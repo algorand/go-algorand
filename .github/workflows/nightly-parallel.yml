@@ -126,174 +126,174 @@ jobs:
           GITHUB_ACTIONS: True
           CIRCLECI: ""
         with:
-          # token: ${{ env.CODECOV_TOKEN }}
+          token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
           fail_ci_if_error: false
 
-  # # Integration nightly jobs that run in parallel splits
-  # integration_nightly:
-  #   needs: [build]
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-  #       platform: ["ubuntu-24.04-arm"]
-  #       partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
-  #   runs-on: ${{ matrix.platform }}
-  #   env:
-  #     CIRCLECI: true
-  #     PARTITION_ID: ${{ matrix.partition_id }}
-  #     PARTITION_TOTAL: 8
-  #     E2E_TEST_FILTER: GO
-  #     PARALLEL_FLAG: "-p 1"
-  #   steps:
-  #     - name: Download workspace archive
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-  #         path: /tmp/
-  #     - name: Extract workspace archive
-  #       run: |
-  #         tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
-  #         rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
-  #       shell: bash
-  #     - name: Get Go version
-  #       id: go_version
-  #       run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: ${{ env.GO_VERSION }}
-  #         cache: true
-  #     - name: Run integration tests
-  #       run: |
-  #         ./scripts/configure_dev.sh
-  #         ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-  #         mkdir -p ~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
-  #         TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
-  #         test/scripts/run_integration_tests.sh
-  #     - name: Upload test results
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
-  #         path: ~/test_results
-  #         retention-days: 7
+  # Integration nightly jobs that run in parallel splits
+  integration_nightly:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04-arm"]
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 8
+      E2E_TEST_FILTER: GO
+      PARALLEL_FLAG: "-p 1"
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Get Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Run integration tests
+        run: |
+          ./scripts/configure_dev.sh
+          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
+          test/scripts/run_integration_tests.sh
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
 
-  # e2e_expect_nightly:
-  #   needs: [build]
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-  #       platform: ["ubuntu-24.04-arm"]
-  #       partition_id: [0, 1]
-  #   runs-on: ${{ matrix.platform }}
-  #   env:
-  #     CIRCLECI: true
-  #     PARTITION_ID: ${{ matrix.partition_id }}
-  #     PARTITION_TOTAL: 2
-  #     E2E_TEST_FILTER: EXPECT
-  #     PARALLEL_FLAG: "-p 1"
-  #   steps:
-  #     - name: Download workspace archive
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-  #         path: /tmp/
-  #     - name: Extract workspace archive
-  #       run: |
-  #         tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
-  #         rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
-  #       shell: bash
-  #     - name: Get Go version
-  #       id: go_version
-  #       run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: ${{ env.GO_VERSION }}
-  #         cache: true
-  #     - name: Run E2E expect tests
-  #       run: |
-  #         scripts/configure_dev.sh
-  #         scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-  #         mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID}
-  #         TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID} \
-  #         test/scripts/run_integration_tests.sh
-  #     - name: Upload test results
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
-  #         path: ~/test_results
-  #         retention-days: 7
+  e2e_expect_nightly:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04-arm"]
+        partition_id: [0, 1]
+    runs-on: ${{ matrix.platform }}
+    env:
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 2
+      E2E_TEST_FILTER: EXPECT
+      PARALLEL_FLAG: "-p 1"
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Get Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Run E2E expect tests
+        run: |
+          scripts/configure_dev.sh
+          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID}
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID} \
+          test/scripts/run_integration_tests.sh
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
 
-  # e2e_subs_nightly:
-  #   needs: [build]
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-  #       platform: ["ubuntu-24.04-arm"]
-  #   runs-on: ${{ matrix.platform }}
-  #   env:
-  #     E2E_TEST_FILTER: SCRIPTS
-  #     CI_PLATFORM: ${{ matrix.platform }}
-  #     CI_KEEP_TEMP_PLATFORM: amd64
-  #   steps:
-  #     - name: Download workspace archive
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-  #         path: /tmp/
-  #     - name: Extract workspace archive
-  #       run: |
-  #         tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
-  #         rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
-  #       shell: bash
-  #     - name: Get Go version
-  #       id: go_version
-  #       run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: ${{ env.GO_VERSION }}
-  #         cache: true
-  #     - name: Run E2E subs tests
-  #       run: |
-  #         scripts/configure_dev.sh
-  #         scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-  #         mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs_nightly
-  #         TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs_nightly \
-  #         test/scripts/run_integration_tests.sh
-  #     - name: Upload test results
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
-  #         path: ~/test_results
-  #         retention-days: 7
+  e2e_subs_nightly:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04-arm"]
+    runs-on: ${{ matrix.platform }}
+    env:
+      E2E_TEST_FILTER: SCRIPTS
+      CI_PLATFORM: ${{ matrix.platform }}
+      CI_KEEP_TEMP_PLATFORM: amd64
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Get Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Run E2E subs tests
+        run: |
+          scripts/configure_dev.sh
+          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs_nightly
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs_nightly \
+          test/scripts/run_integration_tests.sh
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
+          path: ~/test_results
+          retention-days: 7
 
-  # verify_nightly:
-  #   needs: [test_nightly, integration_nightly, e2e_expect_nightly]
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       test_type: ['test', 'integration', 'e2e_expect']
-  #       platform: ['ubuntu-24.04-arm']
-  #   runs-on: ${{ matrix.platform }}
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
-  #         path: ~/test_results
-  #         merge-multiple: true
-  #     - name: Check test execution
-  #       run: |
-  #         cat ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/**/testresults.json > ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json
-  #         python3 scripts/buildtools/check_tests.py \
-  #           --tests-results-filepath ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json \
-  #           --ignored-tests \
-  #             TestAlgodWithExpect \
-  #             TestAlgohWithExpect \
-  #             TestGoalWithExpect \
-  #             TestTealdbgWithExpect
+  verify_nightly:
+    needs: [test_nightly, integration_nightly, e2e_expect_nightly]
+    strategy:
+      fail-fast: false
+      matrix:
+        test_type: ['test', 'integration', 'e2e_expect']
+        platform: ['ubuntu-24.04-arm']
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
+          path: ~/test_results
+          merge-multiple: true
+      - name: Check test execution
+        run: |
+          cat ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/**/testresults.json > ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json
+          python3 scripts/buildtools/check_tests.py \
+            --tests-results-filepath ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json \
+            --ignored-tests \
+              TestAlgodWithExpect \
+              TestAlgohWithExpect \
+              TestGoalWithExpect \
+              TestTealdbgWithExpect
