@@ -90,7 +90,7 @@ func TestRateLimiting(t *testing.T) {
 		log:             log,
 		config:          testConfig,
 		phonebook:       phonebook.MakePhonebook(1, 1),
-		GenesisID:       "go-test-network-genesis",
+		genesisID:       "go-test-network-genesis",
 		NetworkID:       config.Devtestnet,
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
