@@ -271,8 +271,7 @@ jobs:
           retention-days: 7
 
   verify_nightly:
-    # needs: [test_nightly, integration_nightly, e2e_expect_nightly]
-    needs: [test_nightly]
+    needs: [test_nightly, integration_nightly, e2e_expect_nightly]
     strategy:
       fail-fast: false
       matrix:
