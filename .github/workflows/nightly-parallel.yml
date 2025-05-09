@@ -122,6 +122,9 @@ jobs:
           retention-days: 7
       - name: Upload coverage
         uses: codecov/codecov-action@v4
+        env:
+          GITHUB_ACTIONS: True
+          CIRCLECI: ""
         with:
           # token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
