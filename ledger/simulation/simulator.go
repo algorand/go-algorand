@@ -342,8 +342,8 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 			populator := makeResourcePopulator(simulateRequest.TxnGroups[0], consensusParams)
 
 			txnResources := make([]ResourceTracker, len(simulatorTracer.result.TxnGroups[0].Txns))
-			for i := range simulatorTracer.result.TxnGroups[0].Txns {
-				txnResources[i] = *simulatorTracer.result.TxnGroups[0].Txns[i].UnnamedResourcesAccessed
+			for i, tx := range simulatorTracer.result.TxnGroups[0].Txns {
+				txnResources[i] = *tx.UnnamedResourcesAccessed
 			}
 
 			err = populator.populateResources(*simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed, txnResources)
