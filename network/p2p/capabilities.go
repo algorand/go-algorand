@@ -110,7 +110,7 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 }
 
 // AdvertiseCapabilities periodically runs the Advertiser interface on the DHT
-// If a capability fails to advertise we will retry every 10 seconds until full success
+// If a capability fails to advertise we will retry every 100 seconds until full success
 // This gets rerun every at the minimum ttl or the maxAdvertisementInterval.
 func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability) {
 	c.wg.Add(1)
