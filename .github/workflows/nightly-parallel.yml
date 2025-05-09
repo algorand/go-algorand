@@ -276,8 +276,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # test_type: ['test', 'integration', 'e2e_expect']
-        test_type: ['test']
+        test_type: ['test', 'integration', 'e2e_expect']
         platform: ['ubuntu-24.04-arm']
     runs-on: ${{ matrix.platform }}
     steps:
