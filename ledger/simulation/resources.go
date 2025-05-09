@@ -1053,33 +1053,29 @@ func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 
 func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTracker, txnResources []ResourceTracker) error {
 	// We don't want to mutate the groupResourceTracker because it is used later in simulate for UnnamedResourcesAccessed
-	groupResources := struct {
-		Assets        []basics.AssetIndex
-		Apps          []basics.AppIndex
-		Accounts      []basics.Address
-		Boxes         []logic.BoxRef
-		AssetHoldings []ledgercore.AccountAsset
-		AppLocals     []ledgercore.AccountApp
-	}{
-		Apps: slices.Sorted(maps.Keys(groupResourceTracker.Apps)),
-		Accounts: slices.SortedFunc(maps.Keys(groupResourceTracker.Accounts), func(a, b basics.Address) int {
-			return bytes.Compare(a[:], b[:])
-		}),
-		// Sort boxes by app first and then name
-		Boxes: slices.SortedFunc(maps.Keys(groupResourceTracker.Boxes), func(a, b logic.BoxRef) int {
-			// NOTE: We intentionally sort in reverse order for apps so appID 0 is last since they can go anywhere
-			return cmp.Or(cmp.Compare(b.App, a.App), cmp.Compare(a.Name, b.Name))
-		}),
-		// Sort assets holdings by account first and then asset
-		AssetHoldings: slices.SortedFunc(maps.Keys(groupResourceTracker.AssetHoldings), func(a, b ledgercore.AccountAsset) int {
-			return cmp.Or(cmp.Compare(a.Address.GetUserAddress(), b.Address.GetUserAddress()), cmp.Compare(a.Asset, b.Asset))
-		}),
-		// Sort app locals by account first and then app
-		AppLocals: slices.SortedFunc(maps.Keys(groupResourceTracker.AppLocals), func(a, b ledgercore.AccountApp) int {
-			return cmp.Or(cmp.Compare(a.Address.GetUserAddress(), b.Address.GetUserAddress()), cmp.Compare(a.App, b.App))
-		}),
-		Assets: slices.Sorted(maps.Keys(groupResourceTracker.Assets)),
-	}
+	group_apps := slices.Sorted(maps.Keys(groupResourceTracker.Apps))
+
+	group_accounts := slices.SortedFunc(maps.Keys(groupResourceTracker.Accounts), func(a, b basics.Address) int {
+		return bytes.Compare(a[:], b[:])
+	})
+
+	// Sort boxes by app first and then name
+	group_boxes := slices.SortedFunc(maps.Keys(groupResourceTracker.Boxes), func(a, b logic.BoxRef) int {
+		// NOTE: We intentionally sort in reverse order for apps so appID 0 is last since they can go anywhere
+		return cmp.Or(cmp.Compare(b.App, a.App), cmp.Compare(a.Name, b.Name))
+	})
+
+	// Sort assets holdings by account first and then asset
+	group_asset_holdings := slices.SortedFunc(maps.Keys(groupResourceTracker.AssetHoldings), func(a, b ledgercore.AccountAsset) int {
+		return cmp.Or(cmp.Compare(a.Address.GetUserAddress(), b.Address.GetUserAddress()), cmp.Compare(a.Asset, b.Asset))
+	})
+
+	// Sort app locals by account first and then app
+	group_app_locals := slices.SortedFunc(maps.Keys(groupResourceTracker.AppLocals), func(a, b ledgercore.AccountApp) int {
+		return cmp.Or(cmp.Compare(a.Address.GetUserAddress(), b.Address.GetUserAddress()), cmp.Compare(a.App, b.App))
+	})
+
+	group_assets := slices.Sorted(maps.Keys(groupResourceTracker.Assets))
 
 	// First populate resources that HAVE to be assigned to a specific transaction
 	for i, tracker := range txnResources {
@@ -1112,51 +1108,51 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 	}
 
 	// Then assign cross-reference resources because they have the most strict requirements (one account and another resource)
-	for _, holding := range groupResources.AssetHoldings {
+	for _, holding := range group_asset_holdings {
 		err := p.addHolding(holding.Address, holding.Asset)
 		if err != nil {
 			return err
 		}
 
 		// Remove the resources from the global tracker in case they were added separately
-		groupResources.Assets = slices.DeleteFunc(groupResources.Assets, func(a basics.AssetIndex) bool {
+		group_assets = slices.DeleteFunc(group_assets, func(a basics.AssetIndex) bool {
 			return a == holding.Asset
 		})
-		groupResources.Accounts = slices.DeleteFunc(groupResources.Accounts, func(a basics.Address) bool {
+		group_accounts = slices.DeleteFunc(group_accounts, func(a basics.Address) bool {
 			return a == holding.Address
 		})
 	}
 
-	for _, local := range groupResources.AppLocals {
+	for _, local := range group_app_locals {
 		err := p.addLocal(local.Address, local.App)
 		if err != nil {
 			return err
 		}
 
 		// Remove the resources from the global tracker in case they were added separately
-		groupResources.Apps = slices.DeleteFunc(groupResources.Apps, func(a basics.AppIndex) bool {
+		group_apps = slices.DeleteFunc(group_apps, func(a basics.AppIndex) bool {
 			return a == local.App
 		})
-		groupResources.Accounts = slices.DeleteFunc(groupResources.Accounts, func(a basics.Address) bool {
+		group_accounts = slices.DeleteFunc(group_accounts, func(a basics.Address) bool {
 			return a == local.Address
 		})
 	}
 
 	// Then assign boxes because they can take up to two slots
-	for _, box := range groupResources.Boxes {
+	for _, box := range group_boxes {
 		err := p.addBox(box.App, box.Name)
 		if err != nil {
 			return err
 		}
 
 		// Remove the app from the global tracker in case it was added separately
-		groupResources.Apps = slices.DeleteFunc(groupResources.Apps, func(a basics.AppIndex) bool {
+		group_apps = slices.DeleteFunc(group_apps, func(a basics.AppIndex) bool {
 			return a == box.App
 		})
 	}
 
 	// Then assign accounts because they have a lower limit than other resources
-	for _, account := range groupResources.Accounts {
+	for _, account := range group_accounts {
 		err := p.addAccount(account)
 		if err != nil {
 			return err
@@ -1164,14 +1160,14 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 	}
 
 	// Finally assign the remaining resources which just require one slot
-	for _, app := range groupResources.Apps {
+	for _, app := range group_apps {
 		err := p.addApp(app)
 		if err != nil {
 			return err
 		}
 	}
 
-	for _, asset := range groupResources.Assets {
+	for _, asset := range group_assets {
 		err := p.addAsset(asset)
 		if err != nil {
 			return err
