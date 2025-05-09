@@ -141,6 +141,9 @@ func init() {
 	updateAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to send update transaction from")
 	methodAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call method from")
 
+	callAppCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	methodAppCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+
 	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
@@ -871,6 +874,17 @@ var callAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
+		// If Rekeying, parse the address
+		if rekeyToAddress != "" {
+			rekeyTo, err := basics.UnmarshalChecksumAddress(rekeyToAddress)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+			if !rekeyTo.IsZero() {
+				tx.RekeyTo = rekeyTo
+			}
+		}
+
 		// Fill in note and lease
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
@@ -1443,6 +1457,17 @@ var methodAppCmd = &cobra.Command{
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
+		}
+
+		// If Rekeying, parse the address
+		if rekeyToAddress != "" {
+			rekeyTo, err := basics.UnmarshalChecksumAddress(rekeyToAddress)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+			if !rekeyTo.IsZero() {
+				appCallTxn.RekeyTo = rekeyTo
+			}
 		}
 
 		// Fill in note and lease
