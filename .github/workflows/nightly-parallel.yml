@@ -221,7 +221,7 @@ jobs:
       - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
 
@@ -266,73 +266,30 @@ jobs:
       - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-subs-results-${{ matrix.platform }}-${{ github.run_id }}
+          name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
           path: ~/test_results
           retention-days: 7
 
-  # # Verification jobs that run after test jobs complete
-  # verify_test_nightly:
-  #   needs: [test_nightly]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-      
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: test-results-${{ matrix.platform }}-${{ github.run_id }}-
-  #         path: ~/test_results
-  #         merge-multiple: true
-
-  #     - name: Check test execution
-  #       run: |
-  #         python3 scripts/buildtools/check_tests.py \
-  #           --tests-results-filepath test_results/${{ matrix.platform }}_test_nightly/combined_testresults.json \
-  #           --ignored-tests \
-  #             TestAlgodWithExpect \
-  #             TestAlgohWithExpect \
-  #             TestGoalWithExpect \
-  #             TestTealdbgWithExpect
-
-  # verify_integration_nightly:
-  #   needs: [integration_nightly] 
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-      
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: integration-results-${{ matrix.platform }}-${{ github.run_id }}-*
-  #         path: test_results
-  #         merge-multiple: true
-
-  #     - name: Check test execution
-  #       run: |
-  #         python3 scripts/buildtools/check_tests.py \
-  #           --tests-results-filepath test_results/${{ matrix.platform }}_integration_nightly/combined_testresults.json \
-  #           --ignored-tests \
-  #             TestAlgodWithExpect \
-  #             TestAlgohWithExpect \
-  #             TestGoalWithExpect \
-  #             TestTealdbgWithExpect
-
-  # verify_e2e_expect_nightly:
-  #   needs: [e2e_expect_nightly]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-      
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: e2e-expect-results-${{ matrix.platform }}-${{ github.run_id }}-*
-  #         path: test_results
-  #         merge-multiple: true
-
-  #     - name: Check test execution  
-  #       run: |
-  #         python3 scripts/buildtools/check_tests.py \
-  #           --tests-results-filepath test_results/${{ matrix.platform }}_e2e_expect_nightly/combined_testresults.json \
-  #           --ignored-tests \
-  #             TestAlgodWithExpect \
-  #             TestAlgohWithExpect \
-  #             TestGoalWithExpect \
-  #             TestTealdbgWithExpect
+  verify_nightly:
+    needs: [test_nightly, integration_nightly, e2e_expect_nightly]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test_type: ['test', 'integration', 'e2e_expect']
+        platform: ['ubuntu-24.04']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
+          path: ~/test_results
+          merge-multiple: true
+      - name: Check test execution
+        run: |
+          python3 scripts/buildtools/check_tests.py \
+            --tests-results-filepath ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json \
+            --ignored-tests \
+              TestAlgodWithExpect \
+              TestAlgohWithExpect \
+              TestGoalWithExpect \
+              TestTealdbgWithExpect
