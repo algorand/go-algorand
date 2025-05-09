@@ -411,13 +411,13 @@ var sendCmd = &cobra.Command{
 			var err1 error
 			rekeyTo, err1 = basics.UnmarshalChecksumAddress(rekeyToAddress)
 			if err1 != nil {
-				reportErrorf(err1.Error())
+				reportErrorln(err1.Error())
 			}
 		}
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err.Error())
 		}
 		payment, err := client.ConstructPayment(
 			fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved,
@@ -548,7 +548,7 @@ var sendCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err1 = waitForCommit(client, txid, lastValid)
 				if err1 != nil {
-					reportErrorf(err1.Error())
+					reportErrorln(err1.Error())
 				}
 			}
 		} else {
@@ -1162,7 +1162,7 @@ var dryrunCmd = &cobra.Command{
 			}
 			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 			writeFile(outFilename, data, 0600)
 			return

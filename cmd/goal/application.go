@@ -497,7 +497,7 @@ var createAppCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				txn, err1 := waitForCommit(client, txid, lv)
 				if err1 != nil {
-					reportErrorf(err1.Error())
+					reportErrorln(err1.Error())
 				}
 				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
 					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
