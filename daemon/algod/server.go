@@ -339,9 +339,9 @@ func (s *Server) Start() {
 	}
 
 	if cfg.EnableMetricReporting {
-		if err := s.metricCollector.Start(context.Background()); err != nil {
+		if err1 := s.metricCollector.Start(context.Background()); err1 != nil {
 			// log this error
-			s.log.Infof("Unable to start metric collection service : %v", err)
+			s.log.Infof("Unable to start metric collection service : %v", err1)
 		}
 		s.metricServiceStarted = true
 	}

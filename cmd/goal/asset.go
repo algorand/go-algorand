@@ -321,9 +321,9 @@ var createAssetCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				txn, err := waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				txn, err1 := waitForCommit(client, txid, lv)
+				if err1 != nil {
+					reportErrorf(err1.Error())
 				}
 				if txn.AssetIndex != nil && *txn.AssetIndex != 0 {
 					reportInfof("Created asset with asset index %d", *txn.AssetIndex)

@@ -111,38 +111,38 @@ template modes for -t:`,
 		baseRelay := remote.NodeConfig{}
 		baseNonParticipatingNode := remote.NodeConfig{}
 		if nodeTemplatePath != "" {
-			fin, err := os.Open(nodeTemplatePath)
-			if err != nil {
-				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err)
+			fin, err1 := os.Open(nodeTemplatePath)
+			if err1 != nil {
+				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err1)
 			}
 			dec := json.NewDecoder(fin)
-			err = dec.Decode(&baseNode)
-			if err != nil {
-				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err)
+			err1 = dec.Decode(&baseNode)
+			if err1 != nil {
+				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err1)
 			}
 		}
 		if nonParticipatingNodeTemplatePath != "" {
-			fin, err := os.Open(nonParticipatingNodeTemplatePath)
-			if err != nil {
-				reportErrorf("%s: bad npnode template, %s", nonParticipatingNodeTemplatePath, err)
+			fin, err1 := os.Open(nonParticipatingNodeTemplatePath)
+			if err1 != nil {
+				reportErrorf("%s: bad npnode template, %s", nonParticipatingNodeTemplatePath, err1)
 			}
 			dec := json.NewDecoder(fin)
-			err = dec.Decode(&baseNonParticipatingNode)
-			if err != nil {
-				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err)
+			err1 = dec.Decode(&baseNonParticipatingNode)
+			if err1 != nil {
+				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err1)
 			}
 		} else {
 			baseNonParticipatingNode = baseNode
 		}
 		if relayTemplatePath != "" {
-			fin, err := os.Open(relayTemplatePath)
-			if err != nil {
-				reportErrorf("%s: bad relay template, %s", relayTemplatePath, err)
+			fin, err1 := os.Open(relayTemplatePath)
+			if err1 != nil {
+				reportErrorf("%s: bad relay template, %s", relayTemplatePath, err1)
 			}
 			dec := json.NewDecoder(fin)
-			err = dec.Decode(&baseRelay)
-			if err != nil {
-				reportErrorf("%s: bad relay template, %s", relayTemplatePath, err)
+			err1 = dec.Decode(&baseRelay)
+			if err1 != nil {
+				reportErrorf("%s: bad relay template, %s", relayTemplatePath, err1)
 			}
 		} else {
 			baseRelay = baseNode

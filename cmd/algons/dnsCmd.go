@@ -348,13 +348,13 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 			name = service + "._tcp." + network + ".algodev.network"
 		}
 
-		records, err := cloudflareDNS.ListDNSRecord(context.Background(), "SRV", name, "", "", "", "")
+		records, err1 := cloudflareDNS.ListDNSRecord(context.Background(), "SRV", name, "", "", "", "")
 
-		if err != nil {
+		if err1 != nil {
 			if name != "" {
-				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err)
+				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err1)
 			} else {
-				fmt.Fprintf(os.Stderr, "Error listing SRV entries: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Error listing SRV entries: %v\n", err1)
 			}
 			os.Exit(1)
 		}
@@ -381,9 +381,9 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 	}
 
 	for _, recordType := range []string{"A", "CNAME", "TXT"} {
-		records, err := cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing DNS '%s' entries: %v\n", recordType, err)
+		records, err1 := cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
+		if err1 != nil {
+			fmt.Fprintf(os.Stderr, "Error listing DNS '%s' entries: %v\n", recordType, err1)
 			os.Exit(1)
 		}
 		for _, r := range records {

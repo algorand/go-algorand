@@ -325,14 +325,14 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 			PeerAddress:       relayAddress, // on the first iteration it would be empty, which is ok. subsequent iterations would link all the relays.
 		}
 
-		_, err := nc.StartAlgod(args)
-		if err != nil {
-			return err
+		_, err1 := nc.StartAlgod(args)
+		if err1 != nil {
+			return err1
 		}
 
-		relayAddress, err = n.getRelayAddress(nc)
-		if err != nil {
-			return err
+		relayAddress, err1 = n.getRelayAddress(nc)
+		if err1 != nil {
+			return err1
 		}
 		relayNameToAddress[relayDir] = relayAddress
 	}
