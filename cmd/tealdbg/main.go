@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra/doc"
 
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 func main() {
@@ -248,7 +249,7 @@ func debugLocal(args []string) {
 		DdrBlob:          ddrBlob,
 		IndexerURL:       indexerURL,
 		IndexerToken:     indexerToken,
-		Round:            uint64(roundNumber),
+		Round:            basics.Round(roundNumber),
 		LatestTimestamp:  timestamp,
 		RunMode:          runMode.String(),
 		DisableSourceMap: noSourceMap,

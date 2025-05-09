@@ -34,7 +34,7 @@ import (
 func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHolding {
 	return model.AssetHolding{
 		Amount:   ah.Amount,
-		AssetID:  uint64(ai),
+		AssetID:  ai,
 		IsFrozen: ah.Frozen,
 	}
 }
@@ -72,9 +72,9 @@ func AccountDataToAccount(
 		apiParticipation = &model.AccountParticipation{
 			VoteParticipationKey:      record.VoteID[:],
 			SelectionParticipationKey: record.SelectionID[:],
-			VoteFirstValid:            uint64(record.VoteFirstValid),
-			VoteLastValid:             uint64(record.VoteLastValid),
-			VoteKeyDilution:           uint64(record.VoteKeyDilution),
+			VoteFirstValid:            record.VoteFirstValid,
+			VoteLastValid:             record.VoteLastValid,
+			VoteKeyDilution:           record.VoteKeyDilution,
 		}
 		if !record.StateProofID.IsEmpty() {
 			tmp := record.StateProofID[:]
@@ -115,7 +115,7 @@ func AccountDataToAccount(
 
 	return model.Account{
 		SigType:                     nil,
-		Round:                       uint64(lastRound),
+		Round:                       lastRound,
 		Address:                     address,
 		Amount:                      amount.Raw,
 		PendingRewards:              pendingRewards.Raw,
@@ -449,7 +449,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 	globalState := convertTKVToGenerated(&appParams.GlobalState)
 	extraProgramPages := uint64(appParams.ExtraProgramPages)
 	app := model.Application{
-		Id: uint64(appIdx),
+		Id: appIdx,
 		Params: model.ApplicationParams{
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
@@ -508,7 +508,7 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 	}
 
 	return model.Asset{
-		Index:  uint64(idx),
+		Index:  idx,
 		Params: assetParams,
 	}
 }

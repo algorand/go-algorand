@@ -59,17 +59,16 @@ type ApplicationIndexerResponse struct {
 }
 
 type localLedger struct {
-	balances        map[basics.Address]basics.AccountData
-	txnGroup        []transactions.SignedTxn
-	groupIndex      int
-	round           uint64
-	aidx            basics.AppIndex
-	latestTimestamp int64
+	balances   map[basics.Address]basics.AccountData
+	txnGroup   []transactions.SignedTxn
+	groupIndex int
+	round      basics.Round
+	aidx       basics.AppIndex
 }
 
 func makeBalancesAdapter(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto string, round uint64, latestTimestamp int64,
+	groupIndex int, proto string, round basics.Round, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
 ) (apply.Balances, AppState, error) {
 
@@ -215,7 +214,7 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	return creator, nil
 }
 
-func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round uint64) (basics.AccountData, error) {
+func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round basics.Round) (basics.AccountData, error) {
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)

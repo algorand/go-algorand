@@ -163,11 +163,11 @@ func main() {
 	os.Exit(0)
 }
 
-func isSpendRound(cfg config, round uint64) bool {
+func isSpendRound(cfg config, round basics.Round) bool {
 	return cfg.RoundModulator == 0 || ((round+cfg.RoundOffset)%cfg.RoundModulator == 0)
 }
 
-func nextSpendRound(cfg config, round uint64) uint64 {
+func nextSpendRound(cfg config, round basics.Round) basics.Round {
 	if cfg.RoundModulator == 0 {
 		return round
 	}

@@ -49,12 +49,12 @@ func init() {
 	appInteractCmd.AddCommand(appQueryCmd)
 	appInteractCmd.PersistentFlags().StringVarP(&appHdr, "header", "", "", "Application header")
 
-	appQueryCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	appQueryCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
 	appQueryCmd.Flags().StringVarP(&account, "from", "f", "", "Account to query state for (if omitted, query from global state)")
 	appQueryCmd.Flags().SetInterspersed(false)
 	appQueryCmd.MarkFlagRequired("app-id")
 
-	appExecuteCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID (if omitted, zero, which creates an application)")
+	appExecuteCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID (if omitted, zero, which creates an application)")
 	appExecuteCmd.Flags().StringVarP(&account, "from", "f", "", "Account to execute interaction from")
 	appExecuteCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from \"from\" address due to rekeying")
 	appExecuteCmd.Flags().SetInterspersed(false)

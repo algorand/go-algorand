@@ -118,7 +118,7 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, uint64(totalAppExtraPages), *conv.AppsTotalExtraPages)
 
 	verifyCreatedApp := func(index int, appIdx basics.AppIndex, params basics.AppParams) {
-		require.Equal(t, uint64(appIdx), (*conv.CreatedApps)[index].Id)
+		require.Equal(t, appIdx, (*conv.CreatedApps)[index].Id)
 		require.Equal(t, params.ApprovalProgram, (*conv.CreatedApps)[index].Params.ApprovalProgram)
 		if params.Version != 0 {
 			require.NotNil(t, (*conv.CreatedApps)[index].Params.Version)
@@ -179,7 +179,7 @@ func TestAccount(t *testing.T) {
 	verifyAppLocalState(1, appIdx2, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value2"), makeTKV("uint", 2)})
 
 	verifyCreatedAsset := func(index int, assetIdx basics.AssetIndex, params basics.AssetParams) {
-		require.Equal(t, uint64(assetIdx), (*conv.CreatedAssets)[index].Index)
+		require.Equal(t, assetIdx, (*conv.CreatedAssets)[index].Index)
 		require.Equal(t, params.Total, (*conv.CreatedAssets)[index].Params.Total)
 		require.NotNil(t, (*conv.CreatedAssets)[index].Params.DefaultFrozen)
 		require.Equal(t, params.DefaultFrozen, *(*conv.CreatedAssets)[index].Params.DefaultFrozen)

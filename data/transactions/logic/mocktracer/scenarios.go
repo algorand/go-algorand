@@ -325,13 +325,13 @@ type TestScenario struct {
 	Outcome              TestScenarioOutcome
 	Program              string
 	ExpectedError        string
-	FailedAt             []uint64
+	FailedAt             []int
 	ExpectedEvents       []Event
 	ExpectedSimulationAD transactions.ApplyData
 	ExpectedStateDelta   ledgercore.StateDelta
-	AppBudgetAdded       uint64
-	AppBudgetConsumed    uint64
-	TxnAppBudgetConsumed []uint64
+	AppBudgetAdded       int
+	AppBudgetConsumed    int
+	TxnAppBudgetConsumed []int
 }
 
 // TestScenarioGenerator is a function which instantiates a TestScenario
@@ -405,7 +405,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 			ExpectedStateDelta:   expectedDelta,
 			AppBudgetAdded:       2100,
 			AppBudgetConsumed:    35,
-			TxnAppBudgetConsumed: []uint64{0, 35},
+			TxnAppBudgetConsumed: []int{0, 35},
 		}
 	}
 
@@ -451,7 +451,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
-				FailedAt:      []uint64{0},
+				FailedAt:      []int{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
@@ -467,7 +467,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				ExpectedStateDelta:   expectedDelta,
 				AppBudgetAdded:       700,
 				AppBudgetConsumed:    4,
-				TxnAppBudgetConsumed: []uint64{0, 4},
+				TxnAppBudgetConsumed: []int{0, 4},
 			}
 		}
 		scenarios[beforeInnersName] = beforeInners
@@ -496,7 +496,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
-				FailedAt:      []uint64{0, 0},
+				FailedAt:      []int{0, 0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
@@ -523,7 +523,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				ExpectedStateDelta:   expectedDelta,
 				AppBudgetAdded:       1400,
 				AppBudgetConsumed:    15,
-				TxnAppBudgetConsumed: []uint64{0, 15},
+				TxnAppBudgetConsumed: []int{0, 15},
 			}
 		}
 		scenarios[firstInnerName] = firstInner
@@ -551,7 +551,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
-				FailedAt:      []uint64{0},
+				FailedAt:      []int{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
@@ -581,7 +581,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				ExpectedStateDelta:   expectedDelta,
 				AppBudgetAdded:       1400,
 				AppBudgetConsumed:    19,
-				TxnAppBudgetConsumed: []uint64{0, 19},
+				TxnAppBudgetConsumed: []int{0, 19},
 			}
 		}
 		scenarios[betweenInnersName] = betweenInners
@@ -611,7 +611,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					Outcome:       ErrorOutcome,
 					Program:       program,
 					ExpectedError: "overspend",
-					FailedAt:      []uint64{0, 1},
+					FailedAt:      []int{0, 1},
 					ExpectedEvents: FlattenEvents([][]Event{
 						{
 							BeforeTxn(protocol.ApplicationCallTx),
@@ -647,7 +647,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					ExpectedStateDelta:   expectedDelta,
 					AppBudgetAdded:       2100,
 					AppBudgetConsumed:    32,
-					TxnAppBudgetConsumed: []uint64{0, 32},
+					TxnAppBudgetConsumed: []int{0, 32},
 				}
 			}
 			scenarios[secondInnerName] = secondInner
@@ -677,7 +677,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					Outcome:       ErrorOutcome,
 					Program:       program,
 					ExpectedError: "overspend",
-					FailedAt:      []uint64{0, 2},
+					FailedAt:      []int{0, 2},
 					ExpectedEvents: FlattenEvents([][]Event{
 						{
 							BeforeTxn(protocol.ApplicationCallTx),
@@ -715,7 +715,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					ExpectedStateDelta:   expectedDelta,
 					AppBudgetAdded:       2100,
 					AppBudgetConsumed:    32,
-					TxnAppBudgetConsumed: []uint64{0, 32},
+					TxnAppBudgetConsumed: []int{0, 32},
 				}
 			}
 			scenarios[thirdInnerName] = thirdInner
@@ -740,7 +740,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
-				FailedAt:      []uint64{0},
+				FailedAt:      []int{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
@@ -781,7 +781,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				ExpectedStateDelta:   expectedDelta,
 				AppBudgetAdded:       2100,
 				AppBudgetConsumed:    35,
-				TxnAppBudgetConsumed: []uint64{0, 35},
+				TxnAppBudgetConsumed: []int{0, 35},
 			}
 		}
 		scenarios[afterInnersName] = afterInners

@@ -51,7 +51,7 @@ type DryrunRequest struct {
 	ProtocolVersion string `codec:"protocol-version"`
 
 	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
-	Round uint64 `codec:"round"`
+	Round basics.Round `codec:"round"`
 
 	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
 	LatestTimestamp int64 `codec:"latest-timestamp"`
@@ -158,8 +158,8 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 
 func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.DryrunState {
 	st := model.DryrunState{
-		Line: uint64(state.Line),
-		Pc:   uint64(state.PC),
+		Line: state.Line,
+		Pc:   state.PC,
 	}
 	st.Stack = make([]model.TealValue, len(state.Stack))
 	for i, v := range state.Stack {
@@ -379,7 +379,7 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 				continue
 			}
 			for _, asset := range *acct.CreatedAssets {
-				if asset.Index == uint64(cidx) {
+				if asset.Index == basics.AssetIndex(cidx) {
 					addr, err := basics.UnmarshalChecksumAddress(acct.Address)
 					return addr, true, err
 				}
@@ -388,7 +388,7 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 		return basics.Address{}, false, fmt.Errorf("no asset %d", cidx)
 	case basics.AppCreatable:
 		for _, app := range dl.dr.Apps {
-			if app.Id == uint64(cidx) {
+			if app.Id == basics.AppIndex(cidx) {
 				var addr basics.Address
 				if app.Params.Creator != "" {
 					var err error
@@ -526,7 +526,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 			var app basics.AppParams
 			ok := false
 			for _, appt := range dr.Apps {
-				if appt.Id == uint64(appIdx) {
+				if appt.Id == appIdx {
 					app, err = ApplicationParamsToAppParams(&appt.Params)
 					if err != nil {
 						response.Error = err.Error()
@@ -578,8 +578,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				// This is necessary because the fields can only be represented as unsigned
 				// integers, so a negative cost would underflow. The two fields also provide
 				// more information, which can be useful for testing purposes.
-				budgetAdded := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
-				budgetConsumed := uint64(cost) + budgetAdded
+				budgetAdded := proto.MaxAppProgramCost * numInnerTxns(delta)
+				budgetConsumed := cost + budgetAdded
 				result.BudgetAdded = &budgetAdded
 				result.BudgetConsumed = &budgetConsumed
 				maxCurrentBudget = pooledAppBudget

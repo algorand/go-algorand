@@ -476,7 +476,7 @@ func (f *LibGoalFixture) CurrentConsensusParams() (consensus config.ConsensusPar
 }
 
 // ConsensusParams returns the consensus parameters for the protocol from the specified round
-func (f *LibGoalFixture) ConsensusParams(round uint64) (config.ConsensusParams, error) {
+func (f *LibGoalFixture) ConsensusParams(round basics.Round) (config.ConsensusParams, error) {
 	block, err := f.LibGoalClient.BookkeepingBlock(round)
 	if err != nil {
 		return config.ConsensusParams{}, err
@@ -511,7 +511,7 @@ func (f *LibGoalFixture) CurrentMinFeeAndBalance() (minFee, minBalance uint64, e
 // MinFeeAndBalance returns the MinTxnFee and MinBalance for the protocol from the specified round
 // If MinBalance is 0, we provide a resonable default of 1000 to ensure accounts have funds when
 // MinBalance is used to fund new accounts
-func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint64, err error) {
+func (f *LibGoalFixture) MinFeeAndBalance(round basics.Round) (minFee, minBalance uint64, err error) {
 	params, err := f.ConsensusParams(round)
 	if err != nil {
 		return
@@ -524,7 +524,7 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 }
 
 // TransactionProof returns a proof for usage in merkle array verification for the provided transaction.
-func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (model.TransactionProofResponse, merklearray.SingleLeafProof, error) {
+func (f *LibGoalFixture) TransactionProof(txid string, round basics.Round, hashType crypto.HashType) (model.TransactionProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
 	if err != nil {
 		return model.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
@@ -539,7 +539,7 @@ func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType cr
 }
 
 // LightBlockHeaderProof returns a proof for usage in merkle array verification for the provided block's light block header.
-func (f *LibGoalFixture) LightBlockHeaderProof(round uint64) (model.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
+func (f *LibGoalFixture) LightBlockHeaderProof(round basics.Round) (model.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.LightBlockHeaderProof(round)
 
 	if err != nil {

@@ -29,7 +29,7 @@ OAPI := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1
 %/types.go: %/types.yml algod.oas3.yml
 	$(OAPI) -config $^
 
-# We use Makefile as a dependency here so everythign gets rebuilt when you mess with how things are built.
+# We use Makefile as a dependency here so everything gets rebuilt when you mess with how things are built.
 algod.oas3.yml:	algod.oas2.json Makefile
 	jq < $< > /dev/null  # fail with a nice explantion if json is malformed
 	! grep '"type": "number"' $<  # Don't use the number type. Use integer (and format uint64 usually)
