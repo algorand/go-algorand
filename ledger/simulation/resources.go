@@ -784,7 +784,7 @@ func (r *txnResources) addBoxWithApp(app basics.AppIndex, name string) error {
 
 func (r *txnResources) addAppLocal(app basics.AppIndex, addr basics.Address) error {
 	if !r.hasRoomForAppLocal() {
-		return fmt.Errorf("no room for app local %d : %s", app, addr.String())
+		return fmt.Errorf("no room for app local %d : %s", app, addr)
 	}
 
 	r.apps = append(r.apps, app)
