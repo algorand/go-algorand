@@ -966,7 +966,7 @@ func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
 
 	// If we have gotten to this point and the App ID is 0, then we know there is no where it can go
 	// The next loop will try to add the app reference, which is nonsensical for 0
-	if app == basics.AppIndex(0) {
+	if app == 0 {
 		return err
 	}
 
