@@ -76,7 +76,7 @@ var defaultLocal = Local{
 	EnableNetDevMetrics:                        false,
 	EnableOutgoingNetworkMessageFiltering:      true,
 	EnableP2P:                                  false,
-	EnableP2PHybridMode:                        false,
+	EnableP2PHybridMode:                        true,
 	EnablePingHandler:                          true,
 	EnablePrivateNetworkAccessHeader:           false,
 	EnableProcessBlockStats:                    false,

@@ -633,6 +633,7 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2P = true
+	cfg.EnableP2PHybridMode = false
 	cfg.NetAddress = ":4160"
 	require.True(t, cfg.IsGossipServer())
 	require.False(t, cfg.IsWsGossipServer())
