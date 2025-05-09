@@ -783,6 +783,14 @@ type PendingTransactionResponse struct {
 	Txn map[string]interface{} `json:"txn"`
 }
 
+// ResourceArrays Resource arrays that are required for a transaction
+type ResourceArrays struct {
+	Accounts *[]string       `json:"accounts,omitempty"`
+	Apps     *[]uint64       `json:"apps,omitempty"`
+	Assets   *[]uint64       `json:"assets,omitempty"`
+	Boxes    *[]BoxReference `json:"boxes,omitempty"`
+}
+
 // ScratchChange A write operation into a scratch slot.
 type ScratchChange struct {
 	// NewValue Represents an AVM value.
@@ -817,6 +825,9 @@ type SimulateRequest struct {
 
 	// FixSigners If true, signers for transactions that are missing signatures will be fixed during evaluation.
 	FixSigners *bool `json:"fix-signers,omitempty"`
+
+	// PopulateResources If true, return populated resource arrays for each transaction based on unnamed resources
+	PopulateResources *bool `json:"populate-resources,omitempty"`
 
 	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
 	Round *uint64 `json:"round,omitempty"`
@@ -854,6 +865,9 @@ type SimulateTransactionGroupResult struct {
 	// AppBudgetConsumed Total budget consumed during execution of app calls in the transaction group.
 	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
 
+	// ExtraResourceArrays Present if populate-resource-arrays is true in the request and additional transactions are needed to name all the accessed resources.
+	ExtraResourceArrays *[]ResourceArrays `json:"extra-resource-arrays,omitempty"`
+
 	// FailedAt If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.
 	FailedAt *[]uint64 `json:"failed-at,omitempty"`
 
@@ -880,6 +894,9 @@ type SimulateTransactionResult struct {
 
 	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
 	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
+
+	// PopulatedResourceArrays Resource arrays that are required for a transaction
+	PopulatedResourceArrays *ResourceArrays `json:"populated-resource-arrays,omitempty"`
 
 	// TxnResult Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 	TxnResult PendingTransactionResponse `json:"txn-result"`

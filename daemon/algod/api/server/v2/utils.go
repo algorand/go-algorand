@@ -565,10 +565,45 @@ func convertSimulateInitialStates(initialStates *simulation.ResourcesInitialStat
 	}
 }
 
+// Convert the resources to the model structs
+func convertPopulatedResourceArrays(populatedResources simulation.PopulatedResourceArrays) *model.ResourceArrays {
+	accounts := stringSlice(populatedResources.Accounts)
+	assets := uint64Slice(populatedResources.Assets)
+	apps := uint64Slice(populatedResources.Apps)
+
+	boxes := make([]model.BoxReference, len(populatedResources.Boxes))
+	for i, box := range populatedResources.Boxes {
+		boxes[i] = model.BoxReference{
+			App:  uint64(box.App),
+			Name: []byte(box.Name),
+		}
+	}
+
+	populatedResourceArrays := model.ResourceArrays{
+		Accounts: &accounts,
+		Assets:   &assets,
+		Apps:     &apps,
+		Boxes:    &boxes,
+	}
+
+	return &populatedResourceArrays
+}
+
 func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
 	txnResults := make([]PreEncodedSimulateTxnResult, len(txnGroupResult.Txns))
+
+	// applCount is used to track the number of app calls in the group so we can correctly determine
+	// if we need to populate extraResourceArrays (if resource population is enabled)
+	applCount := 0
 	for i, txnResult := range txnGroupResult.Txns {
+		if txnResult.Txn.Txn.Type == protocol.ApplicationCallTx {
+			applCount++
+		}
+
 		txnResults[i] = convertTxnResult(txnResult)
+		if populatedResources, ok := txnGroupResult.PopulatedResourceArrays[i]; ok {
+			txnResults[i].PopulatedResourceArrays = convertPopulatedResourceArrays(populatedResources)
+		}
 	}
 
 	encoded := PreEncodedSimulateTxnGroupResult{
@@ -577,6 +612,16 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
 		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
+	}
+
+	if len(txnGroupResult.PopulatedResourceArrays)-applCount > 0 {
+		extraResourceArrays := make([]model.ResourceArrays, len(txnGroupResult.PopulatedResourceArrays)-applCount)
+
+		for i := len(txnResults); i < len(txnGroupResult.PopulatedResourceArrays); i++ {
+			extraResourceArrays[i-len(txnResults)] = *convertPopulatedResourceArrays(txnGroupResult.PopulatedResourceArrays[i])
+		}
+
+		encoded.ExtraResourceArrays = &extraResourceArrays
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
@@ -624,6 +669,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
 		TraceConfig:           request.ExecTraceConfig,
 		FixSigners:            request.FixSigners,
+		PopulateResources:     request.PopulateResources,
 	}
 }
 
