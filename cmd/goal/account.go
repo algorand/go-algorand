@@ -1239,8 +1239,9 @@ var listParticipationKeysCmd = &cobra.Command{
 		}
 
 		// Squeezed this into 77 characters.
+		hdrFormat := "%-10s  %-11s  %-15s  %10s  %11s  %10s\n"
 		rowFormat := "%-10s  %-11s  %-15s  %10s  %11d  %10d\n"
-		fmt.Printf(rowFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
+		fmt.Printf(hdrFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
 		for _, part := range parts {
 			onlineAccountInfo, err := client.AccountInformation(part.Address, false)
 			if err == nil {
