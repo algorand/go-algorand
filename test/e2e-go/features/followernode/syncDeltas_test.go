@@ -73,7 +73,7 @@ func TestBasicSyncMode(t *testing.T) {
 	require.LessOrEqual(t, *txn.ConfirmedRound, uint64(5), "Transaction should be confirmed in the first 5 rounds")
 
 	// Let the network make some progress
-	waitForRound := uint64(5)
+	const waitForRound = 5
 	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
@@ -82,7 +82,7 @@ func TestBasicSyncMode(t *testing.T) {
 	a.NoError(err)
 	followClient := fixture.GetAlgodClientForController(followControl)
 	// Now, catch up round by round, retrieving state deltas for each
-	for round := uint64(1); round <= waitForRound; round++ {
+	for round := basics.Round(1); round <= waitForRound; round++ {
 		// assert sync round set
 		rResp, err := followClient.GetSyncRound()
 		a.NoError(err)

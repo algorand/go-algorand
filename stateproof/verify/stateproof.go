@@ -171,7 +171,7 @@ func ValidateStateProof(verificationContext *ledgercore.StateProofVerificationCo
 		return err
 	}
 
-	err = verifier.Verify(uint64(verificationContext.LastAttestedRound), msg.Hash(), stateProof)
+	err = verifier.Verify(verificationContext.LastAttestedRound, msg.Hash(), stateProof)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
 	}

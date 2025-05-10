@@ -22,6 +22,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 type config struct {
@@ -34,9 +36,9 @@ type config struct {
 	// APIToken is the API token used to communicate with the node.
 	APIToken string
 	// RoundModulator is the modulator used to determine of the current round is the round at which transactions need to be sent.
-	RoundModulator uint64
+	RoundModulator basics.Round
 	// RoundOffset is the offset used to determine of the current round is the round at which transactions need to be sent.
-	RoundOffset uint64
+	RoundOffset basics.Round
 	// Fee is the amount of algos that would be specified in the transaction fee field.
 	Fee uint64
 	// TxnsToSend is the number of transactions to send in the round where (((round + RoundOffset) % RoundModulator) == 0)

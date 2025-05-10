@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol/transcode"
 )
 
@@ -83,7 +84,7 @@ var blockCmd = &cobra.Command{
 
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.RawBlock(round)
+		response, err := client.RawBlock(basics.Round(round))
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}

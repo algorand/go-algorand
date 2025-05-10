@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-const transactionValidityPeriod = uint64(100) // rounds
+const transactionValidityPeriod = basics.Round(100)
 const transactionFee = uint64(0)
 
 func TestAccountsCanChangeOnlineState(t *testing.T) {
@@ -126,12 +126,12 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	if doNonparticipationTest {
 		txidsForStatusChange[nonparticipatingTxID] = becomesNonparticipating
 	}
-	txnConfirmationDeadline := curRound + uint64(5)
+	txnConfirmationDeadline := curRound + 5
 	confirmed := fixture.WaitForAllTxnsToConfirm(txnConfirmationDeadline, txidsForStatusChange)
 	a.True(confirmed, "Transactions failed to confirm.")
 
 	_, curRound = fixture.GetBalanceAndRound(initiallyOnline)
-	fixture.WaitForRoundWithTimeout(curRound + uint64(1))
+	fixture.WaitForRoundWithTimeout(curRound + 1)
 
 	// assert that initiallyOffline is now online
 	initiallyOfflineAccountStatus, err = client.AccountInformation(initiallyOffline, false)

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 )
@@ -89,7 +90,7 @@ type DebugParams struct {
 	DdrBlob          []byte
 	IndexerURL       string
 	IndexerToken     string
-	Round            uint64
+	Round            basics.Round
 	LatestTimestamp  int64
 	RunMode          string
 	DisableSourceMap bool

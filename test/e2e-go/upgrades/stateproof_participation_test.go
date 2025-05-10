@@ -70,7 +70,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	fixture.SetConsensus(consensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesWithoutStateProofPartkeys.json"))
 	defer fixture.Shutdown()
-	lastValid := uint64(1000 * 5)
+	const lastValid = 5000
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
@@ -89,7 +89,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV30.json"))
 	defer fixture.Shutdown()
-	lastValid := uint64(1000 * 5)
+	const lastValid = 5000
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
@@ -97,7 +97,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV31))
 }
 
-func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
+func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid basics.Round, ver protocol.ConsensusVersion) error {
 
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)

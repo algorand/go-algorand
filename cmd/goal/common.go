@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 const (
@@ -33,11 +34,11 @@ const (
 var validateNoPosArgsFn = cobra.NoArgs
 
 // transaction validity period margins
-var firstValid uint64
-var lastValid uint64
+var firstValid basics.Round
+var lastValid basics.Round
 
 // numValidRounds specifies validity period for a transaction and used to calculate last valid round
-var numValidRounds uint64 // also used in account and asset
+var numValidRounds basics.Round // also used in account and asset
 
 var (
 	fee                uint64
@@ -55,9 +56,9 @@ var dumpForDryrunFormat cmdutil.CobraStringValue = *cmdutil.MakeCobraStringValue
 
 func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
-	cmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
-	cmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
-	cmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
+	cmd.Flags().Uint64Var((*uint64)(&firstValid), "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
+	cmd.Flags().Uint64Var((*uint64)(&numValidRounds), "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	cmd.Flags().Uint64Var((*uint64)(&lastValid), "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	cmd.Flags().StringVarP(&outFilename, "out", "o", "", "Write transaction to this file")
 	cmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	cmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")

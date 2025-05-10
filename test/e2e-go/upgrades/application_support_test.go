@@ -201,7 +201,7 @@ int 1
 	client.WaitForRound(round + 2)
 	pendingTx, err := client.GetPendingTransactions(1)
 	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTransactions)
+	a.Zero(pendingTx.TotalTransactions)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -233,7 +233,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppOptInTx(appIdx, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -288,9 +288,9 @@ int 1
 
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
 
-	app, err := client.ApplicationInformation(uint64(appIdx))
+	app, err := client.ApplicationInformation(appIdx)
 	a.NoError(err)
-	a.Equal(uint64(appIdx), app.Id)
+	a.Equal(appIdx, app.Id)
 	a.Equal(creator, app.Params.Creator)
 }
 
@@ -394,7 +394,7 @@ int 1
 	tx, err := client.MakeUnsignedAppCreateTx(
 		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
-	tx, err = client.FillUnsignedTxTemplate(creator, round, round+primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds, fee, tx)
+	tx, err = client.FillUnsignedTxTemplate(creator, round, round+basics.Round(primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds), fee, tx)
 	a.NoError(err)
 	signedTxn, err := client.SignTransactionWithWallet(wh, nil, tx)
 	a.NoError(err)
@@ -413,16 +413,16 @@ int 1
 
 	round, err = client.CurrentRound()
 	a.NoError(err)
-	if round > round+primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds {
+	if round > round+basics.Round(primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds) {
 		t.Skip("Test platform is too slow for this test")
 	}
 
-	a.Equal(uint64(1), pendingTx.TotalTransactions)
+	a.Equal(1, pendingTx.TotalTransactions)
 
 	// check that the secondary node doesn't have that transaction in it's transaction pool.
 	pendingTx, err = secondary.GetPendingTransactions(1)
 	a.NoError(err)
-	a.Equal(uint64(0), pendingTx.TotalTransactions)
+	a.Zero(pendingTx.TotalTransactions)
 
 	curStatus, err := client.Status()
 	a.NoError(err)
@@ -484,7 +484,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppOptInTx(appIdx, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -539,8 +539,8 @@ int 1
 
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
 
-	app, err := client.ApplicationInformation(uint64(appIdx))
+	app, err := client.ApplicationInformation(appIdx)
 	a.NoError(err)
-	a.Equal(uint64(appIdx), app.Id)
+	a.Equal(appIdx, app.Id)
 	a.Equal(creator, app.Params.Creator)
 }

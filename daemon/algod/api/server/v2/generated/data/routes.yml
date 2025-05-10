@@ -1,21 +1,23 @@
-package: experimental
+package: data
 generate:
   echo-server: true
   embedded-spec: true
 output-options:
   include-tags:
-  - experimental
-  - public
+  - data
+# do not include endpoints tagged public/experimental
+# - public
   exclude-tags:
   - common
   - private
   - participating
   - nonparticipating
-  - data
-  type-mappings:
-    integer: uint64
+# do not exclude endpoints tagged data/experimental
+# - experimental
   skip-prune: true
+  user-templates:
+    echo/echo-register.tmpl: ./templates/echo/echo-register.tmpl
 additional-imports:
   - alias: "."
     package: "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-output: ./server/v2/generated/experimental/routes.go
+output: ./server/v2/generated/data/routes.go

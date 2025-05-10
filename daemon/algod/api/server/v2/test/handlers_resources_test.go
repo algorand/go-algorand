@@ -302,7 +302,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 		params.Exclude = (*model.AccountInformationParamsExclude)(&exclude)
 	}
 	ctx, rec := newReq(t)
-	err := handlers.AccountInformation(ctx, addr.String(), params)
+	err := handlers.AccountInformation(ctx, addr, params)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 
@@ -356,7 +356,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalAssets; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AssetIndex(i * 4)
-		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), model.AccountAssetInformationParams{})
+		err = handlers.AccountAssetInformation(ctx, addr, aidx, model.AccountAssetInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
 		var ret model.AccountAssetResponse
@@ -365,14 +365,14 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 		assert.Nil(t, ret.CreatedAsset)
 		assert.Equal(t, ret.AssetHolding, &model.AssetHolding{
 			Amount:   acctData.Assets[aidx].Amount,
-			AssetID:  uint64(aidx),
+			AssetID:  aidx,
 			IsFrozen: acctData.Assets[aidx].Frozen,
 		})
 	}
 	for i := 0; i < ret.TotalCreatedAssets; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AssetIndex(i*4 + 1)
-		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), model.AccountAssetInformationParams{})
+		err = handlers.AccountAssetInformation(ctx, addr, aidx, model.AccountAssetInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
 		var ret model.AccountAssetResponse
@@ -386,7 +386,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalApps; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AppIndex(i*4 + 2)
-		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), model.AccountApplicationInformationParams{})
+		err = handlers.AccountApplicationInformation(ctx, addr, aidx, model.AccountApplicationInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
 		var ret model.AccountApplicationResponse
@@ -402,7 +402,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalCreatedApps; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AppIndex(i*4 + 3)
-		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), model.AccountApplicationInformationParams{})
+		err = handlers.AccountApplicationInformation(ctx, addr, aidx, model.AccountApplicationInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
 		var ret model.AccountApplicationResponse
@@ -421,7 +421,7 @@ func accountAssetInformationResourceLimitsTest(t *testing.T, handlers v2.Handler
 	acctData basics.AccountData, params model.AccountAssetsInformationParams, inputNextToken int, maxResults int, expectToken bool) {
 
 	ctx, rec := newReq(t)
-	err := handlers.AccountAssetsInformation(ctx, addr.String(), params)
+	err := handlers.AccountAssetsInformation(ctx, addr, params)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
 	var ret model.AccountAssetsInformationResponse
@@ -432,7 +432,7 @@ func accountAssetInformationResourceLimitsTest(t *testing.T, handlers v2.Handler
 		nextRaw, err0 := strconv.ParseUint(*ret.NextToken, 10, 64)
 		require.NoError(t, err0)
 		// The next token decoded is actually the last asset id returned
-		assert.Equal(t, (*ret.AssetHoldings)[maxResults-1].AssetHolding.AssetID, nextRaw)
+		assert.EqualValues(t, (*ret.AssetHoldings)[maxResults-1].AssetHolding.AssetID, nextRaw)
 	}
 	assert.Equal(t, maxResults, len(*ret.AssetHoldings))
 
@@ -442,11 +442,11 @@ func accountAssetInformationResourceLimitsTest(t *testing.T, handlers v2.Handler
 		minForResults = inputNextToken
 	}
 	for i := minForResults; i < minForResults+maxResults; i++ {
-		expectedIndex := i + 1
+		expectedIndex := basics.AssetIndex(i + 1)
 
-		assert.Equal(t, acctData.Assets[basics.AssetIndex(expectedIndex)].Amount, (*ret.AssetHoldings)[i-minForResults].AssetHolding.Amount)
-		assert.Equal(t, acctData.Assets[basics.AssetIndex(expectedIndex)].Frozen, (*ret.AssetHoldings)[i-minForResults].AssetHolding.IsFrozen)
-		assert.Equal(t, uint64(expectedIndex), (*ret.AssetHoldings)[i-minForResults].AssetHolding.AssetID)
+		assert.Equal(t, acctData.Assets[expectedIndex].Amount, (*ret.AssetHoldings)[i-minForResults].AssetHolding.Amount)
+		assert.Equal(t, acctData.Assets[expectedIndex].Frozen, (*ret.AssetHoldings)[i-minForResults].AssetHolding.IsFrozen)
+		assert.Equal(t, expectedIndex, (*ret.AssetHoldings)[i-minForResults].AssetHolding.AssetID)
 	}
 }
 
@@ -493,12 +493,7 @@ func TestAccountAssetsInformation(t *testing.T) {
 	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
 		model.AccountAssetsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, totalAssetHoldings-rawNext, false)
 
-	// 5. Malformed address
-	ctx, rec := newReq(t)
-	err := handlers.AccountAssetsInformation(ctx, "", model.AccountAssetsInformationParams{})
-	require.NoError(t, err)
-	require.Equal(t, 400, rec.Code)
-	require.Equal(t, "{\"message\":\"failed to parse the address\"}\n", rec.Body.String())
+	// 5. Malformed address is now handled by the echo framework
 
 	// 6. Unknown address (200 returned, just no asset data)
 	unknownAddress := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -506,8 +501,8 @@ func TestAccountAssetsInformation(t *testing.T) {
 		0, 0, false)
 
 	// 7a. Invalid limits - larger than configured max
-	ctx, rec = newReq(t)
-	err = handlers.AccountAssetsInformation(ctx, addr.String(), model.AccountAssetsInformationParams{
+	ctx, rec := newReq(t)
+	err := handlers.AccountAssetsInformation(ctx, addr, model.AccountAssetsInformationParams{
 		Limit: func() *uint64 {
 			l := uint64(v2.MaxAssetResults + 1)
 			return &l
@@ -519,7 +514,7 @@ func TestAccountAssetsInformation(t *testing.T) {
 
 	// 7b. Invalid limits - zero
 	ctx, rec = newReq(t)
-	err = handlers.AccountAssetsInformation(ctx, addr.String(), model.AccountAssetsInformationParams{
+	err = handlers.AccountAssetsInformation(ctx, addr, model.AccountAssetsInformationParams{
 		Limit: func() *uint64 {
 			l := uint64(0)
 			return &l
