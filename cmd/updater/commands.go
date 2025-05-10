@@ -21,11 +21,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-
-	"github.com/algorand/go-algorand/logging"
 )
-
-var log = logging.Base()
 
 var channel string
 

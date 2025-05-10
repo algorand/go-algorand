@@ -632,9 +632,8 @@ func testMatch(t testing.TB, actual, expected string) (ok bool) {
 		return strings.Contains(actual+"^", expected[3:]+"^")
 	} else if strings.HasSuffix(expected, "...") {
 		return strings.Contains("^"+actual, "^"+expected[:len(expected)-3])
-	} else {
-		return expected == actual
 	}
+	return expected == actual
 }
 
 func assembleWithTrace(text string, ver uint64) (*OpStream, error) {

@@ -1439,9 +1439,6 @@ func (cx *EvalContext) begin(program []byte) error {
 	if version > cx.Proto.LogicSigVersion {
 		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
 	}
-	if err != nil {
-		return err
-	}
 
 	cx.version = version
 	cx.pc = vlen
@@ -3088,11 +3085,10 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	if inner {
 		// Before we had inner apps, we did not allow these, since we had no inner groups.
 		if cx.version < innerAppsEnabledVersion && (fs.field == GroupIndex || fs.field == TxID) {
-			err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
-			return
+			return sv, fmt.Errorf("illegal field for inner transaction %s", fs.field)
 		}
 	}
-	err = nil
+
 	txn := &stxn.SignedTxn.Txn
 	switch fs.field {
 	case Sender:

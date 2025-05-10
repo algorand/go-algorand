@@ -316,9 +316,8 @@ func MultisigAdd(unisig []MultisigSig, msig *MultisigSig) (err error) {
 					// invalid duplicates
 					err = errInvalidDuplicates
 					return
-				} else {
-					// valid duplicates
 				}
+				// valid duplicates
 			}
 		}
 	}

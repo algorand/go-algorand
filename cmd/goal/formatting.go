@@ -154,7 +154,7 @@ func jsonPrintable(str string) bool {
 		if r >= utf8.RuneSelf {
 			return false
 		}
-		if htmlSafeSet[r] == false {
+		if !htmlSafeSet[r] {
 			return false
 		}
 	}

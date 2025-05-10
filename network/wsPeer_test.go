@@ -166,6 +166,8 @@ func TestVersionToFeature(t *testing.T) {
 		{"2.2", PeerFeatureProposalCompression, pfCompressedProposal},
 		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
 		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
+		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, PeerFeatureVoteVpackCompression}, ","), pfCompressedVoteVpack | pfCompressedProposal},
+		{"2.2", PeerFeatureVoteVpackCompression, pfCompressedVoteVpack},
 		{"2.3", PeerFeatureProposalCompression, pfCompressedProposal},
 	}
 	for i, test := range tests {

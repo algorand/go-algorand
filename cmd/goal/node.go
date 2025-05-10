@@ -282,28 +282,6 @@ var startCmd = &cobra.Command{
 	},
 }
 
-var shutdownCmd = &cobra.Command{
-	Use:   "shutdown",
-	Short: "Shut down the node",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, _ []string) {
-		binDir, err := util.ExeDir()
-		if err != nil {
-			panic(err)
-		}
-		datadir.OnDataDirs(func(dataDir string) {
-			nc := nodecontrol.MakeNodeController(binDir, dataDir)
-			err := nc.Shutdown()
-
-			if err == nil {
-				reportInfoln(infoNodeShuttingDown)
-			} else {
-				reportErrorf(errorNodeFailedToShutdown, err)
-			}
-		})
-	},
-}
-
 func getRunHostedConfigFlag(dataDir string) bool {
 	// See if this instance wants to run Hosted, even if '-H' wasn't specified on our cmdline
 	cfg, err := config.LoadConfigFromDisk(dataDir)

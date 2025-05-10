@@ -105,10 +105,8 @@ func monitorAgent(ws *websocket.Conn) {
 		case websocket.TextMessage:
 			log.Infof("received text from agent: %s", message)
 			clientBroadcast <- message
-			break
 		default:
 			log.Infof("received other from agent: %s", message)
-			break
 		}
 	}
 	// remove the agent from the agent broadcast list

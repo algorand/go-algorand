@@ -268,7 +268,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	// each thread makes new HTTP connections per API call
 	var sendWaitGroup sync.WaitGroup
 	sendWaitGroup.Add(nroutines)
-	sent := make([]int, nroutines, nroutines)
+	sent := make([]int, nroutines)
 	for i := 0; i < nroutines; i++ {
 		go func(base int) {
 			defer sendWaitGroup.Done()

@@ -1032,7 +1032,12 @@ func onlineAccountsNewRoundImpl(
 						prevAcct = updated
 					}
 				} else {
-					if prevAcct.AccountData.IsVotingEmpty() && newAcct.IsVotingEmpty() {
+					if prevAcct.AccountData.IsVotingEmpty() && newStatus != basics.Online {
+						// we are not using newAcct.IsVotingEmpty because new account comes from deltas,
+						// and deltas are base (full) accounts, so that it can have status=offline and non-empty voting data
+						// for suspended accounts.
+						// it is not the same for online accounts where empty all offline accounts are stored with empty voting data.
+
 						// if both old and new are offline, ignore
 						// otherwise the following could happen:
 						// 1. there are multiple offline account deltas so all of them could be inserted

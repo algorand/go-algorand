@@ -24,6 +24,7 @@ import (
 	"github.com/DataDog/zstd"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/vpack"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -52,25 +53,54 @@ func zstdCompressMsg(tbytes []byte, d []byte) ([]byte, string) {
 	return mbytesComp, ""
 }
 
+func vpackCompressVote(tbytes []byte, d []byte) ([]byte, string) {
+	var enc vpack.StatelessEncoder
+	bound := vpack.MaxCompressedVoteSize
+	// Pre-allocate buffer for tag bytes and compressed data
+	mbytesComp := make([]byte, len(tbytes)+bound)
+	copy(mbytesComp, tbytes)
+	comp, err := enc.CompressVote(mbytesComp[len(tbytes):], d)
+	if err != nil {
+		// fallback and reuse non-compressed original data
+		logMsg := fmt.Sprintf("failed to compress vote into buffer of len %d: %v", len(d), err)
+		copied := copy(mbytesComp[len(tbytes):], d)
+		return mbytesComp[:len(tbytes)+copied], logMsg
+	}
+
+	result := mbytesComp[:len(tbytes)+len(comp)]
+	return result, ""
+}
+
 // MaxDecompressedMessageSize defines a maximum decompressed data size
 // to prevent zip bombs. This depends on MaxTxnBytesPerBlock consensus parameter
 // and should be larger.
 const MaxDecompressedMessageSize = 20 * 1024 * 1024 // some large enough value
 
-// wsPeerMsgDataConverter performs optional incoming messages conversion.
-// At the moment it only supports zstd decompression for payload proposal
-type wsPeerMsgDataConverter struct {
+// wsPeerMsgDataDecoder performs optional incoming messages conversion.
+// At the moment it only supports zstd decompression for payload proposal,
+// and vpack decompression for votes.
+type wsPeerMsgDataDecoder struct {
 	log    logging.Logger
 	origin string
 
 	// actual converter(s)
 	ppdec zstdProposalDecompressor
+	avdec vpackVoteDecompressor
 }
 
 type zstdProposalDecompressor struct{}
 
 func (dec zstdProposalDecompressor) accept(data []byte) bool {
 	return len(data) > 4 && bytes.Equal(data[:4], zstdCompressionMagic[:])
+}
+
+type vpackVoteDecompressor struct {
+	enabled bool
+	dec     *vpack.StatelessDecoder
+}
+
+func (dec vpackVoteDecompressor) convert(data []byte) ([]byte, error) {
+	return dec.dec.DecompressVote(nil, data)
 }
 
 func (dec zstdProposalDecompressor) convert(data []byte) ([]byte, error) {
@@ -96,7 +126,7 @@ func (dec zstdProposalDecompressor) convert(data []byte) ([]byte, error) {
 	}
 }
 
-func (c *wsPeerMsgDataConverter) convert(tag protocol.Tag, data []byte) ([]byte, error) {
+func (c *wsPeerMsgDataDecoder) convert(tag protocol.Tag, data []byte) ([]byte, error) {
 	if tag == protocol.ProposalPayloadTag {
 		// sender might support compressed payload but fail to compress for whatever reason,
 		// in this case it sends non-compressed payload - the receiver decompress only if it is compressed.
@@ -108,16 +138,33 @@ func (c *wsPeerMsgDataConverter) convert(tag protocol.Tag, data []byte) ([]byte,
 			return res, nil
 		}
 		c.log.Warnf("peer %s supported zstd but sent non-compressed data", c.origin)
+	} else if tag == protocol.AgreementVoteTag {
+		if c.avdec.enabled {
+			res, err := c.avdec.convert(data)
+			if err != nil {
+				c.log.Warnf("peer %s vote decompress error: %v", c.origin, err)
+				// fall back to original data
+				return data, nil
+			}
+			return res, nil
+		}
 	}
 	return data, nil
 }
 
-func makeWsPeerMsgDataConverter(wp *wsPeer) *wsPeerMsgDataConverter {
-	c := wsPeerMsgDataConverter{
+func makeWsPeerMsgDataDecoder(wp *wsPeer) *wsPeerMsgDataDecoder {
+	c := wsPeerMsgDataDecoder{
 		log:    wp.log,
 		origin: wp.originAddress,
 	}
 
 	c.ppdec = zstdProposalDecompressor{}
+	// have both ends advertised support for compression?
+	if wp.enableVoteCompression && wp.vpackVoteCompressionSupported() {
+		c.avdec = vpackVoteDecompressor{
+			enabled: true,
+			dec:     vpack.NewStatelessDecoder(),
+		}
+	}
 	return &c
 }
