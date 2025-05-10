@@ -37,8 +37,22 @@ if [[ "${UNAME}" == *"MINGW"* ]]; then
 	GOPATH1=$HOME/go
 else
 	export GOPATH=$(go env GOPATH)
+    GOPATH1=${GOPATH%%:*}
 fi
-export GOPATHBIN=${GOPATH%%:*}/bin
+
+# Setup GOBIN
+# If env var GOBIN is set, use it
+# Otherwise, use go env GOBIN if set
+# Otherwise default to $GOPATH1/bin
+
+if [[ -n "${GOBIN}" ]]; then
+    export GOBIN=${GOBIN}
+elif [[ -n "$(go env GOBIN)" ]]; then
+    export GOBIN=$(go env GOBIN)
+else
+    export GOBIN=${GOPATH1}/bin
+fi
+
 REPO_DIR=$(pwd)
 
 echo "Building package for '${OS} - ${ARCH}'"
@@ -63,9 +77,9 @@ DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "${DEFAULT
 mkdir ${PKG_ROOT}/bin
 
 # If you modify this list, also update this list in ./cmd/updater/update.sh backup_binaries()
-bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "find-nodes.sh" "goal" "kmd" "msgpacktool" "node_exporter" "tealcut" "tealdbg" "update.sh" "updater" "COPYING")
+bin_files=("algocfg" "algotmpl" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "find-nodes.sh" "goal" "kmd" "msgpacktool" "node_exporter" "tealcut" "tealdbg" "update.sh" "updater" "COPYING")
 for bin in "${bin_files[@]}"; do
-    cp ${GOPATHBIN}/${bin} ${PKG_ROOT}/bin
+    cp ${GOBIN}/${bin} ${PKG_ROOT}/bin
     if [ $? -ne 0 ]; then exit 1; fi
 done
 
@@ -109,7 +123,7 @@ echo "Staging tools package files"
 bin_files=("algons" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "loadgenerator" "COPYING" "dsign" "catchpointdump" "block-generator")
 mkdir -p ${TOOLS_ROOT}
 for bin in "${bin_files[@]}"; do
-    cp ${GOPATHBIN}/${bin} ${TOOLS_ROOT}
+    cp ${GOBIN}/${bin} ${TOOLS_ROOT}
     if [ $? -ne 0 ]; then exit 1; fi
 done
 
@@ -118,7 +132,7 @@ TEST_UTILS_ROOT=${PKG_ROOT}/test-utils
 bin_files=("algotmpl" "COPYING")
 mkdir -p ${TEST_UTILS_ROOT}
 for bin in "${bin_files[@]}"; do
-    cp ${GOPATHBIN}/${bin} ${TEST_UTILS_ROOT}
+    cp ${GOBIN}/${bin} ${TEST_UTILS_ROOT}
     if [ $? -ne 0 ]; then exit 1; fi
 done
 
