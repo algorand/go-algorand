@@ -100,6 +100,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, customConsens
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg.NetAddress = ni.wsNetAddr()
+		cfg.P2PHybridNetAddress = ni.p2pNetAddr() // since EnableP2PHybridMode is on by default
 		return ni, cfg
 	}
 
@@ -239,11 +240,11 @@ func setupFullNodesEx(
 		}
 
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
+		require.NoError(t, err)
 		phonebook := phonebookHook(nodeInfos, i)
-		require.NoError(t, err)
 		node, err := MakeFull(logging.Base().With("net", fmt.Sprintf("node%d", i)), rootDirectory, cfg, phonebook, g)
-		nodes[i] = node
 		require.NoError(t, err)
+		nodes[i] = node
 	}
 
 	return nodes, wallets
@@ -999,6 +1000,7 @@ func TestNodeP2PRelays(t *testing.T) {
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()
 		cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
+		cfg.EnableP2PHybridMode = false
 		cfg.EnableP2P = true
 		cfg.NetAddress = ""
 		cfg.EnableDHTProviders = true
