@@ -1406,6 +1406,9 @@ type SupplyResponse struct {
 	// CurrentRound Round
 	CurrentRound uint64 `json:"current_round"`
 
+	// OnlineCirculation OnlineCirculation as used by consensus, excluding expired accounts
+	OnlineCirculation uint64 `json:"online-circulation"`
+
 	// OnlineMoney OnlineMoney
 	OnlineMoney uint64 `json:"online-money"`
 

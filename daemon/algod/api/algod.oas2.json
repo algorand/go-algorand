@@ -5533,7 +5533,8 @@
         "required": [
           "online-money",
           "current_round",
-          "total-money"
+          "total-money",
+          "online-circulation"
         ],
         "properties": {
           "current_round": {
@@ -5542,6 +5543,10 @@
           },
           "online-money": {
             "description": "OnlineMoney",
+            "type": "integer"
+          },
+          "online-circulation": {
+            "description": "OnlineCirculation as used by consensus, excluding expired accounts",
             "type": "integer"
           },
           "total-money": {

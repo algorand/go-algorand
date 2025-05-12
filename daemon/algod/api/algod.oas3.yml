@@ -934,6 +934,10 @@
                   "description": "Round",
                   "type": "integer"
                 },
+                "online-circulation": {
+                  "description": "OnlineCirculation as used by consensus, excluding expired accounts",
+                  "type": "integer"
+                },
                 "online-money": {
                   "description": "OnlineMoney",
                   "type": "integer"
@@ -945,6 +949,7 @@
               },
               "required": [
                 "current_round",
+                "online-circulation",
                 "online-money",
                 "total-money"
               ],
@@ -5493,6 +5498,10 @@
                       "description": "Round",
                       "type": "integer"
                     },
+                    "online-circulation": {
+                      "description": "OnlineCirculation as used by consensus, excluding expired accounts",
+                      "type": "integer"
+                    },
                     "online-money": {
                       "description": "OnlineMoney",
                       "type": "integer"
@@ -5504,6 +5513,7 @@
                   },
                   "required": [
                     "current_round",
+                    "online-circulation",
                     "online-money",
                     "total-money"
                   ],
