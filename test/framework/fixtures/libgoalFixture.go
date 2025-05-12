@@ -133,7 +133,7 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	kmdConfOverride := netdeploy.OverrideKmdConfig(netdeploy.TemplateKMDConfig{SessionLifetimeSecs: 300})
 	// copy overrides to prevent caller's data from being modified
 	extraOverrides := append([]netdeploy.TemplateOverride(nil), overrides...)
-	extraOverrides = append(extraOverrides, kmdConfOverride)
+	extraOverrides = append(extraOverrides, kmdConfOverride, netdeploy.OverrideHybridMode)
 
 	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, extraOverrides...)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
