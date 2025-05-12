@@ -68,8 +68,7 @@ jobs:
         path: /tmp/workspace-${{ matrix.platform }}.tar.gz
         retention-days: 1
     - name: Notify Slack on failure
-      # if: $${{ job.status == 'failure' }}
-      if: always()
+      if: failure()
       uses: slackapi/slack-github-action@v2.1.0
       with:
         webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -395,3 +394,37 @@ jobs:
   #             TestAlgohWithExpect \
   #             TestGoalWithExpect \
   #             TestTealdbgWithExpect
+
+  #-- CircleCI steps to replicate:
+  # - attach_workspace:
+  #     at: << parameters.build_dir >>
+  # - run:
+  #     name: Upload Binaries << parameters.platform >>
+  #     command: |
+  #       if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
+  #       then
+  #         export NIGHTLY_BUILD="true"
+  #       fi
+  #       export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
+  #       export GOPATH="<< parameters.build_dir >>/go"
+  #       export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+  #       scripts/travis/deploy_packages.sh
+  #     no_output_timeout: 20m
+  # - when:
+  #     condition:
+  #       equal: [ "amd64", << parameters.platform >> ]
+  #     steps:
+  #       - run:
+  #           name: test_release.sh
+  #           command: |
+  #             export TRAVIS_BRANCH=${CIRCLE_BRANCH}
+  #             scripts/travis/test_release.sh
+  upload:
+    needs: [build]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-ubuntu-24.04-${{ github.run_id }}
+      
