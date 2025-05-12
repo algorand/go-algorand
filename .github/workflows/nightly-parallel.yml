@@ -433,8 +433,8 @@ jobs:
       
       - name: Extract workspace archive
         run: |
-          tar -xzf /tmp/workspace-ubuntu-24.04-${{ github.run_id }}.tar.gz
-          rm -f /tmp/workspace-ubuntu-24.04-${{ github.run_id }}.tar.gz
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
 
       - name: Upload Binaries
