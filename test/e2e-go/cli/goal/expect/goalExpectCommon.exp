@@ -269,6 +269,14 @@ proc ::AlgorandGoal::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR
        puts "ERROR in CreateNetwork: $EXCEPTION"
        exit 1
     }
+
+    # Update the Primary Node configuration for TwoNodes50Each/ThreeNodesEvenDist templates in order to satisfy hybrid mode defaults
+    set RELAY_NAME ""
+    if {[string match "*TwoNodes50Each*" $NETWORK_TEMPLATE] || [string match "*ThreeNodesEvenDist*" $NETWORK_TEMPLATE]} {
+        exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"PublicAddress": "abc", "P2PHybridNetAddress": ":4190"}} > $TEST_ROOT_DIR/Primary/config.json.new
+        exec rm $TEST_ROOT_DIR/Primary/config.json
+        exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
+    }
 }
 
 # Start the network
