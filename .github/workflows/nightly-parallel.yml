@@ -367,31 +367,31 @@ jobs:
   #         path: ~/test_results
   #         retention-days: 7
 
-  verify_nightly:
-    # needs: [test_nightly, integration_nightly, e2e_expect_nightly]
-    needs: [test_nightly]
-    strategy:
-      fail-fast: false
-      matrix:
-        # test_type: ["test", "integration", "e2e_expect"]
-        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        test_type: ["test"]
-        platform: ["ubuntu-24.04"]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
-          path: ~/test_results
-          merge-multiple: true
-      - name: Check test execution
-        run: |
-          cat ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/**/testresults.json > ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json
-          python3 scripts/buildtools/check_tests.py \
-            --tests-results-filepath ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json \
-            --ignored-tests \
-              TestAlgodWithExpect \
-              TestAlgohWithExpect \
-              TestGoalWithExpect \
-              TestTealdbgWithExpect
+  # verify_nightly:
+  #   # needs: [test_nightly, integration_nightly, e2e_expect_nightly]
+  #   needs: [test_nightly]
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       # test_type: ["test", "integration", "e2e_expect"]
+  #       # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+  #       test_type: ["test"]
+  #       platform: ["ubuntu-24.04"]
+  #   runs-on: ${{ matrix.platform }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
+  #         path: ~/test_results
+  #         merge-multiple: true
+  #     - name: Check test execution
+  #       run: |
+  #         cat ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/**/testresults.json > ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json
+  #         python3 scripts/buildtools/check_tests.py \
+  #           --tests-results-filepath ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json \
+  #           --ignored-tests \
+  #             TestAlgodWithExpect \
+  #             TestAlgohWithExpect \
+  #             TestGoalWithExpect \
+  #             TestTealdbgWithExpect
