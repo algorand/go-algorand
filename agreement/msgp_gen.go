@@ -7,7 +7,7 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -680,8 +680,8 @@ func (z *Certificate) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 				err = msgp.WrapError(err, "struct-from-array", "Votes")
 				return
 			}
-			if zb0007 > config.MaxVoteThreshold {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxVoteThreshold))
+			if zb0007 > bounds.MaxVoteThreshold {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxVoteThreshold))
 				err = msgp.WrapError(err, "struct-from-array", "Votes")
 				return
 			}
@@ -709,8 +709,8 @@ func (z *Certificate) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
 				return
 			}
-			if zb0009 > config.MaxVoteThreshold {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxVoteThreshold))
+			if zb0009 > bounds.MaxVoteThreshold {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(bounds.MaxVoteThreshold))
 				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
 				return
 			}
@@ -792,8 +792,8 @@ func (z *Certificate) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					err = msgp.WrapError(err, "Votes")
 					return
 				}
-				if zb0013 > config.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxVoteThreshold))
+				if zb0013 > bounds.MaxVoteThreshold {
+					err = msgp.ErrOverflow(uint64(zb0013), uint64(bounds.MaxVoteThreshold))
 					err = msgp.WrapError(err, "Votes")
 					return
 				}
@@ -819,8 +819,8 @@ func (z *Certificate) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					err = msgp.WrapError(err, "EquivocationVotes")
 					return
 				}
-				if zb0015 > config.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxVoteThreshold))
+				if zb0015 > bounds.MaxVoteThreshold {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxVoteThreshold))
 					err = msgp.WrapError(err, "EquivocationVotes")
 					return
 				}
@@ -881,10 +881,10 @@ func (z *Certificate) MsgIsZero() bool {
 func CertificateMaxSize() (s int) {
 	s = 1 + 4 + basics.RoundMaxSize() + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + ProposalValueMaxSize() + 5
 	// Calculating size of slice: z.Votes
-	s += msgp.ArrayHeaderSize + ((config.MaxVoteThreshold) * (VoteAuthenticatorMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxVoteThreshold) * (VoteAuthenticatorMaxSize()))
 	s += 4
 	// Calculating size of slice: z.EquivocationVotes
-	s += msgp.ArrayHeaderSize + ((config.MaxVoteThreshold) * (EquivocationVoteAuthenticatorMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxVoteThreshold) * (EquivocationVoteAuthenticatorMaxSize()))
 	return
 }
 
@@ -1682,8 +1682,8 @@ func (z *bundle) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 				err = msgp.WrapError(err, "struct-from-array", "Votes")
 				return
 			}
-			if zb0005 > config.MaxVoteThreshold {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(config.MaxVoteThreshold))
+			if zb0005 > bounds.MaxVoteThreshold {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(bounds.MaxVoteThreshold))
 				err = msgp.WrapError(err, "struct-from-array", "Votes")
 				return
 			}
@@ -1711,8 +1711,8 @@ func (z *bundle) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
 				return
 			}
-			if zb0007 > config.MaxVoteThreshold {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxVoteThreshold))
+			if zb0007 > bounds.MaxVoteThreshold {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxVoteThreshold))
 				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
 				return
 			}
@@ -1768,8 +1768,8 @@ func (z *bundle) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 					err = msgp.WrapError(err, "Votes")
 					return
 				}
-				if zb0009 > config.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxVoteThreshold))
+				if zb0009 > bounds.MaxVoteThreshold {
+					err = msgp.ErrOverflow(uint64(zb0009), uint64(bounds.MaxVoteThreshold))
 					err = msgp.WrapError(err, "Votes")
 					return
 				}
@@ -1795,8 +1795,8 @@ func (z *bundle) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []
 					err = msgp.WrapError(err, "EquivocationVotes")
 					return
 				}
-				if zb0011 > config.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxVoteThreshold))
+				if zb0011 > bounds.MaxVoteThreshold {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(bounds.MaxVoteThreshold))
 					err = msgp.WrapError(err, "EquivocationVotes")
 					return
 				}
@@ -1857,10 +1857,10 @@ func (z *bundle) MsgIsZero() bool {
 func BundleMaxSize() (s int) {
 	s = 1 + 2 + UnauthenticatedBundleMaxSize() + 5
 	// Calculating size of slice: z.Votes
-	s += msgp.ArrayHeaderSize + ((config.MaxVoteThreshold) * (VoteMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxVoteThreshold) * (VoteMaxSize()))
 	s += 4
 	// Calculating size of slice: z.EquivocationVotes
-	s += msgp.ArrayHeaderSize + ((config.MaxVoteThreshold) * (EquivocationVoteMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxVoteThreshold) * (EquivocationVoteMaxSize()))
 	return
 }
 
@@ -4916,8 +4916,8 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
 				return
 			}
-			if zb0007 > config.MaxGenesisIDLen {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxGenesisIDLen))
+			if zb0007 > bounds.MaxGenesisIDLen {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxGenesisIDLen))
 				return
 			}
 			(*z).unauthenticatedProposal.Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
@@ -5131,8 +5131,8 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0010 > config.MaxProposedExpiredOnlineAccounts {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(config.MaxProposedExpiredOnlineAccounts))
+			if zb0010 > bounds.MaxProposedExpiredOnlineAccounts {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(bounds.MaxProposedExpiredOnlineAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
@@ -5160,8 +5160,8 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
-			if zb0012 > config.MaxMarkAbsent {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxMarkAbsent))
+			if zb0012 > bounds.MaxMarkAbsent {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(bounds.MaxMarkAbsent))
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
@@ -5282,8 +5282,8 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 					err = msgp.WrapError(err, "GenesisID")
 					return
 				}
-				if zb0015 > config.MaxGenesisIDLen {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxGenesisIDLen))
+				if zb0015 > bounds.MaxGenesisIDLen {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxGenesisIDLen))
 					return
 				}
 				(*z).unauthenticatedProposal.Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
@@ -5453,8 +5453,8 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0018 > config.MaxProposedExpiredOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(config.MaxProposedExpiredOnlineAccounts))
+				if zb0018 > bounds.MaxProposedExpiredOnlineAccounts {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(bounds.MaxProposedExpiredOnlineAccounts))
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
@@ -5480,8 +5480,8 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
-				if zb0020 > config.MaxMarkAbsent {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxMarkAbsent))
+				if zb0020 > bounds.MaxMarkAbsent {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(bounds.MaxMarkAbsent))
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
@@ -5577,7 +5577,7 @@ func (z *proposal) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func ProposalMaxSize() (s int) {
-	s = 3 + 4 + basics.RoundMaxSize() + 5 + bookkeeping.BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + bookkeeping.BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + bounds.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
 	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.unauthenticatedProposal.Block.BlockHeader.StateProofTracking
 	s += protocol.NumStateProofTypes * (protocol.StateProofTypeMaxSize())
@@ -5585,13 +5585,13 @@ func ProposalMaxSize() (s int) {
 	s += protocol.NumStateProofTypes * (bookkeeping.StateProofTrackingDataMaxSize())
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxMarkAbsent) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxMarkAbsent) * (basics.AddressMaxSize()))
 	s += 5
 	// Using maxtotalbytes for: z.unauthenticatedProposal.Block.Payset
-	s += config.MaxTxnBytesPerBlock
+	s += bounds.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
 	return
 }
@@ -9459,8 +9459,8 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
 				return
 			}
-			if zb0007 > config.MaxGenesisIDLen {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxGenesisIDLen))
+			if zb0007 > bounds.MaxGenesisIDLen {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxGenesisIDLen))
 				return
 			}
 			(*z).unauthenticatedProposal.Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
@@ -9674,8 +9674,8 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0010 > config.MaxProposedExpiredOnlineAccounts {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(config.MaxProposedExpiredOnlineAccounts))
+			if zb0010 > bounds.MaxProposedExpiredOnlineAccounts {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(bounds.MaxProposedExpiredOnlineAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
@@ -9703,8 +9703,8 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
-			if zb0012 > config.MaxMarkAbsent {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxMarkAbsent))
+			if zb0012 > bounds.MaxMarkAbsent {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(bounds.MaxMarkAbsent))
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
@@ -9833,8 +9833,8 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 					err = msgp.WrapError(err, "GenesisID")
 					return
 				}
-				if zb0015 > config.MaxGenesisIDLen {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxGenesisIDLen))
+				if zb0015 > bounds.MaxGenesisIDLen {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxGenesisIDLen))
 					return
 				}
 				(*z).unauthenticatedProposal.Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
@@ -10004,8 +10004,8 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0018 > config.MaxProposedExpiredOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(config.MaxProposedExpiredOnlineAccounts))
+				if zb0018 > bounds.MaxProposedExpiredOnlineAccounts {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(bounds.MaxProposedExpiredOnlineAccounts))
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
@@ -10031,8 +10031,8 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
-				if zb0020 > config.MaxMarkAbsent {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxMarkAbsent))
+				if zb0020 > bounds.MaxMarkAbsent {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(bounds.MaxMarkAbsent))
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
@@ -10134,7 +10134,7 @@ func (z *transmittedPayload) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func TransmittedPayloadMaxSize() (s int) {
-	s = 3 + 4 + basics.RoundMaxSize() + 5 + bookkeeping.BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + bookkeeping.BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + bounds.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
 	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.unauthenticatedProposal.Block.BlockHeader.StateProofTracking
 	s += protocol.NumStateProofTypes * (protocol.StateProofTypeMaxSize())
@@ -10142,13 +10142,13 @@ func TransmittedPayloadMaxSize() (s int) {
 	s += protocol.NumStateProofTypes * (bookkeeping.StateProofTrackingDataMaxSize())
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxMarkAbsent) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxMarkAbsent) * (basics.AddressMaxSize()))
 	s += 5
 	// Using maxtotalbytes for: z.unauthenticatedProposal.Block.Payset
-	s += config.MaxTxnBytesPerBlock
+	s += bounds.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize() + 3 + UnauthenticatedVoteMaxSize()
 	return
 }
@@ -10306,8 +10306,8 @@ func (z *unauthenticatedBundle) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 				err = msgp.WrapError(err, "struct-from-array", "Votes")
 				return
 			}
-			if zb0007 > config.MaxVoteThreshold {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxVoteThreshold))
+			if zb0007 > bounds.MaxVoteThreshold {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxVoteThreshold))
 				err = msgp.WrapError(err, "struct-from-array", "Votes")
 				return
 			}
@@ -10335,8 +10335,8 @@ func (z *unauthenticatedBundle) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
 				return
 			}
-			if zb0009 > config.MaxVoteThreshold {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxVoteThreshold))
+			if zb0009 > bounds.MaxVoteThreshold {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(bounds.MaxVoteThreshold))
 				err = msgp.WrapError(err, "struct-from-array", "EquivocationVotes")
 				return
 			}
@@ -10418,8 +10418,8 @@ func (z *unauthenticatedBundle) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 					err = msgp.WrapError(err, "Votes")
 					return
 				}
-				if zb0013 > config.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxVoteThreshold))
+				if zb0013 > bounds.MaxVoteThreshold {
+					err = msgp.ErrOverflow(uint64(zb0013), uint64(bounds.MaxVoteThreshold))
 					err = msgp.WrapError(err, "Votes")
 					return
 				}
@@ -10445,8 +10445,8 @@ func (z *unauthenticatedBundle) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 					err = msgp.WrapError(err, "EquivocationVotes")
 					return
 				}
-				if zb0015 > config.MaxVoteThreshold {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxVoteThreshold))
+				if zb0015 > bounds.MaxVoteThreshold {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxVoteThreshold))
 					err = msgp.WrapError(err, "EquivocationVotes")
 					return
 				}
@@ -10507,10 +10507,10 @@ func (z *unauthenticatedBundle) MsgIsZero() bool {
 func UnauthenticatedBundleMaxSize() (s int) {
 	s = 1 + 4 + basics.RoundMaxSize() + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + ProposalValueMaxSize() + 5
 	// Calculating size of slice: z.Votes
-	s += msgp.ArrayHeaderSize + ((config.MaxVoteThreshold) * (VoteAuthenticatorMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxVoteThreshold) * (VoteAuthenticatorMaxSize()))
 	s += 4
 	// Calculating size of slice: z.EquivocationVotes
-	s += msgp.ArrayHeaderSize + ((config.MaxVoteThreshold) * (EquivocationVoteAuthenticatorMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxVoteThreshold) * (EquivocationVoteAuthenticatorMaxSize()))
 	return
 }
 
@@ -11281,8 +11281,8 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
 				return
 			}
-			if zb0007 > config.MaxGenesisIDLen {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxGenesisIDLen))
+			if zb0007 > bounds.MaxGenesisIDLen {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxGenesisIDLen))
 				return
 			}
 			(*z).Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
@@ -11496,8 +11496,8 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
-			if zb0010 > config.MaxProposedExpiredOnlineAccounts {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(config.MaxProposedExpiredOnlineAccounts))
+			if zb0010 > bounds.MaxProposedExpiredOnlineAccounts {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(bounds.MaxProposedExpiredOnlineAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts")
 				return
 			}
@@ -11525,8 +11525,8 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
-			if zb0012 > config.MaxMarkAbsent {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxMarkAbsent))
+			if zb0012 > bounds.MaxMarkAbsent {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(bounds.MaxMarkAbsent))
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
@@ -11647,8 +11647,8 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 					err = msgp.WrapError(err, "GenesisID")
 					return
 				}
-				if zb0015 > config.MaxGenesisIDLen {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxGenesisIDLen))
+				if zb0015 > bounds.MaxGenesisIDLen {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(bounds.MaxGenesisIDLen))
 					return
 				}
 				(*z).Block.BlockHeader.GenesisID, bts, err = msgp.ReadStringBytes(bts)
@@ -11818,8 +11818,8 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
-				if zb0018 > config.MaxProposedExpiredOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(config.MaxProposedExpiredOnlineAccounts))
+				if zb0018 > bounds.MaxProposedExpiredOnlineAccounts {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(bounds.MaxProposedExpiredOnlineAccounts))
 					err = msgp.WrapError(err, "ExpiredParticipationAccounts")
 					return
 				}
@@ -11845,8 +11845,8 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
-				if zb0020 > config.MaxMarkAbsent {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxMarkAbsent))
+				if zb0020 > bounds.MaxMarkAbsent {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(bounds.MaxMarkAbsent))
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
@@ -11942,7 +11942,7 @@ func (z *unauthenticatedProposal) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func UnauthenticatedProposalMaxSize() (s int) {
-	s = 3 + 4 + basics.RoundMaxSize() + 5 + bookkeeping.BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + config.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
+	s = 3 + 4 + basics.RoundMaxSize() + 5 + bookkeeping.BlockHashMaxSize() + 5 + committee.SeedMaxSize() + 4 + crypto.DigestMaxSize() + 7 + crypto.DigestMaxSize() + 3 + msgp.Int64Size + 4 + msgp.StringPrefixSize + bounds.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5 + basics.AddressMaxSize() + 4 + basics.AddressMaxSize() + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + basics.RoundMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 10 + protocol.ConsensusVersionMaxSize() + 8 + msgp.Uint64Size + 11 + basics.RoundMaxSize() + 11 + basics.RoundMaxSize() + 12 + protocol.ConsensusVersionMaxSize() + 13 + basics.RoundMaxSize() + 11 + msgp.BoolSize + 3 + msgp.Uint64Size + 4
 	s += msgp.MapHeaderSize
 	// Adding size of map keys for z.Block.BlockHeader.StateProofTracking
 	s += protocol.NumStateProofTypes * (protocol.StateProofTypeMaxSize())
@@ -11950,13 +11950,13 @@ func UnauthenticatedProposalMaxSize() (s int) {
 	s += protocol.NumStateProofTypes * (bookkeeping.StateProofTrackingDataMaxSize())
 	s += 11
 	// Calculating size of slice: z.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 11
 	// Calculating size of slice: z.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxMarkAbsent) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((bounds.MaxMarkAbsent) * (basics.AddressMaxSize()))
 	s += 5
 	// Using maxtotalbytes for: z.Block.Payset
-	s += config.MaxTxnBytesPerBlock
+	s += bounds.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
 	return
 }

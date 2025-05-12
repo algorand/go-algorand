@@ -112,8 +112,8 @@ type ResourcesData struct {
 	KeyValue           basics.TealKeyValue `codec:"p"`
 
 	// application global params ( basics.AppParams )
-	ApprovalProgram               []byte              `codec:"q,allocbound=config.MaxAvailableAppProgramLen"`
-	ClearStateProgram             []byte              `codec:"r,allocbound=config.MaxAvailableAppProgramLen"`
+	ApprovalProgram               []byte              `codec:"q,allocbound=bounds.MaxAvailableAppProgramLen"`
+	ClearStateProgram             []byte              `codec:"r,allocbound=bounds.MaxAvailableAppProgramLen"`
 	GlobalState                   basics.TealKeyValue `codec:"s"`
 	LocalStateSchemaNumUint       uint64              `codec:"t"`
 	LocalStateSchemaNumByteSlice  uint64              `codec:"u"`

@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -52,7 +53,7 @@ const maxStringSize = 4096
 const maxByteMathSize = 64
 
 // maxLogSize is the limit of total log size from n log calls in a program
-const maxLogSize = config.MaxEvalDeltaTotalLogSize
+const maxLogSize = bounds.MaxEvalDeltaTotalLogSize
 
 // maxLogCalls is the limit of total log calls during a program execution
 const maxLogCalls = 32
@@ -66,7 +67,7 @@ var maxAppCallDepth = 8
 // maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
 
-// maxTxGroupSize is the same as config.MaxTxGroupSize, but is a constant so
+// maxTxGroupSize is the same as bounds.MaxTxGroupSize, but is a constant so
 // that we can declare an array of this size. A unit test confirms that they
 // match.
 const maxTxGroupSize = 16

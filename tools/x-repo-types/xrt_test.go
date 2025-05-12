@@ -63,7 +63,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			yBranch:    "main",
 			yType:      "Block",
 			skip:       true,
-			skipReason: `Several issues. For example: LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=config.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
+			skipReason: `Several issues. For example: LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=bounds.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
 		},
 		{
 			name:    "goal-v-sdk-eval-delta",

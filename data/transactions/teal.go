@@ -35,18 +35,18 @@ type EvalDelta struct {
 
 	// When decoding EvalDeltas, the integer key represents an offset into
 	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ..., SharedAccts[0], SharedAccts[1], ...]
-	LocalDeltas map[uint64]basics.StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+	LocalDeltas map[uint64]basics.StateDelta `codec:"ld,allocbound=bounds.MaxEvalDeltaAccounts"`
 
 	// If a program modifies the local of an account that is not the Sender, or
 	// in txn.Accounts, it must be recorded here, so that the key in LocalDeltas
 	// can refer to it.
-	SharedAccts []basics.Address `codec:"sa,allocbound=config.MaxEvalDeltaAccounts"`
+	SharedAccts []basics.Address `codec:"sa,allocbound=bounds.MaxEvalDeltaAccounts"`
 
-	// The total allocbound calculation here accounts for the worse possible case of having config.MaxLogCalls individual log entries
-	// with the legnth of all of them summing up to config.MaxEvalDeltaTotalLogSize which is the limit for the sum of individual log lengths
-	Logs []string `codec:"lg,allocbound=config.MaxLogCalls,maxtotalbytes=(config.MaxLogCalls*msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize"`
+	// The total allocbound calculation here accounts for the worse possible case of having bounds.MaxLogCalls individual log entries
+	// with the length of all of them summing up to bounds.MaxEvalDeltaTotalLogSize which is the limit for the sum of individual log lengths
+	Logs []string `codec:"lg,allocbound=bounds.MaxLogCalls,maxtotalbytes=(bounds.MaxLogCalls*msgp.StringPrefixSize) + bounds.MaxEvalDeltaTotalLogSize"`
 
-	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactionsPerDelta"`
+	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=bounds.MaxInnerTransactionsPerDelta"`
 }
 
 // Equal compares two EvalDeltas and returns whether or not they are

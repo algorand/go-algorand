@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -174,8 +175,8 @@ func RandomAppParams() basics.AppParams {
 	}
 
 	ap := basics.AppParams{
-		ApprovalProgram:   make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
-		ClearStateProgram: make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+		ApprovalProgram:   make([]byte, int(crypto.RandUint63())%bounds.MaxAppProgramLen),
+		ClearStateProgram: make([]byte, int(crypto.RandUint63())%bounds.MaxAppProgramLen),
 		GlobalState:       make(basics.TealKeyValue),
 		StateSchemas:      schemas,
 		ExtraProgramPages: uint32(crypto.RandUint64() % 4),
@@ -214,7 +215,7 @@ func RandomAppParams() basics.AppParams {
 
 		var bytes []byte
 		if crypto.RandUint64()%5 != 0 {
-			bytes = make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen-len(keyName)))
+			bytes = make([]byte, crypto.RandUint64()%uint64(bounds.MaxBytesKeyValueLen-len(keyName)))
 			crypto.RandBytes(bytes[:])
 		}
 
@@ -260,7 +261,7 @@ func RandomAppLocalState() basics.AppLocalState {
 		}
 		var bytes []byte
 		if crypto.RandUint64()%5 != 0 {
-			bytes = make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen-len(keyName)))
+			bytes = make([]byte, crypto.RandUint64()%uint64(bounds.MaxBytesKeyValueLen-len(keyName)))
 			crypto.RandBytes(bytes[:])
 		}
 
