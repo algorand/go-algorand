@@ -819,7 +819,7 @@ type peerMetadataProvider interface {
 	GenesisID() string
 	PublicAddress() string
 	RandomID() string
-	NetProtoVersions() []string
+	SupportedProtoVersions() []string
 	Config() config.Local
 }
 
@@ -843,8 +843,8 @@ func (wn *WebsocketNetwork) RandomID() string {
 	return wn.randomID
 }
 
-// NetProtoVersions returns the supported protocol versions of this node.
-func (wn *WebsocketNetwork) NetProtoVersions() []string {
+// SupportedProtoVersions returns the supported protocol versions of this node.
+func (wn *WebsocketNetwork) SupportedProtoVersions() []string {
 	return wn.supportedProtocolVersions
 }
 
@@ -876,7 +876,7 @@ func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvide
 		// for backward compatibility, include the ProtocolVersion header in request as well.
 		header.Set(ProtocolVersionHeader, netProtoVer)
 	}
-	for _, v := range meta.NetProtoVersions() {
+	for _, v := range meta.SupportedProtoVersions() {
 		header.Add(ProtocolAcceptVersionHeader, v)
 	}
 }
@@ -2055,9 +2055,9 @@ func (t *HTTPPAddressBoundTransport) RoundTrip(req *http.Request) (*http.Respons
 // control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
 // are included in this range.
 func filterASCII(unfilteredString string) (filteredString string) {
-	for i, r := range unfilteredString {
+	for _, r := range unfilteredString {
 		if int(r) >= 0x20 && int(r) <= 0x7e {
-			filteredString += string(unfilteredString[i])
+			filteredString += string(r)
 		} else {
 			filteredString += unprintableCharacterGlyph
 		}

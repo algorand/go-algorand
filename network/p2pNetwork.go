@@ -798,8 +798,8 @@ func (n *P2PNetwork) GenesisID() string {
 	return n.genesisID
 }
 
-// NetProtoVersions returns the supported protocol versions of this node.
-func (n *P2PNetwork) NetProtoVersions() []string {
+// SupportedProtoVersions returns the supported protocol versions of this node.
+func (n *P2PNetwork) SupportedProtoVersions() []string {
 	return n.supportedProtocolVersions
 }
 
@@ -842,7 +842,7 @@ func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, str
 		}
 	}
 
-	n.wsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo{})
+	n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo{})
 }
 
 func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) {
@@ -881,10 +881,10 @@ func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, st
 			return
 		}
 	}
-	n.wsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
+	n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
 }
 
-func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool, pmi peerMetaInfo) {
+func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool, pmi peerMetaInfo) {
 	// get address for peer ID
 	ma := stream.Conn().RemoteMultiaddr()
 	addr := ma.String()

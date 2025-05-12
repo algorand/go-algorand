@@ -110,7 +110,7 @@ func writePeerMetaHeaders(stream io.ReadWriter, p2pPeer peer.ID, networkProtoVer
 	length := len(data)
 	if length > math.MaxUint16 {
 		// 64k is enough for everyone
-		// current headers size is TBD
+		// current headers size is 250 bytes
 		msg := fmt.Sprintf("error writing initial message, too large: %v, peer %s", header, p2pPeer)
 		panic(msg)
 	}

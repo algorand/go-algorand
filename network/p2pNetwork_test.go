@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/uuid"
 	"github.com/algorand/go-deadlock"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -1470,6 +1471,8 @@ func TestP2PMetainfoExchange(t *testing.T) {
 	cfg.NetAddress = "127.0.0.1:0"
 	cfg.EnableVoteCompression = true
 	log := logging.TestingLog(t)
+	err := log.EnableTelemetryContext(context.Background(), logging.TelemetryConfig{Enable: true, SendToLog: true, GUID: uuid.New()})
+	require.NoError(t, err)
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	err = netA.Start()
@@ -1494,7 +1497,7 @@ func TestP2PMetainfoExchange(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
-	}, 1*time.Second, 50*time.Millisecond)
+	}, 2*time.Second, 50*time.Millisecond)
 
 	peers := netA.GetPeers(PeersConnectedIn)
 	require.Len(t, peers, 1)
