@@ -1033,7 +1033,7 @@ var infoAppCmd = &cobra.Command{
 		params := meta.Params
 
 		fmt.Printf("Application ID:        %d\n", appIdx)
-		fmt.Printf("Application account:   %v\n", basics.AppIndex(appIdx).Address())
+		fmt.Printf("Application account:   %v\n", appIdx.Address())
 		fmt.Printf("Creator:               %v\n", params.Creator)
 		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
 		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))

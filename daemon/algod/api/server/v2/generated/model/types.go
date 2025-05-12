@@ -182,10 +182,10 @@ type Account struct {
 	IncentiveEligible *bool `json:"incentive-eligible,omitempty"`
 
 	// LastHeartbeat The round in which this account last went online, or explicitly renewed their online status.
-	LastHeartbeat *uint64 `json:"last-heartbeat,omitempty"`
+	LastHeartbeat *basics.Round `json:"last-heartbeat,omitempty"`
 
 	// LastProposed The round in which this account last proposed the block.
-	LastProposed *uint64 `json:"last-proposed,omitempty"`
+	LastProposed *basics.Round `json:"last-proposed,omitempty"`
 
 	// MinBalance MicroAlgo balance required by the account.
 	//
@@ -347,7 +347,7 @@ type ApplicationLocalReference struct {
 // ApplicationLocalState Stores local state associated with an application.
 type ApplicationLocalState struct {
 	// Id The application which this local state is for.
-	Id uint64 `json:"id"`
+	Id basics.AppIndex `json:"id"`
 
 	// KeyValue Represents a key-value store for use in an application.
 	KeyValue *TealKeyValueStore `json:"key-value,omitempty"`

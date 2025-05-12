@@ -94,7 +94,7 @@ type DebugParams struct {
 	LatestTimestamp  int64
 	RunMode          string
 	DisableSourceMap bool
-	AppID            uint64
+	AppID            basics.AppIndex
 	Painless         bool
 	ListenForDrReq   bool
 }

@@ -153,7 +153,7 @@ func TestAssetValidRounds(t *testing.T) {
 	a.NoError(err)
 	// zeros are special cases
 	// first valid never should be zero
-	a.NotEqual(basics.Round(0), tx.FirstValid)
+	a.NotZero(tx.FirstValid)
 
 	params, err = client.SuggestedParams()
 	a.NoError(err)

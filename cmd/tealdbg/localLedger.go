@@ -298,10 +298,10 @@ func (l *localLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx ba
 		return ledgercore.AssetResource{}, nil
 	}
 	var result ledgercore.AssetResource
-	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.AssetParams[aidx]; ok {
 		result.AssetParams = &p
 	}
-	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.Assets[aidx]; ok {
 		result.AssetHolding = &p
 	}
 
@@ -314,10 +314,10 @@ func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, a
 		return ledgercore.AppResource{}, nil
 	}
 	var result ledgercore.AppResource
-	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+	if p, ok := ad.AppParams[aidx]; ok {
 		result.AppParams = &p
 	}
-	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+	if s, ok := ad.AppLocalStates[aidx]; ok {
 		result.AppLocalState = &s
 	}
 

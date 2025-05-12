@@ -917,7 +917,7 @@ func (pps *WorkerState) appFundFromSourceAccount(appID basics.AppIndex, client *
 			return err
 		}
 
-		appAddr := basics.AppIndex(appID).Address()
+		appAddr := appID.Address()
 		mbr := proto.MinBalance +
 			proto.BoxFlatMinBalance*uint64(pps.getNumBoxes()) +
 			proto.BoxByteMinBalance*(proto.MaxBoxSize+uint64(proto.MaxAppKeyLen))*uint64(pps.getNumBoxes())

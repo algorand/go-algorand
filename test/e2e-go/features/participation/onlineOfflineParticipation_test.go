@@ -174,9 +174,9 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.Equal(amountToSendInitial, amt, "new account should be funded with the amount the rich account sent")
 
 	// account adds part key
-	const partKeyFirstValid = 0
+	const partKeyFirstValid basics.Round = 0
 	const partKeyValidityPeriod = 10000
-	partKeyLastValid := basics.Round(partKeyFirstValid + partKeyValidityPeriod)
+	partKeyLastValid := partKeyFirstValid + partKeyValidityPeriod
 
 	maxTxnLife := basics.Round(consensus[protocol.ConsensusVersion("shortpartkeysprotocol")].MaxTxnLife)
 

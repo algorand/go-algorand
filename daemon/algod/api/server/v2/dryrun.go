@@ -281,14 +281,14 @@ func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.Ac
 		}
 		if out.AppParams == nil {
 			out.AppParams = make(map[basics.AppIndex]basics.AppParams)
-			out.AppParams[basics.AppIndex(app.Id)] = params
+			out.AppParams[app.Id] = params
 		} else {
-			ap, ok := out.AppParams[basics.AppIndex(app.Id)]
+			ap, ok := out.AppParams[app.Id]
 			if ok {
 				MergeAppParams(&ap, &params)
-				out.AppParams[basics.AppIndex(app.Id)] = ap
+				out.AppParams[app.Id] = ap
 			} else {
-				out.AppParams[basics.AppIndex(app.Id)] = params
+				out.AppParams[app.Id] = params
 			}
 		}
 	}
@@ -342,10 +342,10 @@ func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address,
 		return ledgercore.AppResource{}, err
 	}
 	var result ledgercore.AppResource
-	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+	if p, ok := ad.AppParams[aidx]; ok {
 		result.AppParams = &p
 	}
-	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+	if s, ok := ad.AppLocalStates[aidx]; ok {
 		result.AppLocalState = &s
 	}
 	return result, nil
@@ -357,10 +357,10 @@ func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx 
 		return ledgercore.AssetResource{}, err
 	}
 	var result ledgercore.AssetResource
-	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.AssetParams[aidx]; ok {
 		result.AssetParams = &p
 	}
-	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.Assets[aidx]; ok {
 		result.AssetHolding = &p
 	}
 	return result, nil
@@ -480,18 +480,18 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				creator := stxn.Txn.Sender.String()
 				// check and use the first entry in dr.Apps
 				if len(dr.Apps) > 0 && dr.Apps[0].Params.Creator == creator {
-					appIdx = basics.AppIndex(dr.Apps[0].Id)
+					appIdx = dr.Apps[0].Id
 				}
 			}
 			if stxn.Txn.OnCompletion == transactions.OptInOC {
 				if idx, ok := dl.accountsIn[stxn.Txn.Sender]; ok {
 					acct := dl.dr.Accounts[idx]
 					ls := model.ApplicationLocalState{
-						Id:       uint64(appIdx),
+						Id:       appIdx,
 						KeyValue: new(model.TealKeyValueStore),
 					}
 					for _, app := range dr.Apps {
-						if basics.AppIndex(app.Id) == appIdx {
+						if app.Id == appIdx {
 							if app.Params.LocalStateSchema != nil {
 								ls.Schema = *app.Params.LocalStateSchema
 							}
@@ -504,7 +504,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 					} else {
 						found := false
 						for _, apls := range *acct.AppsLocalState {
-							if apls.Id == uint64(appIdx) {
+							if apls.Id == appIdx {
 								// already opted in
 								found = true
 							}

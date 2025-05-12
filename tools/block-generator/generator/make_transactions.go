@@ -162,7 +162,7 @@ func (g *generator) makeAppCreateTxn(kind appKind, sender basics.Address, round 
 
 	paySibTxn := g.makeTestTxn(sender, round, intra)
 	paySibTxn.Type = protocol.PaymentTx
-	paySibTxn.Receiver = basics.AppIndex(futureAppId).Address()
+	paySibTxn.Receiver = futureAppId.Address()
 	paySibTxn.Fee = basics.MicroAlgos{Raw: pstFee}
 	paySibTxn.Amount = uint64(pstAmt)
 
@@ -187,7 +187,7 @@ func (g *generator) makeAppOptinTxn(sender basics.Address, round basics.Round, i
 	*/
 
 	optInTxn.Type = protocol.ApplicationCallTx
-	optInTxn.ApplicationID = basics.AppIndex(appIndex)
+	optInTxn.ApplicationID = appIndex
 	optInTxn.OnCompletion = txn.OptInOC
 	// the first inner sends some algo to the creator:
 	optInTxn.Accounts = []basics.Address{indexToAccount(g.appMap[kind][appIndex].sender)}
@@ -202,7 +202,7 @@ func (g *generator) makeAppOptinTxn(sender basics.Address, round basics.Round, i
 
 	paySibTxn := g.makeTestTxn(sender, round, intra)
 	paySibTxn.Type = protocol.PaymentTx
-	paySibTxn.Receiver = basics.AppIndex(appIndex).Address()
+	paySibTxn.Receiver = appIndex.Address()
 	paySibTxn.Fee = basics.MicroAlgos{Raw: pstFee}
 	paySibTxn.Amount = uint64(pstAmt)
 

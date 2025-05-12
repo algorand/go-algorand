@@ -2647,12 +2647,12 @@
         "last-proposed": {
           "description": "The round in which this account last proposed the block.",
           "type": "integer",
-          "format": "uint64"
+          "x-go-type": "basics.Round"
         },
         "last-heartbeat": {
           "description": "The round in which this account last went online, or explicitly renewed their online status.",
           "type": "integer",
-          "format": "uint64"
+          "x-go-type": "basics.Round"
         }
       }
     },
@@ -2889,7 +2889,7 @@
         "id": {
           "description": "The application which this local state is for.",
           "type": "integer",
-          "format": "uint64"
+          "x-go-type": "basics.AppIndex"
         },
         "schema": {
           "description": "\\[hsch\\] schema.",

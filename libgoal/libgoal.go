@@ -602,8 +602,8 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		Header: transactions.Header{
 			Sender:     fromAddr,
 			Fee:        basics.MicroAlgos{Raw: fee},
-			FirstValid: basics.Round(fv),
-			LastValid:  basics.Round(lv),
+			FirstValid: fv,
+			LastValid:  lv,
 			Lease:      lease,
 			Note:       note,
 		},

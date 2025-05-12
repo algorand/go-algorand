@@ -1062,13 +1062,13 @@
           },
           "last-heartbeat": {
             "description": "The round in which this account last went online, or explicitly renewed their online status.",
-            "format": "uint64",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "last-proposed": {
             "description": "The round in which this account last proposed the block.",
-            "format": "uint64",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "min-balance": {
             "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
@@ -1357,8 +1357,8 @@
         "properties": {
           "id": {
             "description": "The application which this local state is for.",
-            "format": "uint64",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
           },
           "key-value": {
             "$ref": "#/components/schemas/TealKeyValueStore"

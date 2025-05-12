@@ -100,10 +100,10 @@ func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx bas
 	if !ok {
 		return ledgercore.AssetResource{}, nil
 	}
-	if ap, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+	if ap, ok := ad.AssetParams[aidx]; ok {
 		ar.AssetParams = &ap
 	}
-	if ah, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+	if ah, ok := ad.Assets[aidx]; ok {
 		ar.AssetHolding = &ah
 	}
 	return ar, nil
@@ -140,10 +140,10 @@ func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, ai
 	if !ok {
 		return ledgercore.AppResource{}, nil
 	}
-	if ap, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+	if ap, ok := ad.AppParams[aidx]; ok {
 		ar.AppParams = &ap
 	}
-	if ls, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+	if ls, ok := ad.AppLocalStates[aidx]; ok {
 		ar.AppLocalState = &ls
 	}
 	return ar, nil
@@ -394,7 +394,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 		require.NoError(t, err)
 		assert.Nil(t, ret.CreatedApp)
 		require.NotNil(t, ret.AppLocalState)
-		assert.Equal(t, uint64(aidx), ret.AppLocalState.Id)
+		assert.Equal(t, aidx, ret.AppLocalState.Id)
 		ls := acctData.AppLocalStates[aidx]
 		assert.Equal(t, ls.Schema.NumByteSlice, ret.AppLocalState.Schema.NumByteSlice)
 		assert.Equal(t, ls.Schema.NumUint, ret.AppLocalState.Schema.NumUint)

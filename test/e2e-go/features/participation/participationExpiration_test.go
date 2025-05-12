@@ -131,7 +131,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.NoError(err)
 	lastValidRound := sAccountData.VoteLastValid
 
-	a.Equal(basics.Round(partKeyLastValid), lastValidRound)
+	a.Equal(partKeyLastValid, lastValidRound)
 
 	// We want to wait until we get to one round past the last valid round
 	err = fixture.WaitForRoundWithTimeout(lastValidRound + 1)

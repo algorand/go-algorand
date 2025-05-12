@@ -248,8 +248,8 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 			Header: transactions.Header{
 				Sender:      publicKeys[i%len(publicKeys)],
 				Fee:         basics.MicroAlgos{Raw: cfg.Fee},
-				FirstValid:  basics.Round(nodeStatus.LastRound),
-				LastValid:   basics.Round(nodeStatus.LastRound + 2),
+				FirstValid:  nodeStatus.LastRound,
+				LastValid:   nodeStatus.LastRound + 2,
 				Note:        make([]byte, 4),
 				GenesisID:   vers.GenesisID,
 				GenesisHash: genesisHash,

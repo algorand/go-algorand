@@ -544,8 +544,8 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 		TotalBoxes:          omitEmpty(record.TotalBoxes),
 		TotalBoxBytes:       omitEmpty(record.TotalBoxBytes),
 		MinBalance:          record.MinBalance(&consensus).Raw,
-		LastProposed:        omitEmpty(uint64(record.LastProposed)),
-		LastHeartbeat:       omitEmpty(uint64(record.LastHeartbeat)),
+		LastProposed:        omitEmpty(record.LastProposed),
+		LastHeartbeat:       omitEmpty(record.LastHeartbeat),
 	}
 	response := model.AccountResponse(account)
 	return ctx.JSON(http.StatusOK, response)
@@ -639,7 +639,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address basi
 	if record.AppLocalState != nil {
 		localState := convertTKVToGenerated(&record.AppLocalState.KeyValue)
 		response.AppLocalState = &model.ApplicationLocalState{
-			Id:       uint64(applicationID),
+			Id:       applicationID,
 			KeyValue: localState,
 			Schema: model.ApplicationStateSchema{
 				NumByteSlice: record.AppLocalState.Schema.NumByteSlice,
@@ -1846,7 +1846,7 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID basics.AssetIndex) er
 	}
 
 	lastRound := ledger.Latest()
-	record, err := ledger.LookupAsset(lastRound, creator, basics.AssetIndex(assetID))
+	record, err := ledger.LookupAsset(lastRound, creator, assetID)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

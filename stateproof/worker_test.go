@@ -1019,7 +1019,7 @@ func TestWorkersProversCacheAndSignatures(t *testing.T) {
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	threshold := onlineProversThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
+	threshold := onlineProversThreshold(&proto, 512) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)
@@ -1755,7 +1755,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	threshold := onlineProversThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
+	threshold := onlineProversThreshold(&proto, 512) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)
@@ -1813,7 +1813,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	a.NoError(err)
 	a.Equal(expectedStateProofs, countDB)
 
-	threshold := onlineProversThreshold(&proto, basics.Round(512)) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
+	threshold := onlineProversThreshold(&proto, 512) // 512 since no StateProofs are confirmed yet (512 is the first, commitment at 256)
 	var roundSigs map[basics.Round][]pendingSig
 	err = w.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		roundSigs, err = getPendingSigs(tx, threshold, basics.Round(256+proto.StateProofInterval*expectedStateProofs), false)

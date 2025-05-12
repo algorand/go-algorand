@@ -164,7 +164,7 @@ func TestAccount(t *testing.T) {
 	}
 
 	verifyAppLocalState := func(index int, appIdx basics.AppIndex, numUints, numByteSlices uint64, keyValues model.TealKeyValueStore) {
-		require.Equal(t, uint64(appIdx), (*conv.AppsLocalState)[index].Id)
+		require.Equal(t, appIdx, (*conv.AppsLocalState)[index].Id)
 		require.Equal(t, numUints, (*conv.AppsLocalState)[index].Schema.NumUint)
 		require.Equal(t, numByteSlices, (*conv.AppsLocalState)[index].Schema.NumByteSlice)
 		require.Equal(t, len(keyValues), len(*(*conv.AppsLocalState)[index].KeyValue))

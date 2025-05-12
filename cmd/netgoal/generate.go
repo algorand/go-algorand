@@ -28,6 +28,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/netdeploy/remote"
@@ -52,7 +53,7 @@ var accountsCount uint64
 var assetsCount uint64
 var applicationCount uint64
 var balRange []string
-var lastPartKeyRound uint64
+var lastPartKeyRound basics.Round
 var deterministicKeys bool
 
 func init() {
@@ -80,7 +81,7 @@ func init() {
 	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 7, "Application Count")
 	generateCmd.Flags().StringArrayVar(&balRange, "bal", []string{}, "Application Count")
 	generateCmd.Flags().BoolVarP(&deterministicKeys, "deterministic", "", false, "Whether to generate deterministic keys")
-	generateCmd.Flags().Uint64VarP(&lastPartKeyRound, "last-part-key-round", "", gen.DefaultGenesis.LastPartKeyRound, "LastPartKeyRound in genesis.json")
+	generateCmd.Flags().Uint64VarP((*uint64)(&lastPartKeyRound), "last-part-key-round", "", uint64(gen.DefaultGenesis.LastPartKeyRound), "LastPartKeyRound in genesis.json")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long

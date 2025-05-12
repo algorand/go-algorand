@@ -264,8 +264,8 @@ func generateRegistrationTransaction(part model.ParticipationKey, fee basics.Mic
 			StateProofPK: stateProofPk,
 		},
 	}
-	t.KeyregTxnFields.VoteFirst = basics.Round(part.Key.VoteFirstValid)
-	t.KeyregTxnFields.VoteLast = basics.Round(part.Key.VoteLastValid)
+	t.KeyregTxnFields.VoteFirst = part.Key.VoteFirstValid
+	t.KeyregTxnFields.VoteLast = part.Key.VoteLastValid
 	t.KeyregTxnFields.VoteKeyDilution = part.Key.VoteKeyDilution
 
 	return t, nil
@@ -292,8 +292,7 @@ func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participa
 
 	goOnlineTx := part.GenerateRegistrationTransaction(
 		basics.MicroAlgos{Raw: fee},
-		basics.Round(txnFirstValid),
-		basics.Round(txnLastValid),
+		txnFirstValid, txnLastValid,
 		leaseBytes, includeStateProofKeys)
 
 	goOnlineTx.Header.GenesisID = params.GenesisId
@@ -332,16 +331,14 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid ba
 
 	// Choose which participation keys to go online with;
 	// need to do this after filling in the round number.
-	part, err := c.chooseParticipation(parsedAddr, basics.Round(firstValid))
+	part, err := c.chooseParticipation(parsedAddr, firstValid)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
 
-	parsedFrstValid := basics.Round(firstValid)
-	parsedLastValid := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
-	goOnlineTransaction, err := generateRegistrationTransaction(part, parsedFee, parsedFrstValid, parsedLastValid, leaseBytes)
+	goOnlineTransaction, err := generateRegistrationTransaction(part, parsedFee, firstValid, lastValid, leaseBytes)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -387,8 +384,6 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid b
 		return transactions.Transaction{}, err
 	}
 
-	parsedFirstRound := basics.Round(firstValid)
-	parsedLastRound := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
 	goOfflineTransaction := transactions.Transaction{
@@ -396,8 +391,8 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid b
 		Header: transactions.Header{
 			Sender:     parsedAddr,
 			Fee:        parsedFee,
-			FirstValid: parsedFirstRound,
-			LastValid:  parsedLastRound,
+			FirstValid: firstValid,
+			LastValid:  lastValid,
 			Lease:      leaseBytes,
 		},
 	}
@@ -442,8 +437,6 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		return transactions.Transaction{}, err
 	}
 
-	parsedFirstRound := basics.Round(firstValid)
-	parsedLastRound := basics.Round(lastValid)
 	parsedFee := basics.MicroAlgos{Raw: fee}
 
 	becomeNonparticipatingTransaction := transactions.Transaction{
@@ -451,8 +444,8 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		Header: transactions.Header{
 			Sender:     parsedAddr,
 			Fee:        parsedFee,
-			FirstValid: parsedFirstRound,
-			LastValid:  parsedLastRound,
+			FirstValid: firstValid,
+			LastValid:  lastValid,
 		},
 	}
 	if cparams.SupportGenesisHash {
@@ -501,8 +494,8 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid bas
 
 	tx.Header.Sender = parsedAddr
 	tx.Header.Fee = parsedFee
-	tx.Header.FirstValid = basics.Round(firstValid)
-	tx.Header.LastValid = basics.Round(lastValid)
+	tx.Header.FirstValid = firstValid
+	tx.Header.LastValid = lastValid
 
 	if cparams.SupportGenesisHash {
 		var genHash crypto.Digest
@@ -570,7 +563,7 @@ func (c *Client) MakeUnsignedAppNoOpTx(appIdx basics.AppIndex, appArgs [][]byte,
 // be constructed using this method.
 func (c *Client) MakeUnsignedApplicationCallTx(appIdx basics.AppIndex, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, extrapages uint32, rejectVersion uint64) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
-	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.ApplicationID = appIdx
 	tx.OnCompletion = onCompletion
 	tx.RejectVersion = rejectVersion
 
@@ -803,7 +796,7 @@ func (c *Client) MakeUnsignedAssetSendTx(index basics.AssetIndex, amount uint64,
 
 	tx.Type = protocol.AssetTransferTx
 	tx.AssetAmount = amount
-	tx.XferAsset = basics.AssetIndex(index)
+	tx.XferAsset = index
 
 	if recipient != "" {
 		tx.AssetReceiver, err = basics.UnmarshalChecksumAddress(recipient)
@@ -838,7 +831,7 @@ func (c *Client) MakeUnsignedAssetFreezeTx(index basics.AssetIndex, accountToCha
 	var err error
 
 	tx.Type = protocol.AssetFreezeTx
-	tx.FreezeAsset = basics.AssetIndex(index)
+	tx.FreezeAsset = index
 
 	tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(accountToChange)
 	if err != nil {

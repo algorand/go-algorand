@@ -543,7 +543,7 @@ func scenarioA(
 				ownAllAccount.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetID),
+				asset.AssetID,
 				ownAllAccount.pk,
 				uint64(0))
 
@@ -582,7 +582,7 @@ func scenarioA(
 				nacc.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetID),
+				asset.AssetID,
 				ownAllAccount.pk,
 				asset.Amount)
 			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
@@ -805,7 +805,7 @@ func scenarioC(
 				require.Fail(t, "Test errored")
 			default:
 			}
-			optInTx := makeOptInAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
+			optInTx := makeOptInAppTransaction(t, client, app.Id, firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
 
 			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
@@ -854,7 +854,7 @@ func scenarioC(
 				require.Fail(t, "Test errored")
 			default:
 			}
-			optInTx := callAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
+			optInTx := callAppTransaction(t, client, app.Id, firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
 
 			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)

@@ -1302,7 +1302,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 			// sha512_256
 			{
 				Pc:             118,
-				StackAdditions: goValuesToAvmValues(crypto.Digest(basics.AppIndex(uint64(appID) + 3).Address()).ToSlice()),
+				StackAdditions: goValuesToAvmValues(crypto.Digest((appID + 3).Address()).ToSlice()),
 				StackPopCount:  toPtr(1),
 			},
 			// itxn_field Receiver
