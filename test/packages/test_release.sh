@@ -23,7 +23,7 @@ OS_LIST=(
     ubuntu:24.04
 )
 
-BUCKET=algorand-builds-dev
+BUCKET=algorand-builds
 CHANNEL=stable
 FAILED=()
 
