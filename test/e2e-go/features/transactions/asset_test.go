@@ -1237,3 +1237,219 @@ func verifyAssetParameters(asset model.AssetParams,
 	asser.Equal(*asset.MetadataHash, metadataHash)
 	asser.Equal(*asset.Url, assetURL)
 }
+
+func TestAssetGlobalFreeze(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	manager, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	reserve, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	freeze, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	clawback, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	extra, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	// Fund the manager, freeze, clawback, and extra, so they can issue transactions later on
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, manager, 0, 10000000000, nil)
+	a.NoError(err)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, reserve, 0, 10000000000, nil)
+	a.NoError(err)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, freeze, 0, 10000000000, nil)
+	a.NoError(err)
+	_, err = client.SendPaymentFromUnencryptedWallet(account0, clawback, 0, 10000000000, nil)
+	a.NoError(err)
+
+	// Create two assets: one with default-freeze, and one without default-freeze
+	txids := make(map[string]string)
+
+	tx, err := client.MakeUnsignedAssetCreateTx(100, false, manager, reserve, freeze, clawback, "nofreeze", "xx", "foo://bar", nil, 0)
+	txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	txids[txid] = account0
+
+	tx, err = client.MakeUnsignedAssetCreateTx(100, true, manager, reserve, freeze, clawback, "frozen", "xx", "foo://bar", nil, 0)
+	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	txids[txid] = account0
+
+	_, curRound := fixture.GetBalanceAndRound(account0)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "creating assets")
+
+	info, err := client.AccountInformation(account0, true)
+	a.NoError(err)
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 2)
+	var frozenIdx, nonFrozenIdx uint64
+	for _, asset := range *info.CreatedAssets {
+		idx := asset.Index
+		cp := asset.Params
+		if cp.UnitName != nil && *cp.UnitName == "frozen" {
+			frozenIdx = idx
+		}
+
+		if cp.UnitName != nil && *cp.UnitName == "nofreeze" {
+			nonFrozenIdx = idx
+		}
+	}
+
+	// Fund the account: extra
+	tx, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
+	a.NoError(err)
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	fixture.WaitForConfirmedTxn(curRound+20, tx.ID().String())
+
+	// Opt in to both assets should succeed, regardless of
+	// their default frozen status.
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+	txids[txid] = extra
+
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+	txids[txid] = extra
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "opting into assets")
+
+	// Send each asset to the opted in account.
+	// frozen should be rejected.
+	// nonFrozen should succeed.
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 1, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "asset frozen in recipient"))
+
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	txids[txid] = account0
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "sending unfrozen asset")
+
+	// Unfreeze the recipient of the frozen asset. Now the
+	// transfer should succeed.
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedAssetFreezeTx(frozenIdx, extra, false)
+	txid, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
+	a.NoError(err)
+	txids[txid] = freeze
+
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 5, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.NoError(err)
+	txids[txid] = account0
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "unfreeze and send remaining asset")
+
+	// Globally Freeze both assets.
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedAssetFreezeTx(frozenIdx, "", true)
+	txid, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
+	a.NoError(err)
+	txids[txid] = freeze
+
+	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, "", true)
+	txid, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
+	a.NoError(err)
+	txids[txid] = freeze
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "global freeze both assets")
+
+	// Both assets should be unable to be transfered now
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 2, extra, "", "")
+	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "globally frozen for"))
+
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 2, extra, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, account0, tx, err)
+	a.Error(err)
+	a.True(strings.Contains(err.Error(), "globally frozen for"))
+
+	// Clawback should still be possible
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 1, account0, "", extra)
+	txid, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.NoError(err)
+	txids[txid] = clawback
+
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, account0, "", extra)
+	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	a.NoError(err)
+	txids[txid] = clawback
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "clawback whilst globally frozen")
+
+	// Check that the asset balances are correct
+	info, err = client.AccountInformation(account0, true)
+	a.NoError(err)
+	a.NotNil(info.Assets)
+	a.Equal(len(*info.Assets), 2)
+	for _, asset := range *info.Assets {
+		if asset.AssetID == frozenIdx {
+			a.Equal(asset.Amount, uint64(96))
+		} else if asset.AssetID == nonFrozenIdx {
+			a.Equal(asset.Amount, uint64(96))
+		}
+	}
+
+	info, err = client.AccountInformation(extra, true)
+	a.NoError(err)
+	a.NotNil(info.Assets)
+	a.Equal(len(*info.Assets), 2)
+	for _, asset := range *info.Assets {
+		if asset.AssetID == frozenIdx {
+			a.Equal(asset.Amount, uint64(4))
+		} else if asset.AssetID == nonFrozenIdx {
+			a.Equal(asset.Amount, uint64(4))
+		}
+	}
+
+	// Should be able to close out asset slots and close entire account.
+	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, "", account0, "")
+	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 0, "", account0, "")
+	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+
+	_, err = client.SendPaymentFromWallet(wh, nil, extra, "", 0, 0, nil, account0, 0, 0)
+	a.NoError(err)
+}

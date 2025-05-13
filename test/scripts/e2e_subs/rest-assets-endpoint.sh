@@ -32,3 +32,8 @@ call_and_verify "Asset parameter parsing error 2." "/v2/assets/not-a-number" 400
 # Good request, but invalid query parameters
 call_and_verify "Asset invalid parameter" "/v2/assets/$ASSET_ID?this-should-not-fail=200" 200 '","decimals":19,"default-frozen":false,"freeze":"'
 
+# Freeze asset globally
+${gcmd} asset freeze --assetid $ASSET_ID --freezer ${ACCOUNT} --freeze=true
+
+# Good request, include "frozen" field
+call_and_verify "Should contain asset data." "/v2/assets/$ASSET_ID" 200 '","frozen":true,"'
