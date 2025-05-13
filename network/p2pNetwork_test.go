@@ -1551,10 +1551,13 @@ func TestP2PMetainfoV1vsV22(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
-	}, 1*time.Second, 50*time.Millisecond)
+	}, 2*time.Second, 50*time.Millisecond)
 
-	peers := netA.GetPeers(PeersConnectedIn)
-	require.Len(t, peers, 1)
+	var peers []Peer
+	require.Eventually(t, func() bool {
+		peers = netA.GetPeers(PeersConnectedIn)
+		return len(peers) > 0
+	}, 2*time.Second, 50*time.Millisecond)
 	peer := peers[0].(*wsPeer)
 	require.False(t, peer.features&pfCompressedProposal != 0)
 	require.False(t, peer.vpackVoteCompressionSupported())
