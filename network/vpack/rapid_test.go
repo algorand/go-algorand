@@ -40,6 +40,7 @@ func TestCheckStatelessEncoder(t *testing.T) {
 
 // FuzzCheckStatelessEncoder is the same as TestCheckStatelessEncoder, but is a fuzz test.
 func FuzzCheckStatelessEncoder(f *testing.F) {
+	partitiontest.PartitionTest(f)
 	f.Fuzz(rapid.MakeFuzz(checkStatelessEncoder))
 }
 
@@ -185,6 +186,8 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 // expects to be valid msgpack-encoded votes, this test is only ensures that
 // StatelessEncoder and StatelessDecoder don't crash on malformed data.
 func FuzzStatelessEncoder(f *testing.F) {
+	partitiontest.PartitionTest(f)
+
 	// Seed with valid compressed votes from random vote generator
 	voteGen := generateRandomVote()
 	var msgpBuf []byte
@@ -229,6 +232,8 @@ func FuzzStatelessEncoder(f *testing.F) {
 // FuzzStatelessDecoder is a fuzz test specifically targeting the StatelessDecoder
 // with potentially malformed input.
 func FuzzStatelessDecoder(f *testing.F) {
+	partitiontest.PartitionTest(f)
+
 	// Add valid compressed votes from random vote generator
 	voteGen := generateRandomVote()
 	var msgpBuf []byte

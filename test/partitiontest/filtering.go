@@ -25,7 +25,7 @@ import (
 )
 
 // PartitionTest checks if the current partition should run this test, and skips it if not.
-func PartitionTest(t *testing.T) {
+func PartitionTest(t testing.TB) {
 	pt, found := os.LookupEnv("PARTITION_TOTAL")
 	if !found {
 		return
