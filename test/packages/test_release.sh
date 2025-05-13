@@ -18,7 +18,6 @@ OS_LIST=(
     quay.io/centos/centos:stream9
     fedora:39
     fedora:40
-    ubuntu:20.04
     ubuntu:22.04
     ubuntu:24.04
 )
