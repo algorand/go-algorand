@@ -952,24 +952,33 @@ func (p *resourcePopulator) addApp(app basics.AppIndex) error {
 	return err
 }
 
+// addEmptyBox adds an empty box (appID=0, name="") to a transaction in the populator
+func (p *resourcePopulator) addEmptyBox() error {
+	var err error
+
+	for _, i := range p.appCallIndexes {
+		err = p.txnResources[i].addBox(basics.AppIndex(0), "")
+		if err == nil {
+			return nil
+		}
+	}
+
+	return err
+}
+
+// addBox adds a box to a txn in the resource populator. The app passed should never be zero,
+// since the boxes from simulate will always have a "hydrated" app ID
 func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
 	var err error
 
 	// First try to find txn with app already available
-	// If the app ID is zero the box ref can go anywhere, so we just put it in the first available app
 	for _, i := range p.appCallIndexes {
-		if app == basics.AppIndex(0) || p.txnResources[i].hasApp(app) {
+		if p.txnResources[i].hasApp(app) {
 			err = p.txnResources[i].addBox(app, name)
 			if err == nil {
 				return nil
 			}
 		}
-	}
-
-	// If we have gotten to this point and the App ID is 0, then we know there is no where it can go
-	// The next loop will try to add the app reference, which is nonsensical for 0
-	if app == 0 {
-		return err
 	}
 
 	// Then try to find txn with room for both app and box
@@ -1061,7 +1070,6 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 
 	// Sort boxes by app first and then name
 	group_boxes := slices.SortedFunc(maps.Keys(groupResourceTracker.Boxes), func(a, b logic.BoxRef) int {
-		// NOTE: We intentionally sort in reverse order for apps so appID 0 is last since they can go anywhere
 		return cmp.Or(cmp.Compare(b.App, a.App), cmp.Compare(a.Name, b.Name))
 	})
 
@@ -1174,8 +1182,8 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 		}
 	}
 
-	for i := 0; i < groupResourceTracker.NumEmptyBoxRefs; i++ {
-		err := p.addBox(0, "")
+	for range groupResourceTracker.NumEmptyBoxRefs {
+		err := p.addEmptyBox()
 		if err != nil {
 			return err
 		}
