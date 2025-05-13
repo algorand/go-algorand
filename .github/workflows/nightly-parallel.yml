@@ -454,6 +454,11 @@ jobs:
         shell: bash
 
       - name: Test Release (amd64 only)
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_RELEASE_BUCKET: ${{ secrets.S3_RELEASE_BUCKET }}
         if: ${{ matrix.platform == 'ubuntu-24.04' }}
         run: |
           export TRAVIS_BRANCH="${{ github.ref_name }}"
