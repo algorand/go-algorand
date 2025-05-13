@@ -79,7 +79,7 @@ func readPeerMetaHeaders(stream io.ReadWriter, p2pPeer peer.ID, netProtoSupporte
 	msgBytes := make([]byte, msgLen)
 	rn, err = stream.Read(msgBytes[:])
 	if rn != int(msgLen) || err != nil {
-		err0 := fmt.Errorf("error reading response message from peer %s: %w", p2pPeer, err)
+		err0 := fmt.Errorf("error reading response message from peer %s: %w, expected: %d, read: %d", p2pPeer, err, msgLen, rn)
 		return peerMetaInfo{}, err0
 	}
 	var responseHeaders peerMetaHeaders
