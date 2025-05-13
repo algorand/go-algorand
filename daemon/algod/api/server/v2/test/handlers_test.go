@@ -83,6 +83,11 @@ func setupMockNodeForMethodGetWithShutdown(t *testing.T, status node.StatusRepor
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	return setupTestForMethodGetWithMockLedger(t, mockLedger, rootkeys, stxns, status, devmode, shutdown, releasefunc)
+}
+
+// setupTestForMethodGetWithMockLedger allows for providing a custom mockLedger for testing
+func setupTestForMethodGetWithMockLedger(t *testing.T, mockLedger *data.Ledger, rootkeys []account.Root, stxns []transactions.SignedTxn, status node.StatusReport, devmode bool, shutdown chan struct{}, releasefunc func()) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -544,10 +549,38 @@ func TestGetSupply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	a := require.New(t)
+	opts := testEnvOptions{
+		numAccounts:     3,
+		numTransactions: 1,
+		offlineAccounts: true,
+		// Make one online account expire early (at round 50)
+		numExpiredOnline:     1,
+		expiredVoteLastValid: 50,
+		accountBalances:      []uint64{500_000, 300_000, 200_000},
+	}
+	mockLedger, rootkeys, _, stxns, releasefunc := testingenvWithOptions(t, opts)
+	shutdown := make(chan struct{})
+	handler, c, rec, _, _, _ := setupTestForMethodGetWithMockLedger(t, mockLedger, rootkeys, stxns, cannedStatusReportGolden, false, shutdown, releasefunc)
 	defer releasefunc()
+	insertRounds(a, handler, 375)
 	err := handler.GetSupply(c)
 	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var supplyResponse model.SupplyResponse
+	a.NoError(json.Unmarshal(rec.Body.Bytes(), &supplyResponse))
+	t.Logf("Total Money: %d, Online Money: %d, Online Circulation: %d",
+		supplyResponse.TotalMoney, supplyResponse.OnlineMoney, supplyResponse.OnlineCirculation)
+
+	a.Equal(uint64(375), supplyResponse.CurrentRound)
+	a.Equal(uint64(1_000_000), supplyResponse.TotalMoney)
+	a.Equal(uint64(800_000), supplyResponse.OnlineMoney)
+	a.Equal(uint64(300_000), supplyResponse.OnlineCirculation)
+
+	totals, err := mockLedger.Totals(basics.Round(supplyResponse.CurrentRound))
+	a.NoError(err)
+	a.Equal(totals.Participating().Raw, supplyResponse.TotalMoney)
+	a.Equal(totals.Online.Money.Raw, supplyResponse.OnlineMoney)
 }
 
 func TestGetStatus(t *testing.T) {
@@ -1130,7 +1163,14 @@ func TestSimulateTransaction(t *testing.T) {
 	// prepare node and handler
 	numAccounts := 5
 	offlineAccounts := true
-	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
+	opts := testEnvOptions{
+		numAccounts:     numAccounts,
+		numTransactions: 1,
+		offlineAccounts: offlineAccounts,
+		minMoneyAtStart: 999_998,
+		maxMoneyAtStart: 999_999,
+	}
+	mockLedger, roots, _, _, releasefunc := testingenvWithOptions(t, opts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
