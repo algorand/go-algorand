@@ -107,7 +107,7 @@ func (af AssetFreezeTxnFields) wellFormed(proto config.ConsensusParams) error {
 		return errAssetIDCannotBeZero
 	}
 
-	if !proto.EnableGlobalFreeze {
+	if !proto.EnableGlobalFreeze && af.FreezeAccount.IsZero() {
 		return errFreezeAccountCannotBeEmpty
 	}
 
