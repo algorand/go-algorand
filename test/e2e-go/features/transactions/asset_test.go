@@ -1408,13 +1408,35 @@ func TestAssetGlobalFreeze(t *testing.T) {
 	txids[txid] = clawback
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, account0, "", extra)
-	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
+	txid, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.NoError(err)
 	txids[txid] = clawback
 
 	_, curRound = fixture.GetBalanceAndRound(account0)
 	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "clawback whilst globally frozen")
+
+	// Unfreeze sender and receiver individually to allow them to
+	// continue using the asset, despite being globally frozen.
+	txids = make(map[string]string)
+	tx, err = client.MakeUnsignedAssetFreezeTx(frozenIdx, extra, false)
+	txid, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
+	a.NoError(err)
+	txids[txid] = freeze
+
+	tx, err = client.MakeUnsignedAssetFreezeTx(frozenIdx, account0, false)
+	txid, err = helperFillSignBroadcast(client, wh, freeze, tx, err)
+	a.NoError(err)
+	txids[txid] = freeze
+
+	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 1, account0, "", "")
+	txid, err = helperFillSignBroadcast(client, wh, extra, tx, err)
+	a.NoError(err)
+	txids[txid] = extra
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
+	a.True(confirmed, "unfreeze account whilst globally frozen")
 
 	// Check that the asset balances are correct
 	info, err = client.AccountInformation(account0, true)
@@ -1423,7 +1445,7 @@ func TestAssetGlobalFreeze(t *testing.T) {
 	a.Equal(len(*info.Assets), 2)
 	for _, asset := range *info.Assets {
 		if asset.AssetID == frozenIdx {
-			a.Equal(asset.Amount, uint64(96))
+			a.Equal(asset.Amount, uint64(97))
 		} else if asset.AssetID == nonFrozenIdx {
 			a.Equal(asset.Amount, uint64(96))
 		}
@@ -1435,7 +1457,7 @@ func TestAssetGlobalFreeze(t *testing.T) {
 	a.Equal(len(*info.Assets), 2)
 	for _, asset := range *info.Assets {
 		if asset.AssetID == frozenIdx {
-			a.Equal(asset.Amount, uint64(4))
+			a.Equal(asset.Amount, uint64(3))
 		} else if asset.AssetID == nonFrozenIdx {
 			a.Equal(asset.Amount, uint64(4))
 		}

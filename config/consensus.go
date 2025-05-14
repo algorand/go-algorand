@@ -1491,6 +1491,7 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
+	vFuture.EnableGlobalFreeze = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
