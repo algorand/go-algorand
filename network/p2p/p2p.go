@@ -36,7 +36,6 @@ import (
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -181,23 +180,23 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 	return rm, err
 }
 
-// StreamHandlerMap is a map of protocol IDs to StreamHandlers
-type StreamHandlerMap map[protocol.ID]StreamHandler
+// StreamHandlerPair is a struct that contains a protocol ID and a StreamHandler
+type StreamHandlerPair struct {
+	ProtoID protocol.ID
+	Handler StreamHandler
+}
+
+// StreamHandlers is an ordered list of StreamHandlerPair
+type StreamHandlers []StreamHandlerPair
 
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlerMap, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
 
 	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
-	sub, err := h.EventBus().Subscribe(new(event.EvtPeerIdentificationCompleted))
-	if err != nil {
-		err0 := fmt.Errorf("failed to subscribe to peer identification events: %v", err)
-		return nil, err0
-	}
-	go sm.peerWatcher(ctx, sub)
 	h.Network().Notify(sm)
 
-	for protoID := range wsStreamHandlers {
-		h.SetStreamHandler(protoID, sm.streamHandler)
+	for _, pair := range wsStreamHandlers {
+		h.SetStreamHandler(pair.ProtoID, sm.streamHandler)
 	}
 
 	ps, err := makePubSub(ctx, cfg, h, metricsTracer)

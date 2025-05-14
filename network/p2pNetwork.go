@@ -290,13 +290,18 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	log.Infof("P2P host created: peer ID %s addrs %s", h.ID(), h.Addrs())
 
 	// TODO: remove after consensus v41 takes effect.
-	hm := p2p.StreamHandlerMap{
-		p2p.AlgorandWsProtocolV1:  net.wsStreamHandlerV1,
-		p2p.AlgorandWsProtocolV22: net.wsStreamHandlerV22,
+	// ordered list of supported protocol versions
+	hm := p2p.StreamHandlers{}
+	if !disableV22Protocol {
+		hm = append(hm, p2p.StreamHandlerPair{
+			ProtoID: p2p.AlgorandWsProtocolV22,
+			Handler: net.wsStreamHandlerV22,
+		})
 	}
-	if disableV22Protocol {
-		delete(hm, p2p.AlgorandWsProtocolV22)
-	}
+	hm = append(hm, p2p.StreamHandlerPair{
+		ProtoID: p2p.AlgorandWsProtocolV1,
+		Handler: net.wsStreamHandlerV1,
+	})
 	// END TODO
 	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, hm, pubsubMetricsTracer{})
 	if err != nil {
