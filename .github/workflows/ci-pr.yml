@@ -83,11 +83,11 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 8
+      PARTITION_TOTAL: 16
       CIRCLECI: true
       SHORT_TEST_FLAG: "-short"
     steps:
@@ -165,12 +165,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 8
+      PARTITION_TOTAL: 16
       E2E_TEST_FILTER: GO
       PARALLEL_FLAG: "-p 1"
       SHORT_TEST_FLAG: "-short"
@@ -232,12 +232,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1]
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 2
+      PARTITION_TOTAL: 16
       E2E_TEST_FILTER: EXPECT
       PARALLEL_FLAG: "-p 1"
       SHORT_TEST_FLAG: "-short"
