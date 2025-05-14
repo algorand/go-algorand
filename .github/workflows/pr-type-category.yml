@@ -1,10 +1,9 @@
 name: Check PR category and type
 on:
-  workflow_dispatch:
-  # pull_request:
-  #   branches:
-  #     - master
-  #   types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+  pull_request:
+    branches:
+      - master
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
 jobs:
   check_label:
     runs-on: ubuntu-latest

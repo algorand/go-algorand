@@ -2,14 +2,13 @@
 # otherwise wouldn't get tested along with the main go-algorand build.
 name: Test tools modules
 on:
-  workflow_dispatch:
-  # push:
-  #   branches:
-  #     - master
-  #   paths:
-  #     - 'tools/block-generator/**'
-  #     - 'tools/x-repo-types/**'
-  # pull_request:
+  push:
+    branches:
+      - master
+    paths:
+      - 'tools/block-generator/**'
+      - 'tools/x-repo-types/**'
+  pull_request:
 
 jobs:
   tools_test:

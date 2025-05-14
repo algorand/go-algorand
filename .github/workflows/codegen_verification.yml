@@ -1,10 +1,9 @@
 name: "codegen verification"
 on:
-  workflow_dispatch:
-#   push:
-#     branches:
-#       - master
-#   pull_request:
+  push:
+    branches:
+      - master
+  pull_request:
 jobs:
   codegen_verification:
     runs-on: ubuntu-22.04
