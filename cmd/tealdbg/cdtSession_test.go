@@ -602,7 +602,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 		require.True(t, ok)
 	}
 
-	objIds := []string{
+	objIDs := []string{
 		encodeTxnArrayField(0, 1), encodeGroupTxnID(0), encodeGroupTxnID(1),
 		encodeArrayLength(stackObjID), encodeArraySlice(scratchObjID, 0, 1),
 		encodeAppLocalsAddr(basics.Address{}.String()),
@@ -612,7 +612,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 		encodeInnerTxnID([]int{0}), encodeInnerTxnID([]int{0, 0}),
 		encodeInnerTxnID([]int{0, 1}),
 	}
-	for _, k := range objIds {
+	for _, k := range objIDs {
 		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}
 		resp, events, err = s.handleCdtRequest(&req, &state)
 		require.NoError(t, err)

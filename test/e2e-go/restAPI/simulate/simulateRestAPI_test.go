@@ -265,7 +265,7 @@ int 1`
 	txn, err := testClient.MakeUnsignedApplicationCallTx(
 		0, nil, nil, nil,
 		nil, nil, transactions.NoOpOC,
-		approval, clearState, basics.StateSchema{}, basics.StateSchema{}, 0,
+		approval, clearState, basics.StateSchema{}, basics.StateSchema{}, 0, 0,
 	)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 1, 1001, 0, txn)
@@ -473,7 +473,7 @@ int 1`
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
 		0, nil, nil, nil,
 		nil, nil, transactions.NoOpOC,
-		approval, clearState, gl, lc, 0,
+		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
@@ -502,7 +502,7 @@ int 1`
 	// construct app call
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
 		uint64(createdAppID), [][]byte{[]byte("first-arg")},
-		nil, nil, nil, nil,
+		nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCallTxn)
@@ -601,7 +601,7 @@ int 1`
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
 		0, nil, nil, nil,
 		nil, nil, transactions.NoOpOC,
-		approval, clearState, gl, lc, 0,
+		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
@@ -629,7 +629,7 @@ int 1`
 
 	// construct app call
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(createdAppID), nil, nil, nil, nil, nil,
+		uint64(createdAppID), nil, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCallTxn)
@@ -894,7 +894,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	// construct app calls
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{uint64ToBytes(uint64(MaxDepth))}, nil, nil, nil, nil,
+		uint64(futureAppID), [][]byte{uint64ToBytes(uint64(MaxDepth))}, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee*uint64(3*MaxDepth+2), appCallTxn)
@@ -1736,7 +1736,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	// construct app calls
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{}, nil, nil, nil, nil,
+		uint64(futureAppID), [][]byte{}, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallTxn)
@@ -1930,18 +1930,18 @@ end:
 
 	// construct app call "global"
 	appCallGlobalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{[]byte("global")}, nil, nil, nil, nil,
+		uint64(futureAppID), [][]byte{[]byte("global")}, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	appCallGlobalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallGlobalTxn)
 	a.NoError(err)
 	// construct app optin
-	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil)
+	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
 	// construct app call "global"
 	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil,
+		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	appCallLocalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallLocalTxn)
@@ -2212,18 +2212,18 @@ end:
 
 	// construct app call "global"
 	appCallGlobalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{[]byte("global")}, nil, nil, nil, nil,
+		uint64(futureAppID), [][]byte{[]byte("global")}, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	appCallGlobalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallGlobalTxn)
 	a.NoError(err)
 	// construct app optin
-	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil)
+	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
 	// construct app call "local"
 	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil,
+		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	appCallLocalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallLocalTxn)
@@ -2624,7 +2624,7 @@ int 1
 
 	// construct app call
 	txn, err = testClient.MakeUnsignedAppNoOpTx(
-		uint64(testAppID), nil, nil, nil, nil, nil,
+		uint64(testAppID), nil, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)

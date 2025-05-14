@@ -3384,6 +3384,7 @@ func randomAppResourceData() trackerdb.ResourcesData {
 		GlobalStateSchemaNumUint:      crypto.RandUint64(),
 		GlobalStateSchemaNumByteSlice: crypto.RandUint64(),
 		ExtraProgramPages:             uint32(crypto.RandUint63() % uint64(math.MaxUint32)),
+		Version:                       crypto.RandUint64(),
 
 		ResourceFlags: 255,
 		UpdateRound:   crypto.RandUint64(),
@@ -3596,4 +3597,90 @@ func TestOnlineAccountsExceedOfflineRows(t *testing.T) {
 	require.Equal(t, basics.Round(4), history[0].UpdRound)
 	require.True(t, history[1].AccountData.IsVotingEmpty())
 	require.Equal(t, basics.Round(5), history[1].UpdRound)
+}
+
+// TestOnlineAccountsSuspended checks that transfer to suspended account does not produce extra rows
+// in online accounts table. The test is similar to TestOnlineAccountsExceedOfflineRows.
+func TestOnlineAccountsSuspended(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	var accts map[basics.Address]basics.AccountData
+	sqlitedriver.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+
+	addrA := ledgertesting.RandomAddress()
+
+	deltaA := onlineAccountDelta{
+		address: addrA,
+		newAcct: []trackerdb.BaseOnlineAccountData{
+			{
+				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+				IncentiveEligible: true, // does not matter for commit logic but makes the test intent clearer
+				BaseVotingData:    trackerdb.BaseVotingData{VoteFirstValid: 1, VoteLastValid: 5},
+			},
+			// suspend, offline but non-empty voting data
+			{
+				MicroAlgos:        basics.MicroAlgos{Raw: 100_000_000},
+				IncentiveEligible: false,
+				BaseVotingData:    trackerdb.BaseVotingData{VoteFirstValid: 1, VoteLastValid: 5},
+			},
+		},
+		updRound:  []uint64{1, 2},
+		newStatus: []basics.Status{basics.Online, basics.Offline},
+	}
+	updates := compactOnlineAccountDeltas{}
+	updates.deltas = append(updates.deltas, deltaA)
+	writer, err := sqlitedriver.MakeOnlineAccountsSQLWriter(tx, updates.len() > 0)
+	require.NoError(t, err)
+	defer writer.Close()
+
+	lastUpdateRound := basics.Round(2)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+	require.Len(t, updated, 2)
+
+	var baseOnlineAccounts lruOnlineAccounts
+	baseOnlineAccounts.init(logging.TestingLog(t), 1000, 800)
+	for _, persistedAcct := range updated {
+		baseOnlineAccounts.write(persistedAcct)
+	}
+
+	// make sure baseOnlineAccounts has the entry
+	entry, has := baseOnlineAccounts.read(addrA)
+	require.True(t, has)
+	require.True(t, entry.AccountData.IsVotingEmpty())
+	require.Equal(t, basics.Round(2), entry.UpdRound)
+
+	acctDelta := ledgercore.AccountDeltas{}
+
+	// simulate transfer to suspended account
+	ad := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			Status:     basics.Offline,
+			MicroAlgos: basics.MicroAlgos{Raw: 100_000_000 - 1},
+		},
+		VotingData: basics.VotingData{
+			VoteFirstValid: 1,
+			VoteLastValid:  5,
+		},
+	}
+	acctDelta.Upsert(addrA, ad)
+	deltas := []ledgercore.AccountDeltas{acctDelta}
+	updates = makeCompactOnlineAccountDeltas(deltas, 3, baseOnlineAccounts)
+
+	// insert and make sure no new rows are inserted
+	lastUpdateRound = basics.Round(3)
+	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+	require.Len(t, updated, 0)
 }

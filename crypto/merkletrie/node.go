@@ -84,7 +84,7 @@ func (n *node) find(cache *merkleTrieCache, d []byte) (bool, error) {
 	if n.leaf() {
 		return 0 == bytes.Compare(d, n.hash), nil
 	}
-	if n.childrenMask.Bit(d[0]) == false {
+	if !n.childrenMask.Bit(d[0]) {
 		return false, nil
 	}
 	childNodeID := n.children[n.indexOf(d[0])].id
@@ -159,7 +159,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		return nodeID, nil
 	}
 
-	if n.childrenMask.Bit(d[0]) == false {
+	if !n.childrenMask.Bit(d[0]) {
 		// no such child.
 		childNode, childNodeID := cache.allocateNewNode()
 		childNode.hash = d[1:]
@@ -171,9 +171,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		pnode.children = make([]childEntry, len(n.children)+1)
 		if d[0] > n.children[len(n.children)-1].hashIndex {
 			// the new entry comes after all the existing ones.
-			for i, child := range n.children {
-				pnode.children[i] = child
-			}
+			copy(pnode.children, n.children)
 			pnode.children[len(pnode.children)-1] = childEntry{
 				id:        childNodeID,
 				hashIndex: d[0],

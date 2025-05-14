@@ -133,11 +133,13 @@ type ResourcesData struct {
 	// correct round number.
 	UpdateRound uint64 `codec:"z"`
 
+	Version uint64 `codec:"A"`
+
 	// Asset Global Freeze. Two new uint64s to contain the txnCounter value.
 	// `LastGlobalFreeze` belongs to AssetParams, indicating when the asset was globally frozen, or 0 if unfrozen.
 	// `LastFreezeChange` belongs to AssetHolding, indicating the last time it was set.
-	LastGlobalFreeze uint64 `codec:"A"`
-	LastFreezeChange uint64 `codec:"B"`
+	LastGlobalFreeze uint64 `codec:"B"`
+	LastFreezeChange uint64 `codec:"C"`
 }
 
 // BaseVotingData is the base struct used to store voting data
@@ -558,7 +560,8 @@ func (rd *ResourcesData) IsEmptyAppFields() bool {
 		rd.LocalStateSchemaNumByteSlice == 0 &&
 		rd.GlobalStateSchemaNumUint == 0 &&
 		rd.GlobalStateSchemaNumByteSlice == 0 &&
-		rd.ExtraProgramPages == 0
+		rd.ExtraProgramPages == 0 &&
+		rd.Version == 0
 }
 
 // IsApp returns true if the flag is ResourceFlagsEmptyApp and the fields are not empty.
@@ -744,6 +747,7 @@ func (rd *ResourcesData) ClearAppParams() {
 	rd.GlobalStateSchemaNumUint = 0
 	rd.GlobalStateSchemaNumByteSlice = 0
 	rd.ExtraProgramPages = 0
+	rd.Version = 0
 	hadHolding := (rd.ResourceFlags & ResourceFlagsNotHolding) == ResourceFlagsHolding
 	rd.ResourceFlags -= rd.ResourceFlags & ResourceFlagsOwnership
 	rd.ResourceFlags &= ^ResourceFlagsEmptyApp
@@ -762,6 +766,7 @@ func (rd *ResourcesData) SetAppParams(ap basics.AppParams, haveHoldings bool) {
 	rd.GlobalStateSchemaNumUint = ap.GlobalStateSchema.NumUint
 	rd.GlobalStateSchemaNumByteSlice = ap.GlobalStateSchema.NumByteSlice
 	rd.ExtraProgramPages = ap.ExtraProgramPages
+	rd.Version = ap.Version
 	rd.ResourceFlags |= ResourceFlagsOwnership
 	if !haveHoldings {
 		rd.ResourceFlags |= ResourceFlagsNotHolding
@@ -789,6 +794,7 @@ func (rd *ResourcesData) GetAppParams() basics.AppParams {
 			},
 		},
 		ExtraProgramPages: rd.ExtraProgramPages,
+		Version:           rd.Version,
 	}
 }
 

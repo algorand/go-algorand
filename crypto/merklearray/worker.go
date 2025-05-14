@@ -80,7 +80,7 @@ func (ws *workerState) nextWorker() bool {
 		return false
 	}
 
-	_ = <-ws.starting
+	<-ws.starting
 
 	curidx := ws.nextidx.Load()
 	if curidx >= ws.maxidx {

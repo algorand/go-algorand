@@ -164,7 +164,11 @@ type ApplicationCallTxnFields struct {
 	// ExtraProgramPages specifies the additional app program len requested in pages.
 	// A page is MaxAppProgramLen bytes. This field enables execution of app programs
 	// larger than the default config, MaxAppProgramLen.
-	ExtraProgramPages uint32 `codec:"apep,omitempty"`
+	ExtraProgramPages uint32 `codec:"apep"`
+
+	// RejectVersion is the lowest application version for which this
+	// transaction should immediately fail. 0 indicates that no version check should be performed.
+	RejectVersion uint64 `codec:"aprv"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
@@ -217,6 +221,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.ExtraProgramPages != 0 {
 		return false
 	}
+	if ac.RejectVersion != 0 {
+		return false
+	}
 	return true
 }
 
@@ -229,6 +236,14 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		/* ok */
 	default:
 		return fmt.Errorf("invalid application OnCompletion")
+	}
+
+	if !proto.EnableAppVersioning && ac.RejectVersion > 0 {
+		return fmt.Errorf("tx.RejectVersion is not supported")
+	}
+
+	if ac.RejectVersion > 0 && ac.ApplicationID == 0 {
+		return fmt.Errorf("tx.RejectVersion cannot be set during creation")
 	}
 
 	// Programs may only be set for creation or update

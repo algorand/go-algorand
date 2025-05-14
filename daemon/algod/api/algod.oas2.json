@@ -120,7 +120,7 @@
           "200": {
             "description": "The genesis file in json.",
             "schema": {
-              "type": "string"
+              "$ref": "#/definitions/Genesis"
             }
           },
           "default": {
@@ -3078,6 +3078,105 @@
     }
   },
   "definitions": {
+    "GenesisAllocation":{
+      "title": "Allocations for Genesis File",
+      "type": "object",
+      "properties": {
+        "addr": {
+          "type": "string"
+        },
+        "comment": {
+          "type": "string"
+        },
+        "state": {
+          "type": "object",
+          "properties": {
+            "algo": {
+              "type": "integer",
+              "format" : "uint64"
+            },
+            "onl": {
+              "type": "integer"
+            },
+            "sel": {
+              "type": "string"
+            },
+            "stprf": {
+              "type": "string"
+            },
+            "vote": {
+              "type": "string"
+            },
+            "voteKD": {
+              "type": "integer",
+              "format" : "uint64"
+            },
+            "voteFst": {
+              "type": "integer",
+              "format" : "uint64"
+            },
+            "voteLst": {
+              "type": "integer",
+              "format" : "uint64"
+            }
+          },
+          "required": [
+            "algo"
+          ]
+        }
+      },
+      "required": [
+        "addr",
+        "comment",
+        "state"
+      ]
+    },
+    "Genesis":{
+      "title": "Genesis File in JSON",
+      "type": "object",
+      "properties": {
+        "alloc": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GenesisAllocation"
+          }
+        },
+        "comment": {
+          "type": "string"
+        },
+        "devmode": {
+          "type": "boolean"
+        },
+        "fees": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "proto": {
+          "type": "string"
+        },
+        "rwd": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "integer",
+          "format" : "int64"
+        }
+      },
+      "required": [
+        "alloc",
+        "fees",
+        "id",
+        "network",
+        "proto",
+        "rwd",
+        "timestamp"
+      ]
+    },
     "LedgerStateDelta": {
       "description": "Ledger StateDelta object",
       "type": "object",
@@ -3761,6 +3860,10 @@
         "global-state": {
           "description": "\\[gs\\] global state",
           "$ref": "#/definitions/TealKeyValueStore"
+        },
+        "version": {
+          "description": "\\[v\\] the number of updates to the application programs",
+          "type": "integer"
         }
       }
     },

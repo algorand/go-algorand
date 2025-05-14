@@ -62,6 +62,8 @@ type Service interface {
 	ID() peer.ID // return peer.ID for self
 	IDSigner() *PeerIDChallengeSigner
 	AddrInfo() peer.AddrInfo // return addrInfo for self
+	NetworkNotify(network.Notifiee)
+	NetworkStopNotify(network.Notifiee)
 
 	DialPeersUntilTargetCount(targetConnCount int)
 	ClosePeer(peer.ID) error
@@ -227,6 +229,7 @@ func (s *serviceImpl) Start() error {
 
 // Close shuts down the P2P service
 func (s *serviceImpl) Close() error {
+	s.host.Network().StopNotify(s.streams)
 	return s.host.Close()
 }
 
@@ -423,4 +426,14 @@ func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 // GetHTTPClient returns a libp2p-streaming http client that can be used to make requests to the given peer
 func (s *serviceImpl) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
 	return makeHTTPClientWithRateLimit(addrInfo, s, connTimeStore, queueingTimeout)
+}
+
+// NetworkNotify registers a notifiee with the host's network
+func (s *serviceImpl) NetworkNotify(n network.Notifiee) {
+	s.host.Network().Notify(n)
+}
+
+// NetworkStopNotify unregisters a notifiee with the host's network
+func (s *serviceImpl) NetworkStopNotify(n network.Notifiee) {
+	s.host.Network().StopNotify(n)
 }
