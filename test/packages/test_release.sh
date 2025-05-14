@@ -6,10 +6,10 @@ TEAL_FG=$(tput setaf 6 2>/dev/null)
 BLUE_FG=$(tput setaf 4 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
-if [[ ! "$AWS_ACCESS_KEY_ID" || ! "$AWS_SECRET_ACCESS_KEY" || ! "$AWS_REGION" ]]
+if [[ ! "$AWS_ACCESS_KEY_ID" || ! "$AWS_SECRET_ACCESS_KEY" ]]
 then
     echo -e "$RED_FG[$0]$END_FG_COLOR Missing AWS credentials." \
-        "\nExport $GREEN_FG\$AWS_ACCESS_KEY_ID$END_FG_COLOR,  $GREEN_FG\$AWS_SECRET_ACCESS_KEY$END_FG_COLOR, and $GREEN_FG\$AWS_REGION$END_FG_COLOR before running this script." \
+        "\nExport $GREEN_FG\$AWS_ACCESS_KEY_ID$END_FG_COLOR and $GREEN_FG\$AWS_SECRET_ACCESS_KEY$END_FG_COLOR before running this script." \
         "\nSee https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/ to obtain creds."
     exit 1
 fi
@@ -18,6 +18,7 @@ OS_LIST=(
     quay.io/centos/centos:stream9
     fedora:39
     fedora:40
+    ubuntu:20.04
     ubuntu:22.04
     ubuntu:24.04
 )
@@ -52,7 +53,6 @@ FROM {{OS}}
 
 ENV AWS_ACCESS_KEY_ID=""
 ENV AWS_SECRET_ACCESS_KEY=""
-ENV AWS_REGION=""
 
 {{PACMAN}}
 WORKDIR /root
@@ -67,7 +67,7 @@ EOF
         # ${parameter/pattern/substitution}
         if [[ $item =~ ubuntu ]]
         then
-            WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN DEBIAN_FRONTEND=noninteractive apt-get update \&\& apt-get install -y curl}")
+            WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y curl}")
         else
             # fedora and centos already have curl installed.
             WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/}")
@@ -98,7 +98,7 @@ run_images () {
     for item in ${OS_LIST[*]}
     do
         echo "$TEAL_FG[$0]$END_FG_COLOR Running ${item}-test..."
-        if ! docker run --rm --name algorand -e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" -e "AWS_REGION=$AWS_REGION" -t "${item}-test" bash install.sh -b "$BUCKET" -c "$CHANNEL"
+        if ! docker run --rm --name algorand -e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" -t "${item}-test" bash install.sh -b "$BUCKET" -c "$CHANNEL"
         then
             FAILED+=("$item")
         fi
