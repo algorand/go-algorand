@@ -62,6 +62,7 @@ var (
 	participation = configUpdater{
 		description: "Participate in consensus or simply ensure chain health by validating blocks.",
 		updateFunc: func(cfg config.Local) config.Local {
+			cfg.EnableP2PHybridMode = false
 			return cfg
 		},
 	}
@@ -75,6 +76,7 @@ var (
 			cfg.EnableLedgerService = true
 			cfg.EnableBlockService = true
 			cfg.NetAddress = ":4160"
+			cfg.EnableP2PHybridMode = false
 			return cfg
 		},
 	}
@@ -87,6 +89,7 @@ var (
 			cfg.EnableBlockService = true
 			cfg.NetAddress = ":4160"
 			cfg.EnableGossipService = false
+			cfg.EnableP2PHybridMode = false
 			return cfg
 		},
 	}
