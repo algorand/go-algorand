@@ -6,10 +6,10 @@ TEAL_FG=$(tput setaf 6 2>/dev/null)
 BLUE_FG=$(tput setaf 4 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
-if [[ ! "$AWS_ACCESS_KEY_ID" || ! "$AWS_SECRET_ACCESS_KEY" ]]
+if [[ ! "$AWS_ACCESS_KEY_ID" || ! "$AWS_SECRET_ACCESS_KEY" || ! "$AWS_REGION" ]]
 then
     echo -e "$RED_FG[$0]$END_FG_COLOR Missing AWS credentials." \
-        "\nExport $GREEN_FG\$AWS_ACCESS_KEY_ID$END_FG_COLOR and $GREEN_FG\$AWS_SECRET_ACCESS_KEY$END_FG_COLOR before running this script." \
+        "\nExport $GREEN_FG\$AWS_ACCESS_KEY_ID$END_FG_COLOR,  $GREEN_FG\$AWS_SECRET_ACCESS_KEY$END_FG_COLOR, and $GREEN_FG\$AWS_REGION$END_FG_COLOR before running this script." \
         "\nSee https://aws.amazon.com/blogs/security/wheres-my-secret-access-key/ to obtain creds."
     exit 1
 fi
@@ -52,6 +52,7 @@ FROM {{OS}}
 
 ENV AWS_ACCESS_KEY_ID=""
 ENV AWS_SECRET_ACCESS_KEY=""
+ENV AWS_REGION=""
 
 {{PACMAN}}
 WORKDIR /root
@@ -97,7 +98,7 @@ run_images () {
     for item in ${OS_LIST[*]}
     do
         echo "$TEAL_FG[$0]$END_FG_COLOR Running ${item}-test..."
-        if ! docker run --rm --name algorand -e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" -t "${item}-test" bash install.sh -b "$BUCKET" -c "$CHANNEL"
+        if ! docker run --rm --name algorand -e "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" -e "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY" -e "AWS_REGION=$AWS_REGION" -t "${item}-test" bash install.sh -b "$BUCKET" -c "$CHANNEL"
         then
             FAILED+=("$item")
         fi
