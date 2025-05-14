@@ -66,7 +66,7 @@ EOF
         # ${parameter/pattern/substitution}
         if [[ $item =~ ubuntu ]]
         then
-            WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y curl}")
+            WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN DEBIAN_FRONTEND=noninteractive apt-get update \&\& apt-get install -y curl}")
         else
             # fedora and centos already have curl installed.
             WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/}")
