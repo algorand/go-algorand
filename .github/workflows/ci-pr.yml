@@ -10,12 +10,11 @@ env:
   KMD_NOUSB: True
   BUILD_TYPE: integration
   ALGOTEST: 1
-
-# Allow one concurrent run per platform/test combination
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.event.issue.number || github.ref }}-${{ matrix.platform }}-${{ matrix.test_type }}
-#   cancel-in-progress: true
   
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   pull-requests: read
   contents: read
@@ -83,11 +82,11 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3] # set PARITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 16
+      PARTITION_TOTAL: 4
       CIRCLECI: true
       SHORT_TEST_FLAG: "-short"
     steps:
@@ -165,12 +164,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 16
+      PARTITION_TOTAL: 4
       E2E_TEST_FILTER: GO
       PARALLEL_FLAG: "-p 1"
       SHORT_TEST_FLAG: "-short"
@@ -232,12 +231,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 16
+      PARTITION_TOTAL: 4
       E2E_TEST_FILTER: EXPECT
       PARALLEL_FLAG: "-p 1"
       SHORT_TEST_FLAG: "-short"
