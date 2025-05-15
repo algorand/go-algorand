@@ -283,7 +283,7 @@ func (prd *PersistedResourcesData) AccountResource() ledgercore.AccountResource 
 
 // NormalizedOnlineBalance getter for normalized online balance.
 func (ba *BaseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
-	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
+	return config.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
 }
 
 // SetCoreAccountData setter for core account data.
@@ -483,7 +483,7 @@ func (bo *BaseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalan
 // GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
 func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
-	microAlgos, _, _ := basics.WithUpdatedRewards(
+	microAlgos, _, _ := config.WithUpdatedRewards(
 		proto, basics.Online, bo.MicroAlgos, basics.MicroAlgos{}, bo.RewardsBase, rewardsLevel,
 	)
 
@@ -505,7 +505,7 @@ func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusPara
 
 // NormalizedOnlineBalance getter for normalized online balance.
 func (bo *BaseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
-	return basics.NormalizedOnlineAccountBalance(basics.Online, bo.RewardsBase, bo.MicroAlgos, proto)
+	return config.NormalizedOnlineAccountBalance(basics.Online, bo.RewardsBase, bo.MicroAlgos, proto)
 }
 
 // SetCoreAccountData setter for core account data.

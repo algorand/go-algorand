@@ -250,7 +250,7 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 		// The original implementation uses current proto to recalculate norm balance
 		// In the same time, in accountsNewRound genesis protocol is used to fill norm balance value
 		// In order to be consistent with the original implementation recalculate the balance with current proto
-		normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
+		normBalance := config.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
 		oa := data.GetOnlineAccount(addr, normBalance)
 		res[addr] = &oa
 	}

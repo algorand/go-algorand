@@ -111,7 +111,7 @@ func AccountDataToAccount(
 		return model.Account{}, errors.New("overflow on pending reward calculation")
 	}
 
-	minBalance := record.MinBalance(consensus)
+	minBalance := consensus.MinBalanceReq(*record)
 
 	return model.Account{
 		SigType:                     nil,

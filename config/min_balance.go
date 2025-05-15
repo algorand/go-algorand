@@ -85,8 +85,8 @@ func MinBalance(
 	return basics.MicroAlgos{Raw: min}
 }
 
-// MinBalance computes the MinBalance requirements for a StateSchema based on
-// the consensus parameters
+// MinBalanceForSchema computes the minimum balance requirement for a
+// StateSchema based on the consensus parameters
 func (proto *ConsensusParams) MinBalanceForSchema(sm basics.StateSchema) basics.MicroAlgos {
 	// Flat cost for each key/value pair
 	flatCost := basics.MulSaturate(proto.SchemaMinBalancePerEntry, sm.NumEntries())

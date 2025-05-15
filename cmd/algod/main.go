@@ -74,7 +74,7 @@ func main() {
 func run() int {
 	dataDir := resolveDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
-	config.UpdateVersionDataDir(absolutePath)
+	config.DataDirectory = absolutePath
 
 	if *seed != "" {
 		seedVal, err := strconv.ParseInt(*seed, 10, 64)
@@ -215,12 +215,18 @@ func run() int {
 	isTest := os.Getenv("ALGOTEST") != ""
 	remoteTelemetryEnabled := false
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
-		if err != nil {
-			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
+		root, err1 := config.GetGlobalConfigFileRoot()
+		var cfgDir *string
+		if err1 == nil {
+			cfgDir = &root
 		}
-		if os.IsPermission(err) {
-			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
+		telemetryConfig, err1 := logging.EnsureTelemetryConfig(&dataDir, cfgDir)
+		config.AnnotateTelemetry(&telemetryConfig, genesis.ID())
+		if err1 != nil {
+			fmt.Fprintln(os.Stdout, "error loading telemetry config", err1)
+		}
+		if os.IsPermission(err1) {
+			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err1)
 			return 1
 		}
 		fmt.Fprintf(os.Stdout, "Telemetry configured from '%s'\n", telemetryConfig.FilePath)
@@ -240,19 +246,19 @@ func run() int {
 			}
 			// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
 			ctx, telemetryCancelFn := context.WithTimeout(context.Background(), defaultStaticTelemetryStartupTimeout)
-			err = log.EnableTelemetryContext(ctx, telemetryConfig)
+			err1 = log.EnableTelemetryContext(ctx, telemetryConfig)
 			telemetryCancelFn()
-			if err != nil {
-				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
+			if err1 != nil {
+				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err1)
 
 				// Remote telemetry init loop
 				go func() {
 					for {
 						time.Sleep(defaultStaticTelemetryBGDialRetry)
 						// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
-						err := log.EnableTelemetryContext(context.Background(), telemetryConfig)
+						err1 = log.EnableTelemetryContext(context.Background(), telemetryConfig)
 						// Error occurs only if URI is defined and we need to retry later
-						if err == nil {
+						if err1 == nil {
 							// Remote telemetry enabled or empty static URI, stop retrying
 							return
 						}

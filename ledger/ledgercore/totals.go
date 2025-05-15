@@ -83,7 +83,7 @@ func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data AccountDa
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.AddA(sum.Money, algos)
-	sum.RewardUnits = ot.Add(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
+	sum.RewardUnits = ot.Add(sum.RewardUnits, proto.RewardUnits(data.MicroAlgos))
 }
 
 // DelAccount removes an account algos from the total money
@@ -91,7 +91,7 @@ func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data AccountDa
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.SubA(sum.Money, algos)
-	sum.RewardUnits = ot.Sub(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
+	sum.RewardUnits = ot.Sub(sum.RewardUnits, proto.RewardUnits(data.MicroAlgos))
 }
 
 // ApplyRewards adds the reward to the account totals based on the new rewards level

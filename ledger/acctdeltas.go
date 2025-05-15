@@ -110,7 +110,7 @@ func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.Co
 			return nil, err
 		}
 		normalizedAccountBalances[i].AccountData.SetAccountData(&accountDataV5)
-		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
+		normalizedAccountBalances[i].NormalizedBalance = proto.NormalizedOnlineBalance(accountDataV5)
 		type resourcesRow struct {
 			aidx basics.CreatableIndex
 			trackerdb.ResourcesData
@@ -147,7 +147,7 @@ func prepareNormalizedBalancesV6(bals []encoded.BalanceRecordV6, proto config.Co
 		if err != nil {
 			return nil, err
 		}
-		normalizedAccountBalances[i].NormalizedBalance = basics.NormalizedOnlineAccountBalance(
+		normalizedAccountBalances[i].NormalizedBalance = config.NormalizedOnlineAccountBalance(
 			normalizedAccountBalances[i].AccountData.Status,
 			normalizedAccountBalances[i].AccountData.RewardsBase,
 			normalizedAccountBalances[i].AccountData.MicroAlgos,

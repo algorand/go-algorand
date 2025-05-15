@@ -600,7 +600,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	// Only write the change if it's meaningful (or required by old code).
-	if !amt.IsZero() || fromBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+	if !amt.IsZero() || cs.proto.RewardUnits(fromBal.MicroAlgos) > 0 || !cs.proto.UnfundedSenders {
 		var overflowed bool
 		fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
 		if overflowed {
@@ -629,7 +629,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	// Only write the change if it's meaningful (or required by old code).
-	if !amt.IsZero() || toBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+	if !amt.IsZero() || cs.proto.RewardUnits(toBal.MicroAlgos) > 0 || !cs.proto.UnfundedSenders {
 		var overflowed bool
 		toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
 		if overflowed {

@@ -19,12 +19,14 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -229,7 +231,8 @@ func savePhonebook(entries []string, w io.Writer) error {
 	return enc.Encode(pb)
 }
 
-var globalConfigFileRoot string
+// DataDirectory for the current instance
+var DataDirectory string
 
 // GetConfigFilePath retrieves the full path to a configuration file
 // These are global configurations - not specific to data-directory / network.
@@ -241,12 +244,13 @@ func GetConfigFilePath(file string) (string, error) {
 	return filepath.Join(rootPath, file), nil
 }
 
-// GetGlobalConfigFileRoot returns the current root folder for global configuration files.
-// This will likely only change for tests.
+var globalConfigFileRoot string
+
+// GetGlobalConfigFileRoot returns the root directory for global configuration files.
 func GetGlobalConfigFileRoot() (string, error) {
 	var err error
 	if globalConfigFileRoot == "" {
-		globalConfigFileRoot, err = GetDefaultConfigFilePath()
+		globalConfigFileRoot, err = deriveConfigFilePath()
 		if err == nil {
 			dirErr := os.Mkdir(globalConfigFileRoot, os.ModePerm)
 			if !os.IsExist(dirErr) {
@@ -257,27 +261,31 @@ func GetGlobalConfigFileRoot() (string, error) {
 	return globalConfigFileRoot, err
 }
 
-// SetGlobalConfigFileRoot allows overriding the root folder for global configuration files.
-// It returns the current one so it can be restored, if desired.
-// This will likely only change for tests.
-func SetGlobalConfigFileRoot(rootPath string) string {
-	currentRoot := globalConfigFileRoot
-	globalConfigFileRoot = rootPath
-	return currentRoot
-}
-
-// GetDefaultConfigFilePath retrieves the default directory for global (not per-instance) config files
+// deriveConfigFilePath retrieves the default directory for global (not per-instance) config files
 // By default we store in ~/.algorand/.
-// This will likely only change for tests.
-func GetDefaultConfigFilePath() (string, error) {
+func deriveConfigFilePath() (string, error) {
 	currentUser, err := user.Current()
 	if err != nil {
 		return "", err
 	}
 	if currentUser.HomeDir == "" {
-		return "", errors.New("GetDefaultConfigFilePath fail - current user has no home directory")
+		return "", fmt.Errorf("current user %s has no home directory", currentUser.Username)
 	}
 	return filepath.Join(currentUser.HomeDir, ".algorand"), nil
+}
+
+// AnnotateTelemetry adds some extra information to the TelemetryConfig that
+// isn't actually in the config file, but is reported by telemetry.
+func AnnotateTelemetry(cfg *logging.TelemetryConfig, genesisID string) {
+	ver := GetCurrentVersion()
+	ch := ver.Channel
+	// Should not happen, but default to "dev" if channel is unspecified.
+	if ch == "" {
+		ch = "dev"
+	}
+	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	cfg.Version = ver.String()
+	cfg.DataDirectory = DataDirectory
 }
 
 const (

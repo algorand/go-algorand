@@ -1409,10 +1409,10 @@ func TestMinBalanceChanges(t *testing.T) {
 
 	proto := l.GenesisProto()
 	// Check balance and min balance requirement changes
-	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000)                   // fee
-	require.Equal(t, ad0init.MinBalance(&proto).Raw, ad0new.MinBalance(&proto).Raw-100000) // create
-	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+1000)                   // fee
-	require.Equal(t, ad5init.MinBalance(&proto).Raw, ad5new.MinBalance(&proto).Raw-100000) // optin
+	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000)                       // fee
+	require.Equal(t, proto.MinBalanceReq(ad0init).Raw, proto.MinBalanceReq(ad0new).Raw-100000) // create
+	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+1000)                       // fee
+	require.Equal(t, proto.MinBalanceReq(ad5init).Raw, proto.MinBalanceReq(ad5new).Raw-100000) // optin
 
 	optOutTxn := txntest.Txn{
 		Type:          "axfer",
@@ -1437,8 +1437,8 @@ func TestMinBalanceChanges(t *testing.T) {
 	ad5final, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
-	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
-	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
+	require.Equal(t, proto.MinBalanceReq(ad0final), proto.MinBalanceReq(ad0init))
+	require.Equal(t, proto.MinBalanceReq(ad5final), proto.MinBalanceReq(ad5init))
 }
 
 // TestAppInsMinBalance checks that accounts with MaxAppsOptedIn are accepted by block evaluator
