@@ -423,6 +423,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
           role-session-name: github-actions
+          aws-region: ${{ secrets.AWS_REGION }}
       - name: Upload Binaries
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
