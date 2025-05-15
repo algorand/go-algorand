@@ -358,7 +358,6 @@ var sendCmd = &cobra.Command{
 		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 
-		var fromAddressResolved string
 		var program []byte = nil
 		var programArgs [][]byte = nil
 		var lsig transactions.LogicSig
@@ -380,19 +379,19 @@ var sendCmd = &cobra.Command{
 			lsigFromArgs(&lsig)
 		}
 		if program != nil {
-			ph := logic.HashProgram(program)
-			pha := basics.Address(ph)
-			fromAddressResolved = pha.String()
+			if account == "" {
+				ph := logic.HashProgram(program)
+				pha := basics.Address(ph)
+				account = pha.String()
+			}
 			programArgs = getProgramArgs()
 		} else {
 			// Check if from was specified, else use default
 			if account == "" {
 				account = accountList.getDefaultAccount()
 			}
-
-			// Resolving friendly names
-			fromAddressResolved = accountList.getAddressByName(account)
 		}
+		fromAddressResolved := accountList.getAddressByName(account)
 		toAddressResolved := accountList.getAddressByName(toAddress)
 
 		// Parse notes and lease fields
@@ -439,6 +438,14 @@ var sendCmd = &cobra.Command{
 			payment.Fee = basics.MicroAlgos{Raw: fee}
 		}
 
+		var authAddr basics.Address
+		if signerAddress != "" {
+			authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+			if err != nil {
+				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+			}
+		}
+
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
 
@@ -471,17 +478,13 @@ var sendCmd = &cobra.Command{
 					Logic: program,
 					Args:  programArgs,
 				},
+				AuthAddr: authAddr,
 			}
 		} else {
 			signTx := sign || (outFilename == "")
-			var authAddr basics.Address
 			if signerAddress != "" {
 				if !signTx {
 					reportErrorf("Signer specified when txn won't be signed")
-				}
-				authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
-				if err != nil {
-					reportErrorf("Signer invalid (%s): %v", signerAddress, err)
 				}
 			}
 			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment, authAddr)
@@ -1223,7 +1226,7 @@ var dryrunRemoteCmd = &cobra.Command{
 			reportErrorf("dryrun-remote: %s", err.Error())
 		}
 		if rawOutput {
-			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))
+			fmt.Fprint(os.Stdout, string(protocol.EncodeJSON(&resp)))
 			return
 		}
 

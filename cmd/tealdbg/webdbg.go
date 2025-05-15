@@ -124,7 +124,6 @@ func (a *WebPageFrontend) homeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	home.Execute(w, nil)
-	return
 }
 
 func (a *WebPageFrontend) stepHandler(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +147,6 @@ func (a *WebPageFrontend) stepHandler(w http.ResponseWriter, r *http.Request) {
 	s.debugger.Step()
 
 	w.WriteHeader(http.StatusOK)
-	return
 }
 
 func (a *WebPageFrontend) configHandler(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +186,6 @@ func (a *WebPageFrontend) configHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusOK)
-	return
 }
 
 func (a *WebPageFrontend) continueHandler(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +209,6 @@ func (a *WebPageFrontend) continueHandler(w http.ResponseWriter, r *http.Request
 	s.debugger.Resume()
 
 	w.WriteHeader(http.StatusOK)
-	return
 }
 
 func (a *WebPageFrontend) subscribeHandler(w http.ResponseWriter, r *http.Request) {
@@ -248,14 +244,11 @@ func (a *WebPageFrontend) subscribeHandler(w http.ResponseWriter, r *http.Reques
 	a.mu.Unlock()
 
 	// Wait on notifications and forward to the user
-	for {
-		select {
-		case notification := <-notifications:
-			enc := protocol.EncodeJSONStrict(&notification)
-			err = ws.WriteMessage(websocket.TextMessage, enc)
-			if err != nil {
-				return
-			}
+	for notification := range notifications {
+		enc := protocol.EncodeJSONStrict(&notification)
+		err = ws.WriteMessage(websocket.TextMessage, enc)
+		if err != nil {
+			return
 		}
 	}
 }

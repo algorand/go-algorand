@@ -122,8 +122,7 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 	// Make map of existing device paths. We will pop each one that we
 	// are able to scan for, meaning anything left over is dead, and we
 	// should remove it
-	var curPaths map[string]bool
-	curPaths = make(map[string]bool)
+	curPaths := make(map[string]bool)
 	for k := range lwd.wallets {
 		curPaths[k] = true
 	}

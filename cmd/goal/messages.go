@@ -165,29 +165,30 @@ const (
 	tealsignTooManyArg    = "--set-lsig-arg-idx too large, maximum of %d arguments"
 	tealsignInfoWroteSig  = "Wrote signature for %s to LSig.Args[%d]"
 
-	tealLogicSigSize = "%s: logicsig program size too large: %d > %d"
-	tealAppSize      = "%s: app program size too large: %d > %d"
-
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "
 	infoChoosePasswordPrompt     = "Please choose a password for wallet '%s': "
 	infoPasswordConfirmation     = "Please confirm the password: "
 	infoCreatingWallet           = "Creating wallet..."
 	infoCreatedWallet            = "Created wallet '%s'"
+	infoUnencrypted              = "Creating unencrypted wallet"
 	infoBackupExplanation        = "Your new wallet has a backup phrase that can be used for recovery.\nKeeping this backup phrase safe is extremely important.\nWould you like to see it now? (Y/n): "
 	infoPrintedBackupPhrase      = "Your backup phrase is printed below.\nKeep this information safe -- never share it with anyone!"
 	infoBackupPhrase             = "\n%s"
 	infoNoWallets                = "No wallets found. You can create a wallet with `goal wallet new`"
+	infoRenamedWallet            = "Renamed wallet '%s' to '%s'"
 	errorCouldntCreateWallet     = "Couldn't create wallet: %s"
 	errorCouldntInitializeWallet = "Couldn't initialize wallet: %s"
 	errorCouldntExportMDK        = "Couldn't export master derivation key: %s"
 	errorCouldntMakeMnemonic     = "Couldn't make mnemonic: %s"
 	errorCouldntListWallets      = "Couldn't list wallets: %s"
+	errorCouldntFindWallet       = "Couldn't find wallet: %s"
 	errorPasswordConfirmation    = "Password confirmation did not match"
 	errorBadMnemonic             = "Problem with mnemonic: %s"
 	errorBadRecoveredKey         = "Recovered invalid key"
 	errorFailedToReadResponse    = "Couldn't read response: %s"
 	errorFailedToReadPassword    = "Couldn't read password: %s"
+	errorCouldntRenameWallet     = "Couldn't rename wallet: %s"
 
 	// Commands
 	infoPasswordPrompt       = "Please enter the password for wallet '%s': "

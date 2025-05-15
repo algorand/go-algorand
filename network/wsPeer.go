@@ -116,8 +116,10 @@ type sendMessage struct {
 	enqueued     time.Time             // the time at which the message was first generated
 	peerEnqueued time.Time             // the time at which the peer was attempting to enqueue the message
 	msgTags      map[protocol.Tag]bool // when msgTags is specified ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
-	hash         crypto.Digest
 	ctx          context.Context
+
+	// onRelease function is called when the message is released either by being sent or discarded.
+	onRelease func()
 }
 
 // wsPeerCore also works for non-connected peers we want to do HTTP GET from
@@ -150,13 +152,6 @@ const disconnectUnexpectedTopicResp disconnectReason = "UnexpectedTopicResp"
 // Response is the structure holding the response from the server
 type Response struct {
 	Topics Topics
-}
-
-type sendMessages struct {
-	msgs []sendMessage
-
-	// onRelease function is called when the message is released either by being sent or discarded.
-	onRelease func()
 }
 
 //msgp:ignore peerType
@@ -202,8 +197,8 @@ type wsPeer struct {
 
 	closing chan struct{}
 
-	sendBufferHighPrio chan sendMessages
-	sendBufferBulk     chan sendMessages
+	sendBufferHighPrio chan sendMessage
+	sendBufferBulk     chan sendMessage
 
 	wg sync.WaitGroup
 
@@ -242,6 +237,9 @@ type wsPeer struct {
 
 	// peer features derived from the peer version
 	features peerFeatureFlag
+
+	// enableCompression specifies whether this node can compress or decompress votes (and whether it has advertised this)
+	enableVoteCompression bool
 
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
@@ -446,16 +444,16 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg Ou
 	serializedMsg := responseTopics.MarshallTopics()
 
 	// Send serializedMsg
-	msg := make([]sendMessage, 1, 1)
-	msg[0] = sendMessage{
+	msg := sendMessage{
 		data:         append([]byte(protocol.TopicMsgRespTag), serializedMsg...),
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
 		ctx:          context.Background(),
+		onRelease:    outMsg.OnRelease,
 	}
 
 	select {
-	case wp.sendBufferBulk <- sendMessages{msgs: msg, onRelease: outMsg.OnRelease}:
+	case wp.sendBufferBulk <- msg:
 	case <-wp.closing:
 		if outMsg.OnRelease != nil {
 			outMsg.OnRelease()
@@ -475,8 +473,8 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg Ou
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.GetAddress())
 	wp.closing = make(chan struct{})
-	wp.sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
-	wp.sendBufferBulk = make(chan sendMessages, sendBufferLength)
+	wp.sendBufferHighPrio = make(chan sendMessage, sendBufferLength)
+	wp.sendBufferBulk = make(chan sendMessage, sendBufferLength)
 	wp.lastPacketTime.Store(time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
@@ -527,7 +525,7 @@ func (wp *wsPeer) readLoop() {
 	}()
 	wp.conn.SetReadLimit(MaxMessageLength)
 	slurper := MakeLimitedReaderSlurper(averageMessageLength, MaxMessageLength)
-	dataConverter := makeWsPeerMsgDataConverter(wp)
+	dataConverter := makeWsPeerMsgDataDecoder(wp)
 
 	for {
 		msg := IncomingMessage{}
@@ -712,15 +710,13 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (close bool, reas
 		wp.log.Warnf("wsPeer handleMessageOfInterest: could not unmarshall message from: %s %v", wp.conn.RemoteAddrString(), err)
 		return true, disconnectBadData
 	}
-	msgs := make([]sendMessage, 1)
-	msgs[0] = sendMessage{
+	sm := sendMessage{
 		data:         nil,
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
 		msgTags:      msgTagsMap,
 		ctx:          context.Background(),
 	}
-	sm := sendMessages{msgs: msgs}
 
 	// try to send the message to the send loop. The send loop will store the message locally and would use it.
 	// the rationale here is that this message is rarely sent, and we would benefit from having it being lock-free.
@@ -770,21 +766,19 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 	}
 }
 
-func (wp *wsPeer) writeLoopSend(msgs sendMessages) disconnectReason {
-	if msgs.onRelease != nil {
-		defer msgs.onRelease()
+func (wp *wsPeer) writeLoopSend(msg sendMessage) disconnectReason {
+	if msg.onRelease != nil {
+		defer msg.onRelease()
 	}
-	for _, msg := range msgs.msgs {
-		select {
-		case <-msg.ctx.Done():
-			//logging.Base().Infof("cancelled large send, msg %v out of %v", i, len(msgs.msgs))
-			return disconnectReasonNone
-		default:
-		}
+	select {
+	case <-msg.ctx.Done():
+		//logging.Base().Infof("cancelled large send, msg %v out of %v", i, len(msgs.msgs))
+		return disconnectReasonNone
+	default:
+	}
 
-		if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
-			return err
-		}
+	if err := wp.writeLoopSendMsg(msg); err != disconnectReasonNone {
+		return err
 	}
 
 	return disconnectReasonNone
@@ -885,38 +879,16 @@ func (wp *wsPeer) writeLoopCleanup(reason disconnectReason) {
 }
 
 func (wp *wsPeer) writeNonBlock(ctx context.Context, data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
-	msgs := make([][]byte, 1)
-	digests := make([]crypto.Digest, 1)
-	msgs[0] = data
-	digests[0] = digest
-	return wp.writeNonBlockMsgs(ctx, msgs, highPrio, digests, msgEnqueueTime)
-}
-
-// return true if enqueued/sent
-func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio bool, digest []crypto.Digest, msgEnqueueTime time.Time) bool {
-	includeIndices := make([]int, 0, len(data))
-	for i := range data {
-		if wp.outgoingMsgFilter != nil && len(data[i]) > messageFilterSize && wp.outgoingMsgFilter.CheckDigest(digest[i], false, false) {
-			//wp.log.Debugf("msg drop as outbound dup %s(%d) %v", string(data[:2]), len(data)-2, digest)
-			// peer has notified us it doesn't need this message
-			outgoingNetworkMessageFilteredOutTotal.Inc(nil)
-			outgoingNetworkMessageFilteredOutBytesTotal.AddUint64(uint64(len(data)), nil)
-		} else {
-			includeIndices = append(includeIndices, i)
-		}
-	}
-	if len(includeIndices) == 0 {
+	if wp.outgoingMsgFilter != nil && len(data) > messageFilterSize && wp.outgoingMsgFilter.CheckDigest(digest, false, false) {
+		//wp.log.Debugf("msg drop as outbound dup %s(%d) %v", string(data[:2]), len(data)-2, digest)
+		// peer has notified us it doesn't need this message
+		outgoingNetworkMessageFilteredOutTotal.Inc(nil)
+		outgoingNetworkMessageFilteredOutBytesTotal.AddUint64(uint64(len(data)), nil)
 		// returning true because it is as good as sent, the peer already has it.
 		return true
 	}
 
-	var outchan chan sendMessages
-
-	msgs := make([]sendMessage, 0, len(includeIndices))
-	enqueueTime := time.Now()
-	for _, index := range includeIndices {
-		msgs = append(msgs, sendMessage{data: data[index], enqueued: msgEnqueueTime, peerEnqueued: enqueueTime, hash: digest[index], ctx: ctx})
-	}
+	var outchan chan sendMessage
 
 	if highPrio {
 		outchan = wp.sendBufferHighPrio
@@ -924,7 +896,7 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 		outchan = wp.sendBufferBulk
 	}
 	select {
-	case outchan <- sendMessages{msgs: msgs}:
+	case outchan <- sendMessage{data: data, enqueued: msgEnqueueTime, peerEnqueued: time.Now(), ctx: ctx}:
 		return true
 	default:
 	}
@@ -1032,14 +1004,13 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	defer wp.getAndRemoveResponseChannel(hash)
 
 	// Send serializedMsg
-	msg := make([]sendMessage, 1)
-	msg[0] = sendMessage{
+	msg := sendMessage{
 		data:         append([]byte(tag), serializedMsg...),
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
 		ctx:          context.Background()}
 	select {
-	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
+	case wp.sendBufferBulk <- msg:
 		wp.outstandingTopicRequests.Add(1)
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddrString())
@@ -1118,11 +1089,16 @@ func (wp *wsPeer) OnClose(f func()) {
 	wp.closers = append(wp.closers, f)
 }
 
+func (wp *wsPeer) vpackVoteCompressionSupported() bool {
+	return wp.features&pfCompressedVoteVpack != 0
+}
+
 //msgp:ignore peerFeatureFlag
 type peerFeatureFlag int
 
 const (
 	pfCompressedProposal peerFeatureFlag = 1 << iota
+	pfCompressedVoteVpack
 )
 
 // versionPeerFeatures defines protocol version when peer features were introduced
@@ -1166,6 +1142,9 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 		part = strings.TrimSpace(part)
 		if part == PeerFeatureProposalCompression {
 			features |= pfCompressedProposal
+		}
+		if part == PeerFeatureVoteVpackCompression {
+			features |= pfCompressedVoteVpack
 		}
 	}
 	return features

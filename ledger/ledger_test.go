@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -1973,7 +1974,7 @@ func TestLookupAgreement(t *testing.T) {
 	ad, _, _, err := ledger.LookupLatest(addrOnline)
 	require.NoError(t, err)
 	require.NotEmpty(t, ad)
-	require.Equal(t, oad, ad.OnlineAccountData())
+	require.Equal(t, oad, basics_testing.OnlineAccountData(ad))
 
 	require.NoError(t, err)
 	oad, err = ledger.LookupAgreement(0, addrOffline)
@@ -1982,7 +1983,7 @@ func TestLookupAgreement(t *testing.T) {
 	ad, _, _, err = ledger.LookupLatest(addrOffline)
 	require.NoError(t, err)
 	require.NotEmpty(t, ad)
-	require.Equal(t, oad, ad.OnlineAccountData())
+	require.Equal(t, oad, basics_testing.OnlineAccountData(ad))
 }
 
 func TestGetKnockOfflineCandidates(t *testing.T) {
@@ -2007,7 +2008,7 @@ func TestGetKnockOfflineCandidates(t *testing.T) {
 	for addr, ad := range genesisInitState.Accounts {
 		if ad.Status == basics.Online {
 			onlineCnt++
-			onlineAddrs[addr] = ad.OnlineAccountData()
+			onlineAddrs[addr] = basics_testing.OnlineAccountData(ad)
 		}
 	}
 	require.Len(t, accts, onlineCnt)

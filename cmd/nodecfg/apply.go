@@ -91,7 +91,7 @@ func doApply(rootDir string, rootNodeDir, channel string, hostName string, dnsNa
 		missing = true
 	} else {
 		fmt.Fprintf(os.Stdout, "Loading config from %s...\n", rootDir)
-		cfg, err = remote.LoadDeployedNetworkConfigFromDir(rootDir)
+		_, err = remote.LoadDeployedNetworkConfigFromDir(rootDir)
 		if err != nil {
 			missing = os.IsNotExist(err)
 			if !missing {

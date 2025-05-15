@@ -53,7 +53,7 @@ const (
 
 var sqliteWalletSupportedTxs = []protocol.TxType{protocol.PaymentTx, protocol.KeyRegistrationTx}
 var disallowedFilenameRegex = regexp.MustCompile("[^a-zA-Z0-9_-]*")
-var databaseFilenameRegex = regexp.MustCompile("^.*\\.db$")
+var databaseFilenameRegex = regexp.MustCompile(`^.*\.db$`)
 
 var walletSchema = `
 CREATE TABLE IF NOT EXISTS metadata (

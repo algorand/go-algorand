@@ -45,7 +45,7 @@ func loadKeyfileOrMnemonic(keyfile string, mnemonic string) crypto.Seed {
 	}
 
 	fmt.Fprintf(os.Stderr, "Must specify one of keyfile or mnemonic\n")
-	os.Exit(1)
+	os.Exit(1) //nolint:revive // intentional
 
 	panic("unreachable")
 }

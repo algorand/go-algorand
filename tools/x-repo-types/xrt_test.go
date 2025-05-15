@@ -42,7 +42,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xBranch: "",
 			xType:   "StateDelta",
 			yPkg:    "github.com/algorand/go-algorand-sdk/v2/types",
-			yBranch: "develop",
+			yBranch: "main",
 			yType:   "LedgerStateDelta",
 		},
 		{
@@ -50,7 +50,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xPkg:       "github.com/algorand/go-algorand/data/bookkeeping",
 			xType:      "Genesis",
 			yPkg:       "github.com/algorand/go-algorand-sdk/v2/types",
-			yBranch:    "develop",
+			yBranch:    "main",
 			yType:      "Genesis",
 			skip:       true,
 			skipReason: `LEVEL 3 of goal basics.AccountData has 12 fields missing from SDK types.Account`,
@@ -60,7 +60,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xPkg:       "github.com/algorand/go-algorand/data/bookkeeping",
 			xType:      "Block",
 			yPkg:       "github.com/algorand/go-algorand-sdk/v2/types",
-			yBranch:    "develop",
+			yBranch:    "main",
 			yType:      "Block",
 			skip:       true,
 			skipReason: `Several issues. For example: LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=config.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
@@ -70,7 +70,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xPkg:    "github.com/algorand/go-algorand/data/transactions",
 			xType:   "EvalDelta",
 			yPkg:    "github.com/algorand/go-algorand-sdk/v2/types",
-			yBranch: "develop",
+			yBranch: "main",
 			yType:   "EvalDelta",
 		},
 		{
@@ -78,7 +78,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xPkg:    "github.com/algorand/go-algorand/config",
 			xType:   "ConsensusParams",
 			yPkg:    "github.com/algorand/go-algorand-sdk/v2/protocol/config",
-			yBranch: "develop",
+			yBranch: "main",
 			yType:   "ConsensusParams",
 		},
 		{
@@ -86,7 +86,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xPkg:    "github.com/algorand/go-algorand/data/bookkeeping",
 			xType:   "BlockHeader",
 			yPkg:    "github.com/algorand/go-algorand-sdk/v2/types",
-			yBranch: "develop",
+			yBranch: "main",
 			yType:   "BlockHeader",
 		},
 		{
@@ -94,7 +94,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			xPkg:    "github.com/algorand/go-algorand/crypto/stateproof",
 			xType:   "StateProof",
 			yPkg:    "github.com/algorand/go-algorand-sdk/v2/types",
-			yBranch: "develop",
+			yBranch: "main",
 			yType:   "StateProof",
 		},
 		{

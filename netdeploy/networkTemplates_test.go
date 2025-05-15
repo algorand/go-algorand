@@ -235,7 +235,7 @@ func TestDevModeValidate(t *testing.T) {
 				},
 			},
 		}
-		require.ErrorContains(t, tmpl.Validate(), "unable to decode JSONOverride")
+		require.ErrorContains(t, tmpl.Validate(), "unable to decode ConfigJSONOverride")
 	})
 
 	t.Run("ConfigJSONOverride unknown key", func(t *testing.T) {

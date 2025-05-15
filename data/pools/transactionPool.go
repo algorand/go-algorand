@@ -617,7 +617,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
 	for _, tx := range txgroup {
 		if tx.Txn.LastValid < r {
-			return &transactions.TxnDeadError{
+			return &bookkeeping.TxnDeadError{
 				Round:      r,
 				FirstValid: tx.Txn.FirstValid,
 				LastValid:  tx.Txn.LastValid,
@@ -779,7 +779,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
-			case *transactions.TxnDeadError:
+			case *bookkeeping.TxnDeadError:
 				if int(terr.LastValid-terr.FirstValid) > 20 {
 					// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
 					asmStats.ExpiredLongLivedCount++

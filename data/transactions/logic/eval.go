@@ -1439,9 +1439,6 @@ func (cx *EvalContext) begin(program []byte) error {
 	if version > cx.Proto.LogicSigVersion {
 		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
 	}
-	if err != nil {
-		return err
-	}
 
 	cx.version = version
 	cx.pc = vlen
@@ -2962,6 +2959,8 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = params.LocalStateSchema.NumByteSlice
 	case AppExtraProgramPages:
 		sv.Uint = uint64(params.ExtraProgramPages)
+	case AppVersion:
+		sv.Uint = params.Version
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
@@ -3086,11 +3085,10 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	if inner {
 		// Before we had inner apps, we did not allow these, since we had no inner groups.
 		if cx.version < innerAppsEnabledVersion && (fs.field == GroupIndex || fs.field == TxID) {
-			err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
-			return
+			return sv, fmt.Errorf("illegal field for inner transaction %s", fs.field)
 		}
 	}
-	err = nil
+
 	txn := &stxn.SignedTxn.Txn
 	switch fs.field {
 	case Sender:
@@ -3161,6 +3159,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Uint = uint64(txn.ApplicationID)
 	case OnCompletion:
 		sv.Uint = uint64(txn.OnCompletion)
+	case RejectVersion:
+		sv.Uint = uint64(txn.RejectVersion)
 
 	case ApplicationArgs:
 		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
@@ -5431,6 +5431,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		var onc uint64
 		onc, err = sv.uintMaxed(uint64(transactions.DeleteApplicationOC))
 		txn.OnCompletion = transactions.OnCompletion(onc)
+	case RejectVersion:
+		txn.RejectVersion, err = sv.uint()
 	case ApplicationArgs:
 		if sv.Bytes == nil {
 			return fmt.Errorf("ApplicationArg is not a byte array")

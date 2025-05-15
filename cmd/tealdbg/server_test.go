@@ -57,8 +57,7 @@ func (t testServerDebugFrontend) eventLoop() {
 			if n.Event == "completed" {
 				return
 			}
-			if n.Event == "registered" {
-			}
+			// No special action needed for 'registered' events
 			// simulate user delay to workaround race cond
 			time.Sleep(10 * time.Millisecond)
 			t.debugger.Resume()

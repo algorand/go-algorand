@@ -178,7 +178,6 @@ func (a *CdtFrontend) versionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(enc)
-	return
 }
 
 func (a *CdtFrontend) jsonHandler(w http.ResponseWriter, r *http.Request) {
@@ -198,5 +197,4 @@ func (a *CdtFrontend) jsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(enc)
-	return
 }

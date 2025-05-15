@@ -131,7 +131,7 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...te
 		log:             log,
 		config:          conf,
 		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:       genesisID,
+		genesisID:       genesisID,
 		NetworkID:       config.Devtestnet,
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: NewIdentityTracker(),
@@ -325,7 +325,7 @@ func setupWebsocketNetworkABwithLogger(t *testing.T, countTarget int, log loggin
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer func() {
 		if !success {
@@ -458,7 +458,7 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 			addrA, postListen := netA.Address()
 			require.True(t, postListen)
 			t.Log(addrA)
-			netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+			netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 			netB.Start()
 			defer netStop(t, netB, "B")
 			messages := [][]byte{
@@ -477,6 +477,89 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 
 			for _, msg := range messages {
 				netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, msg, false, nil)
+			}
+
+			select {
+			case <-counterDone:
+			case <-time.After(2 * time.Second):
+				t.Errorf("timeout, count=%d, wanted %d", len(matcher.received), len(messages))
+			}
+
+			require.True(t, matcher.Match())
+		})
+	}
+}
+
+// Set up two nodes, send vote to test vote compression feature
+func TestWebsocketVoteCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testDef struct {
+		netAEnableCompression, netBEnableCompression bool
+	}
+
+	var tests []testDef = []testDef{
+		{true, true},   // both nodes with compression enabled
+		{true, false},  // node A with compression, node B without
+		{false, true},  // node A without compression, node B with compression
+		{false, false}, // both nodes with compression disabled
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("A_compression_%v+B_compression_%v", test.netAEnableCompression, test.netBEnableCompression), func(t *testing.T) {
+			cfgA := defaultConfig
+			cfgA.GossipFanout = 1
+			cfgA.EnableVoteCompression = test.netAEnableCompression
+			netA := makeTestWebsocketNodeWithConfig(t, cfgA)
+			netA.Start()
+			defer netStop(t, netA, "A")
+
+			cfgB := defaultConfig
+			cfgB.GossipFanout = 1
+			cfgB.EnableVoteCompression = test.netBEnableCompression
+			netB := makeTestWebsocketNodeWithConfig(t, cfgB)
+
+			addrA, postListen := netA.Address()
+			require.True(t, postListen)
+			t.Log(addrA)
+			netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
+			netB.Start()
+			defer netStop(t, netB, "B")
+
+			// ps is empty, so this is a valid vote
+			vote1 := map[string]any{
+				"cred": map[string]any{"pf": crypto.VrfProof{1}},
+				"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
+				"sig": map[string]any{
+					"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
+					"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
+				},
+			}
+			// ps is not empty: vpack compression will fail, but it will still be sent through
+			vote2 := map[string]any{
+				"cred": map[string]any{"pf": crypto.VrfProof{10}},
+				"r":    map[string]any{"rnd": uint64(11), "snd": [32]byte{12}},
+				"sig": map[string]any{
+					"p": [32]byte{13}, "p1s": [64]byte{14}, "p2": [32]byte{15},
+					"p2s": [64]byte{16}, "ps": [64]byte{17}, "s": [64]byte{18},
+				},
+			}
+			// Send a totally invalid message to ensure that it goes through. Even though vpack compression
+			// and decompression will fail, the message should still go through (as an intended fallback).
+			vote3 := []byte("hello")
+			messages := [][]byte{protocol.EncodeReflect(vote1), protocol.EncodeReflect(vote2), vote3}
+			matcher := newMessageMatcher(t, messages)
+			counterDone := matcher.done
+			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: matcher}})
+
+			readyTimeout := time.NewTimer(2 * time.Second)
+			waitReady(t, netA, readyTimeout.C)
+			t.Log("a ready")
+			waitReady(t, netB, readyTimeout.C)
+			t.Log("b ready")
+
+			for _, msg := range messages {
+				netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
 			}
 
 			select {
@@ -533,25 +616,6 @@ func TestWebsocketPeerData(t *testing.T) {
 	require.Equal(t, nil, netA.GetPeerData(peerB, "foo"))
 }
 
-// Test sending array of messages
-func TestWebsocketNetworkArray(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 3)
-	defer closeFunc()
-	counterDone := counter.done
-
-	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
-	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
-	netA.broadcaster.BroadcastArray(context.Background(), tags, data, false, nil)
-
-	select {
-	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 2", counter.count)
-	}
-}
-
 // Test cancelling message sends
 func TestWebsocketNetworkCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -570,25 +634,29 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// try calling BroadcastArray
-	netA.broadcaster.BroadcastArray(ctx, tags, data, true, nil)
+	// try calling broadcast
+	for i := 0; i < 100; i++ {
+		netA.broadcaster.broadcast(ctx, tags[i], data[i], true, nil)
+	}
 
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
 	assert.Equal(t, 0, counter.Count())
 
 	// try calling innerBroadcast
-	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	peers, _ := netA.peerSnapshot([]*wsPeer{})
-	netA.broadcaster.innerBroadcast(request, true, peers)
+	for i := 0; i < 100; i++ {
+		request := broadcastRequest{tag: tags[i], data: data[i], enqueueTime: time.Now(), ctx: ctx}
+		netA.broadcaster.innerBroadcast(request, true, peers)
+	}
 
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
 	assert.Equal(t, 0, counter.Count())
 
@@ -600,21 +668,25 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 		mbytes := make([]byte, len(tbytes)+len(msg))
 		copy(mbytes, tbytes)
 		copy(mbytes[len(tbytes):], msg)
-		msgs = append(msgs, sendMessage{data: mbytes, enqueued: time.Now(), peerEnqueued: enqueueTime, hash: crypto.Hash(mbytes), ctx: context.Background()})
+		msgs = append(msgs, sendMessage{data: mbytes, enqueued: time.Now(), peerEnqueued: enqueueTime, ctx: context.Background()})
 	}
 
+	// cancel msg 50
 	msgs[50].ctx = ctx
 
 	for _, peer := range peers {
-		peer.sendBufferHighPrio <- sendMessages{msgs: msgs}
+		for _, msg := range msgs {
+			peer.sendBufferHighPrio <- msg
+		}
 	}
 
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
-	assert.Equal(t, 50, counter.Count())
+	// all but msg 50 should have been sent
+	assert.Equal(t, 99, counter.Count())
 }
 
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
@@ -637,7 +709,7 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -702,7 +774,7 @@ func lineNetwork(t *testing.T, numNodes int) (nodes []*WebsocketNetwork, counter
 		if i > 0 {
 			addrPrev, postListen := nodes[i-1].Address()
 			require.True(t, postListen)
-			nodes[i].phonebook.ReplacePeerList([]string{addrPrev}, "default", phonebook.PhoneBookEntryRelayRole)
+			nodes[i].phonebook.ReplacePeerList([]string{addrPrev}, "default", phonebook.RelayRole)
 			nodes[i].RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: &counters[i]}})
 		}
 		nodes[i].Start()
@@ -783,7 +855,7 @@ func TestAddrToGossipAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	wn := &WebsocketNetwork{}
-	wn.GenesisID = "test genesisID"
+	wn.genesisID = "test genesisID"
 	wn.log = logging.Base()
 	addrtest(t, wn, "ws://r7.algodev.network.:4166/v1/test%20genesisID/gossip", "r7.algodev.network.:4166")
 	addrtest(t, wn, "ws://r7.algodev.network.:4166/v1/test%20genesisID/gossip", "http://r7.algodev.network.:4166")
@@ -990,8 +1062,8 @@ func TestSlowOutboundPeer(t *testing.T) {
 	for i := range destPeers {
 		destPeers[i].closing = make(chan struct{})
 		destPeers[i].net = node
-		destPeers[i].sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
-		destPeers[i].sendBufferBulk = make(chan sendMessages, sendBufferLength)
+		destPeers[i].sendBufferHighPrio = make(chan sendMessage, sendBufferLength)
+		destPeers[i].sendBufferBulk = make(chan sendMessage, sendBufferLength)
 		destPeers[i].conn = &nopConnSingleton
 		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
 		node.addPeer(&destPeers[i])
@@ -1056,7 +1128,7 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 		log:             logging.TestingLog(t).With("node", nodename),
 		config:          dc,
 		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:       genesisID,
+		genesisID:       genesisID,
 		NetworkID:       config.Devtestnet,
 		peerStater:      peerConnectionStater{log: logging.TestingLog(t).With("node", nodename)},
 		identityTracker: noopIdentityTracker{},
@@ -1080,7 +1152,7 @@ func TestDupFilter(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 	counter := &messageCounterHandler{t: t, limit: 1, done: make(chan struct{})}
@@ -1093,7 +1165,7 @@ func TestDupFilter(t *testing.T) {
 	require.True(t, postListen)
 	netC := makeTestFilterWebsocketNode(t, "c")
 	netC.config.GossipFanout = 1
-	netC.phonebook.ReplacePeerList([]string{addrB}, "default", phonebook.PhoneBookEntryRelayRole)
+	netC.phonebook.ReplacePeerList([]string{addrB}, "default", phonebook.RelayRole)
 	netC.Start()
 	defer netC.Stop()
 
@@ -1172,7 +1244,7 @@ func TestGetPeers(t *testing.T) {
 	require.True(t, postListen)
 	t.Log(addrA)
 	phbMulti := phonebook.MakePhonebook(1, 1*time.Millisecond)
-	phbMulti.ReplacePeerList([]string{addrA}, "phba", phonebook.PhoneBookEntryRelayRole)
+	phbMulti.ReplacePeerList([]string{addrA}, "phba", phonebook.RelayRole)
 	netB.phonebook = phbMulti
 	netB.Start()
 	defer netB.Stop()
@@ -1183,10 +1255,10 @@ func TestGetPeers(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
-	phbMulti.ReplacePeerList([]string{"a", "b", "c"}, "ph", phonebook.PhoneBookEntryRelayRole)
+	phbMulti.ReplacePeerList([]string{"a", "b", "c"}, "ph", phonebook.RelayRole)
 
 	// A few for archival node roles
-	phbMulti.ReplacePeerList([]string{"d", "e", "f"}, "ph", phonebook.PhoneBookEntryArchivalRole)
+	phbMulti.ReplacePeerList([]string{"d", "e", "f"}, "ph", phonebook.ArchivalRole)
 
 	//addrB, _ := netB.Address()
 
@@ -2182,7 +2254,7 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 	returns := make(chan uint64, 100)
@@ -2264,7 +2336,7 @@ func TestWebsocketNetworkPrio(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -2311,7 +2383,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netB.SetPrioScheme(&prioB)
 	netB.config.GossipFanout = 1
 	netB.config.NetAddress = ""
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counterB}})
 	netB.Start()
 	defer netStop(t, netB, "B")
@@ -2325,7 +2397,7 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	netC.SetPrioScheme(&prioC)
 	netC.config.GossipFanout = 1
 	netC.config.NetAddress = ""
-	netC.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netC.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netC.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counterC}})
 	netC.Start()
 	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
@@ -2410,7 +2482,7 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 	for i := 0; i < numClients; i++ {
 		client := makeTestWebsocketNodeWithConfig(t, clientConf)
 		client.config.GossipFanout = 1
-		client.phonebook.ReplacePeerList([]string{relayAddr}, "default", phonebook.PhoneBookEntryRelayRole)
+		client.phonebook.ReplacePeerList([]string{relayAddr}, "default", phonebook.RelayRole)
 		client.Start()
 		defer client.Stop()
 
@@ -2463,52 +2535,48 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	wn := makeTestWebsocketNode(t)
-	wn.GenesisID = "genesis-id1"
-	wn.RandomID = "random-id1"
+	wn.genesisID = "genesis-id1"
+	wn.randomID = "random-id1"
 	header := http.Header{}
 	header.Set(ProtocolVersionHeader, ProtocolVersion)
-	header.Set(NodeRandomHeader, wn.RandomID+"tag")
-	header.Set(GenesisHeader, wn.GenesisID)
+	header.Set(NodeRandomHeader, wn.randomID+"tag")
+	header.Set(GenesisHeader, wn.genesisID)
 	responseVariableOk, matchingVersion := wn.checkServerResponseVariables(header, "addressX")
 	require.Equal(t, true, responseVariableOk)
 	require.Equal(t, matchingVersion, ProtocolVersion)
 
 	noVersionHeader := http.Header{}
-	noVersionHeader.Set(NodeRandomHeader, wn.RandomID+"tag")
-	noVersionHeader.Set(GenesisHeader, wn.GenesisID)
+	noVersionHeader.Set(NodeRandomHeader, wn.randomID+"tag")
+	noVersionHeader.Set(GenesisHeader, wn.genesisID)
 	responseVariableOk, _ = wn.checkServerResponseVariables(noVersionHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 
 	noRandomHeader := http.Header{}
 	noRandomHeader.Set(ProtocolVersionHeader, ProtocolVersion)
-	noRandomHeader.Set(GenesisHeader, wn.GenesisID)
+	noRandomHeader.Set(GenesisHeader, wn.genesisID)
 	responseVariableOk, _ = wn.checkServerResponseVariables(noRandomHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 
 	sameRandomHeader := http.Header{}
 	sameRandomHeader.Set(ProtocolVersionHeader, ProtocolVersion)
-	sameRandomHeader.Set(NodeRandomHeader, wn.RandomID)
-	sameRandomHeader.Set(GenesisHeader, wn.GenesisID)
+	sameRandomHeader.Set(NodeRandomHeader, wn.randomID)
+	sameRandomHeader.Set(GenesisHeader, wn.genesisID)
 	responseVariableOk, _ = wn.checkServerResponseVariables(sameRandomHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 
 	differentGenesisIDHeader := http.Header{}
 	differentGenesisIDHeader.Set(ProtocolVersionHeader, ProtocolVersion)
-	differentGenesisIDHeader.Set(NodeRandomHeader, wn.RandomID+"tag")
-	differentGenesisIDHeader.Set(GenesisHeader, wn.GenesisID+"tag")
+	differentGenesisIDHeader.Set(NodeRandomHeader, wn.randomID+"tag")
+	differentGenesisIDHeader.Set(GenesisHeader, wn.genesisID+"tag")
 	responseVariableOk, _ = wn.checkServerResponseVariables(differentGenesisIDHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
-	msgArr := make([][]byte, 1)
-	msgArr[0] = data
-	tagArr := make([]protocol.Tag, 1)
-	tagArr[0] = tag
-	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when, ctx: context.Background()}
+	request := broadcastRequest{tag: tag, data: data, enqueueTime: when, ctx: context.Background()}
 
 	broadcastQueue := wn.broadcaster.broadcastQueueBulk
-	if highPriorityTag(tagArr) {
+	if highPriorityTag(tag) {
 		broadcastQueue = wn.broadcaster.broadcastQueueHighPrio
 	}
 	// no wait
@@ -2535,7 +2603,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 	counter := newMessageCounter(t, 5)
@@ -2568,7 +2636,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		log:             log,
 		config:          defaultConfig,
 		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:       genesisID,
+		genesisID:       genesisID,
 		NetworkID:       config.Devtestnet,
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
@@ -2590,7 +2658,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -2645,7 +2713,7 @@ func TestForceMessageRelaying(t *testing.T) {
 		log:             log,
 		config:          defaultConfig,
 		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:       genesisID,
+		genesisID:       genesisID,
 		NetworkID:       config.Devtestnet,
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
@@ -2669,14 +2737,14 @@ func TestForceMessageRelaying(t *testing.T) {
 	noAddressConfig.NetAddress = ""
 	netB := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 	netB.config.GossipFanout = 1
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 
 	noAddressConfig.ForceRelayMessages = true
 	netC := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 	netC.config.GossipFanout = 1
-	netC.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netC.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netC.Start()
 	defer func() { t.Log("stopping C"); netC.Stop(); t.Log("C done") }()
 
@@ -2741,7 +2809,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 		log:             log,
 		config:          defaultConfig,
 		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:       genesisID,
+		genesisID:       genesisID,
 		NetworkID:       config.Devtestnet,
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
@@ -2752,7 +2820,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	header1 := make(http.Header)
 	header1.Add(ProtocolAcceptVersionHeader, "1")
 	header1.Add(ProtocolVersionHeader, "3")
-	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(header1)
+	matchingVersion, otherVersion := checkProtocolVersionMatch(header1, wn.supportedProtocolVersions)
 	require.Equal(t, "1", matchingVersion)
 	require.Equal(t, "", otherVersion)
 
@@ -2760,19 +2828,19 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	header2.Add(ProtocolAcceptVersionHeader, "3")
 	header2.Add(ProtocolAcceptVersionHeader, "4")
 	header2.Add(ProtocolVersionHeader, "1")
-	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header2)
+	matchingVersion, otherVersion = checkProtocolVersionMatch(header2, wn.supportedProtocolVersions)
 	require.Equal(t, "1", matchingVersion)
 	require.Equal(t, "1", otherVersion)
 
 	header3 := make(http.Header)
 	header3.Add(ProtocolVersionHeader, "3")
-	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header3)
+	matchingVersion, otherVersion = checkProtocolVersionMatch(header3, wn.supportedProtocolVersions)
 	require.Equal(t, "", matchingVersion)
 	require.Equal(t, "3", otherVersion)
 
 	header4 := make(http.Header)
 	header4.Add(ProtocolVersionHeader, "5\n")
-	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header4)
+	matchingVersion, otherVersion = checkProtocolVersionMatch(header4, wn.supportedProtocolVersions)
 	require.Equal(t, "", matchingVersion)
 	require.Equal(t, "5"+unprintableCharacterGlyph, otherVersion)
 }
@@ -2822,7 +2890,7 @@ func TestWebsocketNetworkTopicRoundtrip(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -2922,7 +2990,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Logf("netA %s", addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 
 	// have netB asking netA to send it ft2.
 	// Max MOI size is calculated by encoding all of the valid tags, since we are using a custom tag here we must deregister one in the default set.
@@ -3047,7 +3115,7 @@ func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -3131,7 +3199,7 @@ func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -3213,7 +3281,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 	require.False(t, netB.relayMessages)
@@ -3319,7 +3387,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 	require.False(t, netB.relayMessages)
@@ -3441,7 +3509,7 @@ func testWebsocketDisconnection(t *testing.T, disconnectFunc func(wn *WebsocketN
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
 
@@ -3574,8 +3642,8 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	wn := makeTestWebsocketNode(t)
-	wn.GenesisID = "genesis-id1"
-	wn.RandomID = "random-id1"
+	wn.genesisID = "genesis-id1"
+	wn.randomID = "random-id1"
 	wn.log = callbackLogger{
 		Logger: wn.log,
 		InfoCallback: func(args ...interface{}) {
@@ -3598,8 +3666,8 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 
 	header1 := http.Header{}
 	header1.Set(ProtocolVersionHeader, ProtocolVersion+"א")
-	header1.Set(NodeRandomHeader, wn.RandomID+"tag")
-	header1.Set(GenesisHeader, wn.GenesisID)
+	header1.Set(NodeRandomHeader, wn.randomID+"tag")
+	header1.Set(GenesisHeader, wn.genesisID)
 	responseVariableOk, matchingVersion := wn.checkServerResponseVariables(header1, "addressX")
 	require.Equal(t, false, responseVariableOk)
 	require.Equal(t, "", matchingVersion)
@@ -3607,15 +3675,15 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	header2 := http.Header{}
 	header2.Set(ProtocolVersionHeader, ProtocolVersion)
 	header2.Set("א", "א")
-	header2.Set(GenesisHeader, wn.GenesisID)
+	header2.Set(GenesisHeader, wn.genesisID)
 	responseVariableOk, matchingVersion = wn.checkServerResponseVariables(header2, "addressX")
 	require.Equal(t, false, responseVariableOk)
 	require.Equal(t, "", matchingVersion)
 
 	header3 := http.Header{}
 	header3.Set(ProtocolVersionHeader, ProtocolVersion)
-	header3.Set(NodeRandomHeader, wn.RandomID+"tag")
-	header3.Set(GenesisHeader, wn.GenesisID+"א")
+	header3.Set(NodeRandomHeader, wn.randomID+"tag")
+	header3.Set(GenesisHeader, wn.genesisID+"א")
 	responseVariableOk, matchingVersion = wn.checkServerResponseVariables(header3, "addressX")
 	require.Equal(t, false, responseVariableOk)
 	require.Equal(t, "", matchingVersion)
@@ -3636,7 +3704,7 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer func() { netB.Stop() }()
 
@@ -3701,35 +3769,60 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 func TestPreparePeerData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// no compression
-	req := broadcastRequest{
-		tags: []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag},
-		data: [][]byte{[]byte("test"), []byte("data")},
+	vote := map[string]any{
+		"cred": map[string]any{"pf": crypto.VrfProof{}},
+		"r":    map[string]any{"rnd": uint64(1), "snd": [32]byte{}},
+		"sig": map[string]any{
+			"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{},
+			"p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{},
+		},
+	}
+	reqs := []broadcastRequest{
+		{tag: protocol.AgreementVoteTag, data: protocol.EncodeReflect(vote)},
+		{tag: protocol.ProposalPayloadTag, data: []byte("data")},
+		{tag: protocol.TxnTag, data: []byte("txn")},
+		{tag: protocol.StateProofSigTag, data: []byte("stateproof")},
 	}
 
 	wn := WebsocketNetwork{}
-	data, digests := wn.broadcaster.preparePeerData(req, false)
-	require.NotEmpty(t, data)
-	require.NotEmpty(t, digests)
-	require.Equal(t, len(req.data), len(digests))
-	require.Equal(t, len(data), len(digests))
+	wn.broadcaster.log = logging.TestingLog(t)
+	// Enable vote compression for the test
+	wn.broadcaster.enableVoteCompression = true
+	data := make([][]byte, len(reqs))
+	compressedData := make([][]byte, len(reqs))
+	digests := make([]crypto.Digest, len(reqs))
 
-	for i := range data {
-		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+	// Test without compression (prio = false)
+	for i, req := range reqs {
+		data[i], compressedData[i], digests[i] = wn.broadcaster.preparePeerData(req, false)
+		require.NotEmpty(t, data[i])
+		require.Empty(t, digests[i]) // small messages have no digest
 	}
 
-	data, digests = wn.broadcaster.preparePeerData(req, true)
-	require.NotEmpty(t, data)
-	require.NotEmpty(t, digests)
-	require.Equal(t, len(req.data), len(digests))
-	require.Equal(t, len(data), len(digests))
+	for i := range data {
+		require.Equal(t, append([]byte(reqs[i].tag), reqs[i].data...), data[i])
+		require.Empty(t, compressedData[i]) // No compression when prio = false
+	}
+
+	// Test with compression (prio = true)
+	for i, req := range reqs {
+		data[i], compressedData[i], digests[i] = wn.broadcaster.preparePeerData(req, true)
+		require.NotEmpty(t, data[i])
+		require.Empty(t, digests[i]) // small messages have no digest
+	}
 
 	for i := range data {
-		if req.tags[i] != protocol.ProposalPayloadTag {
-			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
-			require.Equal(t, data[i], data[i])
+		if reqs[i].tag == protocol.AgreementVoteTag {
+			// For votes with prio=true, the main data remains uncompressed, but compressedData is filled
+			require.Equal(t, append([]byte(reqs[i].tag), reqs[i].data...), data[i])
+			require.NotEmpty(t, compressedData[i], "Vote messages should have compressed data when prio=true")
+		} else if reqs[i].tag == protocol.ProposalPayloadTag {
+			// For proposals with prio=true, the main data is compressed with zstd
+			require.Equal(t, append([]byte(reqs[i].tag), zstdCompressionMagic[:]...), data[i][:len(reqs[i].tag)+len(zstdCompressionMagic)])
+			require.Empty(t, compressedData[i], "Proposal messages should not have separate compressed data")
 		} else {
-			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), data[i][:len(req.tags[i])+len(zstdCompressionMagic)])
+			require.Equal(t, append([]byte(reqs[i].tag), reqs[i].data...), data[i])
+			require.Empty(t, compressedData[i])
 		}
 	}
 }
@@ -4010,14 +4103,13 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	// send an unrequested block response
-	msg := make([]sendMessage, 1)
-	msg[0] = sendMessage{
+	msg := sendMessage{
 		data:         append([]byte(protocol.TopicMsgRespTag), []byte("foo")...),
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
 		ctx:          context.Background(),
 	}
-	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
+	netA.peers[0].sendBufferBulk <- msg
 	require.Eventually(t,
 		func() bool {
 			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) == 1
@@ -4080,7 +4172,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	netC.log.SetOutput(logBuffer)
 
 	// send a late TS response from A -> C
-	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
+	netA.peers[0].sendBufferBulk <- msg
 	require.Eventually(
 		t,
 		func() bool { return netC.peers[0].outstandingTopicRequests.Load() == int64(0) },
@@ -4497,8 +4589,8 @@ func TestSendMessageCallbackDrain(t *testing.T) {
 	node := makeTestWebsocketNode(t)
 	destPeer := wsPeer{
 		closing:            make(chan struct{}),
-		sendBufferHighPrio: make(chan sendMessages, sendBufferLength),
-		sendBufferBulk:     make(chan sendMessages, sendBufferLength),
+		sendBufferHighPrio: make(chan sendMessage, sendBufferLength),
+		sendBufferBulk:     make(chan sendMessage, sendBufferLength),
 		conn:               &nopConnSingleton,
 	}
 	node.addPeer(&destPeer)
@@ -4545,7 +4637,7 @@ func TestWsNetworkPhonebookMix(t *testing.T) {
 		nil,
 	)
 	require.NoError(t, err)
-	addrs := net.phonebook.GetAddresses(10, phonebook.PhoneBookEntryRelayRole)
+	addrs := net.phonebook.GetAddresses(10, phonebook.RelayRole)
 	require.Len(t, addrs, 1)
 }
 
@@ -4657,16 +4749,16 @@ func TestPeerComparisonInBroadcast(t *testing.T) {
 
 	testPeer := &wsPeer{
 		wsPeerCore:     makePeerCore(wn.ctx, wn, log, nil, "test-addr", nil, ""),
-		sendBufferBulk: make(chan sendMessages, sendBufferLength),
+		sendBufferBulk: make(chan sendMessage, sendBufferLength),
 	}
 	exceptPeer := &wsPeer{
 		wsPeerCore:     makePeerCore(wn.ctx, wn, log, nil, "except-addr", nil, ""),
-		sendBufferBulk: make(chan sendMessages, sendBufferLength),
+		sendBufferBulk: make(chan sendMessage, sendBufferLength),
 	}
 
 	request := broadcastRequest{
-		tags:        []protocol.Tag{"test-tag"},
-		data:        [][]byte{[]byte("test-data")},
+		tag:         protocol.Tag("test-tag"),
+		data:        []byte("test-data"),
 		enqueueTime: time.Now(),
 		except:      exceptPeer,
 	}

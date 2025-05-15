@@ -566,7 +566,6 @@ func (c checkpointAction) do(ctx context.Context, s *Service) {
 		// we don't expect this to happen in recovery
 		s.log.with(logEvent).Errorf("checkpoint action for (%v, %v, %v) reached with nil completion channel", c.Round, c.Period, c.Step)
 	}
-	return
 }
 
 func (c checkpointAction) String() string {
