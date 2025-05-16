@@ -1297,7 +1297,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, cow, eval.specials, &ad)
 
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, cow, eval.specials, &ad)
+		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, cow, eval.specials, &ad, ctr)
 
 	case protocol.ApplicationCallTx:
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, cow, &ad, gi, evalParams, ctr)

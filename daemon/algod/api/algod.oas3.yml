@@ -1617,6 +1617,10 @@
             "description": "\\[f\\] Address of account used to freeze holdings of this asset.  If empty, freezing is not permitted.",
             "type": "string"
           },
+          "frozen": {
+            "description": "\\[fr\\] Whether this asset is frozen.",
+            "type": "boolean"
+          },
           "manager": {
             "description": "\\[m\\] Address of account used to manage the keys of this asset and to destroy it.",
             "type": "string"

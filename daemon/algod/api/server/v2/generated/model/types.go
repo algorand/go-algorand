@@ -477,6 +477,9 @@ type AssetParams struct {
 	// Freeze \[f\] Address of account used to freeze holdings of this asset.  If empty, freezing is not permitted.
 	Freeze *string `json:"freeze,omitempty"`
 
+	// Frozen \[fr\] Whether this asset is frozen.
+	Frozen *bool `json:"frozen,omitempty"`
+
 	// Manager \[m\] Address of account used to manage the keys of this asset and to destroy it.
 	Manager *string `json:"manager,omitempty"`
 

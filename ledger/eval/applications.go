@@ -344,7 +344,7 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 		err = apply.AssetTransfer(txn.Txn.AssetTransferTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
 
 	case protocol.AssetFreezeTx:
-		err = apply.AssetFreeze(txn.Txn.AssetFreezeTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData)
+		err = apply.AssetFreeze(txn.Txn.AssetFreezeTxnFields, txn.Txn.Header, cs, *ep.Specials, &txn.ApplyData, cs.Counter())
 
 	case protocol.ApplicationCallTx:
 		err = apply.ApplicationCall(txn.Txn.ApplicationCallTxnFields, txn.Txn.Header, cs, &txn.ApplyData,

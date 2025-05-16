@@ -695,6 +695,8 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIDs bo
 		frozen := ""
 		if assetHolding.IsFrozen {
 			frozen = " (frozen)"
+		} else if assetParams.Params.Frozen != nil {
+			frozen = " (globally frozen)"
 		}
 
 		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", assetHolding.AssetID, assetName, amount, unitName, frozen)

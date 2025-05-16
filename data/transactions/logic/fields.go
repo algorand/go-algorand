@@ -1152,8 +1152,11 @@ type AssetHoldingField int
 const (
 	// AssetBalance AssetHolding.Amount
 	AssetBalance AssetHoldingField = iota
-	// AssetFrozen AssetHolding.Frozen
+	// AssetFrozen AssetHolding.Frozen || (AssetParams.LastGlobalFreeze > AssetHolding.LastFreezeChange)
 	AssetFrozen
+	// AssetFrozenLocally AssetHolding.Frozen
+	AssetFrozenLocally
+
 	invalidAssetHoldingField // compile-time constant for number of fields
 )
 
@@ -1184,7 +1187,8 @@ func (fs assetHoldingFieldSpec) Note() string {
 
 var assetHoldingFieldSpecs = [...]assetHoldingFieldSpec{
 	{AssetBalance, StackUint64, 2, "Amount of the asset unit held by this account"},
-	{AssetFrozen, StackBoolean, 2, "Is the asset frozen or not"},
+	{AssetFrozen, StackBoolean, 2, "Is the asset effectively frozen, accounting for local and global freeze state"},
+	{AssetFrozenLocally, StackBoolean, 12, "Is the account frozen or not"},
 }
 
 func assetHoldingFieldSpecByField(f AssetHoldingField) (assetHoldingFieldSpec, bool) {
@@ -1240,6 +1244,9 @@ const (
 	// AssetCreator is not *in* the Params, but it is uniquely determined.
 	AssetCreator
 
+	// AssetGlobalFrozen AssetParams.LastGlobalFreeze > 0
+	AssetGlobalFrozen
+
 	invalidAssetParamsField // compile-time constant for number of fields
 )
 
@@ -1281,6 +1288,7 @@ var assetParamsFieldSpecs = [...]assetParamsFieldSpec{
 	{AssetFreeze, StackAddress, 2, "Freeze address"},
 	{AssetClawback, StackAddress, 2, "Clawback address"},
 	{AssetCreator, StackAddress, 5, "Creator address"},
+	{AssetGlobalFrozen, StackBoolean, 12, "Is the asset frozen or not"},
 }
 
 func assetParamsFieldSpecByField(f AssetParamsField) (assetParamsFieldSpec, bool) {
