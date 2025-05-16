@@ -18,7 +18,6 @@ package p2p
 
 import (
 	"context"
-	"encoding/base32"
 	"fmt"
 	"net"
 	"net/http"
@@ -91,12 +90,13 @@ type serviceImpl struct {
 	topicsMu deadlock.RWMutex
 }
 
-// AlgorandWsProtocol defines a libp2p protocol name for algorand's websockets messages
-const AlgorandWsProtocol = "/algorand-ws/1.0.0"
+// AlgorandWsProtocolV1 defines a libp2p protocol name for algorand's websockets messages
+// as the very initial release
+const AlgorandWsProtocolV1 = "/algorand-ws/1.0.0"
 
-// algorandGUIDProtocolPrefix defines a libp2p protocol name for algorand node telemetry GUID exchange
-const algorandGUIDProtocolPrefix = "/algorand-telemetry/1.0.0/"
-const algorandGUIDProtocolTemplate = algorandGUIDProtocolPrefix + "%s/%s"
+// AlgorandWsProtocolV22 defines a libp2p protocol name for algorand's websockets messages
+// as a version supporting peer metadata and wsnet v2.2 protocol features
+const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 const dialTimeout = 30 * time.Second
 
@@ -182,18 +182,24 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 	return rm, err
 }
 
+// StreamHandlerPair is a struct that contains a protocol ID and a StreamHandler
+type StreamHandlerPair struct {
+	ProtoID protocol.ID
+	Handler StreamHandler
+}
+
+// StreamHandlers is an ordered list of StreamHandlerPair
+type StreamHandlers []StreamHandlerPair
+
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
+	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
-	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 
-	// set an empty handler for telemetryID/telemetryInstance protocol in order to allow other peers to know our telemetryID
-	telemetryID := log.GetTelemetryGUID()
-	telemetryInstance := log.GetInstanceName()
-	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
-	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
+	for _, pair := range wsStreamHandlers {
+		h.SetStreamHandler(pair.ProtoID, sm.streamHandler)
+	}
 
 	ps, err := makePubSub(ctx, cfg, h, metricsTracer)
 	if err != nil {
@@ -321,35 +327,6 @@ func netAddressToListenAddress(netAddress string) (string, error) {
 	}
 
 	return fmt.Sprintf("/ip4/%s/tcp/%s", ip, parts[1]), nil
-}
-
-// GetPeerTelemetryInfo returns the telemetry ID of a peer by looking at its protocols
-func GetPeerTelemetryInfo(peerProtocols []protocol.ID) (telemetryID string, telemetryInstance string) {
-	for _, protocol := range peerProtocols {
-		if strings.HasPrefix(string(protocol), algorandGUIDProtocolPrefix) {
-			telemetryInfo := string(protocol[len(algorandGUIDProtocolPrefix):])
-			telemetryInfoParts := strings.Split(telemetryInfo, "/")
-			if len(telemetryInfoParts) == 2 {
-				telemetryIDBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[0])
-				if err == nil {
-					telemetryID = string(telemetryIDBytes)
-				}
-				telemetryInstanceBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[1])
-				if err == nil {
-					telemetryInstance = string(telemetryInstanceBytes)
-				}
-				return telemetryID, telemetryInstance
-			}
-		}
-	}
-	return "", ""
-}
-
-func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance string) string {
-	return fmt.Sprintf(algorandGUIDProtocolTemplate,
-		base32.StdEncoding.EncodeToString([]byte(telemetryID)),
-		base32.StdEncoding.EncodeToString([]byte(telemetryInstance)),
-	)
 }
 
 var private6 = parseCIDR([]string{
