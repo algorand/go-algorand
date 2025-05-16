@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -638,6 +639,16 @@ type BonusPlan struct {
 	// after going into effect. The BonusDecayInterval goes into effect at upgrade
 	// time, regardless of `baseRound`.
 	DecayInterval uint64
+}
+
+// KeyDilution returns the key dilution for this account,
+// returning the default key dilution if not explicitly specified.
+func (proto ConsensusParams) KeyDilution(u basics.OnlineAccountData) uint64 {
+	if u.VoteKeyDilution != 0 {
+		return u.VoteKeyDilution
+	}
+
+	return proto.DefaultKeyDilution
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to

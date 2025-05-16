@@ -136,7 +136,7 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 
 	for i, acct := range top {
 		var ot basics.OverflowTracker
-		rewards := basics.PendingRewards(&ot, tr.Proto, acct.MicroAlgos, acct.RewardsBase, hdr.RewardsLevel)
+		rewards := tr.Proto.PendingRewards(&ot, acct.MicroAlgos, acct.RewardsBase, hdr.RewardsLevel)
 		money := ot.AddA(acct.MicroAlgos, rewards)
 		if ot.Overflowed {
 			return fmt.Errorf("votersTracker.LoadTree: overflow adding rewards %d + %d", acct.MicroAlgos, rewards)

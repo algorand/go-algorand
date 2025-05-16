@@ -1392,7 +1392,7 @@ func compareTopAccounts(a *require.Assertions, testingResult []*ledgercore.Onlin
 			Address:                 expectedAccountsBalances[i].Addr,
 			MicroAlgos:              expectedAccountsBalances[i].MicroAlgos,
 			RewardsBase:             0,
-			NormalizedOnlineBalance: expectedAccountsBalances[i].NormalizedOnlineBalance(config.Consensus[protocol.ConsensusCurrentVersion]),
+			NormalizedOnlineBalance: config.Consensus[protocol.ConsensusCurrentVersion].NormalizedOnlineBalance(expectedAccountsBalances[i].AccountData),
 			VoteFirstValid:          expectedAccountsBalances[i].VoteFirstValid,
 			VoteLastValid:           expectedAccountsBalances[i].VoteLastValid})
 	}
