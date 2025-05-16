@@ -32,6 +32,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	csp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
@@ -822,7 +823,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
 	// the logicsig args can both be up to to MaxLogicSigMaxSize, but that's the max for
 	// them combined, so it double counts and we have to subtract one.
-	maxCombinedTxnSize -= uint64(config.MaxLogicSigMaxSize)
+	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
 
 	// maxCombinedTxnSize is still an overestimate because it assumes all txn
 	// type fields can be in the same txn.  That's not true, but it provides an
