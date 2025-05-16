@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 // returnError logs an internal message while returning the encoded response.
@@ -77,14 +78,6 @@ func notImplemented(ctx echo.Context, internal error, external string, log loggi
 	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
 }
 
-func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
-	output := make([]Y, len(input))
-	for i := range input {
-		output[i] = fn(input[i])
-	}
-	return output
-}
-
 func convertMap[X comparable, Y, Z any](input map[X]Y, fn func(X, Y) Z) []Z {
 	output := make([]Z, len(input))
 	counter := 0
@@ -96,11 +89,11 @@ func convertMap[X comparable, Y, Z any](input map[X]Y, fn func(X, Y) Z) []Z {
 }
 
 func uint64Slice[T ~uint64](s []T) []uint64 {
-	return convertSlice(s, func(t T) uint64 { return uint64(t) })
+	return util.Map(s, func(t T) uint64 { return uint64(t) })
 }
 
 func stringSlice[T fmt.Stringer](s []T) []string {
-	return convertSlice(s, func(t T) string { return t.String() })
+	return util.Map(s, func(t T) string { return t.String() })
 }
 
 func sliceOrNil[T any](s []T) *[]T {
@@ -444,11 +437,11 @@ func convertApplicationStateChange(stateChange simulation.StateOperation) model.
 func convertOpcodeTraceUnit(opcodeTraceUnit simulation.OpcodeTraceUnit) model.SimulationOpcodeTraceUnit {
 	return model.SimulationOpcodeTraceUnit{
 		Pc:             opcodeTraceUnit.PC,
-		SpawnedInners:  sliceOrNil(convertSlice(opcodeTraceUnit.SpawnedInners, func(v int) uint64 { return uint64(v) })),
-		StackAdditions: sliceOrNil(convertSlice(opcodeTraceUnit.StackAdded, convertToAVMValue)),
+		SpawnedInners:  sliceOrNil(util.Map(opcodeTraceUnit.SpawnedInners, func(v int) uint64 { return uint64(v) })),
+		StackAdditions: sliceOrNil(util.Map(opcodeTraceUnit.StackAdded, convertToAVMValue)),
 		StackPopCount:  omitEmpty(opcodeTraceUnit.StackPopCount),
-		ScratchChanges: sliceOrNil(convertSlice(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
-		StateChanges:   sliceOrNil(convertSlice(opcodeTraceUnit.StateChanges, convertApplicationStateChange)),
+		ScratchChanges: sliceOrNil(util.Map(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
+		StateChanges:   sliceOrNil(util.Map(opcodeTraceUnit.StateChanges, convertApplicationStateChange)),
 	}
 }
 
@@ -457,15 +450,15 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		return nil
 	}
 	return &model.SimulationTransactionExecTrace{
-		ApprovalProgramTrace:    sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
+		ApprovalProgramTrace:    sliceOrNil(util.Map(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
 		ApprovalProgramHash:     digestOrNil(txnTrace.ApprovalProgramHash),
-		ClearStateProgramTrace:  sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
+		ClearStateProgramTrace:  sliceOrNil(util.Map(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
 		ClearStateProgramHash:   digestOrNil(txnTrace.ClearStateProgramHash),
 		ClearStateRollback:      omitEmpty(txnTrace.ClearStateRollback),
 		ClearStateRollbackError: omitEmpty(txnTrace.ClearStateRollbackError),
-		LogicSigTrace:           sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
+		LogicSigTrace:           sliceOrNil(util.Map(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
 		LogicSigHash:            digestOrNil(txnTrace.LogicSigHash),
-		InnerTrace: sliceOrNil(convertSlice(txnTrace.InnerTraces,
+		InnerTrace: sliceOrNil(util.Map(txnTrace.InnerTraces,
 			func(trace simulation.TransactionTrace) model.SimulationTransactionExecTrace {
 				return *convertTxnTrace(&trace)
 			}),
@@ -498,20 +491,20 @@ func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *mod
 		Accounts: sliceOrNil(stringSlice(slices.Collect(maps.Keys(resources.Accounts)))),
 		Assets:   sliceOrNil(uint64Slice(slices.Collect(maps.Keys(resources.Assets)))),
 		Apps:     sliceOrNil(uint64Slice(slices.Collect(maps.Keys(resources.Apps)))),
-		Boxes: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.Boxes)), func(box logic.BoxRef) model.BoxReference {
+		Boxes: sliceOrNil(util.Map(slices.Collect(maps.Keys(resources.Boxes)), func(box basics.BoxRef) model.BoxReference {
 			return model.BoxReference{
 				App:  uint64(box.App),
 				Name: []byte(box.Name),
 			}
 		})),
 		ExtraBoxRefs: omitEmpty(uint64(resources.NumEmptyBoxRefs)),
-		AssetHoldings: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.AssetHoldings)), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
+		AssetHoldings: sliceOrNil(util.Map(slices.Collect(maps.Keys(resources.AssetHoldings)), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
 			return model.AssetHoldingReference{
 				Account: holding.Address.String(),
 				Asset:   uint64(holding.Asset),
 			}
 		})),
-		AppLocals: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.AppLocals)), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
+		AppLocals: sliceOrNil(util.Map(slices.Collect(maps.Keys(resources.AppLocals)), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
 			return model.ApplicationLocalReference{
 				Account: local.Address.String(),
 				App:     uint64(local.App),
@@ -603,7 +596,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 	return PreEncodedSimulateResponse{
 		Version:         result.Version,
 		LastRound:       uint64(result.LastRound),
-		TxnGroups:       convertSlice(result.TxnGroups, convertTxnGroupResult),
+		TxnGroups:       util.Map(result.TxnGroups, convertTxnGroupResult),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,
 		InitialStates:   convertSimulateInitialStates(result.InitialStates),
