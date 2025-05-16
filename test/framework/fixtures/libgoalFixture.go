@@ -207,18 +207,18 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			}
 
 			// Fetch an account.Root from the database
-			root, err := account.RestoreRoot(handle)
-			if err != nil {
+			root, err1 := account.RestoreRoot(handle)
+			if err1 != nil {
 				// Couldn't read it, skip it
 				continue
 			}
 
 			secretKey := root.Secrets().SK
-			wh, err := lg.GetUnencryptedWalletHandle()
-			f.failOnError(err, "couldn't get default wallet handle: %v")
-			_, err = lg.ImportKey(wh, secretKey[:])
-			if err != nil && !strings.Contains(err.Error(), "key already exists") {
-				f.failOnError(err, "couldn't import secret: %v")
+			wh, err1 := lg.GetUnencryptedWalletHandle()
+			f.failOnError(err1, "couldn't get default wallet handle: %v")
+			_, err1 = lg.ImportKey(wh, secretKey[:])
+			if err1 != nil && !strings.Contains(err1.Error(), "key already exists") {
+				f.failOnError(err1, "couldn't import secret: %v")
 			}
 			accountsWithRootKeys[root.Address().String()] = true
 			handle.Close()

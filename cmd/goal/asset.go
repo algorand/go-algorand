@@ -321,9 +321,9 @@ var createAssetCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				txn, err := waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				txn, err1 := waitForCommit(client, txid, lv)
+				if err1 != nil {
+					reportErrorln(err1.Error())
 				}
 				if txn.AssetIndex != nil && *txn.AssetIndex != 0 {
 					reportInfof("Created asset with asset index %d", *txn.AssetIndex)
@@ -332,7 +332,7 @@ var createAssetCmd = &cobra.Command{
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -408,7 +408,7 @@ var destroyAssetCmd = &cobra.Command{
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -501,7 +501,7 @@ var configAssetCmd = &cobra.Command{
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -588,7 +588,7 @@ var sendAssetCmd = &cobra.Command{
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -657,7 +657,7 @@ var freezeAssetCmd = &cobra.Command{
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},

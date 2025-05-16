@@ -630,9 +630,9 @@ var appExecuteCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				txn, err := waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				txn, err1 := waitForCommit(client, txid, lv)
+				if err1 != nil {
+					reportErrorln(err1.Error())
 				}
 				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
 					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
@@ -642,7 +642,7 @@ var appExecuteCmd = &cobra.Command{
 			// Broadcast or write transaction to file
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},

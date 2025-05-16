@@ -231,7 +231,7 @@ func (w ioPropWrapper) containsTrace(trace ioTrace) (contains bool, info string,
 	for _, e := range trace.events {
 		valid := checker.addEvent(e)
 		if valid != nil {
-			return false, valid.Error(), nil
+			return false, valid.Error(), nil //nolint:nilerr // intentional
 		}
 	}
 	return true, "", nil

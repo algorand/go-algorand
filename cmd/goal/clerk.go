@@ -408,16 +408,16 @@ var sendCmd = &cobra.Command{
 		// (we don't use accountList.getAddressByName because this address likely doesn't correspond to an account)
 		var rekeyTo basics.Address
 		if rekeyToAddress != "" {
-			var err error
-			rekeyTo, err = basics.UnmarshalChecksumAddress(rekeyToAddress)
-			if err != nil {
-				reportErrorf(err.Error())
+			var err1 error
+			rekeyTo, err1 = basics.UnmarshalChecksumAddress(rekeyToAddress)
+			if err1 != nil {
+				reportErrorln(err1.Error())
 			}
 		}
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err.Error())
 		}
 		payment, err := client.ConstructPayment(
 			fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved,
@@ -449,9 +449,9 @@ var sendCmd = &cobra.Command{
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
 
-			params, err := client.SuggestedParams()
-			if err != nil {
-				reportErrorf(errorNodeStatus, err)
+			params, err1 := client.SuggestedParams()
+			if err1 != nil {
+				reportErrorf(errorNodeStatus, err1)
 			}
 			proto := protocol.ConsensusVersion(params.ConsensusVersion)
 			uncheckedTxn := transactions.SignedTxn{
@@ -463,12 +463,12 @@ var sendCmd = &cobra.Command{
 					CurrentProtocol: proto,
 				},
 			}
-			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil, nil)
-			if err == nil {
-				err = verify.LogicSigSanityCheck(0, groupCtx)
+			groupCtx, err1 := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil, nil)
+			if err1 == nil {
+				err1 = verify.LogicSigSanityCheck(0, groupCtx)
 			}
-			if err != nil {
-				reportErrorf("%s: txn error %s", outFilename, err)
+			if err1 != nil {
+				reportErrorf("%s: txn error %s", outFilename, err1)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -501,24 +501,24 @@ var sendCmd = &cobra.Command{
 				reportErrorf(msigParseError, "Not enough arguments to create the multisig address.\nPlease make sure to specify the threshold and at least 2 addresses\n")
 			}
 
-			threshold, err := strconv.ParseUint(params[0], 10, 8)
-			if err != nil || threshold < 1 || threshold > 255 {
+			threshold, err1 := strconv.ParseUint(params[0], 10, 8)
+			if err1 != nil || threshold < 1 || threshold > 255 {
 				reportErrorf(msigParseError, "Failed to parse the threshold. Make sure it's a number between 1 and 255")
 			}
 
 			// Convert the addresses into public keys
 			pks := make([]crypto.PublicKey, len(params[1:]))
 			for i, addrStr := range params[1:] {
-				addr, err := basics.UnmarshalChecksumAddress(addrStr)
-				if err != nil {
-					reportErrorf(failDecodeAddressError, err)
+				addr, err2 := basics.UnmarshalChecksumAddress(addrStr)
+				if err2 != nil {
+					reportErrorf(failDecodeAddressError, err2)
 				}
 				pks[i] = crypto.PublicKey(addr)
 			}
 
-			addr, err := crypto.MultisigAddrGen(1, uint8(threshold), pks)
-			if err != nil {
-				reportErrorf(msigParseError, err)
+			addr, err1 := crypto.MultisigAddrGen(1, uint8(threshold), pks)
+			if err1 != nil {
+				reportErrorf(msigParseError, err1)
 			}
 
 			// Generate the multisig and assign to the txn
@@ -533,10 +533,10 @@ var sendCmd = &cobra.Command{
 
 		if outFilename == "" {
 			// Broadcast the tx
-			txid, err := client.BroadcastTransaction(stx)
+			txid, err1 := client.BroadcastTransaction(stx)
 
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			if err1 != nil {
+				reportErrorf(errorBroadcastingTX, err1)
 			}
 
 			// update information from Transaction
@@ -546,9 +546,9 @@ var sendCmd = &cobra.Command{
 			reportInfof(infoTxIssued, amount, fromAddressResolved, toAddressResolved, txid, fee)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lastValid)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err1 = waitForCommit(client, txid, lastValid)
+				if err1 != nil {
+					reportErrorln(err1.Error())
 				}
 			}
 		} else {
@@ -609,12 +609,12 @@ var rawsendCmd = &cobra.Command{
 		pendingTxns := make(map[transactions.Txid]string)
 		for _, txgroup := range txgroups {
 			// Broadcast the transaction
-			err := client.BroadcastTransactionGroup(txgroup)
-			if err != nil {
+			err1 := client.BroadcastTransactionGroup(txgroup)
+			if err1 != nil {
 				for _, txn := range txgroup {
-					txnErrors[txn.ID()] = err.Error()
+					txnErrors[txn.ID()] = err1.Error()
 				}
-				reportWarnf(errorBroadcastingTX, err)
+				reportWarnf(errorBroadcastingTX, err1)
 				continue
 			}
 
@@ -1162,7 +1162,7 @@ var dryrunCmd = &cobra.Command{
 			}
 			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 			writeFile(outFilename, data, 0600)
 			return

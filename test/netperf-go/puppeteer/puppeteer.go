@@ -201,9 +201,9 @@ func (p *puppet) exec(wg *sync.WaitGroup, errs chan error) {
 			fmt.Printf("%s: Disabled step '%s' skipped.\n", p.recipeName, recipeStep.StepName)
 			continue
 		}
-		err := p.runStep(recipeStep, time.Hour)
-		if err != nil {
-			errs <- fmt.Errorf("Failed running recipe step '%s' : %v", recipeStep.StepName, err)
+		err1 := p.runStep(recipeStep, time.Hour)
+		if err1 != nil {
+			errs <- fmt.Errorf("Failed running recipe step '%s' : %v", recipeStep.StepName, err1)
 			return
 		}
 	}
@@ -218,9 +218,9 @@ func (p *puppet) exec(wg *sync.WaitGroup, errs chan error) {
 			fmt.Printf("%s: Disabled step '%s' skipped.\n", p.recipeName, recipeStep.StepName)
 			continue
 		}
-		err := p.runStep(recipeStep, time.Hour)
-		if err != nil {
-			errs <- fmt.Errorf("Failed running teardown step '%s' : %v", recipeStep.StepName, err)
+		err1 := p.runStep(recipeStep, time.Hour)
+		if err1 != nil {
+			errs <- fmt.Errorf("Failed running teardown step '%s' : %v", recipeStep.StepName, err1)
 			return
 		}
 	}
@@ -440,8 +440,8 @@ func (p *puppet) collectMetrics() {
 			} else {
 				metricFetcher := makePromMetricFetcher(string(hostNameBytes))
 				var err error
-				if results, err := metricFetcher.getMetric(metric.Query); err == nil {
-					if result, err := metricFetcher.getSingleValue(results); err == nil {
+				if results, err1 := metricFetcher.getMetric(metric.Query); err1 == nil {
+					if result, err1 := metricFetcher.getSingleValue(results); err1 == nil {
 						p.metrics[metric.Name] = result
 					}
 				}

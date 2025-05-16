@@ -567,9 +567,9 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64,
 	}
 
 	for _, stxn := range stxns {
-		txib, err := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
-		if err != nil {
-			return bookkeeping.Block{}, err
+		txib, err1 := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
+		if err1 != nil {
+			return bookkeeping.Block{}, err1
 		}
 		txibs = append(txibs, txib)
 	}

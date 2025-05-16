@@ -552,7 +552,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	var blk *bookkeeping.Block
 	var cert *agreement.Certificate
 	for retryCount := uint64(1); blocksFetched <= lookback; {
-		if err := cs.ctx.Err(); err != nil {
+		if err1 := cs.ctx.Err(); err1 != nil {
 			return cs.stopOrAbort()
 		}
 

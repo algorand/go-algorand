@@ -162,18 +162,18 @@ func processFile(filename string, useStdin bool) error {
 			// AST changed.
 			// Print and parse, to update any missing scoping
 			// or position information for subsequent fixers.
-			newSrc, err := gofmtFile(newFile)
-			if err != nil {
-				return err
+			newSrc, err1 := gofmtFile(newFile)
+			if err1 != nil {
+				return err1
 			}
-			newFile, err = parser.ParseFile(fset, filename, newSrc, parserMode)
-			if err != nil {
+			newFile, err1 = parser.ParseFile(fset, filename, newSrc, parserMode)
+			if err1 != nil {
 				if debug {
 					fmt.Printf("%s", newSrc)
-					report(err)
+					report(err1)
 					os.Exit(exitCode)
 				}
-				return err
+				return err1
 			}
 		}
 	}

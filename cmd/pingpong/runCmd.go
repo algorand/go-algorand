@@ -280,16 +280,16 @@ var runCmd = &cobra.Command{
 		cfg.RandomizeDst = randomDst || cfg.RandomizeDst
 		cfg.Quiet = quietish || cfg.Quiet
 		if runTime != "" {
-			val, err := strconv.ParseUint(runTime, 10, 32)
-			if err != nil {
-				reportErrorf("Invalid value specified for --run: %v\n", err)
+			val, err1 := strconv.ParseUint(runTime, 10, 32)
+			if err1 != nil {
+				reportErrorf("Invalid value specified for --run: %v\n", err1)
 			}
 			cfg.RunTime = time.Duration(uint32(val)) * time.Second
 		}
 		if refreshTime != "" {
-			val, err := strconv.ParseUint(refreshTime, 10, 32)
-			if err != nil {
-				reportErrorf("Invalid value specified for --refresh: %v\n", err)
+			val, err1 := strconv.ParseUint(refreshTime, 10, 32)
+			if err1 != nil {
+				reportErrorf("Invalid value specified for --refresh: %v\n", err1)
 			}
 			cfg.RefreshTime = time.Duration(uint32(val)) * time.Second
 		}
@@ -311,8 +311,8 @@ var runCmd = &cobra.Command{
 				programStr = tealLight
 			case "normal":
 				programStr = tealNormal
-				bytes, err := base64.StdEncoding.DecodeString("iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=")
-				if err != nil {
+				bytes, err1 := base64.StdEncoding.DecodeString("iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=")
+				if err1 != nil {
 					reportErrorf("Internal error, cannot decode.")
 				}
 				cfg.LogicArgs = [][]byte{bytes}
@@ -321,8 +321,8 @@ var runCmd = &cobra.Command{
 			default:
 				reportErrorf("Invalid argument for --teal: %v\n", teal)
 			}
-			ops, err := logic.AssembleString(programStr)
-			if err != nil {
+			ops, err1 := logic.AssembleString(programStr)
+			if err1 != nil {
 				ops.ReportMultipleErrors(teal, os.Stderr)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}
