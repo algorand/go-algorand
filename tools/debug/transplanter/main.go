@@ -35,6 +35,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
@@ -83,7 +84,7 @@ func decodeTxGroup(data []byte) ([]transactions.SignedTxn, error) {
 			return nil, fmt.Errorf("received a non-decodable txn: %v", err)
 		}
 		ntx++
-		if ntx >= config.MaxTxGroupSize {
+		if ntx >= bounds.MaxTxGroupSize {
 			// max ever possible group size reached, done reading input.
 			if dec.Remaining() > 0 {
 				// if something else left in the buffer - this is an error, drop

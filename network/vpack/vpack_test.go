@@ -189,6 +189,8 @@ func TestStatelessDecoderErrors(t *testing.T) {
 // FuzzMsgpVote is a fuzz test for parseVote, CompressVote and DecompressVote.
 // It generates random msgp-encoded votes, then compresses & decompresses them.
 func FuzzMsgpVote(f *testing.F) {
+	partitiontest.PartitionTest(f)
+
 	addVote := func(obj any) []byte {
 		var buf []byte
 		if v, ok := obj.(*agreement.UnauthenticatedVote); ok {
@@ -236,6 +238,8 @@ func FuzzMsgpVote(f *testing.F) {
 }
 
 func FuzzVoteFields(f *testing.F) {
+	partitiontest.PartitionTest(f)
+
 	f.Fuzz(func(t *testing.T, snd []byte, rnd, per, step uint64,
 		oper uint64, oprop, dig, encdig []byte,
 		pf []byte, s, p, ps, p2, p1s, p2s []byte) {
