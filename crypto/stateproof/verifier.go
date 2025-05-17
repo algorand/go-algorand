@@ -22,6 +22,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // Errors for the StateProof verifier
@@ -65,7 +66,7 @@ func MkVerifierWithLnProvenWeight(partcom crypto.GenericDigest, lnProvenWt uint6
 
 // Verify checks if s is a valid state proof for the data on a round.
 // it uses the trusted data from the Verifier struct
-func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
+func (v *Verifier) Verify(round basics.Round, data MessageHash, s *StateProof) error {
 	if err := verifyStateProofTreesDepth(s); err != nil {
 		return err
 	}
@@ -96,7 +97,7 @@ func (v *Verifier) Verify(round uint64, data MessageHash, s *StateProof) error {
 
 		// verify that the msg and the signature is valid under the given participant's Pk
 		err = r.Part.PK.VerifyBytes(
-			round,
+			uint64(round),
 			data[:],
 			&r.SigSlot.Sig,
 		)

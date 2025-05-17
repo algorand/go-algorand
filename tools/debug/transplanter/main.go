@@ -388,7 +388,7 @@ func main() {
 			os.Exit(1)
 		}
 		syncRound := uint64(*roundStart) - cfg.MaxAcctLookback + 1
-		err = followerNode.SetSyncRound(syncRound)
+		err = followerNode.SetSyncRound(basics.Round(syncRound))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot configure catchup: %v", err)
 			os.Exit(1)

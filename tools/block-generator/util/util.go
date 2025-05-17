@@ -24,6 +24,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/algorand/go-algorand/data/basics"
+
 	// import postgres driver
 	_ "github.com/lib/pq"
 )
@@ -42,7 +44,7 @@ func MaybeFail(err error, errfmt string, params ...interface{}) {
 }
 
 // GetNextRound returns the next account round from the metastate table.
-func GetNextRound(postgresConnectionString string) (uint64, error) {
+func GetNextRound(postgresConnectionString string) (basics.Round, error) {
 	conn, err := sql.Open("postgres", postgresConnectionString)
 	if err != nil {
 		return 0, fmt.Errorf("postgres connection string did not work: %w", err)
@@ -56,7 +58,7 @@ func GetNextRound(postgresConnectionString string) (uint64, error) {
 		}
 		return 0, fmt.Errorf("unable to get next db round: %w", err)
 	}
-	kv := make(map[string]uint64)
+	kv := make(map[string]basics.Round)
 	err = json.Unmarshal(state, &kv)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get next account round: %w", err)

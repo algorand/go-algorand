@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint64, gval uint64, lval uint64) {
+func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd basics.Round, gval uint64, lval uint64) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	foundGlobal := false
@@ -215,7 +215,7 @@ int 1
 	checkEvalDelta(t, &client, txnRound, txnRound+1, 1, 1)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppOptInTx(appIdx, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -232,7 +232,7 @@ int 1
 	// Ensure the txn committed
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
-	a.Equal(uint64(0), resp.TotalTransactions)
+	a.Zero(resp.TotalTransactions)
 	txinfo, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txinfo.ConfirmedRound)
@@ -289,13 +289,13 @@ int 1
 
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
 
-	app, err := client.ApplicationInformation(uint64(appIdx))
+	app, err := client.ApplicationInformation(appIdx)
 	a.NoError(err)
-	a.Equal(uint64(appIdx), app.Id)
+	a.Equal(appIdx, app.Id)
 	a.Equal(creator, app.Params.Creator)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppNoOpTx(appIdx, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -315,7 +315,7 @@ int 1
 			a.Equal(resp.TopTransactions[0].Txn.ID().String(), txid)
 			continue
 		}
-		a.Equal(uint64(0), resp.TotalTransactions)
+		a.Zero(resp.TotalTransactions)
 		break
 	}
 
@@ -520,7 +520,7 @@ int 1
 	checkEvalDelta(t, &client, txnRound, txnRound+1, 1, 1)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppOptInTx(appIdx, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	if foreignAssets != nil {
 		tx.ForeignAssets = foreignAssets
@@ -547,7 +547,7 @@ int 1
 	// Ensure the txn committed
 	resp, err := client.GetPendingTransactions(2)
 	a.NoError(err)
-	a.Equal(uint64(0), resp.TotalTransactions)
+	a.Zero(resp.TotalTransactions)
 	txinfo, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(txinfo.ConfirmedRound)
@@ -604,13 +604,13 @@ int 1
 
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
 
-	app, err := client.ApplicationInformation(uint64(appIdx))
+	app, err := client.ApplicationInformation(appIdx)
 	a.NoError(err)
-	a.Equal(uint64(appIdx), app.Id)
+	a.Equal(appIdx, app.Id)
 	a.Equal(creator, app.Params.Creator)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppNoOpTx(appIdx, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -631,7 +631,7 @@ int 1
 			a.Equal(pendingTxn.Txn.ID().String(), txid)
 			continue
 		}
-		a.Equal(uint64(0), resp.TotalTransactions)
+		a.Zero(resp.TotalTransactions)
 		break
 	}
 

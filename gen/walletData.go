@@ -44,8 +44,8 @@ type GenesisData struct {
 	NetworkName        string
 	VersionModifier    string
 	ConsensusProtocol  protocol.ConsensusVersion
-	FirstPartKeyRound  uint64
-	LastPartKeyRound   uint64
+	FirstPartKeyRound  basics.Round
+	LastPartKeyRound   basics.Round
 	PartKeyDilution    uint64
 	Wallets            []WalletData
 	FeeSink            basics.Address

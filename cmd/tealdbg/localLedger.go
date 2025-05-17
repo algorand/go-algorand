@@ -62,13 +62,13 @@ type localLedger struct {
 	balances   map[basics.Address]basics.AccountData
 	txnGroup   []transactions.SignedTxn
 	groupIndex int
-	round      uint64
+	round      basics.Round
 	aidx       basics.AppIndex
 }
 
 func makeBalancesAdapter(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto string, round uint64, latestTimestamp int64,
+	groupIndex int, proto string, round basics.Round, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
 ) (apply.Balances, AppState, error) {
 
@@ -214,7 +214,7 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	return creator, nil
 }
 
-func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round uint64) (basics.AccountData, error) {
+func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round basics.Round) (basics.AccountData, error) {
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
@@ -298,10 +298,10 @@ func (l *localLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx ba
 		return ledgercore.AssetResource{}, nil
 	}
 	var result ledgercore.AssetResource
-	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.AssetParams[aidx]; ok {
 		result.AssetParams = &p
 	}
-	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.Assets[aidx]; ok {
 		result.AssetHolding = &p
 	}
 
@@ -314,10 +314,10 @@ func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, a
 		return ledgercore.AppResource{}, nil
 	}
 	var result ledgercore.AppResource
-	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+	if p, ok := ad.AppParams[aidx]; ok {
 		result.AppParams = &p
 	}
-	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+	if s, ok := ad.AppLocalStates[aidx]; ok {
 		result.AppLocalState = &s
 	}
 

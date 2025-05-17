@@ -222,9 +222,10 @@ type (
 	// (instead of materializing it separately, like balances).
 	//msgp:ignore UpgradeState
 	UpgradeState struct {
-		CurrentProtocol       protocol.ConsensusVersion `codec:"proto"`
-		NextProtocol          protocol.ConsensusVersion `codec:"nextproto"`
-		NextProtocolApprovals uint64                    `codec:"nextyes"`
+		CurrentProtocol protocol.ConsensusVersion `codec:"proto"`
+		NextProtocol    protocol.ConsensusVersion `codec:"nextproto"`
+		// NextProtocolApprovals is the number of approvals for the next protocol proposal. It is expressed in basics.Round because it is a count of rounds.
+		NextProtocolApprovals basics.Round `codec:"nextyes"`
 		// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
 		// an upgrade taking place, this would be zero.
 		NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
@@ -506,7 +507,7 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 	}
 
 	// Clear out failed proposal
-	if r == s.NextProtocolVoteBefore && s.NextProtocolApprovals < params.UpgradeThreshold {
+	if r == s.NextProtocolVoteBefore && s.NextProtocolApprovals < basics.Round(params.UpgradeThreshold) {
 		s.NextProtocol = ""
 		s.NextProtocolApprovals = 0
 		s.NextProtocolVoteBefore = basics.Round(0)

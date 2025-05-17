@@ -23,13 +23,14 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/rpcs"
 )
 
 type deadManWatcher struct {
 	timeout       time.Duration
-	newBlockChan  chan uint64
+	newBlockChan  chan basics.Round
 	uploadOnError bool
 	client        Client
 	done          <-chan struct{}
@@ -47,7 +48,7 @@ func makeDeadManWatcher(timeout int64, client Client, uploadOnError bool, done <
 
 	return deadManWatcher{
 		timeout:       deadManTime,
-		newBlockChan:  make(chan uint64),
+		newBlockChan:  make(chan basics.Round),
 		client:        client,
 		uploadOnError: uploadOnError,
 		done:          done,
@@ -56,11 +57,11 @@ func makeDeadManWatcher(timeout int64, client Client, uploadOnError bool, done <
 	}
 }
 
-func (w deadManWatcher) init(initBlock uint64) {
+func (w deadManWatcher) init(initBlock basics.Round) {
 	go w.run(initBlock)
 }
 
-func (w deadManWatcher) run(initBlock uint64) {
+func (w deadManWatcher) run(initBlock basics.Round) {
 	defer w.wg.Done()
 	latestBlock := initBlock
 
@@ -89,10 +90,10 @@ func (w deadManWatcher) run(initBlock uint64) {
 }
 
 func (w deadManWatcher) onBlock(block rpcs.EncodedBlockCert) {
-	w.newBlockChan <- uint64(block.Block.BlockHeader.Round)
+	w.newBlockChan <- block.Block.BlockHeader.Round
 }
 
-func (w deadManWatcher) reportDeadManTimeout(curBlock uint64) (err error) {
+func (w deadManWatcher) reportDeadManTimeout(curBlock basics.Round) (err error) {
 	var details telemetryspec.DeadManTriggeredEventDetails
 	if w.algodConfig.EnableProfiler {
 		goRoutines, err := getGoRoutines(w.client)
@@ -101,7 +102,7 @@ func (w deadManWatcher) reportDeadManTimeout(curBlock uint64) (err error) {
 		}
 		details = telemetryspec.DeadManTriggeredEventDetails{
 			Timeout:      int64(w.timeout.Seconds()),
-			CurrentBlock: curBlock,
+			CurrentBlock: uint64(curBlock),
 			GoRoutines:   goRoutines,
 		}
 	} else {
@@ -111,7 +112,7 @@ func (w deadManWatcher) reportDeadManTimeout(curBlock uint64) (err error) {
 		}
 		details = telemetryspec.DeadManTriggeredEventDetails{
 			Timeout:      int64(w.timeout.Seconds()),
-			CurrentBlock: curBlock,
+			CurrentBlock: uint64(curBlock),
 			GoRoutines:   healthCheck,
 		}
 	}

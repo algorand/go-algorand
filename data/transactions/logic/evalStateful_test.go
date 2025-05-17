@@ -1456,16 +1456,16 @@ func TestAppDisambiguation(t *testing.T) {
 					ep.UnnamedResources = &mockUnnamedResourcePolicy{allowEverything: true}
 				}
 				// make apps with identifiable properties, so we can tell what we get
-				makeIdentifiableApp := func(appID uint64) {
-					ledger.NewApp(tx.Sender, basics.AppIndex(appID), basics.AppParams{
+				makeIdentifiableApp := func(appID basics.AppIndex) {
+					ledger.NewApp(tx.Sender, appID, basics.AppParams{
 						GlobalState: map[string]basics.TealValue{"a": {
 							Type: basics.TealUintType,
-							Uint: appID,
+							Uint: uint64(appID),
 						}},
 						ExtraProgramPages: uint32(appID),
 					})
 					ledger.NewLocals(tx.Sender, appID)
-					ledger.NewLocal(tx.Sender, appID, "x", basics.TealValue{Type: basics.TealUintType, Uint: appID * 10})
+					ledger.NewLocal(tx.Sender, appID, "x", basics.TealValue{Type: basics.TealUintType, Uint: uint64(appID) * 10})
 				}
 				makeIdentifiableApp(1)
 				makeIdentifiableApp(20)

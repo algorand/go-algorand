@@ -95,10 +95,6 @@ func convertMap[X comparable, Y, Z any](input map[X]Y, fn func(X, Y) Z) []Z {
 	return output
 }
 
-func uint64Slice[T ~uint64](s []T) []uint64 {
-	return convertSlice(s, func(t T) uint64 { return uint64(t) })
-}
-
 func stringSlice[T fmt.Stringer](s []T) []string {
 	return convertSlice(s, func(t T) string { return t.String() })
 }
@@ -163,7 +159,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *basics.AssetIndex {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -181,7 +177,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 		return nil
 	}
 
-	aid := uint64(tx.ApplyData.ConfigAsset)
+	aid := tx.ApplyData.ConfigAsset
 	if aid > 0 {
 		return &aid
 	}
@@ -201,13 +197,13 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 		return nil
 	}
 
-	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+	return (*basics.AssetIndex)(computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset))
 }
 
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *basics.AppIndex {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -225,7 +221,7 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 		return nil
 	}
 
-	aid := uint64(tx.ApplyData.ApplicationID)
+	aid := tx.ApplyData.ApplicationID
 	if aid > 0 {
 		return &aid
 	}
@@ -245,7 +241,7 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 		return nil
 	}
 
-	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+	return (*basics.AppIndex)(computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset))
 }
 
 // getCodecHandle converts a format string into the encoder + content type
@@ -378,8 +374,8 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 
 	// Since this is an inner txn, we know these indexes will be populated. No
 	// need to search payset for IDs
-	response.AssetIndex = omitEmpty(uint64(txn.ApplyData.ConfigAsset))
-	response.ApplicationIndex = omitEmpty(uint64(txn.ApplyData.ApplicationID))
+	response.AssetIndex = omitEmpty(txn.ApplyData.ConfigAsset)
+	response.ApplicationIndex = omitEmpty(txn.ApplyData.ApplicationID)
 
 	response.LocalStateDelta = sliceOrNil(localDeltasToLocalDeltas(txn.ApplyData.EvalDelta, &txn.Txn))
 	response.GlobalStateDelta = sliceOrNil(globalDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta))
@@ -444,7 +440,7 @@ func convertApplicationStateChange(stateChange simulation.StateOperation) model.
 func convertOpcodeTraceUnit(opcodeTraceUnit simulation.OpcodeTraceUnit) model.SimulationOpcodeTraceUnit {
 	return model.SimulationOpcodeTraceUnit{
 		Pc:             opcodeTraceUnit.PC,
-		SpawnedInners:  sliceOrNil(convertSlice(opcodeTraceUnit.SpawnedInners, func(v int) uint64 { return uint64(v) })),
+		SpawnedInners:  sliceOrNil(opcodeTraceUnit.SpawnedInners),
 		StackAdditions: sliceOrNil(convertSlice(opcodeTraceUnit.StackAdded, convertToAVMValue)),
 		StackPopCount:  omitEmpty(opcodeTraceUnit.StackPopCount),
 		ScratchChanges: sliceOrNil(convertSlice(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
@@ -496,25 +492,25 @@ func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *mod
 	}
 	return &model.SimulateUnnamedResourcesAccessed{
 		Accounts: sliceOrNil(stringSlice(slices.Collect(maps.Keys(resources.Accounts)))),
-		Assets:   sliceOrNil(uint64Slice(slices.Collect(maps.Keys(resources.Assets)))),
-		Apps:     sliceOrNil(uint64Slice(slices.Collect(maps.Keys(resources.Apps)))),
+		Assets:   sliceOrNil(slices.Collect(maps.Keys(resources.Assets))),
+		Apps:     sliceOrNil(slices.Collect(maps.Keys(resources.Apps))),
 		Boxes: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.Boxes)), func(box logic.BoxRef) model.BoxReference {
 			return model.BoxReference{
-				App:  uint64(box.App),
+				App:  box.App,
 				Name: []byte(box.Name),
 			}
 		})),
-		ExtraBoxRefs: omitEmpty(uint64(resources.NumEmptyBoxRefs)),
+		ExtraBoxRefs: omitEmpty(resources.NumEmptyBoxRefs),
 		AssetHoldings: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.AssetHoldings)), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
 			return model.AssetHoldingReference{
 				Account: holding.Address.String(),
-				Asset:   uint64(holding.Asset),
+				Asset:   holding.Asset,
 			}
 		})),
 		AppLocals: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.AppLocals)), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
 			return model.ApplicationLocalReference{
 				Account: local.Address.String(),
-				App:     uint64(local.App),
+				App:     local.App,
 			}
 		})),
 	}
@@ -549,7 +545,7 @@ func convertAppKVStoreInstance(address basics.Address, appKVPairs simulation.App
 
 func convertApplicationInitialStates(appID basics.AppIndex, states simulation.SingleAppInitialStates) model.ApplicationInitialStates {
 	return model.ApplicationInitialStates{
-		Id:         uint64(appID),
+		Id:         appID,
 		AppBoxes:   convertAppKVStorePtr(basics.Address{}, states.AppBoxes),
 		AppGlobals: convertAppKVStorePtr(basics.Address{}, states.AppGlobals),
 		AppLocals:  sliceOrNil(convertMap(states.AppLocals, convertAppKVStoreInstance)),
@@ -580,7 +576,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
-		failedAt := slices.Clone[[]uint64, uint64](txnGroupResult.FailedAt)
+		failedAt := slices.Clone[[]int, int](txnGroupResult.FailedAt)
 		encoded.FailedAt = &failedAt
 	}
 
@@ -602,7 +598,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 
 	return PreEncodedSimulateResponse{
 		Version:         result.Version,
-		LastRound:       uint64(result.LastRound),
+		LastRound:       result.LastRound,
 		TxnGroups:       convertSlice(result.TxnGroups, convertTxnGroupResult),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,

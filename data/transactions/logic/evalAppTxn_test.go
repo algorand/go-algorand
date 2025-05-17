@@ -2600,7 +2600,7 @@ func TestGtixn(t *testing.T) {
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333), basics.AppIndex(444)}
+	tx.ForeignApps = []basics.AppIndex{222, 333, 444}
 
 	TestApp(t, `
 itxn_begin
@@ -2683,7 +2683,7 @@ func TestGtxnLog(t *testing.T) {
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333)}
+	tx.ForeignApps = []basics.AppIndex{222, 333}
 
 	TestApp(t, `itxn_begin
 int appl;    itxn_field TypeEnum

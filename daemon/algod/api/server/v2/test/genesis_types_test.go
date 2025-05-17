@@ -166,6 +166,16 @@ func verifyTypeCompatibility(t *testing.T, bkType, modelType reflect.Type, tag s
 			return
 		}
 
+	case reflect.Int:
+		// Special case: Simple integer is fine for basics.Status which is a
+		// byte.  You might think that we should also allow bkType to be an int
+		// here, and that makes some sense, but we don't use simple ints in
+		// go-algorand, so it seems more likely to indicate a bug somewhere.
+		switch {
+		case bkType.String() == "basics.Status":
+			return
+		}
+
 	case reflect.Ptr:
 		switch modelType.Elem().Kind() {
 		case reflect.String:

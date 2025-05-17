@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/block-generator/util"
@@ -42,7 +43,7 @@ type BlocksMiddleware func(next http.Handler) http.Handler
 // MakeServerWithMiddleware allows injecting a middleware for the blocks handler.
 // This is needed to simplify tests by stopping block production while validation
 // is done on the data.
-func MakeServerWithMiddleware(log logging.Logger, dbround uint64, genesisFile string, configFile string, verbose bool, addr string, blocksMiddleware BlocksMiddleware) (*http.Server, Generator) {
+func MakeServerWithMiddleware(log logging.Logger, dbround basics.Round, genesisFile string, configFile string, verbose bool, addr string, blocksMiddleware BlocksMiddleware) (*http.Server, Generator) {
 	cfg, err := initializeConfigFile(configFile)
 	util.MaybeFail(err, "problem loading config file. Use '--config' or create a config file.")
 	var bkGenesis bookkeeping.Genesis
@@ -115,7 +116,7 @@ func getBlockHandler(gen Generator) func(w http.ResponseWriter, r *http.Request)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		maybeWriteError("block", w, gen.WriteBlock(w, round))
+		maybeWriteError("block", w, gen.WriteBlock(w, basics.Round(round)))
 	}
 }
 
@@ -143,7 +144,7 @@ func getDeltasHandler(gen Generator) func(w http.ResponseWriter, r *http.Request
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		maybeWriteError("deltas", w, gen.WriteDeltas(w, round))
+		maybeWriteError("deltas", w, gen.WriteDeltas(w, basics.Round(round)))
 	}
 }
 

@@ -268,18 +268,18 @@ func makeUnsignedAssetCreateTx(firstValid, lastValid basics.Round, total uint64,
 	return tx, nil
 }
 
-func makeUnsignedAssetDestroyTx(firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
+func makeUnsignedAssetDestroyTx(firstValid, lastValid basics.Round, assetIndex basics.AssetIndex) (transactions.Transaction, error) {
 	var txn transactions.Transaction
 	txn.Type = protocol.AssetConfigTx
-	txn.ConfigAsset = basics.AssetIndex(assetIndex)
+	txn.ConfigAsset = assetIndex
 	txn.FirstValid = firstValid
 	txn.LastValid = lastValid
 	return txn, nil
 }
 
-func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
+func makeUnsignedApplicationCallTx(appIdx basics.AppIndex, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
-	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.ApplicationID = appIdx
 	tx.OnCompletion = onCompletion
 
 	// If creating, set programs
@@ -405,10 +405,10 @@ func TestArchivalCreatables(t *testing.T) {
 		if i >= maxBlocks/2 && i < (3*(maxBlocks/4)) {
 			switch creatableIdxs[createdIdx] {
 			case AssetCreated:
-				tx, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(createdIdx))
+				tx, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, basics.AssetIndex(createdIdx))
 				creatableIdxs[createdIdx] = AssetDeleted
 			case AppCreated:
-				tx, err = makeUnsignedApplicationCallTx(uint64(createdIdx), transactions.DeleteApplicationOC)
+				tx, err = makeUnsignedApplicationCallTx(basics.AppIndex(createdIdx), transactions.DeleteApplicationOC)
 				creatableIdxs[createdIdx] = AppDeleted
 			default:
 				panic("unknown action")
@@ -513,10 +513,10 @@ func TestArchivalCreatables(t *testing.T) {
 	var tx0 transactions.Transaction
 	switch creatableIdxs[creatableToDelete] {
 	case AssetCreated:
-		tx0, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		tx0, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, basics.AssetIndex(creatableToDelete))
 		creatableIdxs[creatableToDelete] = AssetDeleted
 	case AppCreated:
-		tx0, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
+		tx0, err = makeUnsignedApplicationCallTx(basics.AppIndex(creatableToDelete), transactions.DeleteApplicationOC)
 		creatableIdxs[creatableToDelete] = AppDeleted
 	default:
 		panic("unknown action")
@@ -531,10 +531,10 @@ func TestArchivalCreatables(t *testing.T) {
 	var tx1 transactions.Transaction
 	switch creatableIdxs[creatableToDelete] {
 	case AssetCreated:
-		tx1, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		tx1, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, basics.AssetIndex(creatableToDelete))
 		creatableIdxs[creatableToDelete] = AssetDeleted
 	case AppCreated:
-		tx1, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
+		tx1, err = makeUnsignedApplicationCallTx(basics.AppIndex(creatableToDelete), transactions.DeleteApplicationOC)
 		creatableIdxs[creatableToDelete] = AppDeleted
 	default:
 		panic("unknown action")

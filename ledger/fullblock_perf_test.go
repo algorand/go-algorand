@@ -44,8 +44,8 @@ import (
 )
 
 type benchConfig struct {
-	txnCount  uint64
-	round     uint64
+	txnCount  int
+	round     basics.Round
 	b         *testing.B
 	creator   basics.Address
 	accts     []basics.Address
@@ -54,9 +54,9 @@ type benchConfig struct {
 	l0        *Ledger
 	l1        *Ledger
 	eval      *eval.BlockEvaluator
-	numPay    uint64
-	numAst    uint64
-	numApp    uint64
+	numPay    int
+	numAst    int
+	numApp    int
 	blocks    []bookkeeping.Block
 }
 
@@ -241,7 +241,7 @@ func sendAssetTo(bc *benchConfig, from, to basics.Address, assIdx basics.AssetIn
 }
 
 func payTo(bc *benchConfig, from, to basics.Address, amt uint64) {
-	tx := createPaymentTransaction(uint64(bc.txnCount), bc.round, from, to, amt)
+	tx := createPaymentTransaction(bc.txnCount, bc.round, from, to, amt)
 	var stxn transactions.SignedTxn
 	stxn.Txn = tx
 	stxn.Sig = crypto.Signature{1}
@@ -390,7 +390,7 @@ func BenchmarkBlockValidationMix(b *testing.B) {
 func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb float64, numAccts int) {
 	bc := setupEnv(b, numAccts)
 
-	numBlocks := uint64(b.N)
+	numBlocks := basics.Round(b.N)
 	cert := agreement.Certificate{}
 	fmt.Printf("Preparing... /%d: ", numBlocks)
 	s3 := time.Now()
@@ -417,7 +417,7 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 
 	}
 	fmt.Printf("\nSummary %d blocks and %d txns: pay %d/blk (%d%%) assets %d/blk (%d%%) apps %d/blk (%d%%)\n",
-		numBlocks, bc.txnCount, bc.numPay/numBlocks, bc.numPay*100/bc.txnCount, bc.numAst/numBlocks, bc.numAst*100/bc.txnCount, bc.numApp/numBlocks, bc.numApp*100/bc.txnCount)
+		numBlocks, bc.txnCount, bc.numPay/b.N, bc.numPay*100/bc.txnCount, bc.numAst/b.N, bc.numAst*100/bc.txnCount, bc.numApp/b.N, bc.numApp*100/bc.txnCount)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
 	vc := verify.GetMockedCache(true)
@@ -433,21 +433,21 @@ func benchmarkBlockValidationMix(b *testing.B, newAcctProb, payProb, astProb flo
 }
 
 func createPaymentTransaction(
-	counter uint64,
-	round uint64,
+	counter int,
+	round basics.Round,
 	sender basics.Address,
 	receiver basics.Address,
 	amount uint64) (txn transactions.Transaction) {
 
 	note := make([]byte, 8)
-	binary.LittleEndian.PutUint64(note, counter)
+	binary.LittleEndian.PutUint64(note, uint64(counter))
 	txn = transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(round),
-			LastValid:   basics.Round(round + 1000),
+			FirstValid:  round,
+			LastValid:   round + 1000,
 			GenesisHash: crypto.Digest{1},
 			Note:        note,
 		},
@@ -461,19 +461,19 @@ func createPaymentTransaction(
 
 // prepares a create asset transaction
 func createAssetTransaction(
-	counter uint64,
-	round uint64,
+	counter int,
+	round basics.Round,
 	sender basics.Address) (assetTx transactions.Transaction) {
 
 	note := make([]byte, 8)
-	binary.LittleEndian.PutUint64(note, counter)
+	binary.LittleEndian.PutUint64(note, uint64(counter))
 	assetTx = transactions.Transaction{
 		Type: protocol.AssetConfigTx,
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(round),
-			LastValid:   basics.Round(round + 1000),
+			FirstValid:  round,
+			LastValid:   round + 1000,
 			GenesisHash: crypto.Digest{1},
 			Note:        note,
 		},
@@ -490,22 +490,22 @@ func createAssetTransaction(
 
 // prepares a send asset transaction
 func sendAssetTransaction(
-	counter uint64,
-	round uint64,
+	counter int,
+	round basics.Round,
 	sender basics.Address,
 	receiver basics.Address,
 	assetID basics.AssetIndex,
 	amt uint64) (tx transactions.Transaction) {
 
 	note := make([]byte, 8)
-	binary.LittleEndian.PutUint64(note, counter)
+	binary.LittleEndian.PutUint64(note, uint64(counter))
 	tx = transactions.Transaction{
 		Type: protocol.AssetTransferTx,
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(round),
-			LastValid:   basics.Round(round + 1000),
+			FirstValid:  round,
+			LastValid:   round + 1000,
 			GenesisHash: crypto.Digest{1},
 			Note:        note,
 		},
@@ -519,12 +519,10 @@ func sendAssetTransaction(
 }
 
 func makeAppTransaction(
-	counter uint64,
-	round uint64,
+	counter int,
+	round basics.Round,
 	sender basics.Address) (appTx transactions.Transaction, err error) {
 
-	progCounter := uint64(1)
-	progCounter = counter
 	prog := fmt.Sprintf(`#pragma version 2
 // a simple global and local calls counter app
 byte b64 Y291bnRlcg== // counter
@@ -548,7 +546,7 @@ int 1  // increment
 +
 app_local_put
 int 1
-`, progCounter)
+`, counter)
 
 	approvalOps, err := logic.AssembleString(prog)
 	if err != nil {
@@ -572,7 +570,7 @@ int 1
 	appTx.LocalStateSchema = schema
 
 	note := make([]byte, 8)
-	binary.LittleEndian.PutUint64(note, counter)
+	binary.LittleEndian.PutUint64(note, uint64(counter))
 
 	appTx.Header = transactions.Header{
 		Sender:      sender,
@@ -588,23 +586,23 @@ int 1
 
 // prepares a opt-in app transaction
 func makeOptInAppTransaction(
-	counter uint64,
+	counter int,
 	appIdx basics.AppIndex,
-	round uint64,
+	round basics.Round,
 	sender basics.Address) (appTx transactions.Transaction) {
 
 	note := make([]byte, 8)
-	binary.LittleEndian.PutUint64(note, counter)
+	binary.LittleEndian.PutUint64(note, uint64(counter))
 
 	appTx = transactions.Transaction{}
-	appTx.ApplicationID = basics.AppIndex(appIdx)
+	appTx.ApplicationID = appIdx
 	appTx.OnCompletion = transactions.OptInOC
 
 	appTx.Header = transactions.Header{
 		Sender:      sender,
 		Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-		FirstValid:  basics.Round(round),
-		LastValid:   basics.Round(round + 1000),
+		FirstValid:  round,
+		LastValid:   round + 1000,
 		GenesisHash: crypto.Digest{1},
 		Note:        note,
 	}
@@ -614,16 +612,16 @@ func makeOptInAppTransaction(
 
 // prepare app call transaction
 func callAppTransaction(
-	counter uint64,
+	counter int,
 	appIdx basics.AppIndex,
-	round uint64,
+	round basics.Round,
 	sender basics.Address) (appTx transactions.Transaction) {
 
 	note := make([]byte, 8)
-	binary.LittleEndian.PutUint64(note, counter)
+	binary.LittleEndian.PutUint64(note, uint64(counter))
 
 	appTx = transactions.Transaction{}
-	appTx.ApplicationID = basics.AppIndex(appIdx)
+	appTx.ApplicationID = appIdx
 	appTx.OnCompletion = transactions.NoOpOC
 
 	appTx.Header = transactions.Header{

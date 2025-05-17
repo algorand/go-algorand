@@ -56,7 +56,7 @@ func TestBasicPartitionRecovery(t *testing.T) {
 	a.NoError(err)
 
 	// Let the network make some progress
-	waitForRound := uint64(3)
+	const waitForRound = 3
 	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
@@ -132,7 +132,7 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 	a.NoError(err)
 
 	// Let the network make some progress
-	waitForRound := uint64(3)
+	const waitForRound = 3
 	err = fixture.GetAlgodClientForController(nc1).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
@@ -195,7 +195,7 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 	a.NoError(err)
 
 	// Let the network make some progress
-	waitForRound := uint64(3)
+	const waitForRound = 3
 	err = fixture.GetAlgodClientForController(nc1).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 

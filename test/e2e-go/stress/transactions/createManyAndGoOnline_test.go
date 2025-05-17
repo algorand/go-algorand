@@ -65,7 +65,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 
 	txidsToAccountsWaveOne := make(map[string]string)
 	const transactionFee = uint64(1)
-	fundingTimeoutRound := uint64(400)
+	const fundingTimeoutRound basics.Round = 400
 	// cascade-create and fund 1000 accounts
 	amountToSend := uint64(560000) // ends up leaving each acct with ~4300 algos, which is more than absolutely necessary to go online
 	txidsToAccountsWaveOnePartOne := cascadeCreateAndFundAccounts(amountToSend, transactionFee, fundingAccount, client, a)
@@ -120,7 +120,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 
 	// make funded accounts go online
-	const transactionValidityPeriod = uint64(100) // rounds
+	const transactionValidityPeriod = 100 // rounds
 	_, curRound := fixture.GetBalanceAndRound(fundingAccount)
 	i := 0 // for assert debug messages
 	txidsToAccountsGoOnline := make(map[string]string)
@@ -138,7 +138,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 		txidsToAccountsGoOnline[onlineTxID] = account
 	}
 	// wait for txns to clear
-	goOnlineTimeoutRound := fundingTimeoutRound + uint64(100)
+	goOnlineTimeoutRound := fundingTimeoutRound + 100
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(goOnlineTimeoutRound, txidsToAccountsGoOnline)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 
@@ -160,7 +160,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 
 		// use debug counter to wait for batches of transactions to clear before adding more to the pool
 		if i%20 == 0 {
-			goOnlineTimeoutRound = fundingTimeoutRound + uint64(100)
+			goOnlineTimeoutRound = fundingTimeoutRound + 100
 			allConfirmed = fixture.WaitForAllTxnsToConfirm(goOnlineTimeoutRound, txidsToAccountsGoOnline)
 			a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 		}

@@ -708,7 +708,7 @@ func TestRunMode(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 
 	// check run mode application
 	dp = DebugParams{
@@ -745,7 +745,7 @@ func TestRunMode(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 }
 
 func TestDebugFromTxn(t *testing.T) {
@@ -810,7 +810,7 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal([]byte{3}, l.runs[0].program)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 
 	// ensure clear approval program is supposed to be debugged
 	brs = makeSampleBalanceRecord(sender, 0, appIdx)
@@ -1293,7 +1293,7 @@ int 1`
 				LatestTimestamp: 333,
 				GroupIndex:      0,
 				RunMode:         "application",
-				AppID:           uint64(appIdx),
+				AppID:           appIdx,
 			}
 
 			local := MakeLocalRunner(nil)
@@ -1425,7 +1425,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 				LatestTimestamp: 333,
 				GroupIndex:      0,
 				RunMode:         "application",
-				AppID:           uint64(appIdx),
+				AppID:           appIdx,
 			}
 
 			local := MakeLocalRunner(nil)
