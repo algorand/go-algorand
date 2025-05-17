@@ -78,7 +78,6 @@ export SHORT_PART_PERIOD_FLAG := -s
 endif
 
 GOTAGS      := --tags "$(GOTAGSLIST)"
-GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
@@ -260,11 +259,11 @@ ${GOCACHE}/file.txt:
 	touch "${GOCACHE}"/file.txt
 
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN ${GOCACHE}/file.txt
-	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	$(GO_INSTALL) -trimpath $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special:
 	cd tools/block-generator && \
-	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	$(GO_INSTALL) -trimpath $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
 	./scripts/check_golang_version.sh build
@@ -275,7 +274,7 @@ check-go-version:
 ## the incredible performance impact of -race on Scrypt.
 build-race: build
 	@mkdir -p $(GOPATH1)/bin-race
-	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
+	GOBIN=$(GOPATH1)/bin-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
 	cp $(GOPATH1)/bin/kmd $(GOPATH1)/bin-race
 
 NONGO_BIN_FILES=$(GOPATH1)/bin/find-nodes.sh $(GOPATH1)/bin/update.sh $(GOPATH1)/bin/COPYING $(GOPATH1)/bin/ddconfig.sh

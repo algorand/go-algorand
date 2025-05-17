@@ -55,6 +55,10 @@ type resources struct {
 	// operation.
 	boxes map[BoxRef]bool
 
+	// unnamedAccess is the number of times that a newly created app may access
+	// a box that was not named.  It is decremented for each box accessed this way.
+	unnamedAccess int
+
 	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
 	dirtyBytes uint64
 }
@@ -315,11 +319,14 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 	}
 
 	for _, br := range tx.Boxes {
+		if ep.Proto.EnableUnnamedBoxAccessInNewApps && (br.Index == 0 && br.Name == nil) { // TODO: Use br.Empty() when #6286 merges
+			r.unnamedAccess++
+		}
 		var app basics.AppIndex
 		if br.Index == 0 {
 			// "current app": Ignore if this is a create, else use ApplicationID
 			if tx.ApplicationID == 0 {
-				// When the create actually happens, and we learn the appID, we'll add it.
+				// When the app creation actually happens, and we learn the appID, we'll add it.
 				continue
 			}
 			app = tx.ApplicationID
