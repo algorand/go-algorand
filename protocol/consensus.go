@@ -23,12 +23,8 @@ import (
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
 //
-//msgp:allocbound ConsensusVersion maxConsensusVersionLen
+//msgp:allocbound ConsensusVersion bounds.MaxConsensusVersionLen
 type ConsensusVersion string
-
-// maxConsensusVersionLen is used for generating MaxSize functions on types that contain ConsensusVersion
-// as it's member. 128 is slightly larger than the existing URL length of consensus version URL+hash=89
-const maxConsensusVersionLen = 128
 
 // DEPRECATEDConsensusV0 is a baseline version of the Algorand consensus protocol.
 // at the time versioning was introduced.

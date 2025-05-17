@@ -96,31 +96,6 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 	})
 }
 
-func TestEncodedAccountAllocationBounds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// ensure that all the supported protocols have value limits less or
-	// equal to their corresponding codec allocbounds
-	for protoVer, proto := range config.Consensus {
-		if proto.MaxAssetsPerAccount > 0 && proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
-			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppsCreated > 0 && proto.MaxAppsCreated > EncodedMaxAppParams {
-			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppsOptedIn > 0 && proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
-			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
-		}
-		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
-		}
-		if proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
-		}
-		// There is no protocol limit to the number of Boxes per account, so that allocbound is not checked.
-	}
-}
-
 func TestAppIndexHashing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
