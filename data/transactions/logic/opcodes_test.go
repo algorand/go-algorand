@@ -157,13 +157,23 @@ func TestOpcodesVersioningV2(t *testing.T) {
 	require.Equal(t, cntv1, cntv0)
 	require.Equal(t, 52, cntv1)
 
+	cdEqual := func(a, b costDescriptor) bool {
+		return a.baseCost == b.baseCost &&
+			a.chunkCost == b.chunkCost &&
+			a.chunkSize == b.chunkSize &&
+			a.depth == b.depth &&
+			reflect.ValueOf(a.fn).Pointer() == reflect.ValueOf(b.fn).Pointer() &&
+			a.doc == b.doc
+	}
+
 	eqButVersion := func(a *OpSpec, b *OpSpec) (eq bool) {
 		eq = a.Opcode == b.Opcode && a.Name == b.Name &&
 			reflect.ValueOf(a.op).Pointer() == reflect.ValueOf(b.op).Pointer() &&
 			reflect.ValueOf(a.asm).Pointer() == reflect.ValueOf(b.asm).Pointer() &&
 			reflect.DeepEqual(a.Arg, b.Arg) && reflect.DeepEqual(a.Return, b.Return) &&
 			a.Modes == b.Modes &&
-			a.OpDetails.FullCost == b.OpDetails.FullCost && a.OpDetails.Size == b.OpDetails.Size &&
+			cdEqual(a.FullCost, b.FullCost) &&
+			a.OpDetails.Size == b.OpDetails.Size &&
 			reflect.ValueOf(a.OpDetails.check).Pointer() == reflect.ValueOf(b.OpDetails.check).Pointer()
 		return
 	}
