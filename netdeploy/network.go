@@ -71,6 +71,23 @@ func OverrideDevMode(template *NetworkTemplate) {
 	}
 }
 
+// OverrideHybridMode turns off the mode
+func OverrideHybridMode(template *NetworkTemplate) {
+	for i := range template.Nodes {
+		jsonOverride := template.Nodes[i].ConfigJSONOverride
+		if jsonOverride == "" {
+			jsonOverride = `{"EnableP2PHybridMode": false}`
+		} else {
+			result := make(map[string]interface{})
+			_ = json.Unmarshal([]byte(jsonOverride), &result) // jsonOverride is presumable a valid json
+			result["EnableP2PHybridMode"] = false
+			data, _ := json.Marshal(result)
+			jsonOverride = string(data)
+		}
+		template.Nodes[i].ConfigJSONOverride = jsonOverride
+	}
+}
+
 // OverrideConsensusVersion changes the protocol version of a template.
 func OverrideConsensusVersion(ver protocol.ConsensusVersion) TemplateOverride {
 	return func(template *NetworkTemplate) {
