@@ -733,7 +733,12 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIDs bo
 			extraPages = fmt.Sprintf(", %d extra page%s", *app.Params.ExtraProgramPages, plural)
 		}
 
-		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes)
+		version := uint64(0)
+		if app.Params.Version != nil {
+			version = *app.Params.Version
+		}
+
+		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices, version %d\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes, version)
 	}
 
 	fmt.Fprintln(report, "Opted In Apps:")
@@ -1240,9 +1245,9 @@ var listParticipationKeysCmd = &cobra.Command{
 		rowFormat := "%-10s  %-11s  %-15s  %10s  %11s  %10s\n"
 		fmt.Printf(rowFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
 		for _, part := range parts {
-			onlineInfoStr := "unknown"
 			onlineAccountInfo, err := client.AccountInformation(part.Address, false)
 			if err == nil {
+				onlineInfoStr := "no"
 				votingBytes := part.Key.VoteParticipationKey
 				vrfBytes := part.Key.SelectionParticipationKey
 				if onlineAccountInfo.Participation != nil &&
@@ -1252,8 +1257,6 @@ var listParticipationKeysCmd = &cobra.Command{
 					(onlineAccountInfo.Participation.VoteLastValid == part.Key.VoteLastValid) &&
 					(onlineAccountInfo.Participation.VoteKeyDilution == part.Key.VoteKeyDilution) {
 					onlineInfoStr = "yes"
-				} else {
-					onlineInfoStr = "no"
 				}
 
 				/*

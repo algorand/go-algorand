@@ -632,9 +632,8 @@ func testMatch(t testing.TB, actual, expected string) (ok bool) {
 		return strings.Contains(actual+"^", expected[3:]+"^")
 	} else if strings.HasSuffix(expected, "...") {
 		return strings.Contains("^"+actual, "^"+expected[:len(expected)-3])
-	} else {
-		return expected == actual
 	}
+	return expected == actual
 }
 
 func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
@@ -1731,6 +1730,7 @@ global PayoutsGoOnlineFee
 global PayoutsPercent
 global PayoutsMinBalance
 global PayoutsMaxBalance
+txn RejectVersion
 `, AssemblerMaxVersion)
 	for _, names := range [][]string{GlobalFieldNames[:], TxnFieldNames[:], blockFieldNames[:]} {
 		for _, f := range names {
@@ -2945,6 +2945,9 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
 	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 6)
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, exp(1, "...is not allowed."))
+
+	testProg(t, "itxn_begin; int 3; itxn_field RejectVersion", 11, exp(1, "...introduced in v12..."))
+	testProg(t, "itxn_begin; int 2; itxn_field RejectVersion", 12)
 }
 
 func TestTypeTracking(t *testing.T) {

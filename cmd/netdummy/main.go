@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -47,7 +48,7 @@ func main() {
 	log.SetLevel(logging.Debug)
 	log.SetOutput(os.Stderr)
 
-	var nodes []network.GossipNode
+	var p runtime.Pinner
 	for i := 0; i < *numClients; i++ {
 		n, _ := network.NewWebsocketGossipNode(log,
 			conf,
@@ -55,7 +56,7 @@ func main() {
 			*genesisID,
 			protocol.NetworkID(*networkID))
 		n.Start()
-		nodes = append(nodes, n)
+		p.Pin(n)
 	}
 
 	fmt.Printf("Created %d clients\n", *numClients)

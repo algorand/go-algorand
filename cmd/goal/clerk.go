@@ -1226,7 +1226,7 @@ var dryrunRemoteCmd = &cobra.Command{
 			reportErrorf("dryrun-remote: %s", err.Error())
 		}
 		if rawOutput {
-			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))
+			fmt.Fprint(os.Stdout, string(protocol.EncodeJSON(&resp)))
 			return
 		}
 

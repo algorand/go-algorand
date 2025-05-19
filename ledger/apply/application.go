@@ -97,6 +97,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 			GlobalStateSchema: ac.GlobalStateSchema,
 		},
 		ExtraProgramPages: ac.ExtraProgramPages,
+		Version:           0,
 	}
 
 	// Update the cached TotalStateSchema for this account, used
@@ -213,6 +214,9 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	params.ApprovalProgram = ac.ApprovalProgram
 	params.ClearStateProgram = ac.ClearStateProgram
+	if proto.EnableAppVersioning {
+		params.Version++
+	}
 
 	return balances.PutAppParams(creator, appIdx, params)
 }
@@ -376,6 +380,10 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		return err
 	}
 
+	if ac.RejectVersion > 0 && params.Version >= ac.RejectVersion {
+		return fmt.Errorf("app version (%d) >= reject version (%d)", params.Version, ac.RejectVersion)
+	}
+
 	// Ensure that the only operation we can do is ClearState if the application
 	// does not exist
 	if !exists && ac.OnCompletion != transactions.ClearStateOC {
@@ -424,9 +432,8 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 				// Fill in applyData, so that consumers don't have to implement a
 				// stateful TEAL interpreter to apply state changes
 				ad.EvalDelta = evalDelta
-			} else {
-				// Ignore logic eval errors and rejections from the ClearStateProgram
 			}
+			// Ignore logic eval errors and rejections from the ClearStateProgram
 		}
 
 		return closeOutApplication(balances, header.Sender, appIdx)

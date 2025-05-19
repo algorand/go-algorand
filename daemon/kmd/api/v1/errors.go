@@ -20,8 +20,6 @@ import (
 	"fmt"
 )
 
-var errWalletNameLong = fmt.Errorf("wallet name too long")
-var errPasswordLong = fmt.Errorf("password too long")
 var errCouldNotDecode = fmt.Errorf("could not decode request body")
 var errCouldNotDecodeAddress = fmt.Errorf("could not decode address")
 var errCouldNotDecodeTx = fmt.Errorf("could not decode transaction")

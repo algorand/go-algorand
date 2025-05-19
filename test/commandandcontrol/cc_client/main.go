@@ -18,7 +18,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net/url"
 	"os"
 	"os/signal"
@@ -100,7 +99,7 @@ func main() {
 	ccServiceRequest := lib.CCServiceRequest{
 		Component:       *componentName,
 		Command:         *componentAction,
-		Parameters:      fmt.Sprintf("%s", options),
+		Parameters:      string(options),
 		TargetAgentList: targetHosts,
 	}
 
@@ -119,7 +118,7 @@ func main() {
 		} else {
 			log.Infof("Response: %+v", response)
 		}
-		if *listen == false {
+		if !*listen {
 			break
 		}
 	}

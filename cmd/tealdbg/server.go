@@ -241,5 +241,4 @@ func (ds *DebugServer) dryrunReqHander(w http.ResponseWriter, r *http.Request) {
 
 	// let the main thread to exit
 	close(ds.spinoffCh)
-	return
 }

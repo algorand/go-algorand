@@ -275,7 +275,7 @@ func (p *player) issueFastVote(r routerHandle) (actions []action) {
 
 func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []action {
 	return []action{
-		checkpointAction{
+		checkpointAction{ //nolint:gosimple // explicit assignment for clarity
 			Round:  e.Round,
 			Period: e.Period,
 			Step:   e.Step,

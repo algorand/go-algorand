@@ -64,7 +64,7 @@ func (m *Monotonic[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType Time
 	tmt = timeout{delta: delta}
 
 	target := m.zero.Add(delta)
-	left := target.Sub(time.Now())
+	left := time.Until(target)
 	if left < 0 {
 		ch := make(chan time.Time)
 		close(ch)

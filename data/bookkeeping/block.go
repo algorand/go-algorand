@@ -53,7 +53,7 @@ type (
 		TimeStamp int64 `codec:"ts"`
 
 		// Genesis ID to which this block belongs.
-		GenesisID string `codec:"gen,allocbound=config.MaxGenesisIDLen"`
+		GenesisID string `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
 
 		// Genesis hash to which this block belongs.
 		GenesisHash crypto.Digest `codec:"gh"`
@@ -164,11 +164,11 @@ type (
 		// ExpiredParticipationAccounts contains a list of online accounts
 		// that needs to be converted to offline since their
 		// participation key expired.
-		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxProposedExpiredOnlineAccounts"`
+		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=bounds.MaxProposedExpiredOnlineAccounts"`
 
 		// AbsentParticipationAccounts contains a list of online accounts that
 		// needs to be converted to offline since they are not proposing.
-		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=config.MaxMarkAbsent"`
+		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=bounds.MaxMarkAbsent"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -258,7 +258,7 @@ type (
 	// A Block contains the Payset and metadata corresponding to a given Round.
 	Block struct {
 		BlockHeader
-		Payset transactions.Payset `codec:"txns,maxtotalbytes=config.MaxTxnBytesPerBlock"`
+		Payset transactions.Payset `codec:"txns,maxtotalbytes=bounds.MaxTxnBytesPerBlock"`
 	}
 )
 

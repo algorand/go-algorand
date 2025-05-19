@@ -24,8 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -98,65 +96,6 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 	})
 }
 
-func makeString(len int) string {
-	s := ""
-	for i := 0; i < len; i++ {
-		s += string(byte(i))
-	}
-	return s
-}
-
-func getSampleAccountData() AccountData {
-	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
-	vrfSecrets := crypto.GenerateVRFSecrets()
-	var stateProofID merklesignature.Commitment
-	crypto.RandBytes(stateProofID[:])
-
-	return AccountData{
-		Status:             NotParticipating,
-		MicroAlgos:         MicroAlgos{},
-		RewardsBase:        0x1234123412341234,
-		RewardedMicroAlgos: MicroAlgos{},
-		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
-		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID,
-		VoteFirstValid:     Round(0x1234123412341234),
-		VoteLastValid:      Round(0x1234123412341234),
-		VoteKeyDilution:    0x1234123412341234,
-		AssetParams:        make(map[AssetIndex]AssetParams),
-		Assets:             make(map[AssetIndex]AssetHolding),
-		AppLocalStates:     make(map[AppIndex]AppLocalState),
-		AppParams:          make(map[AppIndex]AppParams),
-		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
-		IncentiveEligible:  true,
-	}
-}
-
-func TestEncodedAccountAllocationBounds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// ensure that all the supported protocols have value limits less or
-	// equal to their corresponding codec allocbounds
-	for protoVer, proto := range config.Consensus {
-		if proto.MaxAssetsPerAccount > 0 && proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
-			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppsCreated > 0 && proto.MaxAppsCreated > EncodedMaxAppParams {
-			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppsOptedIn > 0 && proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
-			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
-		}
-		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
-		}
-		if proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
-		}
-		// There is no protocol limit to the number of Boxes per account, so that allocbound is not checked.
-	}
-}
-
 func TestAppIndexHashing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -174,22 +113,4 @@ func TestAppIndexHashing(t *testing.T) {
 	// python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))"
 	i = AppIndex(77)
 	require.Equal(t, "PCYUFPA2ZTOYWTP43MX2MOX2OWAIAXUDNC2WFCXAGMRUZ3DYD6BWFDL5YM", i.Address().String())
-}
-
-func TestOnlineAccountData(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	ad := getSampleAccountData()
-	ad.MicroAlgos.Raw = 1000000
-	ad.Status = Offline
-
-	oad := ad.OnlineAccountData()
-	require.Empty(t, oad)
-
-	ad.Status = Online
-	oad = ad.OnlineAccountData()
-	require.Equal(t, ad.MicroAlgos, oad.MicroAlgosWithRewards)
-	require.Equal(t, ad.VoteID, oad.VoteID)
-	require.Equal(t, ad.SelectionID, oad.SelectionID)
-	require.Equal(t, ad.IncentiveEligible, oad.IncentiveEligible)
 }
