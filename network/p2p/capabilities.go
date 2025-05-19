@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"context"
+	randv1 "math/rand"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libpeerstore "github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
@@ -123,6 +125,9 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 		defer func() {
 			c.wg.Done()
 		}()
+		// Create a exp jitter backoff strategy to use for retrying failed advertisements
+		ebf := backoff.NewExponentialDecorrelatedJitter(1*time.Second, 100*time.Second, 3.0, randv1.NewSource(randv1.Int63()))
+		eb := ebf()
 
 		for {
 			// shuffle capabilities to advertise in random order
@@ -157,12 +162,13 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 					}
 					c.log.Infof("advertised capability %s", capa)
 				}
-				// If we failed to advertise, retry every 100 seconds until successful
+				// If we failed to advertise, retry every according to exp jitter delays until successful
 				if err != nil {
-					nextExecution = time.After(time.Second * 100)
+					nextExecution = time.After(eb.Delay())
 				} else {
 					// Otherwise, ensure we're at the correct interval
 					nextExecution = time.After(advertisementInterval)
+					eb.Reset()
 				}
 			}
 		}
