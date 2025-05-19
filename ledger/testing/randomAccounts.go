@@ -102,9 +102,10 @@ func RandomOnlineAccountData(rewardsBase uint64) basics.AccountData {
 // RandomAssetParams creates a random basics.AssetParams
 func RandomAssetParams() basics.AssetParams {
 	ap := basics.AssetParams{
-		Total:         crypto.RandUint64(),
-		Decimals:      uint32(crypto.RandUint64() % 20),
-		DefaultFrozen: crypto.RandUint64()%2 == 0,
+		Total:            crypto.RandUint64(),
+		Decimals:         uint32(crypto.RandUint64() % 20),
+		DefaultFrozen:    crypto.RandUint64()%2 == 0,
+		LastGlobalFreeze: crypto.RandUint64(),
 	}
 	// Since 0 and 1 Total assets seem extra interesting, make them more often.
 	if crypto.RandUint64()%5 != 0 {
@@ -151,8 +152,9 @@ func RandomAssetHolding(forceFrozen bool) basics.AssetHolding {
 	}
 
 	ah := basics.AssetHolding{
-		Amount: amount,
-		Frozen: frozen,
+		Amount:           amount,
+		Frozen:           frozen,
+		LastFreezeChange: crypto.RandUint64(),
 	}
 	return ah
 }
