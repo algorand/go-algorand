@@ -2328,6 +2328,39 @@
         ],
         "type": "object"
       },
+      "ResourceArrays": {
+        "description": "Resource arrays that are required for a transaction",
+        "properties": {
+          "accounts": {
+            "items": {
+              "type": "string",
+              "x-algorand-format": "Address"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "items": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "type": "array"
+          },
+          "assets": {
+            "items": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "type": "array"
+          },
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/BoxReference"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "ScratchChange": {
         "description": "A write operation into a scratch slot.",
         "properties": {
@@ -2382,6 +2415,10 @@
           },
           "fix-signers": {
             "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
+          },
+          "populate-resources": {
+            "description": "If true, return populated resource arrays for each transaction based on unnamed resources",
             "type": "boolean"
           },
           "round": {
@@ -2453,6 +2490,13 @@
             "description": "Total budget consumed during execution of app calls in the transaction group.",
             "type": "integer"
           },
+          "extra-resource-arrays": {
+            "description": "Present if populate-resource-arrays is true in the request and additional transactions are needed to name all the accessed resources.",
+            "items": {
+              "$ref": "#/components/schemas/ResourceArrays"
+            },
+            "type": "array"
+          },
           "failed-at": {
             "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
             "items": {
@@ -2498,6 +2542,9 @@
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
+          },
+          "populated-resource-arrays": {
+            "$ref": "#/components/schemas/ResourceArrays"
           },
           "txn-result": {
             "$ref": "#/components/schemas/PendingTransactionResponse"
