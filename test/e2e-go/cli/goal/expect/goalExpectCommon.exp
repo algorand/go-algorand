@@ -403,6 +403,22 @@ proc ::AlgorandGoal::RecoverWallet { NEW_WALLET_NAME WALLET_PASSPHRASE NEW_WALLE
     return $RECOVERED_WALLET_NAME
 }
 
+# Rename a wallet
+proc ::AlgorandGoal::RenameWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NODE_DIR NEW_WALLET_NAME } {
+    set timeout 60
+    if { [catch {
+        spawn goal wallet rename -d $TEST_PRIMARY_NODE_DIR $WALLET_NAME $NEW_WALLET_NAME
+        expect {
+             timeout { ::AlgorandGoal::Abort "Timed out seeing expected input for spawn goal wallet list" }
+             {Please type your recovery mnemonic below, and hit return when you are done:*} { send "$WALLET_PASSWORD\r" }
+             eof { ::AlgorandGoal::Abort "EOF seeing expected input for spawn goal wallet list" }
+             "*Renamed wallet*$WALLET_NAME*$NEW_WALLET_NAME" {close}
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in RenameWallet: $EXCEPTION"
+    }
+}
+
 # Associate a new account with a specific wallet
 proc ::AlgorandGoal::CreateAccountForWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NODE_DIR } {
     set timeout 60

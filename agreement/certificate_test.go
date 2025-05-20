@@ -276,7 +276,7 @@ func TestCertificateCertWrongRound(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
-	block := makeRandomBlock(1 - 1)
+	block := makeRandomBlock(0)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)

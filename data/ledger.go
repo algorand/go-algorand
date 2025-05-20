@@ -118,25 +118,21 @@ func LoadLedger[T string | ledger.DirsAndPrefix](
 	return l, nil
 }
 
-// AddressTxns returns the list of transactions to/from a given address in specific round
-func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
+// TxnsFrom returns the list of transactions sent by a given address in a round
+func (l *Ledger) TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error) {
 	blk, err := l.Block(r)
 	if err != nil {
 		return nil, err
 	}
-	spec := transactions.SpecialAddresses{
-		FeeSink:     blk.FeeSink,
-		RewardsPool: blk.RewardsPool,
-	}
 
-	var res []transactions.SignedTxnWithAD
+	var res []transactions.Transaction
 	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return nil, err
 	}
 	for _, tx := range payset {
-		if tx.Txn.MatchAddress(id, spec) {
-			res = append(res, tx)
+		if id == tx.Txn.Sender {
+			res = append(res, tx.Txn)
 		}
 	}
 	return res, nil
@@ -289,7 +285,7 @@ func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, er
 			// no protocol upgrade taking place, we have *at least* UpgradeVoteRounds before the protocol version would get changed.
 			// it's safe to ignore the error case here since we know that we couldn't reached to this "known" round
 			// without having the binary supporting this protocol version.
-			currentConsensusParams, _ := config.Consensus[latestBlockhdr.CurrentProtocol]
+			currentConsensusParams := config.Consensus[latestBlockhdr.CurrentProtocol]
 			// we're using <= here since there is no current upgrade on this round, and if there will be one on the subsequent round
 			// it would still be correct until (latestBlockhdr.Round + currentConsensusParams.UpgradeVoteRounds)
 			if r <= latestBlockhdr.Round+basics.Round(currentConsensusParams.UpgradeVoteRounds) {

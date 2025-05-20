@@ -763,9 +763,8 @@ func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled boo
 	case newCtx, open := <-newCtxCh:
 		if open {
 			cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
-		} else {
-			// channel is closed, this means that the node is stopping
 		}
+		// if channel is closed, this means that the node is stopping
 	case <-cs.ctx.Done():
 		// the node context was canceled before the SetCatchpointCatchupMode goroutine had
 		// the chance of completing. We At this point, the service is shutting down. However,
@@ -823,12 +822,14 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
 		psp, peerError := cs.blocksDownloadPeerSelector.getNextPeer()
 		if peerError != nil {
-			return err
+			cs.log.Debugf("checkLedgerDownload: error on getNextPeer: %s", peerError.Error())
+			return peerError
 		}
 		err = ledgerFetcher.headLedger(context.Background(), psp.Peer, round)
 		if err == nil {
 			return nil
 		}
+		cs.log.Debugf("checkLedgerDownload: failed to headLedger from peer %s: %v", peerAddress(psp.Peer), err)
 		// a non-nil error means that the catchpoint is not available, so we should rank it accordingly
 		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankNoCatchpointForRound)
 	}

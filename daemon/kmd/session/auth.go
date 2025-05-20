@@ -224,7 +224,7 @@ func (sm *Manager) authMaybeRenewWalletHandleToken(walletHandleToken []byte, ren
 	}
 
 	// Compute how many seconds are left until the handle expires
-	expiresSeconds := int64(handle.expires.Sub(time.Now()).Seconds())
+	expiresSeconds := int64(time.Until(handle.expires).Seconds())
 
 	// Return the wallet and seconds remaining to expiration
 	return handle.wallet, expiresSeconds, nil

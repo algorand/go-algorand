@@ -473,28 +473,6 @@ func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx transactions
 	return
 }
 
-func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []byte {
-	var progParts []string
-	progParts = append(progParts, `#pragma version 2`)
-	progParts = append(progParts, `byte base64 AA==`)
-
-	for i := uint32(0); i < numHashes; i++ {
-		progParts = append(progParts, hashSize)
-	}
-	for i := uint32(0); i < numOps/2; i++ {
-		progParts = append(progParts, `int 1`)
-		progParts = append(progParts, `pop`)
-	}
-	progParts = append(progParts, `int 1`)
-	progParts = append(progParts, `return`)
-	progAsm := strings.Join(progParts, "\n")
-	ops, err := logic.AssembleString(progAsm)
-	if err != nil {
-		panic(err)
-	}
-	return ops.Program
-}
-
 func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys, numLocalKeys, numBoxUpdate, numBoxRead uint32) ([]byte, string) {
 	if numBoxUpdate != 0 || numBoxRead != 0 {
 		prologue := `#pragma version 8
@@ -913,7 +891,7 @@ func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transact
 }
 
 func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Client) (tx transactions.Transaction, err error) {
-	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil, 0)
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
 		panic(err)

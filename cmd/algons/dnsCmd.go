@@ -330,7 +330,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 
 	var idsToDelete []cloudflare.DNSRecordResponseEntry
 	services := []string{"_algobootstrap", "_metrics"}
-	servicesRegexp, err := regexp.Compile("^(_algobootstrap|_metrics)\\._tcp\\..*algodev.network$")
+	servicesRegexp, err := regexp.Compile(`^(_algobootstrap|_metrics)\._tcp\..*algodev.network$`)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create services expression: %v", err)

@@ -34,9 +34,6 @@ import (
 // defaultConfig lowers scrypt params to make tests faster
 var defaultConfig = `{"drivers":{"sqlite":{"scrypt":{"scrypt_n":2},"allow_unsafe_scrypt":true}}}`
 
-// shutdownTimeoutSecs is time to wait for kmd to shut down before returning an error
-const shutdownTimeoutSecs = 5
-
 // defaultTimeoutSecs is the number of seconds after which kmd will die if it
 // receives no requests
 const defaultTimeoutSecs = 60

@@ -117,7 +117,6 @@ func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, memoryConf
 		}
 	}
 	mtc.modified = false
-	return
 }
 
 // allocateNewNode allocates a new node
@@ -312,7 +311,7 @@ func (mtc *merkleTrieCache) commitTransaction() {
 			delete(mtc.pageToNIDsPtr[page], nodeID)
 			// if the page is empty, and it's not on the pendingDeletionPages, it means that we have no further references to it,
 			// so we can delete it right away.
-			if len(mtc.pageToNIDsPtr[page]) == 0 && mtc.pendingDeletionPages[page] == false {
+			if len(mtc.pageToNIDsPtr[page]) == 0 && !mtc.pendingDeletionPages[page] {
 				delete(mtc.pageToNIDsPtr, page)
 			}
 		} else {
@@ -540,7 +539,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 func (mtc *merkleTrieCache) calculatePageHashes(page int64, newPage bool) (fanoutRelocatedNodes int64, err error) {
 	nodes := mtc.pageToNIDsPtr[uint64(page)]
 	for i := storedNodeIdentifier(page * mtc.nodesPerPage); i < storedNodeIdentifier((page+1)*mtc.nodesPerPage); i++ {
-		if !newPage && mtc.pendingCreatedNID[i] == false {
+		if !newPage && !mtc.pendingCreatedNID[i] {
 			continue
 		}
 		node := nodes[i]

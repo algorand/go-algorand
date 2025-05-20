@@ -51,11 +51,6 @@ export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
 endif
 
 ifeq ($(OS_TYPE), darwin)
-# For Xcode >= 15, set -no_warn_duplicate_libraries linker option
-CLANG_MAJOR_VERSION := $(shell clang --version | grep '^Apple clang version ' | awk '{print $$4}' | cut -d. -f1)
-ifeq ($(shell [ $(CLANG_MAJOR_VERSION) -ge 15 ] && echo true), true)
-EXTLDFLAGS := -Wl,-no_warn_duplicate_libraries
-endif
 # M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(ARCH), arm64)
 export CPATH=/opt/homebrew/include
@@ -147,6 +142,13 @@ generate: deps
 	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
 
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
+
+api:
+	make -C daemon/algod/api
+
+logic:
+	make -C data/transactions/logic
+
 
 %/msgp_gen.go: deps ALWAYS
 		@set +e; \
@@ -335,7 +337,11 @@ node_exporter: $(GOPATH1)/bin/node_exporter
 $(GOPATH1)/bin/node_exporter:
 	mkdir -p $(GOPATH1)/bin && \
 	cd $(GOPATH1)/bin && \
-	tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz && \
+	if [ -z "$(CROSS_COMPILE_ARCH)" ]; then \
+		tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz; \
+	else \
+		tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-universal.tar.gz; \
+	fi && \
 	cd -
 
 # deploy

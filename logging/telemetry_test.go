@@ -17,12 +17,14 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
 
@@ -84,7 +86,7 @@ func makeTelemetryTestFixtureWithConfig(minLevel logrus.Level, cfg *TelemetryCon
 	f.l = Base().(logger)
 	f.l.SetLevel(Debug) // Ensure logging doesn't filter anything out
 
-	f.telem, _ = makeTelemetryState(lcfg, func(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+	f.telem, _ = makeTelemetryStateContext(context.Background(), lcfg, func(ctx context.Context, cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return &f.hook, nil
 	})
 	f.l.loggerState.telemetry = f.telem
@@ -138,7 +140,7 @@ func TestCreateHookError(t *testing.T) {
 
 	cfg := createTelemetryConfig()
 	cfg.Enable = true
-	telem, err := makeTelemetryState(cfg, func(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+	telem, err := makeTelemetryStateContext(context.Background(), cfg, func(ctx context.Context, cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return nil, fmt.Errorf("failed")
 	})
 
@@ -291,13 +293,9 @@ func runLogLevelsTest(t *testing.T, minLevel logrus.Level, expected int) {
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	// See if we got the expected number of entries
 	a.Equal(expected, len(f.hookEntries()))
@@ -319,13 +317,9 @@ func TestLogHistoryLevels(t *testing.T) {
 	f.l.Error("error")
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	data := f.hookData()
 	a.Nil(data[0]["log"]) // Debug

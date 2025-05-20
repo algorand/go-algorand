@@ -853,6 +853,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 				},
 			},
 			ExtraProgramPages: appl.ExtraProgramPages,
+			Version:           0,
 		}
 		l.NewApp(from, aid, params)
 		ad.ApplicationID = aid
@@ -915,6 +916,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 		}
 		app.ApprovalProgram = appl.ApprovalProgram
 		app.ClearStateProgram = appl.ClearStateProgram
+		app.Version++
 		l.applications[aid] = app
 	}
 	return nil

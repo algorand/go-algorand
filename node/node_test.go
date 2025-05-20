@@ -1022,15 +1022,15 @@ func TestNodeP2PRelays(t *testing.T) {
 		switch i {
 		case 0:
 			// node R1 connects to R2
-			t.Logf("Node%d phonebook: %s", i, ni[1].p2pMultiAddr())
+			t.Logf("Node%d %s phonebook: %s", i, ni[0].p2pID, ni[1].p2pMultiAddr())
 			return []string{ni[1].p2pMultiAddr()}
 		case 1:
 			// node R2 connects to none one
-			t.Logf("Node%d phonebook: empty", i)
+			t.Logf("Node%d %s phonebook: empty", i, ni[1].p2pID)
 			return []string{}
 		case 2:
-			// node N only connects to R1
-			t.Logf("Node%d phonebook: %s", i, ni[1].p2pMultiAddr())
+			// node N only connects to R2
+			t.Logf("Node%d %s phonebook: %s", i, ni[2].p2pID, ni[1].p2pMultiAddr())
 			return []string{ni[1].p2pMultiAddr()}
 		default:
 			t.Errorf("not expected number of nodes: %d", i)
@@ -1260,5 +1260,93 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 		require.Greater(t, b.TxnCounter, uint64(1000)) // new initial value after AppForbidLowResources
 	case <-time.After(1 * time.Minute):
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
+	}
+}
+
+// TestNodeP2P_NetProtoVersions makes sure two p2p nodes with different network protocol versions
+// can communicate and produce blocks.
+func TestNodeP2P_NetProtoVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const consensusTest0 = protocol.ConsensusVersion("test0")
+
+	configurableConsensus := make(config.ConsensusProtocols)
+
+	testParams0 := config.Consensus[protocol.ConsensusCurrentVersion]
+	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
+	configurableConsensus[consensusTest0] = testParams0
+
+	maxMoneyAtStart := 100_000_000_000
+
+	const numAccounts = 2
+	acctStake := make([]basics.MicroAlgos, numAccounts)
+	acctStake[0] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
+	acctStake[1] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
+
+	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
+		cfg = config.GetDefaultLocal()
+		cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
+		cfg.EnableP2P = true
+		cfg.NetAddress = ""
+
+		cfg.P2PPersistPeerID = true
+		privKey, err := p2p.GetPrivKey(cfg, ni.rootDir)
+		require.NoError(t, err)
+		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
+		require.NoError(t, err)
+
+		switch ni.idx {
+		case 0:
+			cfg.NetAddress = ni.p2pNetAddr()
+			cfg.EnableVoteCompression = true
+		case 1:
+			cfg.EnableVoteCompression = false
+		default:
+		}
+		return ni, cfg
+	}
+
+	phonebookHook := func(nodes []nodeInfo, nodeIdx int) []string {
+		phonebook := make([]string, 0, len(nodes)-1)
+		for i := range nodes {
+			if i != nodeIdx {
+				phonebook = append(phonebook, nodes[i].p2pMultiAddr())
+			}
+		}
+		return phonebook
+	}
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	require.Len(t, nodes, numAccounts)
+	require.Len(t, wallets, numAccounts)
+	for i := 0; i < len(nodes); i++ {
+		defer os.Remove(wallets[i])
+		defer nodes[i].Stop()
+	}
+
+	startAndConnectNodes(nodes, nodelayFirstNodeStartDelay)
+
+	require.Eventually(t, func() bool {
+		connectPeers(nodes)
+		return len(nodes[0].net.GetPeers(network.PeersConnectedIn, network.PeersConnectedOut)) >= 1 &&
+			len(nodes[1].net.GetPeers(network.PeersConnectedIn, network.PeersConnectedOut)) >= 1
+	}, 60*time.Second, 1*time.Second)
+
+	const initialRound = 1
+	const maxRounds = 3
+	for tests := basics.Round(0); tests < maxRounds; tests++ {
+		blocks := make([]bookkeeping.Block, len(wallets))
+		for i := range wallets {
+			select {
+			case <-nodes[i].ledger.Wait(initialRound + tests):
+				blk, err := nodes[i].ledger.Block(initialRound + tests)
+				if err != nil {
+					panic(err)
+				}
+				blocks[i] = blk
+			case <-time.After(60 * time.Second):
+				require.Fail(t, fmt.Sprintf("no block notification for account: %v. Iteration: %v", wallets[i], tests))
+				return
+			}
+		}
 	}
 }
