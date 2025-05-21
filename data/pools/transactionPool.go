@@ -98,8 +98,6 @@ type TransactionPool struct {
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
 
-	isParticipating isParticipating
-
 	// shutdown is set to true when the pool is being shut down. It is checked in exported methods
 	// to prevent pool operations like remember and recomputing the block evaluator
 	// from using down stream resources like ledger that may be shutting down.
@@ -115,10 +113,6 @@ type BlockEvaluator interface {
 	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
 	GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error)
 	ResetTxnBytes()
-}
-
-type isParticipating interface {
-	IsParticipating() bool
 }
 
 // VotingAccountSupplier provides a list of possible participating account addresses valid for a given round.
@@ -145,8 +139,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		txPoolMaxSize:        cfg.TxPoolSize,
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
-		//		isParticipating:      isParticipating,
-		vac: vac,
+		vac:                  vac,
 	}
 	if cfg.EnableDeveloperAPI {
 		pool.evalTracer = logic.EvalErrorDetailsTracer{}
@@ -635,18 +628,6 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
 
-	// if this node is not participating, then we know AssembleBlock is not needed,
-	// and there is no need to generate and broadcast a block
-	if pool.isParticipating != nil {
-		isPart := pool.isParticipating.IsParticipating()
-		if !isPart {
-			// recomputing is true if we are running in OnNewBlock, and in this
-			// method is used to control whether to build assemblyResults and call
-			// assemblyCond.Broadcast()
-			recomputing = false
-		}
-	}
-
 	transactionGroupStartsTime := time.Time{}
 	if recomputing {
 		transactionGroupStartsTime = time.Now()
@@ -679,14 +660,16 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 					stats.ProcessingTime.AddTransaction(transactionGroupDuration)
 				}
 
-				blockGenerationStarts := time.Now()
-				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock(pool.getVotingAccountsForRound(evalRnd))
-				if gerr != nil {
-					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
-				} else {
-					pool.assemblyResults.blk = lvb
+				if votingAccts := pool.getVotingAccountsForRound(evalRnd); len(votingAccts) > 0 {
+					blockGenerationStarts := time.Now()
+					lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock(votingAccts)
+					if gerr != nil {
+						pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
+					} else {
+						pool.assemblyResults.blk = lvb
+					}
+					stats.BlockGenerationDuration = uint64(time.Since(blockGenerationStarts))
 				}
-				stats.BlockGenerationDuration = uint64(time.Since(blockGenerationStarts))
 				pool.assemblyResults.stats = *stats
 				pool.assemblyCond.Broadcast()
 			} else {
