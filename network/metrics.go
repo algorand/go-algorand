@@ -34,6 +34,7 @@ func init() {
 	}
 	networkSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringList, "UNK")
 	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkReceivedUncompressedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_uncompressed_bytes_{TAG}", "Number of bytes after decompression that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
 	networkHandleCountByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_countbytag_{TAG}", "count of handler calls in the receive thread for {TAG} messages", tagStringList, "UNK")
@@ -41,6 +42,7 @@ func init() {
 
 	networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringList, "UNK")
 	networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkP2PReceivedUncompressedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_uncompressed_bytes_{TAG}", "Number of bytes after decompression that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
 }
@@ -53,6 +55,8 @@ var networkReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkReceivedBytes
 var networkP2PReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkP2PReceivedBytesTotal)
 var networkReceivedBytesByTag *metrics.TagCounter
 var networkP2PReceivedBytesByTag *metrics.TagCounter
+var networkReceivedUncompressedBytesByTag *metrics.TagCounter
+var networkP2PReceivedUncompressedBytesByTag *metrics.TagCounter
 
 var networkMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkMessageReceivedTotal)
 var networkP2PMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkP2PMessageReceivedTotal)
