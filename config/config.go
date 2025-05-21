@@ -82,14 +82,6 @@ const ConfigurableConsensusProtocolsFilename = "consensus.json"
 // do not expose in normal config so it is not in code generated local_defaults.go
 const defaultRelayGossipFanout = 8
 
-// MaxGenesisIDLen is the maximum length of the genesis ID set for purpose of setting
-// allocbounds on structs containing GenesisID and for purposes of calculating MaxSize functions
-// on those types. Current value is larger than the existing network IDs and the ones used in testing
-const MaxGenesisIDLen = 128
-
-// MaxEvalDeltaTotalLogSize is the maximum size of the sum of all log sizes in a single eval delta.
-const MaxEvalDeltaTotalLogSize = 1024
-
 // CatchpointTrackingModeUntracked defines the CatchpointTracking mode that does _not_ track catchpoints
 const CatchpointTrackingModeUntracked = -1
 

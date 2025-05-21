@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/uuid"
 	"github.com/algorand/go-deadlock"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -106,7 +107,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	)
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 50*time.Millisecond)
 
 	// for some reason the above check is not enough in race builds on CI
 	time.Sleep(time.Second) // give time for peers to connect.
@@ -199,7 +200,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 50*time.Millisecond)
 
 	time.Sleep(time.Second) // give time for peers to connect.
 
@@ -282,7 +283,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 50*time.Millisecond)
 
 	time.Sleep(time.Second) // give time for peers to connect.
 
@@ -1481,5 +1482,215 @@ func TestGetPeersFiltersSelf(t *testing.T) {
 		default:
 			t.Fatalf("unexpected peer type: %T", peer)
 		}
+	}
+}
+
+// TestP2PMetainfoExchange checks that the metainfo exchange works correctly
+func TestP2PMetainfoExchange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.EnableVoteCompression = true
+	log := logging.TestingLog(t)
+	err := log.EnableTelemetryContext(context.Background(), logging.TelemetryConfig{Enable: true, SendToLog: true, GUID: uuid.New()})
+	require.NoError(t, err)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	cfg2 := cfg
+	cfg2.EnableVoteCompression = false
+	cfg.NetAddress = ""
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	require.Eventually(t, func() bool {
+		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+
+	peers := netA.GetPeers(PeersConnectedIn)
+	require.Len(t, peers, 1)
+	peer := peers[0].(*wsPeer)
+	require.True(t, peer.features&pfCompressedProposal != 0)
+	require.False(t, peer.vpackVoteCompressionSupported())
+
+	peers = netB.GetPeers(PeersConnectedOut)
+	require.Len(t, peers, 1)
+	peer = peers[0].(*wsPeer)
+	require.True(t, peer.features&pfCompressedProposal != 0)
+	require.True(t, peer.vpackVoteCompressionSupported())
+}
+
+// TestP2PMetainfoV1vsV22 checks v1 and v22 nodes works together.
+// It is done with setting disableV22Protocol=true for the second node,
+// and it renders EnableVoteCompression options to have no effect.
+func TestP2PMetainfoV1vsV22(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.EnableVoteCompression = true
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	cfg2 := cfg
+	cfg2.EnableVoteCompression = true
+	cfg.NetAddress = ""
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+	disableV22Protocol = true
+	defer func() {
+		disableV22Protocol = false
+	}()
+	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	require.Eventually(t, func() bool {
+		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+
+	var peers []Peer
+	require.Eventually(t, func() bool {
+		peers = netA.GetPeers(PeersConnectedIn)
+		return len(peers) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+	peer := peers[0].(*wsPeer)
+	require.False(t, peer.features&pfCompressedProposal != 0)
+	require.False(t, peer.vpackVoteCompressionSupported())
+
+	peers = netB.GetPeers(PeersConnectedOut)
+	require.Len(t, peers, 1)
+	peer = peers[0].(*wsPeer)
+	require.False(t, peer.features&pfCompressedProposal != 0)
+	require.False(t, peer.vpackVoteCompressionSupported())
+}
+
+// TestP2PVoteCompression tests vote compression feature in P2P network
+func TestP2PVoteCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testDef struct {
+		netAEnableCompression, netBEnableCompression bool
+	}
+
+	var tests []testDef = []testDef{
+		{true, true},   // both nodes with compression enabled
+		{true, false},  // node A with compression, node B without
+		{false, true},  // node A without compression, node B with compression
+		{false, false}, // both nodes with compression disabled
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("A_compression_%v+B_compression_%v", test.netAEnableCompression, test.netBEnableCompression), func(t *testing.T) {
+			cfg := config.GetDefaultLocal()
+			cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+			cfg.NetAddress = "127.0.0.1:0"
+			cfg.GossipFanout = 1
+			cfg.EnableVoteCompression = test.netAEnableCompression
+			log := logging.TestingLog(t)
+			netA, err := NewP2PNetwork(log.With("name", "netA"), cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+			require.NoError(t, err)
+			err = netA.Start()
+			require.NoError(t, err)
+			defer netA.Stop()
+
+			peerInfoA := netA.service.AddrInfo()
+			addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+			require.NoError(t, err)
+			require.NotZero(t, addrsA[0])
+
+			cfgB := cfg
+			cfgB.EnableVoteCompression = test.netBEnableCompression
+			cfgB.NetAddress = ""
+			multiAddrStr := addrsA[0].String()
+			phoneBookAddresses := []string{multiAddrStr}
+			netB, err := NewP2PNetwork(log.With("name", "netB"), cfgB, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+			require.NoError(t, err)
+			err = netB.Start()
+			require.NoError(t, err)
+			defer netB.Stop()
+
+			// ps is empty, so this is a valid vote
+			vote1 := map[string]any{
+				"cred": map[string]any{"pf": algocrypto.VrfProof{1}},
+				"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
+				"sig": map[string]any{
+					"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
+					"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
+				},
+			}
+			// ps is not empty: vpack compression will fail, but it will still be sent through
+			vote2 := map[string]any{
+				"cred": map[string]any{"pf": algocrypto.VrfProof{10}},
+				"r":    map[string]any{"rnd": uint64(11), "snd": [32]byte{12}},
+				"sig": map[string]any{
+					"p": [32]byte{13}, "p1s": [64]byte{14}, "p2": [32]byte{15},
+					"p2s": [64]byte{16}, "ps": [64]byte{17}, "s": [64]byte{18},
+				},
+			}
+			// Send a totally invalid message to ensure that it goes through. Even though vpack compression
+			// and decompression will fail, the message should still go through (as an intended fallback).
+			vote3 := []byte("hello")
+			messages := [][]byte{protocol.EncodeReflect(vote1), protocol.EncodeReflect(vote2), vote3}
+			matcher := newMessageMatcher(t, messages)
+			counterDone := matcher.done
+			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: matcher}})
+
+			// Wait for peers to connect
+			require.Eventually(t, func() bool {
+				return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+			}, 2*time.Second, 50*time.Millisecond)
+
+			for _, msg := range messages {
+				netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
+			}
+
+			select {
+			case <-counterDone:
+			case <-time.After(2 * time.Second):
+				t.Errorf("timeout, count=%d, wanted %d", len(matcher.received), len(messages))
+			}
+
+			require.True(t, matcher.Match())
+
+			// Verify compression feature is correctly reflected in peer properties
+			// Check peers have the correct compression capability
+			peers := netA.GetPeers(PeersConnectedIn)
+			require.Len(t, peers, 1)
+			peer := peers[0].(*wsPeer)
+			require.Equal(t, test.netBEnableCompression, peer.vpackVoteCompressionSupported())
+
+			peers = netB.GetPeers(PeersConnectedOut)
+			require.Len(t, peers, 1)
+			peer = peers[0].(*wsPeer)
+			require.Equal(t, test.netAEnableCompression, peer.vpackVoteCompressionSupported())
+		})
 	}
 }

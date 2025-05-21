@@ -19,7 +19,7 @@ package simulation
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -108,7 +108,7 @@ const MaxExtraOpcodeBudget = uint64(20000 * 16)
 // - otherwise, set `LogLimits` field to be nil
 func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 	if allow {
-		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), LogBytesLimit
+		maxLogCalls, maxLogSize := uint64(bounds.MaxLogCalls), LogBytesLimit
 		eo.MaxLogCalls = &maxLogCalls
 		eo.MaxLogSize = &maxLogSize
 	}
