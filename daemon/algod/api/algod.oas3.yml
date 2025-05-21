@@ -1737,8 +1737,7 @@
           }
         },
         "required": [
-          "name",
-          "value"
+          "name"
         ],
         "type": "object"
       },
