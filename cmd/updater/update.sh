@@ -185,10 +185,6 @@ function get_updater_url() {
         UNAME=$(uname -m)
         if [[ "${UNAME}" = "x86_64" ]]; then
             ARCH="amd64"
-        elif [[ "${UNAME}" = "armv6l" ]]; then
-            ARCH="arm"
-        elif [[ "${UNAME}" = "armv7l" ]]; then
-            ARCH="arm"
         elif [[ "${UNAME}" = "aarch64" ]]; then
             ARCH="arm64"
         else
@@ -537,7 +533,7 @@ function install_new_binaries() {
     if [ ! -d ${UPDATESRCDIR}/bin ]; then
         return 0
     else
-        echo "Installing new binary files..."
+        echo "Installing new binary files into ${BINDIR}"
         ROLLBACKBIN=1
         rm -rf ${BINDIR}/new
         mkdir ${BINDIR}/new

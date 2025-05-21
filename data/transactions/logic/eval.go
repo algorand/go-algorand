@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,10 +18,6 @@ package logic
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -32,13 +28,13 @@ import (
 	"math/big"
 	"math/bits"
 	"runtime"
+	"slices"
+	"strconv"
 	"strings"
 
-	"golang.org/x/crypto/sha3"
-
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -46,9 +42,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
-
-// evalMaxVersion is the max version we can interpret and run
-const evalMaxVersion = LogicVersion
 
 // The constants below control opcode evaluation and MAY NOT be changed without
 // gating them by version. Old programs need to retain their old behavior.
@@ -60,7 +53,7 @@ const maxStringSize = 4096
 const maxByteMathSize = 64
 
 // maxLogSize is the limit of total log size from n log calls in a program
-const maxLogSize = 1024
+const maxLogSize = bounds.MaxEvalDeltaTotalLogSize
 
 // maxLogCalls is the limit of total log calls during a program execution
 const maxLogCalls = 32
@@ -69,10 +62,15 @@ const maxLogCalls = 32
 // To be clear, 0 would prevent inner appls, 1 would mean inner app calls cannot
 // make inner appls. So the total app depth can be 1 higher than this number, if
 // you count the top-level app call.
-const maxAppCallDepth = 8
+var maxAppCallDepth = 8
 
 // maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
+
+// maxTxGroupSize is the same as bounds.MaxTxGroupSize, but is a constant so
+// that we can declare an array of this size. A unit test confirms that they
+// match.
+const maxTxGroupSize = 16
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -82,11 +80,18 @@ type stackValue struct {
 	Bytes []byte
 }
 
-func (sv stackValue) argType() StackType {
+func (sv stackValue) avmType() avmType {
 	if sv.Bytes != nil {
-		return StackBytes
+		return avmBytes
 	}
-	return StackUint64
+	return avmUint64
+}
+
+func (sv stackValue) stackType() StackType {
+	if sv.Bytes != nil {
+		return NewStackType(sv.avmType(), static(uint64(len(sv.Bytes))))
+	}
+	return NewStackType(sv.avmType(), static(sv.Uint))
 }
 
 func (sv stackValue) typeName() string {
@@ -101,6 +106,17 @@ func (sv stackValue) String() string {
 		return hex.EncodeToString(sv.Bytes)
 	}
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
+}
+
+func (sv stackValue) asAny() any {
+	if sv.Bytes != nil {
+		return sv.Bytes
+	}
+	return sv.Uint
+}
+
+func (sv stackValue) isEmpty() bool {
+	return sv.Bytes == nil && sv.Uint == 0
 }
 
 func (sv stackValue) address() (addr basics.Address, err error) {
@@ -153,8 +169,9 @@ func (sv stackValue) string(limit int) (string, error) {
 	return string(sv.Bytes), nil
 }
 
-func (sv stackValue) toTealValue() (tv basics.TealValue) {
-	if sv.argType() == StackBytes {
+// ToTealValue converts a stack value instance into a basics.TealValue instance
+func (sv stackValue) ToTealValue() basics.TealValue {
+	if sv.avmType() == avmBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
 	}
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
@@ -172,13 +189,13 @@ func stackValueFromTealValue(tv basics.TealValue) (sv stackValue, err error) {
 	return
 }
 
-// ComputeMinAvmVersion calculates the minimum safe AVM version that may be
+// computeMinAvmVersion calculates the minimum safe AVM version that may be
 // used by a transaction in this group. It is important to prevent
 // newly-introduced transaction fields from breaking assumptions made by older
 // versions of the AVM. If one of the transactions in a group will execute a TEAL
 // program whose version predates a given field, that field must not be set
 // anywhere in the transaction group, or the group will be rejected.
-func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
+func computeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 	var minVersion uint64
 	for _, txn := range group {
 		if !txn.Txn.RekeyTo.IsZero() {
@@ -199,17 +216,29 @@ func ComputeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 // only exposes things that consensus has already agreed upon, so it is
 // "stateless" for signature purposes.
 type LedgerForSignature interface {
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	GenesisHash() crypto.Digest
 }
 
-// NoHeaderLedger is intended for debugging situations in which it is reasonable
-// to preclude the use of `block` and `txn LastValidTime`
+// NoHeaderLedger is intended for debugging TEAL in isolation(no real ledger) in
+// which it is reasonable to preclude the use of `block`, `txn
+// LastValidTime`. Also `global GenesisHash` is just a static value.
 type NoHeaderLedger struct {
 }
 
-// BlockHdrCached always errors
-func (NoHeaderLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
+// BlockHdr always errors
+func (NoHeaderLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, fmt.Errorf("no block header access")
+}
+
+// GenesisHash returns a fixed value
+func (NoHeaderLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{
+		0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+		0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+		0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+		0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+	}
 }
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
@@ -218,7 +247,11 @@ type LedgerForLogic interface {
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	PrevTimestamp() int64
-	BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error)
+
+	// These are simplifications of the underlying Ledger methods that take a
+	// round argument. They implicitly use agreement's BalanceRound (320 back).
+	AgreementData(addr basics.Address) (basics.OnlineAccountData, error)
+	OnlineStake() (basics.MicroAlgos, error)
 
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
@@ -242,40 +275,55 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// resources contains a catalog of available resources. It's used to track the
-// apps, assets, and boxes that are available to a transaction, outside the
-// direct foreign array mechanism.
-type resources struct {
-	asas []basics.AssetIndex
-	apps []basics.AppIndex
-
-	// boxes are all of the top-level box refs from the txgroup. Most are added
-	// during NewEvalParams(). refs using 0 on an appl create are resolved and
-	// added when the appl executes. The boolean value indicates the "dirtiness"
-	// of the box - has it been modified in this txngroup? If yes, the size of
-	// the box counts against the group writeBudget. So delete is NOT a dirtying
-	// operation.
-	boxes map[boxRef]bool
-
-	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
-	dirtyBytes uint64
+// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
+type BoxRef struct {
+	App  basics.AppIndex
+	Name string
 }
 
-// boxRef is the "hydrated" form of a BoxRef - it has the actual app id, not an index
-type boxRef struct {
-	app  basics.AppIndex
-	name string
+// UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
+// This should only be used during simulation or debugging.
+type UnnamedResourcePolicy interface {
+	AvailableAccount(addr basics.Address) bool
+	AvailableAsset(asset basics.AssetIndex) bool
+	AvailableApp(app basics.AppIndex) bool
+	AllowsHolding(addr basics.Address, asset basics.AssetIndex) bool
+	AllowsLocal(addr basics.Address, app basics.AppIndex) bool
+	AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool
+}
+
+// EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
+type EvalConstants struct {
+	// MaxLogSize is the limit of total log size from n log calls in a program
+	MaxLogSize uint64
+
+	// MaxLogCalls is the limit of total log calls during a program execution
+	MaxLogCalls uint64
+
+	// UnnamedResources, if provided, allows resources to be used without being named according to
+	// this policy.
+	UnnamedResources UnnamedResourcePolicy
+}
+
+// RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
+func RuntimeEvalConstants() EvalConstants {
+	return EvalConstants{
+		MaxLogSize:  uint64(maxLogSize),
+		MaxLogCalls: uint64(maxLogCalls),
+	}
 }
 
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
+	runMode RunMode
+
 	Proto *config.ConsensusParams
 
 	Trace *strings.Builder
 
 	TxnGroup []transactions.SignedTxnWithAD
 
-	pastScratch []*scratchSpace
+	pastScratch [maxTxGroupSize]*scratchSpace
 
 	logger logging.Logger
 
@@ -285,10 +333,9 @@ type EvalParams struct {
 	// optional tracer
 	Tracer EvalTracer
 
-	// MinAvmVersion is the minimum allowed AVM version of this program.
-	// The program must reject if its version is less than this version. If
-	// MinAvmVersion is nil, we will compute it ourselves
-	MinAvmVersion *uint64
+	// minAvmVersion is the minimum allowed AVM version of a program to be
+	// evaluated in TxnGroup.
+	minAvmVersion uint64
 
 	// Amount "overpaid" by the transactions of the group.  Often 0.  When
 	// positive, it can be spent by inner transactions.  Shared across a group's
@@ -300,6 +347,9 @@ type EvalParams struct {
 
 	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)
 	PooledApplicationBudget *int
+
+	// Total pool of logicsig budget in a group transaction (nil before lsig pooling enabled)
+	PooledLogicSigBudget *int
 
 	// Total allowable inner txns in a group transaction (nil before inner pooling enabled)
 	pooledAllowedInners *int
@@ -318,6 +368,13 @@ type EvalParams struct {
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
 
+	// SurplusReadBudget is the number of bytes from the IO budget that were not used for reading
+	// in boxes before evaluation began. In other words, the txn group could have read in
+	// SurplusReadBudget more box bytes, but did not.
+	SurplusReadBudget uint64
+
+	EvalConstants
+
 	// Caching these here means the hashes can be shared across the TxnGroup
 	// (and inners, because the cache is shared with the inner EvalParams)
 	appAddrCache map[basics.AppIndex]basics.Address
@@ -331,6 +388,27 @@ type EvalParams struct {
 	caller *EvalContext
 }
 
+// GetCaller returns the calling EvalContext if this is an inner transaction evaluation. Otherwise,
+// this returns nil.
+func (ep *EvalParams) GetCaller() *EvalContext {
+	return ep.caller
+}
+
+// GetIOBudget returns the current IO budget for the group.
+func (ep *EvalParams) GetIOBudget() uint64 {
+	return ep.ioBudget
+}
+
+// SetIOBudget sets the IO budget for the group.
+func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
+	ep.ioBudget = ioBudget
+}
+
+// BoxDirtyBytes returns the number of bytes that have been written to boxes
+func (ep *EvalParams) BoxDirtyBytes() uint64 {
+	return ep.available.dirtyBytes
+}
+
 func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.SignedTxnWithAD {
 	copy := make([]transactions.SignedTxnWithAD, len(txgroup))
 	for i := range txgroup {
@@ -340,74 +418,90 @@ func copyWithClearAD(txgroup []transactions.SignedTxnWithAD) []transactions.Sign
 	return copy
 }
 
-// NewEvalParams creates an EvalParams to use while evaluating a top-level txgroup
-func NewEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
+// NewSigEvalParams creates an EvalParams to be used while evaluating a group's logicsigs
+func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusParams, ls LedgerForSignature) *EvalParams {
+	lsigs := 0
+	for _, tx := range txgroup {
+		if !tx.Lsig.Blank() {
+			lsigs++
+		}
+	}
+
+	var pooledLogicBudget *int
+	if lsigs > 0 { // don't allocate if no lsigs
+		if proto.EnableLogicSigCostPooling {
+			pooledLogicBudget = new(int)
+			*pooledLogicBudget = len(txgroup) * int(proto.LogicSigMaxCost)
+		}
+	}
+
+	withADs := transactions.WrapSignedTxnsWithAD(txgroup)
+	return &EvalParams{
+		runMode:              ModeSig,
+		TxnGroup:             withADs,
+		Proto:                proto,
+		minAvmVersion:        computeMinAvmVersion(withADs),
+		SigLedger:            ls,
+		PooledLogicSigBudget: pooledLogicBudget,
+	}
+}
+
+// NewAppEvalParams creates an EvalParams to use while evaluating a top-level txgroup.
+func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
 	apps := 0
-	var allBoxes map[boxRef]bool
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
 			apps++
-			if allBoxes == nil && len(tx.Txn.Boxes) > 0 {
-				allBoxes = make(map[boxRef]bool)
-			}
-			for _, br := range tx.Txn.Boxes {
-				var app basics.AppIndex
-				if br.Index == 0 {
-					// "current app": Ignore if this is a create, else use ApplicationID
-					if tx.Txn.ApplicationID == 0 {
-						// When the create actually happens, and we learn the appID, we'll add it.
-						continue
-					}
-					app = tx.Txn.ApplicationID
-				} else {
-					// Bounds check will already have been done by
-					// WellFormed. For testing purposes, it's better to panic
-					// now than after returning a nil.
-					app = tx.Txn.ForeignApps[br.Index-1] // shift for the 0=this convention
-				}
-				allBoxes[boxRef{app, string(br.Name)}] = false
-			}
 		}
 	}
-
-	// Make a simpler EvalParams that is good enough to evaluate LogicSigs.
-	if apps == 0 {
-		return &EvalParams{
-			TxnGroup: txgroup,
-			Proto:    proto,
-			Specials: specials,
-		}
-	}
-
-	minAvmVersion := ComputeMinAvmVersion(txgroup)
 
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
+	var credit *uint64
 
-	credit := feeCredit(txgroup, proto.MinTxnFee)
+	if apps > 0 { // none of these allocations needed if no apps
+		credit = new(uint64)
+		*credit = feeCredit(txgroup, proto.MinTxnFee)
 
-	if proto.EnableAppCostPooling && apps > 0 {
-		pooledApplicationBudget = new(int)
-		*pooledApplicationBudget = apps * proto.MaxAppProgramCost
+		if proto.EnableAppCostPooling {
+			pooledApplicationBudget = new(int)
+			*pooledApplicationBudget = apps * proto.MaxAppProgramCost
+		}
+
+		if proto.EnableInnerTransactionPooling {
+			pooledAllowedInners = new(int)
+			*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
+		}
 	}
 
-	if proto.EnableInnerTransactionPooling && apps > 0 {
-		pooledAllowedInners = new(int)
-		*pooledAllowedInners = proto.MaxTxGroupSize * proto.MaxInnerTransactions
-	}
-
-	return &EvalParams{
+	ep := &EvalParams{
+		runMode:                 ModeApp,
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
 		Specials:                specials,
-		pastScratch:             make([]*scratchSpace, len(txgroup)),
-		MinAvmVersion:           &minAvmVersion,
-		FeeCredit:               &credit,
+		minAvmVersion:           computeMinAvmVersion(txgroup),
+		FeeCredit:               credit,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
-		available:               &resources{boxes: allBoxes},
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
+		EvalConstants:           RuntimeEvalConstants(),
 	}
+	return ep
+}
+
+func (ep *EvalParams) computeAvailability() *resources {
+	available := &resources{
+		sharedAccounts: make(map[basics.Address]struct{}),
+		sharedAsas:     make(map[basics.AssetIndex]struct{}),
+		sharedApps:     make(map[basics.AppIndex]struct{}),
+		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
+		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
+		boxes:          make(map[BoxRef]bool),
+	}
+	for i := range ep.TxnGroup {
+		available.fill(&ep.TxnGroup[i].Txn, ep)
+	}
+	return available
 }
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
@@ -429,12 +523,12 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minAvmVersion := ComputeMinAvmVersion(txg)
+	minAvmVersion := computeMinAvmVersion(txg)
 	// Can't happen currently, since earliest inner callable version is higher
 	// than any minimum imposed otherwise.  But is correct to inherit a stronger
 	// restriction from above, in case of future restriction.
-	if minAvmVersion < *caller.MinAvmVersion {
-		minAvmVersion = *caller.MinAvmVersion
+	if minAvmVersion < caller.minAvmVersion {
+		minAvmVersion = caller.minAvmVersion
 	}
 
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
@@ -448,15 +542,15 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 	}
 
 	ep := &EvalParams{
+		runMode:                 ModeApp,
 		Proto:                   caller.Proto,
 		Trace:                   caller.Trace,
 		TxnGroup:                txg,
-		pastScratch:             make([]*scratchSpace, len(txg)),
 		logger:                  caller.logger,
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
 		Tracer:                  caller.Tracer,
-		MinAvmVersion:           &minAvmVersion,
+		minAvmVersion:           minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
@@ -465,6 +559,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		ioBudget:                caller.ioBudget,
 		readBudgetChecked:       true, // don't check for inners
 		appAddrCache:            caller.appAddrCache,
+		EvalConstants:           caller.EvalConstants,
 		// read comment in EvalParams declaration about txid caches
 		caller: caller,
 	}
@@ -518,17 +613,29 @@ func (ep *EvalParams) log() logging.Logger {
 // package. For example, after a acfg transaction is processed, the AD created
 // by the acfg is added to the EvalParams this way.
 func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
-	if ep.available == nil {
-		// This is a simplified ep. It won't be used for app evaluation, and
-		// shares the TxnGroup memory with the caller.  Don't touch anything!
-		return
+	if ep.runMode == ModeSig {
+		// We should not be touching a signature mode EvalParams as it shares
+		// memory with its caller.  LogicSigs are supposed to be stateless!
+		panic("RecordAD called in signature mode")
 	}
 	ep.TxnGroup[gi].ApplyData = ad
 	if aid := ad.ConfigAsset; aid != 0 {
-		ep.available.asas = append(ep.available.asas, aid)
+		if ep.available == nil { // here, and below, we may need to make `ep.available`
+			ep.available = ep.computeAvailability()
+		}
+		if ep.available.createdAsas == nil {
+			ep.available.createdAsas = make(map[basics.AssetIndex]struct{})
+		}
+		ep.available.createdAsas[aid] = struct{}{}
 	}
 	if aid := ad.ApplicationID; aid != 0 {
-		ep.available.apps = append(ep.available.apps, aid)
+		if ep.available == nil {
+			ep.available = ep.computeAvailability()
+		}
+		if ep.available.createdApps == nil {
+			ep.available.createdApps = make(map[basics.AppIndex]struct{})
+		}
+		ep.available.createdApps[aid] = struct{}{}
 	}
 }
 
@@ -549,8 +656,8 @@ type scratchSpace [256]stackValue
 type EvalContext struct {
 	*EvalParams
 
-	// determines eval mode: runModeSignature or runModeApplication
-	runModeFlags RunMode
+	// determines eval mode: ModeSig or ModeApp
+	runMode RunMode
 
 	// the index of the transaction being evaluated
 	groupIndex int
@@ -566,7 +673,7 @@ type EvalContext struct {
 	// keeping the running changes, the debugger can be changed to display them
 	// as the app runs.
 
-	stack       []stackValue
+	Stack       []stackValue
 	callstack   []frame
 	fromCallsub bool
 
@@ -577,7 +684,7 @@ type EvalContext struct {
 	intc    []uint64
 	bytec   [][]byte
 	version uint64
-	scratch scratchSpace
+	Scratch scratchSpace
 
 	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
 	cost    int                            // cost incurred so far
@@ -596,27 +703,244 @@ type EvalContext struct {
 	programHashCached crypto.Digest
 }
 
+// GroupIndex returns the group index of the transaction being evaluated
+func (cx *EvalContext) GroupIndex() int {
+	return cx.groupIndex
+}
+
 // RunMode returns the evaluation context's mode (signature or application)
 func (cx *EvalContext) RunMode() RunMode {
-	return cx.runModeFlags
+	return cx.runMode
+}
+
+// ProgramVersion returns the AVM version of the current program.
+func (cx *EvalContext) ProgramVersion() uint64 {
+	return cx.version
+}
+
+// PC returns the program counter of the current application being evaluated
+func (cx *EvalContext) PC() int { return cx.pc }
+
+// GetOpSpec queries for the OpSpec w.r.t. current program byte.
+func (cx *EvalContext) GetOpSpec() OpSpec { return opsByOpcode[cx.version][cx.program[cx.pc]] }
+
+// GetProgram queries for the current program
+func (cx *EvalContext) GetProgram() []byte { return cx.program }
+
+// avmType describes the type of a value on the operand stack
+// avmTypes are a subset of StackTypes
+type avmType byte
+
+const (
+	// avmNone in an OpSpec shows that the op pops or yields nothing
+	avmNone avmType = iota
+
+	// avmAny in an OpSpec shows that the op pops or yield any type
+	avmAny
+
+	// avmUint64 in an OpSpec shows that the op pops or yields a uint64
+	avmUint64
+
+	// avmBytes in an OpSpec shows that the op pops or yields a []byte
+	avmBytes
+)
+
+func (at avmType) String() string {
+	switch at {
+	case avmNone:
+		return "none"
+	case avmAny:
+		return "any"
+	case avmUint64:
+		return "uint64"
+	case avmBytes:
+		return "[]byte"
+	}
+	return "internal error, unknown type"
+}
+
+var (
+	// StackUint64 is any valid uint64
+	StackUint64 = NewStackType(avmUint64, bound(0, math.MaxUint64))
+	// StackBytes is any valid bytestring
+	StackBytes = NewStackType(avmBytes, bound(0, maxStringSize))
+	// StackAny could be Bytes or Uint64
+	StackAny = StackType{
+		Name:    avmAny.String(),
+		AVMType: avmAny,
+		Bound:   [2]uint64{0, 0},
+	}
+	// StackNone is used when there is no input or output to
+	// an opcode
+	StackNone = StackType{
+		Name:    avmNone.String(),
+		AVMType: avmNone,
+	}
+
+	// StackBoolean constrains the int to 1 or 0, representing True or False
+	StackBoolean = NewStackType(avmUint64, bound(0, 1), "bool")
+	// StackAddress represents an address
+	StackAddress = NewStackType(avmBytes, static(32), "address")
+	// StackBytes32 represents a bytestring that should have exactly 32 bytes
+	StackBytes32 = NewStackType(avmBytes, static(32), "[32]byte")
+	// StackBytes64 represents a bytestring that should have exactly 64 bytes
+	StackBytes64 = NewStackType(avmBytes, static(64), "[64]byte")
+	// StackBytes80 represents a bytestring that should have exactly 80 bytes
+	StackBytes80 = NewStackType(avmBytes, static(80), "[80]byte")
+	// StackBigInt represents a bytestring that should be treated like an int
+	StackBigInt = NewStackType(avmBytes, bound(0, maxByteMathSize), "bigint")
+	// StackMethodSelector represents a bytestring that should be treated like a method selector
+	StackMethodSelector = NewStackType(avmBytes, static(4), "method")
+	// StackStateKey represents a bytestring that can be used as a key to some storage (global/local/box)
+	StackStateKey = NewStackType(avmBytes, bound(0, 64), "stateKey")
+	// StackBoxName represents a bytestring that can be used as a key to a box
+	StackBoxName = NewStackType(avmBytes, bound(1, 64), "boxName")
+
+	// StackZeroUint64 is a StackUint64 with a minimum value of 0 and a maximum value of 0
+	StackZeroUint64 = NewStackType(avmUint64, bound(0, 0), "0")
+	// StackZeroBytes is a StackBytes with a minimum length of 0 and a maximum length of 0
+	StackZeroBytes = NewStackType(avmUint64, bound(0, 0), "''")
+
+	// AllStackTypes is a map of all the stack types we recognize
+	// so that we can iterate over them in doc prep
+	// and use them for opcode proto shorthand
+	AllStackTypes = map[byte]StackType{
+		'a': StackAny,
+		'b': StackBytes,
+		'i': StackUint64,
+		'x': StackNone,
+		'A': StackAddress,
+		'I': StackBigInt,
+		'T': StackBoolean,
+		'M': StackMethodSelector,
+		'K': StackStateKey,
+		'N': StackBoxName,
+	}
+)
+
+func bound(min, max uint64) [2]uint64 {
+	return [2]uint64{min, max}
+}
+
+func static(size uint64) [2]uint64 {
+	return bound(size, size)
+}
+
+func union(a, b [2]uint64) [2]uint64 {
+	u := [2]uint64{a[0], a[1]}
+	if b[0] < u[0] {
+		u[0] = b[0]
+	}
+
+	if b[1] > u[1] {
+		u[1] = b[1]
+	}
+	return u
 }
 
 // StackType describes the type of a value on the operand stack
-type StackType byte
+type StackType struct {
+	Name    string // alias (address, boolean, ...) or derived name [5]byte
+	AVMType avmType
+	Bound   [2]uint64 // represents max/min value for uint64 or max/min length for byte[]
+}
 
-const (
-	// StackNone in an OpSpec shows that the op pops or yields nothing
-	StackNone StackType = iota
+// NewStackType Initializes a new StackType with fields passed
+func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
+	name := at.String()
 
-	// StackAny in an OpSpec shows that the op pops or yield any type
-	StackAny
+	// It's static, set the name to show
+	// the static value
+	if bounds[0] == bounds[1] {
+		switch at {
+		case avmBytes:
+			name = fmt.Sprintf("[%d]byte", bounds[0])
+		case avmUint64:
+			name = fmt.Sprintf("%d", bounds[0])
+		}
+	}
 
-	// StackUint64 in an OpSpec shows that the op pops or yields a uint64
-	StackUint64
+	if len(stname) > 0 {
+		name = stname[0]
+	}
 
-	// StackBytes in an OpSpec shows that the op pops or yields a []byte
-	StackBytes
-)
+	return StackType{Name: name, AVMType: at, Bound: bounds}
+}
+
+func (st StackType) union(b StackType) StackType {
+	// TODO: Can we ever receive one or the other
+	// as None? should that be a panic?
+	if st.AVMType != b.AVMType {
+		return StackAny
+	}
+
+	// Same type now, so we can just take the union of the bounds
+	return NewStackType(st.AVMType, union(st.Bound, b.Bound))
+}
+
+func (st StackType) narrowed(bounds [2]uint64) StackType {
+	return NewStackType(st.AVMType, bounds)
+}
+
+func (st StackType) widened() StackType {
+	// Take only the avm type
+	switch st.AVMType {
+	case avmBytes:
+		return StackBytes
+	case avmUint64:
+		return StackUint64
+	case avmAny:
+		return StackAny
+	default:
+		panic(fmt.Sprintf("What are you tyring to widen?: %+v", st))
+	}
+}
+
+func (st StackType) constInt() (uint64, bool) {
+	if st.AVMType != avmUint64 || st.Bound[0] != st.Bound[1] {
+		return 0, false
+	}
+	return st.Bound[0], true
+}
+
+// overlaps checks if there is enough overlap
+// between the given types that the receiver can
+// possible fit in the expected type
+func (st StackType) overlaps(expected StackType) bool {
+	if st.AVMType == avmNone || expected.AVMType == avmNone {
+		return false
+	}
+
+	if st.AVMType == avmAny || expected.AVMType == avmAny {
+		return true
+	}
+
+	// By now, both are either uint or bytes
+	// and must match
+	if st.AVMType != expected.AVMType {
+		return false
+	}
+
+	// Same type now
+	// Check if our constraints will satisfy the other type
+	smin, smax := st.Bound[0], st.Bound[1]
+	emin, emax := expected.Bound[0], expected.Bound[1]
+
+	return smin <= emax && smax >= emin
+}
+
+func (st StackType) String() string {
+	return st.Name
+}
+
+// Typed tells whether the StackType is a specific concrete type.
+func (st StackType) Typed() bool {
+	switch st.AVMType {
+	case avmUint64, avmBytes:
+		return true
+	}
+	return false
+}
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
@@ -625,105 +949,214 @@ func parseStackTypes(spec string) StackTypes {
 	if spec == "" {
 		return nil
 	}
-	types := make(StackTypes, len(spec))
-	for i, letter := range spec {
-		switch letter {
-		case 'a':
-			types[i] = StackAny
-		case 'b':
-			types[i] = StackBytes
-		case 'i':
-			types[i] = StackUint64
-		case 'x':
-			types[i] = StackNone
-		default:
+	types := make(StackTypes, 0, len(spec))
+	for i := 0; i < len(spec); i++ {
+		letter := spec[i]
+		if letter == '{' {
+			if types[len(types)-1] != StackBytes {
+				panic("{ after non-bytes " + spec)
+			}
+			end := strings.IndexByte(spec[i:], '}')
+			if end == -1 {
+				panic("No } after b{ " + spec)
+			}
+			size, err := strconv.Atoi(spec[i+1 : i+end])
+			if err != nil {
+				panic("b{} does not contain a number " + spec)
+			}
+			// replace the generic type with the constrained type
+			types[len(types)-1] = NewStackType(avmBytes, static(uint64(size)), fmt.Sprintf("[%d]byte", size))
+			i += end
+			continue
+		}
+		st, ok := AllStackTypes[letter]
+		if !ok {
 			panic(spec)
 		}
+		types = append(types, st)
 	}
 	return types
 }
 
-func (st StackType) String() string {
-	switch st {
-	case StackNone:
-		return "None"
-	case StackAny:
-		return "any"
-	case StackUint64:
-		return "uint64"
-	case StackBytes:
-		return "[]byte"
+func filterNoneTypes(sts StackTypes) StackTypes {
+	var filteredSts = make(StackTypes, 0, len(sts))
+	for i := range sts {
+		if sts[i].AVMType != avmNone {
+			filteredSts = append(filteredSts, sts[i])
+		}
 	}
-	return "internal error, unknown type"
+	return filteredSts
 }
 
-// Typed tells whether the StackType is a specific concrete type.
-func (st StackType) Typed() bool {
-	switch st {
-	case StackUint64, StackBytes:
-		return true
-	}
-	return false
-}
-
-// PanicError wraps a recover() catching a panic()
-type PanicError struct {
+// panicError wraps a recover() catching a panic()
+type panicError struct {
 	PanicValue interface{}
 	StackTrace string
 }
 
-func (pe PanicError) Error() string {
+func (pe panicError) Error() string {
 	return fmt.Sprintf("panic in TEAL Eval: %v\n%s", pe.PanicValue, pe.StackTrace)
 }
 
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
+var errLogicSigArgTooLarge = errors.New("LogicSig argument too large")
 
-// ClearStateBudgetError allows evaluation to signal that the caller should
-// reject the transaction.  Normally, an error in evaluation would not cause a
-// ClearState txn to fail. However, callers fail a txn for ClearStateBudgetError
-// because the transaction has not provided enough budget to let ClearState do
-// its job.
-type ClearStateBudgetError struct {
-	offered int
+// EvalError indicates AVM evaluation failure
+type EvalError struct {
+	Err      error
+	details  string
+	logicsig bool
 }
 
-func (e ClearStateBudgetError) Error() string {
-	return fmt.Sprintf("Attempted ClearState execution with low OpcodeBudget %d", e.offered)
+// Error satisfies builtin interface `error`
+func (err EvalError) Error() string {
+	var msg string
+	if err.logicsig {
+		msg = fmt.Sprintf("rejected by logic err=%v", err.Err)
+	} else {
+		msg = fmt.Sprintf("logic eval error: %v", err.Err)
+	}
+	if err.details == "" {
+		return msg
+	}
+	return msg + ". Details: " + err.details
 }
 
-// EvalContract executes stateful TEAL program as the gi'th transaction in params
+func (err EvalError) Unwrap() error {
+	return err.Err
+}
+
+func (cx *EvalContext) evalError(err error) error {
+	var pc int
+	var details string
+	if cx.Tracer != nil && cx.Tracer.DetailedEvalErrors() {
+		var det string
+		pc, det = cx.pcDetails()
+		details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+	} else {
+		pc = cx.pc
+		details = fmt.Sprintf("pc=%d", pc)
+	}
+
+	err = basics.Annotate(err,
+		"pc", pc,
+		"group-index", cx.groupIndex,
+		"eval-states", cx.evalStates())
+	if cx.runMode == ModeApp {
+		details = fmt.Sprintf("app=%d, %s", cx.appID, details)
+		err = basics.Annotate(err, "app-index", cx.appID)
+	}
+
+	return EvalError{err, details, cx.runMode == ModeSig}
+}
+
+type evalState struct {
+	Scratch []any    `json:"scratch,omitempty"`
+	Stack   []any    `json:"stack,omitempty"`
+	Logs    [][]byte `json:"logs,omitempty"`
+}
+
+func (cx *EvalContext) evalStates() []evalState {
+	states := make([]evalState, cx.groupIndex+1)
+	for i := 0; i <= cx.groupIndex; i++ {
+		var scratch []stackValue
+		if cx.pastScratch[i] != nil {
+			scratch = (*cx.pastScratch[i])[:]
+		}
+		lastNonZero := -1
+		scratchAsAny := make([]any, len(scratch))
+		for s, sv := range scratch {
+			if !sv.isEmpty() {
+				lastNonZero = s
+			}
+			scratchAsAny[s] = sv.asAny()
+		}
+		if lastNonZero == -1 {
+			scratchAsAny = nil
+		} else {
+			scratchAsAny = scratchAsAny[:lastNonZero+1]
+		}
+
+		// Only the current program's stack is still available. So perhaps it
+		// should be located outside of the evalState, with the PC.
+		var stack []any
+		if cx.groupIndex == i {
+			stack = convertSlice(cx.Stack, func(sv stackValue) any {
+				return sv.asAny()
+			})
+		}
+
+		states[i] = evalState{
+			Scratch: scratchAsAny,
+			Stack:   stack,
+			Logs:    convertSlice(cx.TxnGroup[i].EvalDelta.Logs, func(s string) []byte { return []byte(s) }),
+		}
+	}
+	return states
+}
+
+func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
+	if input == nil {
+		return nil
+	}
+	output := make([]Y, len(input))
+	for i := range input {
+		output[i] = fn(input[i])
+	}
+	return output
+}
+
+// EvalContract executes stateful program as the gi'th transaction in params
 func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
 	if params.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
 	}
 	if params.SigLedger == nil {
-		params.SigLedger = params.Ledger
+		return false, nil, errors.New("no sig ledger in contract eval")
 	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
 	}
-	cx := EvalContext{
-		EvalParams:   params,
-		runModeFlags: ModeApp,
-		groupIndex:   gi,
-		txn:          &params.TxnGroup[gi],
-		appID:        aid,
+	if params.runMode != ModeApp {
+		return false, nil, fmt.Errorf("attempt to evaluate a contract with %s mode EvalParams", params.runMode)
 	}
+	cx := EvalContext{
+		EvalParams: params,
+		runMode:    ModeApp,
+		groupIndex: gi,
+		txn:        &params.TxnGroup[gi],
+		appID:      aid,
+	}
+	// Save scratch for `gload`. We used to copy, but cx.scratch is quite large,
+	// about 8k, and caused measurable CPU and memory demands.  Of course, these
+	// should never be changed by later transactions.
+	cx.pastScratch[cx.groupIndex] = &cx.Scratch
 
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
-			return false, nil, ClearStateBudgetError{*cx.PooledApplicationBudget}
+			return false, nil, fmt.Errorf("Attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
 		}
 	}
 
-	// If this is a creation, make any "0 index" box refs available now that we
-	// have an appID.
+	if cx.EvalParams.available == nil {
+		cx.EvalParams.available = cx.EvalParams.computeAvailability()
+	}
+
+	// If this is a creation...
 	if cx.txn.Txn.ApplicationID == 0 {
+		// make any "0 index" box refs available now that we have an appID.
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				cx.EvalParams.available.boxes[boxRef{cx.appID, string(br.Name)}] = false
+				cx.EvalParams.available.boxes[BoxRef{cx.appID, string(br.Name)}] = false
 			}
+		}
+		// and add the appID to `createdApps`
+		if cx.EvalParams.Proto.LogicSigVersion >= sharedResourcesVersion {
+			if cx.EvalParams.available.createdApps == nil {
+				cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
+			}
+			cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
 		}
 	}
 
@@ -737,12 +1170,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 		used := uint64(0)
 		for br := range cx.available.boxes {
-			if len(br.name) == 0 {
+			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
 				// may have been used to add I/O budget.
 				continue
 			}
-			box, ok, err := cx.Ledger.GetBox(br.app, br.name)
+			box, ok, err := cx.Ledger.GetBox(br.App, br.Name)
 			if err != nil {
 				return false, nil, err
 			}
@@ -754,25 +1187,34 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 			used = basics.AddSaturate(used, size)
 			if used > cx.ioBudget {
-				return false, nil, fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
+				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
+				if !cx.Proto.EnableBareBudgetError {
+					// We return an EvalError here because we used to do
+					// that. It is wrong, and means that there could be a
+					// ClearState call in an old block that failed on read
+					// quota, but we allowed to execute anyway.  If testnet and
+					// mainnet have no such transactions, we can remove
+					// EnableBareBudgetError and this code.
+					err = EvalError{err, "", false}
+				}
+				return false, nil, err
 			}
 		}
 		cx.readBudgetChecked = true
+		cx.SurplusReadBudget = cx.ioBudget - used
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.txn.Txn.OnCompletion, cx.txn.Txn.ApplicationArgs)
 	}
 	pass, err := eval(program, &cx)
+	if err != nil {
+		err = cx.evalError(err)
+	}
 
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
 	}
-
-	// Save scratch for `gload`. We used to copy, but cx.scratch is quite large,
-	// about 8k, and caused measurable CPU and memory demands.  Of course, these
-	// should never be changed by later transactions.
-	cx.pastScratch[cx.groupIndex] = &cx.scratch
 
 	return pass, &cx, err
 }
@@ -786,24 +1228,37 @@ func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (b
 // EvalSignatureFull evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
 // It returns EvalContext suitable for obtaining additional info about the execution.
-func EvalSignatureFull(gi int, params *EvalParams) (pass bool, pcx *EvalContext, err error) {
+func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 	if params.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in signature eval")
 	}
-	cx := EvalContext{
-		EvalParams:   params,
-		runModeFlags: ModeSig,
-		groupIndex:   gi,
-		txn:          &params.TxnGroup[gi],
+	if params.runMode != ModeSig {
+		return false, nil, fmt.Errorf("attempt to evaluate a signature with %s mode EvalParams", params.runMode)
 	}
-	pass, err = eval(cx.txn.Lsig.Logic, &cx)
+	cx := EvalContext{
+		EvalParams: params,
+		runMode:    ModeSig,
+		groupIndex: gi,
+		txn:        &params.TxnGroup[gi],
+	}
+	// Save scratch. `gload*` opcodes are not currently allowed in ModeSig
+	// (though it seems we could allow them, with access to LogicSig scratch
+	// values). But error returns and potentially debug code might like to
+	// return them.
+	cx.pastScratch[cx.groupIndex] = &cx.Scratch
+	pass, err := eval(cx.txn.Lsig.Logic, &cx)
+
+	if err != nil {
+		err = cx.evalError(err)
+	}
+
 	return pass, &cx, err
 }
 
 // EvalSignature evaluates the logicsig of the ith transaction in params.
 // A program passes successfully if it finishes with one int element on the stack that is non-zero.
-func EvalSignature(gi int, params *EvalParams) (pass bool, err error) {
-	pass, _, err = EvalSignatureFull(gi, params)
+func EvalSignature(gi int, params *EvalParams) (bool, error) {
+	pass, _, err := EvalSignatureFull(gi, params)
 	return pass, err
 }
 
@@ -819,39 +1274,55 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 			if cx.Trace != nil {
 				errstr += cx.Trace.String()
 			}
-			err = PanicError{x, errstr}
+			err = panicError{x, errstr}
 			cx.EvalParams.log().Errorf("recovered panic in Eval: %v", err)
 		}
 	}()
 
-	// Avoid returning for any reason until after cx.debugState is setup. That
-	// require cx to be minimally setup, too.
-
-	version, vlen, verr := versionCheck(program, cx.EvalParams)
-	// defer verr check until after cx and debugState is setup
-
-	cx.version = version
-	cx.pc = vlen
 	// 16 is chosen to avoid growth for small programs, and so that repeated
 	// doublings lead to a number just a bit above 1000, the max stack height.
-	cx.stack = make([]stackValue, 0, 16)
-	cx.program = program
+	cx.Stack = make([]stackValue, 0, 16)
 	cx.txn.EvalDelta.GlobalDelta = basics.StateDelta{}
 	cx.txn.EvalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
 
+	// We get the error here, but defer reporting so that the Tracer can be
+	// called with an basically initialized cx.
+	verr := cx.begin(program)
+
 	if cx.Tracer != nil {
 		cx.Tracer.BeforeProgram(cx)
+
 		defer func() {
+			x := recover()
+			tracerErr := err
+			if x != nil {
+				// A panic error occurred during the eval loop. Report it now.
+				tracerErr = fmt.Errorf("panic in TEAL Eval: %v", x)
+				cx.Tracer.AfterOpcode(cx, tracerErr)
+			}
+
 			// Ensure we update the tracer before exiting
-			cx.Tracer.AfterProgram(cx, err)
+			cx.Tracer.AfterProgram(cx, pass, tracerErr)
+
+			if x != nil {
+				// Panic again to trigger higher-level recovery and error reporting
+				panic(x)
+			}
 		}()
 	}
 
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		return false, errLogicSigNotSupported
 	}
-	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
-		return false, errTooManyArgs
+	if cx.txn.Lsig.Args != nil {
+		if len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
+			return false, errTooManyArgs
+		}
+		for _, arg := range cx.txn.Lsig.Args {
+			if len(arg) > transactions.MaxLogicSigArgSize {
+				return false, errLogicSigArgTooLarge
+			}
+		}
 	}
 	if verr != nil {
 		return false, verr
@@ -875,20 +1346,20 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 
 		return false, err
 	}
-	if len(cx.stack) != 1 {
+	if len(cx.Stack) != 1 {
 		if cx.Trace != nil {
 			fmt.Fprintf(cx.Trace, "end stack:\n")
-			for i, sv := range cx.stack {
+			for i, sv := range cx.Stack {
 				fmt.Fprintf(cx.Trace, "[%d] %s\n", i, sv)
 			}
 		}
-		return false, fmt.Errorf("stack len is %d instead of 1", len(cx.stack))
+		return false, fmt.Errorf("stack len is %d instead of 1", len(cx.Stack))
 	}
-	if cx.stack[0].Bytes != nil {
+	if cx.Stack[0].Bytes != nil {
 		return false, errors.New("stack finished with bytes not int")
 	}
 
-	return cx.stack[0].Uint != 0, nil
+	return cx.Stack[0].Uint != 0, nil
 }
 
 // CheckContract should be faster than EvalContract.  It can perform
@@ -915,7 +1386,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 			if params.Trace != nil {
 				errstr += params.Trace.String()
 			}
-			err = PanicError{x, errstr}
+			err = panicError{x, errstr}
 			params.log().Errorf("recovered panic in Check: %s", err)
 		}
 	}()
@@ -923,19 +1394,15 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 		return errLogicSigNotSupported
 	}
 
-	version, vlen, err := versionCheck(program, params)
-	if err != nil {
-		return err
-	}
-
 	var cx EvalContext
-	cx.version = version
-	cx.pc = vlen
 	cx.EvalParams = params
-	cx.runModeFlags = mode
-	cx.program = program
+	cx.runMode = mode
 	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
+
+	if err := cx.begin(program); err != nil {
+		return err
+	}
 
 	maxCost := cx.remainingBudget()
 	staticCost := 0
@@ -946,7 +1413,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 			return fmt.Errorf("pc=%3d %w", cx.pc, err)
 		}
 		staticCost += stepCost
-		if version < backBranchEnabledVersion && staticCost > maxCost {
+		if cx.version < backBranchEnabledVersion && staticCost > maxCost {
 			return fmt.Errorf("pc=%3d static cost budget of %d exceeded", cx.pc, maxCost)
 		}
 		if cx.pc <= prevpc {
@@ -960,30 +1427,32 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	return nil
 }
 
-func versionCheck(program []byte, params *EvalParams) (uint64, int, error) {
+func (cx *EvalContext) begin(program []byte) error {
+	cx.program = program
+
 	version, vlen, err := transactions.ProgramVersion(program)
 	if err != nil {
-		return 0, 0, err
+		return err
 	}
-	if version > evalMaxVersion {
-		return 0, 0, fmt.Errorf("program version %d greater than max supported version %d", version, evalMaxVersion)
+	if version > LogicVersion {
+		return fmt.Errorf("program version %d greater than max supported version %d", version, LogicVersion)
 	}
-	if version > params.Proto.LogicSigVersion {
-		return 0, 0, fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+	if version > cx.Proto.LogicSigVersion {
+		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
 	}
 
-	if params.MinAvmVersion == nil {
-		minVersion := ComputeMinAvmVersion(params.TxnGroup)
-		params.MinAvmVersion = &minVersion
+	cx.version = version
+	cx.pc = vlen
+
+	if cx.version < cx.EvalParams.minAvmVersion {
+		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d",
+			cx.minAvmVersion, cx.version)
 	}
-	if version < *params.MinAvmVersion {
-		return 0, 0, fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", *params.MinAvmVersion, version)
-	}
-	return version, vlen, nil
+	return nil
 }
 
-func opCompat(expected, got StackType) bool {
-	if expected == StackAny {
+func opCompat(expected, got avmType) bool {
+	if expected == avmAny {
 		return true
 	}
 	return expected == got
@@ -1012,8 +1481,16 @@ func (cx *EvalContext) Cost() int {
 	return cx.cost
 }
 
+// AppID returns the ID of the currently executing app. For LogicSigs it returns 0.
+func (cx *EvalContext) AppID() basics.AppIndex {
+	return cx.appID
+}
+
 func (cx *EvalContext) remainingBudget() int {
-	if cx.runModeFlags == ModeSig {
+	if cx.runMode == ModeSig {
+		if cx.PooledLogicSigBudget != nil {
+			return *cx.PooledLogicSigBudget
+		}
 		return int(cx.Proto.LogicSigMaxCost) - cx.cost
 	}
 
@@ -1051,18 +1528,18 @@ func (cx *EvalContext) step() error {
 	if spec.op == nil {
 		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 	}
-	if (cx.runModeFlags & spec.Modes) == 0 {
+	if (cx.runMode & spec.Modes) == 0 {
 		return fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
 
 	// check args for stack underflow and types
-	if len(cx.stack) < len(spec.Arg.Types) {
+	if len(cx.Stack) < len(spec.Arg.Types) {
 		return fmt.Errorf("stack underflow in %s", spec.Name)
 	}
-	first := len(cx.stack) - len(spec.Arg.Types)
+	first := len(cx.Stack) - len(spec.Arg.Types)
 	for i, argType := range spec.Arg.Types {
-		if !opCompat(argType, cx.stack[first+i].argType()) {
-			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.stack[first+i].typeName())
+		if !opCompat(argType.AVMType, cx.Stack[first+i].avmType()) {
+			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.Stack[first+i].typeName())
 		}
 	}
 
@@ -1074,50 +1551,49 @@ func (cx *EvalContext) step() error {
 	// It's something like a 5-10% overhead on our simplest instructions to make
 	// the Cost() call without the FullCost.compute() short-circuit, even
 	// though Cost() tries to exit fast. Use BenchmarkUintMath to test changes.
-	opcost := deets.FullCost.compute(cx.stack)
+	opcost := deets.FullCost.compute(cx.Stack)
 	if opcost <= 0 {
-		opcost = deets.Cost(cx.program, cx.pc, cx.stack)
+		opcost = deets.Cost(cx.program, cx.pc, cx.Stack)
 		if opcost <= 0 {
 			return fmt.Errorf("%3d %s returned 0 cost", cx.pc, spec.Name)
 		}
 	}
-	cx.cost += opcost
-	if cx.PooledApplicationBudget != nil {
-		*cx.PooledApplicationBudget -= opcost
-	}
 
-	if cx.remainingBudget() < 0 {
-		// We're not going to execute the instruction, so give the cost back.
-		// This only matters if this is an inner ClearState - the caller should
-		// not be over debited. (Normally, failure causes total txtree failure.)
-		cx.cost -= opcost
-		if cx.PooledApplicationBudget != nil {
-			*cx.PooledApplicationBudget += opcost
-		}
+	if opcost > cx.remainingBudget() {
 		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 			cx.pc, spec.Name, cx.cost)
 	}
 
-	preheight := len(cx.stack)
+	cx.cost += opcost
+	// At most one of these pooled budgets will be non-nil, perhaps we could
+	// collapse to one variable, but there are some complex callers trying to
+	// set up big budgets for debugging runs that would have to be looked at.
+	switch {
+	case cx.PooledApplicationBudget != nil:
+		*cx.PooledApplicationBudget -= opcost
+	case cx.PooledLogicSigBudget != nil:
+		*cx.PooledLogicSigBudget -= opcost
+	}
+	preheight := len(cx.Stack)
 	err := spec.op(cx)
 
 	if err == nil && !spec.trusted {
-		postheight := len(cx.stack)
+		postheight := len(cx.Stack)
 		if postheight-preheight != len(spec.Return.Types)-len(spec.Arg.Types) && !spec.AlwaysExits() {
 			return fmt.Errorf("%s changed stack height improperly %d != %d",
 				spec.Name, postheight-preheight, len(spec.Return.Types)-len(spec.Arg.Types))
 		}
 		first = postheight - len(spec.Return.Types)
 		for i, argType := range spec.Return.Types {
-			stackType := cx.stack[first+i].argType()
-			if !opCompat(argType, stackType) {
+			stackType := cx.Stack[first+i].avmType()
+			if !opCompat(argType.AVMType, stackType) {
 				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
 					break
 				}
-				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.stack[first+i].typeName(), argType)
+				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.Stack[first+i].typeName(), argType)
 			}
-			if stackType == StackBytes && len(cx.stack[first+i].Bytes) > maxStringSize {
-				return fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.stack[first+i].Bytes))
+			if stackType == avmBytes && len(cx.Stack[first+i].Bytes) > maxStringSize {
+				return fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.Stack[first+i].Bytes))
 			}
 		}
 	}
@@ -1148,7 +1624,7 @@ func (cx *EvalContext) step() error {
 			return inner
 		}
 		var stackString string
-		if len(cx.stack) == 0 {
+		if len(cx.Stack) == 0 {
 			stackString = "<empty stack>"
 		} else {
 			num := 1
@@ -1158,11 +1634,11 @@ func (cx *EvalContext) step() error {
 			// check for nil error here, because we might not return
 			// values if we encounter an error in the opcode
 			if err == nil {
-				if len(cx.stack) < num {
-					return fmt.Errorf("stack underflow: expected %d, have %d", num, len(cx.stack))
+				if len(cx.Stack) < num {
+					return fmt.Errorf("stack underflow: expected %d, have %d", num, len(cx.Stack))
 				}
 				for i := 1; i <= num; i++ {
-					stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i])
+					stackString += fmt.Sprintf("(%s) ", cx.Stack[len(cx.Stack)-i])
 				}
 			}
 		}
@@ -1173,7 +1649,7 @@ func (cx *EvalContext) step() error {
 		return err
 	}
 
-	if len(cx.stack) > maxStackDepth {
+	if len(cx.Stack) > maxStackDepth {
 		return errors.New("stack overflow")
 	}
 	if cx.nextpc != 0 {
@@ -1200,7 +1676,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	if spec.op == nil {
 		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
 	}
-	if (cx.runModeFlags & spec.Modes) == 0 {
+	if (cx.runMode & spec.Modes) == 0 {
 		return 0, fmt.Errorf("%s not allowed in current mode", spec.Name)
 	}
 	deets := spec.OpDetails
@@ -1238,11 +1714,11 @@ func (cx *EvalContext) checkStep() (int, error) {
 }
 
 func (cx *EvalContext) ensureStackCap(targetCap int) {
-	if cap(cx.stack) < targetCap {
+	if cap(cx.Stack) < targetCap {
 		// Let's grow all at once, plus a little slack.
-		newStack := make([]stackValue, len(cx.stack), targetCap+4)
-		copy(newStack, cx.stack)
-		cx.stack = newStack
+		newStack := make([]stackValue, len(cx.Stack), targetCap+4)
+		copy(newStack, cx.Stack)
+		cx.Stack = newStack
 	}
 }
 
@@ -1254,98 +1730,59 @@ func opReturn(cx *EvalContext) error {
 	// Achieve the end condition:
 	// Take the last element on the stack and make it the return value (only element on the stack)
 	// Move the pc to the end of the program
-	last := len(cx.stack) - 1
-	cx.stack[0] = cx.stack[last]
-	cx.stack = cx.stack[:1]
+	last := len(cx.Stack) - 1
+	cx.Stack[0] = cx.Stack[last]
+	cx.Stack = cx.Stack[:1]
 	cx.nextpc = len(cx.program)
 	return nil
 }
 
 func opAssert(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	if cx.stack[last].Uint != 0 {
-		cx.stack = cx.stack[:last]
+	last := len(cx.Stack) - 1
+	if cx.Stack[last].Uint != 0 {
+		cx.Stack = cx.Stack[:last]
 		return nil
 	}
 	return fmt.Errorf("assert failed pc=%d", cx.pc)
 }
 
 func opSwap(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	cx.stack[last], cx.stack[prev] = cx.stack[prev], cx.stack[last]
+	cx.Stack[last], cx.Stack[prev] = cx.Stack[prev], cx.Stack[last]
 	return nil
 }
 
 func opSelect(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // condition on top
+	last := len(cx.Stack) - 1 // condition on top
 	prev := last - 1          // true is one down
 	pprev := prev - 1         // false below that
 
-	if cx.stack[last].Uint != 0 {
-		cx.stack[pprev] = cx.stack[prev]
+	if cx.Stack[last].Uint != 0 {
+		cx.Stack[pprev] = cx.Stack[prev]
 	}
-	cx.stack = cx.stack[:prev]
-	return nil
-}
-
-func opSHA256(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	hash := sha256.Sum256(cx.stack[last].Bytes)
-	cx.stack[last].Bytes = hash[:]
-	return nil
-}
-
-// The NIST SHA3-256 is implemented for compatibility with ICON
-func opSHA3_256(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	hash := sha3.Sum256(cx.stack[last].Bytes)
-	cx.stack[last].Bytes = hash[:]
-	return nil
-}
-
-// The Keccak256 variant of SHA-3 is implemented for compatibility with Ethereum
-func opKeccak256(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	hasher := sha3.NewLegacyKeccak256()
-	hasher.Write(cx.stack[last].Bytes)
-	hv := make([]byte, 0, hasher.Size())
-	hv = hasher.Sum(hv)
-	cx.stack[last].Bytes = hv
-	return nil
-}
-
-// This is the hash commonly used in Algorand in crypto/util.go Hash()
-//
-// It is explicitly implemented here in terms of the specific hash for
-// stability and portability in case the rest of Algorand ever moves
-// to a different default hash. For stability of this language, at
-// that time a new opcode should be made with the new hash.
-func opSHA512_256(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	hash := sha512.Sum512_256(cx.stack[last].Bytes)
-	cx.stack[last].Bytes = hash[:]
+	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 
 func opPlus(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	sum, carry := bits.Add64(cx.stack[prev].Uint, cx.stack[last].Uint, 0)
+	sum, carry := bits.Add64(cx.Stack[prev].Uint, cx.Stack[last].Uint, 0)
 	if carry > 0 {
 		return errors.New("+ overflowed")
 	}
-	cx.stack[prev].Uint = sum
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = sum
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opAddw(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	sum, carry := bits.Add64(cx.stack[prev].Uint, cx.stack[last].Uint, 0)
-	cx.stack[prev].Uint = carry
-	cx.stack[last].Uint = sum
+	sum, carry := bits.Add64(cx.Stack[prev].Uint, cx.Stack[last].Uint, 0)
+	cx.Stack[prev].Uint = carry
+	cx.Stack[last].Uint = sum
 	return nil
 }
 
@@ -1368,83 +1805,83 @@ func opDivModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint6
 }
 
 func opDivModw(cx *EvalContext) error {
-	loDen := len(cx.stack) - 1
+	loDen := len(cx.Stack) - 1
 	hiDen := loDen - 1
-	if cx.stack[loDen].Uint == 0 && cx.stack[hiDen].Uint == 0 {
+	if cx.Stack[loDen].Uint == 0 && cx.Stack[hiDen].Uint == 0 {
 		return errors.New("/ 0")
 	}
 	loNum := loDen - 2
 	hiNum := loDen - 3
 	hiQuo, loQuo, hiRem, loRem :=
-		opDivModwImpl(cx.stack[hiNum].Uint, cx.stack[loNum].Uint, cx.stack[hiDen].Uint, cx.stack[loDen].Uint)
-	cx.stack[hiNum].Uint = hiQuo
-	cx.stack[loNum].Uint = loQuo
-	cx.stack[hiDen].Uint = hiRem
-	cx.stack[loDen].Uint = loRem
+		opDivModwImpl(cx.Stack[hiNum].Uint, cx.Stack[loNum].Uint, cx.Stack[hiDen].Uint, cx.Stack[loDen].Uint)
+	cx.Stack[hiNum].Uint = hiQuo
+	cx.Stack[loNum].Uint = loQuo
+	cx.Stack[hiDen].Uint = hiRem
+	cx.Stack[loDen].Uint = loRem
 	return nil
 }
 
 func opMinus(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	if cx.stack[last].Uint > cx.stack[prev].Uint {
+	if cx.Stack[last].Uint > cx.Stack[prev].Uint {
 		return errors.New("- would result negative")
 	}
-	cx.stack[prev].Uint -= cx.stack[last].Uint
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint -= cx.Stack[last].Uint
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opDiv(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	if cx.stack[last].Uint == 0 {
+	if cx.Stack[last].Uint == 0 {
 		return errors.New("/ 0")
 	}
-	cx.stack[prev].Uint /= cx.stack[last].Uint
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint /= cx.Stack[last].Uint
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opModulo(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	if cx.stack[last].Uint == 0 {
+	if cx.Stack[last].Uint == 0 {
 		return errors.New("% 0")
 	}
-	cx.stack[prev].Uint = cx.stack[prev].Uint % cx.stack[last].Uint
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = cx.Stack[prev].Uint % cx.Stack[last].Uint
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opMul(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	high, low := bits.Mul64(cx.stack[prev].Uint, cx.stack[last].Uint)
+	high, low := bits.Mul64(cx.Stack[prev].Uint, cx.Stack[last].Uint)
 	if high > 0 {
 		return errors.New("* overflowed")
 	}
-	cx.stack[prev].Uint = low
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = low
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opMulw(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	high, low := bits.Mul64(cx.stack[prev].Uint, cx.stack[last].Uint)
-	cx.stack[prev].Uint = high
-	cx.stack[last].Uint = low
+	high, low := bits.Mul64(cx.Stack[prev].Uint, cx.Stack[last].Uint)
+	cx.Stack[prev].Uint = high
+	cx.Stack[last].Uint = low
 	return nil
 }
 
 func opDivw(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 	pprev := last - 2
-	hi := cx.stack[pprev].Uint
-	lo := cx.stack[prev].Uint
-	y := cx.stack[last].Uint
+	hi := cx.Stack[pprev].Uint
+	lo := cx.Stack[prev].Uint
+	y := cx.Stack[last].Uint
 	// These two clauses catch what will cause panics in bits.Div64, so we get
 	// nicer errors.
 	if y == 0 {
@@ -1454,17 +1891,17 @@ func opDivw(cx *EvalContext) error {
 		return fmt.Errorf("divw overflow: %d <= %d", y, hi)
 	}
 	quo, _ := bits.Div64(hi, lo, y)
-	cx.stack = cx.stack[:prev] // pop 2
-	cx.stack[pprev].Uint = quo
+	cx.Stack = cx.Stack[:prev] // pop 2
+	cx.Stack[pprev].Uint = quo
 	return nil
 }
 
 func opLt(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	cond := cx.stack[prev].Uint < cx.stack[last].Uint
-	cx.stack[prev] = boolToSV(cond)
-	cx.stack = cx.stack[:last]
+	cond := cx.Stack[prev].Uint < cx.Stack[last].Uint
+	cx.Stack[prev] = boolToSV(cond)
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -1486,39 +1923,39 @@ func opGe(cx *EvalContext) error {
 }
 
 func opAnd(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	cond := (cx.stack[prev].Uint != 0) && (cx.stack[last].Uint != 0)
-	cx.stack[prev] = boolToSV(cond)
-	cx.stack = cx.stack[:last]
+	cond := (cx.Stack[prev].Uint != 0) && (cx.Stack[last].Uint != 0)
+	cx.Stack[prev] = boolToSV(cond)
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opOr(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	cond := (cx.stack[prev].Uint != 0) || (cx.stack[last].Uint != 0)
-	cx.stack[prev] = boolToSV(cond)
-	cx.stack = cx.stack[:last]
+	cond := (cx.Stack[prev].Uint != 0) || (cx.Stack[last].Uint != 0)
+	cx.Stack[prev] = boolToSV(cond)
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opEq(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	ta := cx.stack[prev].argType()
-	tb := cx.stack[last].argType()
+	ta := cx.Stack[prev].avmType()
+	tb := cx.Stack[last].avmType()
 	if ta != tb {
-		return fmt.Errorf("cannot compare (%s to %s)", cx.stack[prev].typeName(), cx.stack[last].typeName())
+		return fmt.Errorf("cannot compare (%s to %s)", cx.Stack[prev].typeName(), cx.Stack[last].typeName())
 	}
 	var cond bool
-	if ta == StackBytes {
-		cond = bytes.Equal(cx.stack[prev].Bytes, cx.stack[last].Bytes)
+	if ta == avmBytes {
+		cond = bytes.Equal(cx.Stack[prev].Bytes, cx.Stack[last].Bytes)
 	} else {
-		cond = cx.stack[prev].Uint == cx.stack[last].Uint
+		cond = cx.Stack[prev].Uint == cx.Stack[last].Uint
 	}
-	cx.stack[prev] = boolToSV(cond)
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev] = boolToSV(cond)
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -1531,31 +1968,31 @@ func opNeq(cx *EvalContext) error {
 }
 
 func opNot(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	cx.stack[last] = boolToSV(cx.stack[last].Uint == 0)
+	last := len(cx.Stack) - 1
+	cx.Stack[last] = boolToSV(cx.Stack[last].Uint == 0)
 	return nil
 }
 
 func opLen(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	cx.stack[last].Uint = uint64(len(cx.stack[last].Bytes))
-	cx.stack[last].Bytes = nil
+	last := len(cx.Stack) - 1
+	cx.Stack[last].Uint = uint64(len(cx.Stack[last].Bytes))
+	cx.Stack[last].Bytes = nil
 	return nil
 }
 
 func opItob(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	ibytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(ibytes, cx.stack[last].Uint)
+	binary.BigEndian.PutUint64(ibytes, cx.Stack[last].Uint)
 	// cx.stack[last].Uint is not cleared out as optimization
-	// stackValue.argType() checks Bytes field first
-	cx.stack[last].Bytes = ibytes
+	// stackValue.avmType() checks Bytes field first
+	cx.Stack[last].Bytes = ibytes
 	return nil
 }
 
 func opBtoi(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	ibytes := cx.stack[last].Bytes
+	last := len(cx.Stack) - 1
+	ibytes := cx.Stack[last].Bytes
 	if len(ibytes) > 8 {
 		return fmt.Errorf("btoi arg too long, got [%d]bytes", len(ibytes))
 	}
@@ -1564,75 +2001,75 @@ func opBtoi(cx *EvalContext) error {
 		value = value << 8
 		value = value | (uint64(b) & 0x0ff)
 	}
-	cx.stack[last].Uint = value
-	cx.stack[last].Bytes = nil
+	cx.Stack[last].Uint = value
+	cx.Stack[last].Bytes = nil
 	return nil
 }
 
 func opBitOr(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	cx.stack[prev].Uint = cx.stack[prev].Uint | cx.stack[last].Uint
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = cx.Stack[prev].Uint | cx.Stack[last].Uint
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opBitAnd(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	cx.stack[prev].Uint = cx.stack[prev].Uint & cx.stack[last].Uint
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = cx.Stack[prev].Uint & cx.Stack[last].Uint
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opBitXor(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	cx.stack[prev].Uint = cx.stack[prev].Uint ^ cx.stack[last].Uint
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = cx.Stack[prev].Uint ^ cx.Stack[last].Uint
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opBitNot(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	cx.stack[last].Uint = cx.stack[last].Uint ^ 0xffffffffffffffff
+	last := len(cx.Stack) - 1
+	cx.Stack[last].Uint = cx.Stack[last].Uint ^ 0xffffffffffffffff
 	return nil
 }
 
 func opShiftLeft(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	if cx.stack[last].Uint > 63 {
-		return fmt.Errorf("shl arg too big, (%d)", cx.stack[last].Uint)
+	if cx.Stack[last].Uint > 63 {
+		return fmt.Errorf("shl arg too big, (%d)", cx.Stack[last].Uint)
 	}
-	cx.stack[prev].Uint = cx.stack[prev].Uint << cx.stack[last].Uint
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = cx.Stack[prev].Uint << cx.Stack[last].Uint
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opShiftRight(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	if cx.stack[last].Uint > 63 {
-		return fmt.Errorf("shr arg too big, (%d)", cx.stack[last].Uint)
+	if cx.Stack[last].Uint > 63 {
+		return fmt.Errorf("shr arg too big, (%d)", cx.Stack[last].Uint)
 	}
-	cx.stack[prev].Uint = cx.stack[prev].Uint >> cx.stack[last].Uint
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = cx.Stack[prev].Uint >> cx.Stack[last].Uint
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opSqrt(cx *EvalContext) error {
 	/*
-		        It would not be safe to use math.Sqrt, because we would have to
-			convert our u64 to an f64, but f64 cannot represent all u64s exactly.
+		It would not be safe to use math.Sqrt, because we would have to convert our
+		u64 to an f64, but f64 cannot represent all u64s exactly.
 
-			This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
-			http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
+		This algorithm comes from Jack W. Crenshaw's 1998 article in Embedded:
+		http://www.embedded.com/electronics-blogs/programmer-s-toolbox/4219659/Integer-Square-Roots
 	*/
 
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
-	sq := cx.stack[last].Uint
+	sq := cx.Stack[last].Uint
 	var rem uint64 = 0
 	var root uint64 = 0
 
@@ -1645,27 +2082,27 @@ func opSqrt(cx *EvalContext) error {
 			root += 2
 		}
 	}
-	cx.stack[last].Uint = root >> 1
+	cx.Stack[last].Uint = root >> 1
 	return nil
 }
 
 func opBitLen(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	if cx.stack[last].argType() == StackUint64 {
-		cx.stack[last].Uint = uint64(bits.Len64(cx.stack[last].Uint))
+	last := len(cx.Stack) - 1
+	if cx.Stack[last].avmType() == avmUint64 {
+		cx.Stack[last].Uint = uint64(bits.Len64(cx.Stack[last].Uint))
 		return nil
 	}
-	length := len(cx.stack[last].Bytes)
+	length := len(cx.Stack[last].Bytes)
 	idx := 0
-	for i, b := range cx.stack[last].Bytes {
+	for i, b := range cx.Stack[last].Bytes {
 		if b != 0 {
 			idx = bits.Len8(b) + (8 * (length - i - 1))
 			break
 		}
 
 	}
-	cx.stack[last].Bytes = nil
-	cx.stack[last].Uint = uint64(idx)
+	cx.Stack[last].Bytes = nil
+	cx.Stack[last].Uint = uint64(idx)
 	return nil
 }
 
@@ -1698,17 +2135,17 @@ func opExpImpl(base uint64, exp uint64) (uint64, error) {
 }
 
 func opExp(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	exp := cx.stack[last].Uint
-	base := cx.stack[prev].Uint
+	exp := cx.Stack[last].Uint
+	base := cx.Stack[prev].Uint
 	val, err := opExpImpl(base, exp)
 	if err != nil {
 		return err
 	}
-	cx.stack[prev].Uint = val
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = val
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -1742,11 +2179,11 @@ func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
 }
 
 func opExpw(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	exp := cx.stack[last].Uint
-	base := cx.stack[prev].Uint
+	exp := cx.Stack[last].Uint
+	base := cx.Stack[prev].Uint
 	val, err := opExpwImpl(base, exp)
 	if err != nil {
 		return err
@@ -1754,27 +2191,27 @@ func opExpw(cx *EvalContext) error {
 	hi := new(big.Int).Rsh(val, 64).Uint64()
 	lo := val.Uint64()
 
-	cx.stack[prev].Uint = hi
-	cx.stack[last].Uint = lo
+	cx.Stack[prev].Uint = hi
+	cx.Stack[last].Uint = lo
 	return nil
 }
 
 func opBytesBinOp(cx *EvalContext, result *big.Int, op func(x, y *big.Int) *big.Int) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.stack[last].Bytes) > maxByteMathSize || len(cx.stack[prev].Bytes) > maxByteMathSize {
+	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	rhs := new(big.Int).SetBytes(cx.stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.stack[prev].Bytes)
+	rhs := new(big.Int).SetBytes(cx.Stack[last].Bytes)
+	lhs := new(big.Int).SetBytes(cx.Stack[prev].Bytes)
 	op(lhs, rhs) // op's receiver has already been bound to result
 	if result.Sign() < 0 {
 		return errors.New("byte math would have negative result")
 	}
-	cx.stack[prev].Bytes = result.Bytes()
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Bytes = result.Bytes()
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -1811,15 +2248,15 @@ func opBytesMul(cx *EvalContext) error {
 }
 
 func opBytesSqrt(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
-	if len(cx.stack[last].Bytes) > maxByteMathSize {
+	if len(cx.Stack[last].Bytes) > maxByteMathSize {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	val := new(big.Int).SetBytes(cx.stack[last].Bytes)
+	val := new(big.Int).SetBytes(cx.Stack[last].Bytes)
 	val.Sqrt(val)
-	cx.stack[last].Bytes = val.Bytes()
+	cx.Stack[last].Bytes = val.Bytes()
 	return nil
 }
 
@@ -1833,19 +2270,26 @@ func nonzero(b []byte) []byte {
 }
 
 func opBytesLt(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.stack[last].Bytes) > maxByteMathSize || len(cx.stack[prev].Bytes) > maxByteMathSize {
+	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	rhs := nonzero(cx.stack[last].Bytes)
-	lhs := nonzero(cx.stack[prev].Bytes)
+	rhs := nonzero(cx.Stack[last].Bytes)
+	lhs := nonzero(cx.Stack[prev].Bytes)
 
-	cx.stack[prev] = boolToSV(len(lhs) < len(rhs) || bytes.Compare(lhs, rhs) < 0)
+	switch {
+	case len(lhs) < len(rhs):
+		cx.Stack[prev] = boolToSV(true)
+	case len(lhs) > len(rhs):
+		cx.Stack[prev] = boolToSV(false)
+	default:
+		cx.Stack[prev] = boolToSV(bytes.Compare(lhs, rhs) < 0)
+	}
 
-	cx.stack = cx.stack[:last]
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -1871,18 +2315,18 @@ func opBytesGe(cx *EvalContext) error {
 }
 
 func opBytesEq(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.stack[last].Bytes) > maxByteMathSize || len(cx.stack[prev].Bytes) > maxByteMathSize {
+	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
 		return errors.New("math attempted on large byte-array")
 	}
 
-	rhs := nonzero(cx.stack[last].Bytes)
-	lhs := nonzero(cx.stack[prev].Bytes)
+	rhs := nonzero(cx.Stack[last].Bytes)
+	lhs := nonzero(cx.Stack[prev].Bytes)
 
-	cx.stack[prev] = boolToSV(bytes.Equal(lhs, rhs))
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev] = boolToSV(bytes.Equal(lhs, rhs))
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -1923,20 +2367,20 @@ func zpad(smaller []byte, size int) []byte {
 // must be newly allocated, and already in place at the top of stack
 // (the original top having been popped).
 func opBytesBinaryLogicPrep(cx *EvalContext) ([]byte, []byte) {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	llen := len(cx.stack[last].Bytes)
-	plen := len(cx.stack[prev].Bytes)
+	llen := len(cx.Stack[last].Bytes)
+	plen := len(cx.Stack[prev].Bytes)
 
 	var fresh, other []byte
 	if llen > plen {
-		fresh, other = zpad(cx.stack[prev].Bytes, llen), cx.stack[last].Bytes
+		fresh, other = zpad(cx.Stack[prev].Bytes, llen), cx.Stack[last].Bytes
 	} else {
-		fresh, other = zpad(cx.stack[last].Bytes, plen), cx.stack[prev].Bytes
+		fresh, other = zpad(cx.Stack[last].Bytes, plen), cx.Stack[prev].Bytes
 	}
-	cx.stack[prev].Bytes = fresh
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Bytes = fresh
+	cx.Stack = cx.Stack[:last]
 	return fresh, other
 }
 
@@ -1965,23 +2409,23 @@ func opBytesBitXor(cx *EvalContext) error {
 }
 
 func opBytesBitNot(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
-	fresh := make([]byte, len(cx.stack[last].Bytes))
-	for i, b := range cx.stack[last].Bytes {
+	fresh := make([]byte, len(cx.Stack[last].Bytes))
+	for i, b := range cx.Stack[last].Bytes {
 		fresh[i] = ^b
 	}
-	cx.stack[last].Bytes = fresh
+	cx.Stack[last].Bytes = fresh
 	return nil
 }
 
 func opBytesZero(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	length := cx.stack[last].Uint
+	last := len(cx.Stack) - 1
+	length := cx.Stack[last].Uint
 	if length > maxStringSize {
 		return fmt.Errorf("bzero attempted to create a too large string")
 	}
-	cx.stack[last].Bytes = make([]byte, length)
+	cx.Stack[last].Bytes = make([]byte, length)
 	return nil
 }
 
@@ -1993,9 +2437,9 @@ func opIntConstBlock(cx *EvalContext) error {
 
 func opIntConstN(cx *EvalContext, n byte) error {
 	if int(n) >= len(cx.intc) {
-		return fmt.Errorf("intc [%d] beyond %d constants", n, len(cx.intc))
+		return fmt.Errorf("intc %d beyond %d constants", n, len(cx.intc))
 	}
-	cx.stack = append(cx.stack, stackValue{Uint: cx.intc[n]})
+	cx.Stack = append(cx.Stack, stackValue{Uint: cx.intc[n]})
 	return nil
 }
 func opIntConstLoad(cx *EvalContext) error {
@@ -2022,7 +2466,7 @@ func opPushInt(cx *EvalContext) error {
 		return fmt.Errorf("could not decode int at program[%d]", pos)
 	}
 	sv := stackValue{Uint: val}
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	cx.nextpc = pos + bytesUsed
 	return nil
 }
@@ -2032,11 +2476,11 @@ func opPushInts(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	finalLen := len(cx.stack) + len(intc)
+	finalLen := len(cx.Stack) + len(intc)
 	cx.ensureStackCap(finalLen)
 	for _, cint := range intc {
 		sv := stackValue{Uint: cint}
-		cx.stack = append(cx.stack, sv)
+		cx.Stack = append(cx.Stack, sv)
 	}
 	cx.nextpc = nextpc
 	return nil
@@ -2050,9 +2494,9 @@ func opByteConstBlock(cx *EvalContext) error {
 
 func opByteConstN(cx *EvalContext, n uint) error {
 	if n >= uint(len(cx.bytec)) {
-		return fmt.Errorf("bytec [%d] beyond %d constants", n, len(cx.bytec))
+		return fmt.Errorf("bytec %d beyond %d constants", n, len(cx.bytec))
 	}
-	cx.stack = append(cx.stack, stackValue{Bytes: cx.bytec[n]})
+	cx.Stack = append(cx.Stack, stackValue{Bytes: cx.bytec[n]})
 	return nil
 }
 func opByteConstLoad(cx *EvalContext) error {
@@ -2084,7 +2528,7 @@ func opPushBytes(cx *EvalContext) error {
 		return fmt.Errorf("pushbytes too long at program[%d]", pos)
 	}
 	sv := stackValue{Bytes: cx.program[pos:end]}
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	cx.nextpc = int(end)
 	return nil
 }
@@ -2094,11 +2538,11 @@ func opPushBytess(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	finalLen := len(cx.stack) + len(cbytess)
+	finalLen := len(cx.Stack) + len(cbytess)
 	cx.ensureStackCap(finalLen)
 	for _, cbytes := range cbytess {
 		sv := stackValue{Bytes: cbytes}
-		cx.stack = append(cx.stack, sv)
+		cx.Stack = append(cx.Stack, sv)
 	}
 	cx.nextpc = nextpc
 	return nil
@@ -2109,7 +2553,7 @@ func opArgN(cx *EvalContext, n uint64) error {
 		return fmt.Errorf("cannot load arg[%d] of %d", n, len(cx.txn.Lsig.Args))
 	}
 	val := nilToEmpty(cx.txn.Lsig.Args[n])
-	cx.stack = append(cx.stack, stackValue{Bytes: val})
+	cx.Stack = append(cx.Stack, stackValue{Bytes: val})
 	return nil
 }
 
@@ -2130,10 +2574,10 @@ func opArg3(cx *EvalContext) error {
 	return opArgN(cx, 3)
 }
 func opArgs(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	n := cx.stack[last].Uint
+	last := len(cx.Stack) - 1
+	n := cx.Stack[last].Uint
 	// Pop the index and push the result back on the stack.
-	cx.stack = cx.stack[:last]
+	cx.Stack = cx.Stack[:last]
 	return opArgN(cx, n)
 }
 
@@ -2163,13 +2607,20 @@ func branchTarget(cx *EvalContext) (int, error) {
 }
 
 func switchTarget(cx *EvalContext, branchIdx uint64) (int, error) {
+	if cx.pc+1 >= len(cx.program) {
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return 0, fmt.Errorf("bare %s opcode at end of program", spec.Name)
+	}
 	numOffsets := int(cx.program[cx.pc+1])
 
 	end := cx.pc + 2          // end of opcode + number of offsets, beginning of offset list
 	eoi := end + 2*numOffsets // end of instruction
 
 	if eoi > len(cx.program) { // eoi will equal len(p) if switch is last instruction
-		return 0, fmt.Errorf("switch claims to extend beyond program")
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return 0, fmt.Errorf("%s opcode claims to extend beyond program", spec.Name)
 	}
 
 	offset := 0
@@ -2204,8 +2655,13 @@ func checkBranch(cx *EvalContext) error {
 	return nil
 }
 
-// checks switch is encoded properly (and calculates nextpc)
+// checks switch or match is encoded properly (and calculates nextpc)
 func checkSwitch(cx *EvalContext) error {
+	if cx.pc+1 >= len(cx.program) {
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return fmt.Errorf("bare %s opcode at end of program", spec.Name)
+	}
 	numOffsets := int(cx.program[cx.pc+1])
 	eoi := cx.pc + 2 + 2*numOffsets
 
@@ -2230,10 +2686,10 @@ func checkSwitch(cx *EvalContext) error {
 }
 
 func opBnz(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
-	isNonZero := cx.stack[last].Uint != 0
-	cx.stack = cx.stack[:last] // pop
+	isNonZero := cx.Stack[last].Uint != 0
+	cx.Stack = cx.Stack[:last] // pop
 	if isNonZero {
 		target, err := branchTarget(cx)
 		if err != nil {
@@ -2245,10 +2701,10 @@ func opBnz(cx *EvalContext) error {
 }
 
 func opBz(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
-	isZero := cx.stack[last].Uint == 0
-	cx.stack = cx.stack[:last] // pop
+	isZero := cx.Stack[last].Uint == 0
+	cx.Stack = cx.Stack[:last] // pop
 	if isZero {
 		target, err := branchTarget(cx)
 		if err != nil {
@@ -2269,10 +2725,10 @@ func opB(cx *EvalContext) error {
 }
 
 func opSwitch(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	branchIdx := cx.stack[last].Uint
+	last := len(cx.Stack) - 1
+	branchIdx := cx.Stack[last].Uint
 
-	cx.stack = cx.stack[:last]
+	cx.Stack = cx.Stack[:last]
 	target, err := switchTarget(cx, branchIdx)
 	if err != nil {
 		return err
@@ -2282,30 +2738,33 @@ func opSwitch(cx *EvalContext) error {
 }
 
 func opMatch(cx *EvalContext) error {
+	if cx.pc+1 >= len(cx.program) {
+		return fmt.Errorf("bare match opcode at end of program")
+	}
 	n := int(cx.program[cx.pc+1])
 	// stack contains the n sized match list and the single match value
-	if n+1 > len(cx.stack) {
-		return fmt.Errorf("match expects %d stack args while stack only contains %d", n+1, len(cx.stack))
+	if n+1 > len(cx.Stack) {
+		return fmt.Errorf("match expects %d stack args while stack only contains %d", n+1, len(cx.Stack))
 	}
 
-	last := len(cx.stack) - 1
-	matchVal := cx.stack[last]
-	cx.stack = cx.stack[:last]
+	last := len(cx.Stack) - 1
+	matchVal := cx.Stack[last]
+	cx.Stack = cx.Stack[:last]
 
-	argBase := len(cx.stack) - n
-	matchList := cx.stack[argBase:]
-	cx.stack = cx.stack[:argBase]
+	argBase := len(cx.Stack) - n
+	matchList := cx.Stack[argBase:]
+	cx.Stack = cx.Stack[:argBase]
 
 	matchedIdx := n
 	for i, stackArg := range matchList {
-		if stackArg.argType() != matchVal.argType() {
+		if stackArg.avmType() != matchVal.avmType() {
 			continue
 		}
 
-		if matchVal.argType() == StackBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
+		if matchVal.avmType() == avmBytes && bytes.Equal(matchVal.Bytes, stackArg.Bytes) {
 			matchedIdx = i
 			break
-		} else if matchVal.argType() == StackUint64 && matchVal.Uint == stackArg.Uint {
+		} else if matchVal.avmType() == avmUint64 && matchVal.Uint == stackArg.Uint {
 			matchedIdx = i
 			break
 		}
@@ -2324,7 +2783,7 @@ const protoByte = 0x8a
 func opCallSub(cx *EvalContext) error {
 	cx.callstack = append(cx.callstack, frame{
 		retpc:  cx.pc + 3, // retpc is pc _after_ the callsub
-		height: len(cx.stack),
+		height: len(cx.Stack),
 	})
 	err := opB(cx)
 
@@ -2346,90 +2805,90 @@ func opRetSub(cx *EvalContext) error {
 	if top < 0 {
 		return errors.New("retsub with empty callstack")
 	}
-	frame := cx.callstack[top]
-	if frame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
-		expect := frame.height + frame.returns
-		if len(cx.stack) < expect { // Check general error case first, only diffentiate when error is assured
+	topFrame := cx.callstack[top]
+	if topFrame.clear { // A `proto` was issued in the subroutine, so retsub cleans up.
+		expect := topFrame.height + topFrame.returns
+		if len(cx.Stack) < expect { // Check general error case first, only diffentiate when error is assured
 			switch {
-			case len(cx.stack) < frame.height:
+			case len(cx.Stack) < topFrame.height:
 				return fmt.Errorf("retsub executed with stack below frame. Did you pop args?")
-			case len(cx.stack) == frame.height:
-				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", frame.returns)
+			case len(cx.Stack) == topFrame.height:
+				return fmt.Errorf("retsub executed with no return values on stack. proto declared %d", topFrame.returns)
 			default:
 				return fmt.Errorf("retsub executed with %d return values on stack. proto declared %d",
-					len(cx.stack)-frame.height, frame.returns)
+					len(cx.Stack)-topFrame.height, topFrame.returns)
 			}
 		}
-		argstart := frame.height - frame.args
-		copy(cx.stack[argstart:], cx.stack[frame.height:expect])
-		cx.stack = cx.stack[:argstart+frame.returns]
+		argstart := topFrame.height - topFrame.args
+		copy(cx.Stack[argstart:], cx.Stack[topFrame.height:expect])
+		cx.Stack = cx.Stack[:argstart+topFrame.returns]
 	}
 	cx.callstack = cx.callstack[:top]
-	cx.nextpc = frame.retpc
+	cx.nextpc = topFrame.retpc
 	return nil
 }
 
 func opPop(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	cx.stack = cx.stack[:last]
+	last := len(cx.Stack) - 1
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opDup(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	sv := cx.stack[last]
-	cx.stack = append(cx.stack, sv)
+	last := len(cx.Stack) - 1
+	sv := cx.Stack[last]
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
 func opDup2(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	cx.stack = append(cx.stack, cx.stack[prev:]...)
+	cx.Stack = append(cx.Stack, cx.Stack[prev:]...)
 	return nil
 }
 
 func opDig(cx *EvalContext) error {
 	depth := int(cx.program[cx.pc+1])
-	idx := len(cx.stack) - 1 - depth
+	idx := len(cx.Stack) - 1 - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand dig
 	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
-		return fmt.Errorf("dig %d with stack size = %d", depth, len(cx.stack))
+		return fmt.Errorf("dig %d with stack size = %d", depth, len(cx.Stack))
 	}
-	sv := cx.stack[idx]
-	cx.stack = append(cx.stack, sv)
+	sv := cx.Stack[idx]
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
 func opCover(cx *EvalContext) error {
 	depth := int(cx.program[cx.pc+1])
-	topIdx := len(cx.stack) - 1
+	topIdx := len(cx.Stack) - 1
 	idx := topIdx - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand cover
 	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
-		return fmt.Errorf("cover %d with stack size = %d", depth, len(cx.stack))
+		return fmt.Errorf("cover %d with stack size = %d", depth, len(cx.Stack))
 	}
-	sv := cx.stack[topIdx]
-	copy(cx.stack[idx+1:], cx.stack[idx:])
-	cx.stack[idx] = sv
+	sv := cx.Stack[topIdx]
+	copy(cx.Stack[idx+1:], cx.Stack[idx:])
+	cx.Stack[idx] = sv
 	return nil
 }
 
 func opUncover(cx *EvalContext) error {
 	depth := int(cx.program[cx.pc+1])
-	topIdx := len(cx.stack) - 1
+	topIdx := len(cx.Stack) - 1
 	idx := topIdx - depth
 	// Need to check stack size explicitly here because checkArgs() doesn't understand uncover
 	// so we can't expect our stack to be prechecked.
 	if idx < 0 {
-		return fmt.Errorf("uncover %d with stack size = %d", depth, len(cx.stack))
+		return fmt.Errorf("uncover %d with stack size = %d", depth, len(cx.Stack))
 	}
 
-	sv := cx.stack[idx]
-	copy(cx.stack[idx:], cx.stack[idx+1:])
-	cx.stack[topIdx] = sv
+	sv := cx.Stack[idx]
+	copy(cx.Stack[idx:], cx.Stack[idx+1:])
+	cx.Stack[topIdx] = sv
 	return nil
 }
 
@@ -2443,8 +2902,8 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2479,8 +2938,8 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2501,13 +2960,15 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = params.LocalStateSchema.NumByteSlice
 	case AppExtraProgramPages:
 		sv.Uint = uint64(params.ExtraProgramPages)
+	case AppVersion:
+		sv.Uint = params.Version
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2524,7 +2985,7 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 		return basics.TealValue{}, fmt.Errorf("invalid field %s", field)
 	}
 	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, inner)
-	return sv.toTealValue(), err
+	return sv.ToTealValue(), err
 }
 
 // currentTxID is a convenience method to get the Txid for the txn being evaluated
@@ -2615,7 +3076,7 @@ func (cx *EvalContext) getTxID(txn *transactions.Transaction, groupIndex int, in
 
 func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *txnFieldSpec, arrayFieldIdx uint64, groupIndex int, inner bool) (sv stackValue, err error) {
 	if fs.effects {
-		if cx.runModeFlags == ModeSig {
+		if cx.runMode == ModeSig {
 			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 		}
 		if cx.version < txnEffectsVersion && !inner {
@@ -2625,11 +3086,10 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	if inner {
 		// Before we had inner apps, we did not allow these, since we had no inner groups.
 		if cx.version < innerAppsEnabledVersion && (fs.field == GroupIndex || fs.field == TxID) {
-			err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
-			return
+			return sv, fmt.Errorf("illegal field for inner transaction %s", fs.field)
 		}
 	}
-	err = nil
+
 	txn := &stxn.SignedTxn.Txn
 	switch fs.field {
 	case Sender:
@@ -2643,7 +3103,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		if err != nil {
 			return sv, err
 		}
-		hdr, err := cx.SigLedger.BlockHdrCached(rnd)
+		hdr, err := cx.SigLedger.BlockHdr(rnd)
 		if err != nil {
 			return sv, err
 		}
@@ -2700,6 +3160,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Uint = uint64(txn.ApplicationID)
 	case OnCompletion:
 		sv.Uint = uint64(txn.OnCompletion)
+	case RejectVersion:
+		sv.Uint = uint64(txn.RejectVersion)
 
 	case ApplicationArgs:
 		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
@@ -2758,9 +3220,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case ClearStateProgram:
 		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
 	case NumApprovalProgramPages:
-		sv.Uint = uint64(divCeil(len(txn.ApprovalProgram), maxStringSize))
+		sv.Uint = uint64(basics.DivCeil(len(txn.ApprovalProgram), maxStringSize))
 	case ApprovalProgramPages:
-		pageCount := divCeil(len(txn.ApprovalProgram), maxStringSize)
+		pageCount := basics.DivCeil(len(txn.ApprovalProgram), maxStringSize)
 		if arrayFieldIdx >= uint64(pageCount) {
 			return sv, fmt.Errorf("invalid ApprovalProgramPages index %d", arrayFieldIdx)
 		}
@@ -2771,9 +3233,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		}
 		sv.Bytes = txn.ApprovalProgram[first:last]
 	case NumClearStateProgramPages:
-		sv.Uint = uint64(divCeil(len(txn.ClearStateProgram), maxStringSize))
+		sv.Uint = uint64(basics.DivCeil(len(txn.ClearStateProgram), maxStringSize))
 	case ClearStateProgramPages:
-		pageCount := divCeil(len(txn.ClearStateProgram), maxStringSize)
+		pageCount := basics.DivCeil(len(txn.ClearStateProgram), maxStringSize)
 		if arrayFieldIdx >= uint64(pageCount) {
 			return sv, fmt.Errorf("invalid ClearStateProgramPages index %d", arrayFieldIdx)
 		}
@@ -2840,8 +3302,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		return sv, fmt.Errorf("invalid txn field %s", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 	return sv, nil
 }
@@ -2883,7 +3345,7 @@ func (cx *EvalContext) opTxnImpl(gi uint64, src txnSource, field TxnField, ai ui
 	case srcGroup:
 		if fs.effects && gi >= uint64(cx.groupIndex) {
 			// Test mode so that error is clearer
-			if cx.runModeFlags == ModeSig {
+			if cx.runMode == ModeSig {
 				return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 			}
 			return sv, fmt.Errorf("txn effects can only be read from past txns %d %d", gi, cx.groupIndex)
@@ -2919,7 +3381,7 @@ func opTxn(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
@@ -2933,23 +3395,23 @@ func opTxna(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
 func opTxnas(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
 	gi := uint64(cx.groupIndex)
 	field := TxnField(cx.program[cx.pc+1])
-	ai := cx.stack[last].Uint
+	ai := cx.Stack[last].Uint
 
 	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
 
-	cx.stack[last] = sv
+	cx.Stack[last] = sv
 	return nil
 }
 
@@ -2962,7 +3424,7 @@ func opGtxn(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
@@ -2976,30 +3438,30 @@ func opGtxna(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
 func opGtxnas(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
 	gi := uint64(cx.program[cx.pc+1])
 	field := TxnField(cx.program[cx.pc+2])
-	ai := cx.stack[last].Uint
+	ai := cx.Stack[last].Uint
 
 	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
 
-	cx.stack[last] = sv
+	cx.Stack[last] = sv
 	return nil
 }
 
 func opGtxns(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
-	gi := cx.stack[last].Uint
+	gi := cx.Stack[last].Uint
 	field := TxnField(cx.program[cx.pc+1])
 
 	sv, err := cx.opTxnImpl(gi, srcGroup, field, 0, false)
@@ -3007,14 +3469,14 @@ func opGtxns(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[last] = sv
+	cx.Stack[last] = sv
 	return nil
 }
 
 func opGtxnsa(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
-	gi := cx.stack[last].Uint
+	gi := cx.Stack[last].Uint
 	field := TxnField(cx.program[cx.pc+1])
 	ai := uint64(cx.program[cx.pc+2])
 
@@ -3023,25 +3485,25 @@ func opGtxnsa(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[last] = sv
+	cx.Stack[last] = sv
 	return nil
 }
 
 func opGtxnsas(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	gi := cx.stack[prev].Uint
+	gi := cx.Stack[prev].Uint
 	field := TxnField(cx.program[cx.pc+1])
-	ai := cx.stack[last].Uint
+	ai := cx.Stack[last].Uint
 
 	sv, err := cx.opTxnImpl(gi, srcGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
 
-	cx.stack[prev] = sv
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev] = sv
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -3052,7 +3514,7 @@ func opItxn(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
@@ -3065,22 +3527,22 @@ func opItxna(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
 func opItxnas(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
 	field := TxnField(cx.program[cx.pc+1])
-	ai := cx.stack[last].Uint
+	ai := cx.Stack[last].Uint
 
 	sv, err := cx.opTxnImpl(0, srcInner, field, ai, true)
 	if err != nil {
 		return err
 	}
 
-	cx.stack[last] = sv
+	cx.Stack[last] = sv
 	return nil
 }
 
@@ -3123,7 +3585,7 @@ func opGitxn(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
@@ -3137,23 +3599,23 @@ func opGitxna(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
 func opGitxnas(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
 	gi := uint64(cx.program[cx.pc+1])
 	field := TxnField(cx.program[cx.pc+2])
-	ai := cx.stack[last].Uint
+	ai := cx.Stack[last].Uint
 
 	sv, err := cx.opTxnImpl(gi, srcInnerGroup, field, ai, true)
 	if err != nil {
 		return err
 	}
 
-	cx.stack[last] = sv
+	cx.Stack[last] = sv
 	return nil
 }
 
@@ -3189,20 +3651,20 @@ func opGaid(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
 func opGaids(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	gi := cx.stack[last].Uint
+	last := len(cx.Stack) - 1
+	gi := cx.Stack[last].Uint
 
 	sv, err := opGaidImpl(cx, gi, "gaids")
 	if err != nil {
 		return err
 	}
 
-	cx.stack[last] = sv
+	cx.Stack[last] = sv
 	return nil
 }
 
@@ -3218,15 +3680,15 @@ func (cx *EvalContext) getLatestTimestamp() (uint64, error) {
 	return uint64(ts), nil
 }
 
-// getApplicationAddress memoizes app.Address() across a tx group's evaluation
-func (cx *EvalContext) getApplicationAddress(app basics.AppIndex) basics.Address {
+// GetApplicationAddress memoizes app.Address() across a tx group's evaluation
+func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address {
 	/* Do not instantiate the cache here, that would mask a programming error.
 	   The cache must be instantiated at EvalParams construction time, so that
 	   proper sharing with inner EvalParams can work. */
-	appAddr, ok := cx.appAddrCache[app]
+	appAddr, ok := ep.appAddrCache[app]
 	if !ok {
 		appAddr = app.Address()
-		cx.appAddrCache[app] = appAddr
+		ep.appAddrCache[app] = appAddr
 	}
 
 	return appAddr
@@ -3263,7 +3725,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case CurrentApplicationID:
 		sv.Uint = uint64(cx.appID)
 	case CurrentApplicationAddress:
-		addr := cx.getApplicationAddress(cx.appID)
+		addr := cx.GetApplicationAddress(cx.appID)
 		sv.Bytes = addr[:]
 	case CreatorAddress:
 		sv.Bytes, err = cx.getCreatorAddress()
@@ -3279,17 +3741,34 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		}
 	case CallerApplicationAddress:
 		if cx.caller != nil {
-			addr := cx.caller.getApplicationAddress(cx.caller.appID)
+			addr := cx.caller.GetApplicationAddress(cx.caller.appID)
 			sv.Bytes = addr[:]
 		} else {
 			sv.Bytes = zeroAddress[:]
 		}
+	case AssetCreateMinBalance:
+		sv.Uint = cx.Proto.MinBalance
+	case AssetOptInMinBalance:
+		sv.Uint = cx.Proto.MinBalance
+	case GenesisHash:
+		gh := cx.SigLedger.GenesisHash()
+		sv.Bytes = gh[:]
+	case PayoutsEnabled:
+		sv.Uint = boolToUint(cx.Proto.Payouts.Enabled)
+	case PayoutsGoOnlineFee:
+		sv.Uint = cx.Proto.Payouts.GoOnlineFee
+	case PayoutsPercent:
+		sv.Uint = cx.Proto.Payouts.Percent
+	case PayoutsMinBalance:
+		sv.Uint = cx.Proto.Payouts.MinBalance
+	case PayoutsMaxBalance:
+		sv.Uint = cx.Proto.Payouts.MaxBalance
 	default:
-		err = fmt.Errorf("invalid global field %d", fs.field)
+		return sv, fmt.Errorf("invalid global field %s", fs.field)
 	}
 
-	if fs.ftype != sv.argType() {
-		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.argType())
+	if err == nil && fs.ftype.AVMType != sv.avmType() {
+		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 
 	return sv, err
@@ -3301,7 +3780,7 @@ func opGlobal(cx *EvalContext) error {
 	if !ok || fs.version > cx.version {
 		return fmt.Errorf("invalid global field %s", globalField)
 	}
-	if (cx.runModeFlags & fs.mode) == 0 {
+	if (cx.runMode & fs.mode) == 0 {
 		return fmt.Errorf("global[%s] not allowed in current mode", globalField)
 	}
 
@@ -3310,281 +3789,43 @@ func opGlobal(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, sv)
-	return nil
-}
-
-// Msg is data meant to be signed and then verified with the
-// ed25519verify opcode.
-type Msg struct {
-	_struct     struct{}      `codec:",omitempty,omitemptyarray"`
-	ProgramHash crypto.Digest `codec:"p"`
-	Data        []byte        `codec:"d"`
-}
-
-// ToBeHashed implements crypto.Hashable
-func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.ProgramData, append(msg.ProgramHash[:], msg.Data...)
-}
-
-// programHash lets us lazily compute H(cx.program)
-func (cx *EvalContext) programHash() crypto.Digest {
-	if cx.programHashCached == (crypto.Digest{}) {
-		cx.programHashCached = crypto.HashObj(Program(cx.program))
-	}
-	return cx.programHashCached
-}
-
-func opEd25519Verify(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // index of PK
-	prev := last - 1          // index of signature
-	pprev := prev - 1         // index of data
-
-	var sv crypto.SignatureVerifier
-	if len(cx.stack[last].Bytes) != len(sv) {
-		return errors.New("invalid public key")
-	}
-	copy(sv[:], cx.stack[last].Bytes)
-
-	var sig crypto.Signature
-	if len(cx.stack[prev].Bytes) != len(sig) {
-		return errors.New("invalid signature")
-	}
-	copy(sig[:], cx.stack[prev].Bytes)
-
-	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
-	cx.stack[pprev] = boolToSV(sv.Verify(msg, sig))
-	cx.stack = cx.stack[:prev]
-	return nil
-}
-
-func opEd25519VerifyBare(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // index of PK
-	prev := last - 1          // index of signature
-	pprev := prev - 1         // index of data
-
-	var sv crypto.SignatureVerifier
-	if len(cx.stack[last].Bytes) != len(sv) {
-		return errors.New("invalid public key")
-	}
-	copy(sv[:], cx.stack[last].Bytes)
-
-	var sig crypto.Signature
-	if len(cx.stack[prev].Bytes) != len(sig) {
-		return errors.New("invalid signature")
-	}
-	copy(sig[:], cx.stack[prev].Bytes)
-
-	cx.stack[pprev] = boolToSV(sv.VerifyBytes(cx.stack[pprev].Bytes, sig))
-	cx.stack = cx.stack[:prev]
-	return nil
-}
-
-func leadingZeros(size int, b *big.Int) ([]byte, error) {
-	byteLength := (b.BitLen() + 7) / 8
-	if size < byteLength {
-		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, byteLength)
-	}
-	buf := make([]byte, size)
-	b.FillBytes(buf)
-	return buf, nil
-}
-
-var ecdsaVerifyCosts = []int{
-	Secp256k1: 1700,
-	Secp256r1: 2500,
-}
-
-func opEcdsaVerify(cx *EvalContext) error {
-	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
-	if !ok || fs.version > cx.version {
-		return fmt.Errorf("invalid curve %d", ecdsaCurve)
-	}
-
-	if fs.field != Secp256k1 && fs.field != Secp256r1 {
-		return fmt.Errorf("unsupported curve %d", fs.field)
-	}
-
-	last := len(cx.stack) - 1 // index of PK y
-	prev := last - 1          // index of PK x
-	pprev := prev - 1         // index of signature s
-	fourth := pprev - 1       // index of signature r
-	fifth := fourth - 1       // index of data
-
-	pkY := cx.stack[last].Bytes
-	pkX := cx.stack[prev].Bytes
-	sigS := cx.stack[pprev].Bytes
-	sigR := cx.stack[fourth].Bytes
-	msg := cx.stack[fifth].Bytes
-
-	if len(msg) != 32 {
-		return fmt.Errorf("the signed data must be 32 bytes long, not %d", len(msg))
-	}
-
-	x := new(big.Int).SetBytes(pkX)
-	y := new(big.Int).SetBytes(pkY)
-
-	var result bool
-	if fs.field == Secp256k1 {
-		signature := make([]byte, 0, len(sigR)+len(sigS))
-		signature = append(signature, sigR...)
-		signature = append(signature, sigS...)
-
-		pubkey := secp256k1.S256().Marshal(x, y)
-		result = secp256k1.VerifySignature(pubkey, msg, signature)
-	} else if fs.field == Secp256r1 {
-		r := new(big.Int).SetBytes(sigR)
-		s := new(big.Int).SetBytes(sigS)
-
-		pubkey := ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     x,
-			Y:     y,
-		}
-		result = ecdsa.Verify(&pubkey, msg, r, s)
-	}
-
-	cx.stack[fifth] = boolToSV(result)
-	cx.stack = cx.stack[:fourth]
-	return nil
-}
-
-var ecdsaDecompressCosts = []int{
-	Secp256k1: 650,
-	Secp256r1: 2400,
-}
-
-func opEcdsaPkDecompress(cx *EvalContext) error {
-	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
-	if !ok || fs.version > cx.version {
-		return fmt.Errorf("invalid curve %d", ecdsaCurve)
-	}
-
-	if fs.field != Secp256k1 && fs.field != Secp256r1 {
-		return fmt.Errorf("unsupported curve %d", fs.field)
-	}
-
-	last := len(cx.stack) - 1 // compressed PK
-
-	pubkey := cx.stack[last].Bytes
-	var x, y *big.Int
-	if fs.field == Secp256k1 {
-		x, y = secp256k1.DecompressPubkey(pubkey)
-		if x == nil {
-			return fmt.Errorf("invalid pubkey")
-		}
-	} else if fs.field == Secp256r1 {
-		x, y = elliptic.UnmarshalCompressed(elliptic.P256(), pubkey)
-		if x == nil {
-			return fmt.Errorf("invalid compressed pubkey")
-		}
-	}
-
-	var err error
-	cx.stack[last].Uint = 0
-	cx.stack[last].Bytes, err = leadingZeros(32, x)
-	if err != nil {
-		return fmt.Errorf("x component zeroing failed: %s", err.Error())
-	}
-
-	var sv stackValue
-	sv.Bytes, err = leadingZeros(32, y)
-	if err != nil {
-		return fmt.Errorf("y component zeroing failed: %s", err.Error())
-	}
-
-	cx.stack = append(cx.stack, sv)
-	return nil
-}
-
-func opEcdsaPkRecover(cx *EvalContext) error {
-	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
-	if !ok || fs.version > cx.version {
-		return fmt.Errorf("invalid curve %d", ecdsaCurve)
-	}
-
-	if fs.field != Secp256k1 {
-		return fmt.Errorf("unsupported curve %d", fs.field)
-	}
-
-	last := len(cx.stack) - 1 // index of signature s
-	prev := last - 1          // index of signature r
-	pprev := prev - 1         // index of recovery id
-	fourth := pprev - 1       // index of data
-
-	sigS := cx.stack[last].Bytes
-	sigR := cx.stack[prev].Bytes
-	recid := cx.stack[pprev].Uint
-	msg := cx.stack[fourth].Bytes
-
-	if recid > 3 {
-		return fmt.Errorf("invalid recovery id: %d", recid)
-	}
-
-	signature := make([]byte, 0, len(sigR)+len(sigS)+1)
-	signature = append(signature, sigR...)
-	signature = append(signature, sigS...)
-	signature = append(signature, uint8(recid))
-
-	pk, err := secp256k1.RecoverPubkey(msg, signature)
-	if err != nil {
-		return fmt.Errorf("pubkey recover failed: %s", err.Error())
-	}
-	x, y := secp256k1.S256().Unmarshal(pk)
-	if x == nil {
-		return fmt.Errorf("pubkey unmarshal failed")
-	}
-
-	cx.stack[fourth].Uint = 0
-	cx.stack[fourth].Bytes, err = leadingZeros(32, x)
-	if err != nil {
-		return fmt.Errorf("x component zeroing failed: %s", err.Error())
-	}
-	cx.stack[pprev].Uint = 0
-	cx.stack[pprev].Bytes, err = leadingZeros(32, y)
-	if err != nil {
-		return fmt.Errorf("y component zeroing failed: %s", err.Error())
-	}
-	cx.stack = cx.stack[:prev]
+	cx.Stack = append(cx.Stack, sv)
 	return nil
 }
 
 func opLoad(cx *EvalContext) error {
 	n := cx.program[cx.pc+1]
-	cx.stack = append(cx.stack, cx.scratch[n])
+	cx.Stack = append(cx.Stack, cx.Scratch[n])
 	return nil
 }
 
 func opLoads(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	n := cx.stack[last].Uint
-	if n >= uint64(len(cx.scratch)) {
+	last := len(cx.Stack) - 1
+	n := cx.Stack[last].Uint
+	if n >= uint64(len(cx.Scratch)) {
 		return fmt.Errorf("invalid Scratch index %d", n)
 	}
-	cx.stack[last] = cx.scratch[n]
+	cx.Stack[last] = cx.Scratch[n]
 	return nil
 }
 
 func opStore(cx *EvalContext) error {
 	n := cx.program[cx.pc+1]
-	last := len(cx.stack) - 1
-	cx.scratch[n] = cx.stack[last]
-	cx.stack = cx.stack[:last]
+	last := len(cx.Stack) - 1
+	cx.Scratch[n] = cx.Stack[last]
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opStores(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	n := cx.stack[prev].Uint
-	if n >= uint64(len(cx.scratch)) {
+	n := cx.Stack[prev].Uint
+	if n >= uint64(len(cx.Scratch)) {
 		return fmt.Errorf("invalid Scratch index %d", n)
 	}
-	cx.scratch[n] = cx.stack[last]
-	cx.stack = cx.stack[:prev]
+	cx.Scratch[n] = cx.Stack[last]
+	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 
@@ -3593,7 +3834,7 @@ func opGloadImpl(cx *EvalContext, gi int, scratchIdx byte, opName string) (stack
 	if gi >= len(cx.TxnGroup) {
 		return none, fmt.Errorf("%s lookup TxnGroup[%d] but it only has %d", opName, gi, len(cx.TxnGroup))
 	}
-	if int(scratchIdx) >= len(cx.scratch) {
+	if int(scratchIdx) >= len(cx.Scratch) {
 		return none, fmt.Errorf("invalid Scratch index %d", scratchIdx)
 	}
 	if cx.TxnGroup[gi].Txn.Type != protocol.ApplicationCallTx {
@@ -3617,13 +3858,13 @@ func opGload(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = append(cx.stack, scratchValue)
+	cx.Stack = append(cx.Stack, scratchValue)
 	return nil
 }
 
 func opGloads(cx *EvalContext) error {
-	last := len(cx.stack) - 1
-	gi := cx.stack[last].Uint
+	last := len(cx.Stack) - 1
+	gi := cx.Stack[last].Uint
 	if gi >= uint64(len(cx.TxnGroup)) {
 		return fmt.Errorf("gloads lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
 	}
@@ -3633,19 +3874,19 @@ func opGloads(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[last] = scratchValue
+	cx.Stack[last] = scratchValue
 	return nil
 }
 
 func opGloadss(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	gi := cx.stack[prev].Uint
+	gi := cx.Stack[prev].Uint
 	if gi >= uint64(len(cx.TxnGroup)) {
 		return fmt.Errorf("gloadss lookup TxnGroup[%d] but it only has %d", gi, len(cx.TxnGroup))
 	}
-	scratchIdx := cx.stack[last].Uint
+	scratchIdx := cx.Stack[last].Uint
 	if scratchIdx >= 256 {
 		return fmt.Errorf("gloadss scratch index >= 256 (%d)", scratchIdx)
 	}
@@ -3654,22 +3895,22 @@ func opGloadss(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[prev] = scratchValue
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev] = scratchValue
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opConcat(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	a := cx.stack[prev].Bytes
-	b := cx.stack[last].Bytes
+	a := cx.Stack[prev].Bytes
+	b := cx.Stack[last].Bytes
 	newlen := len(a) + len(b)
 	newvalue := make([]byte, newlen)
 	copy(newvalue, a)
 	copy(newvalue[len(a):], b)
-	cx.stack[prev].Bytes = newvalue
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Bytes = newvalue
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -3684,37 +3925,37 @@ func substring(x []byte, start, end int) ([]byte, error) {
 }
 
 func opSubstring(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	start := cx.program[cx.pc+1]
 	end := cx.program[cx.pc+2]
-	bytes, err := substring(cx.stack[last].Bytes, int(start), int(end))
-	cx.stack[last].Bytes = bytes
+	bytes, err := substring(cx.Stack[last].Bytes, int(start), int(end))
+	cx.Stack[last].Bytes = bytes
 	return err
 }
 
 func opSubstring3(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // end
+	last := len(cx.Stack) - 1 // end
 	prev := last - 1          // start
 	pprev := prev - 1         // bytes
-	start := cx.stack[prev].Uint
-	end := cx.stack[last].Uint
+	start := cx.Stack[prev].Uint
+	end := cx.Stack[last].Uint
 	if start > math.MaxInt32 || end > math.MaxInt32 {
 		return errors.New("substring range beyond length of string")
 	}
-	bytes, err := substring(cx.stack[pprev].Bytes, int(start), int(end))
-	cx.stack[pprev].Bytes = bytes
-	cx.stack = cx.stack[:prev]
+	bytes, err := substring(cx.Stack[pprev].Bytes, int(start), int(end))
+	cx.Stack[pprev].Bytes = bytes
+	cx.Stack = cx.Stack[:prev]
 	return err
 }
 
 func opGetBit(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
-	idx := cx.stack[last].Uint
-	target := cx.stack[prev]
+	idx := cx.Stack[last].Uint
+	target := cx.Stack[prev]
 
 	var bit uint64
-	if target.argType() == StackUint64 {
+	if target.avmType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("getbit index > 63 with with Uint")
 		}
@@ -3737,34 +3978,34 @@ func opGetBit(cx *EvalContext) error {
 		mask := byte(0x80) >> bitIdx
 		bit = uint64((byteVal & mask) >> (7 - bitIdx))
 	}
-	cx.stack[prev].Uint = bit
-	cx.stack[prev].Bytes = nil
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = bit
+	cx.Stack[prev].Bytes = nil
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opSetBit(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 	pprev := prev - 1
 
-	bit := cx.stack[last].Uint
-	idx := cx.stack[prev].Uint
-	target := cx.stack[pprev]
+	bit := cx.Stack[last].Uint
+	idx := cx.Stack[prev].Uint
+	target := cx.Stack[pprev]
 
 	if bit > 1 {
 		return errors.New("setbit value > 1")
 	}
 
-	if target.argType() == StackUint64 {
+	if target.avmType() == avmUint64 {
 		if idx > 63 {
 			return errors.New("setbit index > 63 with Uint")
 		}
 		mask := uint64(1) << idx
 		if bit == uint64(1) {
-			cx.stack[pprev].Uint |= mask // manipulate stack in place
+			cx.Stack[pprev].Uint |= mask // manipulate stack in place
 		} else {
-			cx.stack[pprev].Uint &^= mask // manipulate stack in place
+			cx.Stack[pprev].Uint &^= mask // manipulate stack in place
 		}
 	} else {
 		// indexing into a byteslice
@@ -3787,42 +4028,42 @@ func opSetBit(cx *EvalContext) error {
 		} else {
 			scratch[byteIdx] &^= mask
 		}
-		cx.stack[pprev].Bytes = scratch
+		cx.Stack[pprev].Bytes = scratch
 	}
-	cx.stack = cx.stack[:prev]
+	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 
 func opGetByte(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	idx := cx.stack[last].Uint
-	target := cx.stack[prev]
+	idx := cx.Stack[last].Uint
+	target := cx.Stack[prev]
 
 	if idx >= uint64(len(target.Bytes)) {
 		return errors.New("getbyte index beyond array length")
 	}
-	cx.stack[prev].Uint = uint64(target.Bytes[idx])
-	cx.stack[prev].Bytes = nil
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = uint64(target.Bytes[idx])
+	cx.Stack[prev].Bytes = nil
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opSetByte(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	prev := last - 1
 	pprev := prev - 1
-	if cx.stack[last].Uint > 255 {
+	if cx.Stack[last].Uint > 255 {
 		return errors.New("setbyte value > 255")
 	}
-	if cx.stack[prev].Uint >= uint64(len(cx.stack[pprev].Bytes)) {
+	if cx.Stack[prev].Uint >= uint64(len(cx.Stack[pprev].Bytes)) {
 		return errors.New("setbyte index beyond array length")
 	}
 	// Copy to avoid modifying shared slice
-	cx.stack[pprev].Bytes = append([]byte(nil), cx.stack[pprev].Bytes...)
-	cx.stack[pprev].Bytes[cx.stack[prev].Uint] = byte(cx.stack[last].Uint)
-	cx.stack = cx.stack[:prev]
+	cx.Stack[pprev].Bytes = append([]byte(nil), cx.Stack[pprev].Bytes...)
+	cx.Stack[pprev].Bytes[cx.Stack[prev].Uint] = byte(cx.Stack[last].Uint)
+	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 
@@ -3841,29 +4082,29 @@ func extractCarefully(x []byte, start, length uint64) ([]byte, error) {
 }
 
 func opExtract(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	start := uint64(cx.program[cx.pc+1])
 	length := uint64(cx.program[cx.pc+2])
 	// Shortcut: if length is 0, take bytes from start index to the end
 	if length == 0 {
 		// If length has wrapped, it's because start > len(), so extractCarefully will report
-		length = uint64(len(cx.stack[last].Bytes) - int(start))
+		length = uint64(len(cx.Stack[last].Bytes) - int(start))
 	}
-	bytes, err := extractCarefully(cx.stack[last].Bytes, start, length)
-	cx.stack[last].Bytes = bytes
+	bytes, err := extractCarefully(cx.Stack[last].Bytes, start, length)
+	cx.Stack[last].Bytes = bytes
 	return err
 }
 
 func opExtract3(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // length
+	last := len(cx.Stack) - 1 // length
 	prev := last - 1          // start
 	pprev := prev - 1         // bytes
 
-	start := cx.stack[prev].Uint
-	length := cx.stack[last].Uint
-	bytes, err := extractCarefully(cx.stack[pprev].Bytes, start, length)
-	cx.stack[pprev].Bytes = bytes
-	cx.stack = cx.stack[:prev]
+	start := cx.Stack[prev].Uint
+	length := cx.Stack[last].Uint
+	bytes, err := extractCarefully(cx.Stack[pprev].Bytes, start, length)
+	cx.Stack[pprev].Bytes = bytes
+	cx.Stack = cx.Stack[:prev]
 	return err
 }
 
@@ -3874,7 +4115,7 @@ func replaceCarefully(original []byte, replacement []byte, start uint64) ([]byte
 		return nil, fmt.Errorf("replacement start %d beyond length: %d", start, len(original))
 	}
 	end := start + uint64(len(replacement))
-	if end < start { // impossible because it is sum of two avm value lengths
+	if end < start { // impossible because it is sum of two avm value (or box) lengths
 		return nil, fmt.Errorf("replacement end exceeds uint64")
 	}
 
@@ -3892,37 +4133,37 @@ func replaceCarefully(original []byte, replacement []byte, start uint64) ([]byte
 }
 
 func opReplace2(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // replacement
+	last := len(cx.Stack) - 1 // replacement
 	prev := last - 1          // original
 
-	replacement := cx.stack[last].Bytes
+	replacement := cx.Stack[last].Bytes
 	start := uint64(cx.program[cx.pc+1])
-	original := cx.stack[prev].Bytes
+	original := cx.Stack[prev].Bytes
 
 	bytes, err := replaceCarefully(original, replacement, start)
 	if err != nil {
 		return err
 	}
-	cx.stack[prev].Bytes = bytes
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Bytes = bytes
+	cx.Stack = cx.Stack[:last]
 	return err
 }
 
 func opReplace3(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // replacement
+	last := len(cx.Stack) - 1 // replacement
 	prev := last - 1          // start
 	pprev := prev - 1         // original
 
-	replacement := cx.stack[last].Bytes
-	start := cx.stack[prev].Uint
-	original := cx.stack[pprev].Bytes
+	replacement := cx.Stack[last].Bytes
+	start := cx.Stack[prev].Uint
+	original := cx.Stack[pprev].Bytes
 
 	bytes, err := replaceCarefully(original, replacement, start)
 	if err != nil {
 		return err
 	}
-	cx.stack[pprev].Bytes = bytes
-	cx.stack = cx.stack[:prev]
+	cx.Stack[pprev].Bytes = bytes
+	cx.Stack = cx.Stack[:prev]
 	return err
 }
 
@@ -3938,16 +4179,16 @@ func convertBytesToInt(x []byte) uint64 {
 }
 
 func opExtractNBytes(cx *EvalContext, n uint64) error {
-	last := len(cx.stack) - 1 // start
+	last := len(cx.Stack) - 1 // start
 	prev := last - 1          // bytes
-	start := cx.stack[last].Uint
-	bytes, err := extractCarefully(cx.stack[prev].Bytes, start, n) // extract n bytes
+	start := cx.Stack[last].Uint
+	bytes, err := extractCarefully(cx.Stack[prev].Bytes, start, n) // extract n bytes
 	if err != nil {
 		return err
 	}
-	cx.stack[prev].Uint = convertBytesToInt(bytes)
-	cx.stack[prev].Bytes = nil
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev].Uint = convertBytesToInt(bytes)
+	cx.Stack[prev].Bytes = nil
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -3963,78 +4204,146 @@ func opExtract64Bits(cx *EvalContext) error {
 	return opExtractNBytes(cx, 8) // extract 8 bytes
 }
 
+// assignAccount is used to convert a stackValue into a 32-byte account value,
+// enforcing any "availability" restrictions in force.
+func (cx *EvalContext) assignAccount(sv stackValue) (basics.Address, error) {
+	addr, err := sv.address()
+	if err != nil {
+		return basics.Address{}, err
+	}
+
+	if cx.availableAccount(addr) {
+		return addr, nil
+	}
+	return basics.Address{}, fmt.Errorf("unavailable Account %s", addr)
+}
+
 // accountReference yields the address and Accounts offset designated by a
 // stackValue. If the stackValue is the app account, an account of an app in
-// created.apps, or an account of an app in foreignApps, and it is not in the
-// Accounts array, then len(Accounts) + 1 is returned as the index. This would
-// let us catch the mistake if the index is used for set/del. If the txn somehow
-// "psychically" predicted the address, and therefore it IS in txn.Accounts,
-// then happy day, we can set/del it. Return the proper index.
+// created.apps, an account of an app in foreignApps, or an account made
+// available by another txn, and it is not in the Accounts array, then
+// len(Accounts) + 1 is returned as the index. This would let us catch the
+// mistake if the index is used for set/del. If the txn somehow "psychically"
+// predicted the address, and therefore it IS in txn.Accounts, then happy day,
+// we can set/del it. Return the proper index.
 
-// If we ever want apps to be able to change local state on these accounts
-// (which includes this app's own account!), we will need a change to
-// EvalDelta's on disk format, so that the addr can be encoded explicitly rather
-// than by index into txn.Accounts.
+// Starting in v9, apps can change local state on these accounts by adding the
+// address to EvalDelta.SharedAccounts and indexing it there. But at this level,
+// we still report the "failure" to find an index with `len(Accounts)+1` That
+// value allows mutableAccountReference to decide whether to report an error or
+// not, based on version.
 
 func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uint64, error) {
-	if account.argType() == StackUint64 {
-		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
-		return addr, account.Uint, err
-	}
-	addr, err := account.address()
+	addr, idx, err := cx.resolveAccount(account)
 	if err != nil {
 		return addr, 0, err
 	}
-	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
 
-	invalidIndex := uint64(len(cx.txn.Txn.Accounts) + 1)
+	if idx >= 0 {
+		return addr, uint64(idx), err
+	}
+	// negative idx tells us we can't return the idx into
+	// txn.Accounts, but the account might still be available (because it was
+	// created earlier in the group, or because of group sharing)
+	ok := cx.availableAccount(addr)
+	if !ok {
+		return addr, 0, fmt.Errorf("invalid Account reference %s", addr)
+	}
+	// available, but not in txn.Accounts. Return 1 higher to signal.
+	return addr, uint64(len(cx.txn.Txn.Accounts) + 1), nil
+}
+
+// resolveAccount determines the Address and slot indicated by a stackValue, so
+// it is either confirming that the bytes is indeed 32 bytes (and trying to find
+// it in txn.Accounts or returning -1), or it is performing the lookup of the
+// integer arg in txn.Accounts.
+func (cx *EvalContext) resolveAccount(account stackValue) (basics.Address, int, error) {
+	if account.avmType() == avmUint64 {
+		addr, err := cx.txn.Txn.AddressByIndex(account.Uint, cx.txn.Txn.Sender)
+		return addr, int(account.Uint), err
+	}
+	addr, err := account.address()
+	if err != nil {
+		return addr, -1, err
+	}
+
+	idx, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
+	if err != nil {
+		// we don't want to convey `err`, because the supplied `account` does
+		// seem to be an address, but we can't give a valid index.
+		return addr, -1, nil //nolint:nilerr // see above comment
+	}
+	return addr, int(idx), nil
+}
+
+func (cx *EvalContext) availableAccount(addr basics.Address) bool {
+	_, err := cx.txn.Txn.IndexByAddress(addr, cx.txn.Txn.Sender)
+	if err == nil {
+		return true
+	}
+
 	// Allow an address for an app that was created in group
-	if err != nil && cx.version >= createdResourcesVersion {
-		for _, appID := range cx.available.apps {
-			createdAddress := cx.getApplicationAddress(appID)
+	if cx.version >= createdResourcesVersion {
+		for appID := range cx.available.createdApps {
+			createdAddress := cx.GetApplicationAddress(appID)
 			if addr == createdAddress {
-				return addr, invalidIndex, nil
+				return true
 			}
+		}
+	}
+
+	// or some other txn mentioned it
+	if cx.version >= sharedResourcesVersion {
+		if _, ok := cx.available.sharedAccounts[addr]; ok {
+			return true
 		}
 	}
 
 	// Allow an address for an app that was provided in the foreign apps array.
-	if err != nil && cx.version >= appAddressAvailableVersion {
+	if cx.version >= appAddressAvailableVersion {
 		for _, appID := range cx.txn.Txn.ForeignApps {
-			foreignAddress := cx.getApplicationAddress(appID)
+			foreignAddress := cx.GetApplicationAddress(appID)
 			if addr == foreignAddress {
-				return addr, invalidIndex, nil
+				return true
 			}
 		}
 	}
 
-	// this app's address is also allowed
-	if err != nil {
-		appAddr := cx.getApplicationAddress(cx.appID)
-		if appAddr == addr {
-			return addr, invalidIndex, nil
-		}
+	if cx.GetApplicationAddress(cx.appID) == addr {
+		return true
 	}
 
-	return addr, idx, err
+	if cx.UnnamedResources != nil && cx.UnnamedResources.AvailableAccount(addr) {
+		return true
+	}
+
+	return false
 }
 
 func (cx *EvalContext) mutableAccountReference(account stackValue) (basics.Address, uint64, error) {
 	addr, accountIdx, err := cx.accountReference(account)
-	if err == nil && accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
+	if err != nil {
+		return basics.Address{}, 0, err
+	}
+	if accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
 		// There was no error, but accountReference has signaled that accountIdx
 		// is not for mutable ops (because it can't encode it in EvalDelta)
-		// This also tells us that account.address() will work.
-		addr, _ := account.address()
-		err = fmt.Errorf("invalid Account reference for mutation %s", addr)
+		if cx.version < sharedResourcesVersion {
+			return basics.Address{}, 0, fmt.Errorf("invalid Account reference for mutation %s", addr)
+		}
+		// fall through, which means that starting in v9, the accountIdx
+		// returned can be > len(tx.Accounts). It will end up getting passed to
+		// GetLocal, which can record that index in order to produce old-style
+		// EDS. But those EDs are only made in old consenus versions - at that
+		// point v9 did not exist, so no backward incompatible change occurs.
 	}
 	return addr, accountIdx, err
 }
 
 func opBalance(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // account (index or actual address)
+	last := len(cx.Stack) - 1 // account (index or actual address)
 
-	addr, _, err := cx.accountReference(cx.stack[last])
+	addr, _, err := cx.accountReference(cx.Stack[last])
 	if err != nil {
 		return err
 	}
@@ -4044,15 +4353,15 @@ func opBalance(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[last].Bytes = nil
-	cx.stack[last].Uint = account.MicroAlgos.Raw
+	cx.Stack[last].Bytes = nil
+	cx.Stack[last].Uint = account.MicroAlgos.Raw
 	return nil
 }
 
 func opMinBalance(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // account (index or actual address)
+	last := len(cx.Stack) - 1 // account (index or actual address)
 
-	addr, _, err := cx.accountReference(cx.stack[last])
+	addr, _, err := cx.accountReference(cx.Stack[last])
 	if err != nil {
 		return err
 	}
@@ -4062,21 +4371,16 @@ func opMinBalance(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[last].Bytes = nil
-	cx.stack[last].Uint = account.MinBalance(cx.Proto).Raw
+	cx.Stack[last].Bytes = nil
+	cx.Stack[last].Uint = account.MinBalance(cx.Proto).Raw
 	return nil
 }
 
 func opAppOptedIn(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // app
+	last := len(cx.Stack) - 1 // app
 	prev := last - 1          // account
 
-	addr, _, err := cx.accountReference(cx.stack[prev])
-	if err != nil {
-		return err
-	}
-
-	app, err := appReference(cx, cx.stack[last].Uint, false)
+	addr, app, _, err := cx.localsReference(cx.Stack[prev], cx.Stack[last].Uint)
 	if err != nil {
 		return err
 	}
@@ -4086,53 +4390,48 @@ func opAppOptedIn(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack[prev] = boolToSV(optedIn)
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev] = boolToSV(optedIn)
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opAppLocalGet(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // state key
+	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // account
 
-	key := cx.stack[last].Bytes
+	key := cx.Stack[last].Bytes
 
-	result, _, err := opAppLocalGetImpl(cx, 0, key, cx.stack[prev])
+	result, _, err := opAppLocalGetImpl(cx, 0, key, cx.Stack[prev])
 	if err != nil {
 		return err
 	}
 
-	cx.stack[prev] = result
-	cx.stack = cx.stack[:last]
+	cx.Stack[prev] = result
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opAppLocalGetEx(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // state key
+	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // app id
 	pprev := prev - 1         // account
 
-	key := cx.stack[last].Bytes
-	appID := cx.stack[prev].Uint
+	key := cx.Stack[last].Bytes
+	appID := cx.Stack[prev].Uint
 
-	result, ok, err := opAppLocalGetImpl(cx, appID, key, cx.stack[pprev])
+	result, ok, err := opAppLocalGetImpl(cx, appID, key, cx.Stack[pprev])
 	if err != nil {
 		return err
 	}
 
-	cx.stack[pprev] = result
-	cx.stack[prev] = boolToSV(ok)
-	cx.stack = cx.stack[:last]
+	cx.Stack[pprev] = result
+	cx.Stack[prev] = boolToSV(ok)
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValue) (result stackValue, ok bool, err error) {
-	addr, accountIdx, err := cx.accountReference(acct)
-	if err != nil {
-		return
-	}
-
-	app, err := appReference(cx, appID, false)
+	addr, app, accountIdx, err := cx.localsReference(acct, appID)
 	if err != nil {
 		return
 	}
@@ -4149,7 +4448,7 @@ func opAppLocalGetImpl(cx *EvalContext, appID uint64, key []byte, acct stackValu
 }
 
 func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
-	app, err := appReference(cx, appIndex, true)
+	app, err := cx.appReference(appIndex, true)
 	if err != nil {
 		return
 	}
@@ -4166,42 +4465,68 @@ func opAppGetGlobalStateImpl(cx *EvalContext, appIndex uint64, key []byte) (resu
 }
 
 func opAppGlobalGet(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // state key
+	last := len(cx.Stack) - 1 // state key
 
-	key := cx.stack[last].Bytes
+	key := cx.Stack[last].Bytes
 
 	result, _, err := opAppGetGlobalStateImpl(cx, 0, key)
 	if err != nil {
 		return err
 	}
 
-	cx.stack[last] = result
+	cx.Stack[last] = result
 	return nil
 }
 
 func opAppGlobalGetEx(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // state key
+	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // app
 
-	key := cx.stack[last].Bytes
+	key := cx.Stack[last].Bytes
 
-	result, ok, err := opAppGetGlobalStateImpl(cx, cx.stack[prev].Uint, key)
+	result, ok, err := opAppGetGlobalStateImpl(cx, cx.Stack[prev].Uint, key)
 	if err != nil {
 		return err
 	}
 
-	cx.stack[prev] = result
-	cx.stack[last] = boolToSV(ok)
+	cx.Stack[prev] = result
+	cx.Stack[last] = boolToSV(ok)
 	return nil
 }
 
+// ensureLocalDelta is used to get accountIdx that is usable in the LocalDeltas
+// of the EvalDelta. The input accountIdx is "tentative" - if it's longer than
+// txn.Accounts, then we may need to add the address into SharedAccounts, and
+// index into it.
+func (cx *EvalContext) ensureLocalDelta(accountIdx uint64, addr basics.Address) uint64 {
+	if accountIdx > uint64(len(cx.txn.Txn.Accounts)) {
+		// the returned accountIdx was just a signal that the account was
+		// not in txn, so we look in SharedAccounts, allocating space if needed.
+		found := false
+		for i, shared := range cx.txn.EvalDelta.SharedAccts {
+			if shared == addr {
+				found = true
+				accountIdx = uint64(len(cx.txn.Txn.Accounts) + 1 + i)
+			}
+		}
+		if !found {
+			cx.txn.EvalDelta.SharedAccts = append(cx.txn.EvalDelta.SharedAccts, addr)
+			accountIdx = uint64(len(cx.txn.Txn.Accounts) + len(cx.txn.EvalDelta.SharedAccts))
+		}
+	}
+	if _, ok := cx.txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
+		cx.txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
+	}
+	return accountIdx
+}
+
 func opAppLocalPut(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // value
+	last := len(cx.Stack) - 1 // value
 	prev := last - 1          // state key
 	pprev := prev - 1         // account
 
-	sv := cx.stack[last]
-	key := string(cx.stack[prev].Bytes)
+	sv := cx.Stack[last]
+	key := string(cx.Stack[prev].Bytes)
 
 	// Enforce key lengths. Now, this is the same as enforced by ledger, but if
 	// it ever to change in proto, we would need to isolate changes to different
@@ -4210,9 +4535,16 @@ func opAppLocalPut(cx *EvalContext) error {
 		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cx.Proto.MaxAppKeyLen)
 	}
 
-	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[pprev])
+	addr, accountIdx, err := cx.mutableAccountReference(cx.Stack[pprev])
 	if err != nil {
 		return err
+	}
+
+	// The version check is overkill, but makes very clear we don't change old
+	// programs. The test here is to ensure that we didn't get access to the
+	// address from another txn, but don't have access to the local state.
+	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
+		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
 	}
 
 	// if writing the same value, don't record in EvalDelta, matching ledger
@@ -4222,11 +4554,9 @@ func opAppLocalPut(cx *EvalContext) error {
 		return err
 	}
 
-	tv := sv.toTealValue()
+	tv := sv.ToTealValue()
 	if !ok || tv != etv {
-		if _, ok := cx.txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
-			cx.txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
-		}
+		accountIdx = cx.ensureLocalDelta(accountIdx, addr)
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = tv.ToValueDelta()
 	}
 
@@ -4245,16 +4575,16 @@ func opAppLocalPut(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = cx.stack[:pprev]
+	cx.Stack = cx.Stack[:pprev]
 	return nil
 }
 
 func opAppGlobalPut(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // value
+	last := len(cx.Stack) - 1 // value
 	prev := last - 1          // state key
 
-	sv := cx.stack[last]
-	key := string(cx.stack[prev].Bytes)
+	sv := cx.Stack[last]
+	key := string(cx.Stack[prev].Bytes)
 
 	// Enforce maximum key length. Currently this is the same as enforced by
 	// ledger. If it were ever to change in proto, we would need to isolate
@@ -4270,7 +4600,7 @@ func opAppGlobalPut(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	tv := sv.toTealValue()
+	tv := sv.ToTealValue()
 	if !ok || tv != etv {
 		cx.txn.EvalDelta.GlobalDelta[key] = tv.ToValueDelta()
 	}
@@ -4290,30 +4620,35 @@ func opAppGlobalPut(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = cx.stack[:prev]
+	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 
 func opAppLocalDel(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // key
+	last := len(cx.Stack) - 1 // key
 	prev := last - 1          // account
 
-	key := string(cx.stack[last].Bytes)
+	key := string(cx.Stack[last].Bytes)
 
-	addr, accountIdx, err := cx.mutableAccountReference(cx.stack[prev])
+	addr, accountIdx, err := cx.mutableAccountReference(cx.Stack[prev])
 	if err != nil {
 		return err
 	}
 
+	// The version check is overkill, but makes very clear we don't change old
+	// programs. The test here is to ensure that we didn't get access to the
+	// address from another txn, but don't have access to the local state.
+	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
+		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
+	}
+
 	// if deleting a non-existent value, don't record in EvalDelta, matching
 	// ledger behavior with previous BuildEvalDelta mechanism
-	if _, ok, err := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
-		if err != nil {
-			return err
+	if _, ok, getErr := cx.Ledger.GetLocal(addr, cx.appID, key, accountIdx); ok {
+		if getErr != nil {
+			return getErr
 		}
-		if _, ok := cx.txn.EvalDelta.LocalDeltas[accountIdx]; !ok {
-			cx.txn.EvalDelta.LocalDeltas[accountIdx] = basics.StateDelta{}
-		}
+		accountIdx = cx.ensureLocalDelta(accountIdx, addr)
 		cx.txn.EvalDelta.LocalDeltas[accountIdx][key] = basics.ValueDelta{
 			Action: basics.DeleteAction,
 		}
@@ -4324,14 +4659,14 @@ func opAppLocalDel(cx *EvalContext) error {
 		return err
 	}
 
-	cx.stack = cx.stack[:prev]
+	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 
 func opAppGlobalDel(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // key
+	last := len(cx.Stack) - 1 // key
 
-	key := string(cx.stack[last].Bytes)
+	key := string(cx.Stack[last].Bytes)
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
 	// ledger behavior with previous BuildEvalDelta mechanism
@@ -4348,7 +4683,7 @@ func opAppGlobalDel(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	cx.stack = cx.stack[:last]
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -4358,87 +4693,217 @@ func opAppGlobalDel(cx *EvalContext) error {
 // more than 2 or so, and was often called an "index".  But it was not a
 // basics.AssetIndex or basics.ApplicationIndex.
 
-func appReference(cx *EvalContext, ref uint64, foreign bool) (basics.AppIndex, error) {
+func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppIndex, err error) {
 	if cx.version >= directRefEnabledVersion {
-		if ref == 0 || ref == uint64(cx.appID) {
-			return cx.appID, nil
-		}
-		for _, appID := range cx.txn.Txn.ForeignApps {
-			if appID == basics.AppIndex(ref) {
-				return appID, nil
+		return cx.resolveApp(ref)
+	}
+
+	// resolveApp is already similarly protected (and must be, since it is
+	// called independently)
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low App lookup %d", aid)
 			}
-		}
-		// or was created in group
-		if cx.version >= createdResourcesVersion {
-			for _, appID := range cx.available.apps {
-				if appID == basics.AppIndex(ref) {
-					return appID, nil
-				}
-			}
-		}
-		// Allow use of indexes, but this comes last so that clear advice can be
-		// given to anyone who cares about semantics in the first few rounds of
-		// a new network - don't use indexes for references, use the App ID
+		}()
+	}
+	// Old rules, pre directRefEnabledVersion, when a ref has to be a slot for
+	// some opcodes, and had to be an ID for others.
+	if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
+		return cx.appID, nil
+	}
+	if foreign {
+		// In old versions, a foreign reference must be an index in ForeignApps or 0
 		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
 			return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
 		}
-	} else {
-		// Old rules
-		if ref == 0 { // Even back when expected to be a real ID, ref = 0 was current app
-			return cx.appID, nil
-		}
-		if foreign {
-			// In old versions, a foreign reference must be an index in ForeignAssets or 0
-			if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-				return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
-			}
-		} else {
-			// Otherwise it's direct
-			return basics.AppIndex(ref), nil
-		}
+		return 0, fmt.Errorf("App index %d beyond txn.ForeignApps", ref)
 	}
-	return basics.AppIndex(0), fmt.Errorf("invalid App reference %d", ref)
+	// Otherwise it's direct
+	return basics.AppIndex(ref), nil
 }
 
-func asaReference(cx *EvalContext, ref uint64, foreign bool) (basics.AssetIndex, error) {
+// resolveApp figures out what App an integer is referring to, considering 0 as
+// current app first, then uses the integer as is if it is an availableApp, then
+// tries to perform a slot lookup.
+func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low App lookup %d", aid)
+			}
+		}()
+	}
+
+	if ref == 0 || ref == uint64(cx.appID) {
+		return cx.appID, nil
+	}
+	aid = basics.AppIndex(ref)
+	if cx.availableApp(aid) {
+		return aid, nil
+	}
+
+	// Allow use of indexes, but this comes last so that clear advice can be
+	// given to anyone who cares about semantics in the first few rounds of
+	// a new network - don't use indexes for references, use the App ID
+	if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
+		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+	}
+	return 0, fmt.Errorf("unavailable App %d", ref)
+}
+
+// localsReference has the main job of resolving the account (as bytes or u64)
+// and the App, taking access rules into account.  It has the funny side job of
+// also reporting which "slot" the address appears in, if it is in txn.Accounts
+// (or is the Sender, which yields 0). But it only needs to do this funny side
+// job in certain old versions that need the slot index while doing a lookup.
+func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.Address, basics.AppIndex, uint64, error) {
+	if cx.version >= sharedResourcesVersion {
+		addr, _, err := cx.resolveAccount(account)
+		if err != nil {
+			return basics.Address{}, 0, 0, err
+		}
+		aid, err := cx.resolveApp(ref)
+		if err == nil {
+			if cx.allowsLocals(addr, aid) {
+				return addr, aid, 0, nil // >v9 caller doesn't care about slot
+			}
+		}
+
+		// Do an extra check to give a better error. The app is definitely
+		// available. If the addr is too, then the trouble is they must have
+		// come from different transactions, and the HOLDING is the problem.
+
+		acctOK := cx.availableAccount(addr)
+		switch {
+		case err != nil && acctOK:
+			// do nothing, err contains the an Asset specific problem
+		case err == nil && acctOK:
+			// although both are available, the LOCALS are not
+			err = fmt.Errorf("unavailable Local State %s x %d", addr, aid)
+		case err != nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+		case err == nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s", addr)
+		}
+
+		return basics.Address{}, 0, 0, err
+	}
+
+	// Pre group resource sharing, the rule is just that account and app are
+	// each available.
+	addr, addrIdx, err := cx.accountReference(account)
+	if err != nil {
+		return basics.Address{}, 0, 0, err
+	}
+	app, err := cx.appReference(ref, false)
+	if err != nil {
+		return basics.Address{}, 0, 0, err
+	}
+	return addr, app, addrIdx, nil
+}
+
+func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.AssetIndex, err error) {
 	if cx.version >= directRefEnabledVersion {
-		for _, assetID := range cx.txn.Txn.ForeignAssets {
-			if assetID == basics.AssetIndex(ref) {
-				return assetID, nil
+		return cx.resolveAsset(ref)
+	}
+
+	// resolveAsset is already similarly protected (and must be, since it is
+	// called independently)
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low Asset lookup %d", aid)
 			}
-		}
-		// or was created in group
-		if cx.version >= createdResourcesVersion {
-			for _, assetID := range cx.available.asas {
-				if assetID == basics.AssetIndex(ref) {
-					return assetID, nil
-				}
-			}
-		}
-		// Allow use of indexes, but this comes last so that clear advice can be
-		// given to anyone who cares about semantics in the first few rounds of
-		// a new network - don't use indexes for references, use the asa ID.
+		}()
+	}
+	// Old rules, pre directRefEnabledVersion, when a ref has to be a slot for
+	// some opcodes, and had to be an ID for others.
+	if foreign {
+		// In old versions, a foreign reference must be an index in ForeignAssets
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
 		}
-	} else {
-		// Old rules
-		if foreign {
-			// In old versions, a foreign reference must be an index in ForeignAssets
-			if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-				return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
-			}
-		} else {
-			// Otherwise it's direct
-			return basics.AssetIndex(ref), nil
-		}
+		return 0, fmt.Errorf("Asset index %d beyond txn.ForeignAssets", ref)
 	}
-	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", ref)
+	// Otherwise it's direct
+	return basics.AssetIndex(ref), nil
+}
 
+const lastForbiddenResource = 255
+
+// resolveAsset figures out what Asset an integer is referring to, considering 0 as
+// current app first, then uses the integer as is if it is an availableAsset, then
+// tries to perform a slot lookup.
+func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err error) {
+	if cx.Proto.AppForbidLowResources {
+		defer func() {
+			if aid <= lastForbiddenResource && err == nil {
+				err = fmt.Errorf("low Asset lookup %d", aid)
+			}
+		}()
+	}
+	aid = basics.AssetIndex(ref)
+	if cx.availableAsset(aid) {
+		return aid, nil
+	}
+
+	// Allow use of indexes, but this comes last so that clear advice can be
+	// given to anyone who cares about semantics in the first few rounds of
+	// a new network - don't use indexes for references, use the Asset ID
+	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
+		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+	}
+	return 0, fmt.Errorf("unavailable Asset %d", ref)
+}
+
+func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.Address, basics.AssetIndex, error) {
+	if cx.version >= sharedResourcesVersion {
+		addr, _, err := cx.resolveAccount(account)
+		if err != nil {
+			return basics.Address{}, 0, err
+		}
+		aid, err := cx.resolveAsset(ref)
+		if err == nil {
+			if cx.allowsHolding(addr, aid) {
+				return addr, aid, nil
+			}
+		}
+
+		// Do an extra check to give a better error. The asset is definitely
+		// available. If the addr is too, then the trouble is they must have
+		// come from different transactions, and the HOLDING is the problem.
+
+		acctOK := cx.availableAccount(addr)
+		switch {
+		case err != nil && acctOK:
+			// do nothing, err contains the an Asset specific problem
+		case err == nil && acctOK:
+			// although both are available, the HOLDING is not
+			err = fmt.Errorf("unavailable Holding %s x %d", addr, aid)
+		case err != nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+		case err == nil && !acctOK:
+			err = fmt.Errorf("unavailable Account %s", addr)
+		}
+		return basics.Address{}, 0, err
+	}
+
+	// Pre group resource sharing, the rule is just that account and asset are
+	// each available.
+	addr, _, err := cx.accountReference(account)
+	if err != nil {
+		return basics.Address{}, 0, err
+	}
+	asset, err := cx.assetReference(ref, false)
+	if err != nil {
+		return basics.Address{}, 0, err
+	}
+	return addr, asset, nil
 }
 
 func opAssetHoldingGet(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // asset
+	last := len(cx.Stack) - 1 // asset
 	prev := last - 1          // account
 
 	holdingField := AssetHoldingField(cx.program[cx.pc+1])
@@ -4447,12 +4912,7 @@ func opAssetHoldingGet(cx *EvalContext) error {
 		return fmt.Errorf("invalid asset_holding_get field %d", holdingField)
 	}
 
-	addr, _, err := cx.accountReference(cx.stack[prev])
-	if err != nil {
-		return err
-	}
-
-	asset, err := asaReference(cx, cx.stack[last].Uint, false)
+	addr, asset, err := cx.holdingReference(cx.Stack[prev], cx.Stack[last].Uint)
 	if err != nil {
 		return err
 	}
@@ -4460,7 +4920,7 @@ func opAssetHoldingGet(cx *EvalContext) error {
 	var exist uint64 = 0
 	var value stackValue
 	if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
-		// the holding exist, read the value
+		// the holding exists, read the value
 		exist = 1
 		value, err = cx.assetHoldingToValue(&holding, fs)
 		if err != nil {
@@ -4468,13 +4928,13 @@ func opAssetHoldingGet(cx *EvalContext) error {
 		}
 	}
 
-	cx.stack[prev] = value
-	cx.stack[last].Uint = exist
+	cx.Stack[prev] = value
+	cx.Stack[last].Uint = exist
 	return nil
 }
 
 func opAssetParamsGet(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // asset
+	last := len(cx.Stack) - 1 // asset
 
 	paramField := AssetParamsField(cx.program[cx.pc+1])
 	fs, ok := assetParamsFieldSpecByField(paramField)
@@ -4482,7 +4942,7 @@ func opAssetParamsGet(cx *EvalContext) error {
 		return fmt.Errorf("invalid asset_params_get field %d", paramField)
 	}
 
-	asset, err := asaReference(cx, cx.stack[last].Uint, true)
+	asset, err := cx.assetReference(cx.Stack[last].Uint, true)
 	if err != nil {
 		return err
 	}
@@ -4498,13 +4958,13 @@ func opAssetParamsGet(cx *EvalContext) error {
 		}
 	}
 
-	cx.stack[last] = value
-	cx.stack = append(cx.stack, stackValue{Uint: exist})
+	cx.Stack[last] = value
+	cx.Stack = append(cx.Stack, stackValue{Uint: exist})
 	return nil
 }
 
 func opAppParamsGet(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // app
+	last := len(cx.Stack) - 1 // app
 
 	paramField := AppParamsField(cx.program[cx.pc+1])
 	fs, ok := appParamsFieldSpecByField(paramField)
@@ -4512,7 +4972,7 @@ func opAppParamsGet(cx *EvalContext) error {
 		return fmt.Errorf("invalid app_params_get field %d", paramField)
 	}
 
-	app, err := appReference(cx, cx.stack[last].Uint, true)
+	app, err := cx.appReference(cx.Stack[last].Uint, true)
 	if err != nil {
 		return err
 	}
@@ -4537,15 +4997,15 @@ func opAppParamsGet(cx *EvalContext) error {
 		}
 	}
 
-	cx.stack[last] = value
-	cx.stack = append(cx.stack, stackValue{Uint: exist})
+	cx.Stack[last] = value
+	cx.Stack = append(cx.Stack, stackValue{Uint: exist})
 	return nil
 }
 
 func opAcctParamsGet(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // acct
+	last := len(cx.Stack) - 1 // acct
 
-	addr, _, err := cx.accountReference(cx.stack[last])
+	addr, _, err := cx.accountReference(cx.Stack[last])
 	if err != nil {
 		return err
 	}
@@ -4590,25 +5050,75 @@ func opAcctParamsGet(cx *EvalContext) error {
 		value.Uint = account.TotalBoxes
 	case AcctTotalBoxBytes:
 		value.Uint = account.TotalBoxBytes
+	case AcctIncentiveEligible:
+		value = boolToSV(account.IncentiveEligible)
+	case AcctLastHeartbeat:
+		value.Uint = uint64(account.LastHeartbeat)
+	case AcctLastProposed:
+		value.Uint = uint64(account.LastProposed)
+	default:
+		return fmt.Errorf("invalid account field %s", fs.field)
 	}
-	cx.stack[last] = value
-	cx.stack = append(cx.stack, boolToSV(account.MicroAlgos.Raw > 0))
+	cx.Stack[last] = value
+	cx.Stack = append(cx.Stack, boolToSV(account.MicroAlgos.Raw > 0))
+	return nil
+}
+
+func opVoterParamsGet(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // acct
+	addr, _, err := cx.accountReference(cx.Stack[last])
+	if err != nil {
+		return err
+	}
+
+	paramField := VoterParamsField(cx.program[cx.pc+1])
+	fs, ok := voterParamsFieldSpecByField(paramField)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid voter_params_get field %d", paramField)
+	}
+
+	account, err := cx.Ledger.AgreementData(addr)
+	if err != nil {
+		return err
+	}
+
+	var value stackValue
+
+	switch fs.field {
+	case VoterBalance:
+		value.Uint = account.MicroAlgosWithRewards.Raw
+	case VoterIncentiveEligible:
+		value = boolToSV(account.IncentiveEligible)
+	default:
+		return fmt.Errorf("invalid voter field %s", fs.field)
+	}
+	cx.Stack[last] = value
+	cx.Stack = append(cx.Stack, boolToSV(account.MicroAlgosWithRewards.Raw > 0))
+	return nil
+}
+
+func opOnlineStake(cx *EvalContext) error {
+	amount, err := cx.Ledger.OnlineStake()
+	if err != nil {
+		return err
+	}
+	cx.Stack = append(cx.Stack, stackValue{Uint: amount.Raw})
 	return nil
 }
 
 func opLog(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 
-	if len(cx.txn.EvalDelta.Logs) >= maxLogCalls {
-		return fmt.Errorf("too many log calls in program. up to %d is allowed", maxLogCalls)
+	if uint64(len(cx.txn.EvalDelta.Logs)) >= cx.MaxLogCalls {
+		return fmt.Errorf("too many log calls in program. up to %d is allowed", cx.MaxLogCalls)
 	}
-	log := cx.stack[last]
+	log := cx.Stack[last]
 	cx.logSize += len(log.Bytes)
-	if cx.logSize > maxLogSize {
-		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, maxLogSize)
+	if uint64(cx.logSize) > cx.MaxLogSize {
+		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, cx.MaxLogSize)
 	}
 	cx.txn.EvalDelta.Logs = append(cx.txn.EvalDelta.Logs, string(log.Bytes))
-	cx.stack = cx.stack[:last]
+	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
@@ -4617,8 +5127,8 @@ func authorizedSender(cx *EvalContext, addr basics.Address) error {
 	if err != nil {
 		return err
 	}
-	if cx.getApplicationAddress(cx.appID) != authorizer {
-		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.getApplicationAddress(cx.appID), authorizer)
+	if cx.GetApplicationAddress(cx.appID) != authorizer {
+		return fmt.Errorf("app %d (addr %s) unauthorized %s", cx.appID, cx.GetApplicationAddress(cx.appID), authorizer)
 	}
 	return nil
 }
@@ -4626,7 +5136,7 @@ func authorizedSender(cx *EvalContext, addr basics.Address) error {
 // addInnerTxn appends a fresh SignedTxn to subtxns, populated with reasonable
 // defaults.
 func addInnerTxn(cx *EvalContext) error {
-	addr := cx.getApplicationAddress(cx.appID)
+	addr := cx.GetApplicationAddress(cx.appID)
 
 	// For compatibility with v5, in which failures only occurred in the submit,
 	// we only fail here if we are already over the max inner limit.  Thus this
@@ -4669,7 +5179,7 @@ func addInnerTxn(cx *EvalContext) error {
 	return nil
 }
 
-func opTxBegin(cx *EvalContext) error {
+func opItxnBegin(cx *EvalContext) error {
 	if len(cx.subtxns) > 0 {
 		return errors.New("itxn_begin without itxn_submit")
 	}
@@ -4686,76 +5196,99 @@ func opItxnNext(cx *EvalContext) error {
 	return addInnerTxn(cx)
 }
 
-// availableAccount is used instead of accountReference for more recent opcodes
-// that don't need (or want!) to allow low numbers to represent the account at
-// that index in Accounts array.
-func (cx *EvalContext) availableAccount(sv stackValue) (basics.Address, error) {
-	if sv.argType() != StackBytes || len(sv.Bytes) != crypto.DigestSize {
-		return basics.Address{}, fmt.Errorf("not an address")
-	}
-
-	addr, _, err := cx.accountReference(sv)
-	return addr, err
-}
-
-// availableAsset is used instead of asaReference for more recent opcodes that
-// don't need (or want!) to allow low numbers to represent the asset at that
-// index in ForeignAssets array.
-func (cx *EvalContext) availableAsset(sv stackValue) (basics.AssetIndex, error) {
+// assignAsset is used to convert a stackValue to a uint64 assetIndex, reporting
+// any errors due to availability rules or type checking.
+func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 	uint, err := sv.uint()
 	if err != nil {
-		return basics.AssetIndex(0), err
+		return 0, err
 	}
 	aid := basics.AssetIndex(uint)
 
+	if cx.availableAsset(aid) {
+		return aid, nil
+	}
+
+	return 0, fmt.Errorf("unavailable Asset %d", aid)
+}
+
+// availableAsset determines whether an asset is "available". Before
+// sharedResourcesVersion, an asset had to be available for asset param
+// lookups, asset holding lookups, and asset id assignments to inner
+// transactions. After sharedResourcesVersion, the distinction must be more fine
+// grained. It must be available for asset param lookups, or use in an asset
+// transaction (axfer,acfg,afrz), but not for holding lookups or assignments to
+// an inner static array.
+func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 	// Ensure that aid is in Foreign Assets
-	for _, assetID := range cx.txn.Txn.ForeignAssets {
-		if assetID == aid {
-			return aid, nil
-		}
+	if slices.Contains(cx.txn.Txn.ForeignAssets, aid) {
+		return true
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, assetID := range cx.available.asas {
-			if assetID == aid {
-				return aid, nil
-			}
+		if _, ok := cx.available.createdAsas[aid]; ok {
+			return true
 		}
 	}
 
-	return basics.AssetIndex(0), fmt.Errorf("invalid Asset reference %d", aid)
+	// or some other txn mentioned it
+	if cx.version >= sharedResourcesVersion {
+		if _, ok := cx.available.sharedAsas[aid]; ok {
+			return true
+		}
+	}
+
+	if aid > lastForbiddenResource && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableAsset(aid) {
+		return true
+	}
+
+	return false
 }
 
-// availableApp is used instead of appReference for more recent (stateful)
-// opcodes that don't need (or want!) to allow low numbers to represent the app
-// at that index in ForeignApps array.
-func (cx *EvalContext) availableApp(sv stackValue) (basics.AppIndex, error) {
+// assignApp is used to convert a stackValue to a uint64 appIndex, reporting
+// any errors due to availability rules or type checking.
+func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 	uint, err := sv.uint()
 	if err != nil {
-		return basics.AppIndex(0), err
+		return 0, err
 	}
 	aid := basics.AppIndex(uint)
 
+	if cx.availableApp(aid) {
+		return aid, nil
+	}
+
+	return 0, fmt.Errorf("unavailable App %d", aid)
+}
+
+func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 	// Ensure that aid is in Foreign Apps
-	for _, appID := range cx.txn.Txn.ForeignApps {
-		if appID == aid {
-			return aid, nil
-		}
+	if slices.Contains(cx.txn.Txn.ForeignApps, aid) {
+		return true
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
-		for _, appID := range cx.available.apps {
-			if appID == aid {
-				return aid, nil
-			}
+		if _, ok := cx.available.createdApps[aid]; ok {
+			return true
 		}
 	}
 	// Or, it can be the current app
 	if cx.appID == aid {
-		return aid, nil
+		return true
 	}
 
-	return 0, fmt.Errorf("invalid App reference %d", aid)
+	// or some other txn mentioned it
+	if cx.version >= sharedResourcesVersion {
+		if _, ok := cx.available.sharedApps[aid]; ok {
+			return true
+		}
+	}
+
+	if aid > lastForbiddenResource && cx.UnnamedResources != nil && cx.UnnamedResources.AvailableApp(aid) {
+		return true
+	}
+
+	return false
 }
 
 func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *transactions.Transaction) (err error) {
@@ -4789,7 +5322,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 			return fmt.Errorf("%d is not a valid TypeEnum", i)
 		}
 	case Sender:
-		txn.Sender, err = cx.availableAccount(sv)
+		txn.Sender, err = cx.assignAccount(sv)
 	case Fee:
 		txn.Fee.Raw, err = sv.uint()
 	// FirstValid, LastValid unsettable: little motivation (maybe a app call
@@ -4799,8 +5332,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
 		}
-		txn.Note = make([]byte, len(sv.Bytes))
-		copy(txn.Note, sv.Bytes)
+		txn.Note = slices.Clone(sv.Bytes)
 	// GenesisID, GenesisHash unsettable: surely makes no sense
 	// Group unsettable: Can't make groups from AVM (yet?)
 	// Lease unsettable: This seems potentially useful.
@@ -4839,37 +5371,31 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 
 	// Payment
 	case Receiver:
-		txn.Receiver, err = cx.availableAccount(sv)
+		txn.Receiver, err = cx.assignAccount(sv)
 	case Amount:
 		txn.Amount.Raw, err = sv.uint()
 	case CloseRemainderTo:
-		txn.CloseRemainderTo, err = cx.availableAccount(sv)
+		txn.CloseRemainderTo, err = cx.assignAccount(sv)
 	// AssetTransfer
 	case XferAsset:
-		txn.XferAsset, err = cx.availableAsset(sv)
+		txn.XferAsset, err = cx.assignAsset(sv)
 	case AssetAmount:
 		txn.AssetAmount, err = sv.uint()
 	case AssetSender:
-		txn.AssetSender, err = cx.availableAccount(sv)
+		txn.AssetSender, err = cx.assignAccount(sv)
 	case AssetReceiver:
-		txn.AssetReceiver, err = cx.availableAccount(sv)
+		txn.AssetReceiver, err = cx.assignAccount(sv)
 	case AssetCloseTo:
-		txn.AssetCloseTo, err = cx.availableAccount(sv)
+		txn.AssetCloseTo, err = cx.assignAccount(sv)
 	// AssetConfig
 	case ConfigAsset:
-		txn.ConfigAsset, err = cx.availableAsset(sv)
+		txn.ConfigAsset, err = cx.assignAsset(sv)
 	case ConfigAssetTotal:
 		txn.AssetParams.Total, err = sv.uint()
 	case ConfigAssetDecimals:
 		var decimals uint64
-		decimals, err = sv.uint()
-		if err == nil {
-			if decimals > uint64(cx.Proto.MaxAssetDecimals) {
-				err = fmt.Errorf("too many decimals (%d)", decimals)
-			} else {
-				txn.AssetParams.Decimals = uint32(decimals)
-			}
-		}
+		decimals, err = sv.uintMaxed(uint64(cx.Proto.MaxAssetDecimals))
+		txn.AssetParams.Decimals = uint32(decimals)
 	case ConfigAssetDefaultFrozen:
 		txn.AssetParams.DefaultFrozen, err = sv.bool()
 	case ConfigAssetUnitName:
@@ -4893,19 +5419,21 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.AssetParams.Clawback, err = sv.address()
 	// Freeze
 	case FreezeAsset:
-		txn.FreezeAsset, err = cx.availableAsset(sv)
+		txn.FreezeAsset, err = cx.assignAsset(sv)
 	case FreezeAssetAccount:
-		txn.FreezeAccount, err = cx.availableAccount(sv)
+		txn.FreezeAccount, err = cx.assignAccount(sv)
 	case FreezeAssetFrozen:
 		txn.AssetFrozen, err = sv.bool()
 
 	// ApplicationCall
 	case ApplicationID:
-		txn.ApplicationID, err = cx.availableApp(sv)
+		txn.ApplicationID, err = cx.assignApp(sv)
 	case OnCompletion:
 		var onc uint64
 		onc, err = sv.uintMaxed(uint64(transactions.DeleteApplicationOC))
 		txn.OnCompletion = transactions.OnCompletion(onc)
+	case RejectVersion:
+		txn.RejectVersion, err = sv.uint()
 	case ApplicationArgs:
 		if sv.Bytes == nil {
 			return fmt.Errorf("ApplicationArg is not a byte array")
@@ -4920,12 +5448,10 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(txn.ApplicationArgs) >= cx.Proto.MaxAppArgs {
 			return errors.New("too many application args")
 		}
-		new := make([]byte, len(sv.Bytes))
-		copy(new, sv.Bytes)
-		txn.ApplicationArgs = append(txn.ApplicationArgs, new)
+		txn.ApplicationArgs = append(txn.ApplicationArgs, slices.Clone(sv.Bytes))
 	case Accounts:
 		var new basics.Address
-		new, err = cx.availableAccount(sv)
+		new, err = cx.assignAccount(sv)
 		if err != nil {
 			return err
 		}
@@ -4938,15 +5464,13 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
-		txn.ApprovalProgram = make([]byte, len(sv.Bytes))
-		copy(txn.ApprovalProgram, sv.Bytes)
+		txn.ApprovalProgram = slices.Clone(sv.Bytes)
 	case ClearStateProgram:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
-		txn.ClearStateProgram = make([]byte, len(sv.Bytes))
-		copy(txn.ClearStateProgram, sv.Bytes)
+		txn.ClearStateProgram = slices.Clone(sv.Bytes)
 	case ApprovalProgramPages:
 		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)
@@ -4961,7 +5485,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		}
 	case Assets:
 		var new basics.AssetIndex
-		new, err = cx.availableAsset(sv)
+		new, err = cx.assignAsset(sv)
 		if err != nil {
 			return err
 		}
@@ -4971,7 +5495,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		txn.ForeignAssets = append(txn.ForeignAssets, new)
 	case Applications:
 		var new basics.AppIndex
-		new, err = cx.availableApp(sv)
+		new, err = cx.assignApp(sv)
 		if err != nil {
 			return err
 		}
@@ -5010,19 +5534,19 @@ func opItxnField(cx *EvalContext) error {
 	if itx < 0 {
 		return errors.New("itxn_field without itxn_begin")
 	}
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField(field)
 	if !ok || fs.itxVersion == 0 || fs.itxVersion > cx.version {
 		return fmt.Errorf("invalid itxn_field %s", field)
 	}
-	sv := cx.stack[last]
+	sv := cx.Stack[last]
 	err := cx.stackIntoTxnField(sv, &fs, &cx.subtxns[itx].Txn)
-	cx.stack = cx.stack[:last] // pop
+	cx.Stack = cx.Stack[:last] // pop
 	return err
 }
 
-func opItxnSubmit(cx *EvalContext) error {
+func opItxnSubmit(cx *EvalContext) (err error) {
 	// Should rarely trigger, since itxn_next checks these too. (but that check
 	// must be imperfect, see its comment) In contrast to that check, subtxns is
 	// already populated here.
@@ -5064,21 +5588,20 @@ func opItxnSubmit(cx *EvalContext) error {
 		parent = cx.currentTxID()
 	}
 	for itx := range cx.subtxns {
-		// The goal is to follow the same invariants used by the
-		// transaction pool. Namely that any transaction that makes it
-		// to Perform (which is equivalent to eval.applyTransaction)
-		// is authorized, and WellFormed.
-		err := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
-		if err != nil {
-			return err
-		}
+		// The goal is to follow the same invariants used by the transaction
+		// pool. Namely that any transaction that makes it to Perform (which is
+		// equivalent to eval.applyTransaction) is WellFormed. Authorization
+		// must be checked later, to take state changes from earlier in the
+		// group into account.
 
 		// Recall that WellFormed does not care about individual
 		// transaction fees because of fee pooling. Checked above.
-		err = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
-		if err != nil {
-			return err
+		txnErr := cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		if txnErr != nil {
+			return txnErr
 		}
+
+		var calledVersion uint64
 
 		// Disallow reentrancy, limit inner app call depth, and do version checks
 		if cx.subtxns[itx].Txn.Type == protocol.ApplicationCallTx {
@@ -5099,9 +5622,9 @@ func opItxnSubmit(cx *EvalContext) error {
 			// Set program by txn, approval, or clear state
 			program := cx.subtxns[itx].Txn.ApprovalProgram
 			if cx.subtxns[itx].Txn.ApplicationID != 0 {
-				app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
-				if err != nil {
-					return err
+				app, _, paramsErr := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+				if paramsErr != nil {
+					return paramsErr
 				}
 				program = app.ApprovalProgram
 				if cx.subtxns[itx].Txn.OnCompletion == transactions.ClearStateOC {
@@ -5110,13 +5633,13 @@ func opItxnSubmit(cx *EvalContext) error {
 			}
 
 			// Can't call old versions in inner apps.
-			v, _, err := transactions.ProgramVersion(program)
+			calledVersion, _, err = transactions.ProgramVersion(program)
 			if err != nil {
 				return err
 			}
-			if v < cx.Proto.MinInnerApplVersion {
+			if calledVersion < cx.Proto.MinInnerApplVersion {
 				return fmt.Errorf("inner app call with version v%d < v%d",
-					v, cx.Proto.MinInnerApplVersion)
+					calledVersion, cx.Proto.MinInnerApplVersion)
 			}
 
 			// Don't allow opt-in if the CSP is not runnable as an inner.
@@ -5125,22 +5648,33 @@ func opItxnSubmit(cx *EvalContext) error {
 			if cx.subtxns[itx].Txn.OnCompletion == transactions.OptInOC {
 				csp := cx.subtxns[itx].Txn.ClearStateProgram
 				if cx.subtxns[itx].Txn.ApplicationID != 0 {
-					app, _, err := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
-					if err != nil {
-						return err
+					app, _, paramsErr := cx.Ledger.AppParams(cx.subtxns[itx].Txn.ApplicationID)
+					if paramsErr != nil {
+						return paramsErr
 					}
 					csp = app.ClearStateProgram
 				}
-				csv, _, err := transactions.ProgramVersion(csp)
-				if err != nil {
-					return err
+				csv, _, verErr := transactions.ProgramVersion(csp)
+				if verErr != nil {
+					return verErr
 				}
 				if csv < cx.Proto.MinInnerApplVersion {
 					return fmt.Errorf("inner app call opt-in with CSP v%d < v%d",
 						csv, cx.Proto.MinInnerApplVersion)
 				}
 			}
+		}
 
+		// Starting in v9, it's possible for apps to create transactions that
+		// should not be allowed to run, because they require access to
+		// resources that the caller does not have.  This can only happen for
+		// Holdings and Local States. The caller might have access to the
+		// account and the asa or app, but not the holding or locals, because
+		// the caller gained access to the two top resources by group sharing
+		// from two different transactions.
+		err = cx.allows(&cx.subtxns[itx].Txn, calledVersion)
+		if err != nil {
+			return err
 		}
 
 		if isGroup {
@@ -5170,6 +5704,10 @@ func opItxnSubmit(cx *EvalContext) error {
 
 	if ep.Tracer != nil {
 		ep.Tracer.BeforeTxnGroup(ep)
+		// Ensure we update the tracer before exiting
+		defer func() {
+			ep.Tracer.AfterTxnGroup(ep, nil, err)
+		}()
 	}
 
 	for i := range ep.TxnGroup {
@@ -5177,75 +5715,29 @@ func opItxnSubmit(cx *EvalContext) error {
 			ep.Tracer.BeforeTxn(ep, i)
 		}
 
-		err := cx.Ledger.Perform(i, ep)
+		err := authorizedSender(cx, ep.TxnGroup[i].Txn.Sender)
 		if err != nil {
 			return err
 		}
+		err = cx.Ledger.Perform(i, ep)
+
+		if ep.Tracer != nil {
+			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, err)
+		}
+
+		if err != nil {
+			return basics.Wrap(err, fmt.Sprintf("inner tx %d failed: %s", i, err.Error()), "inner")
+		}
+
 		// This is mostly a no-op, because Perform does its work "in-place", but
 		// RecordAD has some further responsibilities.
 		ep.RecordAD(i, ep.TxnGroup[i].ApplyData)
-
-		if ep.Tracer != nil {
-			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData)
-		}
 	}
 	cx.txn.EvalDelta.InnerTxns = append(cx.txn.EvalDelta.InnerTxns, ep.TxnGroup...)
 	cx.subtxns = nil
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
 
-	if ep.Tracer != nil {
-		ep.Tracer.AfterTxnGroup(ep)
-	}
-
-	return nil
-}
-
-type rawMessage []byte
-
-func (rm rawMessage) ToBeHashed() (protocol.HashID, []byte) {
-	return "", []byte(rm)
-}
-
-func opVrfVerify(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // PK
-	prev := last - 1          // proof
-	pprev := prev - 1         // data
-
-	data := rawMessage(cx.stack[pprev].Bytes)
-	proofbytes := cx.stack[prev].Bytes
-	var proof crypto.VrfProof
-	if len(proofbytes) != len(proof) {
-		return fmt.Errorf("vrf proof wrong size %d != %d", len(proofbytes), len(proof))
-	}
-	copy(proof[:], proofbytes[:])
-
-	pubkeybytes := cx.stack[last].Bytes
-	var pubkey crypto.VrfPubkey
-	if len(pubkeybytes) != len(pubkey) {
-		return fmt.Errorf("vrf pubkey wrong size %d != %d", len(pubkeybytes), len(pubkey))
-	}
-	copy(pubkey[:], pubkeybytes[:])
-
-	var verified bool
-	var output []byte
-	std := VrfStandard(cx.program[cx.pc+1])
-	ss, ok := vrfStandardSpecByField(std)
-	if !ok || ss.version > cx.version {
-		return fmt.Errorf("invalid VRF standard %s", std)
-	}
-	switch std {
-	case VrfAlgorand:
-		var out crypto.VrfOutput
-		verified, out = pubkey.Verify(proof, data)
-		output = out[:]
-	default:
-		return fmt.Errorf("unsupported vrf_verify standard %s", std)
-	}
-
-	cx.stack[pprev].Bytes = output[:]
-	cx.stack[prev] = boolToSV(verified)
-	cx.stack = cx.stack[:last] // pop 1 because we take 3 args and return 2
 	return nil
 }
 
@@ -5269,8 +5761,8 @@ func (cx *EvalContext) availableRound(r uint64) (basics.Round, error) {
 }
 
 func opBlock(cx *EvalContext) error {
-	last := len(cx.stack) - 1 // round
-	round, err := cx.availableRound(cx.stack[last].Uint)
+	last := len(cx.Stack) - 1 // round
+	round, err := cx.availableRound(cx.Stack[last].Uint)
 	if err != nil {
 		return err
 	}
@@ -5280,29 +5772,45 @@ func opBlock(cx *EvalContext) error {
 		return fmt.Errorf("invalid block field %s", f)
 	}
 
-	hdr, err := cx.SigLedger.BlockHdrCached(round)
+	hdr, err := cx.SigLedger.BlockHdr(round)
 	if err != nil {
 		return err
 	}
 
 	switch fs.field {
 	case BlkSeed:
-		cx.stack[last].Bytes = hdr.Seed[:]
-		return nil
+		cx.Stack[last].Bytes = hdr.Seed[:]
 	case BlkTimestamp:
-		cx.stack[last].Bytes = nil
 		if hdr.TimeStamp < 0 {
 			return fmt.Errorf("block(%d) timestamp %d < 0", round, hdr.TimeStamp)
 		}
-		cx.stack[last].Uint = uint64(hdr.TimeStamp)
-		return nil
+		cx.Stack[last] = stackValue{Uint: uint64(hdr.TimeStamp)}
+
+	case BlkBranch:
+		cx.Stack[last].Bytes = hdr.Branch[:]
+	case BlkFeeSink:
+		cx.Stack[last].Bytes = hdr.FeeSink[:]
+	case BlkProtocol:
+		cx.Stack[last].Bytes = []byte(hdr.CurrentProtocol)
+	case BlkTxnCounter:
+		cx.Stack[last] = stackValue{Uint: hdr.TxnCounter}
+
+	case BlkProposer:
+		cx.Stack[last].Bytes = hdr.Proposer[:]
+	case BlkFeesCollected:
+		cx.Stack[last] = stackValue{Uint: hdr.FeesCollected.Raw}
+	case BlkBonus:
+		cx.Stack[last] = stackValue{Uint: hdr.Bonus.Raw}
+	case BlkProposerPayout:
+		cx.Stack[last] = stackValue{Uint: hdr.ProposerPayout.Raw}
 	default:
-		return fmt.Errorf("invalid block field %d", fs.field)
+		return fmt.Errorf("invalid block field %s", fs.field)
 	}
+	return nil
 }
 
-// PcDetails return PC and disassembled instructions at PC up to 2 opcodes back
-func (cx *EvalContext) PcDetails() (pc int, dis string) {
+// pcDetails return PC and disassembled instructions at PC up to 2 opcodes back
+func (cx *EvalContext) pcDetails() (pc int, dis string) {
 	const maxNumAdditionalOpcodes = 2
 	text, ds, err := disassembleInstrumented(cx.program, nil)
 	if err != nil {
@@ -5326,7 +5834,7 @@ func (cx *EvalContext) PcDetails() (pc int, dis string) {
 			break
 		}
 	}
-	return cx.pc, dis
+	return cx.pc, strings.ReplaceAll(strings.TrimSuffix(dis, "\n"), "\n", "; ")
 }
 
 func base64Decode(encoded []byte, encoding *base64.Encoding) ([]byte, error) {
@@ -5354,7 +5862,7 @@ func base64padded(encoded []byte) bool {
 }
 
 func opBase64Decode(cx *EvalContext) error {
-	last := len(cx.stack) - 1
+	last := len(cx.Stack) - 1
 	encodingField := Base64Encoding(cx.program[cx.pc+1])
 	fs, ok := base64EncodingSpecByField(encodingField)
 	if !ok || fs.version > cx.version {
@@ -5365,7 +5873,7 @@ func opBase64Decode(cx *EvalContext) error {
 	if encodingField == StdEncoding {
 		encoding = base64.StdEncoding
 	}
-	encoded := cx.stack[last].Bytes
+	encoded := cx.Stack[last].Bytes
 	if !base64padded(encoded) {
 		encoding = encoding.WithPadding(base64.NoPadding)
 	}
@@ -5373,7 +5881,7 @@ func opBase64Decode(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	cx.stack[last].Bytes = bytes
+	cx.Stack[last].Bytes = bytes
 	return nil
 }
 
@@ -5424,9 +5932,9 @@ func parseJSON(jsonText []byte) (map[string]json.RawMessage, error) {
 
 func opJSONRef(cx *EvalContext) error {
 	// get json key
-	last := len(cx.stack) - 1
-	key := string(cx.stack[last].Bytes)
-	cx.stack = cx.stack[:last] // pop
+	last := len(cx.Stack) - 1
+	key := string(cx.Stack[last].Bytes)
+	cx.Stack = cx.Stack[:last] // pop
 
 	expectedType := JSONRefType(cx.program[cx.pc+1])
 	fs, ok := jsonRefSpecByField(expectedType)
@@ -5435,8 +5943,8 @@ func opJSONRef(cx *EvalContext) error {
 	}
 
 	// parse json text
-	last = len(cx.stack) - 1
-	parsed, err := parseJSON(cx.stack[last].Bytes)
+	last = len(cx.Stack) - 1
+	parsed, err := parseJSON(cx.Stack[last].Bytes)
 	if err != nil {
 		return fmt.Errorf("error while parsing JSON text, %v", err)
 	}
@@ -5448,7 +5956,7 @@ func opJSONRef(cx *EvalContext) error {
 		// if the key is not found, first check whether the JSON text is the null value
 		// by checking whether it is a primitive JSON value. Any other primitive
 		// (or array) would have thrown an error previously during `parseJSON`.
-		isPrimitive, err := isPrimitiveJSON(cx.stack[last].Bytes)
+		isPrimitive, err := isPrimitiveJSON(cx.Stack[last].Bytes)
 		if err == nil && isPrimitive {
 			err = fmt.Errorf("invalid json text, only json object is allowed")
 		}
@@ -5484,6 +5992,6 @@ func opJSONRef(cx *EvalContext) error {
 	default:
 		return fmt.Errorf("unsupported json_ref return type %s", expectedType)
 	}
-	cx.stack[last] = stval
+	cx.Stack[last] = stval
 	return nil
 }

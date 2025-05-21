@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/avm-abi/apps"
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -77,7 +78,6 @@ type appInteractDatum interface {
 }
 
 func helpList(help map[string]appInteractDatum) string {
-	var names []string
 	largestName := 0
 	largestKind := 0
 	for k, v := range help {
@@ -90,7 +90,6 @@ func helpList(help map[string]appInteractDatum) string {
 		if len(v.kind()) > largestKind {
 			largestKind = len(v.kind())
 		}
-		names = append(names, k)
 	}
 
 	namesize := "%-" + fmt.Sprintf("%d", largestName+3) + "s"
@@ -478,7 +477,7 @@ var appExecuteCmd = &cobra.Command{
 	Short: "Execute a procedure on an application",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
 		header := parseAppHeader()
@@ -587,7 +586,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, nil, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, nil, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -613,20 +612,20 @@ var appExecuteCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			if appIdx == 0 {
-				reportInfof("Attempting to create app (global ints %d, global blobs %d, local ints %d, local blobs %d, approval size %d, hash %v; clear size %d, hash %v)", globalSchema.NumUint, globalSchema.NumByteSlice, localSchema.NumUint, localSchema.NumByteSlice, len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+				reportInfof("Attempting to create app (global ints %d, global blobs %d, local ints %d, local blobs %d, approval size %d, hash %v; clear size %d, hash %v)", globalSchema.NumUint, globalSchema.NumByteSlice, localSchema.NumUint, localSchema.NumByteSlice, len(approvalProg), logic.HashProgram(approvalProg), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
 			} else if onCompletion == transactions.UpdateApplicationOC {
-				reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+				reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 			}
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
@@ -654,7 +653,7 @@ var appQueryCmd = &cobra.Command{
 	Short: "Query local or global state from an application",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
 		header := parseAppHeader()

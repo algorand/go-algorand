@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -197,9 +198,9 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 				srcAcctPresent = true
 			}
 
-			ai, err := ac.AccountInformation(addr, true)
-			if err != nil {
-				return err
+			ai, aiErr := ac.AccountInformation(addr, true)
+			if aiErr != nil {
+				return aiErr
 			}
 			amt := ai.Amount
 
@@ -209,10 +210,10 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 			}
 
 			ppa := &pingPongAccount{
-				balance: amt,
-				sk:      secret,
-				pk:      accountAddress,
+				sk: secret,
+				pk: accountAddress,
 			}
+			ppa.balance.Store(amt)
 
 			pps.integrateAccountInfo(addr, ppa, ai)
 
@@ -246,7 +247,7 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 }
 
 func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, ai model.Account) {
-	ppa.balance = ai.Amount
+	ppa.balance.Store(ai.Amount)
 	// assets this account has created
 	if ai.CreatedAssets != nil {
 		for _, ap := range *ai.CreatedAssets {
@@ -470,28 +471,6 @@ func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx transactions
 	}
 	senderAccount.addBalance(-int64(tx.Fee.Raw))
 	return
-}
-
-func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []byte {
-	var progParts []string
-	progParts = append(progParts, `#pragma version 2`)
-	progParts = append(progParts, `byte base64 AA==`)
-
-	for i := uint32(0); i < numHashes; i++ {
-		progParts = append(progParts, hashSize)
-	}
-	for i := uint32(0); i < numOps/2; i++ {
-		progParts = append(progParts, `int 1`)
-		progParts = append(progParts, `pop`)
-	}
-	progParts = append(progParts, `int 1`)
-	progParts = append(progParts, `return`)
-	progAsm := strings.Join(progParts, "\n")
-	ops, err := logic.AssembleString(progAsm)
-	if err != nil {
-		panic(err)
-	}
-	return ops.Program
 }
 
 func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys, numLocalKeys, numBoxUpdate, numBoxRead uint32) ([]byte, string) {
@@ -912,7 +891,7 @@ func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transact
 }
 
 func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Client) (tx transactions.Transaction, err error) {
-	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil, 0)
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
 		panic(err)
@@ -958,7 +937,7 @@ func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.C
 	return nil
 }
 
-func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) {
+func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) { //nolint:unused // TODO
 	allAddrs := make([]string, len(allAccounts))
 	var i int
 	for addr := range allAccounts {
@@ -1003,10 +982,8 @@ func (pps *WorkerState) generateAccounts() {
 }
 
 func uniqueAppend(they []string, x string) []string {
-	for _, v := range they {
-		if v == x {
-			return they
-		}
+	if slices.Contains(they, x) {
+		return they
 	}
 	return append(they, x)
 }

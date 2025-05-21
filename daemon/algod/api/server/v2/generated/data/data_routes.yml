@@ -5,13 +5,15 @@ generate:
 output-options:
   include-tags:
   - data
-  - public
+# do not include endpoints tagged public/experimental
+# - public
   exclude-tags:
   - common
   - private
   - participating
   - nonparticipating
-  - experimental
+# do not exclude endpoints tagged data/experimental
+# - experimental
   type-mappings:
     integer: uint64
   skip-prune: true

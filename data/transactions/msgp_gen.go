@@ -7,9 +7,14 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // The following msgp objects are implemented in this file:
@@ -17,169 +22,221 @@ import (
 //             |-----> (*) MarshalMsg
 //             |-----> (*) CanMarshalMsg
 //             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> ApplicationCallTxnFieldsMaxSize()
 //
 // ApplyData
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> ApplyDataMaxSize()
 //
 // AssetConfigTxnFields
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
 //           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> AssetConfigTxnFieldsMaxSize()
 //
 // AssetFreezeTxnFields
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
 //           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
+//           |-----> AssetFreezeTxnFieldsMaxSize()
 //
 // AssetTransferTxnFields
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
 //            |-----> (*) UnmarshalMsg
+//            |-----> (*) UnmarshalMsgWithState
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> AssetTransferTxnFieldsMaxSize()
 //
 // BoxRef
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> BoxRefMaxSize()
 //
 // EvalDelta
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> EvalDeltaMaxSize()
 //
 // Header
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> HeaderMaxSize()
+//
+// HeartbeatTxnFields
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//          |-----> HeartbeatTxnFieldsMaxSize()
 //
 // KeyregTxnFields
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> KeyregTxnFieldsMaxSize()
 //
 // LogicSig
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> LogicSigMaxSize()
 //
 // OnCompletion
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
+//       |-----> OnCompletionMaxSize()
 //
 // PaymentTxnFields
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> PaymentTxnFieldsMaxSize()
 //
 // Payset
 //    |-----> MarshalMsg
 //    |-----> CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
+//    |-----> PaysetMaxSize()
 //
 // SignedTxn
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> SignedTxnMaxSize()
 //
 // SignedTxnInBlock
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> SignedTxnInBlockMaxSize()
 //
 // SignedTxnWithAD
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> SignedTxnWithADMaxSize()
 //
 // StateProofTxnFields
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
 //          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> StateProofTxnFieldsMaxSize()
 //
 // Transaction
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> TransactionMaxSize()
 //
 // TxGroup
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> TxGroupMaxSize()
 //
 // Txid
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//
+// crypto.Digest
+//       |-----> crypto.DigestMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0006Len := uint32(12)
-	var zb0006Mask uint16 /* 13 bits */
+	zb0006Len := uint32(13)
+	var zb0006Mask uint16 /* 14 bits */
 	if len((*z).ApplicationArgs) == 0 {
 		zb0006Len--
 		zb0006Mask |= 0x2
@@ -224,9 +281,13 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte) {
 		zb0006Len--
 		zb0006Mask |= 0x800
 	}
-	if len((*z).ClearStateProgram) == 0 {
+	if (*z).RejectVersion == 0 {
 		zb0006Len--
 		zb0006Mask |= 0x1000
+	}
+	if len((*z).ClearStateProgram) == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x2000
 	}
 	// variable map header, size zb0006Len
 	o = append(o, 0x80|uint8(zb0006Len))
@@ -344,6 +405,11 @@ func (z *ApplicationCallTxnFields) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).LocalStateSchema.MarshalMsg(o)
 		}
 		if (zb0006Mask & 0x1000) == 0 { // if not empty
+			// string "aprv"
+			o = append(o, 0xa4, 0x61, 0x70, 0x72, 0x76)
+			o = msgp.AppendUint64(o, (*z).RejectVersion)
+		}
+		if (zb0006Mask & 0x2000) == 0 { // if not empty
 			// string "apsu"
 			o = append(o, 0xa4, 0x61, 0x70, 0x73, 0x75)
 			o = msgp.AppendBytes(o, (*z).ClearStateProgram)
@@ -358,7 +424,12 @@ func (_ *ApplicationCallTxnFields) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ApplicationCallTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0006 int
@@ -372,7 +443,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0006 > 0 {
 			zb0006--
-			bts, err = (*z).ApplicationID.UnmarshalMsg(bts)
+			bts, err = (*z).ApplicationID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
@@ -441,7 +512,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				(*z).Accounts = make([]basics.Address, zb0011)
 			}
 			for zb0002 := range (*z).Accounts {
-				bts, err = (*z).Accounts[zb0002].UnmarshalMsg(bts)
+				bts, err = (*z).Accounts[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Accounts", zb0002)
 					return
@@ -470,7 +541,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				(*z).ForeignApps = make([]basics.AppIndex, zb0013)
 			}
 			for zb0003 := range (*z).ForeignApps {
-				bts, err = (*z).ForeignApps[zb0003].UnmarshalMsg(bts)
+				bts, err = (*z).ForeignApps[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ForeignApps", zb0003)
 					return
@@ -518,6 +589,16 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					}
 					if zb0017 > 0 {
 						zb0017--
+						var zb0019 int
+						zb0019, err = msgp.ReadBytesBytesHeader(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0004, "struct-from-array", "Name")
+							return
+						}
+						if zb0019 > bounds.MaxBytesKeyValueLen {
+							err = msgp.ErrOverflow(uint64(zb0019), uint64(bounds.MaxBytesKeyValueLen))
+							return
+						}
 						(*z).Boxes[zb0004].Name, bts, err = msgp.ReadBytesBytes(bts, (*z).Boxes[zb0004].Name)
 						if err != nil {
 							err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0004, "struct-from-array", "Name")
@@ -554,6 +635,16 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 								return
 							}
 						case "n":
+							var zb0020 int
+							zb0020, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0004, "Name")
+								return
+							}
+							if zb0020 > bounds.MaxBytesKeyValueLen {
+								err = msgp.ErrOverflow(uint64(zb0020), uint64(bounds.MaxBytesKeyValueLen))
+								return
+							}
 							(*z).Boxes[zb0004].Name, bts, err = msgp.ReadBytesBytes(bts, (*z).Boxes[zb0004].Name)
 							if err != nil {
 								err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0004, "Name")
@@ -572,27 +663,27 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0006 > 0 {
 			zb0006--
-			var zb0019 int
-			var zb0020 bool
-			zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0021 int
+			var zb0022 bool
+			zb0021, zb0022, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
-			if zb0019 > encodedMaxForeignAssets {
-				err = msgp.ErrOverflow(uint64(zb0019), uint64(encodedMaxForeignAssets))
+			if zb0021 > encodedMaxForeignAssets {
+				err = msgp.ErrOverflow(uint64(zb0021), uint64(encodedMaxForeignAssets))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
-			if zb0020 {
+			if zb0022 {
 				(*z).ForeignAssets = nil
-			} else if (*z).ForeignAssets != nil && cap((*z).ForeignAssets) >= zb0019 {
-				(*z).ForeignAssets = ((*z).ForeignAssets)[:zb0019]
+			} else if (*z).ForeignAssets != nil && cap((*z).ForeignAssets) >= zb0021 {
+				(*z).ForeignAssets = ((*z).ForeignAssets)[:zb0021]
 			} else {
-				(*z).ForeignAssets = make([]basics.AssetIndex, zb0019)
+				(*z).ForeignAssets = make([]basics.AssetIndex, zb0021)
 			}
 			for zb0005 := range (*z).ForeignAssets {
-				bts, err = (*z).ForeignAssets[zb0005].UnmarshalMsg(bts)
+				bts, err = (*z).ForeignAssets[zb0005].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ForeignAssets", zb0005)
 					return
@@ -601,7 +692,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0006 > 0 {
 			zb0006--
-			bts, err = (*z).LocalStateSchema.UnmarshalMsg(bts)
+			bts, err = (*z).LocalStateSchema.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema")
 				return
@@ -609,7 +700,7 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0006 > 0 {
 			zb0006--
-			bts, err = (*z).GlobalStateSchema.UnmarshalMsg(bts)
+			bts, err = (*z).GlobalStateSchema.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema")
 				return
@@ -617,14 +708,14 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0006 > 0 {
 			zb0006--
-			var zb0021 int
-			zb0021, err = msgp.ReadBytesBytesHeader(bts)
+			var zb0023 int
+			zb0023, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
-			if zb0021 > config.MaxAvailableAppProgramLen {
-				err = msgp.ErrOverflow(uint64(zb0021), uint64(config.MaxAvailableAppProgramLen))
+			if zb0023 > bounds.MaxAvailableAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0023), uint64(bounds.MaxAvailableAppProgramLen))
 				return
 			}
 			(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
@@ -635,14 +726,14 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0006 > 0 {
 			zb0006--
-			var zb0022 int
-			zb0022, err = msgp.ReadBytesBytesHeader(bts)
+			var zb0024 int
+			zb0024, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
-			if zb0022 > config.MaxAvailableAppProgramLen {
-				err = msgp.ErrOverflow(uint64(zb0022), uint64(config.MaxAvailableAppProgramLen))
+			if zb0024 > bounds.MaxAvailableAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0024), uint64(bounds.MaxAvailableAppProgramLen))
 				return
 			}
 			(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
@@ -656,6 +747,14 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 			(*z).ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ExtraProgramPages")
+				return
+			}
+		}
+		if zb0006 > 0 {
+			zb0006--
+			(*z).RejectVersion, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RejectVersion")
 				return
 			}
 		}
@@ -683,40 +782,40 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 			}
 			switch string(field) {
 			case "apid":
-				bts, err = (*z).ApplicationID.UnmarshalMsg(bts)
+				bts, err = (*z).ApplicationID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
 			case "apan":
 				{
-					var zb0023 uint64
-					zb0023, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0025 uint64
+					zb0025, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "OnCompletion")
 						return
 					}
-					(*z).OnCompletion = OnCompletion(zb0023)
+					(*z).OnCompletion = OnCompletion(zb0025)
 				}
 			case "apaa":
-				var zb0024 int
-				var zb0025 bool
-				zb0024, zb0025, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0026 int
+				var zb0027 bool
+				zb0026, zb0027, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0024 > encodedMaxApplicationArgs {
-					err = msgp.ErrOverflow(uint64(zb0024), uint64(encodedMaxApplicationArgs))
+				if zb0026 > encodedMaxApplicationArgs {
+					err = msgp.ErrOverflow(uint64(zb0026), uint64(encodedMaxApplicationArgs))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0025 {
+				if zb0027 {
 					(*z).ApplicationArgs = nil
-				} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0024 {
-					(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0024]
+				} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0026 {
+					(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0026]
 				} else {
-					(*z).ApplicationArgs = make([][]byte, zb0024)
+					(*z).ApplicationArgs = make([][]byte, zb0026)
 				}
 				for zb0001 := range (*z).ApplicationArgs {
 					(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationArgs[zb0001])
@@ -726,107 +825,117 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					}
 				}
 			case "apat":
-				var zb0026 int
-				var zb0027 bool
-				zb0026, zb0027, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0028 int
+				var zb0029 bool
+				zb0028, zb0029, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0026 > encodedMaxAccounts {
-					err = msgp.ErrOverflow(uint64(zb0026), uint64(encodedMaxAccounts))
+				if zb0028 > encodedMaxAccounts {
+					err = msgp.ErrOverflow(uint64(zb0028), uint64(encodedMaxAccounts))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0027 {
+				if zb0029 {
 					(*z).Accounts = nil
-				} else if (*z).Accounts != nil && cap((*z).Accounts) >= zb0026 {
-					(*z).Accounts = ((*z).Accounts)[:zb0026]
+				} else if (*z).Accounts != nil && cap((*z).Accounts) >= zb0028 {
+					(*z).Accounts = ((*z).Accounts)[:zb0028]
 				} else {
-					(*z).Accounts = make([]basics.Address, zb0026)
+					(*z).Accounts = make([]basics.Address, zb0028)
 				}
 				for zb0002 := range (*z).Accounts {
-					bts, err = (*z).Accounts[zb0002].UnmarshalMsg(bts)
+					bts, err = (*z).Accounts[zb0002].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Accounts", zb0002)
 						return
 					}
 				}
 			case "apfa":
-				var zb0028 int
-				var zb0029 bool
-				zb0028, zb0029, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0030 int
+				var zb0031 bool
+				zb0030, zb0031, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0028 > encodedMaxForeignApps {
-					err = msgp.ErrOverflow(uint64(zb0028), uint64(encodedMaxForeignApps))
+				if zb0030 > encodedMaxForeignApps {
+					err = msgp.ErrOverflow(uint64(zb0030), uint64(encodedMaxForeignApps))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0029 {
+				if zb0031 {
 					(*z).ForeignApps = nil
-				} else if (*z).ForeignApps != nil && cap((*z).ForeignApps) >= zb0028 {
-					(*z).ForeignApps = ((*z).ForeignApps)[:zb0028]
+				} else if (*z).ForeignApps != nil && cap((*z).ForeignApps) >= zb0030 {
+					(*z).ForeignApps = ((*z).ForeignApps)[:zb0030]
 				} else {
-					(*z).ForeignApps = make([]basics.AppIndex, zb0028)
+					(*z).ForeignApps = make([]basics.AppIndex, zb0030)
 				}
 				for zb0003 := range (*z).ForeignApps {
-					bts, err = (*z).ForeignApps[zb0003].UnmarshalMsg(bts)
+					bts, err = (*z).ForeignApps[zb0003].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "ForeignApps", zb0003)
 						return
 					}
 				}
 			case "apbx":
-				var zb0030 int
-				var zb0031 bool
-				zb0030, zb0031, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0032 int
+				var zb0033 bool
+				zb0032, zb0033, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Boxes")
 					return
 				}
-				if zb0030 > encodedMaxBoxes {
-					err = msgp.ErrOverflow(uint64(zb0030), uint64(encodedMaxBoxes))
+				if zb0032 > encodedMaxBoxes {
+					err = msgp.ErrOverflow(uint64(zb0032), uint64(encodedMaxBoxes))
 					err = msgp.WrapError(err, "Boxes")
 					return
 				}
-				if zb0031 {
+				if zb0033 {
 					(*z).Boxes = nil
-				} else if (*z).Boxes != nil && cap((*z).Boxes) >= zb0030 {
-					(*z).Boxes = ((*z).Boxes)[:zb0030]
+				} else if (*z).Boxes != nil && cap((*z).Boxes) >= zb0032 {
+					(*z).Boxes = ((*z).Boxes)[:zb0032]
 				} else {
-					(*z).Boxes = make([]BoxRef, zb0030)
+					(*z).Boxes = make([]BoxRef, zb0032)
 				}
 				for zb0004 := range (*z).Boxes {
-					var zb0032 int
-					var zb0033 bool
-					zb0032, zb0033, bts, err = msgp.ReadMapHeaderBytes(bts)
+					var zb0034 int
+					var zb0035 bool
+					zb0034, zb0035, bts, err = msgp.ReadMapHeaderBytes(bts)
 					if _, ok := err.(msgp.TypeError); ok {
-						zb0032, zb0033, bts, err = msgp.ReadArrayHeaderBytes(bts)
+						zb0034, zb0035, bts, err = msgp.ReadArrayHeaderBytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "Boxes", zb0004)
 							return
 						}
-						if zb0032 > 0 {
-							zb0032--
+						if zb0034 > 0 {
+							zb0034--
 							(*z).Boxes[zb0004].Index, bts, err = msgp.ReadUint64Bytes(bts)
 							if err != nil {
 								err = msgp.WrapError(err, "Boxes", zb0004, "struct-from-array", "Index")
 								return
 							}
 						}
-						if zb0032 > 0 {
-							zb0032--
+						if zb0034 > 0 {
+							zb0034--
+							var zb0036 int
+							zb0036, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Boxes", zb0004, "struct-from-array", "Name")
+								return
+							}
+							if zb0036 > bounds.MaxBytesKeyValueLen {
+								err = msgp.ErrOverflow(uint64(zb0036), uint64(bounds.MaxBytesKeyValueLen))
+								return
+							}
 							(*z).Boxes[zb0004].Name, bts, err = msgp.ReadBytesBytes(bts, (*z).Boxes[zb0004].Name)
 							if err != nil {
 								err = msgp.WrapError(err, "Boxes", zb0004, "struct-from-array", "Name")
 								return
 							}
 						}
-						if zb0032 > 0 {
-							err = msgp.ErrTooManyArrayFields(zb0032)
+						if zb0034 > 0 {
+							err = msgp.ErrTooManyArrayFields(zb0034)
 							if err != nil {
 								err = msgp.WrapError(err, "Boxes", zb0004, "struct-from-array")
 								return
@@ -837,11 +946,11 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 							err = msgp.WrapError(err, "Boxes", zb0004)
 							return
 						}
-						if zb0033 {
+						if zb0035 {
 							(*z).Boxes[zb0004] = BoxRef{}
 						}
-						for zb0032 > 0 {
-							zb0032--
+						for zb0034 > 0 {
+							zb0034--
 							field, bts, err = msgp.ReadMapKeyZC(bts)
 							if err != nil {
 								err = msgp.WrapError(err, "Boxes", zb0004)
@@ -855,6 +964,16 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 									return
 								}
 							case "n":
+								var zb0037 int
+								zb0037, err = msgp.ReadBytesBytesHeader(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "Boxes", zb0004, "Name")
+									return
+								}
+								if zb0037 > bounds.MaxBytesKeyValueLen {
+									err = msgp.ErrOverflow(uint64(zb0037), uint64(bounds.MaxBytesKeyValueLen))
+									return
+								}
 								(*z).Boxes[zb0004].Name, bts, err = msgp.ReadBytesBytes(bts, (*z).Boxes[zb0004].Name)
 								if err != nil {
 									err = msgp.WrapError(err, "Boxes", zb0004, "Name")
@@ -871,53 +990,53 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					}
 				}
 			case "apas":
-				var zb0034 int
-				var zb0035 bool
-				zb0034, zb0035, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0038 int
+				var zb0039 bool
+				zb0038, zb0039, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
-				if zb0034 > encodedMaxForeignAssets {
-					err = msgp.ErrOverflow(uint64(zb0034), uint64(encodedMaxForeignAssets))
+				if zb0038 > encodedMaxForeignAssets {
+					err = msgp.ErrOverflow(uint64(zb0038), uint64(encodedMaxForeignAssets))
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
-				if zb0035 {
+				if zb0039 {
 					(*z).ForeignAssets = nil
-				} else if (*z).ForeignAssets != nil && cap((*z).ForeignAssets) >= zb0034 {
-					(*z).ForeignAssets = ((*z).ForeignAssets)[:zb0034]
+				} else if (*z).ForeignAssets != nil && cap((*z).ForeignAssets) >= zb0038 {
+					(*z).ForeignAssets = ((*z).ForeignAssets)[:zb0038]
 				} else {
-					(*z).ForeignAssets = make([]basics.AssetIndex, zb0034)
+					(*z).ForeignAssets = make([]basics.AssetIndex, zb0038)
 				}
 				for zb0005 := range (*z).ForeignAssets {
-					bts, err = (*z).ForeignAssets[zb0005].UnmarshalMsg(bts)
+					bts, err = (*z).ForeignAssets[zb0005].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "ForeignAssets", zb0005)
 						return
 					}
 				}
 			case "apls":
-				bts, err = (*z).LocalStateSchema.UnmarshalMsg(bts)
+				bts, err = (*z).LocalStateSchema.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "LocalStateSchema")
 					return
 				}
 			case "apgs":
-				bts, err = (*z).GlobalStateSchema.UnmarshalMsg(bts)
+				bts, err = (*z).GlobalStateSchema.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "GlobalStateSchema")
 					return
 				}
 			case "apap":
-				var zb0036 int
-				zb0036, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0040 int
+				zb0040, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-				if zb0036 > config.MaxAvailableAppProgramLen {
-					err = msgp.ErrOverflow(uint64(zb0036), uint64(config.MaxAvailableAppProgramLen))
+				if zb0040 > bounds.MaxAvailableAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0040), uint64(bounds.MaxAvailableAppProgramLen))
 					return
 				}
 				(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
@@ -926,14 +1045,14 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					return
 				}
 			case "apsu":
-				var zb0037 int
-				zb0037, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0041 int
+				zb0041, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
-				if zb0037 > config.MaxAvailableAppProgramLen {
-					err = msgp.ErrOverflow(uint64(zb0037), uint64(config.MaxAvailableAppProgramLen))
+				if zb0041 > bounds.MaxAvailableAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0041), uint64(bounds.MaxAvailableAppProgramLen))
 					return
 				}
 				(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
@@ -945,6 +1064,12 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				(*z).ExtraProgramPages, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ExtraProgramPages")
+					return
+				}
+			case "aprv":
+				(*z).RejectVersion, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RejectVersion")
 					return
 				}
 			default:
@@ -960,6 +1085,9 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 	return
 }
 
+func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ApplicationCallTxnFields) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ApplicationCallTxnFields)
 	return ok
@@ -987,13 +1115,33 @@ func (z *ApplicationCallTxnFields) Msgsize() (s int) {
 	for zb0005 := range (*z).ForeignAssets {
 		s += (*z).ForeignAssets[zb0005].Msgsize()
 	}
-	s += 5 + (*z).LocalStateSchema.Msgsize() + 5 + (*z).GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 5 + msgp.Uint32Size
+	s += 5 + (*z).LocalStateSchema.Msgsize() + 5 + (*z).GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 5 + msgp.Uint32Size + 5 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *ApplicationCallTxnFields) MsgIsZero() bool {
-	return ((*z).ApplicationID.MsgIsZero()) && ((*z).OnCompletion == 0) && (len((*z).ApplicationArgs) == 0) && (len((*z).Accounts) == 0) && (len((*z).ForeignApps) == 0) && (len((*z).Boxes) == 0) && (len((*z).ForeignAssets) == 0) && ((*z).LocalStateSchema.MsgIsZero()) && ((*z).GlobalStateSchema.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && ((*z).ExtraProgramPages == 0)
+	return ((*z).ApplicationID.MsgIsZero()) && ((*z).OnCompletion == 0) && (len((*z).ApplicationArgs) == 0) && (len((*z).Accounts) == 0) && (len((*z).ForeignApps) == 0) && (len((*z).Boxes) == 0) && (len((*z).ForeignAssets) == 0) && ((*z).LocalStateSchema.MsgIsZero()) && ((*z).GlobalStateSchema.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && ((*z).ExtraProgramPages == 0) && ((*z).RejectVersion == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func ApplicationCallTxnFieldsMaxSize() (s int) {
+	s = 1 + 5 + basics.AppIndexMaxSize() + 5 + msgp.Uint64Size + 5
+	// Calculating size of slice: z.ApplicationArgs
+	s += msgp.ArrayHeaderSize + bounds.MaxAppTotalArgLen + 5
+	// Calculating size of slice: z.Accounts
+	s += msgp.ArrayHeaderSize + ((encodedMaxAccounts) * (basics.AddressMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ForeignApps
+	s += msgp.ArrayHeaderSize + ((encodedMaxForeignApps) * (basics.AppIndexMaxSize()))
+	s += 5
+	// Calculating size of slice: z.Boxes
+	s += msgp.ArrayHeaderSize + ((encodedMaxBoxes) * (BoxRefMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ForeignAssets
+	s += msgp.ArrayHeaderSize + ((encodedMaxForeignAssets) * (basics.AssetIndexMaxSize()))
+	s += 5 + basics.StateSchemaMaxSize() + 5 + basics.StateSchemaMaxSize() + 5 + msgp.BytesPrefixSize + bounds.MaxAvailableAppProgramLen + 5 + msgp.BytesPrefixSize + bounds.MaxAvailableAppProgramLen + 5 + msgp.Uint32Size + 5 + msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1087,7 +1235,12 @@ func (_ *ApplyData) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ApplyData) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1101,7 +1254,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ClosingAmount.UnmarshalMsg(bts)
+			bts, err = (*z).ClosingAmount.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClosingAmount")
 				return
@@ -1117,7 +1270,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SenderRewards.UnmarshalMsg(bts)
+			bts, err = (*z).SenderRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SenderRewards")
 				return
@@ -1125,7 +1278,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ReceiverRewards.UnmarshalMsg(bts)
+			bts, err = (*z).ReceiverRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ReceiverRewards")
 				return
@@ -1133,7 +1286,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).CloseRewards.UnmarshalMsg(bts)
+			bts, err = (*z).CloseRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CloseRewards")
 				return
@@ -1141,7 +1294,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).EvalDelta.UnmarshalMsg(bts)
+			bts, err = (*z).EvalDelta.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "EvalDelta")
 				return
@@ -1149,7 +1302,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ConfigAsset.UnmarshalMsg(bts)
+			bts, err = (*z).ConfigAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
@@ -1157,7 +1310,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ApplicationID.UnmarshalMsg(bts)
+			bts, err = (*z).ApplicationID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
@@ -1187,7 +1340,7 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "ca":
-				bts, err = (*z).ClosingAmount.UnmarshalMsg(bts)
+				bts, err = (*z).ClosingAmount.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ClosingAmount")
 					return
@@ -1199,37 +1352,37 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rs":
-				bts, err = (*z).SenderRewards.UnmarshalMsg(bts)
+				bts, err = (*z).SenderRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "SenderRewards")
 					return
 				}
 			case "rr":
-				bts, err = (*z).ReceiverRewards.UnmarshalMsg(bts)
+				bts, err = (*z).ReceiverRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ReceiverRewards")
 					return
 				}
 			case "rc":
-				bts, err = (*z).CloseRewards.UnmarshalMsg(bts)
+				bts, err = (*z).CloseRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "CloseRewards")
 					return
 				}
 			case "dt":
-				bts, err = (*z).EvalDelta.UnmarshalMsg(bts)
+				bts, err = (*z).EvalDelta.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "EvalDelta")
 					return
 				}
 			case "caid":
-				bts, err = (*z).ConfigAsset.UnmarshalMsg(bts)
+				bts, err = (*z).ConfigAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
 			case "apid":
-				bts, err = (*z).ApplicationID.UnmarshalMsg(bts)
+				bts, err = (*z).ApplicationID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationID")
 					return
@@ -1247,6 +1400,9 @@ func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ApplyData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ApplyData) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ApplyData)
 	return ok
@@ -1261,6 +1417,12 @@ func (z *ApplyData) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *ApplyData) MsgIsZero() bool {
 	return ((*z).ClosingAmount.MsgIsZero()) && ((*z).AssetClosingAmount == 0) && ((*z).SenderRewards.MsgIsZero()) && ((*z).ReceiverRewards.MsgIsZero()) && ((*z).CloseRewards.MsgIsZero()) && ((*z).EvalDelta.MsgIsZero()) && ((*z).ConfigAsset.MsgIsZero()) && ((*z).ApplicationID.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func ApplyDataMaxSize() (s int) {
+	s = 1 + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1300,7 +1462,12 @@ func (_ *AssetConfigTxnFields) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AssetConfigTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1314,7 +1481,7 @@ func (z *AssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ConfigAsset.UnmarshalMsg(bts)
+			bts, err = (*z).ConfigAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
@@ -1322,7 +1489,7 @@ func (z *AssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).AssetParams.UnmarshalMsg(bts)
+			bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 				return
@@ -1352,13 +1519,13 @@ func (z *AssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "caid":
-				bts, err = (*z).ConfigAsset.UnmarshalMsg(bts)
+				bts, err = (*z).ConfigAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
 			case "apar":
-				bts, err = (*z).AssetParams.UnmarshalMsg(bts)
+				bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetParams")
 					return
@@ -1376,6 +1543,9 @@ func (z *AssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *AssetConfigTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *AssetConfigTxnFields) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*AssetConfigTxnFields)
 	return ok
@@ -1390,6 +1560,12 @@ func (z *AssetConfigTxnFields) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AssetConfigTxnFields) MsgIsZero() bool {
 	return ((*z).ConfigAsset.MsgIsZero()) && ((*z).AssetParams.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AssetConfigTxnFieldsMaxSize() (s int) {
+	s = 1 + 5 + basics.AssetIndexMaxSize() + 5 + basics.AssetParamsMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1438,7 +1614,12 @@ func (_ *AssetFreezeTxnFields) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AssetFreezeTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1452,7 +1633,7 @@ func (z *AssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).FreezeAccount.UnmarshalMsg(bts)
+			bts, err = (*z).FreezeAccount.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAccount")
 				return
@@ -1460,7 +1641,7 @@ func (z *AssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).FreezeAsset.UnmarshalMsg(bts)
+			bts, err = (*z).FreezeAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
@@ -1498,13 +1679,13 @@ func (z *AssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "fadd":
-				bts, err = (*z).FreezeAccount.UnmarshalMsg(bts)
+				bts, err = (*z).FreezeAccount.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FreezeAccount")
 					return
 				}
 			case "faid":
-				bts, err = (*z).FreezeAsset.UnmarshalMsg(bts)
+				bts, err = (*z).FreezeAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
@@ -1528,6 +1709,9 @@ func (z *AssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *AssetFreezeTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *AssetFreezeTxnFields) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*AssetFreezeTxnFields)
 	return ok
@@ -1542,6 +1726,12 @@ func (z *AssetFreezeTxnFields) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AssetFreezeTxnFields) MsgIsZero() bool {
 	return ((*z).FreezeAccount.MsgIsZero()) && ((*z).FreezeAsset.MsgIsZero()) && ((*z).AssetFrozen == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AssetFreezeTxnFieldsMaxSize() (s int) {
+	s = 1 + 5 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.BoolSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1608,7 +1798,12 @@ func (_ *AssetTransferTxnFields) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AssetTransferTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1622,7 +1817,7 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).XferAsset.UnmarshalMsg(bts)
+			bts, err = (*z).XferAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
@@ -1638,7 +1833,7 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).AssetSender.UnmarshalMsg(bts)
+			bts, err = (*z).AssetSender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetSender")
 				return
@@ -1646,7 +1841,7 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).AssetReceiver.UnmarshalMsg(bts)
+			bts, err = (*z).AssetReceiver.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetReceiver")
 				return
@@ -1654,7 +1849,7 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).AssetCloseTo.UnmarshalMsg(bts)
+			bts, err = (*z).AssetCloseTo.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetCloseTo")
 				return
@@ -1684,7 +1879,7 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 			}
 			switch string(field) {
 			case "xaid":
-				bts, err = (*z).XferAsset.UnmarshalMsg(bts)
+				bts, err = (*z).XferAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "XferAsset")
 					return
@@ -1696,19 +1891,19 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 					return
 				}
 			case "asnd":
-				bts, err = (*z).AssetSender.UnmarshalMsg(bts)
+				bts, err = (*z).AssetSender.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetSender")
 					return
 				}
 			case "arcv":
-				bts, err = (*z).AssetReceiver.UnmarshalMsg(bts)
+				bts, err = (*z).AssetReceiver.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetReceiver")
 					return
 				}
 			case "aclose":
-				bts, err = (*z).AssetCloseTo.UnmarshalMsg(bts)
+				bts, err = (*z).AssetCloseTo.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetCloseTo")
 					return
@@ -1726,6 +1921,9 @@ func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) 
 	return
 }
 
+func (z *AssetTransferTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *AssetTransferTxnFields) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*AssetTransferTxnFields)
 	return ok
@@ -1740,6 +1938,12 @@ func (z *AssetTransferTxnFields) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AssetTransferTxnFields) MsgIsZero() bool {
 	return ((*z).XferAsset.MsgIsZero()) && ((*z).AssetAmount == 0) && ((*z).AssetSender.MsgIsZero()) && ((*z).AssetReceiver.MsgIsZero()) && ((*z).AssetCloseTo.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AssetTransferTxnFieldsMaxSize() (s int) {
+	s = 1 + 5 + basics.AssetIndexMaxSize() + 5 + msgp.Uint64Size + 5 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 7 + basics.AddressMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1779,7 +1983,12 @@ func (_ *BoxRef) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *BoxRef) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *BoxRef) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -1801,6 +2010,16 @@ func (z *BoxRef) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
+			var zb0003 int
+			zb0003, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Name")
+				return
+			}
+			if zb0003 > bounds.MaxBytesKeyValueLen {
+				err = msgp.ErrOverflow(uint64(zb0003), uint64(bounds.MaxBytesKeyValueLen))
+				return
+			}
 			(*z).Name, bts, err = msgp.ReadBytesBytes(bts, (*z).Name)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Name")
@@ -1837,6 +2056,16 @@ func (z *BoxRef) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "n":
+				var zb0004 int
+				zb0004, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Name")
+					return
+				}
+				if zb0004 > bounds.MaxBytesKeyValueLen {
+					err = msgp.ErrOverflow(uint64(zb0004), uint64(bounds.MaxBytesKeyValueLen))
+					return
+				}
 				(*z).Name, bts, err = msgp.ReadBytesBytes(bts, (*z).Name)
 				if err != nil {
 					err = msgp.WrapError(err, "Name")
@@ -1855,6 +2084,9 @@ func (z *BoxRef) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *BoxRef) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *BoxRef) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*BoxRef)
 	return ok
@@ -1871,37 +2103,47 @@ func (z *BoxRef) MsgIsZero() bool {
 	return ((*z).Index == 0) && (len((*z).Name) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func BoxRefMaxSize() (s int) {
+	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BytesPrefixSize + bounds.MaxBytesKeyValueLen
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0005Len := uint32(4)
-	var zb0005Mask uint8 /* 5 bits */
+	zb0006Len := uint32(5)
+	var zb0006Mask uint8 /* 6 bits */
 	if (*z).GlobalDelta.MsgIsZero() {
-		zb0005Len--
-		zb0005Mask |= 0x2
+		zb0006Len--
+		zb0006Mask |= 0x2
 	}
 	if len((*z).InnerTxns) == 0 {
-		zb0005Len--
-		zb0005Mask |= 0x4
+		zb0006Len--
+		zb0006Mask |= 0x4
 	}
 	if len((*z).LocalDeltas) == 0 {
-		zb0005Len--
-		zb0005Mask |= 0x8
+		zb0006Len--
+		zb0006Mask |= 0x8
 	}
 	if len((*z).Logs) == 0 {
-		zb0005Len--
-		zb0005Mask |= 0x10
+		zb0006Len--
+		zb0006Mask |= 0x10
 	}
-	// variable map header, size zb0005Len
-	o = append(o, 0x80|uint8(zb0005Len))
-	if zb0005Len != 0 {
-		if (zb0005Mask & 0x2) == 0 { // if not empty
+	if len((*z).SharedAccts) == 0 {
+		zb0006Len--
+		zb0006Mask |= 0x20
+	}
+	// variable map header, size zb0006Len
+	o = append(o, 0x80|uint8(zb0006Len))
+	if zb0006Len != 0 {
+		if (zb0006Mask & 0x2) == 0 { // if not empty
 			// string "gd"
 			o = append(o, 0xa2, 0x67, 0x64)
 			o = (*z).GlobalDelta.MarshalMsg(o)
 		}
-		if (zb0005Mask & 0x4) == 0 { // if not empty
+		if (zb0006Mask & 0x4) == 0 { // if not empty
 			// string "itx"
 			o = append(o, 0xa3, 0x69, 0x74, 0x78)
 			if (*z).InnerTxns == nil {
@@ -1909,11 +2151,11 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 			} else {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).InnerTxns)))
 			}
-			for zb0004 := range (*z).InnerTxns {
-				o = (*z).InnerTxns[zb0004].MarshalMsg(o)
+			for zb0005 := range (*z).InnerTxns {
+				o = (*z).InnerTxns[zb0005].MarshalMsg(o)
 			}
 		}
-		if (zb0005Mask & 0x8) == 0 { // if not empty
+		if (zb0006Mask & 0x8) == 0 { // if not empty
 			// string "ld"
 			o = append(o, 0xa2, 0x6c, 0x64)
 			if (*z).LocalDeltas == nil {
@@ -1933,7 +2175,7 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 				o = zb0002.MarshalMsg(o)
 			}
 		}
-		if (zb0005Mask & 0x10) == 0 { // if not empty
+		if (zb0006Mask & 0x10) == 0 { // if not empty
 			// string "lg"
 			o = append(o, 0xa2, 0x6c, 0x67)
 			if (*z).Logs == nil {
@@ -1941,8 +2183,20 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte) {
 			} else {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Logs)))
 			}
-			for zb0003 := range (*z).Logs {
-				o = msgp.AppendString(o, (*z).Logs[zb0003])
+			for zb0004 := range (*z).Logs {
+				o = msgp.AppendString(o, (*z).Logs[zb0004])
+			}
+		}
+		if (zb0006Mask & 0x20) == 0 { // if not empty
+			// string "sa"
+			o = append(o, 0xa2, 0x73, 0x61)
+			if (*z).SharedAccts == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).SharedAccts)))
+			}
+			for zb0003 := range (*z).SharedAccts {
+				o = (*z).SharedAccts[zb0003].MarshalMsg(o)
 			}
 		}
 	}
@@ -1955,55 +2209,60 @@ func (_ *EvalDelta) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *EvalDelta) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
-	var zb0005 int
-	var zb0006 bool
-	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0006 int
+	var zb0007 bool
+	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0005 > 0 {
-			zb0005--
-			bts, err = (*z).GlobalDelta.UnmarshalMsg(bts)
+		if zb0006 > 0 {
+			zb0006--
+			bts, err = (*z).GlobalDelta.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalDelta")
 				return
 			}
 		}
-		if zb0005 > 0 {
-			zb0005--
-			var zb0007 int
-			var zb0008 bool
-			zb0007, zb0008, bts, err = msgp.ReadMapHeaderBytes(bts)
+		if zb0006 > 0 {
+			zb0006--
+			var zb0008 int
+			var zb0009 bool
+			zb0008, zb0009, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 				return
 			}
-			if zb0007 > config.MaxEvalDeltaAccounts {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxEvalDeltaAccounts))
+			if zb0008 > bounds.MaxEvalDeltaAccounts {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(bounds.MaxEvalDeltaAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 				return
 			}
-			if zb0008 {
+			if zb0009 {
 				(*z).LocalDeltas = nil
 			} else if (*z).LocalDeltas == nil {
-				(*z).LocalDeltas = make(map[uint64]basics.StateDelta, zb0007)
+				(*z).LocalDeltas = make(map[uint64]basics.StateDelta, zb0008)
 			}
-			for zb0007 > 0 {
+			for zb0008 > 0 {
 				var zb0001 uint64
 				var zb0002 basics.StateDelta
-				zb0007--
+				zb0008--
 				zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 					return
 				}
-				bts, err = zb0002.UnmarshalMsg(bts)
+				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas", zb0001)
 					return
@@ -2011,66 +2270,95 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).LocalDeltas[zb0001] = zb0002
 			}
 		}
-		if zb0005 > 0 {
-			zb0005--
-			var zb0009 int
-			var zb0010 bool
-			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0006 > 0 {
+			zb0006--
+			var zb0010 int
+			var zb0011 bool
+			zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "SharedAccts")
+				return
+			}
+			if zb0010 > bounds.MaxEvalDeltaAccounts {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(bounds.MaxEvalDeltaAccounts))
+				err = msgp.WrapError(err, "struct-from-array", "SharedAccts")
+				return
+			}
+			if zb0011 {
+				(*z).SharedAccts = nil
+			} else if (*z).SharedAccts != nil && cap((*z).SharedAccts) >= zb0010 {
+				(*z).SharedAccts = ((*z).SharedAccts)[:zb0010]
+			} else {
+				(*z).SharedAccts = make([]basics.Address, zb0010)
+			}
+			for zb0003 := range (*z).SharedAccts {
+				bts, err = (*z).SharedAccts[zb0003].UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "SharedAccts", zb0003)
+					return
+				}
+			}
+		}
+		if zb0006 > 0 {
+			zb0006--
+			var zb0012 int
+			var zb0013 bool
+			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
-			if zb0009 > config.MaxLogCalls {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxLogCalls))
+			if zb0012 > bounds.MaxLogCalls {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(bounds.MaxLogCalls))
 				err = msgp.WrapError(err, "struct-from-array", "Logs")
 				return
 			}
-			if zb0010 {
+			if zb0013 {
 				(*z).Logs = nil
-			} else if (*z).Logs != nil && cap((*z).Logs) >= zb0009 {
-				(*z).Logs = ((*z).Logs)[:zb0009]
+			} else if (*z).Logs != nil && cap((*z).Logs) >= zb0012 {
+				(*z).Logs = ((*z).Logs)[:zb0012]
 			} else {
-				(*z).Logs = make([]string, zb0009)
+				(*z).Logs = make([]string, zb0012)
 			}
-			for zb0003 := range (*z).Logs {
-				(*z).Logs[zb0003], bts, err = msgp.ReadStringBytes(bts)
+			for zb0004 := range (*z).Logs {
+				(*z).Logs[zb0004], bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Logs", zb0003)
+					err = msgp.WrapError(err, "struct-from-array", "Logs", zb0004)
 					return
 				}
 			}
 		}
-		if zb0005 > 0 {
-			zb0005--
-			var zb0011 int
-			var zb0012 bool
-			zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0006 > 0 {
+			zb0006--
+			var zb0014 int
+			var zb0015 bool
+			zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "InnerTxns")
 				return
 			}
-			if zb0011 > config.MaxInnerTransactionsPerDelta {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxInnerTransactionsPerDelta))
+			if zb0014 > bounds.MaxInnerTransactionsPerDelta {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(bounds.MaxInnerTransactionsPerDelta))
 				err = msgp.WrapError(err, "struct-from-array", "InnerTxns")
 				return
 			}
-			if zb0012 {
+			if zb0015 {
 				(*z).InnerTxns = nil
-			} else if (*z).InnerTxns != nil && cap((*z).InnerTxns) >= zb0011 {
-				(*z).InnerTxns = ((*z).InnerTxns)[:zb0011]
+			} else if (*z).InnerTxns != nil && cap((*z).InnerTxns) >= zb0014 {
+				(*z).InnerTxns = ((*z).InnerTxns)[:zb0014]
 			} else {
-				(*z).InnerTxns = make([]SignedTxnWithAD, zb0011)
+				(*z).InnerTxns = make([]SignedTxnWithAD, zb0014)
 			}
-			for zb0004 := range (*z).InnerTxns {
-				bts, err = (*z).InnerTxns[zb0004].UnmarshalMsg(bts)
+			for zb0005 := range (*z).InnerTxns {
+				bts, err = (*z).InnerTxns[zb0005].UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "InnerTxns", zb0004)
+					err = msgp.WrapError(err, "struct-from-array", "InnerTxns", zb0005)
 					return
 				}
 			}
 		}
-		if zb0005 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0005)
+		if zb0006 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0006)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -2081,11 +2369,11 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0006 {
+		if zb0007 {
 			(*z) = EvalDelta{}
 		}
-		for zb0005 > 0 {
-			zb0005--
+		for zb0006 > 0 {
+			zb0006--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -2093,96 +2381,123 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "gd":
-				bts, err = (*z).GlobalDelta.UnmarshalMsg(bts)
+				bts, err = (*z).GlobalDelta.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "GlobalDelta")
 					return
 				}
 			case "ld":
-				var zb0013 int
-				var zb0014 bool
-				zb0013, zb0014, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0016 int
+				var zb0017 bool
+				zb0016, zb0017, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LocalDeltas")
 					return
 				}
-				if zb0013 > config.MaxEvalDeltaAccounts {
-					err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxEvalDeltaAccounts))
+				if zb0016 > bounds.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0016), uint64(bounds.MaxEvalDeltaAccounts))
 					err = msgp.WrapError(err, "LocalDeltas")
 					return
 				}
-				if zb0014 {
+				if zb0017 {
 					(*z).LocalDeltas = nil
 				} else if (*z).LocalDeltas == nil {
-					(*z).LocalDeltas = make(map[uint64]basics.StateDelta, zb0013)
+					(*z).LocalDeltas = make(map[uint64]basics.StateDelta, zb0016)
 				}
-				for zb0013 > 0 {
+				for zb0016 > 0 {
 					var zb0001 uint64
 					var zb0002 basics.StateDelta
-					zb0013--
+					zb0016--
 					zb0001, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalDeltas")
 						return
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalDeltas", zb0001)
 						return
 					}
 					(*z).LocalDeltas[zb0001] = zb0002
 				}
+			case "sa":
+				var zb0018 int
+				var zb0019 bool
+				zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "SharedAccts")
+					return
+				}
+				if zb0018 > bounds.MaxEvalDeltaAccounts {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(bounds.MaxEvalDeltaAccounts))
+					err = msgp.WrapError(err, "SharedAccts")
+					return
+				}
+				if zb0019 {
+					(*z).SharedAccts = nil
+				} else if (*z).SharedAccts != nil && cap((*z).SharedAccts) >= zb0018 {
+					(*z).SharedAccts = ((*z).SharedAccts)[:zb0018]
+				} else {
+					(*z).SharedAccts = make([]basics.Address, zb0018)
+				}
+				for zb0003 := range (*z).SharedAccts {
+					bts, err = (*z).SharedAccts[zb0003].UnmarshalMsgWithState(bts, st)
+					if err != nil {
+						err = msgp.WrapError(err, "SharedAccts", zb0003)
+						return
+					}
+				}
 			case "lg":
-				var zb0015 int
-				var zb0016 bool
-				zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0020 int
+				var zb0021 bool
+				zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
-				if zb0015 > config.MaxLogCalls {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxLogCalls))
+				if zb0020 > bounds.MaxLogCalls {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(bounds.MaxLogCalls))
 					err = msgp.WrapError(err, "Logs")
 					return
 				}
-				if zb0016 {
+				if zb0021 {
 					(*z).Logs = nil
-				} else if (*z).Logs != nil && cap((*z).Logs) >= zb0015 {
-					(*z).Logs = ((*z).Logs)[:zb0015]
+				} else if (*z).Logs != nil && cap((*z).Logs) >= zb0020 {
+					(*z).Logs = ((*z).Logs)[:zb0020]
 				} else {
-					(*z).Logs = make([]string, zb0015)
+					(*z).Logs = make([]string, zb0020)
 				}
-				for zb0003 := range (*z).Logs {
-					(*z).Logs[zb0003], bts, err = msgp.ReadStringBytes(bts)
+				for zb0004 := range (*z).Logs {
+					(*z).Logs[zb0004], bts, err = msgp.ReadStringBytes(bts)
 					if err != nil {
-						err = msgp.WrapError(err, "Logs", zb0003)
+						err = msgp.WrapError(err, "Logs", zb0004)
 						return
 					}
 				}
 			case "itx":
-				var zb0017 int
-				var zb0018 bool
-				zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0022 int
+				var zb0023 bool
+				zb0022, zb0023, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "InnerTxns")
 					return
 				}
-				if zb0017 > config.MaxInnerTransactionsPerDelta {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(config.MaxInnerTransactionsPerDelta))
+				if zb0022 > bounds.MaxInnerTransactionsPerDelta {
+					err = msgp.ErrOverflow(uint64(zb0022), uint64(bounds.MaxInnerTransactionsPerDelta))
 					err = msgp.WrapError(err, "InnerTxns")
 					return
 				}
-				if zb0018 {
+				if zb0023 {
 					(*z).InnerTxns = nil
-				} else if (*z).InnerTxns != nil && cap((*z).InnerTxns) >= zb0017 {
-					(*z).InnerTxns = ((*z).InnerTxns)[:zb0017]
+				} else if (*z).InnerTxns != nil && cap((*z).InnerTxns) >= zb0022 {
+					(*z).InnerTxns = ((*z).InnerTxns)[:zb0022]
 				} else {
-					(*z).InnerTxns = make([]SignedTxnWithAD, zb0017)
+					(*z).InnerTxns = make([]SignedTxnWithAD, zb0022)
 				}
-				for zb0004 := range (*z).InnerTxns {
-					bts, err = (*z).InnerTxns[zb0004].UnmarshalMsg(bts)
+				for zb0005 := range (*z).InnerTxns {
+					bts, err = (*z).InnerTxns[zb0005].UnmarshalMsgWithState(bts, st)
 					if err != nil {
-						err = msgp.WrapError(err, "InnerTxns", zb0004)
+						err = msgp.WrapError(err, "InnerTxns", zb0005)
 						return
 					}
 				}
@@ -2199,6 +2514,9 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *EvalDelta) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*EvalDelta)
 	return ok
@@ -2215,19 +2533,42 @@ func (z *EvalDelta) Msgsize() (s int) {
 		}
 	}
 	s += 3 + msgp.ArrayHeaderSize
-	for zb0003 := range (*z).Logs {
-		s += msgp.StringPrefixSize + len((*z).Logs[zb0003])
+	for zb0003 := range (*z).SharedAccts {
+		s += (*z).SharedAccts[zb0003].Msgsize()
+	}
+	s += 3 + msgp.ArrayHeaderSize
+	for zb0004 := range (*z).Logs {
+		s += msgp.StringPrefixSize + len((*z).Logs[zb0004])
 	}
 	s += 4 + msgp.ArrayHeaderSize
-	for zb0004 := range (*z).InnerTxns {
-		s += (*z).InnerTxns[zb0004].Msgsize()
+	for zb0005 := range (*z).InnerTxns {
+		s += (*z).InnerTxns[zb0005].Msgsize()
 	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *EvalDelta) MsgIsZero() bool {
-	return ((*z).GlobalDelta.MsgIsZero()) && (len((*z).LocalDeltas) == 0) && (len((*z).Logs) == 0) && (len((*z).InnerTxns) == 0)
+	return ((*z).GlobalDelta.MsgIsZero()) && (len((*z).LocalDeltas) == 0) && (len((*z).SharedAccts) == 0) && (len((*z).Logs) == 0) && (len((*z).InnerTxns) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func EvalDeltaMaxSize() (s int) {
+	s = 1 + 3 + basics.StateDeltaMaxSize() + 3
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.LocalDeltas
+	s += bounds.MaxEvalDeltaAccounts * (msgp.Uint64Size)
+	// Adding size of map values for z.LocalDeltas
+	s += bounds.MaxEvalDeltaAccounts * (basics.StateDeltaMaxSize())
+	s += 3
+	// Calculating size of slice: z.SharedAccts
+	s += msgp.ArrayHeaderSize + ((bounds.MaxEvalDeltaAccounts) * (basics.AddressMaxSize()))
+	s += 3
+	// Calculating size of slice: z.Logs
+	s += msgp.ArrayHeaderSize + (bounds.MaxLogCalls * msgp.StringPrefixSize) + bounds.MaxEvalDeltaTotalLogSize + 4
+	// Calculating size of slice: z.InnerTxns
+	s += msgp.ArrayHeaderSize + ((bounds.MaxInnerTransactionsPerDelta) * (SignedTxnWithADMaxSize()))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2339,7 +2680,12 @@ func (_ *Header) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Header) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -2353,7 +2699,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Sender.UnmarshalMsg(bts)
+			bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sender")
 				return
@@ -2361,7 +2707,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Fee.UnmarshalMsg(bts)
+			bts, err = (*z).Fee.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
@@ -2369,7 +2715,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).FirstValid.UnmarshalMsg(bts)
+			bts, err = (*z).FirstValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
@@ -2377,7 +2723,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).LastValid.UnmarshalMsg(bts)
+			bts, err = (*z).LastValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
@@ -2391,8 +2737,8 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
-			if zb0004 > config.MaxTxnNoteBytes {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxTxnNoteBytes))
+			if zb0004 > bounds.MaxTxnNoteBytes {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(bounds.MaxTxnNoteBytes))
 				return
 			}
 			(*z).Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Note)
@@ -2403,6 +2749,16 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			var zb0005 int
+			zb0005, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0005 > bounds.MaxGenesisIDLen {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(bounds.MaxGenesisIDLen))
+				return
+			}
 			(*z).GenesisID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
@@ -2411,7 +2767,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+			bts, err = (*z).GenesisHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
 				return
@@ -2419,7 +2775,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Group.UnmarshalMsg(bts)
+			bts, err = (*z).Group.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Group")
 				return
@@ -2435,7 +2791,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).RekeyTo.UnmarshalMsg(bts)
+			bts, err = (*z).RekeyTo.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
 				return
@@ -2465,38 +2821,38 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "snd":
-				bts, err = (*z).Sender.UnmarshalMsg(bts)
+				bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sender")
 					return
 				}
 			case "fee":
-				bts, err = (*z).Fee.UnmarshalMsg(bts)
+				bts, err = (*z).Fee.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
 			case "fv":
-				bts, err = (*z).FirstValid.UnmarshalMsg(bts)
+				bts, err = (*z).FirstValid.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
 			case "lv":
-				bts, err = (*z).LastValid.UnmarshalMsg(bts)
+				bts, err = (*z).LastValid.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
 			case "note":
-				var zb0005 int
-				zb0005, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0006 int
+				zb0006, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Note")
 					return
 				}
-				if zb0005 > config.MaxTxnNoteBytes {
-					err = msgp.ErrOverflow(uint64(zb0005), uint64(config.MaxTxnNoteBytes))
+				if zb0006 > bounds.MaxTxnNoteBytes {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(bounds.MaxTxnNoteBytes))
 					return
 				}
 				(*z).Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Note)
@@ -2505,19 +2861,29 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "gen":
+				var zb0007 int
+				zb0007, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0007 > bounds.MaxGenesisIDLen {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(bounds.MaxGenesisIDLen))
+					return
+				}
 				(*z).GenesisID, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisID")
 					return
 				}
 			case "gh":
-				bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+				bts, err = (*z).GenesisHash.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisHash")
 					return
 				}
 			case "grp":
-				bts, err = (*z).Group.UnmarshalMsg(bts)
+				bts, err = (*z).Group.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Group")
 					return
@@ -2529,7 +2895,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rekey":
-				bts, err = (*z).RekeyTo.UnmarshalMsg(bts)
+				bts, err = (*z).RekeyTo.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RekeyTo")
 					return
@@ -2547,6 +2913,9 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Header) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Header)
 	return ok
@@ -2561,6 +2930,227 @@ func (z *Header) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Header) MsgIsZero() bool {
 	return ((*z).Sender.MsgIsZero()) && ((*z).Fee.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && (len((*z).Note) == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).Group.MsgIsZero()) && ((*z).Lease == ([32]byte{})) && ((*z).RekeyTo.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func HeaderMaxSize() (s int) {
+	s = 1 + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 5 + msgp.BytesPrefixSize + bounds.MaxTxnNoteBytes + 4 + msgp.StringPrefixSize + bounds.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + crypto.DigestMaxSize() + 3
+	// Calculating size of array: z.Lease
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + basics.AddressMaxSize()
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *HeartbeatTxnFields) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 6 bits */
+	if (*z).HbAddress.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).HbKeyDilution == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).HbProof.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).HbSeed.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if (*z).HbVoteID.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "a"
+			o = append(o, 0xa1, 0x61)
+			o = (*z).HbAddress.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "kd"
+			o = append(o, 0xa2, 0x6b, 0x64)
+			o = msgp.AppendUint64(o, (*z).HbKeyDilution)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "prf"
+			o = append(o, 0xa3, 0x70, 0x72, 0x66)
+			o = (*z).HbProof.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "sd"
+			o = append(o, 0xa2, 0x73, 0x64)
+			o = (*z).HbSeed.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "vid"
+			o = append(o, 0xa3, 0x76, 0x69, 0x64)
+			o = (*z).HbVoteID.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *HeartbeatTxnFields) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*HeartbeatTxnFields)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *HeartbeatTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).HbAddress.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "HbAddress")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).HbProof.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "HbProof")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).HbSeed.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "HbSeed")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).HbVoteID.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "HbVoteID")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).HbKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "HbKeyDilution")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = HeartbeatTxnFields{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "a":
+				bts, err = (*z).HbAddress.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "HbAddress")
+					return
+				}
+			case "prf":
+				bts, err = (*z).HbProof.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "HbProof")
+					return
+				}
+			case "sd":
+				bts, err = (*z).HbSeed.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "HbSeed")
+					return
+				}
+			case "vid":
+				bts, err = (*z).HbVoteID.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "HbVoteID")
+					return
+				}
+			case "kd":
+				(*z).HbKeyDilution, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "HbKeyDilution")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *HeartbeatTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *HeartbeatTxnFields) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*HeartbeatTxnFields)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *HeartbeatTxnFields) Msgsize() (s int) {
+	s = 1 + 2 + (*z).HbAddress.Msgsize() + 4 + (*z).HbProof.Msgsize() + 3 + (*z).HbSeed.Msgsize() + 4 + (*z).HbVoteID.Msgsize() + 3 + msgp.Uint64Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *HeartbeatTxnFields) MsgIsZero() bool {
+	return ((*z).HbAddress.MsgIsZero()) && ((*z).HbProof.MsgIsZero()) && ((*z).HbSeed.MsgIsZero()) && ((*z).HbVoteID.MsgIsZero()) && ((*z).HbKeyDilution == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func HeartbeatTxnFieldsMaxSize() (s int) {
+	s = 1 + 2 + basics.AddressMaxSize() + 4 + crypto.HeartbeatProofMaxSize() + 3 + committee.SeedMaxSize() + 4 + crypto.OneTimeSignatureVerifierMaxSize() + 3 + msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2645,7 +3235,12 @@ func (_ *KeyregTxnFields) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *KeyregTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -2659,7 +3254,7 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VotePK.UnmarshalMsg(bts)
+			bts, err = (*z).VotePK.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VotePK")
 				return
@@ -2667,7 +3262,7 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SelectionPK.UnmarshalMsg(bts)
+			bts, err = (*z).SelectionPK.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SelectionPK")
 				return
@@ -2675,7 +3270,7 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).StateProofPK.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofPK.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofPK")
 				return
@@ -2683,7 +3278,7 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VoteFirst.UnmarshalMsg(bts)
+			bts, err = (*z).VoteFirst.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
@@ -2691,7 +3286,7 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VoteLast.UnmarshalMsg(bts)
+			bts, err = (*z).VoteLast.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
@@ -2737,31 +3332,31 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "votekey":
-				bts, err = (*z).VotePK.UnmarshalMsg(bts)
+				bts, err = (*z).VotePK.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VotePK")
 					return
 				}
 			case "selkey":
-				bts, err = (*z).SelectionPK.UnmarshalMsg(bts)
+				bts, err = (*z).SelectionPK.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "SelectionPK")
 					return
 				}
 			case "sprfkey":
-				bts, err = (*z).StateProofPK.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofPK.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofPK")
 					return
 				}
 			case "votefst":
-				bts, err = (*z).VoteFirst.UnmarshalMsg(bts)
+				bts, err = (*z).VoteFirst.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
 			case "votelst":
-				bts, err = (*z).VoteLast.UnmarshalMsg(bts)
+				bts, err = (*z).VoteLast.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteLast")
 					return
@@ -2791,6 +3386,9 @@ func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *KeyregTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *KeyregTxnFields) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*KeyregTxnFields)
 	return ok
@@ -2805,6 +3403,12 @@ func (z *KeyregTxnFields) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *KeyregTxnFields) MsgIsZero() bool {
 	return ((*z).VotePK.MsgIsZero()) && ((*z).SelectionPK.MsgIsZero()) && ((*z).StateProofPK.MsgIsZero()) && ((*z).VoteFirst.MsgIsZero()) && ((*z).VoteLast.MsgIsZero()) && ((*z).VoteKeyDilution == 0) && ((*z).Nonparticipation == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func KeyregTxnFieldsMaxSize() (s int) {
+	s = 1 + 8 + crypto.OneTimeSignatureVerifierMaxSize() + 7 + crypto.VRFVerifierMaxSize() + 8 + merklesignature.CommitmentMaxSize() + 8 + basics.RoundMaxSize() + 8 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2869,7 +3473,12 @@ func (_ *LogicSig) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *LogicSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -2889,8 +3498,8 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Logic")
 				return
 			}
-			if zb0004 > config.MaxLogicSigMaxSize {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxLogicSigMaxSize))
+			if zb0004 > bounds.MaxLogicSigMaxSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(bounds.MaxLogicSigMaxSize))
 				return
 			}
 			(*z).Logic, bts, err = msgp.ReadBytesBytes(bts, (*z).Logic)
@@ -2901,7 +3510,7 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Sig.UnmarshalMsg(bts)
+			bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
@@ -2909,7 +3518,7 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Msig.UnmarshalMsg(bts)
+			bts, err = (*z).Msig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Msig")
 				return
@@ -2943,8 +3552,8 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "Args", zb0001)
 					return
 				}
-				if zb0007 > config.MaxLogicSigMaxSize {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxLogicSigMaxSize))
+				if zb0007 > MaxLogicSigArgSize {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(MaxLogicSigArgSize))
 					return
 				}
 				(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
@@ -2984,8 +3593,8 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Logic")
 					return
 				}
-				if zb0008 > config.MaxLogicSigMaxSize {
-					err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxLogicSigMaxSize))
+				if zb0008 > bounds.MaxLogicSigMaxSize {
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(bounds.MaxLogicSigMaxSize))
 					return
 				}
 				(*z).Logic, bts, err = msgp.ReadBytesBytes(bts, (*z).Logic)
@@ -2994,13 +3603,13 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "sig":
-				bts, err = (*z).Sig.UnmarshalMsg(bts)
+				bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
 			case "msig":
-				bts, err = (*z).Msig.UnmarshalMsg(bts)
+				bts, err = (*z).Msig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Msig")
 					return
@@ -3032,8 +3641,8 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "Args", zb0001)
 						return
 					}
-					if zb0011 > config.MaxLogicSigMaxSize {
-						err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxLogicSigMaxSize))
+					if zb0011 > MaxLogicSigArgSize {
+						err = msgp.ErrOverflow(uint64(zb0011), uint64(MaxLogicSigArgSize))
 						return
 					}
 					(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
@@ -3055,6 +3664,9 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *LogicSig) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*LogicSig)
 	return ok
@@ -3074,6 +3686,14 @@ func (z *LogicSig) MsgIsZero() bool {
 	return (len((*z).Logic) == 0) && ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && (len((*z).Args) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func LogicSigMaxSize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + bounds.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 4
+	// Calculating size of slice: z.Args
+	s += msgp.ArrayHeaderSize + bounds.MaxLogicSigMaxSize
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z OnCompletion) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -3090,7 +3710,12 @@ func (_ OnCompletion) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OnCompletion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OnCompletion) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 uint64
 		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
@@ -3104,6 +3729,9 @@ func (z *OnCompletion) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *OnCompletion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *OnCompletion) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OnCompletion)
 	return ok
@@ -3118,6 +3746,12 @@ func (z OnCompletion) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z OnCompletion) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func OnCompletionMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3166,7 +3800,12 @@ func (_ *PaymentTxnFields) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *PaymentTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -3180,7 +3819,7 @@ func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Receiver.UnmarshalMsg(bts)
+			bts, err = (*z).Receiver.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Receiver")
 				return
@@ -3188,7 +3827,7 @@ func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Amount.UnmarshalMsg(bts)
+			bts, err = (*z).Amount.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
@@ -3196,7 +3835,7 @@ func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).CloseRemainderTo.UnmarshalMsg(bts)
+			bts, err = (*z).CloseRemainderTo.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CloseRemainderTo")
 				return
@@ -3226,19 +3865,19 @@ func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "rcv":
-				bts, err = (*z).Receiver.UnmarshalMsg(bts)
+				bts, err = (*z).Receiver.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Receiver")
 					return
 				}
 			case "amt":
-				bts, err = (*z).Amount.UnmarshalMsg(bts)
+				bts, err = (*z).Amount.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
 			case "close":
-				bts, err = (*z).CloseRemainderTo.UnmarshalMsg(bts)
+				bts, err = (*z).CloseRemainderTo.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "CloseRemainderTo")
 					return
@@ -3256,6 +3895,9 @@ func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *PaymentTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *PaymentTxnFields) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*PaymentTxnFields)
 	return ok
@@ -3270,6 +3912,12 @@ func (z *PaymentTxnFields) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *PaymentTxnFields) MsgIsZero() bool {
 	return ((*z).Receiver.MsgIsZero()) && ((*z).Amount.MsgIsZero()) && ((*z).CloseRemainderTo.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func PaymentTxnFieldsMaxSize() (s int) {
+	s = 1 + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 6 + basics.AddressMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3295,7 +3943,12 @@ func (_ Payset) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Payset) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Payset) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -3316,7 +3969,7 @@ func (z *Payset) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		(*z) = make(Payset, zb0002)
 	}
 	for zb0001 := range *z {
-		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
+		bts, err = (*z)[zb0001].UnmarshalMsgWithState(bts, st)
 		if err != nil {
 			err = msgp.WrapError(err, zb0001)
 			return
@@ -3326,6 +3979,9 @@ func (z *Payset) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Payset) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Payset) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Payset)
 	return ok
@@ -3343,6 +3999,13 @@ func (z Payset) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Payset) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func PaysetMaxSize() (s int) {
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((100000) * (SignedTxnInBlockMaxSize()))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3409,7 +4072,12 @@ func (_ *SignedTxn) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *SignedTxn) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -3423,7 +4091,7 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Sig.UnmarshalMsg(bts)
+			bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
@@ -3431,7 +4099,7 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Msig.UnmarshalMsg(bts)
+			bts, err = (*z).Msig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Msig")
 				return
@@ -3439,7 +4107,7 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Lsig.UnmarshalMsg(bts)
+			bts, err = (*z).Lsig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
 				return
@@ -3447,7 +4115,7 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Txn.UnmarshalMsg(bts)
+			bts, err = (*z).Txn.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Txn")
 				return
@@ -3455,7 +4123,7 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).AuthAddr.UnmarshalMsg(bts)
+			bts, err = (*z).AuthAddr.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AuthAddr")
 				return
@@ -3485,31 +4153,31 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "sig":
-				bts, err = (*z).Sig.UnmarshalMsg(bts)
+				bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
 			case "msig":
-				bts, err = (*z).Msig.UnmarshalMsg(bts)
+				bts, err = (*z).Msig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Msig")
 					return
 				}
 			case "lsig":
-				bts, err = (*z).Lsig.UnmarshalMsg(bts)
+				bts, err = (*z).Lsig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
 			case "txn":
-				bts, err = (*z).Txn.UnmarshalMsg(bts)
+				bts, err = (*z).Txn.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Txn")
 					return
 				}
 			case "sgnr":
-				bts, err = (*z).AuthAddr.UnmarshalMsg(bts)
+				bts, err = (*z).AuthAddr.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AuthAddr")
 					return
@@ -3527,6 +4195,9 @@ func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *SignedTxn) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *SignedTxn) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*SignedTxn)
 	return ok
@@ -3541,6 +4212,12 @@ func (z *SignedTxn) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxn) MsgIsZero() bool {
 	return ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && ((*z).Lsig.MsgIsZero()) && ((*z).Txn.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SignedTxnMaxSize() (s int) {
+	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3697,7 +4374,12 @@ func (_ *SignedTxnInBlock) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *SignedTxnInBlock) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -3711,7 +4393,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.SignedTxn.Sig.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.SignedTxn.Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
@@ -3719,7 +4401,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.SignedTxn.Msig.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.SignedTxn.Msig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Msig")
 				return
@@ -3727,7 +4409,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.SignedTxn.Lsig.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.SignedTxn.Lsig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
 				return
@@ -3735,7 +4417,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Txn")
 				return
@@ -3743,7 +4425,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.SignedTxn.AuthAddr.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.SignedTxn.AuthAddr.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AuthAddr")
 				return
@@ -3751,7 +4433,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.ApplyData.ClosingAmount.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.ApplyData.ClosingAmount.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClosingAmount")
 				return
@@ -3767,7 +4449,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.ApplyData.SenderRewards.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.ApplyData.SenderRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SenderRewards")
 				return
@@ -3775,7 +4457,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ReceiverRewards")
 				return
@@ -3783,7 +4465,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.ApplyData.CloseRewards.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.ApplyData.CloseRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CloseRewards")
 				return
@@ -3791,7 +4473,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.ApplyData.EvalDelta.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.ApplyData.EvalDelta.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "EvalDelta")
 				return
@@ -3799,7 +4481,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.ApplyData.ConfigAsset.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.ApplyData.ConfigAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
@@ -3807,7 +4489,7 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxnWithAD.ApplyData.ApplicationID.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxnWithAD.ApplyData.ApplicationID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
@@ -3853,37 +4535,37 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "sig":
-				bts, err = (*z).SignedTxnWithAD.SignedTxn.Sig.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.SignedTxn.Sig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
 			case "msig":
-				bts, err = (*z).SignedTxnWithAD.SignedTxn.Msig.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.SignedTxn.Msig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Msig")
 					return
 				}
 			case "lsig":
-				bts, err = (*z).SignedTxnWithAD.SignedTxn.Lsig.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.SignedTxn.Lsig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
 			case "txn":
-				bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.SignedTxn.Txn.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Txn")
 					return
 				}
 			case "sgnr":
-				bts, err = (*z).SignedTxnWithAD.SignedTxn.AuthAddr.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.SignedTxn.AuthAddr.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AuthAddr")
 					return
 				}
 			case "ca":
-				bts, err = (*z).SignedTxnWithAD.ApplyData.ClosingAmount.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.ApplyData.ClosingAmount.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ClosingAmount")
 					return
@@ -3895,37 +4577,37 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rs":
-				bts, err = (*z).SignedTxnWithAD.ApplyData.SenderRewards.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.ApplyData.SenderRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "SenderRewards")
 					return
 				}
 			case "rr":
-				bts, err = (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.ApplyData.ReceiverRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ReceiverRewards")
 					return
 				}
 			case "rc":
-				bts, err = (*z).SignedTxnWithAD.ApplyData.CloseRewards.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.ApplyData.CloseRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "CloseRewards")
 					return
 				}
 			case "dt":
-				bts, err = (*z).SignedTxnWithAD.ApplyData.EvalDelta.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.ApplyData.EvalDelta.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "EvalDelta")
 					return
 				}
 			case "caid":
-				bts, err = (*z).SignedTxnWithAD.ApplyData.ConfigAsset.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.ApplyData.ConfigAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
 			case "apid":
-				bts, err = (*z).SignedTxnWithAD.ApplyData.ApplicationID.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxnWithAD.ApplyData.ApplicationID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationID")
 					return
@@ -3955,6 +4637,9 @@ func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *SignedTxnInBlock) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *SignedTxnInBlock) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*SignedTxnInBlock)
 	return ok
@@ -3969,6 +4654,12 @@ func (z *SignedTxnInBlock) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnInBlock) MsgIsZero() bool {
 	return ((*z).SignedTxnWithAD.SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxnWithAD.SignedTxn.AuthAddr.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ClosingAmount.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.AssetClosingAmount == 0) && ((*z).SignedTxnWithAD.ApplyData.SenderRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.CloseRewards.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.EvalDelta.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ConfigAsset.MsgIsZero()) && ((*z).SignedTxnWithAD.ApplyData.ApplicationID.MsgIsZero()) && ((*z).HasGenesisID == false) && ((*z).HasGenesisHash == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SignedTxnInBlockMaxSize() (s int) {
+	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize() + 4 + msgp.BoolSize + 4 + msgp.BoolSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4107,7 +4798,12 @@ func (_ *SignedTxnWithAD) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *SignedTxnWithAD) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -4121,7 +4817,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxn.Sig.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxn.Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
@@ -4129,7 +4825,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxn.Msig.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxn.Msig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Msig")
 				return
@@ -4137,7 +4833,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxn.Lsig.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxn.Lsig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Lsig")
 				return
@@ -4145,7 +4841,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxn.Txn.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxn.Txn.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Txn")
 				return
@@ -4153,7 +4849,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SignedTxn.AuthAddr.UnmarshalMsg(bts)
+			bts, err = (*z).SignedTxn.AuthAddr.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AuthAddr")
 				return
@@ -4161,7 +4857,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ApplyData.ClosingAmount.UnmarshalMsg(bts)
+			bts, err = (*z).ApplyData.ClosingAmount.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClosingAmount")
 				return
@@ -4177,7 +4873,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ApplyData.SenderRewards.UnmarshalMsg(bts)
+			bts, err = (*z).ApplyData.SenderRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SenderRewards")
 				return
@@ -4185,7 +4881,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ApplyData.ReceiverRewards.UnmarshalMsg(bts)
+			bts, err = (*z).ApplyData.ReceiverRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ReceiverRewards")
 				return
@@ -4193,7 +4889,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ApplyData.CloseRewards.UnmarshalMsg(bts)
+			bts, err = (*z).ApplyData.CloseRewards.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CloseRewards")
 				return
@@ -4201,7 +4897,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ApplyData.EvalDelta.UnmarshalMsg(bts)
+			bts, err = (*z).ApplyData.EvalDelta.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "EvalDelta")
 				return
@@ -4209,7 +4905,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ApplyData.ConfigAsset.UnmarshalMsg(bts)
+			bts, err = (*z).ApplyData.ConfigAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
@@ -4217,7 +4913,7 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).ApplyData.ApplicationID.UnmarshalMsg(bts)
+			bts, err = (*z).ApplyData.ApplicationID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
@@ -4247,37 +4943,37 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "sig":
-				bts, err = (*z).SignedTxn.Sig.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxn.Sig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
 				}
 			case "msig":
-				bts, err = (*z).SignedTxn.Msig.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxn.Msig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Msig")
 					return
 				}
 			case "lsig":
-				bts, err = (*z).SignedTxn.Lsig.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxn.Lsig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Lsig")
 					return
 				}
 			case "txn":
-				bts, err = (*z).SignedTxn.Txn.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxn.Txn.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Txn")
 					return
 				}
 			case "sgnr":
-				bts, err = (*z).SignedTxn.AuthAddr.UnmarshalMsg(bts)
+				bts, err = (*z).SignedTxn.AuthAddr.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AuthAddr")
 					return
 				}
 			case "ca":
-				bts, err = (*z).ApplyData.ClosingAmount.UnmarshalMsg(bts)
+				bts, err = (*z).ApplyData.ClosingAmount.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ClosingAmount")
 					return
@@ -4289,37 +4985,37 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rs":
-				bts, err = (*z).ApplyData.SenderRewards.UnmarshalMsg(bts)
+				bts, err = (*z).ApplyData.SenderRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "SenderRewards")
 					return
 				}
 			case "rr":
-				bts, err = (*z).ApplyData.ReceiverRewards.UnmarshalMsg(bts)
+				bts, err = (*z).ApplyData.ReceiverRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ReceiverRewards")
 					return
 				}
 			case "rc":
-				bts, err = (*z).ApplyData.CloseRewards.UnmarshalMsg(bts)
+				bts, err = (*z).ApplyData.CloseRewards.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "CloseRewards")
 					return
 				}
 			case "dt":
-				bts, err = (*z).ApplyData.EvalDelta.UnmarshalMsg(bts)
+				bts, err = (*z).ApplyData.EvalDelta.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "EvalDelta")
 					return
 				}
 			case "caid":
-				bts, err = (*z).ApplyData.ConfigAsset.UnmarshalMsg(bts)
+				bts, err = (*z).ApplyData.ConfigAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
 			case "apid":
-				bts, err = (*z).ApplyData.ApplicationID.UnmarshalMsg(bts)
+				bts, err = (*z).ApplyData.ApplicationID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationID")
 					return
@@ -4337,6 +5033,9 @@ func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *SignedTxnWithAD) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *SignedTxnWithAD) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*SignedTxnWithAD)
 	return ok
@@ -4351,6 +5050,12 @@ func (z *SignedTxnWithAD) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *SignedTxnWithAD) MsgIsZero() bool {
 	return ((*z).SignedTxn.Sig.MsgIsZero()) && ((*z).SignedTxn.Msig.MsgIsZero()) && ((*z).SignedTxn.Lsig.MsgIsZero()) && ((*z).SignedTxn.Txn.MsgIsZero()) && ((*z).SignedTxn.AuthAddr.MsgIsZero()) && ((*z).ApplyData.ClosingAmount.MsgIsZero()) && ((*z).ApplyData.AssetClosingAmount == 0) && ((*z).ApplyData.SenderRewards.MsgIsZero()) && ((*z).ApplyData.ReceiverRewards.MsgIsZero()) && ((*z).ApplyData.CloseRewards.MsgIsZero()) && ((*z).ApplyData.EvalDelta.MsgIsZero()) && ((*z).ApplyData.ConfigAsset.MsgIsZero()) && ((*z).ApplyData.ApplicationID.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SignedTxnWithADMaxSize() (s int) {
+	s = 1 + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 5 + LogicSigMaxSize() + 4 + TransactionMaxSize() + 5 + basics.AddressMaxSize() + 3 + basics.MicroAlgosMaxSize() + 4 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 3 + EvalDeltaMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AppIndexMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4399,7 +5104,12 @@ func (_ *StateProofTxnFields) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofTxnFields) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -4413,7 +5123,7 @@ func (z *StateProofTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).StateProofType.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofType.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofType")
 				return
@@ -4421,7 +5131,7 @@ func (z *StateProofTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).StateProof.UnmarshalMsg(bts)
+			bts, err = (*z).StateProof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProof")
 				return
@@ -4429,7 +5139,7 @@ func (z *StateProofTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Message.UnmarshalMsg(bts)
+			bts, err = (*z).Message.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Message")
 				return
@@ -4459,19 +5169,19 @@ func (z *StateProofTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "sptype":
-				bts, err = (*z).StateProofType.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofType.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofType")
 					return
 				}
 			case "sp":
-				bts, err = (*z).StateProof.UnmarshalMsg(bts)
+				bts, err = (*z).StateProof.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProof")
 					return
 				}
 			case "spmsg":
-				bts, err = (*z).Message.UnmarshalMsg(bts)
+				bts, err = (*z).Message.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Message")
 					return
@@ -4489,6 +5199,9 @@ func (z *StateProofTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *StateProofTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *StateProofTxnFields) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofTxnFields)
 	return ok
@@ -4505,12 +5218,18 @@ func (z *StateProofTxnFields) MsgIsZero() bool {
 	return ((*z).StateProofType.MsgIsZero()) && ((*z).StateProof.MsgIsZero()) && ((*z).Message.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func StateProofTxnFieldsMaxSize() (s int) {
+	s = 1 + 7 + protocol.StateProofTypeMaxSize() + 3 + stateproof.StateProofMaxSize() + 6 + stateproofmsg.MessageMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0007Len := uint32(46)
-	var zb0007Mask uint64 /* 55 bits */
+	zb0007Len := uint32(48)
+	var zb0007Mask uint64 /* 57 bits */
 	if (*z).AssetTransferTxnFields.AssetAmount == 0 {
 		zb0007Len--
 		zb0007Mask |= 0x200
@@ -4575,125 +5294,133 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 		zb0007Len--
 		zb0007Mask |= 0x1000000
 	}
-	if len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0 {
+	if (*z).ApplicationCallTxnFields.RejectVersion == 0 {
 		zb0007Len--
 		zb0007Mask |= 0x2000000
 	}
-	if (*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero() {
+	if len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0 {
 		zb0007Len--
 		zb0007Mask |= 0x4000000
 	}
-	if (*z).AssetTransferTxnFields.AssetSender.MsgIsZero() {
+	if (*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x8000000
 	}
-	if (*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero() {
+	if (*z).AssetTransferTxnFields.AssetSender.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x10000000
 	}
-	if (*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero() {
+	if (*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x20000000
 	}
-	if (*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero() {
+	if (*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x40000000
 	}
-	if (*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero() {
+	if (*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x80000000
 	}
-	if (*z).Header.Fee.MsgIsZero() {
+	if (*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x100000000
 	}
-	if (*z).Header.FirstValid.MsgIsZero() {
+	if (*z).Header.Fee.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x200000000
 	}
-	if (*z).Header.GenesisID == "" {
+	if (*z).Header.FirstValid.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x400000000
 	}
-	if (*z).Header.GenesisHash.MsgIsZero() {
+	if (*z).Header.GenesisID == "" {
 		zb0007Len--
 		zb0007Mask |= 0x800000000
 	}
-	if (*z).Header.Group.MsgIsZero() {
+	if (*z).Header.GenesisHash.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x1000000000
 	}
-	if (*z).Header.LastValid.MsgIsZero() {
+	if (*z).Header.Group.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x2000000000
 	}
-	if (*z).Header.Lease == ([32]byte{}) {
+	if (*z).HeartbeatTxnFields == nil {
 		zb0007Len--
 		zb0007Mask |= 0x4000000000
 	}
-	if (*z).KeyregTxnFields.Nonparticipation == false {
+	if (*z).Header.LastValid.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x8000000000
 	}
-	if len((*z).Header.Note) == 0 {
+	if (*z).Header.Lease == ([32]byte{}) {
 		zb0007Len--
 		zb0007Mask |= 0x10000000000
 	}
-	if (*z).PaymentTxnFields.Receiver.MsgIsZero() {
+	if (*z).KeyregTxnFields.Nonparticipation == false {
 		zb0007Len--
 		zb0007Mask |= 0x20000000000
 	}
-	if (*z).Header.RekeyTo.MsgIsZero() {
+	if len((*z).Header.Note) == 0 {
 		zb0007Len--
 		zb0007Mask |= 0x40000000000
 	}
-	if (*z).KeyregTxnFields.SelectionPK.MsgIsZero() {
+	if (*z).PaymentTxnFields.Receiver.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x80000000000
 	}
-	if (*z).Header.Sender.MsgIsZero() {
+	if (*z).Header.RekeyTo.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x100000000000
 	}
-	if (*z).StateProofTxnFields.StateProof.MsgIsZero() {
+	if (*z).KeyregTxnFields.SelectionPK.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x200000000000
 	}
-	if (*z).StateProofTxnFields.Message.MsgIsZero() {
+	if (*z).Header.Sender.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x400000000000
 	}
-	if (*z).KeyregTxnFields.StateProofPK.MsgIsZero() {
+	if (*z).StateProofTxnFields.StateProof.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x800000000000
 	}
-	if (*z).StateProofTxnFields.StateProofType.MsgIsZero() {
+	if (*z).StateProofTxnFields.Message.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x1000000000000
 	}
-	if (*z).Type.MsgIsZero() {
+	if (*z).KeyregTxnFields.StateProofPK.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x2000000000000
 	}
-	if (*z).KeyregTxnFields.VoteFirst.MsgIsZero() {
+	if (*z).StateProofTxnFields.StateProofType.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x4000000000000
 	}
-	if (*z).KeyregTxnFields.VoteKeyDilution == 0 {
+	if (*z).Type.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x8000000000000
 	}
-	if (*z).KeyregTxnFields.VotePK.MsgIsZero() {
+	if (*z).KeyregTxnFields.VoteFirst.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x10000000000000
 	}
-	if (*z).KeyregTxnFields.VoteLast.MsgIsZero() {
+	if (*z).KeyregTxnFields.VoteKeyDilution == 0 {
 		zb0007Len--
 		zb0007Mask |= 0x20000000000000
 	}
-	if (*z).AssetTransferTxnFields.XferAsset.MsgIsZero() {
+	if (*z).KeyregTxnFields.VotePK.MsgIsZero() {
 		zb0007Len--
 		zb0007Mask |= 0x40000000000000
+	}
+	if (*z).KeyregTxnFields.VoteLast.MsgIsZero() {
+		zb0007Len--
+		zb0007Mask |= 0x80000000000000
+	}
+	if (*z).AssetTransferTxnFields.XferAsset.MsgIsZero() {
+		zb0007Len--
+		zb0007Mask |= 0x100000000000000
 	}
 	// variable map header, size zb0007Len
 	o = msgp.AppendMapHeader(o, zb0007Len)
@@ -4836,151 +5563,165 @@ func (z *Transaction) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).ApplicationCallTxnFields.LocalStateSchema.MarshalMsg(o)
 		}
 		if (zb0007Mask & 0x2000000) == 0 { // if not empty
+			// string "aprv"
+			o = append(o, 0xa4, 0x61, 0x70, 0x72, 0x76)
+			o = msgp.AppendUint64(o, (*z).ApplicationCallTxnFields.RejectVersion)
+		}
+		if (zb0007Mask & 0x4000000) == 0 { // if not empty
 			// string "apsu"
 			o = append(o, 0xa4, 0x61, 0x70, 0x73, 0x75)
 			o = msgp.AppendBytes(o, (*z).ApplicationCallTxnFields.ClearStateProgram)
 		}
-		if (zb0007Mask & 0x4000000) == 0 { // if not empty
+		if (zb0007Mask & 0x8000000) == 0 { // if not empty
 			// string "arcv"
 			o = append(o, 0xa4, 0x61, 0x72, 0x63, 0x76)
 			o = (*z).AssetTransferTxnFields.AssetReceiver.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x8000000) == 0 { // if not empty
+		if (zb0007Mask & 0x10000000) == 0 { // if not empty
 			// string "asnd"
 			o = append(o, 0xa4, 0x61, 0x73, 0x6e, 0x64)
 			o = (*z).AssetTransferTxnFields.AssetSender.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x10000000) == 0 { // if not empty
+		if (zb0007Mask & 0x20000000) == 0 { // if not empty
 			// string "caid"
 			o = append(o, 0xa4, 0x63, 0x61, 0x69, 0x64)
 			o = (*z).AssetConfigTxnFields.ConfigAsset.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x20000000) == 0 { // if not empty
+		if (zb0007Mask & 0x40000000) == 0 { // if not empty
 			// string "close"
 			o = append(o, 0xa5, 0x63, 0x6c, 0x6f, 0x73, 0x65)
 			o = (*z).PaymentTxnFields.CloseRemainderTo.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x40000000) == 0 { // if not empty
+		if (zb0007Mask & 0x80000000) == 0 { // if not empty
 			// string "fadd"
 			o = append(o, 0xa4, 0x66, 0x61, 0x64, 0x64)
 			o = (*z).AssetFreezeTxnFields.FreezeAccount.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x80000000) == 0 { // if not empty
+		if (zb0007Mask & 0x100000000) == 0 { // if not empty
 			// string "faid"
 			o = append(o, 0xa4, 0x66, 0x61, 0x69, 0x64)
 			o = (*z).AssetFreezeTxnFields.FreezeAsset.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x100000000) == 0 { // if not empty
+		if (zb0007Mask & 0x200000000) == 0 { // if not empty
 			// string "fee"
 			o = append(o, 0xa3, 0x66, 0x65, 0x65)
 			o = (*z).Header.Fee.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x200000000) == 0 { // if not empty
+		if (zb0007Mask & 0x400000000) == 0 { // if not empty
 			// string "fv"
 			o = append(o, 0xa2, 0x66, 0x76)
 			o = (*z).Header.FirstValid.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x400000000) == 0 { // if not empty
+		if (zb0007Mask & 0x800000000) == 0 { // if not empty
 			// string "gen"
 			o = append(o, 0xa3, 0x67, 0x65, 0x6e)
 			o = msgp.AppendString(o, (*z).Header.GenesisID)
 		}
-		if (zb0007Mask & 0x800000000) == 0 { // if not empty
+		if (zb0007Mask & 0x1000000000) == 0 { // if not empty
 			// string "gh"
 			o = append(o, 0xa2, 0x67, 0x68)
 			o = (*z).Header.GenesisHash.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x1000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x2000000000) == 0 { // if not empty
 			// string "grp"
 			o = append(o, 0xa3, 0x67, 0x72, 0x70)
 			o = (*z).Header.Group.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x2000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x4000000000) == 0 { // if not empty
+			// string "hb"
+			o = append(o, 0xa2, 0x68, 0x62)
+			if (*z).HeartbeatTxnFields == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = (*z).HeartbeatTxnFields.MarshalMsg(o)
+			}
+		}
+		if (zb0007Mask & 0x8000000000) == 0 { // if not empty
 			// string "lv"
 			o = append(o, 0xa2, 0x6c, 0x76)
 			o = (*z).Header.LastValid.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x4000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x10000000000) == 0 { // if not empty
 			// string "lx"
 			o = append(o, 0xa2, 0x6c, 0x78)
 			o = msgp.AppendBytes(o, ((*z).Header.Lease)[:])
 		}
-		if (zb0007Mask & 0x8000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x20000000000) == 0 { // if not empty
 			// string "nonpart"
 			o = append(o, 0xa7, 0x6e, 0x6f, 0x6e, 0x70, 0x61, 0x72, 0x74)
 			o = msgp.AppendBool(o, (*z).KeyregTxnFields.Nonparticipation)
 		}
-		if (zb0007Mask & 0x10000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x40000000000) == 0 { // if not empty
 			// string "note"
 			o = append(o, 0xa4, 0x6e, 0x6f, 0x74, 0x65)
 			o = msgp.AppendBytes(o, (*z).Header.Note)
 		}
-		if (zb0007Mask & 0x20000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x80000000000) == 0 { // if not empty
 			// string "rcv"
 			o = append(o, 0xa3, 0x72, 0x63, 0x76)
 			o = (*z).PaymentTxnFields.Receiver.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x40000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x100000000000) == 0 { // if not empty
 			// string "rekey"
 			o = append(o, 0xa5, 0x72, 0x65, 0x6b, 0x65, 0x79)
 			o = (*z).Header.RekeyTo.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x80000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x200000000000) == 0 { // if not empty
 			// string "selkey"
 			o = append(o, 0xa6, 0x73, 0x65, 0x6c, 0x6b, 0x65, 0x79)
 			o = (*z).KeyregTxnFields.SelectionPK.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x100000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x400000000000) == 0 { // if not empty
 			// string "snd"
 			o = append(o, 0xa3, 0x73, 0x6e, 0x64)
 			o = (*z).Header.Sender.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x200000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x800000000000) == 0 { // if not empty
 			// string "sp"
 			o = append(o, 0xa2, 0x73, 0x70)
 			o = (*z).StateProofTxnFields.StateProof.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x400000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x1000000000000) == 0 { // if not empty
 			// string "spmsg"
 			o = append(o, 0xa5, 0x73, 0x70, 0x6d, 0x73, 0x67)
 			o = (*z).StateProofTxnFields.Message.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x800000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x2000000000000) == 0 { // if not empty
 			// string "sprfkey"
 			o = append(o, 0xa7, 0x73, 0x70, 0x72, 0x66, 0x6b, 0x65, 0x79)
 			o = (*z).KeyregTxnFields.StateProofPK.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x1000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x4000000000000) == 0 { // if not empty
 			// string "sptype"
 			o = append(o, 0xa6, 0x73, 0x70, 0x74, 0x79, 0x70, 0x65)
 			o = (*z).StateProofTxnFields.StateProofType.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x2000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x8000000000000) == 0 { // if not empty
 			// string "type"
 			o = append(o, 0xa4, 0x74, 0x79, 0x70, 0x65)
 			o = (*z).Type.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x4000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x10000000000000) == 0 { // if not empty
 			// string "votefst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x66, 0x73, 0x74)
 			o = (*z).KeyregTxnFields.VoteFirst.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x8000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x20000000000000) == 0 { // if not empty
 			// string "votekd"
 			o = append(o, 0xa6, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x64)
 			o = msgp.AppendUint64(o, (*z).KeyregTxnFields.VoteKeyDilution)
 		}
-		if (zb0007Mask & 0x10000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x40000000000000) == 0 { // if not empty
 			// string "votekey"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6b, 0x65, 0x79)
 			o = (*z).KeyregTxnFields.VotePK.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x20000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x80000000000000) == 0 { // if not empty
 			// string "votelst"
 			o = append(o, 0xa7, 0x76, 0x6f, 0x74, 0x65, 0x6c, 0x73, 0x74)
 			o = (*z).KeyregTxnFields.VoteLast.MarshalMsg(o)
 		}
-		if (zb0007Mask & 0x40000000000000) == 0 { // if not empty
+		if (zb0007Mask & 0x100000000000000) == 0 { // if not empty
 			// string "xaid"
 			o = append(o, 0xa4, 0x78, 0x61, 0x69, 0x64)
 			o = (*z).AssetTransferTxnFields.XferAsset.MarshalMsg(o)
@@ -4995,7 +5736,12 @@ func (_ *Transaction) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Transaction) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0007 int
@@ -5009,7 +5755,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).Type.UnmarshalMsg(bts)
+			bts, err = (*z).Type.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Type")
 				return
@@ -5017,7 +5763,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).Header.Sender.UnmarshalMsg(bts)
+			bts, err = (*z).Header.Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sender")
 				return
@@ -5025,7 +5771,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).Header.Fee.UnmarshalMsg(bts)
+			bts, err = (*z).Header.Fee.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Fee")
 				return
@@ -5033,7 +5779,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).Header.FirstValid.UnmarshalMsg(bts)
+			bts, err = (*z).Header.FirstValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
@@ -5041,7 +5787,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).Header.LastValid.UnmarshalMsg(bts)
+			bts, err = (*z).Header.LastValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
@@ -5055,8 +5801,8 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Note")
 				return
 			}
-			if zb0009 > config.MaxTxnNoteBytes {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(config.MaxTxnNoteBytes))
+			if zb0009 > bounds.MaxTxnNoteBytes {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(bounds.MaxTxnNoteBytes))
 				return
 			}
 			(*z).Header.Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Header.Note)
@@ -5067,6 +5813,16 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
+			var zb0010 int
+			zb0010, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
+				return
+			}
+			if zb0010 > bounds.MaxGenesisIDLen {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(bounds.MaxGenesisIDLen))
+				return
+			}
 			(*z).Header.GenesisID, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisID")
@@ -5075,7 +5831,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).Header.GenesisHash.UnmarshalMsg(bts)
+			bts, err = (*z).Header.GenesisHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
 				return
@@ -5083,7 +5839,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).Header.Group.UnmarshalMsg(bts)
+			bts, err = (*z).Header.Group.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Group")
 				return
@@ -5099,7 +5855,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).Header.RekeyTo.UnmarshalMsg(bts)
+			bts, err = (*z).Header.RekeyTo.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RekeyTo")
 				return
@@ -5107,7 +5863,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).KeyregTxnFields.VotePK.UnmarshalMsg(bts)
+			bts, err = (*z).KeyregTxnFields.VotePK.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VotePK")
 				return
@@ -5115,7 +5871,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).KeyregTxnFields.SelectionPK.UnmarshalMsg(bts)
+			bts, err = (*z).KeyregTxnFields.SelectionPK.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SelectionPK")
 				return
@@ -5123,7 +5879,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).KeyregTxnFields.StateProofPK.UnmarshalMsg(bts)
+			bts, err = (*z).KeyregTxnFields.StateProofPK.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofPK")
 				return
@@ -5131,7 +5887,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).KeyregTxnFields.VoteFirst.UnmarshalMsg(bts)
+			bts, err = (*z).KeyregTxnFields.VoteFirst.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirst")
 				return
@@ -5139,7 +5895,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).KeyregTxnFields.VoteLast.UnmarshalMsg(bts)
+			bts, err = (*z).KeyregTxnFields.VoteLast.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VoteLast")
 				return
@@ -5163,7 +5919,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).PaymentTxnFields.Receiver.UnmarshalMsg(bts)
+			bts, err = (*z).PaymentTxnFields.Receiver.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Receiver")
 				return
@@ -5171,7 +5927,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).PaymentTxnFields.Amount.UnmarshalMsg(bts)
+			bts, err = (*z).PaymentTxnFields.Amount.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Amount")
 				return
@@ -5179,7 +5935,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).PaymentTxnFields.CloseRemainderTo.UnmarshalMsg(bts)
+			bts, err = (*z).PaymentTxnFields.CloseRemainderTo.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CloseRemainderTo")
 				return
@@ -5187,7 +5943,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).AssetConfigTxnFields.ConfigAsset.UnmarshalMsg(bts)
+			bts, err = (*z).AssetConfigTxnFields.ConfigAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ConfigAsset")
 				return
@@ -5195,7 +5951,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).AssetConfigTxnFields.AssetParams.UnmarshalMsg(bts)
+			bts, err = (*z).AssetConfigTxnFields.AssetParams.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 				return
@@ -5203,7 +5959,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).AssetTransferTxnFields.XferAsset.UnmarshalMsg(bts)
+			bts, err = (*z).AssetTransferTxnFields.XferAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "XferAsset")
 				return
@@ -5219,7 +5975,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).AssetTransferTxnFields.AssetSender.UnmarshalMsg(bts)
+			bts, err = (*z).AssetTransferTxnFields.AssetSender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetSender")
 				return
@@ -5227,7 +5983,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).AssetTransferTxnFields.AssetReceiver.UnmarshalMsg(bts)
+			bts, err = (*z).AssetTransferTxnFields.AssetReceiver.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetReceiver")
 				return
@@ -5235,7 +5991,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).AssetTransferTxnFields.AssetCloseTo.UnmarshalMsg(bts)
+			bts, err = (*z).AssetTransferTxnFields.AssetCloseTo.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AssetCloseTo")
 				return
@@ -5243,7 +5999,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).AssetFreezeTxnFields.FreezeAccount.UnmarshalMsg(bts)
+			bts, err = (*z).AssetFreezeTxnFields.FreezeAccount.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAccount")
 				return
@@ -5251,7 +6007,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).AssetFreezeTxnFields.FreezeAsset.UnmarshalMsg(bts)
+			bts, err = (*z).AssetFreezeTxnFields.FreezeAsset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FreezeAsset")
 				return
@@ -5267,7 +6023,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).ApplicationCallTxnFields.ApplicationID.UnmarshalMsg(bts)
+			bts, err = (*z).ApplicationCallTxnFields.ApplicationID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationID")
 				return
@@ -5276,35 +6032,35 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if zb0007 > 0 {
 			zb0007--
 			{
-				var zb0010 uint64
-				zb0010, bts, err = msgp.ReadUint64Bytes(bts)
+				var zb0011 uint64
+				zb0011, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "OnCompletion")
 					return
 				}
-				(*z).ApplicationCallTxnFields.OnCompletion = OnCompletion(zb0010)
+				(*z).ApplicationCallTxnFields.OnCompletion = OnCompletion(zb0011)
 			}
 		}
 		if zb0007 > 0 {
 			zb0007--
-			var zb0011 int
-			var zb0012 bool
-			zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0012 int
+			var zb0013 bool
+			zb0012, zb0013, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
-			if zb0011 > encodedMaxApplicationArgs {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(encodedMaxApplicationArgs))
+			if zb0012 > encodedMaxApplicationArgs {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(encodedMaxApplicationArgs))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
-			if zb0012 {
+			if zb0013 {
 				(*z).ApplicationCallTxnFields.ApplicationArgs = nil
-			} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0011 {
-				(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0011]
+			} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0012 {
+				(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0012]
 			} else {
-				(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0011)
+				(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0012)
 			}
 			for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
 				(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
@@ -5316,27 +6072,27 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			var zb0013 int
-			var zb0014 bool
-			zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0014 int
+			var zb0015 bool
+			zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
-			if zb0013 > encodedMaxAccounts {
-				err = msgp.ErrOverflow(uint64(zb0013), uint64(encodedMaxAccounts))
+			if zb0014 > encodedMaxAccounts {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(encodedMaxAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
-			if zb0014 {
+			if zb0015 {
 				(*z).ApplicationCallTxnFields.Accounts = nil
-			} else if (*z).ApplicationCallTxnFields.Accounts != nil && cap((*z).ApplicationCallTxnFields.Accounts) >= zb0013 {
-				(*z).ApplicationCallTxnFields.Accounts = ((*z).ApplicationCallTxnFields.Accounts)[:zb0013]
+			} else if (*z).ApplicationCallTxnFields.Accounts != nil && cap((*z).ApplicationCallTxnFields.Accounts) >= zb0014 {
+				(*z).ApplicationCallTxnFields.Accounts = ((*z).ApplicationCallTxnFields.Accounts)[:zb0014]
 			} else {
-				(*z).ApplicationCallTxnFields.Accounts = make([]basics.Address, zb0013)
+				(*z).ApplicationCallTxnFields.Accounts = make([]basics.Address, zb0014)
 			}
 			for zb0003 := range (*z).ApplicationCallTxnFields.Accounts {
-				bts, err = (*z).ApplicationCallTxnFields.Accounts[zb0003].UnmarshalMsg(bts)
+				bts, err = (*z).ApplicationCallTxnFields.Accounts[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Accounts", zb0003)
 					return
@@ -5345,27 +6101,27 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			var zb0015 int
-			var zb0016 bool
-			zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0016 int
+			var zb0017 bool
+			zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
-			if zb0015 > encodedMaxForeignApps {
-				err = msgp.ErrOverflow(uint64(zb0015), uint64(encodedMaxForeignApps))
+			if zb0016 > encodedMaxForeignApps {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(encodedMaxForeignApps))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
-			if zb0016 {
+			if zb0017 {
 				(*z).ApplicationCallTxnFields.ForeignApps = nil
-			} else if (*z).ApplicationCallTxnFields.ForeignApps != nil && cap((*z).ApplicationCallTxnFields.ForeignApps) >= zb0015 {
-				(*z).ApplicationCallTxnFields.ForeignApps = ((*z).ApplicationCallTxnFields.ForeignApps)[:zb0015]
+			} else if (*z).ApplicationCallTxnFields.ForeignApps != nil && cap((*z).ApplicationCallTxnFields.ForeignApps) >= zb0016 {
+				(*z).ApplicationCallTxnFields.ForeignApps = ((*z).ApplicationCallTxnFields.ForeignApps)[:zb0016]
 			} else {
-				(*z).ApplicationCallTxnFields.ForeignApps = make([]basics.AppIndex, zb0015)
+				(*z).ApplicationCallTxnFields.ForeignApps = make([]basics.AppIndex, zb0016)
 			}
 			for zb0004 := range (*z).ApplicationCallTxnFields.ForeignApps {
-				bts, err = (*z).ApplicationCallTxnFields.ForeignApps[zb0004].UnmarshalMsg(bts)
+				bts, err = (*z).ApplicationCallTxnFields.ForeignApps[zb0004].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ForeignApps", zb0004)
 					return
@@ -5374,53 +6130,63 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			var zb0017 int
-			var zb0018 bool
-			zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0018 int
+			var zb0019 bool
+			zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Boxes")
 				return
 			}
-			if zb0017 > encodedMaxBoxes {
-				err = msgp.ErrOverflow(uint64(zb0017), uint64(encodedMaxBoxes))
+			if zb0018 > encodedMaxBoxes {
+				err = msgp.ErrOverflow(uint64(zb0018), uint64(encodedMaxBoxes))
 				err = msgp.WrapError(err, "struct-from-array", "Boxes")
 				return
 			}
-			if zb0018 {
+			if zb0019 {
 				(*z).ApplicationCallTxnFields.Boxes = nil
-			} else if (*z).ApplicationCallTxnFields.Boxes != nil && cap((*z).ApplicationCallTxnFields.Boxes) >= zb0017 {
-				(*z).ApplicationCallTxnFields.Boxes = ((*z).ApplicationCallTxnFields.Boxes)[:zb0017]
+			} else if (*z).ApplicationCallTxnFields.Boxes != nil && cap((*z).ApplicationCallTxnFields.Boxes) >= zb0018 {
+				(*z).ApplicationCallTxnFields.Boxes = ((*z).ApplicationCallTxnFields.Boxes)[:zb0018]
 			} else {
-				(*z).ApplicationCallTxnFields.Boxes = make([]BoxRef, zb0017)
+				(*z).ApplicationCallTxnFields.Boxes = make([]BoxRef, zb0018)
 			}
 			for zb0005 := range (*z).ApplicationCallTxnFields.Boxes {
-				var zb0019 int
-				var zb0020 bool
-				zb0019, zb0020, bts, err = msgp.ReadMapHeaderBytes(bts)
+				var zb0020 int
+				var zb0021 bool
+				zb0020, zb0021, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if _, ok := err.(msgp.TypeError); ok {
-					zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
+					zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005)
 						return
 					}
-					if zb0019 > 0 {
-						zb0019--
+					if zb0020 > 0 {
+						zb0020--
 						(*z).ApplicationCallTxnFields.Boxes[zb0005].Index, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005, "struct-from-array", "Index")
 							return
 						}
 					}
-					if zb0019 > 0 {
-						zb0019--
+					if zb0020 > 0 {
+						zb0020--
+						var zb0022 int
+						zb0022, err = msgp.ReadBytesBytesHeader(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005, "struct-from-array", "Name")
+							return
+						}
+						if zb0022 > bounds.MaxBytesKeyValueLen {
+							err = msgp.ErrOverflow(uint64(zb0022), uint64(bounds.MaxBytesKeyValueLen))
+							return
+						}
 						(*z).ApplicationCallTxnFields.Boxes[zb0005].Name, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.Boxes[zb0005].Name)
 						if err != nil {
 							err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005, "struct-from-array", "Name")
 							return
 						}
 					}
-					if zb0019 > 0 {
-						err = msgp.ErrTooManyArrayFields(zb0019)
+					if zb0020 > 0 {
+						err = msgp.ErrTooManyArrayFields(zb0020)
 						if err != nil {
 							err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005, "struct-from-array")
 							return
@@ -5431,11 +6197,11 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005)
 						return
 					}
-					if zb0020 {
+					if zb0021 {
 						(*z).ApplicationCallTxnFields.Boxes[zb0005] = BoxRef{}
 					}
-					for zb0019 > 0 {
-						zb0019--
+					for zb0020 > 0 {
+						zb0020--
 						field, bts, err = msgp.ReadMapKeyZC(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005)
@@ -5449,6 +6215,16 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								return
 							}
 						case "n":
+							var zb0023 int
+							zb0023, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005, "Name")
+								return
+							}
+							if zb0023 > bounds.MaxBytesKeyValueLen {
+								err = msgp.ErrOverflow(uint64(zb0023), uint64(bounds.MaxBytesKeyValueLen))
+								return
+							}
 							(*z).ApplicationCallTxnFields.Boxes[zb0005].Name, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.Boxes[zb0005].Name)
 							if err != nil {
 								err = msgp.WrapError(err, "struct-from-array", "Boxes", zb0005, "Name")
@@ -5467,27 +6243,27 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			var zb0021 int
-			var zb0022 bool
-			zb0021, zb0022, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0024 int
+			var zb0025 bool
+			zb0024, zb0025, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
-			if zb0021 > encodedMaxForeignAssets {
-				err = msgp.ErrOverflow(uint64(zb0021), uint64(encodedMaxForeignAssets))
+			if zb0024 > encodedMaxForeignAssets {
+				err = msgp.ErrOverflow(uint64(zb0024), uint64(encodedMaxForeignAssets))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignAssets")
 				return
 			}
-			if zb0022 {
+			if zb0025 {
 				(*z).ApplicationCallTxnFields.ForeignAssets = nil
-			} else if (*z).ApplicationCallTxnFields.ForeignAssets != nil && cap((*z).ApplicationCallTxnFields.ForeignAssets) >= zb0021 {
-				(*z).ApplicationCallTxnFields.ForeignAssets = ((*z).ApplicationCallTxnFields.ForeignAssets)[:zb0021]
+			} else if (*z).ApplicationCallTxnFields.ForeignAssets != nil && cap((*z).ApplicationCallTxnFields.ForeignAssets) >= zb0024 {
+				(*z).ApplicationCallTxnFields.ForeignAssets = ((*z).ApplicationCallTxnFields.ForeignAssets)[:zb0024]
 			} else {
-				(*z).ApplicationCallTxnFields.ForeignAssets = make([]basics.AssetIndex, zb0021)
+				(*z).ApplicationCallTxnFields.ForeignAssets = make([]basics.AssetIndex, zb0024)
 			}
 			for zb0006 := range (*z).ApplicationCallTxnFields.ForeignAssets {
-				bts, err = (*z).ApplicationCallTxnFields.ForeignAssets[zb0006].UnmarshalMsg(bts)
+				bts, err = (*z).ApplicationCallTxnFields.ForeignAssets[zb0006].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ForeignAssets", zb0006)
 					return
@@ -5496,7 +6272,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).ApplicationCallTxnFields.LocalStateSchema.UnmarshalMsg(bts)
+			bts, err = (*z).ApplicationCallTxnFields.LocalStateSchema.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LocalStateSchema")
 				return
@@ -5504,7 +6280,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).ApplicationCallTxnFields.GlobalStateSchema.UnmarshalMsg(bts)
+			bts, err = (*z).ApplicationCallTxnFields.GlobalStateSchema.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalStateSchema")
 				return
@@ -5512,14 +6288,14 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			var zb0023 int
-			zb0023, err = msgp.ReadBytesBytesHeader(bts)
+			var zb0026 int
+			zb0026, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
 				return
 			}
-			if zb0023 > config.MaxAvailableAppProgramLen {
-				err = msgp.ErrOverflow(uint64(zb0023), uint64(config.MaxAvailableAppProgramLen))
+			if zb0026 > bounds.MaxAvailableAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0026), uint64(bounds.MaxAvailableAppProgramLen))
 				return
 			}
 			(*z).ApplicationCallTxnFields.ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApprovalProgram)
@@ -5530,14 +6306,14 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			var zb0024 int
-			zb0024, err = msgp.ReadBytesBytesHeader(bts)
+			var zb0027 int
+			zb0027, err = msgp.ReadBytesBytesHeader(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
 				return
 			}
-			if zb0024 > config.MaxAvailableAppProgramLen {
-				err = msgp.ErrOverflow(uint64(zb0024), uint64(config.MaxAvailableAppProgramLen))
+			if zb0027 > bounds.MaxAvailableAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0027), uint64(bounds.MaxAvailableAppProgramLen))
 				return
 			}
 			(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ClearStateProgram)
@@ -5556,7 +6332,15 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).StateProofTxnFields.StateProofType.UnmarshalMsg(bts)
+			(*z).ApplicationCallTxnFields.RejectVersion, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "RejectVersion")
+				return
+			}
+		}
+		if zb0007 > 0 {
+			zb0007--
+			bts, err = (*z).StateProofTxnFields.StateProofType.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofType")
 				return
@@ -5564,7 +6348,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).StateProofTxnFields.StateProof.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofTxnFields.StateProof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProof")
 				return
@@ -5572,10 +6356,29 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0007 > 0 {
 			zb0007--
-			bts, err = (*z).StateProofTxnFields.Message.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofTxnFields.Message.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Message")
 				return
+			}
+		}
+		if zb0007 > 0 {
+			zb0007--
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				(*z).HeartbeatTxnFields = nil
+			} else {
+				if (*z).HeartbeatTxnFields == nil {
+					(*z).HeartbeatTxnFields = new(HeartbeatTxnFields)
+				}
+				bts, err = (*z).HeartbeatTxnFields.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "HeartbeatTxnFields")
+					return
+				}
 			}
 		}
 		if zb0007 > 0 {
@@ -5602,44 +6405,44 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "type":
-				bts, err = (*z).Type.UnmarshalMsg(bts)
+				bts, err = (*z).Type.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Type")
 					return
 				}
 			case "snd":
-				bts, err = (*z).Header.Sender.UnmarshalMsg(bts)
+				bts, err = (*z).Header.Sender.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sender")
 					return
 				}
 			case "fee":
-				bts, err = (*z).Header.Fee.UnmarshalMsg(bts)
+				bts, err = (*z).Header.Fee.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Fee")
 					return
 				}
 			case "fv":
-				bts, err = (*z).Header.FirstValid.UnmarshalMsg(bts)
+				bts, err = (*z).Header.FirstValid.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
 			case "lv":
-				bts, err = (*z).Header.LastValid.UnmarshalMsg(bts)
+				bts, err = (*z).Header.LastValid.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "LastValid")
 					return
 				}
 			case "note":
-				var zb0025 int
-				zb0025, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0028 int
+				zb0028, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Note")
 					return
 				}
-				if zb0025 > config.MaxTxnNoteBytes {
-					err = msgp.ErrOverflow(uint64(zb0025), uint64(config.MaxTxnNoteBytes))
+				if zb0028 > bounds.MaxTxnNoteBytes {
+					err = msgp.ErrOverflow(uint64(zb0028), uint64(bounds.MaxTxnNoteBytes))
 					return
 				}
 				(*z).Header.Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Header.Note)
@@ -5648,19 +6451,29 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "gen":
+				var zb0029 int
+				zb0029, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GenesisID")
+					return
+				}
+				if zb0029 > bounds.MaxGenesisIDLen {
+					err = msgp.ErrOverflow(uint64(zb0029), uint64(bounds.MaxGenesisIDLen))
+					return
+				}
 				(*z).Header.GenesisID, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisID")
 					return
 				}
 			case "gh":
-				bts, err = (*z).Header.GenesisHash.UnmarshalMsg(bts)
+				bts, err = (*z).Header.GenesisHash.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisHash")
 					return
 				}
 			case "grp":
-				bts, err = (*z).Header.Group.UnmarshalMsg(bts)
+				bts, err = (*z).Header.Group.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Group")
 					return
@@ -5672,37 +6485,37 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rekey":
-				bts, err = (*z).Header.RekeyTo.UnmarshalMsg(bts)
+				bts, err = (*z).Header.RekeyTo.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RekeyTo")
 					return
 				}
 			case "votekey":
-				bts, err = (*z).KeyregTxnFields.VotePK.UnmarshalMsg(bts)
+				bts, err = (*z).KeyregTxnFields.VotePK.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VotePK")
 					return
 				}
 			case "selkey":
-				bts, err = (*z).KeyregTxnFields.SelectionPK.UnmarshalMsg(bts)
+				bts, err = (*z).KeyregTxnFields.SelectionPK.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "SelectionPK")
 					return
 				}
 			case "sprfkey":
-				bts, err = (*z).KeyregTxnFields.StateProofPK.UnmarshalMsg(bts)
+				bts, err = (*z).KeyregTxnFields.StateProofPK.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofPK")
 					return
 				}
 			case "votefst":
-				bts, err = (*z).KeyregTxnFields.VoteFirst.UnmarshalMsg(bts)
+				bts, err = (*z).KeyregTxnFields.VoteFirst.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteFirst")
 					return
 				}
 			case "votelst":
-				bts, err = (*z).KeyregTxnFields.VoteLast.UnmarshalMsg(bts)
+				bts, err = (*z).KeyregTxnFields.VoteLast.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteLast")
 					return
@@ -5720,37 +6533,37 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rcv":
-				bts, err = (*z).PaymentTxnFields.Receiver.UnmarshalMsg(bts)
+				bts, err = (*z).PaymentTxnFields.Receiver.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Receiver")
 					return
 				}
 			case "amt":
-				bts, err = (*z).PaymentTxnFields.Amount.UnmarshalMsg(bts)
+				bts, err = (*z).PaymentTxnFields.Amount.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Amount")
 					return
 				}
 			case "close":
-				bts, err = (*z).PaymentTxnFields.CloseRemainderTo.UnmarshalMsg(bts)
+				bts, err = (*z).PaymentTxnFields.CloseRemainderTo.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "CloseRemainderTo")
 					return
 				}
 			case "caid":
-				bts, err = (*z).AssetConfigTxnFields.ConfigAsset.UnmarshalMsg(bts)
+				bts, err = (*z).AssetConfigTxnFields.ConfigAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ConfigAsset")
 					return
 				}
 			case "apar":
-				bts, err = (*z).AssetConfigTxnFields.AssetParams.UnmarshalMsg(bts)
+				bts, err = (*z).AssetConfigTxnFields.AssetParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetParams")
 					return
 				}
 			case "xaid":
-				bts, err = (*z).AssetTransferTxnFields.XferAsset.UnmarshalMsg(bts)
+				bts, err = (*z).AssetTransferTxnFields.XferAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "XferAsset")
 					return
@@ -5762,31 +6575,31 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "asnd":
-				bts, err = (*z).AssetTransferTxnFields.AssetSender.UnmarshalMsg(bts)
+				bts, err = (*z).AssetTransferTxnFields.AssetSender.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetSender")
 					return
 				}
 			case "arcv":
-				bts, err = (*z).AssetTransferTxnFields.AssetReceiver.UnmarshalMsg(bts)
+				bts, err = (*z).AssetTransferTxnFields.AssetReceiver.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetReceiver")
 					return
 				}
 			case "aclose":
-				bts, err = (*z).AssetTransferTxnFields.AssetCloseTo.UnmarshalMsg(bts)
+				bts, err = (*z).AssetTransferTxnFields.AssetCloseTo.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AssetCloseTo")
 					return
 				}
 			case "fadd":
-				bts, err = (*z).AssetFreezeTxnFields.FreezeAccount.UnmarshalMsg(bts)
+				bts, err = (*z).AssetFreezeTxnFields.FreezeAccount.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FreezeAccount")
 					return
 				}
 			case "faid":
-				bts, err = (*z).AssetFreezeTxnFields.FreezeAsset.UnmarshalMsg(bts)
+				bts, err = (*z).AssetFreezeTxnFields.FreezeAsset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FreezeAsset")
 					return
@@ -5798,40 +6611,40 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "apid":
-				bts, err = (*z).ApplicationCallTxnFields.ApplicationID.UnmarshalMsg(bts)
+				bts, err = (*z).ApplicationCallTxnFields.ApplicationID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationID")
 					return
 				}
 			case "apan":
 				{
-					var zb0026 uint64
-					zb0026, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0030 uint64
+					zb0030, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "OnCompletion")
 						return
 					}
-					(*z).ApplicationCallTxnFields.OnCompletion = OnCompletion(zb0026)
+					(*z).ApplicationCallTxnFields.OnCompletion = OnCompletion(zb0030)
 				}
 			case "apaa":
-				var zb0027 int
-				var zb0028 bool
-				zb0027, zb0028, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0031 int
+				var zb0032 bool
+				zb0031, zb0032, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0027 > encodedMaxApplicationArgs {
-					err = msgp.ErrOverflow(uint64(zb0027), uint64(encodedMaxApplicationArgs))
+				if zb0031 > encodedMaxApplicationArgs {
+					err = msgp.ErrOverflow(uint64(zb0031), uint64(encodedMaxApplicationArgs))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0028 {
+				if zb0032 {
 					(*z).ApplicationCallTxnFields.ApplicationArgs = nil
-				} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0027 {
-					(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0027]
+				} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0031 {
+					(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0031]
 				} else {
-					(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0027)
+					(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0031)
 				}
 				for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
 					(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
@@ -5841,107 +6654,117 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "apat":
-				var zb0029 int
-				var zb0030 bool
-				zb0029, zb0030, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0033 int
+				var zb0034 bool
+				zb0033, zb0034, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0029 > encodedMaxAccounts {
-					err = msgp.ErrOverflow(uint64(zb0029), uint64(encodedMaxAccounts))
+				if zb0033 > encodedMaxAccounts {
+					err = msgp.ErrOverflow(uint64(zb0033), uint64(encodedMaxAccounts))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0030 {
+				if zb0034 {
 					(*z).ApplicationCallTxnFields.Accounts = nil
-				} else if (*z).ApplicationCallTxnFields.Accounts != nil && cap((*z).ApplicationCallTxnFields.Accounts) >= zb0029 {
-					(*z).ApplicationCallTxnFields.Accounts = ((*z).ApplicationCallTxnFields.Accounts)[:zb0029]
+				} else if (*z).ApplicationCallTxnFields.Accounts != nil && cap((*z).ApplicationCallTxnFields.Accounts) >= zb0033 {
+					(*z).ApplicationCallTxnFields.Accounts = ((*z).ApplicationCallTxnFields.Accounts)[:zb0033]
 				} else {
-					(*z).ApplicationCallTxnFields.Accounts = make([]basics.Address, zb0029)
+					(*z).ApplicationCallTxnFields.Accounts = make([]basics.Address, zb0033)
 				}
 				for zb0003 := range (*z).ApplicationCallTxnFields.Accounts {
-					bts, err = (*z).ApplicationCallTxnFields.Accounts[zb0003].UnmarshalMsg(bts)
+					bts, err = (*z).ApplicationCallTxnFields.Accounts[zb0003].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Accounts", zb0003)
 						return
 					}
 				}
 			case "apfa":
-				var zb0031 int
-				var zb0032 bool
-				zb0031, zb0032, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0035 int
+				var zb0036 bool
+				zb0035, zb0036, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0031 > encodedMaxForeignApps {
-					err = msgp.ErrOverflow(uint64(zb0031), uint64(encodedMaxForeignApps))
+				if zb0035 > encodedMaxForeignApps {
+					err = msgp.ErrOverflow(uint64(zb0035), uint64(encodedMaxForeignApps))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0032 {
+				if zb0036 {
 					(*z).ApplicationCallTxnFields.ForeignApps = nil
-				} else if (*z).ApplicationCallTxnFields.ForeignApps != nil && cap((*z).ApplicationCallTxnFields.ForeignApps) >= zb0031 {
-					(*z).ApplicationCallTxnFields.ForeignApps = ((*z).ApplicationCallTxnFields.ForeignApps)[:zb0031]
+				} else if (*z).ApplicationCallTxnFields.ForeignApps != nil && cap((*z).ApplicationCallTxnFields.ForeignApps) >= zb0035 {
+					(*z).ApplicationCallTxnFields.ForeignApps = ((*z).ApplicationCallTxnFields.ForeignApps)[:zb0035]
 				} else {
-					(*z).ApplicationCallTxnFields.ForeignApps = make([]basics.AppIndex, zb0031)
+					(*z).ApplicationCallTxnFields.ForeignApps = make([]basics.AppIndex, zb0035)
 				}
 				for zb0004 := range (*z).ApplicationCallTxnFields.ForeignApps {
-					bts, err = (*z).ApplicationCallTxnFields.ForeignApps[zb0004].UnmarshalMsg(bts)
+					bts, err = (*z).ApplicationCallTxnFields.ForeignApps[zb0004].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "ForeignApps", zb0004)
 						return
 					}
 				}
 			case "apbx":
-				var zb0033 int
-				var zb0034 bool
-				zb0033, zb0034, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0037 int
+				var zb0038 bool
+				zb0037, zb0038, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Boxes")
 					return
 				}
-				if zb0033 > encodedMaxBoxes {
-					err = msgp.ErrOverflow(uint64(zb0033), uint64(encodedMaxBoxes))
+				if zb0037 > encodedMaxBoxes {
+					err = msgp.ErrOverflow(uint64(zb0037), uint64(encodedMaxBoxes))
 					err = msgp.WrapError(err, "Boxes")
 					return
 				}
-				if zb0034 {
+				if zb0038 {
 					(*z).ApplicationCallTxnFields.Boxes = nil
-				} else if (*z).ApplicationCallTxnFields.Boxes != nil && cap((*z).ApplicationCallTxnFields.Boxes) >= zb0033 {
-					(*z).ApplicationCallTxnFields.Boxes = ((*z).ApplicationCallTxnFields.Boxes)[:zb0033]
+				} else if (*z).ApplicationCallTxnFields.Boxes != nil && cap((*z).ApplicationCallTxnFields.Boxes) >= zb0037 {
+					(*z).ApplicationCallTxnFields.Boxes = ((*z).ApplicationCallTxnFields.Boxes)[:zb0037]
 				} else {
-					(*z).ApplicationCallTxnFields.Boxes = make([]BoxRef, zb0033)
+					(*z).ApplicationCallTxnFields.Boxes = make([]BoxRef, zb0037)
 				}
 				for zb0005 := range (*z).ApplicationCallTxnFields.Boxes {
-					var zb0035 int
-					var zb0036 bool
-					zb0035, zb0036, bts, err = msgp.ReadMapHeaderBytes(bts)
+					var zb0039 int
+					var zb0040 bool
+					zb0039, zb0040, bts, err = msgp.ReadMapHeaderBytes(bts)
 					if _, ok := err.(msgp.TypeError); ok {
-						zb0035, zb0036, bts, err = msgp.ReadArrayHeaderBytes(bts)
+						zb0039, zb0040, bts, err = msgp.ReadArrayHeaderBytes(bts)
 						if err != nil {
 							err = msgp.WrapError(err, "Boxes", zb0005)
 							return
 						}
-						if zb0035 > 0 {
-							zb0035--
+						if zb0039 > 0 {
+							zb0039--
 							(*z).ApplicationCallTxnFields.Boxes[zb0005].Index, bts, err = msgp.ReadUint64Bytes(bts)
 							if err != nil {
 								err = msgp.WrapError(err, "Boxes", zb0005, "struct-from-array", "Index")
 								return
 							}
 						}
-						if zb0035 > 0 {
-							zb0035--
+						if zb0039 > 0 {
+							zb0039--
+							var zb0041 int
+							zb0041, err = msgp.ReadBytesBytesHeader(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Boxes", zb0005, "struct-from-array", "Name")
+								return
+							}
+							if zb0041 > bounds.MaxBytesKeyValueLen {
+								err = msgp.ErrOverflow(uint64(zb0041), uint64(bounds.MaxBytesKeyValueLen))
+								return
+							}
 							(*z).ApplicationCallTxnFields.Boxes[zb0005].Name, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.Boxes[zb0005].Name)
 							if err != nil {
 								err = msgp.WrapError(err, "Boxes", zb0005, "struct-from-array", "Name")
 								return
 							}
 						}
-						if zb0035 > 0 {
-							err = msgp.ErrTooManyArrayFields(zb0035)
+						if zb0039 > 0 {
+							err = msgp.ErrTooManyArrayFields(zb0039)
 							if err != nil {
 								err = msgp.WrapError(err, "Boxes", zb0005, "struct-from-array")
 								return
@@ -5952,11 +6775,11 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "Boxes", zb0005)
 							return
 						}
-						if zb0036 {
+						if zb0040 {
 							(*z).ApplicationCallTxnFields.Boxes[zb0005] = BoxRef{}
 						}
-						for zb0035 > 0 {
-							zb0035--
+						for zb0039 > 0 {
+							zb0039--
 							field, bts, err = msgp.ReadMapKeyZC(bts)
 							if err != nil {
 								err = msgp.WrapError(err, "Boxes", zb0005)
@@ -5970,6 +6793,16 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 									return
 								}
 							case "n":
+								var zb0042 int
+								zb0042, err = msgp.ReadBytesBytesHeader(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "Boxes", zb0005, "Name")
+									return
+								}
+								if zb0042 > bounds.MaxBytesKeyValueLen {
+									err = msgp.ErrOverflow(uint64(zb0042), uint64(bounds.MaxBytesKeyValueLen))
+									return
+								}
 								(*z).ApplicationCallTxnFields.Boxes[zb0005].Name, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.Boxes[zb0005].Name)
 								if err != nil {
 									err = msgp.WrapError(err, "Boxes", zb0005, "Name")
@@ -5986,53 +6819,53 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "apas":
-				var zb0037 int
-				var zb0038 bool
-				zb0037, zb0038, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0043 int
+				var zb0044 bool
+				zb0043, zb0044, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
-				if zb0037 > encodedMaxForeignAssets {
-					err = msgp.ErrOverflow(uint64(zb0037), uint64(encodedMaxForeignAssets))
+				if zb0043 > encodedMaxForeignAssets {
+					err = msgp.ErrOverflow(uint64(zb0043), uint64(encodedMaxForeignAssets))
 					err = msgp.WrapError(err, "ForeignAssets")
 					return
 				}
-				if zb0038 {
+				if zb0044 {
 					(*z).ApplicationCallTxnFields.ForeignAssets = nil
-				} else if (*z).ApplicationCallTxnFields.ForeignAssets != nil && cap((*z).ApplicationCallTxnFields.ForeignAssets) >= zb0037 {
-					(*z).ApplicationCallTxnFields.ForeignAssets = ((*z).ApplicationCallTxnFields.ForeignAssets)[:zb0037]
+				} else if (*z).ApplicationCallTxnFields.ForeignAssets != nil && cap((*z).ApplicationCallTxnFields.ForeignAssets) >= zb0043 {
+					(*z).ApplicationCallTxnFields.ForeignAssets = ((*z).ApplicationCallTxnFields.ForeignAssets)[:zb0043]
 				} else {
-					(*z).ApplicationCallTxnFields.ForeignAssets = make([]basics.AssetIndex, zb0037)
+					(*z).ApplicationCallTxnFields.ForeignAssets = make([]basics.AssetIndex, zb0043)
 				}
 				for zb0006 := range (*z).ApplicationCallTxnFields.ForeignAssets {
-					bts, err = (*z).ApplicationCallTxnFields.ForeignAssets[zb0006].UnmarshalMsg(bts)
+					bts, err = (*z).ApplicationCallTxnFields.ForeignAssets[zb0006].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "ForeignAssets", zb0006)
 						return
 					}
 				}
 			case "apls":
-				bts, err = (*z).ApplicationCallTxnFields.LocalStateSchema.UnmarshalMsg(bts)
+				bts, err = (*z).ApplicationCallTxnFields.LocalStateSchema.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "LocalStateSchema")
 					return
 				}
 			case "apgs":
-				bts, err = (*z).ApplicationCallTxnFields.GlobalStateSchema.UnmarshalMsg(bts)
+				bts, err = (*z).ApplicationCallTxnFields.GlobalStateSchema.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "GlobalStateSchema")
 					return
 				}
 			case "apap":
-				var zb0039 int
-				zb0039, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0045 int
+				zb0045, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
-				if zb0039 > config.MaxAvailableAppProgramLen {
-					err = msgp.ErrOverflow(uint64(zb0039), uint64(config.MaxAvailableAppProgramLen))
+				if zb0045 > bounds.MaxAvailableAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0045), uint64(bounds.MaxAvailableAppProgramLen))
 					return
 				}
 				(*z).ApplicationCallTxnFields.ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApprovalProgram)
@@ -6041,14 +6874,14 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "apsu":
-				var zb0040 int
-				zb0040, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0046 int
+				zb0046, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
 					return
 				}
-				if zb0040 > config.MaxAvailableAppProgramLen {
-					err = msgp.ErrOverflow(uint64(zb0040), uint64(config.MaxAvailableAppProgramLen))
+				if zb0046 > bounds.MaxAvailableAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0046), uint64(bounds.MaxAvailableAppProgramLen))
 					return
 				}
 				(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ClearStateProgram)
@@ -6062,23 +6895,46 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ExtraProgramPages")
 					return
 				}
+			case "aprv":
+				(*z).ApplicationCallTxnFields.RejectVersion, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RejectVersion")
+					return
+				}
 			case "sptype":
-				bts, err = (*z).StateProofTxnFields.StateProofType.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofTxnFields.StateProofType.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofType")
 					return
 				}
 			case "sp":
-				bts, err = (*z).StateProofTxnFields.StateProof.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofTxnFields.StateProof.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProof")
 					return
 				}
 			case "spmsg":
-				bts, err = (*z).StateProofTxnFields.Message.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofTxnFields.Message.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Message")
 					return
+				}
+			case "hb":
+				if msgp.IsNil(bts) {
+					bts, err = msgp.ReadNilBytes(bts)
+					if err != nil {
+						return
+					}
+					(*z).HeartbeatTxnFields = nil
+				} else {
+					if (*z).HeartbeatTxnFields == nil {
+						(*z).HeartbeatTxnFields = new(HeartbeatTxnFields)
+					}
+					bts, err = (*z).HeartbeatTxnFields.UnmarshalMsgWithState(bts, st)
+					if err != nil {
+						err = msgp.WrapError(err, "HeartbeatTxnFields")
+						return
+					}
 				}
 			default:
 				err = msgp.ErrNoField(string(field))
@@ -6093,6 +6949,9 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Transaction) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Transaction)
 	return ok
@@ -6120,13 +6979,42 @@ func (z *Transaction) Msgsize() (s int) {
 	for zb0006 := range (*z).ApplicationCallTxnFields.ForeignAssets {
 		s += (*z).ApplicationCallTxnFields.ForeignAssets[zb0006].Msgsize()
 	}
-	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram) + 5 + msgp.Uint32Size + 7 + (*z).StateProofTxnFields.StateProofType.Msgsize() + 3 + (*z).StateProofTxnFields.StateProof.Msgsize() + 6 + (*z).StateProofTxnFields.Message.Msgsize()
+	s += 5 + (*z).ApplicationCallTxnFields.LocalStateSchema.Msgsize() + 5 + (*z).ApplicationCallTxnFields.GlobalStateSchema.Msgsize() + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ApprovalProgram) + 5 + msgp.BytesPrefixSize + len((*z).ApplicationCallTxnFields.ClearStateProgram) + 5 + msgp.Uint32Size + 5 + msgp.Uint64Size + 7 + (*z).StateProofTxnFields.StateProofType.Msgsize() + 3 + (*z).StateProofTxnFields.StateProof.Msgsize() + 6 + (*z).StateProofTxnFields.Message.Msgsize() + 3
+	if (*z).HeartbeatTxnFields == nil {
+		s += msgp.NilSize
+	} else {
+		s += (*z).HeartbeatTxnFields.Msgsize()
+	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Transaction) MsgIsZero() bool {
-	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).Header.RekeyTo.MsgIsZero()) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.StateProofPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && (len((*z).ApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).ApplicationCallTxnFields.Boxes) == 0) && (len((*z).ApplicationCallTxnFields.ForeignAssets) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && (len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0) && ((*z).ApplicationCallTxnFields.ExtraProgramPages == 0) && ((*z).StateProofTxnFields.StateProofType.MsgIsZero()) && ((*z).StateProofTxnFields.StateProof.MsgIsZero()) && ((*z).StateProofTxnFields.Message.MsgIsZero())
+	return ((*z).Type.MsgIsZero()) && ((*z).Header.Sender.MsgIsZero()) && ((*z).Header.Fee.MsgIsZero()) && ((*z).Header.FirstValid.MsgIsZero()) && ((*z).Header.LastValid.MsgIsZero()) && (len((*z).Header.Note) == 0) && ((*z).Header.GenesisID == "") && ((*z).Header.GenesisHash.MsgIsZero()) && ((*z).Header.Group.MsgIsZero()) && ((*z).Header.Lease == ([32]byte{})) && ((*z).Header.RekeyTo.MsgIsZero()) && ((*z).KeyregTxnFields.VotePK.MsgIsZero()) && ((*z).KeyregTxnFields.SelectionPK.MsgIsZero()) && ((*z).KeyregTxnFields.StateProofPK.MsgIsZero()) && ((*z).KeyregTxnFields.VoteFirst.MsgIsZero()) && ((*z).KeyregTxnFields.VoteLast.MsgIsZero()) && ((*z).KeyregTxnFields.VoteKeyDilution == 0) && ((*z).KeyregTxnFields.Nonparticipation == false) && ((*z).PaymentTxnFields.Receiver.MsgIsZero()) && ((*z).PaymentTxnFields.Amount.MsgIsZero()) && ((*z).PaymentTxnFields.CloseRemainderTo.MsgIsZero()) && ((*z).AssetConfigTxnFields.ConfigAsset.MsgIsZero()) && ((*z).AssetConfigTxnFields.AssetParams.MsgIsZero()) && ((*z).AssetTransferTxnFields.XferAsset.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetAmount == 0) && ((*z).AssetTransferTxnFields.AssetSender.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetReceiver.MsgIsZero()) && ((*z).AssetTransferTxnFields.AssetCloseTo.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAccount.MsgIsZero()) && ((*z).AssetFreezeTxnFields.FreezeAsset.MsgIsZero()) && ((*z).AssetFreezeTxnFields.AssetFrozen == false) && ((*z).ApplicationCallTxnFields.ApplicationID.MsgIsZero()) && ((*z).ApplicationCallTxnFields.OnCompletion == 0) && (len((*z).ApplicationCallTxnFields.ApplicationArgs) == 0) && (len((*z).ApplicationCallTxnFields.Accounts) == 0) && (len((*z).ApplicationCallTxnFields.ForeignApps) == 0) && (len((*z).ApplicationCallTxnFields.Boxes) == 0) && (len((*z).ApplicationCallTxnFields.ForeignAssets) == 0) && ((*z).ApplicationCallTxnFields.LocalStateSchema.MsgIsZero()) && ((*z).ApplicationCallTxnFields.GlobalStateSchema.MsgIsZero()) && (len((*z).ApplicationCallTxnFields.ApprovalProgram) == 0) && (len((*z).ApplicationCallTxnFields.ClearStateProgram) == 0) && ((*z).ApplicationCallTxnFields.ExtraProgramPages == 0) && ((*z).ApplicationCallTxnFields.RejectVersion == 0) && ((*z).StateProofTxnFields.StateProofType.MsgIsZero()) && ((*z).StateProofTxnFields.StateProof.MsgIsZero()) && ((*z).StateProofTxnFields.Message.MsgIsZero()) && ((*z).HeartbeatTxnFields == nil)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func TransactionMaxSize() (s int) {
+	s = 3 + 5 + protocol.TxTypeMaxSize() + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 5 + msgp.BytesPrefixSize + bounds.MaxTxnNoteBytes + 4 + msgp.StringPrefixSize + bounds.MaxGenesisIDLen + 3 + crypto.DigestMaxSize() + 4 + crypto.DigestMaxSize() + 3
+	// Calculating size of array: z.Header.Lease
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + basics.AddressMaxSize() + 8 + crypto.OneTimeSignatureVerifierMaxSize() + 7 + crypto.VRFVerifierMaxSize() + 8 + merklesignature.CommitmentMaxSize() + 8 + basics.RoundMaxSize() + 8 + basics.RoundMaxSize() + 7 + msgp.Uint64Size + 8 + msgp.BoolSize + 4 + basics.AddressMaxSize() + 4 + basics.MicroAlgosMaxSize() + 6 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + basics.AssetParamsMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.Uint64Size + 5 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 7 + basics.AddressMaxSize() + 5 + basics.AddressMaxSize() + 5 + basics.AssetIndexMaxSize() + 5 + msgp.BoolSize + 5 + basics.AppIndexMaxSize() + 5 + msgp.Uint64Size + 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.ApplicationArgs
+	s += msgp.ArrayHeaderSize + bounds.MaxAppTotalArgLen + 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.Accounts
+	s += msgp.ArrayHeaderSize + ((encodedMaxAccounts) * (basics.AddressMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.ForeignApps
+	s += msgp.ArrayHeaderSize + ((encodedMaxForeignApps) * (basics.AppIndexMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.Boxes
+	s += msgp.ArrayHeaderSize + ((encodedMaxBoxes) * (BoxRefMaxSize()))
+	s += 5
+	// Calculating size of slice: z.ApplicationCallTxnFields.ForeignAssets
+	s += msgp.ArrayHeaderSize + ((encodedMaxForeignAssets) * (basics.AssetIndexMaxSize()))
+	s += 5 + basics.StateSchemaMaxSize() + 5 + basics.StateSchemaMaxSize() + 5 + msgp.BytesPrefixSize + bounds.MaxAvailableAppProgramLen + 5 + msgp.BytesPrefixSize + bounds.MaxAvailableAppProgramLen + 5 + msgp.Uint32Size + 5 + msgp.Uint64Size + 7 + protocol.StateProofTypeMaxSize() + 3 + stateproof.StateProofMaxSize() + 6 + stateproofmsg.MessageMaxSize() + 3
+	s += HeartbeatTxnFieldsMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -6164,7 +7052,12 @@ func (_ *TxGroup) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *TxGroup) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -6185,8 +7078,8 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "TxGroupHashes")
 				return
 			}
-			if zb0004 > config.MaxTxGroupSize {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxTxGroupSize))
+			if zb0004 > bounds.MaxTxGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(bounds.MaxTxGroupSize))
 				err = msgp.WrapError(err, "struct-from-array", "TxGroupHashes")
 				return
 			}
@@ -6198,7 +7091,7 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).TxGroupHashes = make([]crypto.Digest, zb0004)
 			}
 			for zb0001 := range (*z).TxGroupHashes {
-				bts, err = (*z).TxGroupHashes[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).TxGroupHashes[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "TxGroupHashes", zb0001)
 					return
@@ -6236,8 +7129,8 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "TxGroupHashes")
 					return
 				}
-				if zb0006 > config.MaxTxGroupSize {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(config.MaxTxGroupSize))
+				if zb0006 > bounds.MaxTxGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(bounds.MaxTxGroupSize))
 					err = msgp.WrapError(err, "TxGroupHashes")
 					return
 				}
@@ -6249,7 +7142,7 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).TxGroupHashes = make([]crypto.Digest, zb0006)
 				}
 				for zb0001 := range (*z).TxGroupHashes {
-					bts, err = (*z).TxGroupHashes[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).TxGroupHashes[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "TxGroupHashes", zb0001)
 						return
@@ -6268,6 +7161,9 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *TxGroup) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*TxGroup)
 	return ok
@@ -6287,6 +7183,14 @@ func (z *TxGroup) MsgIsZero() bool {
 	return (len((*z).TxGroupHashes) == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func TxGroupMaxSize() (s int) {
+	s = 1 + 7
+	// Calculating size of slice: z.TxGroupHashes
+	s += msgp.ArrayHeaderSize + ((bounds.MaxTxGroupSize) * (crypto.DigestMaxSize()))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Txid) MarshalMsg(b []byte) []byte {
 	return ((*(crypto.Digest))(z)).MarshalMsg(b)
@@ -6299,6 +7203,9 @@ func (_ *Txid) CanMarshalMsg(z interface{}) bool {
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Txid) UnmarshalMsg(bts []byte) ([]byte, error) {
 	return ((*(crypto.Digest))(z)).UnmarshalMsg(bts)
+}
+func (z *Txid) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) ([]byte, error) {
+	return ((*(crypto.Digest))(z)).UnmarshalMsgWithState(bts, st)
 }
 func (_ *Txid) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Txid)
@@ -6313,4 +7220,9 @@ func (z *Txid) Msgsize() int {
 // MsgIsZero returns whether this is a zero value
 func (z *Txid) MsgIsZero() bool {
 	return ((*(crypto.Digest))(z)).MsgIsZero()
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func TxidMaxSize() int {
+	return crypto.DigestMaxSize()
 }

@@ -5,23 +5,28 @@
 version: 2.1
 
 orbs:
-  win: circleci/windows@2.3.0
-  go: circleci/go@1.7.0
-  slack: circleci/slack@4.10.1
+  win: circleci/windows@5.0.0
+  go: circleci/go@1.7.3
+  slack: circleci/slack@4.12.5
 
 parameters:
   ubuntu_image:
     type: string
-    default: "ubuntu-2004:202104-01"
+    default: "ubuntu-2004:2023.04.2"
   build_dir:
     type: string
     default: "/opt/cibuild"
   result_path:
     type: string
-    default: "/tmp/build_test_results"
+    default: "/tmp/build_test_results_<< pipeline.id >>"
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
+  # The following is intentional - hardcoding a token for public repos
+  # is recommended here to allow fork access
+  codecov:
+    type: string
+    default: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"
 
 executors:
   amd64_medium:
@@ -40,29 +45,14 @@ executors:
     machine:
       image: << pipeline.parameters.ubuntu_image >>
     resource_class: arm.large
-  mac_amd64_medium:
-    macos:
-      xcode: 13.2.1
-    resource_class: medium
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-  mac_amd64_large:
-    macos:
-      xcode: 13.2.1
-    resource_class: large
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-  mac_arm64: &executor-mac-arm64
-    machine: true
-    resource_class: algorand/macstadium-m1-macos11
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-  # these are required b/c jobs explicitly assign sizes to the executors
-  # for `mac_arm64` there is only one size
   mac_arm64_medium:
-    <<: *executor-mac-arm64
+    macos:
+      xcode: 14.3.1
+    resource_class: macos.m1.medium.gen1
   mac_arm64_large:
-    <<: *executor-mac-arm64
+    macos:
+      xcode: 14.3.1
+    resource_class: macos.m1.large.gen1
 
 slack-fail-stop-step: &slack-fail-post-step
   post-steps:
@@ -74,29 +64,16 @@ slack-fail-stop-step: &slack-fail-post-step
 # ===== Workflow Definitions =====
 workflows:
   version: 2
-  "circleci_build_and_test":
+  nightly_build_and_test:
     jobs:
       - build_nightly:
           name: << matrix.platform >>_build_nightly
           matrix: &matrix-nightly
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["amd64", "arm64", "mac_arm64"]
           filters: &filters-nightly
             branches:
               only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - test:
-          name: << matrix.platform >>_test
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
@@ -111,15 +88,6 @@ workflows:
           context: slack-secrets
           <<: *slack-fail-post-step
 
-      - integration:
-          name: << matrix.platform >>_integration
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
           matrix:
@@ -129,30 +97,12 @@ workflows:
           context: slack-secrets
           <<: *slack-fail-post-step
 
-      - e2e_expect:
-          name: << matrix.platform >>_e2e_expect
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
           matrix:
             <<: *matrix-nightly
           requires:
             - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - e2e_subs:
-          name: << matrix.platform >>_e2e_subs
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
           context: slack-secrets
           <<: *slack-fail-post-step
 
@@ -167,22 +117,11 @@ workflows:
             - aws-secrets
           <<: *slack-fail-post-step
 
-      - tests_verification_job:
-          name: << matrix.platform >>_<< matrix.job_type >>_verification
-          matrix:
-            parameters:
-              platform: ["amd64", "arm64"]
-              job_type: ["test", "integration", "e2e_expect"]
-          requires:
-            - << matrix.platform >>_<< matrix.job_type >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
       - tests_verification_job_nightly:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["amd64", "arm64", "mac_arm64"]
               job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
@@ -198,17 +137,63 @@ workflows:
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
             - << matrix.platform >>_e2e_subs_nightly
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
           context:
             - slack-secrets
             - aws-secrets
           <<: *slack-fail-post-step
 
-      #- windows_x64_build
+  "circleci_build_and_test":
+    jobs:
+      - test:
+          name: << matrix.platform >>_test
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64"]
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - integration:
+          name: << matrix.platform >>_integration
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - e2e_expect:
+          name: << matrix.platform >>_e2e_expect
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - e2e_subs:
+          name: << matrix.platform >>_e2e_subs
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - tests_verification_job:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["amd64"]
+              job_type: ["test", "integration", "e2e_expect"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
 # ===== Job Definitions =====
 jobs:
@@ -239,6 +224,8 @@ jobs:
     executor: << parameters.platform >>_medium
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 32
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
     steps:
       - generic_build
       - generic_test:
@@ -251,9 +238,11 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 4
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
     steps:
       - generic_build
       - generic_test:
@@ -298,7 +287,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 10
     environment:
@@ -314,7 +303,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 2
     environment:
@@ -452,7 +441,7 @@ commands:
           shell: bash.exe
           command: |
             choco install -y msys2 pacman make wget --force
-            choco install -y golang --version=1.17.13 --force
+            choco install -y golang --version=$(./scripts/get_golang_version.sh) --force
             choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
@@ -705,9 +694,6 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
-      - store_artifacts:
-          path: << parameters.result_path >>/<< parameters.result_subdir >>
-          destination: << parameters.result_subdir >>/combined-test-results
 
   upload_binaries_command:
     description: save build artifacts for potential deployments
@@ -725,12 +711,13 @@ commands:
             command: |
               if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
               then
-                export NO_BUILD="true"
+                export NIGHTLY_BUILD="true"
               fi
               export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
               export GOPATH="<< parameters.build_dir >>/go"
               export TRAVIS_BRANCH=${CIRCLE_BRANCH}
               scripts/travis/deploy_packages.sh
+            no_output_timeout: 20m
         - when:
             condition:
               equal: [ "amd64", << parameters.platform >> ]

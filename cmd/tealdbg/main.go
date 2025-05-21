@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -160,11 +160,6 @@ func debugRemote() {
 }
 
 func debugLocal(args []string) {
-	// simple pre-invalidation
-	if roundNumber < 0 {
-		log.Fatalln("Invalid round")
-	}
-
 	// local debugging works in two modes:
 	// - listening for upcoming Dryrun Requests
 	// - or taking program, transaction or Dryrun Request from command line

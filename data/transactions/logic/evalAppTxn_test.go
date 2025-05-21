@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package logic_test
 import (
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -104,15 +105,16 @@ func TestFieldTypes(t *testing.T) {
 	t.Parallel()
 
 	ep, _, _ := MakeSampleEnv()
-	TestApp(t, "itxn_begin; byte \"pay\"; itxn_field Sender;", ep, "not an address")
+	// Use NoTrack to skip assembly errors
+	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Sender;"), ep, "not an address")
 	TestApp(t, NoTrack("itxn_begin; int 7; itxn_field Receiver;"), ep, "not an address")
-	TestApp(t, "itxn_begin; byte \"\"; itxn_field CloseRemainderTo;", ep, "not an address")
-	TestApp(t, "itxn_begin; byte \"\"; itxn_field AssetSender;", ep, "not an address")
+	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field CloseRemainderTo;"), ep, "not an address")
+	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field AssetSender;"), ep, "not an address")
 	// can't really tell if it's an addres, so 32 bytes gets further
-	TestApp(t, "itxn_begin; byte \"01234567890123456789012345678901\"; itxn_field AssetReceiver;",
-		ep, "invalid Account reference")
+	TestApp(t, "itxn_begin; byte \"01234567890123456789012345678901\"; itxn_field AssetReceiver; int 1",
+		ep, "unavailable Account")
 	// but a b32 string rep is not an account
-	TestApp(t, "itxn_begin; byte \"GAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYZIZD42E\"; itxn_field AssetCloseTo;",
+	TestApp(t, NoTrack("itxn_begin; byte \"GAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYTEMZUGU3DOOBZGAYZIZD42E\"; itxn_field AssetCloseTo;"),
 		ep, "not an address")
 
 	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Fee;"), ep, "not a uint64")
@@ -124,6 +126,71 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field ExtraProgramPages;"), ep, "not a uint64")
 	// get coverage on bool()
 	TestApp(t, NoTrack("itxn_begin; byte \"pay\"; itxn_field Nonparticipation;"), ep, "not a uint64")
+}
+
+func TestFieldLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, _, _ := MakeSampleEnv()
+
+	intProgram := "itxn_begin; int %d; itxn_field %s; int 1"
+	goodInt := func(field string, value interface{}) {
+		TestApp(t, fmt.Sprintf(intProgram, value, field), ep)
+	}
+	badInt := func(field string, value interface{}) {
+		// error messages are different for different fields, just use a space
+		// to indicate there should be an error, it will surely match any error.
+		TestApp(t, NoTrack(fmt.Sprintf(intProgram, value, field)), ep, " ")
+	}
+	testInt := func(field string, max int) {
+		goodInt(field, 1)
+		goodInt(field, max)
+		badInt(field, max+1)
+	}
+	testBool := func(field string) {
+		goodInt(field, 0)
+		goodInt(field, 1)
+		badInt(field, 2)
+	}
+	bytesProgram := "itxn_begin; byte %#v; itxn_field %s; int 1"
+	goodBytes := func(field string, value string) {
+		TestApp(t, fmt.Sprintf(bytesProgram, value, field), ep)
+	}
+	badBytes := func(field string, value string) {
+		// error messages are different for different fields, just use a space
+		// to indicate there should be an error, it will surely match any error.
+		TestApp(t, NoTrack(fmt.Sprintf(bytesProgram, value, field)), ep, " ")
+	}
+	testBytes := func(field string, maxLen int) {
+		goodBytes(field, "")
+		goodBytes(field, strings.Repeat("a", maxLen))
+		badBytes(field, strings.Repeat("a", maxLen+1))
+	}
+
+	// header
+	badInt("TypeEnum", 0)
+	testInt("TypeEnum", len(TxnTypeNames)-1)
+	//keyreg
+	testBool("Nonparticipation")
+	//acfg
+	goodInt("ConfigAssetTotal", 1)
+	goodInt("ConfigAssetTotal", uint64(1<<63))
+	goodInt("ConfigAssetDecimals", 0)
+	testInt("ConfigAssetDecimals", int(ep.Proto.MaxAssetDecimals))
+	testBool("ConfigAssetDefaultFrozen")
+	testBytes("ConfigAssetUnitName", ep.Proto.MaxAssetUnitNameBytes)
+	testBytes("ConfigAssetName", ep.Proto.MaxAssetNameBytes)
+	testBytes("ConfigAssetURL", ep.Proto.MaxAssetURLBytes)
+	//afrz
+	testBool("FreezeAssetFrozen")
+	// appl
+	testInt("OnCompletion", len(OnCompletionNames)-1)
+	testInt("LocalNumUint", int(ep.Proto.MaxLocalSchemaEntries))
+	testInt("LocalNumByteSlice", int(ep.Proto.MaxLocalSchemaEntries))
+	testInt("GlobalNumUint", int(ep.Proto.MaxGlobalSchemaEntries))
+	testInt("GlobalNumByteSlice", int(ep.Proto.MaxGlobalSchemaEntries))
+	testInt("ExtraProgramPages", int(ep.Proto.MaxExtraAppProgramPages))
 }
 
 func appAddr(id int) basics.Address {
@@ -145,49 +212,60 @@ func TestAppPay(t *testing.T) {
   int 1
 `
 
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	TestApp(t, "txn Sender; balance; int 0; ==;", ep)
-	TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay, ep, "unauthorized")
-	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
-		"insufficient balance")
-	ledger.NewAccount(appAddr(888), 1000000)
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		test := func(source string, problem ...string) {
+			TestApp(t, source, ep, problem...)
+		}
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		test("txn Sender; balance; int 0; ==;")
+		test("txn Sender; txn Accounts 1; int 100"+pay, "unauthorized")
+		test("global CurrentApplicationAddress; txn Accounts 1; int 100"+pay,
+			"insufficient balance")
+		ledger.NewAccount(appAddr(888), 1000000)
 
-	// You might NewExpect this to fail because of min balance issue
-	// (receiving account only gets 100 microalgos).  It does not fail at
-	// this level, instead, we must be certain that the existing min
-	// balance check in eval.transaction() properly notices and fails
-	// the transaction later.  This fits with the model that we check
-	// min balances once at the end of each "top-level" transaction.
-	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep)
+		// You might NewExpect this to fail because of min balance issue
+		// (receiving account only gets 100 microalgos).  It does not fail at
+		// this level, instead, we must be certain that the existing min
+		// balance check in eval.transaction() properly notices and fails
+		// the transaction later.  This fits with the model that we check
+		// min balances once at the end of each "top-level" transaction.
+		test("global CurrentApplicationAddress; txn Accounts 1; int 100" + pay)
 
-	// 100 of 1000000 spent, plus MinTxnFee in our fake protocol is 1001
-	TestApp(t, "global CurrentApplicationAddress; balance; int 998899; ==", ep)
-	TestApp(t, "txn Receiver; balance; int 100; ==", ep)
+		// 100 of 1000000 spent, plus MinTxnFee in our fake protocol is 1001
+		test("global CurrentApplicationAddress; balance; int 998899; ==")
+		test("txn Receiver; balance; int 100; ==")
 
-	close := `
+		close := `
   itxn_begin
   int pay;      itxn_field TypeEnum
   txn Receiver; itxn_field CloseRemainderTo
   itxn_submit
   int 1
 `
-	TestApp(t, close, ep)
-	TestApp(t, "global CurrentApplicationAddress; balance; !", ep)
-	// Receiver got most of the algos (except 1001 for fee)
-	TestApp(t, "txn Receiver; balance; int 997998; ==", ep)
+		test(close)
+		test("global CurrentApplicationAddress; balance; !")
+		// Receiver got most of the algos (except 1001 for fee)
+		test("txn Receiver; balance; int 997998; ==")
+	})
 }
 
 func TestAppAssetOptIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, tx, ledger := MakeSampleEnv()
-	// Establish 888 as the app id, and fund it.
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		test := func(source string, problem ...string) {
+			t.Helper()
+			TestApp(t, source, ep, problem...)
+		}
 
-	axfer := `
+		// Establish 888 as the app id, and fund it.
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
+
+		axfer := `
 itxn_begin
 int axfer;  itxn_field TypeEnum;
 int 25;     itxn_field XferAsset;
@@ -196,10 +274,10 @@ txn Sender; itxn_field AssetReceiver;
 itxn_submit
 int 1
 `
-	TestApp(t, axfer, ep, "invalid Asset reference")
-	tx.ForeignAssets = append(tx.ForeignAssets, 25)
-	TestApp(t, axfer, ep, "not opted in") // app account not opted in
-	optin := `
+		test(axfer, "unavailable Asset 25")
+		tx.ForeignAssets = append(tx.ForeignAssets, 25)
+		test(axfer, "not opted in") // app account not opted in
+		optin := `
 itxn_begin
 int axfer; itxn_field TypeEnum;
 int 25;    itxn_field XferAsset;
@@ -208,25 +286,25 @@ global CurrentApplicationAddress; itxn_field AssetReceiver;
 itxn_submit
 int 1
 `
-	TestApp(t, optin, ep, "does not exist")
-	// Asset 25
-	ledger.NewAsset(tx.Sender, 25, basics.AssetParams{
-		Total:     10,
-		UnitName:  "x",
-		AssetName: "Cross",
-	})
-	TestApp(t, optin, ep)
+		test(optin, "does not exist")
+		// Asset 25
+		ledger.NewAsset(tx.Sender, 25, basics.AssetParams{
+			Total:     10,
+			UnitName:  "x",
+			AssetName: "Cross",
+		})
+		test(optin)
 
-	TestApp(t, axfer, ep, "insufficient balance") // opted in, but balance=0
+		test(axfer, "insufficient balance") // opted in, but balance=0
 
-	// Fund the app account with the asset
-	ledger.NewHolding(basics.AppIndex(888).Address(), 25, 5, false)
-	TestApp(t, axfer, ep)
-	TestApp(t, axfer, ep)
-	TestApp(t, axfer, ep, "insufficient balance") // balance = 1, tried to move 2)
-	TestApp(t, "global CurrentApplicationAddress; int 25; asset_holding_get AssetBalance; assert; int 1; ==", ep)
+		// Fund the app account with the asset
+		ledger.NewHolding(basics.AppIndex(888).Address(), 25, 5, false)
+		test(axfer)
+		test(axfer)
+		test(axfer, "insufficient balance") // balance = 1, tried to move 2)
+		test("global CurrentApplicationAddress; int 25; asset_holding_get AssetBalance; assert; int 1; ==")
 
-	close := `
+		close := `
 itxn_begin
 int axfer;  itxn_field TypeEnum;
 int 25;     itxn_field XferAsset;
@@ -236,8 +314,9 @@ txn Sender; itxn_field AssetCloseTo;
 itxn_submit
 int 1
 `
-	TestApp(t, close, ep)
-	TestApp(t, "global CurrentApplicationAddress; int 25; asset_holding_get AssetBalance; !; assert; !", ep)
+		test(close)
+		test("global CurrentApplicationAddress; int 25; asset_holding_get AssetBalance; !; assert; !")
+	})
 }
 
 func TestRekeyPay(t *testing.T) {
@@ -254,16 +333,17 @@ func TestRekeyPay(t *testing.T) {
   itxn_submit
 `
 
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	TestApp(t, "txn Sender; balance; int 0; ==;", ep)
-	TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay, ep, "unauthorized")
-	ledger.NewAccount(tx.Sender, 120+ep.Proto.MinTxnFee)
-	ledger.Rekey(tx.Sender, basics.AppIndex(888).Address())
-	TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay+"; int 1", ep)
-	// Note that the Sender would fail min balance check if we did it here.
-	// It seems proper to wait until end of txn though.
-	// See explanation in cowRoundState's Perform()
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay, ep, "unauthorized")
+		ledger.NewAccount(tx.Sender, 120+ep.Proto.MinTxnFee)
+		ledger.Rekey(tx.Sender, basics.AppIndex(888).Address())
+		TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay+"; int 1", ep)
+		// Note that the Sender would fail min balance check if we did it here.
+		// It seems proper to wait until end of txn though.
+		// See explanation in cowRoundState's Perform()
+	})
 }
 
 func TestRekeyBack(t *testing.T) {
@@ -282,15 +362,45 @@ func TestRekeyBack(t *testing.T) {
   itxn_submit
 `
 
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	TestApp(t, "txn Sender; balance; int 0; ==;", ep)
-	TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey, ep, "unauthorized")
-	ledger.NewAccount(tx.Sender, 120+3*ep.Proto.MinTxnFee)
-	ledger.Rekey(tx.Sender, basics.AppIndex(888).Address())
-	TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey+"; int 1", ep)
-	// now rekeyed back to original
-	TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey, ep, "unauthorized")
+	// v6 added inner rekey
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		TestApp(t, "txn Sender; balance; int 0; ==;", ep)
+		TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey, ep, "unauthorized")
+		ledger.NewAccount(tx.Sender, 120+3*ep.Proto.MinTxnFee)
+		ledger.Rekey(tx.Sender, basics.AppIndex(888).Address())
+		TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey+"; int 1", ep)
+		// now rekeyed back to original
+		TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey, ep, "unauthorized")
+	})
+}
+
+// TestRekeyInnerGroup ensures that in an inner group, if an account is
+// rekeyed, it can not be used (by the previously owning app) later in the
+// group.
+func TestRekeyInnerGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rekeyAndUse := `
+  itxn_begin
+   // pay 0 to the zero address, and rekey a junk addr
+   int pay;  itxn_field TypeEnum
+   global ZeroAddress; byte 0x01; b|; itxn_field RekeyTo
+  itxn_next
+   // try to perform the same 0 pay, but fail because tx0 gave away control
+   int pay;  itxn_field TypeEnum
+  itxn_submit
+  int 1
+`
+
+	// v6 added inner rekey
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		// fund the app account
+		ledger.NewAccount(basics.AppIndex(888).Address(), 1_000_000)
+		TestApp(t, rekeyAndUse, ep, "unauthorized AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVIOOBQA")
+	})
 }
 
 func TestDefaultSender(t *testing.T) {
@@ -306,13 +416,15 @@ func TestDefaultSender(t *testing.T) {
   itxn_submit
 `
 
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	tx.Accounts = append(tx.Accounts, appAddr(888))
-	TestApp(t, "txn Accounts 1; int 100"+pay, ep, "insufficient balance")
-	ledger.NewAccount(appAddr(888), 1000000)
-	TestApp(t, "txn Accounts 1; int 100"+pay+"int 1", ep)
-	TestApp(t, "global CurrentApplicationAddress; balance; int 998899; ==", ep)
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		tx.Accounts = append(tx.Accounts, appAddr(888))
+		TestApp(t, "txn Accounts 1; int 100"+pay, ep, "insufficient balance")
+		ledger.NewAccount(appAddr(888), 1000000)
+		TestApp(t, "txn Accounts 1; int 100"+pay+"int 1", ep)
+		TestApp(t, "global CurrentApplicationAddress; balance; int 998899; ==", ep)
+	})
 }
 
 func TestAppAxfer(t *testing.T) {
@@ -331,36 +443,42 @@ func TestAppAxfer(t *testing.T) {
   itxn_submit
 `
 
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAsset(tx.Receiver, 777, basics.AssetParams{}) // not in foreign-assets of sample
-	ledger.NewAsset(tx.Receiver, 77, basics.AssetParams{})  // in foreign-assets of sample
-	TestApp(t, "txn Sender; int 777; asset_holding_get AssetBalance; assert; int 0; ==;", ep,
-		"invalid Asset reference") // 777 not in foreign-assets
-	TestApp(t, "txn Sender; int 77; asset_holding_get AssetBalance; assert; int 0; ==;", ep,
-		"assert failed") // because Sender not opted-in
-	TestApp(t, "global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 0; ==;", ep,
-		"assert failed") // app account not opted in
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		test := func(source string, problem ...string) {
+			t.Helper()
+			TestApp(t, source, ep, problem...)
+		}
 
-	ledger.NewAccount(appAddr(888), 10000) // plenty for fees
-	ledger.NewHolding(appAddr(888), 77, 3000, false)
-	TestApp(t, "global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 3000; ==;", ep)
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAsset(tx.Receiver, 777, basics.AssetParams{}) // not in foreign-assets of sample
+		ledger.NewAsset(tx.Receiver, 77, basics.AssetParams{})  // in foreign-assets of sample
+		test("txn Sender; int 777; asset_holding_get AssetBalance; assert; int 0; ==;",
+			"unavailable Asset 777") // 777 not in foreign-assets
+		test("txn Sender; int 77; asset_holding_get AssetBalance; assert; int 0; ==;",
+			"assert failed") // because Sender not opted-in
+		test("global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 0; ==;",
+			"assert failed") // app account not opted in
 
-	TestApp(t, "txn Sender; txn Accounts 1; int 100"+axfer, ep, "unauthorized")
-	TestApp(t, "global CurrentApplicationAddress; txn Accounts 0; int 100"+axfer, ep,
-		fmt.Sprintf("Receiver (%s) not opted in", tx.Sender)) // txn.Sender (receiver of the axfer) isn't opted in
-	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100000"+axfer, ep,
-		"insufficient balance")
+		ledger.NewAccount(appAddr(888), 10000) // plenty for fees
+		ledger.NewHolding(appAddr(888), 77, 3000, false)
+		test("global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 3000; ==;")
 
-	// Temporarily remove from ForeignAssets to ensure App Account
-	// doesn't get some sort of free pass to send arbitrary assets.
-	save := tx.ForeignAssets
-	tx.ForeignAssets = []basics.AssetIndex{6, 10}
-	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100000"+axfer, ep,
-		"invalid Asset reference 77")
-	tx.ForeignAssets = save
+		test("txn Sender; txn Accounts 1; int 100"+axfer, "unauthorized")
+		test("global CurrentApplicationAddress; txn Accounts 0; int 100"+axfer,
+			fmt.Sprintf("Receiver (%s) not opted in", tx.Sender)) // txn.Sender (receiver of the axfer) isn't opted in
+		test("global CurrentApplicationAddress; txn Accounts 1; int 100000"+axfer,
+			"insufficient balance")
 
-	noid := `
+		// Temporarily remove from ForeignAssets to ensure App Account
+		// doesn't get some sort of free pass to send arbitrary assets.
+		save := tx.ForeignAssets
+		tx.ForeignAssets = []basics.AssetIndex{6, 10}
+		test("global CurrentApplicationAddress; txn Accounts 1; int 100000"+axfer,
+			"unavailable Asset 77")
+		tx.ForeignAssets = save
+
+		noid := `
   itxn_begin
   itxn_field AssetAmount
   itxn_field AssetReceiver
@@ -369,16 +487,50 @@ func TestAppAxfer(t *testing.T) {
   itxn_field TypeEnum
   itxn_submit
 `
-	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+noid+"int 1", ep,
-		fmt.Sprintf("Sender (%s) not opted in to 0", appAddr(888)))
 
-	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+axfer+"int 1", ep)
+		// Here, the XferAsset is never set, so it is defaulted to 0. Therefore
+		// v8 and below had no opportunity to complain about the inavailability
+		// of the implied holding. Of course, there is no 0 asset, so the axfer
+		// is going to fail anyway, but to keep the behavior consistent, v9
+		// allows the zero asset (and zero account) in `requireHolding`.
+		test("global CurrentApplicationAddress; txn Accounts 1; int 100"+noid+"int 1",
+			fmt.Sprintf("Sender (%s) not opted in to 0", appAddr(888)))
 
-	// 100 of 3000 spent
-	TestApp(t, "global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 2900; ==", ep)
-	TestApp(t, "txn Accounts 1; int 77; asset_holding_get AssetBalance; assert; int 100; ==", ep)
+		test("global CurrentApplicationAddress; txn Accounts 1; int 100" + axfer + "int 1")
+
+		// 100 of 3000 spent
+		test("global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 2900; ==")
+		test("txn Accounts 1; int 77; asset_holding_get AssetBalance; assert; int 100; ==")
+	})
 }
 
+func TestInnerAppl(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	appl := `
+  itxn_begin
+   int appl;   itxn_field TypeEnum
+   int 56						// present in ForeignApps of sample txn
+   itxn_field ApplicationID
+  itxn_submit
+  int 1
+`
+
+	// v6 added inner appls
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		// Establish 888 as the app id, and fund it.
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(basics.AppIndex(888).Address(), 200000)
+
+		ops := TestProg(t, "int 1", 5)
+		ledger.NewApp(basics.Address{0x01}, 56, basics.AppParams{ApprovalProgram: ops.Program})
+		TestApp(t, appl, ep)
+	})
+}
+
+// TestExtraFields tests that the inner txn fields are not allowed to be set for
+// different transaction type than the one submitted.
 func TestExtraFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -396,8 +548,6 @@ func TestExtraFields(t *testing.T) {
 
 	ep, tx, ledger := MakeSampleEnv()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	TestApp(t, "txn Sender; balance; int 0; ==;", ep)
-	TestApp(t, "txn Sender; txn Accounts 1; int 100"+pay, ep, "unauthorized")
 	TestApp(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, ep,
 		"non-zero fields for type axfer")
 }
@@ -453,6 +603,37 @@ func TestBadField(t *testing.T) {
 	TestAppBytes(t, ops.Program, ep, "invalid itxn_field FirstValid")
 }
 
+// TestInnerValidity logs fv and lv fields that are handled oddly (valid
+// rounds are copied) so we can check if they are correct.
+func TestInnerValidity(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ep, tx, ledger := MakeSampleEnv()
+	tx.GenesisHash = crypto.Digest{0x01, 0x02, 0x03}
+	logger := TestProg(t, `
+txn FirstValid; itob; log;
+txn LastValid; itob; log;
+int 1`, AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: logger.Program,
+	})
+
+	ledger.NewAccount(appAddr(888), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+itxn Logs 0; btoi; txn FirstValid; ==; assert
+itxn Logs 1; btoi; txn LastValid; ==; assert
+itxn FirstValid; txn FirstValid; ==; assert
+itxn LastValid; txn LastValid; ==; assert
+int 1
+`, ep)
+
+}
+
 func TestNumInnerShallow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -470,7 +651,6 @@ func TestNumInnerShallow(t *testing.T) {
 
 	ep, tx, ledger := MakeSampleEnv()
 	ep.Proto.EnableInnerTransactionPooling = false
-	ep.Reset()
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1000000)
 	TestApp(t, pay+";int 1", ep)
@@ -527,12 +707,12 @@ func TestNumInnerPooled(t *testing.T) {
 	TestApps(t, []string{short, long}, grp, LogicVersion, ledger)
 	TestApps(t, []string{long, short}, grp, LogicVersion, ledger)
 	TestApps(t, []string{long, long}, grp, LogicVersion, ledger,
-		NewExpect(1, "too many inner transactions"))
+		Exp(1, "too many inner transactions"))
 	grp = append(grp, grp[0])
 	TestApps(t, []string{short, long, long}, grp, LogicVersion, ledger,
-		NewExpect(2, "too many inner transactions"))
+		Exp(2, "too many inner transactions"))
 	TestApps(t, []string{long, long, long}, grp, LogicVersion, ledger,
-		NewExpect(1, "too many inner transactions"))
+		Exp(1, "too many inner transactions"))
 }
 
 func TestAssetCreate(t *testing.T) {
@@ -541,27 +721,40 @@ func TestAssetCreate(t *testing.T) {
 
 	create := `
   itxn_begin
-  int acfg
-  itxn_field TypeEnum
-  int 1000000
-  itxn_field ConfigAssetTotal
-  int 3
-  itxn_field ConfigAssetDecimals
-  byte "oz"
-  itxn_field ConfigAssetUnitName
-  byte "Gold"
-  itxn_field ConfigAssetName
-  byte "https://gold.rush/"
-  itxn_field ConfigAssetURL
+   int acfg;                   itxn_field TypeEnum
+   int 1000000;                itxn_field ConfigAssetTotal
+   int 3;                      itxn_field ConfigAssetDecimals
+   byte "oz";                  itxn_field ConfigAssetUnitName
+   byte "Gold";                itxn_field ConfigAssetName
+   byte "https://gold.rush/";  itxn_field ConfigAssetURL
+
+   // set all the addresses to something checkable
+   byte 0x01; int 31; bzero; concat; itxn_field ConfigAssetManager;
+   byte 0x02; int 31; bzero; concat; itxn_field ConfigAssetClawback;
+   byte 0x03; int 31; bzero; concat; itxn_field ConfigAssetFreeze;
+   byte 0x04; int 31; bzero; concat; itxn_field ConfigAssetReserve;
+
+   byte 0x05; int 31; bzero; concat; itxn_field ConfigAssetMetadataHash;
   itxn_submit
   int 1
 `
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	TestApp(t, create, ep, "insufficient balance")
-	// Give it enough for fee.  Recall that we don't check min balance at this level.
-	ledger.NewAccount(appAddr(888), MakeTestProto().MinTxnFee)
-	TestApp(t, create, ep)
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		TestApp(t, create, ep, "insufficient balance")
+		// Give it enough for fee.  Recall that we don't check min balance at this level.
+		ledger.NewAccount(appAddr(888), MakeTestProto().MinTxnFee)
+		TestApp(t, create, ep)
+		assetID := basics.AssetIndex(ledger.Counter() - 1)
+		app, _, err := ledger.AssetParams(assetID)
+		require.NoError(t, err)
+		require.Equal(t, app.Manager, basics.Address{0x01})
+		require.Equal(t, app.Clawback, basics.Address{0x02})
+		require.Equal(t, app.Freeze, basics.Address{0x03})
+		require.Equal(t, app.Reserve, basics.Address{0x04})
+
+		require.Equal(t, app.MetadataHash, [32]byte{0x05})
+	})
 }
 
 func TestAssetFreeze(t *testing.T) {
@@ -582,13 +775,14 @@ func TestAssetFreeze(t *testing.T) {
   int 5000
   ==
 `
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	// Give it enough for fees.  Recall that we don't check min balance at this level.
-	ledger.NewAccount(appAddr(888), 12*MakeTestProto().MinTxnFee)
-	TestApp(t, create, ep)
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		// Give it enough for fees.  Recall that we don't check min balance at this level.
+		ledger.NewAccount(appAddr(888), 12*MakeTestProto().MinTxnFee)
+		TestApp(t, create, ep)
 
-	freeze := `
+		freeze := `
   itxn_begin
   int afrz                    ; itxn_field TypeEnum
   int 5000                    ; itxn_field FreezeAsset
@@ -597,20 +791,21 @@ func TestAssetFreeze(t *testing.T) {
   itxn_submit
   int 1
 `
-	TestApp(t, freeze, ep, "invalid Asset reference")
-	tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(5000)}
-	tx.ApplicationArgs = [][]byte{{0x01}}
-	TestApp(t, freeze, ep, "does not hold Asset")
-	ledger.NewHolding(tx.Receiver, 5000, 55, false)
-	TestApp(t, freeze, ep)
-	holding, err := ledger.AssetHolding(tx.Receiver, 5000)
-	require.NoError(t, err)
-	require.Equal(t, true, holding.Frozen)
-	tx.ApplicationArgs = [][]byte{{0x00}}
-	TestApp(t, freeze, ep)
-	holding, err = ledger.AssetHolding(tx.Receiver, 5000)
-	require.NoError(t, err)
-	require.Equal(t, false, holding.Frozen)
+		TestApp(t, freeze, ep, "unavailable Asset 5000")
+		tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(5000)}
+		tx.ApplicationArgs = [][]byte{{0x01}}
+		TestApp(t, freeze, ep, "does not hold Asset")
+		ledger.NewHolding(tx.Receiver, 5000, 55, false)
+		TestApp(t, freeze, ep)
+		holding, err := ledger.AssetHolding(tx.Receiver, 5000)
+		require.NoError(t, err)
+		require.Equal(t, true, holding.Frozen)
+		tx.ApplicationArgs = [][]byte{{0x00}}
+		TestApp(t, freeze, ep)
+		holding, err = ledger.AssetHolding(tx.Receiver, 5000)
+		require.NoError(t, err)
+		require.Equal(t, false, holding.Frozen)
+	})
 }
 
 func TestKeyReg(t *testing.T) {
@@ -789,7 +984,7 @@ func TestFieldSetting(t *testing.T) {
 
 	TestApp(t, "itxn_begin; int 0; itxn_field Nonparticipation; int 1", ep)
 	TestApp(t, "itxn_begin; int 1; itxn_field Nonparticipation; int 1", ep)
-	TestApp(t, "itxn_begin; int 2; itxn_field Nonparticipation; int 1", ep,
+	TestApp(t, NoTrack("itxn_begin; int 2; itxn_field Nonparticipation; int 1"), ep,
 		"boolean is neither 1 nor 0")
 
 	TestApp(t, "itxn_begin; int 32; bzero; itxn_field RekeyTo; int 1", ep)
@@ -828,6 +1023,10 @@ txn Sender; itxn_field Receiver;
 	// NewAccount overwrites the existing balance
 	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee)
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
+	TestApp(t, "itxn_begin; itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
+		"itxn_begin without itxn_submit")
+	TestApp(t, "itxn_next"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
+		"itxn_next without itxn_begin")
 }
 
 func TestInnerFeePooling(t *testing.T) {
@@ -910,8 +1109,7 @@ func TestApplCreation(t *testing.T) {
 	p := "itxn_begin;"
 	s := "; int 1"
 
-	TestApp(t, p+"int 31; itxn_field ApplicationID"+s, ep,
-		"invalid App reference")
+	TestApp(t, p+"int 31; itxn_field ApplicationID"+s, ep, "unavailable App 31")
 	tx.ForeignApps = append(tx.ForeignApps, 31)
 	TestApp(t, p+"int 31; itxn_field ApplicationID"+s, ep)
 
@@ -940,7 +1138,7 @@ func TestApplCreation(t *testing.T) {
 		"too many application args")
 
 	TestApp(t, p+strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)+s, ep,
-		"invalid Account reference")
+		"unavailable Account")
 	tx.Accounts = append(tx.Accounts, basics.Address{})
 	TestApp(t, fmt.Sprintf(p+"%s"+s,
 		strings.Repeat("int 32; bzero; itxn_field Accounts;", 3)), ep)
@@ -949,14 +1147,14 @@ func TestApplCreation(t *testing.T) {
 		"too many foreign accounts")
 
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 5)+s, ep,
-		"invalid App reference")
+		"unavailable App 621")
 	tx.ForeignApps = append(tx.ForeignApps, basics.AppIndex(621))
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 5)+s, ep)
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Applications;", 6)+s, ep,
 		"too many foreign apps")
 
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 6)+s, ep,
-		"invalid Asset reference")
+		"unavailable Asset 621")
 	tx.ForeignAssets = append(tx.ForeignAssets, basics.AssetIndex(621))
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 6)+s, ep)
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 7)+s, ep,
@@ -998,7 +1196,6 @@ func TestBigApplCreation(t *testing.T) {
 
 	// First, test normal accummulation
 	for _, pgm := range []string{"Approval", "ClearState"} {
-		pgm := pgm
 		t.Run(pgm, func(t *testing.T) {
 			t.Parallel()
 
@@ -1093,68 +1290,93 @@ func TestInnerApplCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(appAddr(888), 50_000)
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		v := ep.Proto.LogicSigVersion
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), 50_000)
 
-	ops := TestProg(t, "int 50", AssemblerMaxVersion)
-	approve := "byte 0x" + hex.EncodeToString(ops.Program)
+		ops := TestProg(t, "int 50", v)
+		approve := "byte 0x" + hex.EncodeToString(ops.Program)
 
-	TestApp(t, `
+		test := func(source string, problems ...string) {
+			t.Helper()
+			TestApp(t, source, ep, problems...)
+		}
+
+		test(`
 itxn_begin
 int appl;    itxn_field TypeEnum
-`+approve+`; itxn_field ApprovalProgram
-`+approve+`; itxn_field ClearStateProgram
+` + approve + `; itxn_field ApprovalProgram
+` + approve + `; itxn_field ClearStateProgram
 int 1;       itxn_field GlobalNumUint
 int 2;       itxn_field LocalNumByteSlice
 int 3;       itxn_field LocalNumUint
 itxn_submit
 int 1
-`, ep)
+`)
 
-	TestApp(t, `
-int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
-`, ep, "invalid App reference")
+		test("int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert",
+			"unavailable App 5000")
 
-	call := `
+		call := `
 itxn_begin
 int appl;    itxn_field TypeEnum
 int 5000;    itxn_field ApplicationID
 itxn_submit
 int 1
 `
-	// Can't call it either
-	TestApp(t, call, ep, "invalid App reference")
+		// Can't call it either
+		test(call, "unavailable App 5000")
 
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(5000)}
-	TestApp(t, `
+		tx.ForeignApps = []basics.AppIndex{basics.AppIndex(5000)}
+		test(`
 int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
 int 5000; app_params_get AppGlobalNumUint;      assert; int 1; ==; assert
 int 5000; app_params_get AppLocalNumByteSlice;  assert; int 2; ==; assert
 int 5000; app_params_get AppLocalNumUint;       assert; int 3; ==; assert
 int 1
-`, ep)
+`)
+		if v >= 12 {
+			// Version starts at 0
+			test(`int 5000; app_params_get AppVersion; assert; !`)
+		}
 
-	// Call it (default OnComplete is NoOp)
-	TestApp(t, call, ep)
+		// Call it (default OnComplete is NoOp)
+		test(call)
 
-	TestApp(t, `
+		update := `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 5000;    itxn_field ApplicationID
+` + approve + `; itxn_field ApprovalProgram
+` + approve + `; itxn_field ClearStateProgram
+int UpdateApplication; itxn_field OnCompletion
+itxn_submit
+int 1
+`
+		test(update)
+
+		if v >= 12 {
+			// Version starts at 0
+			test(`int 5000; app_params_get AppVersion; assert; int 1; ==`)
+		}
+
+		test(`
 itxn_begin
 int appl;              itxn_field TypeEnum
 int DeleteApplication; itxn_field OnCompletion
 txn Applications 1;    itxn_field ApplicationID
 itxn_submit
 int 1
-`, ep)
+`)
 
-	// App is gone
-	TestApp(t, `
-int 5000; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1
-`, ep)
+		// App is gone
+		test("int 5000; app_params_get AppGlobalNumByteSlice; !; assert; !; assert; int 1")
 
-	// Can't call it either
-	TestApp(t, call, ep, "no such app 5000")
+		// Can't call it either
+		test(call, "no app 5000")
 
+	})
 }
 
 func TestCreateOldAppFails(t *testing.T) {
@@ -1799,7 +2021,6 @@ int 1
 `
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
@@ -1832,7 +2053,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
@@ -2127,7 +2348,6 @@ int 1
 `
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
@@ -2160,7 +2380,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
@@ -2265,7 +2485,6 @@ func TestInnerTxIDCaching(t *testing.T) {
 	childAppID := basics.AppIndex(222)
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
@@ -2610,20 +2829,17 @@ func TestNumInnerDeep(t *testing.T) {
   itxn_submit
 `
 
-	tx := txntest.Txn{
-		Type:          protocol.ApplicationCallTx,
-		ApplicationID: 888,
-		ForeignApps:   []basics.AppIndex{basics.AppIndex(222)},
-	}.SignedTxnWithAD()
-	require.Equal(t, 888, int(tx.Txn.ApplicationID))
-	ledger := NewLedger(nil)
+	ep, tx, ledger := MakeSampleEnv()
 
-	pay3 := TestProg(t, pay+pay+pay+"int 1;", AssemblerMaxVersion).Program
-	ledger.NewApp(tx.Txn.Receiver, 222, basics.AppParams{
-		ApprovalProgram: pay3,
+	tx.Type = protocol.ApplicationCallTx
+	tx.ApplicationID = 888
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: TestProg(t, pay+pay+pay+"int 1;", AssemblerMaxVersion).Program,
 	})
 
-	ledger.NewApp(tx.Txn.Receiver, 888, basics.AppParams{})
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 1_000_000)
 
 	callpay3 := `itxn_begin
@@ -2631,9 +2847,6 @@ int appl;    itxn_field TypeEnum
 int 222;     itxn_field ApplicationID
 itxn_submit
 `
-	txg := []transactions.SignedTxnWithAD{tx}
-	ep := NewEvalParams(txg, MakeTestProto(), &transactions.SpecialAddresses{})
-	ep.Ledger = ledger
 	TestApp(t, callpay3+"int 1", ep, "insufficient balance") // inner contract needs money
 
 	ledger.NewAccount(appAddr(222), 1_000_000)
@@ -2660,20 +2873,29 @@ func TestCreateAndUse(t *testing.T) {
   itxn_begin
    int axfer;           itxn_field TypeEnum
    itxn CreatedAssetID; itxn_field XferAsset
-   txn Accounts 0;      itxn_field AssetReceiver
+   txn Sender;          itxn_field AssetReceiver
   itxn_submit
 
   int 1
 `
 
-	// First testing use in axfer
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
-	TestApp(t, axfer, ep)
+	// First testing use in axfer, start at v5 so that the failure is tested
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		v := ep.Proto.LogicSigVersion
+		test := func(source string, problems ...string) {
+			t.Helper()
+			TestApp(t, source, ep, problems...)
+		}
 
-	ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
-	TestApp(t, axfer, ep, "invalid Asset reference")
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
+
+		if v < CreatedResourcesVersion {
+			test(axfer, "unavailable Asset")
+		} else {
+			test(axfer)
+		}
+	})
 
 	balance := `
   itxn_begin
@@ -2706,14 +2928,23 @@ func TestCreateAndUse(t *testing.T) {
   int 1
 `
 
-	// Now test use in asset balance opcode
-	ep, tx, ledger = MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
-	TestApp(t, balance, ep)
+	// Now test use in asset balance opcode, over the same range
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		v := ep.Proto.LogicSigVersion
+		test := func(source string, problems ...string) {
+			t.Helper()
+			TestApp(t, source, ep, problems...)
+		}
 
-	ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
-	TestApp(t, balance, ep, "invalid Asset reference")
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
+
+		if v < CreatedResourcesVersion {
+			test(balance, "unavailable Asset "+strconv.Itoa(FirstTestID))
+		} else {
+			test(balance)
+		}
+	})
 
 	appcall := `
   itxn_begin
@@ -2731,18 +2962,20 @@ func TestCreateAndUse(t *testing.T) {
   int 1
 `
 
-	// Now as ForeignAsset
-	ep, tx, ledger = MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
-	// It gets passed the Assets setting
-	TestApp(t, appcall, ep, "attempt to self-call")
+	// Now as ForeignAsset (starts in v6, when inner app calls allowed)
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		test := func(source string, problems ...string) {
+			TestApp(t, source, ep, problems...)
+		}
 
-	// Appcall is isn't allowed pre-CreatedResourcesVersion, because same
-	// version allowed inner app calls
-	// ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
-	// TestApp(t, appcall, ep, "invalid Asset reference")
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), 4*MakeTestProto().MinTxnFee)
+		// It gets passed the Assets setting
+		test(appcall, "attempt to self-call")
+		// Appcall is isn't allowed pre-6, so there's no point in this loop
+		// checking v5.
+	})
 }
 
 // main wraps up some TEAL source in a header and footer so that it is
@@ -2756,42 +2989,33 @@ func main(source string) string {
        end: int 1`, source)
 }
 
-func hexProgram(t *testing.T, source string) string {
-	return "0x" + hex.EncodeToString(TestProg(t, source, AssemblerMaxVersion).Program)
+func hexProgram(t *testing.T, source string, v uint64) string {
+	return "0x" + hex.EncodeToString(TestProg(t, source, v).Program)
 }
 
-// TestCreateAndUseApp checks that an app can be created in an inner txn, and then
+// TestCreateAndSeeApp checks that an app can be created in an inner txn, and then
 // the address for it can be looked up.
-func TestCreateUseApp(t *testing.T) {
+func TestCreateSeeApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	pay5back := main(`
-itxn_begin
-int pay;    itxn_field TypeEnum
-txn Sender; itxn_field Receiver
-int 5;      itxn_field Amount
-itxn_submit
-int 1
-`)
-
-	createAndUse := `
+	TestLogicRange(t, CreatedResourcesVersion, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), 1*MakeTestProto().MinTxnFee)
+		createAndUse := `
   itxn_begin
    int appl;     itxn_field TypeEnum
-   byte	` + hexProgram(t, pay5back) + `; dup; itxn_field ApprovalProgram; itxn_field ClearStateProgram;
+   byte	` + hexProgram(t, main(""), 5) + `; dup; itxn_field ApprovalProgram; itxn_field ClearStateProgram;
   itxn_submit
 
   itxn CreatedApplicationID; app_params_get AppAddress; assert
   addr ` + appAddr(5000).String() + `
   ==
 `
-
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(appAddr(888), 1*MakeTestProto().MinTxnFee)
-	TestApp(t, createAndUse, ep)
-	// Again, can't test if this (properly) fails in previous version, because
-	// we can't even create apps this way in previous version.
+		TestApp(t, createAndUse, ep)
+		// Again, can't test if this (properly) fails in previous version, because
+		// we can't even create apps this way in previous version.
+	})
 }
 
 // TestCreateAndPay checks that an app can be created in an inner app, and then
@@ -2801,7 +3025,9 @@ func TestCreateAndPay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	pay5back := main(`
+	TestLogicRange(t, CreatedResourcesVersion, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		v := ep.Proto.LogicSigVersion
+		pay5back := main(`
 itxn_begin
 int pay;    itxn_field TypeEnum
 txn Sender; itxn_field Receiver
@@ -2810,10 +3036,10 @@ itxn_submit
 int 1
 `)
 
-	createAndPay := `
+		createAndPay := `
   itxn_begin
    int appl;    itxn_field TypeEnum
-	` + fmt.Sprintf("byte %s", hexProgram(t, pay5back)) + `
+	` + fmt.Sprintf("byte %s", hexProgram(t, pay5back, v)) + `
   dup
   itxn_field ApprovalProgram;
   itxn_field ClearStateProgram;
@@ -2828,15 +3054,15 @@ int 1
   int 1
 `
 
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
-	TestApp(t, createAndPay, ep)
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
+		TestApp(t, createAndPay, ep)
 
-	// This test is impossible because CreatedResourcesVersion is also when
-	// inner txns could make apps.
-	// ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
-	// TestApp(t, createAndPay, ep, "invalid Address reference")
+		// This test is impossible because CreatedResourcesVersion is also when
+		// inner txns could make apps.
+		// ep.Proto = MakeTestProtoV(CreatedResourcesVersion - 1)
+		// TestApp(t, createAndPay, ep, "invalid Address reference")
+	})
 }
 
 // TestInnerGaid ensures there's no confusion over the tracking of ids
@@ -2999,64 +3225,38 @@ done:
 	TestAppBytes(t, app.ApprovalProgram, ep, "appl depth")
 }
 
-func TestInfiniteRecursion(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	ep, tx, ledger := MakeSampleEnv()
-	source := `
-itxn_begin
-int appl; itxn_field TypeEnum
-int 0; app_params_get AppApprovalProgram
-assert
-itxn_field ApprovalProgram
-
-int 0; app_params_get AppClearStateProgram
-assert
-itxn_field ClearStateProgram
-
-itxn_submit
-`
-	// This app looks itself up in the ledger, so we need to put it in there.
-	ledger.NewApp(tx.Sender, 888, basics.AppParams{
-		ApprovalProgram:   TestProg(t, source, AssemblerMaxVersion).Program,
-		ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
-	})
-	// We're testing if this can recur forever. It's hard to fund all these
-	// apps, but we can put a huge credit in the ep.
-	*ep.FeeCredit = 1_000_000_000
-
-	// This has been tested by hand, by setting maxAppCallDepth to 10_000_000
-	// but without that, the depth limiter stops it first.
-	// TestApp(t, source, ep, "too many inner transactions 1 with 0 left")
-
-	TestApp(t, source, ep, "appl depth (8) exceeded")
-}
-
+// TestForeignAppAccountAccess ensures that an app can access the account
+// associated withe an app mentioned in its ForeignApps.
 func TestForeignAppAccountAccess(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, tx, ledger := MakeSampleEnv()
-	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(111)}
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		v := ep.Proto.LogicSigVersion
+		ledger.NewAccount(appAddr(888), 50_000)
+		tx.ForeignApps = []basics.AppIndex{basics.AppIndex(111)}
 
-	ledger.NewApp(tx.Sender, 111, basics.AppParams{
-		ApprovalProgram:   TestProg(t, "int 1", AssemblerMaxVersion).Program,
-		ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
-	})
+		ledger.NewApp(tx.Sender, 111, basics.AppParams{
+			ApprovalProgram:   TestProg(t, "int 1", AssemblerMaxVersion).Program,
+			ClearStateProgram: TestProg(t, "int 1", AssemblerMaxVersion).Program,
+		})
 
-	TestApp(t, `
+		// app address available starting with 7
+		var problem []string
+		if v < 7 {
+			problem = []string{"unavailable Account " + appAddr(111).String()}
+		}
+
+		TestApp(t, `
 itxn_begin
-int pay
-itxn_field TypeEnum
-int 100
-itxn_field Amount
+int pay; itxn_field TypeEnum
+int 100; itxn_field Amount
 txn Applications 1
 app_params_get AppAddress
 assert
 itxn_field Receiver
 itxn_submit
 int 1
-`, ep)
+`, ep, problem...)
+	})
 }

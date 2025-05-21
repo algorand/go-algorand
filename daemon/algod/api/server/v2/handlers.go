@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,10 +25,16 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
+	"runtime"
+	"slices"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-codec/codec"
@@ -36,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -45,8 +52,10 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -54,20 +63,41 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 )
 
-// max compiled teal program is currently 8k
+// MaxTealSourceBytes sets a size limit for TEAL source programs for requests
+// Max TEAL program size is currently 8k
 // but we allow for comments, spacing, and repeated consts
-// in the source teal, allow up to 200kb
-const maxTealSourceBytes = 200_000
+// in the source TEAL. We have some indication that real TEAL programs with comments are about 20 times bigger than the bytecode they produce, and we may soon allow 16,000 byte logicsigs, implying a maximum of 320kb. Let's call it half a meg for a little room to spare.
+const MaxTealSourceBytes = 512 * 1024
 
+// MaxTealDryrunBytes sets a size limit for dryrun requests
 // With the ability to hold unlimited assets DryrunRequests can
-// become quite large, allow up to 1mb
-const maxTealDryrunBytes = 1_000_000
+// become quite large, so we allow up to 1MB
+const MaxTealDryrunBytes = 1_000_000
+
+// MaxAssetResults sets a size limit for the number of assets returned in a single request to the
+// /v2/accounts/{address}/assets endpoint
+const MaxAssetResults = 1000
+
+// DefaultAssetResults sets a default size limit for the number of assets returned in a single request to the
+// /v2/accounts/{address}/assets endpoint
+const DefaultAssetResults = uint64(1000)
+
+const (
+	errInvalidLimit      = "limit parameter must be a positive integer"
+	errUnableToParseNext = "unable to parse next token"
+)
+
+// WaitForBlockTimeout is the timeout for the WaitForBlock endpoint.
+var WaitForBlockTimeout = 1 * time.Minute
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
 	Node     NodeInterface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
+
+	// KeygenLimiter is used to limit the number of concurrent key generation requests.
+	KeygenLimiter *semaphore.Weighted
 }
 
 // LedgerForAPI describes the Ledger methods used by the v2 API.
@@ -75,20 +105,23 @@ type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) ([]byte, error)
-	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
+	LookupKeysByPrefix(prefix, next string, boxLimit, byteLimit int, values bool) (basics.Round, map[string]string, string, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
+	LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
+	WaitWithCancel(r basics.Round) (chan struct{}, func())
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
-	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
+	TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error)
 	GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error)
+	GetTracer() logic.EvalTracer
 }
 
 // NodeInterface represents node fns used by the handlers.
@@ -98,7 +131,8 @@ type NodeInterface interface {
 	GenesisID() string
 	GenesisHash() crypto.Digest
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	Simulate(txgroup []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error)
+	AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
+	Simulate(request simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -113,6 +147,8 @@ type NodeInterface interface {
 	SetSyncRound(rnd uint64) error
 	GetSyncRound() uint64
 	UnsetSyncRound()
+	GetBlockTimeStampOffset() (*int64, error)
+	SetBlockTimeStampOffset(int64) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -194,18 +230,18 @@ func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForA
 		default:
 		}
 
-		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
+		txns, err := txnFetcher.TxnsFrom(transactions.StateProofSender, i)
 		if err != nil {
 			return transactions.Transaction{}, err
 		}
 		for _, txn := range txns {
-			if txn.Txn.Type != protocol.StateProofTx {
+			if txn.Type != protocol.StateProofTx {
 				continue
 			}
 
-			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
-				uint64(round) <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
-				return txn.Txn, nil
+			if txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
+				uint64(round) <= txn.StateProofTxnFields.Message.LastAttestedRound {
+				return txn, nil
 			}
 		}
 	}
@@ -230,6 +266,47 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+func (v2 *Handlers) generateKeyHandler(address string, params model.GenerateParticipationKeysParams) error {
+	installFunc := func(path string) error {
+		bytes, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		partKeyBinary := bytes
+
+		if len(partKeyBinary) == 0 {
+			return fmt.Errorf("cannot install partkey '%s' is empty", partKeyBinary)
+		}
+
+		partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
+		v2.Log.Infof("Installed participation key %s", partID)
+		return err
+	}
+	_, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "", installFunc)
+	return err
+}
+
+// GenerateParticipationKeys generates and installs participation keys to the node.
+// (POST /v2/participation/generate/{address})
+func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
+	if !v2.KeygenLimiter.TryAcquire(1) {
+		err := fmt.Errorf("participation key generation already in progress")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	// Semaphore was acquired, generate the key.
+	go func() {
+		defer v2.KeygenLimiter.Release(1)
+		err := v2.generateKeyHandler(address, params)
+		if err != nil {
+			v2.Log.Warnf("Error generating participation keys: %v", err)
+		}
+	}()
+
+	// Empty object. In the future we may want to add a field for the participation ID.
+	return ctx.String(http.StatusOK, "{}")
+}
+
 // AddParticipationKey Add a participation key to the node
 // (POST /v2/participation)
 func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
@@ -241,8 +318,8 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 	partKeyBinary := buf.Bytes()
 
 	if len(partKeyBinary) == 0 {
-		err := fmt.Errorf(errRESTPayloadZeroLength)
-		return badRequest(ctx, err, err.Error(), v2.Log)
+		lenErr := errors.New(errRESTPayloadZeroLength)
+		return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
 	}
 
 	partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
@@ -341,7 +418,7 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params model.ShutdownNodePara
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
 func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params model.AccountInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -366,14 +443,14 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	// count total # of resources, if max limit is set
 	if maxResults := v2.Node.Config().MaxAPIResourcesPerAccount; maxResults != 0 {
-		record, _, _, err := myLedger.LookupAccount(myLedger.Latest(), addr)
-		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		record, _, _, lookupErr := myLedger.LookupAccount(myLedger.Latest(), addr)
+		if lookupErr != nil {
+			return internalError(ctx, lookupErr, errFailedLookingUpLedger, v2.Log)
 		}
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
 			v2.Log.Infof("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
-			extraData := map[string]interface{}{
+			extraData := map[string]any{
 				"max-results":           maxResults,
 				"total-assets-opted-in": record.TotalAssets,
 				"total-created-assets":  record.TotalAssetParams,
@@ -424,9 +501,9 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 	}
 
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
-		if err != nil {
-			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		data, encErr := encode(handle, record)
+		if encErr != nil {
+			return internalError(ctx, encErr, errFailedToEncodeResponse, v2.Log)
 		}
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
@@ -437,7 +514,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 	}
 
 	var apiParticipation *model.AccountParticipation
-	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+	if !record.VoteID.IsEmpty() {
 		apiParticipation = &model.AccountParticipation{
 			VoteParticipationKey:      record.VoteID[:],
 			SelectionParticipationKey: record.SelectionID[:],
@@ -467,6 +544,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 		Status:                      record.Status.String(),
 		RewardBase:                  &record.RewardsBase,
 		Participation:               apiParticipation,
+		IncentiveEligible:           omitEmpty(record.IncentiveEligible),
 		TotalCreatedAssets:          record.TotalAssetParams,
 		TotalCreatedApps:            record.TotalAppParams,
 		TotalAssetsOptedIn:          record.TotalAssets,
@@ -476,10 +554,12 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 			NumByteSlice: record.TotalAppSchema.NumByteSlice,
 			NumUint:      record.TotalAppSchema.NumUint,
 		},
-		AppsTotalExtraPages: numOrNil(uint64(record.TotalExtraAppPages)),
-		TotalBoxes:          numOrNil(record.TotalBoxes),
-		TotalBoxBytes:       numOrNil(record.TotalBoxBytes),
+		AppsTotalExtraPages: omitEmpty(uint64(record.TotalExtraAppPages)),
+		TotalBoxes:          omitEmpty(record.TotalBoxes),
+		TotalBoxBytes:       omitEmpty(record.TotalBoxBytes),
 		MinBalance:          record.MinBalance(&consensus).Raw,
+		LastProposed:        omitEmpty(uint64(record.LastProposed)),
+		LastHeartbeat:       omitEmpty(uint64(record.LastHeartbeat)),
 	}
 	response := model.AccountResponse(account)
 	return ctx.JSON(http.StatusOK, response)
@@ -488,7 +568,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 // AccountAssetInformation gets account information about a given asset.
 // (GET /v2/accounts/{address}/assets/{asset-id})
 func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, assetID uint64, params model.AccountAssetInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -541,7 +621,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address string, as
 // AccountApplicationInformation gets account information about a given app.
 // (GET /v2/accounts/{address}/applications/{application-id})
 func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address string, applicationID uint64, params model.AccountApplicationInformationParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -595,23 +675,37 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// BlockResponseJSON is used to embed the block in JSON responses.
+type BlockResponseJSON struct {
+	Block bookkeeping.Block `codec:"block"`
+}
+
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlockParams) error {
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
+	// For a future iteration/V3, we should make the available data for this endpoint consistent between messagepack and JSON.
+	// Currently, the certificate is only returned in messagepack format requests for a complete block.
+	// The 'getBlockHeader' function is used to get the block header only; this is currently consistent between messagepack and JSON.
+
+	// If the client requests block header only, process that
+	if params.HeaderOnly != nil && *params.HeaderOnly {
+		return v2.getBlockHeader(ctx, round, handle, contentType)
+	}
+
 	// msgpack format uses 'RawBlockBytes' and attaches a custom header.
 	if handle == protocol.CodecHandle {
-		blockbytes, err := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
-		if err != nil {
-			switch err.(type) {
+		blockbytes, blockErr := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
+		if blockErr != nil {
+			switch blockErr.(type) {
 			case ledgercore.ErrNoEntry:
-				return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+				return notFound(ctx, blockErr, errFailedLookingUpLedger, v2.Log)
 			default:
-				return internalError(ctx, err, err.Error(), v2.Log)
+				return internalError(ctx, blockErr, blockErr.Error(), v2.Log)
 			}
 		}
 
@@ -620,7 +714,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	}
 
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -631,8 +725,32 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
+	response := BlockResponseJSON{
+		Block: block,
+	}
+
+	data, err := encode(handle, response)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+func (v2 *Handlers) getBlockHeader(ctx echo.Context, round uint64, handle codec.Handle, contentType string) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.BlockHdr(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
 	response := struct {
-		Block bookkeeping.Block `codec:"block"`
+		Block bookkeeping.BlockHeader `codec:"block"`
 	}{
 		Block: block,
 	}
@@ -645,11 +763,104 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// GetBlockTxids gets all top level TxIDs in a block for the given round.
+// (GET /v2/blocks/{round}/txids)
+func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.Block(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	txids := make([]string, 0, len(txns))
+	for ids := range txns {
+		txids = append(txids, txns[ids].ID().String())
+	}
+
+	response := model.BlockTxidsResponse{BlockTxids: txids}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// NewAppCallLogs generates a new model.AppCallLogs struct.
+func NewAppCallLogs(txid string, logs []string, appIndex uint64) model.AppCallLogs {
+	return model.AppCallLogs{
+		TxId:             txid,
+		Logs:             convertSlice(logs, func(s string) []byte { return []byte(s) }),
+		ApplicationIndex: appIndex,
+	}
+}
+
+func getAppIndexFromTxn(txn transactions.SignedTxnWithAD) uint64 {
+	appIndex := uint64(txn.SignedTxn.Txn.ApplicationID)
+	if appIndex == 0 {
+		appIndex = uint64(txn.ApplyData.ApplicationID)
+	}
+
+	return appIndex
+}
+
+func appendLogsFromTxns(blockLogs []model.AppCallLogs, txns []transactions.SignedTxnWithAD, outerTxnID string) []model.AppCallLogs {
+
+	for _, txn := range txns {
+		if len(txn.EvalDelta.Logs) > 0 {
+			blockLogs = append(
+				blockLogs,
+				NewAppCallLogs(outerTxnID, txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
+			)
+		}
+
+		blockLogs = appendLogsFromTxns(blockLogs, txn.EvalDelta.InnerTxns, outerTxnID)
+	}
+
+	return blockLogs
+}
+
+// GetBlockLogs gets all of the logs (inner and outer app calls) for a given block
+// (GET /v2/blocks/{round}/logs)
+func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.Block(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	blockLogs := []model.AppCallLogs{}
+
+	for _, txn := range txns {
+		blockLogs = appendLogsFromTxns(blockLogs, []transactions.SignedTxnWithAD{txn}, txn.ID().String())
+	}
+
+	response := model.BlockLogsResponse{Logs: blockLogs}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetBlockHash gets the block hash for the given round.
 // (GET /v2/blocks/{round}/hash)
 func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledgercore.ErrNoEntry:
@@ -668,7 +879,7 @@ func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
 func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid string, params model.GetTransactionProofParams) error {
 	var txID transactions.Txid
-	err := txID.UnmarshalText([]byte(txid))
+	err := txID.FromString(txid)
 	if err != nil {
 		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
 	}
@@ -678,7 +889,7 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 	}
 
 	ledger := v2.Node.LedgerForAPI()
-	block, _, err := ledger.BlockCert(basics.Round(round))
+	block, err := ledger.Block(basics.Round(round))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -726,9 +937,9 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 			return badRequest(ctx, err, "unsupported hash type", v2.Log)
 		}
 
-		proof, err := tree.ProveSingleLeaf(uint64(idx))
-		if err != nil {
-			return internalError(ctx, err, "generating proof", v2.Log)
+		proof, proofErr := tree.ProveSingleLeaf(uint64(idx))
+		if proofErr != nil {
+			return internalError(ctx, proofErr, "generating proof", v2.Log)
 		}
 
 		response := model.TransactionProofResponse{
@@ -772,12 +983,6 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
 
-	ledger := v2.Node.LedgerForAPI()
-	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
-	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
-	}
-
 	response := model.NodeStatusResponse{
 		LastRound:                   uint64(stat.LastRound),
 		LastVersion:                 string(stat.LastVersion),
@@ -799,26 +1004,29 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
 
-	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
-	var votesToGo int64 = int64(nextProtocolVoteBefore) - int64(stat.LastRound)
-	if votesToGo < 0 {
-		votesToGo = 0
-	}
-	if nextProtocolVoteBefore > 0 {
+	// Make sure a vote is happening
+	if stat.NextProtocolVoteBefore > 0 {
+		votesToGo := uint64(0)
+		// Check if the vote window is still open.
+		if stat.NextProtocolVoteBefore > stat.LastRound {
+			// subtract 1 because the variables are referring to "Last" round and "VoteBefore"
+			votesToGo = uint64(stat.NextProtocolVoteBefore - stat.LastRound - 1)
+		}
+
 		consensus := config.Consensus[protocol.ConsensusCurrentVersion]
 		upgradeVoteRounds := consensus.UpgradeVoteRounds
 		upgradeThreshold := consensus.UpgradeThreshold
-		votes := uint64(consensus.UpgradeVoteRounds) - uint64(votesToGo)
+		votes := consensus.UpgradeVoteRounds - votesToGo
 		votesYes := stat.NextProtocolApprovals
 		votesNo := votes - votesYes
-		upgradeDelay := uint64(stat.UpgradeDelay)
+		upgradeDelay := stat.UpgradeDelay
 		response.UpgradeVotesRequired = &upgradeThreshold
-		response.UpgradeNodeVote = &latestBlkHdr.UpgradeApprove
+		response.UpgradeNodeVote = &stat.UpgradeApprove
 		response.UpgradeDelay = &upgradeDelay
 		response.UpgradeVotes = &votes
 		response.UpgradeYesVotes = &votesYes
 		response.UpgradeNoVotes = &votesNo
-		response.UpgradeNextProtocolVoteBefore = &nextProtocolVoteBefore
+		response.UpgradeNextProtocolVoteBefore = omitEmpty(uint64(stat.NextProtocolVoteBefore))
 		response.UpgradeVoteRounds = &upgradeVoteRounds
 	}
 
@@ -857,11 +1065,15 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	}
 
 	// Wait
+	ledgerWaitCh, cancelLedgerWait := ledger.WaitWithCancel(basics.Round(round + 1))
+	defer cancelLedgerWait()
 	select {
 	case <-v2.Shutdown:
 		return internalError(ctx, err, errServiceShuttingDown, v2.Log)
-	case <-time.After(1 * time.Minute):
-	case <-ledger.Wait(basics.Round(round + 1)):
+	case <-ctx.Request().Context().Done():
+		return ctx.NoContent(http.StatusRequestTimeout)
+	case <-time.After(WaitForBlockTimeout):
+	case <-ledgerWaitCh:
 	}
 
 	// Return status after the wait
@@ -924,15 +1136,166 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.PostTransactionsResponse{TxId: txid.String()})
 }
 
-// SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
-// (POST /v2/transactions/simulate)
-func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
+// RawTransactionAsync broadcasts a raw transaction to the network without ensuring it is accepted by transaction pool.
+// (POST /v2/transactions/async)
+func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 	if !v2.Node.Config().EnableExperimentalAPI {
-		// Right now this is a redundant/useless check at runtime, since experimental APIs are not registered when EnableExperimentalAPI=false.
-		// However, this endpoint won't always be experimental, so I've left this here as a reminder to have some other flag guarding its usage.
-		return ctx.String(http.StatusNotFound, fmt.Sprintf("%s was not enabled in the configuration file by setting EnableExperimentalAPI to true", ctx.Request().URL.Path))
+		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
+	}
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
+	txgroup, err := decodeTxGroup(ctx.Request().Body, bounds.MaxTxGroupSize)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	err = v2.Node.AsyncBroadcastSignedTxGroup(txgroup)
+	if err != nil {
+		return serviceUnavailable(ctx, err, err.Error(), v2.Log)
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
+// AccountAssetsInformation looks up an account's asset holdings.
+// (GET /v2/accounts/{address}/assets)
+func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address string, params model.AccountAssetsInformationParams) error {
+	if !v2.Node.Config().EnableExperimentalAPI {
+		return ctx.String(http.StatusNotFound, "/v2/accounts/{address}/assets was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
 	}
 
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
+	}
+
+	var assetGreaterThan uint64 = 0
+	if params.Next != nil {
+		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
+		if err0 != nil {
+			return badRequest(ctx, err0, fmt.Sprintf("%s: %v", errUnableToParseNext, err0), v2.Log)
+		}
+		assetGreaterThan = agt
+	}
+
+	if params.Limit != nil {
+		if *params.Limit <= 0 {
+			return badRequest(ctx, errors.New(errInvalidLimit), errInvalidLimit, v2.Log)
+		}
+
+		if *params.Limit > MaxAssetResults {
+			limitErrMsg := fmt.Sprintf("limit %d exceeds max assets single batch limit %d", *params.Limit, MaxAssetResults)
+			return badRequest(ctx, errors.New(limitErrMsg), limitErrMsg, v2.Log)
+		}
+	} else {
+		// default limit
+		l := DefaultAssetResults
+		params.Limit = &l
+	}
+
+	ledger := v2.Node.LedgerForAPI()
+
+	// Logic
+	// 1. Get the account's asset holdings subject to limits
+	// 2. Handle empty response
+	// 3. Prepare JSON response
+
+	// We intentionally request one more than the limit to determine if there are more assets.
+	records, lookupRound, err := ledger.LookupAssets(addr, basics.AssetIndex(assetGreaterThan), *params.Limit+1)
+
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	// prepare JSON response
+	response := model.AccountAssetsInformationResponse{Round: uint64(lookupRound)}
+
+	// If the total count is greater than the limit, we set the next token to the last asset ID being returned
+	if uint64(len(records)) > *params.Limit {
+		// we do not include the last record in the response
+		records = records[:*params.Limit]
+		nextTk := strconv.FormatUint(uint64(records[len(records)-1].AssetID), 10)
+		response.NextToken = &nextTk
+	}
+
+	assetHoldings := make([]model.AccountAssetHolding, 0, len(records))
+
+	for _, record := range records {
+		if record.AssetHolding == nil {
+			v2.Log.Warnf("AccountAssetsInformation: asset %d has no holding - should not be possible", record.AssetID)
+			continue
+		}
+
+		aah := model.AccountAssetHolding{
+			AssetHolding: model.AssetHolding{
+				Amount:   record.AssetHolding.Amount,
+				AssetID:  uint64(record.AssetID),
+				IsFrozen: record.AssetHolding.Frozen,
+			},
+		}
+
+		if !record.Creator.IsZero() {
+			asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
+			aah.AssetParams = &asset.Params
+		}
+
+		assetHoldings = append(assetHoldings, aah)
+	}
+
+	response.AssetHoldings = &assetHoldings
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
+type PreEncodedSimulateTxnResult struct {
+	Txn                      PreEncodedTxInfo                        `codec:"txn-result"`
+	AppBudgetConsumed        *uint64                                 `codec:"app-budget-consumed,omitempty"`
+	LogicSigBudgetConsumed   *uint64                                 `codec:"logic-sig-budget-consumed,omitempty"`
+	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
+	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
+	FixedSigner              *string                                 `codec:"fixed-signer,omitempty"`
+}
+
+// PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
+type PreEncodedSimulateTxnGroupResult struct {
+	AppBudgetAdded           *uint64                                 `codec:"app-budget-added,omitempty"`
+	AppBudgetConsumed        *uint64                                 `codec:"app-budget-consumed,omitempty"`
+	FailedAt                 *[]uint64                               `codec:"failed-at,omitempty"`
+	FailureMessage           *string                                 `codec:"failure-message,omitempty"`
+	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
+	Txns                     []PreEncodedSimulateTxnResult           `codec:"txn-results"`
+}
+
+// PreEncodedSimulateResponse mirrors model.SimulateResponse
+type PreEncodedSimulateResponse struct {
+	Version         uint64                             `codec:"version"`
+	LastRound       uint64                             `codec:"last-round"`
+	TxnGroups       []PreEncodedSimulateTxnGroupResult `codec:"txn-groups"`
+	EvalOverrides   *model.SimulationEvalOverrides     `codec:"eval-overrides,omitempty"`
+	ExecTraceConfig simulation.ExecTraceConfig         `codec:"exec-trace-config,omitempty"`
+	InitialStates   *model.SimulateInitialStates       `codec:"initial-states,omitempty"`
+}
+
+// PreEncodedSimulateRequestTransactionGroup mirrors model.SimulateRequestTransactionGroup
+type PreEncodedSimulateRequestTransactionGroup struct {
+	Txns []transactions.SignedTxn `codec:"txns"`
+}
+
+// PreEncodedSimulateRequest mirrors model.SimulateRequest
+type PreEncodedSimulateRequest struct {
+	TxnGroups             []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	Round                 basics.Round                                `codec:"round,omitempty"`
+	AllowEmptySignatures  bool                                        `codec:"allow-empty-signatures,omitempty"`
+	AllowMoreLogging      bool                                        `codec:"allow-more-logging,omitempty"`
+	AllowUnnamedResources bool                                        `codec:"allow-unnamed-resources,omitempty"`
+	ExtraOpcodeBudget     uint64                                      `codec:"extra-opcode-budget,omitempty"`
+	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
+	FixSigners            bool                                        `codec:"fix-signers,omitempty"`
+}
+
+// SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
+// (POST /v2/transactions/simulate)
+func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateTransactionParams) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
@@ -943,36 +1306,58 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context) error {
 	}
 	proto := config.Consensus[stat.LastVersion]
 
-	txgroup, err := decodeTxGroup(ctx.Request().Body, proto.MaxTxGroupSize)
+	requestBuffer := new(bytes.Buffer)
+	requestBodyReader := http.MaxBytesReader(nil, ctx.Request().Body, MaxTealDryrunBytes)
+	_, err = requestBuffer.ReadFrom(requestBodyReader)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
+	requestData := requestBuffer.Bytes()
 
-	var res model.SimulationResponse
+	var simulateRequest PreEncodedSimulateRequest
+	err = decode(protocol.CodecHandle, requestData, &simulateRequest)
+	if err != nil {
+		err = decode(protocol.JSONStrictHandle, requestData, &simulateRequest)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	for _, txgroup := range simulateRequest.TxnGroups {
+		if len(txgroup.Txns) == 0 {
+			err = errors.New("empty txgroup")
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		if len(txgroup.Txns) > proto.MaxTxGroupSize {
+			err = fmt.Errorf("transaction group size %d exceeds protocol max %d", len(txgroup.Txns), proto.MaxTxGroupSize)
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
 
 	// Simulate transaction
-	_, missingSignatures, err := v2.Node.Simulate(txgroup)
+	simulationResult, err := v2.Node.Simulate(convertSimulationRequest(simulateRequest))
 	if err != nil {
-		var invalidTxErr *simulation.InvalidTxGroupError
-		var evalErr *simulation.EvalFailureError
+		var invalidTxErr simulation.InvalidRequestError
 		switch {
 		case errors.As(err, &invalidTxErr):
 			return badRequest(ctx, invalidTxErr, invalidTxErr.Error(), v2.Log)
-		case errors.As(err, &evalErr):
-			res.FailureMessage = evalErr.Error()
 		default:
 			return internalError(ctx, err, err.Error(), v2.Log)
 		}
 	}
-	res.MissingSignatures = missingSignatures
 
-	// Return msgpack response
-	msgpack, err := encode(protocol.CodecHandle, &res)
+	response := convertSimulationResult(simulationResult)
+
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	responseData, err := encode(handle, &response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	return ctx.Blob(http.StatusOK, "application/msgpack", msgpack)
+	return ctx.Blob(http.StatusOK, contentType, responseData)
 }
 
 // TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
@@ -983,7 +1368,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	}
 	req := ctx.Request()
 	buf := new(bytes.Buffer)
-	req.Body = http.MaxBytesReader(nil, req.Body, maxTealDryrunBytes)
+	req.Body = http.MaxBytesReader(nil, req.Body, MaxTealDryrunBytes)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1078,26 +1463,25 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 // GetLedgerStateDelta returns the deltas for a given round.
 // This should be a representation of the ledgercore.StateDelta object.
 // (GET /v2/deltas/{round})
-func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64) error {
+func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64, params model.GetLedgerStateDeltaParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
 	sDelta, err := v2.Node.LedgerForAPI().GetStateDeltaForRound(basics.Round(round))
 	if err != nil {
-		return internalError(ctx, err, errFailedRetrievingStateDelta, v2.Log)
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
-	consensusParams, err := v2.Node.LedgerForAPI().ConsensusParams(basics.Round(round))
+	if handle == protocol.JSONStrictHandle {
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		sDelta.Txleases = nil
+	}
+	data, err := encode(handle, sDelta)
 	if err != nil {
-		return internalError(ctx, fmt.Errorf("unable to retrieve consensus params for round %d", round), errInternalFailure, v2.Log)
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
-	hdr, err := v2.Node.LedgerForAPI().BlockHdr(basics.Round(round))
-	if err != nil {
-		return internalError(ctx, fmt.Errorf("unable to retrieve block header for round %d", round), errInternalFailure, v2.Log)
-	}
-
-	response, err := stateDeltaToLedgerDelta(sDelta, consensusParams, hdr.RewardsLevel, round)
-	if err != nil {
-		return internalError(ctx, err, errInternalFailure, v2.Log)
-	}
-
-	return ctx.JSON(http.StatusOK, response)
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.
@@ -1162,8 +1546,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	}
 
 	txID := transactions.Txid{}
-	if err := txID.UnmarshalText([]byte(txid)); err != nil {
-		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
+	if err0 := txID.FromString(txid); err0 != nil {
+		return badRequest(ctx, err0, errNoValidTxnSpecified, v2.Log)
 	}
 
 	txn, ok := v2.Node.GetPendingTransaction(txID)
@@ -1191,12 +1575,13 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.LedgerForAPI())
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.LedgerForAPI())
-		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
+		response.LocalStateDelta = sliceOrNil(localDeltasToLocalDeltas(txn.ApplyData.EvalDelta, &txn.Txn.Txn))
+		response.GlobalStateDelta = sliceOrNil(globalDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta))
 		response.Logs = convertLogs(txn)
 		response.Inners = convertInners(&txn)
 	}
 
-	handle, contentType, err := getCodecHandle((*model.Format)(params.Format))
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -1230,7 +1615,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		addrPtr = &addr
 	}
 
-	handle, contentType, err := getCodecHandle((*model.Format)(format))
+	handle, contentType, err := getCodecHandle(format)
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -1238,12 +1623,6 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	txnPool, err := v2.Node.GetPendingTxnsFromPool()
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpTransactionPool, v2.Log)
-	}
-
-	// MatchAddress uses this to check FeeSink, we don't care about that here.
-	spec := transactions.SpecialAddresses{
-		FeeSink:     basics.Address{},
-		RewardsPool: basics.Address{},
 	}
 
 	txnLimit := uint64(math.MaxUint64)
@@ -1260,7 +1639,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		}
 
 		// continue if we have an address filter and the address doesn't match the transaction.
-		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr, spec) {
+		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr) {
 			continue
 		}
 
@@ -1285,10 +1664,20 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 }
 
 // startCatchup Given a catchpoint, it starts catching up to this catchpoint
-func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
-	_, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
+func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string, minRounds uint64) error {
+	catchpointRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	if minRounds > 0 {
+		ledgerRound := v2.Node.LedgerForAPI().Latest()
+		if catchpointRound < (ledgerRound + basics.Round(minRounds)) {
+			v2.Log.Infof("Skipping catchup. Catchpoint round %d is not %d rounds ahead of the current round %d.", catchpointRound, minRounds, ledgerRound)
+			return ctx.JSON(http.StatusOK, model.CatchpointStartResponse{
+				CatchupMessage: errCatchpointWouldNotInitialize,
+			})
+		}
 	}
 
 	// Select 200/201, or return an error
@@ -1301,6 +1690,8 @@ func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
 		code = http.StatusOK
 	case *node.CatchpointUnableToStartError:
 		return badRequest(ctx, err, err.Error(), v2.Log)
+	case *node.StartCatchpointError:
+		return timeout(ctx, err, err.Error(), v2.Log)
 	default:
 		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	}
@@ -1362,62 +1753,93 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	return ctx.JSON(http.StatusOK, response)
 }
 
-func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
-	if requestedMax == 0 {
-		if algodMax == 0 {
-			return math.MaxUint64 // unlimited results when both requested and algod max are 0
-		}
-		return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
+func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) int {
+	if requestedMax == 0 || requestedMax > math.MaxInt {
+		requestedMax = math.MaxInt
 	}
-
-	if requestedMax <= algodMax || algodMax == 0 {
-		return requestedMax // requested limit dominates
+	if algodMax == 0 || algodMax > math.MaxInt {
+		algodMax = math.MaxInt
 	}
-
-	return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
+	return int(min(requestedMax, algodMax))
 }
 
-// GetApplicationBoxes returns the box names of an application
+// GetApplicationBoxes returns the boxes of an application
 // (GET /v2/applications/{application-id}/boxes)
 func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, params model.GetApplicationBoxesParams) error {
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
-	lastRound := ledger.Latest()
-	keyPrefix := apps.MakeBoxKey(uint64(appIdx), "")
 
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
-	if max != math.MaxUint64 {
-		record, _, _, err := ledger.LookupAccount(ledger.Latest(), appIdx.Address())
+	values := nilToZero(params.Values)
+
+	// We'll need to convert between "KV" names and "Box" names, so keep track
+	// of how much gets tacked on to make the kv name.
+	kvPrefix := apps.MakeBoxKey(uint64(appIdx), "")
+	kvPrefixLen := len(kvPrefix)
+
+	prefix := nilToZero(params.Prefix)
+	if len(prefix) > 0 {
+		cb, err := apps.NewAppCallBytes(prefix)
 		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
-		if record.TotalBoxes > max {
-			return ctx.JSON(http.StatusBadRequest, model.ErrorResponse{
-				Message: "Result limit exceeded",
-				Data: &map[string]interface{}{
-					"max-api-box-per-application": algodMax,
-					"max":                         requestedMax,
-					"total-boxes":                 record.TotalBoxes,
-				},
-			})
+		rawPrefix, err := cb.Raw()
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
+		prefix = string(rawPrefix)
 	}
 
-	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, math.MaxUint64)
+	next := nilToZero(params.Next)
+	if len(next) > 0 {
+		cb, err := apps.NewAppCallBytes(next)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		rawNext, err := cb.Raw()
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		next = kvPrefix + string(rawNext)
+	}
+
+	round, boxes, nextToken, err := ledger.LookupKeysByPrefix(kvPrefix+prefix, next, max, 1_000_000, values)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	prefixLen := len(keyPrefix)
-	responseBoxes := make([]model.BoxDescriptor, len(boxKeys))
-	for i, boxKey := range boxKeys {
-		responseBoxes[i] = model.BoxDescriptor{
-			Name: []byte(boxKey[prefixLen:]),
+	if nextToken != "" {
+		// Preserve existing failure behavior if caller is not using `next`.
+		if params.Next == nil {
+			return ctx.JSON(http.StatusBadRequest, model.ErrorResponse{
+				Message: "Result limit exceeded",
+				Data: &map[string]any{
+					"max-api-box-per-application": algodMax,
+					"max":                         requestedMax,
+				},
+			})
 		}
+		nextToken = nextToken[kvPrefixLen:]
 	}
-	response := model.BoxesResponse{Boxes: responseBoxes}
+
+	responseBoxes := make([]model.Box, 0, len(boxes))
+	for key, value := range boxes {
+		box := model.Box{Name: []byte(key[kvPrefixLen:])}
+		if values {
+			box.Value = []byte(value)
+		}
+		responseBoxes = append(responseBoxes, box)
+	}
+	slices.SortFunc(responseBoxes, func(a, b model.Box) int {
+		return bytes.Compare(a.Name, b.Name)
+	})
+	response := model.BoxesResponse{
+		Round:     uint64(round),
+		Boxes:     responseBoxes,
+		NextToken: omitEmpty(nextToken),
+	}
 	return ctx.JSON(http.StatusOK, response)
 }
 
@@ -1447,6 +1869,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	}
 
 	response := model.BoxResponse{
+		Round: omitEmpty(uint64(lastRound)),
 		Name:  boxName,
 		Value: value,
 	}
@@ -1489,8 +1912,9 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 
 // StartCatchup Given a catchpoint, it starts catching up to this catchpoint
 // (POST /v2/catchup/{catchpoint})
-func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string) error {
-	return v2.startCatchup(ctx, catchpoint)
+func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string, params model.StartCatchupParams) error {
+	min := nilToZero(params.Min)
+	return v2.startCatchup(ctx, catchpoint, min)
 }
 
 // AbortCatchup Given a catchpoint, it aborts catching up to this catchpoint
@@ -1520,7 +1944,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 	}
 
 	buf := new(bytes.Buffer)
-	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, MaxTealSourceBytes)
 	_, err = buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1538,7 +1962,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 	// If source map flag is enabled, then return the map.
 	var sourcemap *logic.SourceMap
 	if *params.Sourcemap {
-		rawmap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+		rawmap := logic.GetSourceMap([]string{"<body>"}, ops.OffsetToSource)
 		sourcemap = &rawmap
 	}
 
@@ -1637,7 +2061,7 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 		return ctx.String(http.StatusNotFound, "/teal/disassemble was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
 	buf := new(bytes.Buffer)
-	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, MaxTealSourceBytes)
 	_, err := buf.ReadFrom(ctx.Request().Body)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -1650,5 +2074,173 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 	response := model.DisassembleResponse{
 		Result: program,
 	}
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetLedgerStateDeltaForTransactionGroup retrieves the delta for a specified transaction group.
+// (GET /v2/deltas/txn/group/{id})
+func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id string, params model.GetLedgerStateDeltaForTransactionGroupParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	idDigest, err := crypto.DigestFromString(id)
+	if err != nil {
+		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
+	}
+	tracer, ok := v2.Node.LedgerForAPI().GetTracer().(*eval.TxnGroupDeltaTracer)
+	if !ok {
+		return notImplemented(ctx, err, errFailedRetrievingTracer, v2.Log)
+	}
+	delta, err := tracer.GetDeltaForID(idDigest)
+	if err != nil {
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
+	}
+	if handle == protocol.JSONStrictHandle {
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		delta.Txleases = nil
+	}
+	data, err := encode(handle, delta)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+// GetTransactionGroupLedgerStateDeltasForRound retrieves the deltas for transaction groups in a given round.
+// (GET /v2/deltas/{round}/txn/group)
+func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Context, round uint64, params model.GetTransactionGroupLedgerStateDeltasForRoundParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+	tracer, ok := v2.Node.LedgerForAPI().GetTracer().(*eval.TxnGroupDeltaTracer)
+	if !ok {
+		return notImplemented(ctx, err, errFailedRetrievingTracer, v2.Log)
+	}
+	deltas, err := tracer.GetDeltasForRound(basics.Round(round))
+	if err != nil {
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
+	}
+	if handle == protocol.JSONStrictHandle {
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		for i := range deltas {
+			deltas[i].Delta.Txleases = nil
+		}
+	}
+	response := struct {
+		Deltas []eval.TxnGroupDeltaWithIds
+	}{
+		Deltas: deltas,
+	}
+	data, err := encode(handle, response)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+// ExperimentalCheck is only available when EnabledExperimentalAPI is true
+func (v2 *Handlers) ExperimentalCheck(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, true)
+}
+
+// GetBlockTimeStampOffset gets the timestamp offset.
+// This is only available in dev mode.
+// (GET /v2/devmode/blocks/offset)
+func (v2 *Handlers) GetBlockTimeStampOffset(ctx echo.Context) error {
+	offset, err := v2.Node.GetBlockTimeStampOffset()
+	if err != nil {
+		err = fmt.Errorf("cannot get block timestamp offset because we are not in dev mode")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
+	} else if offset == nil {
+		err = fmt.Errorf("block timestamp offset was never set, using real clock for timestamps")
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
+	}
+	return ctx.JSON(http.StatusOK, model.GetBlockTimeStampOffsetResponse{Offset: uint64(*offset)})
+}
+
+// SetBlockTimeStampOffset sets the timestamp offset.
+// This is only available in dev mode.
+// (POST /v2/devmode/blocks/offset/{offset})
+func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) error {
+	if offset > math.MaxInt64 {
+		err := fmt.Errorf("block timestamp offset cannot be larger than max int64 value")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
+	err := v2.Node.SetBlockTimeStampOffset(int64(offset))
+	if err != nil {
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
+// savedBlockingRate is the current blocking rate
+var savedBlockingRate atomic.Int32
+
+// GetDebugSettingsProf returns the current mutex and blocking rates.
+func (v2 *Handlers) GetDebugSettingsProf(ctx echo.Context) error {
+	mutexRate := uint64(runtime.SetMutexProfileFraction(-1))
+	blockingRate := uint64(savedBlockingRate.Load())
+
+	response := model.DebugSettingsProf{
+		MutexRate: &mutexRate,
+		BlockRate: &blockingRate,
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetConfig returns the merged (defaults + overrides) config file in json.
+func (v2 *Handlers) GetConfig(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, v2.Node.Config())
+}
+
+// PutDebugSettingsProf sets the mutex and blocking rates and returns the old values.
+func (v2 *Handlers) PutDebugSettingsProf(ctx echo.Context) error {
+	req := ctx.Request()
+	buf := new(bytes.Buffer)
+	req.Body = http.MaxBytesReader(nil, req.Body, 128)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	data := buf.Bytes()
+
+	var opts model.DebugSettingsProf
+	err = decode(protocol.JSONStrictHandle, data, &opts)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	var response model.DebugSettingsProf
+
+	// validate input fiest
+	if opts.MutexRate != nil && *opts.MutexRate > math.MaxInt32 {
+		err = errors.New("blocking rate cannot be larger than max int32 value")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	if opts.BlockRate != nil && *opts.BlockRate > math.MaxInt32 {
+		err = errors.New("blocking rate cannot be larger than max int32 value")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	if opts.MutexRate != nil {
+		newMutexRate := int(*opts.MutexRate)
+		oldMutexRate := uint64(runtime.SetMutexProfileFraction(newMutexRate))
+		response.MutexRate = &oldMutexRate
+	}
+
+	if opts.BlockRate != nil {
+		newBlockingRate := int(*opts.BlockRate)
+		runtime.SetBlockProfileRate(newBlockingRate)
+
+		oldBlockingRate := uint64(savedBlockingRate.Load())
+		response.BlockRate = &oldBlockingRate
+		savedBlockingRate.Store(int32(newBlockingRate))
+	}
+
 	return ctx.JSON(http.StatusOK, response)
 }

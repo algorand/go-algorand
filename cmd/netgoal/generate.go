@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,6 +52,8 @@ var accountsCount uint64
 var assetsCount uint64
 var applicationCount uint64
 var balRange []string
+var lastPartKeyRound uint64
+var deterministicKeys bool
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
@@ -77,6 +79,8 @@ func init() {
 	generateCmd.Flags().Uint64VarP(&assetsCount, "nassets", "", 5, "Asset count")
 	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 7, "Application Count")
 	generateCmd.Flags().StringArrayVar(&balRange, "bal", []string{}, "Application Count")
+	generateCmd.Flags().BoolVarP(&deterministicKeys, "deterministic", "", false, "Whether to generate deterministic keys")
+	generateCmd.Flags().Uint64VarP(&lastPartKeyRound, "last-part-key-round", "", gen.DefaultGenesis.LastPartKeyRound, "LastPartKeyRound in genesis.json")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long
@@ -184,7 +188,7 @@ template modes for -t:`,
 			if len(balRange) < 2 {
 				reportErrorf("must specify account balance range with --bal.")
 			}
-			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount, balRange)
+			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount, balRange, deterministicKeys)
 		default:
 			reportInfoln("Please specify a valid template name.\nSupported templates are:")
 			for _, line := range generateTemplateLines {
@@ -471,6 +475,9 @@ func saveTemplateToDisk(template remote.DeployedNetworkConfig, filename string) 
 }
 
 func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string) error {
+	if lastPartKeyRound != 0 {
+		template.Genesis.LastPartKeyRound = lastPartKeyRound
+	}
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
@@ -528,6 +535,9 @@ func generateWalletGenesis(filename string, wallets, npnNodes int) error {
 }
 
 func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
+	if lastPartKeyRound != 0 {
+		genesisData.LastPartKeyRound = lastPartKeyRound
+	}
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
@@ -538,7 +548,7 @@ func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
 	return err
 }
 
-func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64, balRange []string) error {
+func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64, balRange []string, deterministicKeys bool) error {
 
 	min, err := strconv.ParseInt(balRange[0], 0, 64)
 	if err != nil {
@@ -557,6 +567,7 @@ func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, 
 		GeneratedApplicationCount: applicationCount,
 		SourceWalletName:          sourceWallet,
 		BalanceRange:              []int64{min, max},
+		DeterministicKeys:         deterministicKeys,
 	}
 	return saveLoadingFileDataToDisk(data, templateFilename)
 }

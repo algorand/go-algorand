@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -131,6 +131,48 @@ func logResponse(t *testing.T, response *model.DryrunResponse) {
 
 var dryrunProtoVersion protocol.ConsensusVersion = protocol.ConsensusFuture
 var dryrunMakeLedgerProto protocol.ConsensusVersion = "dryrunMakeLedgerProto"
+
+func TestDryrunSources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	goodSource := model.DryrunSource{
+		AppIndex:  1007,
+		FieldName: "approv",
+		Source: `#pragma version 10
+int 1`,
+	}
+	badSource := model.DryrunSource{
+		AppIndex:  1007,
+		FieldName: "approv",
+		Source: `#pragma version 10
+int 1
+pop
+fake_opcode
+int not_an_int`,
+	}
+
+	dr := DryrunRequest{
+		Sources: []model.DryrunSource{
+			goodSource,
+		},
+		Apps: []model.Application{
+			{
+				Id: 1007,
+			},
+		},
+	}
+	var response model.DryrunResponse
+
+	doDryrunRequest(&dr, &response)
+	require.Empty(t, response.Error)
+
+	dr.Sources[0] = badSource
+	doDryrunRequest(&dr, &response)
+	require.Contains(t, response.Error, "dryrun Source[0]: 2 errors")
+	require.Contains(t, response.Error, "4: unknown opcode: fake_opcode")
+	require.Contains(t, response.Error, "5:4: unable to parse \"not_an_int\" as integer")
+}
 
 func TestDryrunLogicSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -363,6 +405,7 @@ func init() {
 }
 
 func checkLogicSigPass(t *testing.T, response *model.DryrunResponse) {
+	t.Helper()
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
@@ -486,7 +529,7 @@ func TestDryrunGlobal2(t *testing.T) {
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: 1,
+					ApplicationID: 1234,
 					ApplicationArgs: [][]byte{
 						[]byte("check"),
 						[]byte("bar"),
@@ -503,7 +546,7 @@ func TestDryrunGlobal2(t *testing.T) {
 	}
 	dr.Apps = []model.Application{
 		{
-			Id: 1,
+			Id: 1234,
 			Params: model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
@@ -691,7 +734,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: 1,
+					ApplicationID: 1234,
 					ApplicationArgs: [][]byte{
 						[]byte("check"),
 						[]byte("bar"),
@@ -702,13 +745,13 @@ func TestDryrunLocalCheck(t *testing.T) {
 	}
 	dr.Apps = []model.Application{
 		{
-			Id: 1,
+			Id: 1234,
 			Params: model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
 	}
-	localv := make(model.TealKeyValueStore, 1)
+	localv := make(model.TealKeyValueStore, 1234)
 	localv[0] = model.TealKeyValue{
 		Key: b64("foo"),
 		Value: model.TealValue{
@@ -722,7 +765,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Status:  "Online",
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]model.ApplicationLocalState{{
-				Id:       1,
+				Id:       1234,
 				KeyValue: &localv,
 			}},
 		},
@@ -1041,12 +1084,12 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 			Action: basics.DeleteAction,
 		},
 	}
-	gsd := StateDeltaToStateDelta(sd)
-	require.Equal(t, 3, len(*gsd))
+	gsd := globalDeltaToStateDelta(sd)
+	require.Equal(t, 3, len(gsd))
 
 	var keys []string
 	// test with a loop because sd is a map and iteration order is random
-	for _, item := range *gsd {
+	for _, item := range gsd {
 		if item.Key == b64("byteskey") {
 			require.Equal(t, uint64(1), item.Value.Action)
 			require.Nil(t, item.Value.Uint)

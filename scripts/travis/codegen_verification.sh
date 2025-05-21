@@ -4,7 +4,7 @@
 #
 # Syntax:   codegen_verification.sh
 #
-# Usage:    Can be used by either Travis or an ephermal build machine
+# Usage:    Can be used by either Travis or an ephemeral build machine
 #
 # Examples: scripts/travis/codegen_verification.sh
 set -e
@@ -40,6 +40,9 @@ echo "Running fixcheck"
 GOPATH=$(go env GOPATH)
 "$GOPATH"/bin/algofix -error */
 
+echo "Running expect linter"
+make expectlint
+
 echo "Updating TEAL Specs"
 touch data/transactions/logic/fields_string.go # ensure rebuild
 make -C data/transactions/logic
@@ -59,6 +62,17 @@ if [[ -n $(git status --porcelain) ]]; then
    exit 1
 else
    echo Enlistment is clean
+fi
+
+echo Checking Tidiness...
+make tidy
+if [[ -n $(git status --porcelain) ]]; then
+   echo Dirty after go mod tidy - did you forget to run make tidy?
+   git status -s
+   git --no-pager diff
+   exit 1
+else
+   echo All tidy
 fi
 
 # test binary compatibility

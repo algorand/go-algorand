@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,11 +63,9 @@ func updateSRVRecordRequest(zoneID string, authToken string, recordID string, na
 
 	requestJSON := createSRVRecord{
 		Type: "SRV",
+		Name: fmt.Sprintf("%s.%s.%s", service, protocol, name),
 	}
-	requestJSON.Data.Name = name
 	requestJSON.Data.TTL = ttl
-	requestJSON.Data.Service = service
-	requestJSON.Data.Proto = protocol
 	requestJSON.Data.Weight = weight
 	requestJSON.Data.Port = port
 	requestJSON.Data.Priority = priority

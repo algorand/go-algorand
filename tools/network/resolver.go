@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -109,11 +109,10 @@ func (p *Resolver) effectiveResolver() ResolverIf {
 // SetFallbackResolverAddress sets preferred DNS server address
 func (p *Resolver) SetFallbackResolverAddress(fallbackDNSResolverAddress net.IPAddr) {
 	p.dnsAddress = fallbackDNSResolverAddress
-	return
 }
 
-func (p *Resolver) resolverDial(ctx context.Context, network, address string) (net.Conn, error) {
+func (p *Resolver) resolverDial(ctx context.Context, network, _address string) (net.Conn, error) {
 	// override the default address with our own.
-	address = p.EffectiveResolverDNS() + dnsPortSuffix
+	address := p.EffectiveResolverDNS() + dnsPortSuffix
 	return (&net.Dialer{}).DialContext(ctx, network, address)
 }

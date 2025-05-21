@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,6 +54,17 @@ func (kcl KMDClient) CreateWallet(walletName []byte, walletDriverName string, wa
 		WalletDriverName:    walletDriverName,
 		WalletPassword:      string(walletPassword),
 		MasterDerivationKey: walletMDK,
+	}
+	err = kcl.DoV1Request(req, &resp)
+	return
+}
+
+// RenameWallet wraps kmdapi.APIV1POSTWalletRenameRequest
+func (kcl KMDClient) RenameWallet(walletID []byte, newWalletName []byte, walletPassword []byte) (resp kmdapi.APIV1POSTWalletRenameResponse, err error) {
+	req := kmdapi.APIV1POSTWalletRenameRequest{
+		WalletID:       string(walletID),
+		NewWalletName:  string(newWalletName),
+		WalletPassword: string(walletPassword),
 	}
 	err = kcl.DoV1Request(req, &resp)
 	return

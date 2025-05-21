@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,6 +38,7 @@ import (
 const defaultTimeout = 5 * time.Second
 
 // ParticipationID identifies a particular set of participation keys.
+//
 //msgp:ignore ParticipationID
 type ParticipationID crypto.Digest
 
@@ -181,6 +182,7 @@ func (r ParticipationRecord) OverlapsInterval(first, last basics.Round) bool {
 }
 
 // ParticipationAction is used when recording participation actions.
+//
 //msgp:ignore ParticipationAction
 type ParticipationAction int
 
@@ -233,7 +235,7 @@ type ParticipationRegistry interface {
 	// once, an error will occur when the data is flushed when inserting a duplicate key.
 	AppendKeys(id ParticipationID, keys StateProofKeys) error
 
-	// DeleteStateProofKeys removes all stateproof keys preceding a given round (including)
+	// DeleteStateProofKeys removes all stateproof keys up to, and not including, a given round
 	DeleteStateProofKeys(id ParticipationID, round basics.Round) error
 
 	// Delete removes a record from storage.
@@ -351,7 +353,7 @@ const (
 	insertKeysetQuery         = `INSERT INTO Keysets (participationID, account, firstValidRound, lastValidRound, keyDilution, vrf, stateProof) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	insertRollingQuery        = `INSERT INTO Rolling (pk, voting) VALUES (?, ?)`
 	appendStateProofKeysQuery = `INSERT INTO StateProofKeys (pk, round, key) VALUES(?, ?, ?)`
-	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<=?`
+	deleteStateProofKeysQuery = `DELETE FROM StateProofKeys WHERE pk=? AND round<?`
 
 	// SELECT pk FROM Keysets WHERE participationID = ?
 	selectPK      = `SELECT pk FROM Keysets WHERE participationID = ? LIMIT 1`
@@ -801,18 +803,18 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 	var rawStateProofKey []byte
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch secret key
-		keyFirstValidRound, err := partRecord.StateProof.FirstRoundInKeyLifetime(uint64(round))
-		if err != nil {
-			return err
+		keyFirstValidRound, err2 := partRecord.StateProof.FirstRoundInKeyLifetime(uint64(round))
+		if err2 != nil {
+			return err2
 		}
 
 		row := tx.QueryRow(selectStateProofKey, keyFirstValidRound, id[:])
-		err = row.Scan(&rawStateProofKey)
-		if err == sql.ErrNoRows {
+		err2 = row.Scan(&rawStateProofKey)
+		if err2 == sql.ErrNoRows {
 			return ErrSecretNotFound
 		}
-		if err != nil {
-			return fmt.Errorf("error while querying secrets: %w", err)
+		if err2 != nil {
+			return fmt.Errorf("error while querying secrets: %w", err2)
 		}
 
 		return nil
@@ -835,9 +837,9 @@ func (db *participationDB) GetStateProofSecretsForRound(id ParticipationID, roun
 	err = db.store.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		// fetch stateproof public data
 		row := tx.QueryRow(selectStateProofData, id[:])
-		err := row.Scan(&rawSignerContext)
-		if err != nil {
-			return fmt.Errorf("error while querying stateproof data: %w", err)
+		err2 := row.Scan(&rawSignerContext)
+		if err2 != nil {
+			return fmt.Errorf("error while querying stateproof data: %w", err2)
 		}
 		return nil
 	})
@@ -906,10 +908,11 @@ func recordActive(record ParticipationRecord, on basics.Round) bool {
 }
 
 // PKI TODO: Register needs a bit more work to make sure EffectiveFirst and
-//           EffectiveLast are set at the right time. Specifically, the node
-//           doesn't call Register until the key becomes active and is about
-//           to be used, so effective first/last is updated just-in-time. It
-//           would be better to update them when the KeyRegistration occurs.
+//
+//	EffectiveLast are set at the right time. Specifically, the node
+//	doesn't call Register until the key becomes active and is about
+//	to be used, so effective first/last is updated just-in-time. It
+//	would be better to update them when the KeyRegistration occurs.
 func (db *participationDB) Register(id ParticipationID, on basics.Round) error {
 	// Lookup recordToRegister for first/last valid and account.
 	recordToRegister := db.Get(id)

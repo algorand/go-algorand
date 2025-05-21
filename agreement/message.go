@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ type message struct {
 
 	// this field is for backwards compatibility with crash state serialized using go-codec prior to explicit unexport.
 	// should be removed after the next consensus update.
-	MessageHandle msgp.Raw
+	MessageHandle msgp.Raw `codec:"MessageHandle,omitempty"`
 	// explicitly unexport this field since we can't define serializers for interface{} type
 	// the only implementation of this is gossip.messageMetadata which doesn't have exported fields to serialize.
 	messageHandle MessageHandle

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,9 +37,10 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/blockdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -67,7 +68,7 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eval.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }
 
@@ -75,7 +76,7 @@ func (wl *wrappedLedger) Latest() basics.Round {
 	return wl.l.Latest()
 }
 
-func (wl *wrappedLedger) trackerDB() db.Pair {
+func (wl *wrappedLedger) trackerDB() trackerdb.Store {
 	return wl.l.trackerDB()
 }
 
@@ -129,14 +130,6 @@ func TestArchival(t *testing.T) {
 	//
 	// We generate mostly empty blocks, with the exception of timestamps,
 	// which affect participationTracker.committedUpTo()'s return value.
-
-	// This test was causing random crashes on travis when executed with the race detector
-	// due to memory exhustion. For the time being, I'm taking it offline from the ubuntu
-	// configuration where it used to cause failuires.
-	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
-		t.Skip("Skipping the TestArchival as it tend to randomally fail on travis linux-amd64")
-	}
-
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	const inMem = true

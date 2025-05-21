@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ package participation
 // deterministic.
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -32,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -39,7 +41,10 @@ import (
 // installParticipationKey generates a new key for a given account and installs it with the client.
 func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp model.PostParticipationResponse, part account.Participation, err error) {
 	// Install overlapping participation keys...
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir())
+	installFunc := func(keyPath string) error {
+		return errors.New("the install directory is provided, so keys should not be installed")
+	}
+	part, filePath, err := participation.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir(), installFunc)
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())

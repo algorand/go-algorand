@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -276,7 +276,7 @@ func TestCertificateCertWrongRound(t *testing.T) {
 	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
 	round := ledger.NextRound()
 	period := period(0)
-	block := makeRandomBlock(1 - 1)
+	block := makeRandomBlock(0)
 
 	votes := make([]vote, 0)
 	equiVotes := make([]equivocationVote, 0)

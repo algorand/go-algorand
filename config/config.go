@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -72,7 +73,7 @@ const StateProofFileName = "stateproof.sqlite"
 // It is used for tracking participation key metadata.
 const ParticipationRegistryFilename = "partregistry.sqlite"
 
-// ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
+// ConfigurableConsensusProtocolsFilename defines a set of consensus protocols that
 // are to be loaded from the data directory ( if present ), to override the
 // built-in supported consensus protocols.
 const ConfigurableConsensusProtocolsFilename = "consensus.json"
@@ -80,6 +81,24 @@ const ConfigurableConsensusProtocolsFilename = "consensus.json"
 // The default gossip fanout setting when configured as a relay (here, as we
 // do not expose in normal config so it is not in code generated local_defaults.go
 const defaultRelayGossipFanout = 8
+
+// CatchpointTrackingModeUntracked defines the CatchpointTracking mode that does _not_ track catchpoints
+const CatchpointTrackingModeUntracked = -1
+
+// CatchpointTrackingModeAutomatic defines the CatchpointTracking mode that automatically determines catchpoint tracking
+// and storage based on the Archival property and CatchpointInterval.
+const CatchpointTrackingModeAutomatic = 0
+
+// CatchpointTrackingModeTracked defines the CatchpointTracking mode that tracks catchpoint
+// as long as CatchpointInterval > 0
+const CatchpointTrackingModeTracked = 1
+
+// CatchpointTrackingModeStored defines the CatchpointTracking mode that tracks and stores catchpoints
+// as long as CatchpointInterval > 0
+const CatchpointTrackingModeStored = 2
+
+// PlaceholderPublicAddress is a placeholder for the public address generated in certain profiles
+const PlaceholderPublicAddress = "PLEASE_SET_ME"
 
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
@@ -121,11 +140,23 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 	defer f.Close()
 
 	err = loadConfig(f, &source)
+	if err != nil {
+		return source, err
+	}
+	source, err = enrichNetworkingConfig(source)
+	return source, err
+}
 
-	// For now, all relays (listening for incoming connections) are also Archival
-	// We can change this logic in the future, but it's currently the sanest default.
+// enrichNetworkingConfig makes the following tweaks to the config:
+// - If NetAddress is set, enable the ledger and block services
+// - If EnableP2PHybridMode is set, require PublicAddress to be set
+func enrichNetworkingConfig(source Local) (Local, error) {
+	// If the PublicAddress in config file has the PlaceholderPublicAddress, treat it as if it were empty
+	if source.PublicAddress == PlaceholderPublicAddress {
+		source.PublicAddress = ""
+	}
+
 	if source.NetAddress != "" {
-		source.Archival = true
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
 
@@ -135,8 +166,13 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 			source.GossipFanout = defaultRelayGossipFanout
 		}
 	}
-
-	return source, err
+	// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
+	// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
+	if (source.NetAddress != "" || source.P2PHybridNetAddress != "") && source.EnableP2PHybridMode && source.PublicAddress == "" {
+		return source, errors.New("PublicAddress must be specified when EnableP2PHybridMode is set")
+	}
+	source.PublicAddress = strings.ToLower(source.PublicAddress)
+	return source, nil
 }
 
 func loadConfig(reader io.Reader, config *Local) error {
@@ -248,6 +284,7 @@ const (
 	dnssecSRV = 1 << iota
 	dnssecRelayAddr
 	dnssecTelemetryAddr
+	dnssecTXT
 )
 
 const (
@@ -261,3 +298,90 @@ const (
 	catchupValidationModeVerifyTransactionSignatures = 4
 	catchupValidationModeVerifyApplyData             = 8
 )
+
+// SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+// if the params contains zero protocols, the existing consensus.json file will be removed if exists.
+func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+
+	if len(params) == 0 {
+		// we have no consensus params to write. In this case, just delete the existing file
+		// ( if any )
+		err := os.Remove(consensusProtocolPath)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	encodedConsensusParams, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
+	return err
+}
+
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
+// and merge it with a copy of the Consensus map. Then, it returns it to the caller.
+func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+	file, err := os.Open(consensusProtocolPath)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			// this file is not required, only optional. if it's missing, no harm is done.
+			return Consensus, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	configurableConsensus := make(ConsensusProtocols)
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&configurableConsensus)
+	if err != nil {
+		return nil, err
+	}
+	return Consensus.Merge(configurableConsensus), nil
+}
+
+// SetConfigurableConsensusProtocols sets the configurable protocols.
+func SetConfigurableConsensusProtocols(newConsensus ConsensusProtocols) ConsensusProtocols {
+	oldConsensus := Consensus
+	Consensus = newConsensus
+	// Set allocation limits
+	for _, p := range Consensus {
+		checkSetAllocBounds(p)
+	}
+	return oldConsensus
+}
+
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directory
+func LoadConfigurableConsensusProtocols(dataDirectory string) error {
+	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
+	if err != nil {
+		return err
+	}
+	if newConsensus != nil {
+		SetConfigurableConsensusProtocols(newConsensus)
+	}
+	return nil
+}
+
+// ApplyShorterUpgradeRoundsForDevNetworks applies a shorter upgrade round time for the Devnet and Betanet networks.
+// This function should not take precedence over settings loaded via `PreloadConfigurableConsensusProtocols`.
+func ApplyShorterUpgradeRoundsForDevNetworks(id protocol.NetworkID) {
+	if id == Betanet || id == Devnet {
+		// Go through all approved upgrades and set to the MinUpgradeWaitRounds valid where MinUpgradeWaitRounds is set
+		for _, p := range Consensus {
+			if p.ApprovedUpgrades != nil {
+				for v := range p.ApprovedUpgrades {
+					if p.MinUpgradeWaitRounds > 0 {
+						p.ApprovedUpgrades[v] = p.MinUpgradeWaitRounds
+					}
+				}
+			}
+		}
+	}
+}

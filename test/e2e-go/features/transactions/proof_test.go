@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -92,7 +92,7 @@ func TestTxnMerkleProof(t *testing.T) {
 
 	txid := tx.ID()
 	txidSHA256 := tx.IDSha256() // only used for verification
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, txid.String())
 	a.NoError(err)
 	a.NotNil(confirmedTx.ConfirmedRound)
 
@@ -175,7 +175,7 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	a.NoError(err)
 
 	txid := tx.ID()
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, txid.String())
 	a.NoError(err)
 	a.NotNil(confirmedTx.ConfirmedRound)
 

@@ -7,16 +7,19 @@ linters:
   disable-all: true
   enable:
     - errcheck
+    - copyloopvar
     - gofmt
     - gosimple
     - govet
     - ineffassign
     - misspell
+    - nilerr
     - nolintlint
+    - paralleltest
     - revive
     - staticcheck
     - typecheck
-    - paralleltest
+    - unused
 
 severity:
   default-severity: error
@@ -29,15 +32,19 @@ linters-settings:
     require-explanation: true
   errcheck:
     exclude-functions:
-      # data/transactions/logic/assembler.go uses ops.error, warn, to append log messages: OK to ignore for this case
-    - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).errorf
-    - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).error
-    - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warnf
-    - (*github.com/algorand/go-algorand/data/transactions/logic.OpStream).warn
     # We do this 121 times and never check the error.
     - (*github.com/spf13/cobra.Command).MarkFlagRequired
+    - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
+    - (*github.com/spf13/pflag.FlagSet).MarkShorthandDeprecated
   govet:
+    # Enables these linters in addition to the default ones.
+    enable:
+        - shadow
     settings:
+      shadow:
+        # explanation of strict vs non-strict:
+        # https://github.com/golang/tools/blob/v0.7.0/go/analysis/passes/shadow/shadow.go#L104-L122
+        strict: false
       printf:
         # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).
         # Default: []
@@ -60,9 +67,6 @@ linters-settings:
           - (github.com/algorand/go-algorand/logging.Logger).Error
           - (github.com/algorand/go-algorand/logging.Logger).Fatal
           - (github.com/algorand/go-algorand/logging.Logger).Panic
-          - (github.com/algorand/go-algorand/data/transactions/logic.OpStream).warnf
-          - (github.com/algorand/go-algorand/data/transactions/logic.OpStream).errorf
-          - (github.com/algorand/go-algorand/data/transactions/logic.OpStream).lineErrorf
           - (github.com/algorand/go-algorand/cmd/goal/main).reportInfof
           - (github.com/algorand/go-algorand/cmd/goal/main).reportInfoln
           - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnf
@@ -101,9 +105,27 @@ issues:
     # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
     - ineffective break statement. Did you mean to break out of the outer loop
     # revive: irrelevant error about naming
-    - "var-naming: don't use leading k in Go names"
+    - "^var-naming: don't use leading k in Go names"
+    # revive: ignore unused-paramter, package-comments, unexported-return, redefines-builtin-id, var-declaration, empty-block, superfluous-else
+    - "^unused-parameter: parameter"
+    - "^package-comments: should have a package comment"
+    - "^unexported-return: "
+    - "^redefines-builtin-id: redefinition of"
+    - "^var-declaration: should"
+    - "^empty-block: this block is empty, you can remove it"
+    - "^superfluous-else: if block ends with"
 
   exclude-rules:
+    - path: cmd/algofix/
+      linters: unused
+    - path: cmd/algocfg/
+      linters: unused
+    - path: cmd/catchpointdump/
+      linters: unused
+    - path: tools/
+      linters: unused
+    - path: daemon/kmd/lib/kmdapi/
+      linters: unused
     - path: _test\.go
       linters:
         - errcheck
@@ -112,66 +134,81 @@ issues:
         # - govet
         - ineffassign
         - misspell
+        # - nilerr
         - nolintlint
         # - revive
-        - staticcheck
+        # - staticcheck
         - typecheck
+        - unused
+    - path: _test\.go
+      linters:
+        - staticcheck
+      text: "SA4006: this value" # of X is never used
+    - linters:
+        - staticcheck
+      text: "(SA3001|SA1019):"
+    - path: _test\.go
+      linters:
+        - revive
+      text: "dot-imports: should not use dot imports"
+    - linters:
+        - staticcheck
+      text: "SA1019: rand*"
+    # allow shadowing in test code
+    - path: _test\.go
+      linters:
+        - govet
+      text: "shadows declaration at line"
     # Ignore missing parallel tests in existing packages
-    - path: agreement.*_test\.go
+    - path: ^agreement.*_test\.go
       linters:
         - paralleltest
-    - path: catchup.*_test\.go
+    - path: ^catchup.*_test\.go
       linters:
         - paralleltest
-    - path: cmd.*_test\.go
+    - path: ^config.*_test\.go
       linters:
         - paralleltest
-    - path: config.*_test\.go
+    - path: ^crypto.*_test\.go
       linters:
         - paralleltest
-    - path: crypto.*_test\.go
+    - path: ^daemon.*_test\.go
       linters:
         - paralleltest
-    - path: daemon.*_test\.go
+    - path: ^data.*_test\.go
       linters:
         - paralleltest
-    - path: data.*_test\.go
+    - path: ^gen.*_test\.go
       linters:
         - paralleltest
-    - path: gen.*_test\.go
+    - path: ^ledger.*_test\.go
       linters:
         - paralleltest
-    - path: ledger.*_test\.go
+    - path: ^logging.*_test\.go
       linters:
         - paralleltest
-    - path: logging.*_test\.go
+    - path: ^network.*_test\.go
       linters:
         - paralleltest
-    - path: netdeploy.*_test\.go
+    - path: ^node.*_test\.go
       linters:
         - paralleltest
-    - path: network.*_test\.go
+    - path: ^protocol.*_test\.go
       linters:
         - paralleltest
-    - path: node.*_test\.go
+    - path: ^rpcs.*_test\.go
       linters:
         - paralleltest
-    - path: protocol.*_test\.go
+    - path: ^stateproof.*_test\.go
       linters:
         - paralleltest
-    - path: rpcs.*_test\.go
+    - path: ^test.*_test\.go
       linters:
         - paralleltest
-    - path: stateproof.*_test\.go
+    - path: ^tools.*_test\.go
       linters:
         - paralleltest
-    - path: test.*_test\.go
-      linters:
-        - paralleltest
-    - path: tools.*_test\.go
-      linters:
-        - paralleltest
-    - path: util.*_test\.go
+    - path: ^util.*_test\.go
       linters:
         - paralleltest
     # Add all linters here -- Comment this block out for testing linters
@@ -183,3 +220,4 @@ issues:
         - govet
         - ineffassign
         - misspell
+        - unused

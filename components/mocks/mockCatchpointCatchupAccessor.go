@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,12 @@ package mocks
 import (
 	"context"
 
+	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // MockCatchpointCatchupAccessor is a dummy CatchpointCatchupAccessor implementation which doesn't do anything.
@@ -67,6 +70,11 @@ func (m *MockCatchpointCatchupAccessor) GetCatchupBlockRound(ctx context.Context
 	return basics.Round(0), nil
 }
 
+// GetVerifyData returns the balances hash, spver hash and totals used by VerifyCatchpoint
+func (m *MockCatchpointCatchupAccessor) GetVerifyData(ctx context.Context) (balancesHash, spverHash, onlineAccountsHash, onlineRoundParams crypto.Digest, totals ledgercore.AccountTotals, err error) {
+	return crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, nil
+}
+
 // VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
 func (m *MockCatchpointCatchupAccessor) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	return nil
@@ -79,12 +87,12 @@ func (m *MockCatchpointCatchupAccessor) StoreBalancesRound(ctx context.Context, 
 }
 
 // StoreFirstBlock stores a single block to the blocks database.
-func (m *MockCatchpointCatchupAccessor) StoreFirstBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
+func (m *MockCatchpointCatchupAccessor) StoreFirstBlock(ctx context.Context, blk *bookkeeping.Block, cert *agreement.Certificate) (err error) {
 	return nil
 }
 
 // StoreBlock stores a single block to the blocks database.
-func (m *MockCatchpointCatchupAccessor) StoreBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
+func (m *MockCatchpointCatchupAccessor) StoreBlock(ctx context.Context, blk *bookkeeping.Block, cert *agreement.Certificate) (err error) {
 	return nil
 }
 

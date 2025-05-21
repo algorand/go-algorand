@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -56,8 +55,9 @@ func TelemetryOverride(env string, telemetryConfig *TelemetryConfig) bool {
 
 // createTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint.
 // Note: This should only be used/persisted when initially creating 'TelemetryConfigFilename'. Because the methods are called
-//       from various tools and goal commands and affect the future default settings for telemetry, we need to inject
-//       a "dev" branch check.
+//
+//	from various tools and goal commands and affect the future default settings for telemetry, we need to inject
+//	a "dev" branch check.
 func createTelemetryConfig() TelemetryConfig {
 	enable := false
 
@@ -125,7 +125,7 @@ func (cfg TelemetryConfig) getInstanceName() string {
 
 	// NOTE: We used to report HASH:DataDir but DataDir is Personally Identifiable Information (PII)
 	// So we're removing it entirely to avoid GDPR issues.
-	return fmt.Sprintf("%s", pathHashStr[:16])
+	return pathHashStr[:16]
 }
 
 // SanitizeTelemetryString applies sanitization rules and returns the sanitized string.

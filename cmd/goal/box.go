@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,11 +20,17 @@ import (
 	"bytes"
 	"strings"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/spf13/cobra"
 )
 
-var boxName string
-var maxBoxes uint64
+var (
+	boxName string
+	// next    uint64 // declared in account.go
+	// limit   uint64 // declared in account.go
+	boxPrefix string
+	boxValues bool
+)
 
 func init() {
 	appCmd.AddCommand(appBoxCmd)
@@ -37,7 +43,10 @@ func init() {
 	appBoxInfoCmd.Flags().StringVarP(&boxName, "name", "n", "", "Application box name. Use the same form as app-arg to name the box.")
 	appBoxInfoCmd.MarkFlagRequired("name")
 
-	appBoxListCmd.Flags().Uint64VarP(&maxBoxes, "max", "m", 0, "Maximum number of boxes to list. 0 means no limit.")
+	appBoxListCmd.Flags().StringVarP(&boxPrefix, "prefix", "p", "", "Return only boxes that begin with the supplied prefix.")
+	appBoxListCmd.Flags().StringVarP(&next, "next", "n", "", "The next-token returned from a previous call, used for pagination.")
+	appBoxListCmd.Flags().Uint64VarP(&limit, "limit", "l", 0, "The maximum number of boxes to list. 0 means no limit.")
+	appBoxListCmd.Flags().BoolVarP(&boxValues, "values", "v", false, "Request and display box values.")
 }
 
 var appBoxCmd = &cobra.Command{
@@ -89,30 +98,36 @@ var appBoxInfoCmd = &cobra.Command{
 
 var appBoxListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all application boxes belonging to an application",
-	Long: "List all application boxes belonging to an application.\n" +
-		"For printable strings, the box name is formatted as 'str:hello'\n" +
-		"For everything else, the box name is formatted as 'b64:A=='. ",
+	Short: "List application boxes belonging to an application",
+	Long: "List application boxes belonging to an application.\n" +
+		"Printable names and values are formatted as 'str:hello' otherwise 'b64:A=='.",
 	Args: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		_, client := getDataDirAndClient()
+		dataDir := datadir.EnsureSingleDataDir()
+		client := ensureAlgodClient(dataDir)
 
-		// Get app boxes
-		boxesRes, err := client.ApplicationBoxes(appIdx, maxBoxes)
+		response, err := client.ApplicationBoxes(appIdx, boxPrefix, &next, limit, boxValues)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-		boxes := boxesRes.Boxes
 
-		// Error if no boxes found
-		if len(boxes) == 0 {
-			reportErrorf("No boxes found for appid %d", appIdx)
+		// Endpoint did not originally report the Round, so don't show it if it's 0
+		if response.Round != 0 {
+			reportInfof("Round: %d", response.Round)
 		}
-
-		// Print app boxes
-		for _, descriptor := range boxes {
-			encodedName := encodeBytesAsAppCallBytes(descriptor.Name)
-			reportInfof("%s", encodedName)
+		// There will only be a next-token if there are more boxes to list
+		if response.NextToken != nil {
+			encoded := encodeBytesAsAppCallBytes([]byte(*response.NextToken))
+			reportInfof("NextToken (use with --next to retrieve more boxes): %s", encoded)
+		}
+		reportInfoln("Boxes:")
+		for _, descriptor := range response.Boxes {
+			name := encodeBytesAsAppCallBytes(descriptor.Name)
+			if boxValues {
+				reportInfof("%s : %s", name, encodeBytesAsAppCallBytes(descriptor.Value))
+			} else {
+				reportInfoln(name)
+			}
 		}
 	},
 }

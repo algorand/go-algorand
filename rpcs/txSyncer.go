@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -97,6 +97,9 @@ func (syncer *TxSyncer) Start(canStart chan struct{}) {
 
 // Stop stops periodic syncing
 func (syncer *TxSyncer) Stop() {
+	syncer.log.Debug("transaction syncer is stopping")
+	defer syncer.log.Debug("transaction syncer has stopped")
+
 	syncer.cancel()
 	syncer.wg.Wait()
 }

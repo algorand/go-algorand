@@ -17,7 +17,7 @@ gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
-APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/scratch-rw.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0  --clear-prog=${TEAL}/approve-all.teal | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog=${TEAL}/scratch-rw.teal --clear-prog=${TEAL}/approve-all.teal | grep Created | awk '{ print $6 }')
 
 # Create app calls
 function create_app_call {

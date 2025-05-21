@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -51,6 +52,10 @@ type (
 		R       rawVote                 `codec:"r"`
 		Cred    committee.Credential    `codec:"cred"`
 		Sig     crypto.OneTimeSignature `codec:"sig,omitempty,omitemptycheckstruct"`
+
+		// validatedAt indicates the time at which this vote was verified (as a voteVerified messageEvent),
+		// relative to the zero of that round. It is only set for step 0.
+		validatedAt time.Duration
 	}
 
 	// unauthenticatedEquivocationVote is a pair of votes which has not
@@ -141,9 +146,15 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	return vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
 }
 
+var (
+	// testMakeVoteCheck is a function that can be set to check every
+	// unauthenticatedVote before it is returned by makeVote. It is only set by tests.
+	testMakeVoteCheck func(*unauthenticatedVote) error
+)
+
 // makeVote creates a new unauthenticated vote from its constituent components.
 //
-// makeVote returns an error it it fails.
+// makeVote returns an error if it fails.
 func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecrets, l Ledger) (unauthenticatedVote, error) {
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {
@@ -173,7 +184,15 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 	}
 
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
-	return unauthenticatedVote{R: rv, Cred: cred, Sig: sig}, nil
+	ret := unauthenticatedVote{R: rv, Cred: cred, Sig: sig}
+
+	// for use when running in tests
+	if testMakeVoteCheck != nil {
+		if testErr := testMakeVoteCheck(&ret); testErr != nil {
+			return unauthenticatedVote{}, fmt.Errorf("makeVote: testMakeVoteCheck failed: %w", testErr)
+		}
+	}
+	return ret, nil
 }
 
 // ToBeHashed implements the Hashable interface.

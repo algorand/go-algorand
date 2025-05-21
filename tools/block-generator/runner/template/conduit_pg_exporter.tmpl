@@ -1,0 +1,61 @@
+# Log verbosity: PANIC, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
+log-level: {{.LogLevel}}
+
+# If no log file is provided logs are written to stdout.
+log-file: {{.LogFile}}
+
+# Number of retries to perform after a pipeline plugin error.
+retry-count: 120
+
+# Time duration to wait between retry attempts.
+retry-delay: "1s"
+
+# Optional filepath to use for pidfile.
+#pid-filepath: /path/to/pidfile
+
+# Whether or not to print the conduit banner on startup.
+hide-banner: false
+
+# When enabled prometheus metrics are available on '/metrics'
+metrics:
+  mode: ON
+  addr: "{{.MetricsPort}}"
+  prefix: "conduit"
+
+# The importer is typically an algod follower node.
+importer:
+  name: algod
+  config:
+    # The mode of operation, either "archival" or "follower".
+    # * archival mode allows you to start processing on any round but does not
+    # contain the ledger state delta objects required for the postgres writer.
+    # * follower mode allows you to use a lightweight non-archival node as the
+    # data source. In addition, it will provide ledger state delta objects to
+    # the processors and exporter.
+    mode: "follower"
+
+    # Algod API address.
+    netaddr: "{{.AlgodNet}}"
+
+    # Algod API token.
+    token: ""
+
+
+# Zero or more processors may be defined to manipulate what data
+# reaches the exporter.
+processors:
+
+# An exporter is defined to do something with the data.
+exporter:
+  name: postgresql
+  config:
+    # Pgsql connection string
+    # See https://github.com/jackc/pgconn for more details
+    connection-string: "{{ .PostgresConnectionString }}"
+
+    # Maximum connection number for connection pool
+    # This means the total number of active queries that can be running
+    # concurrently can never be more than this
+    max-conn: 20
+
+

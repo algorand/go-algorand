@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ var networkRecipeFile string
 var networkName string
 var networkGenesisVersionModifier string
 var miscStringStringTokens []string
+var ignoreUnknownTokens bool
 
 var cpuprofilePath string
 
@@ -56,7 +57,8 @@ func init() {
 	networkBuildCmd.Flags().BoolVarP(&networkUseGenesisFiles, "use-existing-files", "e", false, "Use existing genesis files.")
 	networkBuildCmd.Flags().BoolVarP(&bootstrapLoadingFile, "gen-db-files", "b", false, "Generate database files.")
 	networkBuildCmd.Flags().BoolVarP(&networkIgnoreExistingDir, "force", "f", false, "Force generation into existing directory.")
-	networkBuildCmd.Flags().StringSliceVarP(&miscStringStringTokens, "val", "v", nil, "name=value, may be reapeated")
+	networkBuildCmd.Flags().StringSliceVarP(&miscStringStringTokens, "val", "v", nil, "name=value, may be repeated")
+	networkBuildCmd.Flags().BoolVarP(&ignoreUnknownTokens, "ignore", "i", false, "Ignore unknown tokens in network template file")
 	networkBuildCmd.Flags().StringVar(&cpuprofilePath, "cpuprofile", "", "write cpu profile to path")
 
 	rootCmd.PersistentFlags().StringVarP(&networkGenesisVersionModifier, "modifier", "m", "", "Override Genesis Version Modifier (eg 'v1')")
@@ -78,7 +80,7 @@ var networkBuildCmd = &cobra.Command{
 	},
 }
 
-func runBuildNetwork() (err error) {
+func runBuildNetwork() error {
 	if cpuprofilePath != "" {
 		f, err := os.Create(cpuprofilePath)
 		if err != nil {
@@ -93,7 +95,7 @@ func runBuildNetwork() (err error) {
 
 	networkRootDir, err := filepath.Abs(networkRootDir)
 	if err != nil {
-		return
+		return err
 	}
 	// Make sure target directory doesn't already exist
 	exists := util.FileExists(networkRootDir)
@@ -109,7 +111,7 @@ func runBuildNetwork() (err error) {
 	}
 
 	if networkRecipeFile, err = filepath.Abs(networkRecipeFile); err != nil {
-		return
+		return err
 	}
 
 	var r recipe
@@ -126,8 +128,8 @@ func runBuildNetwork() (err error) {
 		return fmt.Errorf("error loading Build Config file: %v", err)
 	}
 	for _, kev := range miscStringStringTokens {
-		ab := strings.SplitN(kev, "=", 2)
-		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{"+ab[0]+"}}", ab[1])
+		k, v, _ := strings.Cut(kev, "=")
+		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{"+k+"}}", v)
 	}
 
 	networkTemplateFile := resolveFile(r.NetworkFile, templateBaseDir)
@@ -136,7 +138,7 @@ func runBuildNetwork() (err error) {
 		return fmt.Errorf("error resolving network template file '%s' to full path: %v", networkTemplateFile, err)
 	}
 
-	netCfg, err := remote.InitDeployedNetworkConfig(networkTemplateFile, buildConfig)
+	netCfg, err := remote.InitDeployedNetworkConfig(networkTemplateFile, buildConfig, ignoreUnknownTokens)
 	if err != nil {
 		return fmt.Errorf("error loading Network Config file '%s': %v", networkTemplateFile, err)
 	}
@@ -168,9 +170,9 @@ func runBuildNetwork() (err error) {
 			return fmt.Errorf("error resolving bootstrap file: %v", err)
 		}
 		net.BootstrappedNet = fileTemplate
-		net.SetUseBoostrappedFiles(bootstrapLoadingFile)
+		net.SetUseBootstrappedFiles(bootstrapLoadingFile)
 	} else {
-		net.SetUseBoostrappedFiles(false)
+		net.SetUseBootstrappedFiles(false)
 	}
 
 	net.SetUseExistingGenesisFiles(networkUseGenesisFiles)

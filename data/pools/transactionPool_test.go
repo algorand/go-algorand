@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package pools
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -119,7 +120,7 @@ func newBlockEvaluator(t TestingT, l *ledger.Ledger) BlockEvaluator {
 	require.NoError(t, err)
 
 	next := bookkeeping.MakeBlock(prev)
-	eval, err := l.StartEvaluator(next.BlockHeader, 0, 0)
+	eval, err := l.StartEvaluator(next.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
 	return eval
@@ -574,10 +575,11 @@ func TestRememberForget(t *testing.T) {
 	numberOfTxns := numOfAccounts*numOfAccounts - numOfAccounts
 	require.Len(t, pending, numberOfTxns)
 
-	blk, err := eval.GenerateBlock()
+	ufblk, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
 
-	err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
+	blk := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+	err = mockLedger.AddValidatedBlock(blk, agreement.Certificate{})
 	require.NoError(t, err)
 	transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
@@ -585,7 +587,7 @@ func TestRememberForget(t *testing.T) {
 	require.Len(t, pending, 0)
 }
 
-//	Test that clean up works
+// Test that clean up works
 func TestCleanUp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -637,10 +639,11 @@ func TestCleanUp(t *testing.T) {
 
 	for mockLedger.Latest() < 6 {
 		eval := newBlockEvaluator(t, mockLedger)
-		blk, err := eval.GenerateBlock()
+		ufblk, err := eval.GenerateBlock(nil)
 		require.NoError(t, err)
 
-		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
+		blk := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+		err = mockLedger.AddValidatedBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
@@ -653,10 +656,11 @@ func TestCleanUp(t *testing.T) {
 
 	for mockLedger.Latest() < 6+basics.Round(expiredHistory*proto.MaxTxnLife) {
 		eval := newBlockEvaluator(t, mockLedger)
-		blk, err := eval.GenerateBlock()
+		ufblk, err := eval.GenerateBlock(nil)
 		require.NoError(t, err)
 
-		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
+		blk := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+		err = mockLedger.AddValidatedBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
@@ -748,10 +752,11 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	// simulate this transaction was applied
-	block, err := blockEval.GenerateBlock()
+	ufblk, err := blockEval.GenerateBlock(nil)
 	require.NoError(t, err)
 
-	err = mockLedger.AddValidatedBlock(*block, agreement.Certificate{})
+	block := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+	err = mockLedger.AddValidatedBlock(block, agreement.Certificate{})
 	require.NoError(t, err)
 
 	transactionPool.OnNewBlock(block.Block(), ledgercore.StateDelta{})
@@ -1163,24 +1168,24 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 
 		// make args for recomputeBlockEvaluator() like OnNewBlock() would
 		var knownCommitted uint
-		committedTxIds := make(map[transactions.Txid]ledgercore.IncludedTransactions)
+		committedTxIDs := make(map[transactions.Txid]ledgercore.IncludedTransactions)
 		for i := 0; i < blockTxnCount; i++ {
 			knownCommitted++
 			// OK to use empty IncludedTransactions: recomputeBlockEvaluator is only checking map membership
-			committedTxIds[signedTransactions[i].ID()] = ledgercore.IncludedTransactions{}
+			committedTxIDs[signedTransactions[i].ID()] = ledgercore.IncludedTransactions{}
 		}
-		b.Logf("Made transactionPool with %d signedTransactions, %d committedTxIds, %d knownCommitted",
-			len(signedTransactions), len(committedTxIds), knownCommitted)
+		b.Logf("Made transactionPool with %d signedTransactions, %d committedTxIDs, %d knownCommitted",
+			len(signedTransactions), len(committedTxIDs), knownCommitted)
 		b.Logf("transactionPool pendingTxGroups %d rememberedTxGroups %d",
 			len(transactionPool.pendingTxGroups), len(transactionPool.rememberedTxGroups))
-		return transactionPool, committedTxIds, knownCommitted
+		return transactionPool, committedTxIDs, knownCommitted
 	}
 
 	transactionPool := make([]*TransactionPool, b.N)
-	committedTxIds := make([]map[transactions.Txid]ledgercore.IncludedTransactions, b.N)
+	committedTxIDs := make([]map[transactions.Txid]ledgercore.IncludedTransactions, b.N)
 	knownCommitted := make([]uint, b.N)
 	for i := 0; i < b.N; i++ {
-		transactionPool[i], committedTxIds[i], knownCommitted[i] = setupPool()
+		transactionPool[i], committedTxIDs[i], knownCommitted[i] = setupPool()
 	}
 	time.Sleep(time.Second)
 	runtime.GC()
@@ -1198,7 +1203,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
+		transactionPool[i].recomputeBlockEvaluator(committedTxIDs[i], knownCommitted[i])
 	}
 	b.StopTimer()
 	if profF != nil {
@@ -1290,10 +1295,11 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 			ledgerTxnQueue = ledgerTxnQueue[1:]
 		}
 
-		blk, err := eval.GenerateBlock()
+		ufblk, err := eval.GenerateBlock(nil)
 		require.NoError(b, err)
 
-		err = l.AddValidatedBlock(*blk, agreement.Certificate{})
+		blk := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+		err = l.AddValidatedBlock(blk, agreement.Certificate{})
 		require.NoError(b, err)
 
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
@@ -1433,7 +1439,7 @@ func TestStateProofLogging(t *testing.T) {
 	// Set the logging to capture the telemetry Metrics into logging
 	logger := logging.TestingLog(t)
 	logger.SetLevel(logging.Info)
-	logger.EnableTelemetry(logging.TelemetryConfig{Enable: true, SendToLog: true})
+	logger.EnableTelemetryContext(context.Background(), logging.TelemetryConfig{Enable: true, SendToLog: true})
 	var buf bytes.Buffer
 	logger.SetOutput(&buf)
 
@@ -1448,20 +1454,22 @@ func TestStateProofLogging(t *testing.T) {
 	b.BlockHeader.GenesisHash = mockLedger.GenesisHash()
 	b.CurrentProtocol = protocol.ConsensusCurrentVersion
 	b.BlockHeader.Round = 1
+	b.BlockHeader.Bonus = basics.MicroAlgos{Raw: 10000000}
 
 	phdr, err := mockLedger.BlockHdr(0)
 	require.NoError(t, err)
 	b.BlockHeader.Branch = phdr.Hash()
 
-	_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
+	_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000, nil)
 	require.NoError(t, err)
 
 	// Simulate the blocks up to round 512 without any transactions
 	for i := 1; true; i++ {
-		blk, err := transactionPool.AssembleBlock(basics.Round(i), time.Time{})
+		ufblk, err := transactionPool.AssembleBlock(basics.Round(i), time.Time{})
 		require.NoError(t, err)
 
-		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
+		blk := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+		err = mockLedger.AddValidatedBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
 
 		// Move to the next round
@@ -1477,7 +1485,7 @@ func TestStateProofLogging(t *testing.T) {
 			break
 		}
 
-		_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000)
+		_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000, nil)
 		require.NoError(t, err)
 	}
 
@@ -1499,7 +1507,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NotNil(t, voters)
 
 	// Get the message
-	msg, err := stateproof.GenerateStateProofMessage(mockLedger, uint64(votersRound), spRoundHdr)
+	msg, err := stateproof.GenerateStateProofMessage(mockLedger, round)
 
 	// Get the SP
 	proof := generateProofForTesting(uint64(round), msg, provenWeight, voters.Participants, voters.Tree, allKeys, t)
@@ -1520,7 +1528,7 @@ func TestStateProofLogging(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add it to the transaction pool and assemble the block
-	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000)
+	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000, nil)
 	require.NoError(t, err)
 
 	err = eval.Transaction(stxn, transactions.ApplyData{})
@@ -1586,7 +1594,7 @@ func generateProofForTesting(
 
 	// Prepare the builder
 	stateProofStrengthTargetForTests := config.Consensus[protocol.ConsensusCurrentVersion].StateProofStrengthTarget
-	b, err := cryptostateproof.MakeBuilder(data, round, provenWeight,
+	b, err := cryptostateproof.MakeProver(data, round, provenWeight,
 		partArray, partTree, stateProofStrengthTargetForTests)
 	require.NoError(t, err)
 
@@ -1607,7 +1615,7 @@ func generateProofForTesting(
 	}
 
 	// Build the SP
-	proof, err := b.Build()
+	proof, err := b.CreateProof()
 	require.NoError(t, err)
 
 	return proof

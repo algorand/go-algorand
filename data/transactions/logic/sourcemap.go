@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ const sourceMapVersion = 3
 const b64table string = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
 // SourceMap contains details from the source to assembly process.
-// Currently contains the map between TEAL source line to
+// Currently, contains the map between TEAL source line to
 // the assembled bytecode position and details about
 // the template variables contained in the source file.
 type SourceMap struct {
@@ -41,21 +41,21 @@ type SourceMap struct {
 
 // GetSourceMap returns a struct containing details about
 // the assembled file and encoded mappings to the source file.
-func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
+func GetSourceMap(sourceNames []string, offsetToLocation map[int]SourceLocation) SourceMap {
 	maxPC := 0
-	for pc := range offsetToLine {
+	for pc := range offsetToLocation {
 		if pc > maxPC {
 			maxPC = pc
 		}
 	}
 
 	// Array where index is the PC and value is the line for `mappings` field.
-	prevSourceLine := 0
+	prevSourceLocation := SourceLocation{}
 	pcToLine := make([]string, maxPC+1)
 	for pc := range pcToLine {
-		if line, ok := offsetToLine[pc]; ok {
-			pcToLine[pc] = MakeSourceMapLine(0, 0, line-prevSourceLine, 0)
-			prevSourceLine = line
+		if location, ok := offsetToLocation[pc]; ok {
+			pcToLine[pc] = MakeSourceMapLine(0, 0, location.Line-prevSourceLocation.Line, location.Column-prevSourceLocation.Column)
+			prevSourceLocation = location
 		} else {
 			pcToLine[pc] = ""
 		}

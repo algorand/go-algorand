@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -89,11 +89,12 @@ func (t *voteTrackerPeriod) handle(r routerHandle, p player, e event) event {
 //
 // Bundle "freshness" is an ordering relation defined on thresholdEvents.  The
 // relation is defined as follows:
-//  - certThresholds are fresher than other kinds of thresholdEvent.
-//  - other thresholdEvents are fresher than thresholdEvents from older periods.
-//  - nextThresholds are fresher than softThreshold in the same period.
-//  - nextThresholds for the bottom proposal-value are fresher than
-//    nextThresholds for another proposal-value.
+//   - certThresholds are fresher than other kinds of thresholdEvent.
+//   - other thresholdEvents are fresher than thresholdEvents from older periods.
+//   - nextThresholds are fresher than softThreshold in the same period.
+//   - nextThresholds for the bottom proposal-value are fresher than
+//     nextThresholds for another proposal-value.
+//
 // (Note that the step of a nextThreshold does not affect its freshness.)
 //
 // It handles the following type(s) of event: voteAcceptedEvent, freshestBundleRequest, nextThreshold

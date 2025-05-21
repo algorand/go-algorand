@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"encoding/binary"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -40,11 +41,11 @@ func TestLRUBasicResources(t *testing.T) {
 	// write 50 resources
 	for i := 0; i < resourcesNum; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res := store.PersistedResourcesData{
-			Addrid: int64(i),
-			Aidx:   basics.CreatableIndex(i),
-			Round:  basics.Round(i),
-			Data:   store.ResourcesData{Total: uint64(i)},
+		res := trackerdb.PersistedResourcesData{
+			AcctRef: mockEntryRef{int64(i)},
+			Aidx:    basics.CreatableIndex(i),
+			Round:   basics.Round(i),
+			Data:    trackerdb.ResourcesData{Total: uint64(i)},
 		}
 		baseRes.write(res, addr)
 	}
@@ -55,7 +56,7 @@ func TestLRUBasicResources(t *testing.T) {
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), res.Round)
-		require.Equal(t, int64(i), res.Addrid)
+		require.Equal(t, mockEntryRef{int64(i)}, res.AcctRef)
 		require.Equal(t, uint64(i), res.Data.Total)
 		require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 	}
@@ -65,7 +66,7 @@ func TestLRUBasicResources(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.read(addr, basics.CreatableIndex(i%resourcesNum))
 		require.False(t, has)
-		require.Equal(t, store.PersistedResourcesData{}, res)
+		require.Equal(t, trackerdb.PersistedResourcesData{}, res)
 	}
 
 	baseRes.prune(resourcesNum / 2)
@@ -79,14 +80,56 @@ func TestLRUBasicResources(t *testing.T) {
 			// expected to have it.
 			require.True(t, has)
 			require.Equal(t, basics.Round(i), res.Round)
-			require.Equal(t, int64(i), res.Addrid)
+			require.Equal(t, mockEntryRef{int64(i)}, res.AcctRef)
 			require.Equal(t, uint64(i), res.Data.Total)
 			require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 		} else {
 			require.False(t, has)
-			require.Equal(t, store.PersistedResourcesData{}, res)
+			require.Equal(t, trackerdb.PersistedResourcesData{}, res)
 		}
 	}
+}
+
+func TestLRUResourcesDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var baseRes lruResources
+	baseRes.init(logging.TestingLog(t), 0, 1)
+
+	resourceNum := 5
+
+	for i := 1; i <= resourceNum; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
+			res := trackerdb.PersistedResourcesData{
+				AcctRef: mockEntryRef{int64(i)},
+				Aidx:    basics.CreatableIndex(i),
+				Round:   basics.Round(i),
+				Data:    trackerdb.ResourcesData{Total: uint64(i)},
+			}
+			baseRes.writePending(res, addr)
+			baseRes.writeNotFoundPending(addr, basics.CreatableIndex(i))
+		}(i)
+	}
+	require.Empty(t, baseRes.pendingResources)
+	require.Empty(t, baseRes.pendingNotFound)
+	baseRes.flushPendingWrites()
+	require.Empty(t, baseRes.resources)
+	require.Empty(t, baseRes.notFound)
+
+	for i := 0; i < resourceNum; i++ {
+		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
+		res := trackerdb.PersistedResourcesData{
+			AcctRef: mockEntryRef{int64(i)},
+			Aidx:    basics.CreatableIndex(i),
+			Round:   basics.Round(i),
+			Data:    trackerdb.ResourcesData{Total: uint64(i)},
+		}
+		baseRes.write(res, addr)
+	}
+
+	require.Empty(t, baseRes.resources)
 }
 
 func TestLRUResourcesPendingWrites(t *testing.T) {
@@ -100,11 +143,11 @@ func TestLRUResourcesPendingWrites(t *testing.T) {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-			res := store.PersistedResourcesData{
-				Addrid: int64(i),
-				Aidx:   basics.CreatableIndex(i),
-				Round:  basics.Round(i),
-				Data:   store.ResourcesData{Total: uint64(i)},
+			res := trackerdb.PersistedResourcesData{
+				AcctRef: mockEntryRef{int64(i)},
+				Aidx:    basics.CreatableIndex(i),
+				Round:   basics.Round(i),
+				Data:    trackerdb.ResourcesData{Total: uint64(i)},
 			}
 			baseRes.writePending(res, addr)
 		}(i)
@@ -138,8 +181,10 @@ type lruResourcesTestLogger struct {
 	warnMsgCount  int
 }
 
-func (cl *lruResourcesTestLogger) Warnf(s string, args ...interface{}) {
-	cl.warnMsgCount++
+func (cl *lruResourcesTestLogger) Infof(s string, args ...interface{}) {
+	if strings.Contains(s, "exceed the warning threshold of") {
+		cl.warnMsgCount++
+	}
 }
 
 func TestLRUResourcesPendingWritesWarning(t *testing.T) {
@@ -153,11 +198,11 @@ func TestLRUResourcesPendingWritesWarning(t *testing.T) {
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-			res := store.PersistedResourcesData{
-				Addrid: int64(i),
-				Aidx:   basics.CreatableIndex(i),
-				Round:  basics.Round(i),
-				Data:   store.ResourcesData{Total: uint64(i)},
+			res := trackerdb.PersistedResourcesData{
+				AcctRef: mockEntryRef{int64(i)},
+				Aidx:    basics.CreatableIndex(i),
+				Round:   basics.Round(i),
+				Data:    trackerdb.ResourcesData{Total: uint64(i)},
 			}
 			baseRes.writePending(res, addr)
 		}
@@ -180,11 +225,11 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
-		res := store.PersistedResourcesData{
-			Addrid: int64(i),
-			Aidx:   basics.CreatableIndex(i),
-			Round:  basics.Round(i),
-			Data:   store.ResourcesData{Total: uint64(i)},
+		res := trackerdb.PersistedResourcesData{
+			AcctRef: mockEntryRef{int64(i)},
+			Aidx:    basics.CreatableIndex(i),
+			Round:   basics.Round(i),
+			Data:    trackerdb.ResourcesData{Total: uint64(i)},
 		}
 		baseRes.writePending(res, addr)
 	}
@@ -197,7 +242,7 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), res.Round)
-		require.Equal(t, int64(i), res.Addrid)
+		require.Equal(t, mockEntryRef{int64(i)}, res.AcctRef)
 		require.Equal(t, uint64(i), res.Data.Total)
 		require.Equal(t, basics.CreatableIndex(i), res.Aidx)
 	}
@@ -207,7 +252,7 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.False(t, has)
-		require.Equal(t, store.PersistedResourcesData{}, res)
+		require.Equal(t, trackerdb.PersistedResourcesData{}, res)
 	}
 }
 
@@ -252,11 +297,11 @@ func generatePersistedResourcesData(startRound, endRound int) []cachedResourceDa
 		digest := crypto.Hash(buffer)
 
 		accounts[i-startRound] = cachedResourceData{
-			PersistedResourcesData: store.PersistedResourcesData{
-				Addrid: int64(i),
-				Aidx:   basics.CreatableIndex(i),
-				Round:  basics.Round(i + startRound),
-				Data:   store.ResourcesData{Total: uint64(i)},
+			PersistedResourcesData: trackerdb.PersistedResourcesData{
+				AcctRef: mockEntryRef{int64(i)},
+				Aidx:    basics.CreatableIndex(i),
+				Round:   basics.Round(i + startRound),
+				Data:    trackerdb.ResourcesData{Total: uint64(i)},
 			},
 			address: basics.Address(digest),
 		}

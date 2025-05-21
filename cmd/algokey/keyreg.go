@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -94,10 +96,7 @@ func init() {
 		"betanet": mustConvertB64ToDigest("mFgazF+2uRS1tMiL9dsj01hJGySEmPN28B/TjjvpVW0="),
 		"devnet":  mustConvertB64ToDigest("sC3P7e2SdbqKJK0tbiCdK9tdSpbe6XeCGKdoNzmlj0E="),
 	}
-	validNetworkList = make([]string, 0, len(validNetworks))
-	for k := range validNetworks {
-		validNetworkList = append(validNetworkList, k)
-	}
+	validNetworkList = slices.Collect(maps.Keys(validNetworks))
 }
 
 func mustConvertB64ToDigest(b64 string) (digest crypto.Digest) {

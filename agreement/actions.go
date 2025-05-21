@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -65,6 +66,7 @@ type action interface {
 	do(context.Context, *Service)
 
 	String() string
+	ComparableStr() string
 }
 
 type nonpersistent struct{}
@@ -86,6 +88,8 @@ func (a noopAction) do(context.Context, *Service) {}
 func (a noopAction) String() string {
 	return a.t().String()
 }
+
+func (a noopAction) ComparableStr() string { return a.String() }
 
 type networkAction struct {
 	nonpersistent
@@ -117,6 +121,13 @@ func (a networkAction) String() string {
 		return fmt.Sprintf("%s: %2v: %5v", a.t().String(), a.Tag, a.CompoundMessage.Proposal.value())
 	}
 	return fmt.Sprintf("%s: %2v", a.t().String(), a.Tag)
+}
+
+func (a networkAction) ComparableStr() string {
+	if a.Tag == protocol.AgreementVoteTag {
+		return fmt.Sprintf("%s: %2v: %3v-%2v-%2v", a.t().String(), a.Tag, a.UnauthenticatedVote.R.Round, a.UnauthenticatedVote.R.Period, a.UnauthenticatedVote.R.Step)
+	}
+	return a.String()
 }
 
 func (a networkAction) do(ctx context.Context, s *Service) {
@@ -191,6 +202,18 @@ func (a cryptoAction) String() string {
 	return a.t().String()
 }
 
+func (a cryptoAction) ComparableStr() (s string) {
+	switch a.T {
+	case verifyVote:
+		s = fmt.Sprintf("%s: %3v-%2v TaskIndex %d", a.t().String(), a.Round, a.Period, a.TaskIndex)
+	case verifyPayload:
+		s = fmt.Sprintf("%s: %3v-%2v Pinned %v", a.t().String(), a.Round, a.Period, a.Pinned)
+	case verifyBundle:
+		s = fmt.Sprintf("%s: %3v-%2v-%2v", a.t().String(), a.Round, a.Period, a.Step)
+	}
+	return
+}
+
 func (a cryptoAction) do(ctx context.Context, s *Service) {
 	switch a.T {
 	case verifyVote:
@@ -209,6 +232,10 @@ type ensureAction struct {
 	Payload proposal
 	// the certificate proving commitment
 	Certificate Certificate
+	// The time that the lowest proposal-vote was validated for `credentialRoundLag` rounds ago (R-credentialRoundLag). This may not have been the winning proposal, since we wait `credentialRoundLag` rounds to see if there was a better one.
+	voteValidatedAt time.Duration
+	// The dynamic filter timeout calculated for this round, even if not enabled, for reporting to telemetry.
+	dynamicFilterTimeout time.Duration
 }
 
 func (a ensureAction) t() actionType {
@@ -218,6 +245,8 @@ func (a ensureAction) t() actionType {
 func (a ensureAction) String() string {
 	return fmt.Sprintf("%s: %.5s: %v, %v, %.5s", a.t().String(), a.Payload.Digest().String(), a.Certificate.Round, a.Certificate.Period, a.Certificate.Proposal.BlockDigest.String())
 }
+
+func (a ensureAction) ComparableStr() string { return a.String() }
 
 func (a ensureAction) do(ctx context.Context, s *Service) {
 	logEvent := logspec.AgreementEvent{
@@ -231,14 +260,16 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		logEvent.Type = logspec.RoundConcluded
 		s.log.with(logEvent).Infof("committed round %d with pre-validated block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-			Address:      a.Certificate.Proposal.OriginalProposer.String(),
-			Hash:         a.Certificate.Proposal.BlockDigest.String(),
-			Round:        uint64(a.Certificate.Round),
-			ValidatedAt:  a.Payload.validatedAt,
-			ReceivedAt:   a.Payload.receivedAt,
-			PreValidated: true,
-			PropBufLen:   uint64(len(s.demux.rawProposals)),
-			VoteBufLen:   uint64(len(s.demux.rawVotes)),
+			Address:              a.Certificate.Proposal.OriginalProposer.String(),
+			Hash:                 a.Certificate.Proposal.BlockDigest.String(),
+			Round:                uint64(a.Certificate.Round),
+			ValidatedAt:          a.Payload.validatedAt,
+			ReceivedAt:           a.Payload.receivedAt,
+			VoteValidatedAt:      a.voteValidatedAt,
+			DynamicFilterTimeout: a.dynamicFilterTimeout,
+			PreValidated:         true,
+			PropBufLen:           uint64(len(s.demux.rawProposals)),
+			VoteBufLen:           uint64(len(s.demux.rawVotes)),
 		})
 		s.Ledger.EnsureValidatedBlock(a.Payload.ve, a.Certificate)
 	} else {
@@ -246,14 +277,16 @@ func (a ensureAction) do(ctx context.Context, s *Service) {
 		logEvent.Type = logspec.RoundConcluded
 		s.log.with(logEvent).Infof("committed round %d with block %v", a.Certificate.Round, a.Certificate.Proposal)
 		s.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockAcceptedEvent, telemetryspec.BlockAcceptedEventDetails{
-			Address:      a.Certificate.Proposal.OriginalProposer.String(),
-			Hash:         a.Certificate.Proposal.BlockDigest.String(),
-			Round:        uint64(a.Certificate.Round),
-			ValidatedAt:  a.Payload.validatedAt,
-			ReceivedAt:   a.Payload.receivedAt,
-			PreValidated: false,
-			PropBufLen:   uint64(len(s.demux.rawProposals)),
-			VoteBufLen:   uint64(len(s.demux.rawVotes)),
+			Address:              a.Certificate.Proposal.OriginalProposer.String(),
+			Hash:                 a.Certificate.Proposal.BlockDigest.String(),
+			Round:                uint64(a.Certificate.Round),
+			ValidatedAt:          a.Payload.validatedAt,
+			ReceivedAt:           a.Payload.receivedAt,
+			VoteValidatedAt:      a.voteValidatedAt,
+			DynamicFilterTimeout: a.dynamicFilterTimeout,
+			PreValidated:         false,
+			PropBufLen:           uint64(len(s.demux.rawProposals)),
+			VoteBufLen:           uint64(len(s.demux.rawVotes)),
 		})
 		s.Ledger.EnsureBlock(block, a.Certificate)
 	}
@@ -277,6 +310,8 @@ func (a stageDigestAction) t() actionType {
 func (a stageDigestAction) String() string {
 	return fmt.Sprintf("%s: %.5s. %v. %v", a.t().String(), a.Certificate.Proposal.BlockDigest.String(), a.Certificate.Round, a.Certificate.Period)
 }
+
+func (a stageDigestAction) ComparableStr() string { return a.String() }
 
 func (a stageDigestAction) do(ctx context.Context, service *Service) {
 	logEvent := logspec.AgreementEvent{
@@ -304,8 +339,25 @@ func (a rezeroAction) String() string {
 	return a.t().String()
 }
 
+func (a rezeroAction) ComparableStr() string {
+	return fmt.Sprintf("%s: %d", a.t().String(), a.Round)
+}
+
 func (a rezeroAction) do(ctx context.Context, s *Service) {
 	s.Clock = s.Clock.Zero()
+	// Preserve the zero time of the new round a.Round (for
+	// period 0) for future use if a late proposal-vote arrives,
+	// for late credential tracking.
+	if _, ok := s.historicalClocks[a.Round]; !ok {
+		s.historicalClocks[a.Round] = s.Clock
+	}
+
+	// Garbage collect clocks that are too old
+	for rnd := range s.historicalClocks {
+		if a.Round > rnd+credentialRoundLag {
+			delete(s.historicalClocks, rnd)
+		}
+	}
 }
 
 type pseudonodeAction struct {
@@ -325,6 +377,8 @@ func (a pseudonodeAction) t() actionType {
 func (a pseudonodeAction) String() string {
 	return fmt.Sprintf("%v %3v-%2v-%2v: %.5v", a.t().String(), a.Round, a.Period, a.Step, a.Proposal.BlockDigest.String())
 }
+
+func (a pseudonodeAction) ComparableStr() string { return a.String() }
 
 func (a pseudonodeAction) persistent() bool {
 	return a.T == attest
@@ -512,9 +566,10 @@ func (c checkpointAction) do(ctx context.Context, s *Service) {
 		// we don't expect this to happen in recovery
 		s.log.with(logEvent).Errorf("checkpoint action for (%v, %v, %v) reached with nil completion channel", c.Round, c.Period, c.Step)
 	}
-	return
 }
 
 func (c checkpointAction) String() string {
 	return c.t().String()
 }
+
+func (c checkpointAction) ComparableStr() string { return c.String() }

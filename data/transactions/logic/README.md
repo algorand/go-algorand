@@ -40,6 +40,31 @@ has fewer than two elements, the operation fails. Some operations, like
 `frame_dig` and `proto` could fail because of an attempt to access
 above the current stack.
 
+## Stack Types
+
+While every element of the stack is restricted to the types `uint64` and `bytes`, 
+the values of these types may be known to be bounded.  The more common bounded types are 
+named to provide more semantic information in the documentation. They're also used during
+assembly time to do type checking and to provide more informative error messages.
+
+
+#### Definitions
+
+| Name | Bound | AVM Type |
+| ---- | ---- | -------- |
+| []byte | len(x) <= 4096 | []byte |
+| address | len(x) == 32 | []byte |
+| any |  | any |
+| bigint | len(x) <= 64 | []byte |
+| bool | x <= 1 | uint64 |
+| boxName | 1 <= len(x) <= 64 | []byte |
+| method | len(x) == 4 | []byte |
+| none |  | none |
+| stateKey | len(x) <= 64 | []byte |
+| uint64 | x <= 18446744073709551615 | uint64 |
+
+
+
 ## Scratch Space
 
 In addition to the stack there are 256 positions of scratch
@@ -112,15 +137,23 @@ of a contract account.
   transaction against the contract account is for the program to
   approve it.
 
-The bytecode plus the length of all Args must add up to no more than
-1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an
-associated cost and the program cost must total no more than 20,000
-(consensus parameter LogicSigMaxCost). Most opcodes have a cost of 1,
-but a few slow cryptographic operations have a much higher cost. Prior
-to v4, the program's cost was estimated as the static sum of all the
-opcode costs in the program (whether they were actually executed or
-not). Beginning with v4, the program's cost is tracked dynamically,
-while being evaluated. If the program exceeds its budget, it fails.
+The size of a Smart Signature is defined as the length of its bytecode
+plus the length of all its Args. The sum of the sizes of all Smart
+Signatures in a group must not exceed 1000 bytes times the number of
+transactions in the group (1000 bytes is defined in consensus parameter
+`LogicSigMaxSize`).
+
+Each opcode has an associated cost, usually 1, but a few slow operations
+have higher costs. Prior to v4, the program's cost was estimated as the
+static sum of all the opcode costs in the program (whether they were
+actually executed or not). Beginning with v4, the program's cost is
+tracked dynamically while being evaluated. If the program exceeds its
+budget, it fails.
+
+The total program cost of all Smart Signatures in a group must not
+exceed 20,000 (consensus parameter LogicSigMaxCost) times the number
+of transactions in the group.
+
 
 ## Execution Environment for Smart Contracts (Applications)
 
@@ -193,6 +226,41 @@ _available_.
 
  * Since v7, the account associated with any contract present in the
    `txn.ForeignApplications` field is _available_.
+   
+ * Since v9, there is group-level resource sharing. Any resource that
+   is available in _some_ top-level transaction in a transaction group
+   is available in _all_ v9 or later application calls in the group,
+   whether those application calls are top-level or inner.
+   
+ * When considering whether an asset holding or application local
+   state is available by group-level resource sharing, the holding or
+   local state must be available in a top-level transaction without
+   considering group sharing. For example, if account A is made
+   available in one transaction, and asset X is made available in
+   another, group resource sharing does _not_ make A's X holding
+   available.
+     
+ * Top-level transactions that are not application calls also make
+   resources available to group-level resource sharing. The following
+   resources are made available by other transaction types.
+
+     1. `pay` - `txn.Sender`, `txn.Receiver`, and
+        `txn.CloseRemainderTo` (if set).
+
+     1. `keyreg` - `txn.Sender`
+
+     1. `acfg` - `txn.Sender`, `txn.ConfigAsset`, and the
+        `txn.ConfigAsset` holding of `txn.Sender`.
+
+     1. `axfer` - `txn.Sender`, `txn.AssetReceiver`, `txn.AssetSender`
+        (if set), `txnAssetCloseTo` (if set), `txn.XferAsset`, and the
+        `txn.XferAsset` holding of each of those accounts.
+
+     1. `afrz` - `txn.Sender`, `txn.FreezeAccount`, `txn.FreezeAsset`,
+        and the `txn.FreezeAsset` holding of `txn.FreezeAccount`. The
+        `txn.FreezeAsset` holding of `txn.Sender` is _not_ made
+        available.
+
 
  * A Box is _available_ to an Approval Program if _any_ transaction in
    the same group contains a box reference (`txn.Boxes`) that denotes
@@ -201,6 +269,18 @@ _available_.
    ForeignApplications array, with the usual convention that 0
    indicates the application ID of the app called by that
    transaction. No box is ever _available_ to a ClearStateProgram.
+
+Regardless of _availability_, any attempt to access an Asset or
+Application with an ID less than 256 from within a Contract will fail
+immediately. This avoids any ambiguity in opcodes that interpret their
+integer arguments as resource IDs _or_ indexes into the
+`txn.ForeignAssets` or `txn.ForeignApplications` arrays.
+
+It is recommended that contract authors avoid supplying array indexes
+to these opcodes, and always use explicit resource IDs. By using
+explicit IDs, contracts will better take advantage of group resource
+sharing.  The array indexing interpretation may be deprecated in a
+future version.
 
 ## Constants
 
@@ -212,7 +292,7 @@ Constants can be pushed onto the stack in two different ways:
 
 2. Constants can be loaded into storage separate from the stack and
    scratch space, using two opcodes `intcblock` and
-   `bytecblock`. Then, constants from this storage can be pushed
+   `bytecblock`. Then, constants from this storage can be
    pushed onto the stack by referring to the type and index using
    `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. This method is
    more efficient for constants that are used multiple times.
@@ -262,7 +342,7 @@ An application transaction must indicate the action to be taken following the ex
 
 Most operations work with only one type of argument, uint64 or bytes, and fail if the wrong type value is on the stack.
 
-Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
+Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in the corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
@@ -282,20 +362,10 @@ an opcode manipulates the stack in such a way that a value changes
 position but is otherwise unchanged, the name of the output on the
 return stack matches the name of the input value.
 
-### Arithmetic, Logic, and Cryptographic Operations
+### Arithmetic and Logic Operations
 
 | Opcode | Description |
 | - | -- |
-| `sha256` | SHA256 hash of value A, yields [32]byte |
-| `keccak256` | Keccak256 hash of value A, yields [32]byte |
-| `sha512_256` | SHA512_256 hash of value A, yields [32]byte |
-| `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
-| `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
-| `ed25519verify_bare` | for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1} |
-| `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
-| `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
-| `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
-| `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
@@ -314,7 +384,6 @@ return stack matches the name of the input value.
 | `==` | A is equal to B => {0 or 1} |
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | A == 0 yields 1; else 0 |
-| `len` | yields length of byte value A |
 | `itob` | converts uint64 A to big-endian byte array, always of length 8 |
 | `btoi` | converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8. |
 | `%` | A modulo B. Fail if B == 0. |
@@ -327,16 +396,17 @@ return stack matches the name of the input value.
 | `divw` | A,B / C. Fail if C == 0 or if result overflows. |
 | `divmodw` | W,X = (A,B / C,D); Y,Z = (A,B modulo C,D) |
 | `expw` | A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1 |
-| `getbit` | Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails |
-| `setbit` | Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails |
-| `getbyte` | Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails |
-| `setbyte` | Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails |
-| `concat` | join A and B |
 
 ### Byte Array Manipulation
 
 | Opcode | Description |
 | - | -- |
+| `getbit` | Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails |
+| `setbit` | Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails |
+| `getbyte` | Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails |
+| `setbyte` | Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails |
+| `concat` | join A and B |
+| `len` | yields length of byte value A |
 | `substring s e` | A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails |
 | `extract s l` | A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
@@ -388,6 +458,28 @@ these results may contain leading zero bytes.
 | `b&` | A bitwise-and B. A and B are zero-left extended to the greater of their lengths |
 | `b^` | A bitwise-xor B. A and B are zero-left extended to the greater of their lengths |
 | `b~` | A with all bits inverted |
+
+### Cryptographic Operations
+
+| Opcode | Description |
+| - | -- |
+| `sha256` | SHA256 hash of value A, yields [32]byte |
+| `keccak256` | Keccak256 hash of value A, yields [32]byte |
+| `sha512_256` | SHA512_256 hash of value A, yields [32]byte |
+| `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
+| `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
+| `ed25519verify_bare` | for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1} |
+| `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
+| `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
+| `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
+| `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
+| `ec_add g` | for curve points A and B, return the curve point A + B |
+| `ec_scalar_mul g` | for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B. |
+| `ec_pairing_check g` | 1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0 |
+| `ec_multi_scalar_mul g` | for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn |
+| `ec_subgroup_check g` | 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all. |
+| `ec_map_to g` | maps field element A to group G |
+| `mimc c` | MiMC hash of scalars A, using curve and parameters specified by configuration C |
 
 ### Loading Values
 
@@ -444,18 +536,18 @@ Some of these have immediate data in the byte or bytes after the opcode.
 ##### Scalar Fields
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
-| 0 | Sender | []byte |      | 32 byte address |
+| 0 | Sender | address |      | 32 byte address |
 | 1 | Fee | uint64 |      | microalgos |
 | 2 | FirstValid | uint64 |      | round number |
 | 3 | FirstValidTime | uint64 | v7  | UNIX timestamp of block before txn.FirstValid. Fails if negative |
 | 4 | LastValid | uint64 |      | round number |
 | 5 | Note | []byte |      | Any data up to 1024 bytes |
-| 6 | Lease | []byte |      | 32 byte lease value |
-| 7 | Receiver | []byte |      | 32 byte address |
+| 6 | Lease | [32]byte |      | 32 byte lease value |
+| 7 | Receiver | address |      | 32 byte address |
 | 8 | Amount | uint64 |      | microalgos |
-| 9 | CloseRemainderTo | []byte |      | 32 byte address |
-| 10 | VotePK | []byte |      | 32 byte address |
-| 11 | SelectionPK | []byte |      | 32 byte address |
+| 9 | CloseRemainderTo | address |      | 32 byte address |
+| 10 | VotePK | [32]byte |      | 32 byte address |
+| 11 | SelectionPK | [32]byte |      | 32 byte address |
 | 12 | VoteFirst | uint64 |      | The first round that the participation key is valid. |
 | 13 | VoteLast | uint64 |      | The last round that the participation key is valid. |
 | 14 | VoteKeyDilution | uint64 |      | Dilution for the 2-level participation key |
@@ -463,33 +555,33 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 16 | TypeEnum | uint64 |      | Transaction type as integer |
 | 17 | XferAsset | uint64 |      | Asset ID |
 | 18 | AssetAmount | uint64 |      | value in Asset's units |
-| 19 | AssetSender | []byte |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
-| 20 | AssetReceiver | []byte |      | 32 byte address |
-| 21 | AssetCloseTo | []byte |      | 32 byte address |
+| 19 | AssetSender | address |      | 32 byte address. Source of assets if Sender is the Asset's Clawback address. |
+| 20 | AssetReceiver | address |      | 32 byte address |
+| 21 | AssetCloseTo | address |      | 32 byte address |
 | 22 | GroupIndex | uint64 |      | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
-| 23 | TxID | []byte |      | The computed ID for this transaction. 32 bytes. |
+| 23 | TxID | [32]byte |      | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | v2  | ApplicationID from ApplicationCall transaction |
 | 25 | OnCompletion | uint64 | v2  | ApplicationCall transaction on completion action |
 | 27 | NumAppArgs | uint64 | v2  | Number of ApplicationArgs |
 | 29 | NumAccounts | uint64 | v2  | Number of Accounts |
 | 30 | ApprovalProgram | []byte | v2  | Approval program |
 | 31 | ClearStateProgram | []byte | v2  | Clear state program |
-| 32 | RekeyTo | []byte | v2  | 32 byte Sender's new AuthAddr |
+| 32 | RekeyTo | address | v2  | 32 byte Sender's new AuthAddr |
 | 33 | ConfigAsset | uint64 | v2  | Asset ID in asset config transaction |
 | 34 | ConfigAssetTotal | uint64 | v2  | Total number of units of this asset created |
 | 35 | ConfigAssetDecimals | uint64 | v2  | Number of digits to display after the decimal place when displaying the asset |
-| 36 | ConfigAssetDefaultFrozen | uint64 | v2  | Whether the asset's slots are frozen by default or not, 0 or 1 |
+| 36 | ConfigAssetDefaultFrozen | bool | v2  | Whether the asset's slots are frozen by default or not, 0 or 1 |
 | 37 | ConfigAssetUnitName | []byte | v2  | Unit name of the asset |
 | 38 | ConfigAssetName | []byte | v2  | The asset name |
 | 39 | ConfigAssetURL | []byte | v2  | URL |
-| 40 | ConfigAssetMetadataHash | []byte | v2  | 32 byte commitment to unspecified asset metadata |
-| 41 | ConfigAssetManager | []byte | v2  | 32 byte address |
-| 42 | ConfigAssetReserve | []byte | v2  | 32 byte address |
-| 43 | ConfigAssetFreeze | []byte | v2  | 32 byte address |
-| 44 | ConfigAssetClawback | []byte | v2  | 32 byte address |
+| 40 | ConfigAssetMetadataHash | [32]byte | v2  | 32 byte commitment to unspecified asset metadata |
+| 41 | ConfigAssetManager | address | v2  | 32 byte address |
+| 42 | ConfigAssetReserve | address | v2  | 32 byte address |
+| 43 | ConfigAssetFreeze | address | v2  | 32 byte address |
+| 44 | ConfigAssetClawback | address | v2  | 32 byte address |
 | 45 | FreezeAsset | uint64 | v2  | Asset ID being frozen or un-frozen |
-| 46 | FreezeAssetAccount | []byte | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
-| 47 | FreezeAssetFrozen | uint64 | v2  | The new frozen value, 0 or 1 |
+| 46 | FreezeAssetAccount | address | v2  | 32 byte address of the account whose asset slot is being frozen or un-frozen |
+| 47 | FreezeAssetFrozen | bool | v2  | The new frozen value, 0 or 1 |
 | 49 | NumAssets | uint64 | v3  | Number of Assets |
 | 51 | NumApplications | uint64 | v3  | Number of Applications |
 | 52 | GlobalNumUint | uint64 | v3  | Number of global state integers in ApplicationCall |
@@ -497,12 +589,12 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 54 | LocalNumUint | uint64 | v3  | Number of local state integers in ApplicationCall |
 | 55 | LocalNumByteSlice | uint64 | v3  | Number of local state byteslices in ApplicationCall |
 | 56 | ExtraProgramPages | uint64 | v4  | Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program. |
-| 57 | Nonparticipation | uint64 | v5  | Marks an account nonparticipating for rewards |
+| 57 | Nonparticipation | bool | v5  | Marks an account nonparticipating for rewards |
 | 59 | NumLogs | uint64 | v5  | Number of Logs (only with `itxn` in v5). Application mode only |
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
-| 63 | StateProofPK | []byte | v6  | 64 byte state proof public key |
+| 63 | StateProofPK | [64]byte | v6  | State proof public key |
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 
@@ -510,7 +602,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 26 | ApplicationArgs | []byte | v2  | Arguments passed to the application in the ApplicationCall transaction |
-| 28 | Accounts | []byte | v2  | Accounts listed in the ApplicationCall transaction |
+| 28 | Accounts | address | v2  | Accounts listed in the ApplicationCall transaction |
 | 48 | Assets | uint64 | v3  | Foreign Assets listed in the ApplicationCall transaction |
 | 50 | Applications | uint64 | v3  | Foreign Apps listed in the ApplicationCall transaction |
 | 58 | Logs | []byte | v5  | Log messages emitted by an application call (only with `itxn` in v5). Application mode only |
@@ -529,18 +621,26 @@ Global fields are fields that are common to all the transactions in the group. I
 | 0 | MinTxnFee | uint64 |      | microalgos |
 | 1 | MinBalance | uint64 |      | microalgos |
 | 2 | MaxTxnLife | uint64 |      | rounds |
-| 3 | ZeroAddress | []byte |      | 32 byte address of all zero bytes |
+| 3 | ZeroAddress | address |      | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 |      | Number of transactions in this atomic transaction group. At least 1 |
 | 5 | LogicSigVersion | uint64 | v2  | Maximum supported version |
 | 6 | Round | uint64 | v2  | Current round number. Application mode only. |
 | 7 | LatestTimestamp | uint64 | v2  | Last confirmed block UNIX timestamp. Fails if negative. Application mode only. |
 | 8 | CurrentApplicationID | uint64 | v2  | ID of current application executing. Application mode only. |
-| 9 | CreatorAddress | []byte | v3  | Address of the creator of the current application. Application mode only. |
-| 10 | CurrentApplicationAddress | []byte | v5  | Address that the current application controls. Application mode only. |
-| 11 | GroupID | []byte | v5  | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. |
+| 9 | CreatorAddress | address | v3  | Address of the creator of the current application. Application mode only. |
+| 10 | CurrentApplicationAddress | address | v5  | Address that the current application controls. Application mode only. |
+| 11 | GroupID | [32]byte | v5  | ID of the transaction group. 32 zero bytes if the transaction is not part of a group. |
 | 12 | OpcodeBudget | uint64 | v6  | The remaining cost that can be spent by opcodes in this program. |
 | 13 | CallerApplicationID | uint64 | v6  | The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only. |
-| 14 | CallerApplicationAddress | []byte | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
+| 14 | CallerApplicationAddress | address | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
+| 15 | AssetCreateMinBalance | uint64 | v10  | The additional minimum balance required to create (and opt-in to) an asset. |
+| 16 | AssetOptInMinBalance | uint64 | v10  | The additional minimum balance required to opt-in to an asset. |
+| 17 | GenesisHash | [32]byte | v10  | The Genesis Hash for the network. |
+| 18 | PayoutsEnabled | bool | v11  | Whether block proposal payouts are enabled. |
+| 19 | PayoutsGoOnlineFee | uint64 | v11  | The fee required in a keyreg transaction to make an account incentive eligible. |
+| 20 | PayoutsPercent | uint64 | v11  | The percentage of transaction fees in a block that can be paid to the block proposer. |
+| 21 | PayoutsMinBalance | uint64 | v11  | The minimum balance an account must have in the agreement round to receive block payouts in the proposal round. |
+| 22 | PayoutsMaxBalance | uint64 | v11  | The maximum balance an account can have in the agreement round to receive block payouts in the proposal round. |
 
 
 **Asset Fields**
@@ -550,23 +650,23 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in the
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
 | 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
-| 1 | AssetFrozen | uint64 | Is the asset frozen or not |
+| 1 | AssetFrozen | bool | Is the asset frozen or not |
 
 
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | AssetTotal | uint64 |      | Total number of units of this asset |
 | 1 | AssetDecimals | uint64 |      | See AssetParams.Decimals |
-| 2 | AssetDefaultFrozen | uint64 |      | Frozen by default or not |
+| 2 | AssetDefaultFrozen | bool |      | Frozen by default or not |
 | 3 | AssetUnitName | []byte |      | Asset unit name |
 | 4 | AssetName | []byte |      | Asset name |
 | 5 | AssetURL | []byte |      | URL with additional info about the asset |
-| 6 | AssetMetadataHash | []byte |      | Arbitrary commitment |
-| 7 | AssetManager | []byte |      | Manager address |
-| 8 | AssetReserve | []byte |      | Reserve address |
-| 9 | AssetFreeze | []byte |      | Freeze address |
-| 10 | AssetClawback | []byte |      | Clawback address |
-| 11 | AssetCreator | []byte | v5  | Creator address |
+| 6 | AssetMetadataHash | [32]byte |      | Arbitrary commitment |
+| 7 | AssetManager | address |      | Manager address |
+| 8 | AssetReserve | address |      | Reserve address |
+| 9 | AssetFreeze | address |      | Freeze address |
+| 10 | AssetClawback | address |      | Clawback address |
+| 11 | AssetCreator | address | v5  | Creator address |
 
 
 **App Fields**
@@ -582,8 +682,8 @@ App fields used in the `app_params_get` opcode.
 | 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
 | 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
 | 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
-| 7 | AppCreator | []byte | Creator address |
-| 8 | AppAddress | []byte | Address for which this application has authority |
+| 7 | AppCreator | address | Creator address |
+| 8 | AppAddress | address | Address for which this application has authority |
 
 
 **Account Fields**
@@ -594,7 +694,7 @@ Account fields used in the `acct_params_get` opcode.
 | - | ------ | -- | - | --------- |
 | 0 | AcctBalance | uint64 |      | Account balance in microalgos |
 | 1 | AcctMinBalance | uint64 |      | Minimum required balance for account, in microalgos |
-| 2 | AcctAuthAddr | []byte |      | Address the account is rekeyed to. |
+| 2 | AcctAuthAddr | address |      | Address the account is rekeyed to. |
 | 3 | AcctTotalNumUint | uint64 | v8  | The total number of uint64 values allocated by this account in Global and Local States. |
 | 4 | AcctTotalNumByteSlice | uint64 | v8  | The total number of byte array values allocated by this account in Global and Local States. |
 | 5 | AcctTotalExtraAppPages | uint64 | v8  | The number of extra app code pages used by this account. |
@@ -604,6 +704,9 @@ Account fields used in the `acct_params_get` opcode.
 | 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
 | 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
 | 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
+| 12 | AcctIncentiveEligible | bool | v11  | Has this account opted into block payouts |
+| 13 | AcctLastProposed | uint64 | v11  | The round number of the last block this account proposed. |
+| 14 | AcctLastHeartbeat | uint64 | v11  | The round number of the last block this account sent a heartbeat. |
 
 
 ### Flow Control
@@ -654,10 +757,18 @@ Account fields used in the `acct_params_get` opcode.
 | `asset_params_get f` | X is field F from asset A. Y is 1 if A exists, else 0 |
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
+| `voter_params_get f` | X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive algos online in the agreement round, else Y is 0 and X is a type specific zero-value |
+| `online_stake` | the total online stake in the agreement round |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
 
 ### Box Access
+
+Box opcodes that create, delete, or resize boxes affect the minimum
+balance requirement of the calling application's account.  The change
+is immediate, and can be observed after exection by using
+`min_balance`.  If the account does not possess the new minimum
+balance, the opcode fails.
 
 All box related opcodes fail immediately if used in a
 ClearStateProgram. This behavior is meant to discourage Smart Contract
@@ -671,19 +782,21 @@ are sure to be _available_.
 
 | Opcode | Description |
 | - | -- |
-| `box_create` | create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1 |
+| `box_create` | create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1 |
 | `box_extract` | read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
 | `box_replace` | write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
+| `box_splice` | set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C. |
 | `box_del` | delete box named A if it exists. Return 1 if A existed, 0 otherwise |
 | `box_len` | X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0. |
 | `box_get` | X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0. |
 | `box_put` | replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist |
+| `box_resize` | change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768. |
 
 ### Inner Transactions
 
 The following opcodes allow for "inner transactions". Inner
 transactions allow stateful applications to have many of the effects
-of a true top-level transaction, programatically.  However, they are
+of a true top-level transaction, programmatically.  However, they are
 different in significant ways.  The most important differences are
 that they are not signed, duplicates are not rejected, and they do not
 appear in the block in the usual away. Instead, their effects are
@@ -694,7 +807,7 @@ account that has been rekeyed to that hash.
 
 In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 `afrz` effects.  After executing an inner transaction with
-`itxn_submit`, the effects of the transaction are visible begining
+`itxn_submit`, the effects of the transaction are visible beginning
 with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
 `keyreg` and `appl` effects. Inner `appl` calls fail if they attempt
@@ -714,7 +827,7 @@ setting is used when `itxn_submit` executes. For this purpose `Type`
 and `TypeEnum` are considered to be the same field. When using
 `itxn_field` to set an array field (`ApplicationArgs` `Accounts`,
 `Assets`, or `Applications`) each use adds an element to the end of
-the the array, rather than setting the entire array at once.
+the array, rather than setting the entire array at once.
 
 `itxn_field` fails immediately for unsupported fields, unsupported
 transaction types, or improperly typed values for a particular

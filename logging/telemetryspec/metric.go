@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,6 +46,7 @@ type AssembleBlockStats struct {
 	IncludedCount             int // number of transactions that are included in a block
 	InvalidCount              int // number of transaction groups that are included in a block
 	MinFeeErrorCount          int // number of transactions excluded because the fee is too low
+	LogicErrorCount           int // number of transactions excluded due to logic error (contract no longer valid)
 	ExpiredCount              int // number of transactions removed because of expiration
 	ExpiredLongLivedCount     int // number of expired transactions with non-super short LastValid values
 	LeaseErrorCount           int // number of transactions removed because it has an already used lease
@@ -77,21 +78,30 @@ type StateProofStats struct {
 	TxnSize        int
 }
 
-// AssembleBlockTimeout represents AssemblePayset exiting due to timeout
+// AssembleBlockTimeout represents AssembleBlock exiting due to timeout
 const AssembleBlockTimeout = "timeout"
 
-// AssembleBlockFull represents AssemblePayset exiting due to block being full
+// AssembleBlockTimeoutEmpty represents AssembleBlock giving up after a timeout and returning an empty block
+const AssembleBlockTimeoutEmpty = "timeout-empty"
+
+// AssembleBlockFull represents AssembleBlock exiting due to block being full
 const AssembleBlockFull = "block-full"
 
-// AssembleBlockEmpty represents AssemblePayset exiting due to no more txns
+// AssembleBlockEmpty represents AssembleBlock exiting due to no more txns
 const AssembleBlockEmpty = "pool-empty"
+
+// AssembleBlockPoolBehind represents the transaction pool being more than two roudns behind
+const AssembleBlockPoolBehind = "pool-behind"
+
+// AssembleBlockEvalOld represents the assembled block that was returned being a round too old
+const AssembleBlockEvalOld = "eval-old"
 
 // AssembleBlockAbandon represents the block generation being abandoned since it won't be needed.
 const AssembleBlockAbandon = "block-abandon"
 
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
-// AssembleBlockMetrics is the set of metrics captured when we compute AssemblePayset
+// AssembleBlockMetrics is the set of metrics captured when we compute AssembleBlock
 type AssembleBlockMetrics struct {
 	AssembleBlockStats
 }
@@ -106,6 +116,7 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("IncludedCount:%d, ", m.IncludedCount))
 	b.WriteString(fmt.Sprintf("InvalidCount:%d, ", m.InvalidCount))
 	b.WriteString(fmt.Sprintf("MinFeeErrorCount:%d, ", m.MinFeeErrorCount))
+	b.WriteString(fmt.Sprintf("LogicErrorCount:%d, ", m.LogicErrorCount))
 	b.WriteString(fmt.Sprintf("ExpiredCount:%d, ", m.ExpiredCount))
 	b.WriteString(fmt.Sprintf("ExpiredLongLivedCount:%d, ", m.ExpiredLongLivedCount))
 	b.WriteString(fmt.Sprintf("LeaseErrorCount:%d, ", m.LeaseErrorCount))
@@ -193,7 +204,7 @@ func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
 }
 
-//-------------------------------------------------------
+// -------------------------------------------------------
 // AccountsUpdate
 const accountsUpdateMetricsIdentifier Metric = "AccountsUpdate"
 

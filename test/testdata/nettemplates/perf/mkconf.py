@@ -6,6 +6,7 @@ d = {
   "Genesis": {
     "NetworkName": "tbd",
     "ConsensusProtocol": "test-big-blocks",
+    "LastPartKeyRound": 3000,
     "Wallets": [],
   },
   "Nodes": [],
@@ -33,10 +34,20 @@ for n in range(0, nodes):
 
   d["Nodes"].append(node)
 
+npn_nodes = 0
+for n in range(0, npn_nodes):
+  node = {
+    "Name": "NPNode%d" % n,
+    "Wallets": [],
+    "DeadlockDetection": -1,
+    "ConfigJSONOverride": '{"ForceFetchTransactions":true}'
+  }
+  d["Nodes"].append(node)
+
 d["Nodes"].append({
   "Name": "Relay",
   "IsRelay": True,
   "Wallets": [],
 })
 
-print json.dumps(d, indent=True)
+print(json.dumps(d, indent=True))

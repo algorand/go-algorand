@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,9 +104,9 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 }
 
 // TestNewAccountCanGoOnlineAndParticipate tests two behaviors:
-// - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
-//   it should not be proposing blocks
-// - When the account balance receives enough stake, it should be proposing after lookback rounds
+//   - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
+//     it should not be proposing blocks
+//   - When the account balance receives enough stake, it should be proposing after lookback rounds
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -124,8 +124,8 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	shortPartKeysProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	shortPartKeysProtocol.SeedLookback = 2
 	shortPartKeysProtocol.SeedRefreshInterval = 8
-	if runtime.GOARCH == "amd64" {
-		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		shortPartKeysProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		shortPartKeysProtocol.AgreementFilterTimeout = 1 * time.Second
 	}
@@ -196,7 +196,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	fixture.AssertValidTxid(onlineTxID)
 	maxRoundsToWaitForTxnConfirm := uint64(5)
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 	onlineRound := nodeStatus.LastRound
 	newAccountStatus, err := client.AccountInformation(newAccount, false)
@@ -216,7 +216,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	// Need to wait for funding to take effect on selection, then we can see if we're participating
 	// Stop before the account should become eligible for selection so we can ensure it wasn't
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting-1),
+	err = fixture.WaitForRound(uint64(accountProposesStarting-1),
 		time.Duration(uint64(globals.MaxTimePerRound)*uint64(accountProposesStarting-1)))
 	a.NoError(err)
 
@@ -226,7 +226,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.False(blockWasProposed, "account should not be selected until BalLookback (round %d) passes", int(accountProposesStarting-1))
 
 	// Now wait until the round where the funded account will be used.
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting), 10*globals.MaxTimePerRound)
+	err = fixture.WaitForRound(uint64(accountProposesStarting), 10*globals.MaxTimePerRound)
 	a.NoError(err)
 
 	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting), 1)
@@ -247,11 +247,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	// Make the seed lookback shorter, otherwise will wait for 320 rounds
-	consensus := make(config.ConsensusProtocols)
-
 	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(consensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 
 	// update the config file by setting the ParticipationKeysRefreshInterval to 5 second.
@@ -311,7 +307,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	nodeStatus, err := client.Status()
 	a.NoError(err)
 	seededRound := nodeStatus.LastRound
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 
 	accountStatus, err := client.AccountInformation(newAccount, false)

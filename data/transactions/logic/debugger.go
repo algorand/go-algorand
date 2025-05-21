@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -73,7 +74,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeTxnGroup(ep *EvalParams) {
 }
 
 // AfterTxnGroup updates inner txn depth
-func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams) {
+func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error) {
 	a.txnDepth--
 }
 
@@ -97,7 +98,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
 }
 
 // AfterProgram invokes the debugger's Complete hook
-func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError error) {
+func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, pass bool, evalError error) {
 	if a.txnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
@@ -176,18 +177,18 @@ func makeDebugState(cx *EvalContext) *DebugState {
 	globals := make([]basics.TealValue, len(globalFieldSpecs))
 	for _, fs := range globalFieldSpecs {
 		// Don't try to grab app only fields when evaluating a signature
-		if (cx.runModeFlags&ModeSig) != 0 && fs.mode == ModeApp {
+		if cx.runMode == ModeSig && fs.mode == ModeApp {
 			continue
 		}
 		sv, err := cx.globalFieldToValue(fs)
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}
 		}
-		globals[fs.field] = stackValueToTealValue(&sv)
+		globals[fs.field] = sv.toEncodedTealValue()
 	}
 	ds.Globals = globals
 
-	if (cx.runModeFlags & ModeApp) != 0 {
+	if cx.runMode == ModeApp {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
@@ -243,22 +244,13 @@ func (d *DebugState) PCToLine(pc int) int {
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
-func stackValueToTealValue(sv *stackValue) basics.TealValue {
-	tv := sv.toTealValue()
-	return basics.TealValue{
-		Type:  tv.Type,
-		Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
-		Uint:  tv.Uint,
+// toEncodedTealValue converts stackValue to basics.TealValue, with the Bytes
+// field b64 encoded, so it is suitable for conversion to JSON.
+func (sv stackValue) toEncodedTealValue() basics.TealValue {
+	if sv.avmType() == avmBytes {
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: base64.StdEncoding.EncodeToString(sv.Bytes)}
 	}
-}
-
-// valueDeltaToValueDelta converts delta's bytes to base64 in a new struct
-func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
-	return basics.ValueDelta{
-		Action: vd.Action,
-		Bytes:  base64.StdEncoding.EncodeToString([]byte(vd.Bytes)),
-		Uint:   vd.Uint,
-	}
+	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
 
 // parseCallStack initializes an array of CallFrame objects from the raw
@@ -293,14 +285,14 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 		ds.Error = evalError.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack))
-	for i, sv := range cx.stack {
-		stack[i] = stackValueToTealValue(&sv)
+	stack := make([]basics.TealValue, len(cx.Stack))
+	for i, sv := range cx.Stack {
+		stack[i] = sv.toEncodedTealValue()
 	}
 
-	scratch := make([]basics.TealValue, len(cx.scratch))
-	for i, sv := range cx.scratch {
-		scratch[i] = stackValueToTealValue(&sv)
+	scratch := make([]basics.TealValue, len(cx.Scratch))
+	for i, sv := range cx.Scratch {
+		scratch[i] = sv.toEncodedTealValue()
 	}
 
 	ds.Stack = stack
@@ -308,7 +300,7 @@ func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError
 	ds.OpcodeBudget = cx.remainingBudget()
 	ds.CallStack = ds.parseCallstack(cx.callstack)
 
-	if (cx.runModeFlags & ModeApp) != 0 {
+	if cx.runMode == ModeApp {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 

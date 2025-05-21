@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package upgrades
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,7 +43,7 @@ func waitUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClie
 	startTime := time.Now()
 
 	// while consensus version has not upgraded
-	for strings.Compare(string(curProtocol), string(consensusTestFastUpgrade(protocol.ConsensusV30))) == 0 {
+	for curProtocol == consensusTestFastUpgrade(protocol.ConsensusV30) {
 		curRound = curRound + 1
 		fixture.WaitForRoundWithTimeout(curRound + 1)
 
@@ -144,8 +143,9 @@ func getStateProofConsensus() config.ConsensusProtocols {
 	return consensus
 }
 
-//TODO: copied code from other test: onlineOfflineParticipation_test.go.
-//  consider how to avoid duplication
+// TODO: copied code from other test: onlineOfflineParticipation_test.go.
+//
+//	consider how to avoid duplication
 func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestClientFixture, account string, window int) bool {
 	client := fixture.AlgodClient
 
@@ -172,7 +172,8 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 }
 
 // This test starts with participation keys in Version30, then attempts to let the richest user participate even after
-//  consensus upgrade.
+//
+//	consensus upgrade.
 func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)

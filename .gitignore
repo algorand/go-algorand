@@ -48,12 +48,14 @@ crypto/libs
 *~
 *.swp
 *.swo
+*.swn
 
 # Mac
 .DS_Store
 
 # doc intermediates
 data/transactions/logic/*.md
+!data/transactions/logic/TEAL_opcodes*.md
 
 *.pem
 
@@ -67,3 +69,12 @@ index.html
 
 # test summary
 testresults.json
+
+# block generator binary
+tools/block-generator/block-generator
+
+# cross repo types tool binary
+tools/x-repo-types/x-repo-types
+
+# python virtual environment
+.venv

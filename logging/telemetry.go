@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -35,9 +36,9 @@ const telemetryPrefix = "/"
 const telemetrySeparator = "/"
 const logBufferDepth = 2
 
-// EnableTelemetry configures and enables telemetry based on the config provided
-func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
-	telemetry, err := makeTelemetryState(cfg, createElasticHook)
+// EnableTelemetryContext configures and enables telemetry based on the config provided
+func EnableTelemetryContext(ctx context.Context, cfg TelemetryConfig, l *logger) (err error) {
+	telemetry, err := makeTelemetryStateContext(ctx, cfg, createElasticHookContext)
 	if err != nil {
 		return
 	}
@@ -70,14 +71,14 @@ func makeLevels(min logrus.Level) []logrus.Level {
 	return levels
 }
 
-func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
+func makeTelemetryStateContext(ctx context.Context, cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
 	telemetry := &telemetryState{}
 	telemetry.history = createLogBuffer(logBufferDepth)
 	if cfg.Enable {
 		if cfg.SessionGUID == "" {
 			cfg.SessionGUID = uuid.New()
 		}
-		hook, err := createTelemetryHook(cfg, telemetry.history, hookFactory)
+		hook, err := createTelemetryHookContext(ctx, cfg, telemetry.history, hookFactory)
 		if err != nil {
 			return nil, err
 		}

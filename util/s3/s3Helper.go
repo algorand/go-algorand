@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -189,7 +189,17 @@ func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVers
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 	prefix := fmt.Sprintf("%s_%s_%s-%s_", pkg, channel, osName, arch)
-	return helper.GetPackageFilesVersion(channel, prefix, specificVersion)
+
+	maxVersion, maxVersionName, err = helper.GetPackageFilesVersion(channel, prefix, specificVersion)
+	// For darwin, we want to also look at universal binaries
+	if osName == "darwin" {
+		universalPrefix := fmt.Sprintf("%s_%s_%s-%s_", pkg, channel, osName, "universal")
+		universalMaxVersion, universalMaxVersionName, universalErr := helper.GetPackageFilesVersion(channel, universalPrefix, specificVersion)
+		if universalMaxVersion > maxVersion {
+			return universalMaxVersion, universalMaxVersionName, universalErr
+		}
+	}
+	return maxVersion, maxVersionName, err
 }
 
 // GetPackageFilesVersion return the package version
@@ -245,15 +255,15 @@ func GetVersionFromName(name string) (version uint64, err error) {
 		return
 	}
 	var val uint64
-	for index, match := range submatchAll[0] {
-		if index > 0 {
-			version <<= 16
-			val, err = strconv.ParseUint(match, 10, 0)
-			if err != nil {
-				return
-			}
-			version += val
+	submatch := submatchAll[0][1:] // skip the first match which is the whole string
+	offsets := []int{0, 16, 24}    // some bits for major (not really restricted), 16 bits for minor, 24 bits for patch
+	for index, match := range submatch {
+		version <<= offsets[index]
+		val, err = strconv.ParseUint(match, 10, 0)
+		if err != nil {
+			return
 		}
+		version += val
 	}
 	return
 }
@@ -262,13 +272,13 @@ func GetVersionFromName(name string) (version uint64, err error) {
 func GetVersionPartsFromVersion(version uint64) (major uint64, minor uint64, patch uint64, err error) {
 	val := version
 
-	if val < 1<<32 {
+	if val < 1<<40 {
 		err = errors.New("versions below 1.0.0 not supported")
 		return
 	}
 
-	patch = val & 0xffff
-	val >>= 16
+	patch = val & 0xffffff
+	val >>= 24
 	minor = val & 0xffff
 	val >>= 16
 	major = val

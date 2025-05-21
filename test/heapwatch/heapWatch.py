@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Copyright (C) 2019-2023 Algorand, Inc.
+# Copyright (C) 2019-2025 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -122,6 +122,9 @@ class algodDir:
         self._algod = None
         self.timeout = 15
 
+    def __repr__(self):
+        return '<algodDir {}>'.format(self.path)
+
     def pid(self):
         if self._pid is None:
             if not self.isdir:
@@ -159,11 +162,43 @@ class algodDir:
         logger.debug('%s -> %s', self.nick, outpath)
         return outpath
 
+    def get_debug_settings_pprof(self):
+        timeout = self.timeout
+        url = 'http://' + self.net + '/debug/settings/pprof'
+        headers = self.headers.copy()
+        headers['X-Algo-API-Token'] = self.admin_token
+        try:
+            response = urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout)
+        except Exception as e:
+            logger.error('could not fetch %s from %s via %r (%s)', '/debug/settings/pprof', self.path, url, e)
+            return
+        blob = response.read()
+        return json.loads(blob)
+
+    def set_debug_settings_pprof(self, settings):
+        timeout = self.timeout
+        url = 'http://' + self.net + '/debug/settings/pprof'
+        headers = self.headers.copy()
+        headers['X-Algo-API-Token'] = self.admin_token
+        data = json.dumps(settings).encode()
+        try:
+            response = urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers, method='PUT'), timeout=timeout)
+        except Exception as e:
+            logger.error('could not put %s to %s via %r (%s)', settings, self.path, url, e)
+            return
+        response.close()
+
     def get_heap_snapshot(self, snapshot_name=None, outdir=None):
         return self.get_pprof_snapshot('heap', snapshot_name, outdir)
 
     def get_goroutine_snapshot(self, snapshot_name=None, outdir=None):
         return self.get_pprof_snapshot('goroutine', snapshot_name, outdir)
+
+    def get_mutex_snapshot(self, snapshot_name=None, outdir=None):
+        return self.get_pprof_snapshot('mutex', snapshot_name, outdir)
+
+    def get_block_snapshot(self, snapshot_name=None, outdir=None):
+        return self.get_pprof_snapshot('block', snapshot_name, outdir)
 
     def get_cpu_profile(self, snapshot_name=None, outdir=None, seconds=90):
         seconds = int(seconds)
@@ -349,9 +384,36 @@ class watcher:
                 rss, vsz = rssvsz
                 with open(os.path.join(self.args.out, nick + '.heap.csv'), 'at') as fout:
                     fout.write('{},{},{},{}\n'.format(snapshot_name,snapshot_isotime,rss, vsz))
+        if self.args.mutex or self.args.block:
+            # get mutex/blocking profiles state and enable as needed
+            for ad in self.they:
+                settings = ad.get_debug_settings_pprof()
+                if not settings:
+                    # failed to get settings, probably disabled
+                    continue
+                updated = False
+                if self.args.mutex:
+                    mrate = settings.get('mutex-rate', 0)
+                    if mrate == 0:
+                        settings['mutex-rate'] = 5  # 1/5 of events recorded
+                        updated = True
+                if self.args.block:
+                    brate = settings.get('block-rate', 0)
+                    if brate == 0:
+                        settings['block-rate'] = 100 # one blocking event per 100 nanoseconds spent blocked.
+                        updated = True
+                if updated:
+                    logger.debug('enabling mutex/blocking profiles on %s', ad.path)
+                    ad.set_debug_settings_pprof(settings)
         if self.args.goroutine:
             for ad in self.they:
                 ad.get_goroutine_snapshot(snapshot_name, outdir=self.args.out)
+        if self.args.mutex:
+            for ad in self.they:
+                ad.get_mutex_snapshot(snapshot_name, outdir=self.args.out)
+        if self.args.block:
+            for ad in self.they:
+                ad.get_block_snapshot(snapshot_name, outdir=self.args.out)
         if self.args.metrics:
             threads = []
             for ad in self.they:
@@ -427,7 +489,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('data_dirs', nargs='*', help='list paths to algorand datadirs to grab heap profile from')
     ap.add_argument('--no-heap', dest='heaps', default=True, action='store_false', help='disable heap snapshot capture')
+    ap.add_argument('--block', default=False, action='store_true', help='also capture goroutines block profile')
     ap.add_argument('--goroutine', default=False, action='store_true', help='also capture goroutine profile')
+    ap.add_argument('--mutex', default=False, action='store_true', help='also capture mutex profile')
     ap.add_argument('--metrics', default=False, action='store_true', help='also capture /metrics counts')
     ap.add_argument('--blockinfo', default=False, action='store_true', help='also capture block header info')
     ap.add_argument('--period', default=None, help='seconds between automatically capturing')

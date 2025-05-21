@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -114,7 +114,7 @@ func TestAccountInformationV2(t *testing.T) {
 
 	round, err := client.CurrentRound()
 	a.NoError(err)
-	fixture.WaitForConfirmedTxn(round+4, creator, txn.ID().String())
+	fixture.WaitForConfirmedTxn(round+4, txn.ID().String())
 
 	// There should be no apps to start with
 	ad, err := client.AccountData(creator)
@@ -215,7 +215,7 @@ int 1
 	checkEvalDelta(t, &client, txnRound, txnRound+1, 1, 1)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -295,7 +295,7 @@ int 1
 	a.Equal(creator, app.Params.Creator)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -419,7 +419,7 @@ func accountInformationCheckWithOffendingFields(t *testing.T,
 
 	round, err := client.CurrentRound()
 	a.NoError(err)
-	fixture.WaitForConfirmedTxn(round+4, creator, txn.ID().String())
+	fixture.WaitForConfirmedTxn(round+4, txn.ID().String())
 
 	// There should be no apps to start with
 	ad, err := client.AccountData(creator)
@@ -520,7 +520,7 @@ int 1
 	checkEvalDelta(t, &client, txnRound, txnRound+1, 1, 1)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	if foreignAssets != nil {
 		tx.ForeignAssets = foreignAssets
@@ -610,7 +610,7 @@ int 1
 	a.Equal(creator, app.Params.Creator)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)

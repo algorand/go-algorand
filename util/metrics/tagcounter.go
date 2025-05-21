@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package metrics
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -98,9 +99,7 @@ func (tc *TagCounter) Add(tag string, val uint64) {
 			// Still need to add a new tag.
 			// Make a new map so there's never any race.
 			newtags := make(map[string]*uint64, len(tc.tags)+1)
-			for k, v := range tc.tags {
-				newtags[k] = v
-			}
+			maps.Copy(newtags, tc.tags)
 			var st []uint64
 			if len(tc.storage) > 0 {
 				st = tc.storage[len(tc.storage)-1]

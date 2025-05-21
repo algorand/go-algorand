@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -96,7 +96,6 @@ type Command struct {
 	options string
 	time    int64
 	status  CommandStatus
-	err     error
 }
 
 var hostAgent = NewAgent()

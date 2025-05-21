@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -30,10 +30,6 @@ var errKeyregGoingOnlineFirstVotingInFuture = errors.New("transaction tries to m
 
 // Keyreg applies a KeyRegistration transaction using the Balances interface.
 func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, round basics.Round) error {
-	if header.Sender == spec.FeeSink {
-		return fmt.Errorf("cannot register participation key for fee sink's address %v ", header.Sender)
-	}
-
 	// Get the user's balance entry
 	record, err := balances.Get(header.Sender, false)
 	if err != nil {
@@ -54,7 +50,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 	if params.EnableStateProofKeyregCheck {
 		record.StateProofID = keyreg.StateProofPK
 	}
-	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
+	if keyreg.VotePK.IsEmpty() || keyreg.SelectionPK.IsEmpty() {
 		if keyreg.Nonparticipation {
 			if params.SupportBecomeNonParticipatingTransactions {
 				record.Status = basics.NotParticipating
@@ -67,6 +63,8 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = 0
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0
+		// IncentiveEligible is not reset, because the account has gracefully
+		// gone offline. They should be able to get back online without paying again.
 	} else {
 		if params.EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
@@ -77,9 +75,16 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 			}
 		}
 		record.Status = basics.Online
+		if params.Payouts.Enabled {
+			lookback := agreement.BalanceLookback(balances.ConsensusParams())
+			record.LastHeartbeat = round + lookback
+		}
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
+		if header.Fee.Raw >= params.Payouts.GoOnlineFee && params.Payouts.Enabled {
+			record.IncentiveEligible = true
+		}
 	}
 
 	// Write the updated entry

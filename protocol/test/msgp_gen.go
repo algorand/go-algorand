@@ -11,9 +11,11 @@ import (
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
+//     |-----> TestSliceMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -39,7 +41,12 @@ func (_ testSlice) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *testSlice) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *testSlice) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -70,6 +77,9 @@ func (z *testSlice) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *testSlice) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *testSlice) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*testSlice)
 	return ok
@@ -84,4 +94,11 @@ func (z testSlice) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z testSlice) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func TestSliceMaxSize() (s int) {
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((16) * (msgp.Uint64Size))
+	return
 }

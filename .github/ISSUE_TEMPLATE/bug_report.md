@@ -2,7 +2,7 @@
 name: "\U0001F41C Bug report"
 about: Report a reproducible bug.
 title: ''
-labels: new-bug
+labels: bug
 assignees: ''
 
 ---

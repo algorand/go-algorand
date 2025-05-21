@@ -6,7 +6,7 @@ log_user 1
 #
 # The goal of the test is to demonstrate the catchpoint catchup functionality using the goal command line interface.
 # It does that by deploying a single relay, which advances until it generates a catchpoint.
-# Once it does, another node is started, and instructred to catchup using the catchpoint from the first relay.
+# Once it does, another node is started, and instructed to catchup using the catchpoint from the first relay.
 # To make sure that the second node won't be using the "regular" catchup, we tunnel all the communication between the two using a proxy.
 # The proxy is responsible to filter out block number 2. This would prevent the "regular" catchup from working,
 # and would be a good test ground for the catchpoint catchup.
@@ -64,7 +64,7 @@ if { [catch {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Update the Primary Node configuration
-    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"MaxAcctLookback": 2, "CatchpointInterval": 4,"EnableRequestLogger":true}} > $TEST_ROOT_DIR/Primary/config.json.new
+    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"MaxAcctLookback": 2, "CatchpointInterval": 4,"EnableRequestLogger":true,"Archival":true}} > $TEST_ROOT_DIR/Primary/config.json.new
     exec rm $TEST_ROOT_DIR/Primary/config.json
     exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
 
@@ -182,7 +182,7 @@ if { [catch {
     # once the node is started we can clear the ::GLOBAL_TEST_ALGO_DIR, so that shutdown would be done as a network.
     set ::GLOBAL_TEST_ALGO_DIR ""
 
-    ::AlgorandGoal::WaitForRound 38 $TEST_ROOT_DIR/Node
+    ::AlgorandGoal::WaitForRound $CATCHPOINT_ROUND $TEST_ROOT_DIR/Node
 
     ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
 

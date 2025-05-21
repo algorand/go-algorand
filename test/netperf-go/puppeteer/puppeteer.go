@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -233,8 +233,6 @@ func (p *puppet) exec(wg *sync.WaitGroup, errs chan error) {
 			return
 		}
 	}
-
-	return
 }
 
 type stdWriter struct {
@@ -258,7 +256,7 @@ func (c *stdWriter) Write(p []byte) (n int, err error) {
 		if eolIdx > 0 {
 			line := c.prefix + c.output[:eolIdx+1]
 			c.output = c.output[eolIdx+1:]
-			fmt.Fprintf(c.outFile, line)
+			fmt.Fprint(c.outFile, line)
 		} else {
 			break
 		}

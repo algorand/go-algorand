@@ -40,6 +40,17 @@ has fewer than two elements, the operation fails. Some operations, like
 `frame_dig` and `proto` could fail because of an attempt to access
 above the current stack.
 
+## Stack Types
+
+While every element of the stack is restricted to the types `uint64` and `bytes`, 
+the values of these types may be known to be bounded.  The more common bounded types are 
+named to provide more semantic information in the documentation. They're also used during
+assembly time to do type checking and to provide more informative error messages.
+
+
+@@ named_stack_types.md @@
+
+
 ## Scratch Space
 
 In addition to the stack there are 256 positions of scratch
@@ -112,15 +123,23 @@ of a contract account.
   transaction against the contract account is for the program to
   approve it.
 
-The bytecode plus the length of all Args must add up to no more than
-1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an
-associated cost and the program cost must total no more than 20,000
-(consensus parameter LogicSigMaxCost). Most opcodes have a cost of 1,
-but a few slow cryptographic operations have a much higher cost. Prior
-to v4, the program's cost was estimated as the static sum of all the
-opcode costs in the program (whether they were actually executed or
-not). Beginning with v4, the program's cost is tracked dynamically,
-while being evaluated. If the program exceeds its budget, it fails.
+The size of a Smart Signature is defined as the length of its bytecode
+plus the length of all its Args. The sum of the sizes of all Smart
+Signatures in a group must not exceed 1000 bytes times the number of
+transactions in the group (1000 bytes is defined in consensus parameter
+`LogicSigMaxSize`).
+
+Each opcode has an associated cost, usually 1, but a few slow operations
+have higher costs. Prior to v4, the program's cost was estimated as the
+static sum of all the opcode costs in the program (whether they were
+actually executed or not). Beginning with v4, the program's cost is
+tracked dynamically while being evaluated. If the program exceeds its
+budget, it fails.
+
+The total program cost of all Smart Signatures in a group must not
+exceed 20,000 (consensus parameter LogicSigMaxCost) times the number
+of transactions in the group.
+
 
 ## Execution Environment for Smart Contracts (Applications)
 
@@ -193,6 +212,41 @@ _available_.
 
  * Since v7, the account associated with any contract present in the
    `txn.ForeignApplications` field is _available_.
+   
+ * Since v9, there is group-level resource sharing. Any resource that
+   is available in _some_ top-level transaction in a transaction group
+   is available in _all_ v9 or later application calls in the group,
+   whether those application calls are top-level or inner.
+   
+ * When considering whether an asset holding or application local
+   state is available by group-level resource sharing, the holding or
+   local state must be available in a top-level transaction without
+   considering group sharing. For example, if account A is made
+   available in one transaction, and asset X is made available in
+   another, group resource sharing does _not_ make A's X holding
+   available.
+     
+ * Top-level transactions that are not application calls also make
+   resources available to group-level resource sharing. The following
+   resources are made available by other transaction types.
+
+     1. `pay` - `txn.Sender`, `txn.Receiver`, and
+        `txn.CloseRemainderTo` (if set).
+
+     1. `keyreg` - `txn.Sender`
+
+     1. `acfg` - `txn.Sender`, `txn.ConfigAsset`, and the
+        `txn.ConfigAsset` holding of `txn.Sender`.
+
+     1. `axfer` - `txn.Sender`, `txn.AssetReceiver`, `txn.AssetSender`
+        (if set), `txnAssetCloseTo` (if set), `txn.XferAsset`, and the
+        `txn.XferAsset` holding of each of those accounts.
+
+     1. `afrz` - `txn.Sender`, `txn.FreezeAccount`, `txn.FreezeAsset`,
+        and the `txn.FreezeAsset` holding of `txn.FreezeAccount`. The
+        `txn.FreezeAsset` holding of `txn.Sender` is _not_ made
+        available.
+
 
  * A Box is _available_ to an Approval Program if _any_ transaction in
    the same group contains a box reference (`txn.Boxes`) that denotes
@@ -201,6 +255,18 @@ _available_.
    ForeignApplications array, with the usual convention that 0
    indicates the application ID of the app called by that
    transaction. No box is ever _available_ to a ClearStateProgram.
+
+Regardless of _availability_, any attempt to access an Asset or
+Application with an ID less than 256 from within a Contract will fail
+immediately. This avoids any ambiguity in opcodes that interpret their
+integer arguments as resource IDs _or_ indexes into the
+`txn.ForeignAssets` or `txn.ForeignApplications` arrays.
+
+It is recommended that contract authors avoid supplying array indexes
+to these opcodes, and always use explicit resource IDs. By using
+explicit IDs, contracts will better take advantage of group resource
+sharing.  The array indexing interpretation may be deprecated in a
+future version.
 
 ## Constants
 
@@ -212,7 +278,7 @@ Constants can be pushed onto the stack in two different ways:
 
 2. Constants can be loaded into storage separate from the stack and
    scratch space, using two opcodes `intcblock` and
-   `bytecblock`. Then, constants from this storage can be pushed
+   `bytecblock`. Then, constants from this storage can be
    pushed onto the stack by referring to the type and index using
    `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. This method is
    more efficient for constants that are used multiple times.
@@ -238,7 +304,7 @@ of (varuint, bytes) length prefixed byte strings.
 
 Most operations work with only one type of argument, uint64 or bytes, and fail if the wrong type value is on the stack.
 
-Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
+Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in the corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
@@ -258,7 +324,7 @@ an opcode manipulates the stack in such a way that a value changes
 position but is otherwise unchanged, the name of the output on the
 return stack matches the name of the input value.
 
-### Arithmetic, Logic, and Cryptographic Operations
+### Arithmetic and Logic Operations
 
 @@ Arithmetic.md @@
 
@@ -287,6 +353,10 @@ length as the longer input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
 
 @@ Byte_Array_Logic.md @@
+
+### Cryptographic Operations
+
+@@ Cryptography.md @@
 
 ### Loading Values
 
@@ -340,6 +410,12 @@ Account fields used in the `acct_params_get` opcode.
 
 ### Box Access
 
+Box opcodes that create, delete, or resize boxes affect the minimum
+balance requirement of the calling application's account.  The change
+is immediate, and can be observed after exection by using
+`min_balance`.  If the account does not possess the new minimum
+balance, the opcode fails.
+
 All box related opcodes fail immediately if used in a
 ClearStateProgram. This behavior is meant to discourage Smart Contract
 authors from depending upon the availability of boxes in a ClearState
@@ -356,7 +432,7 @@ are sure to be _available_.
 
 The following opcodes allow for "inner transactions". Inner
 transactions allow stateful applications to have many of the effects
-of a true top-level transaction, programatically.  However, they are
+of a true top-level transaction, programmatically.  However, they are
 different in significant ways.  The most important differences are
 that they are not signed, duplicates are not rejected, and they do not
 appear in the block in the usual away. Instead, their effects are
@@ -367,7 +443,7 @@ account that has been rekeyed to that hash.
 
 In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 `afrz` effects.  After executing an inner transaction with
-`itxn_submit`, the effects of the transaction are visible begining
+`itxn_submit`, the effects of the transaction are visible beginning
 with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
 `keyreg` and `appl` effects. Inner `appl` calls fail if they attempt
@@ -387,7 +463,7 @@ setting is used when `itxn_submit` executes. For this purpose `Type`
 and `TypeEnum` are considered to be the same field. When using
 `itxn_field` to set an array field (`ApplicationArgs` `Accounts`,
 `Assets`, or `Applications`) each use adds an element to the end of
-the the array, rather than setting the entire array at once.
+the array, rather than setting the entire array at once.
 
 `itxn_field` fails immediately for unsupported fields, unsupported
 transaction types, or improperly typed values for a particular

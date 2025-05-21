@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -81,7 +81,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	pingAccount := pingAccountList[0].Address
 
 	pongClient := fixture.GetLibGoalClientForNamedNode("Node")
-	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient.DataDir())
+	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient)
 	a.NoError(err)
 	var pongAccount string
 	for _, acct := range pongAccounts {

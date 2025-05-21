@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,11 +25,18 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
+// hdrProvider allows fetching old block headers
+type hdrProvider interface {
+	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
+}
+
 // StateProofsApplier allows fetching and updating state-proofs state on the ledger
 type StateProofsApplier interface {
-	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
+	hdrProvider
 	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)
+	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	ConsensusParams() config.ConsensusParams
 }
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records

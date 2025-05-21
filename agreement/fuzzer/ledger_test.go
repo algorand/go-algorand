@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
@@ -93,9 +94,17 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
+func (b testValidatedBlock) Round() basics.Round {
+	return b.Inside.Round()
+}
+
+func (b testValidatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.Block {
 	b.Inside.BlockHeader.Seed = s
-	return b
+	b.Inside.BlockHeader.Proposer = proposer
+	if !eligible {
+		b.Inside.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
+	return agreement.Block(b.Inside)
 }
 
 type testBlockValidator struct{}
@@ -108,7 +117,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.ValidatedBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round, _ []basics.Address) (agreement.UnfinishedBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
@@ -233,10 +242,10 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 		err := fmt.Errorf("Lookup called on future round: %d >= %d! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
-	return l.state[a].OnlineAccountData(), nil
+	return basics_testing.OnlineAccountData(l.state[a]), nil
 }
 
-func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -248,7 +257,7 @@ func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
+		sum, overflowed = basics.OAddA(sum, basics_testing.OnlineAccountData(rec).VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}

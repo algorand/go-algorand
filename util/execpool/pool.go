@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@ import (
 	"context"
 	"runtime"
 	"sync"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // The list of all valid priority values. When adding new ones, add them before numPrios.
@@ -68,7 +70,7 @@ type enqueuedTask struct {
 }
 
 // MakePool creates a pool.
-func MakePool(owner interface{}) ExecutionPool {
+func MakePool(owner interface{}, profLabels ...string) ExecutionPool {
 	p := &pool{
 		inputs:  make([]chan enqueuedTask, numPrios),
 		numCPUs: runtime.NumCPU(),
@@ -82,9 +84,8 @@ func MakePool(owner interface{}) ExecutionPool {
 
 	p.wg.Add(p.numCPUs)
 	for i := 0; i < p.numCPUs; i++ {
-		go p.worker()
+		go p.worker(profLabels)
 	}
-
 	return p
 }
 
@@ -107,7 +108,7 @@ func (p *pool) GetOwner() interface{} {
 //
 // Enqueue blocks until the task is enqueued correctly, or until the passed-in
 // context is cancelled.
-///
+// /
 // Enqueue returns nil if task was enqueued successfully or the result of the
 // expired context error.
 func (p *pool) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{}, i Priority, out chan interface{}) error {
@@ -136,12 +137,14 @@ func (p *pool) Shutdown() {
 
 // worker function blocks until a new task is pending on any of the channels and execute the above task.
 // the implementation below would give higher priority for channels that are on higher priority slot.
-func (p *pool) worker() {
+func (p *pool) worker(profLabels []string) {
 	var t enqueuedTask
 	var ok bool
 	lowPrio := p.inputs[LowPriority]
 	highPrio := p.inputs[HighPriority]
 	defer p.wg.Done()
+	util.SetGoroutineLabels(profLabels...)
+
 	for {
 
 		select {

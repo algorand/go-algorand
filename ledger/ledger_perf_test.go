@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,10 +33,11 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -205,7 +206,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		prev, err := l0.BlockHdr(basics.Round(i))
 		require.NoError(b, err)
 		newBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0)
+		eval, err := l0.StartEvaluator(newBlk.BlockHeader, 5000, 0, nil)
 		require.NoError(b, err)
 
 		// build a payset
@@ -293,24 +294,26 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			}
 		}
 
-		lvb, err := eval.GenerateBlock()
+		lvb, err := eval.GenerateBlock(nil)
 		require.NoError(b, err)
+
+		fb := lvb.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
 
 		// If this is the app creation block, add to both ledgers
 		if i == 1 {
-			err = l0.AddBlock(lvb.Block(), cert)
+			err = l0.AddBlock(fb, cert)
 			require.NoError(b, err)
-			err = l1.AddBlock(lvb.Block(), cert)
+			err = l1.AddBlock(fb, cert)
 			require.NoError(b, err)
 			continue
 		}
 
 		// For all other blocks, add just to the first ledger, and stash
 		// away to be replayed in the second ledger while running timer
-		err = l0.AddBlock(lvb.Block(), cert)
+		err = l0.AddBlock(fb, cert)
 		require.NoError(b, err)
 
-		blocks = append(blocks, lvb.Block())
+		blocks = append(blocks, fb)
 	}
 
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)
@@ -319,7 +322,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = internal.Eval(context.Background(), l1, blk, true, vc, nil)
+		_, err = eval.Eval(context.Background(), l1, blk, true, vc, nil, l1.tracer)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)

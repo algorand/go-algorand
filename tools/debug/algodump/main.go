@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -149,7 +149,6 @@ func setDumpHandlers(n network.GossipNode) {
 		{Tag: protocol.ProposalPayloadTag, MessageHandler: &dh},
 		{Tag: protocol.TopicMsgRespTag, MessageHandler: &dh},
 		{Tag: protocol.TxnTag, MessageHandler: &dh},
-		{Tag: protocol.UniCatchupReqTag, MessageHandler: &dh},
 		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: &dh},
 		{Tag: protocol.VoteBundleTag, MessageHandler: &dh},
 	}
@@ -180,7 +179,11 @@ func main() {
 		*genesisID,
 		protocol.NetworkID(*networkID))
 	setDumpHandlers(n)
-	n.Start()
+	err := n.Start()
+	if err != nil {
+		log.Errorf("Failed to start network: %v", err)
+		return
+	}
 
 	for {
 		time.Sleep(time.Second)

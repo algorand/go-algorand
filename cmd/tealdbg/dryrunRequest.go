@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,23 +44,6 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 		}
 	}
 
-	return
-}
-
-func convertAccounts(accounts []model.Account) (records []basics.BalanceRecord, err error) {
-	for _, a := range accounts {
-		var addr basics.Address
-		addr, err = basics.UnmarshalChecksumAddress(a.Address)
-		if err != nil {
-			return
-		}
-		var ad basics.AccountData
-		ad, err = v2.AccountToAccountData(&a)
-		if err != nil {
-			return
-		}
-		records = append(records, basics.BalanceRecord{Addr: addr, AccountData: ad})
-	}
 	return
 }
 

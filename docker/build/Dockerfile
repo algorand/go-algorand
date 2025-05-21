@@ -1,7 +1,7 @@
-FROM ubuntu:16.04
+FROM ubuntu:20.04
 ARG GOLANG_VERSION
 
-RUN apt-get update && apt-get install -y git libboost-all-dev wget sqlite3 autoconf build-essential shellcheck
+RUN apt-get update && apt-get install -y git wget autoconf build-essential shellcheck
 WORKDIR /root
 RUN wget --quiet https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz && tar -xvf go${GOLANG_VERSION}.linux-amd64.tar.gz && mv go /usr/local
 ENV GOROOT=/usr/local/go \

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,18 +31,6 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-func checkEqual(expected []string, actual []string) bool {
-	if len(expected) != len(actual) {
-		return false
-	}
-	for i, e := range expected {
-		if e != actual[i] {
-			return false
-		}
-	}
-	return true
-}
 
 func TestApplication(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -124,9 +112,7 @@ log
 	b, err := client.BookkeepingBlock(round)
 	a.NoError(err)
 	for _, ps := range b.Payset {
-		ed := ps.ApplyData.EvalDelta
-		ok = checkEqual(logs, ed.Logs)
-		a.True(ok)
+		a.Equal(logs, ps.ApplyData.EvalDelta.Logs)
 	}
 
 }

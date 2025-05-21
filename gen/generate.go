@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -169,7 +169,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		comment               = genData.Comment
 
 		genesisAddrs = make(map[string]basics.Address)
-		records      = make(map[string]basics.AccountData)
+		records      = make(map[string]bookkeeping.GenesisAccountData)
 	)
 
 	if partKeyDilution == 0 {
@@ -275,7 +275,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 				}
 			}
 
-			var data basics.AccountData
+			var data bookkeeping.GenesisAccountData
 			data.Status = wallet.Online
 			data.MicroAlgos.Raw = wallet.Stake
 			if wallet.Online == basics.Online {
@@ -345,12 +345,12 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		rewardsBalance = protoParams.MinBalance
 	}
 
-	records["FeeSink"] = basics.AccountData{
+	records["FeeSink"] = bookkeeping.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: protoParams.MinBalance},
 	}
 
-	records["RewardsPool"] = basics.AccountData{
+	records["RewardsPool"] = bookkeeping.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: rewardsBalance},
 	}

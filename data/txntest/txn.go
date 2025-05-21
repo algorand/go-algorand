@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,8 +23,10 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -55,6 +57,7 @@ type Txn struct {
 	VoteLast         basics.Round
 	VoteKeyDilution  uint64
 	Nonparticipation bool
+	StateProofPK     merklesignature.Commitment
 
 	Receiver         basics.Address
 	Amount           uint64
@@ -89,6 +92,12 @@ type Txn struct {
 	StateProofType protocol.StateProofType
 	StateProof     stateproof.StateProof
 	StateProofMsg  stateproofmsg.Message
+
+	HbAddress     basics.Address
+	HbProof       crypto.HeartbeatProof
+	HbSeed        committee.Seed
+	HbVoteID      crypto.OneTimeSignatureVerifier
+	HbKeyDilution uint64
 }
 
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
@@ -147,30 +156,39 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
 
-	if tx.Type == protocol.ApplicationCallTx &&
-		(tx.ApplicationID == 0 || tx.OnCompletion == transactions.UpdateApplicationOC) {
-
-		switch program := tx.ApprovalProgram.(type) {
-		case nil:
-			tx.ApprovalProgram = fmt.Sprintf("#pragma version %d\nint 1", params.LogicSigVersion)
-		case string:
-			if program != "" && !strings.Contains(program, "#pragma version") {
-				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
-				tx.ApprovalProgram = pragma + program
+	switch tx.Type {
+	case protocol.KeyRegistrationTx:
+		if !tx.VotePK.MsgIsZero() && !tx.SelectionPK.MsgIsZero() {
+			if tx.VoteLast == 0 {
+				tx.VoteLast = tx.VoteFirst + 1_000_000
 			}
-		case []byte:
+		}
+	case protocol.ApplicationCallTx:
+		// fill in empty programs
+		if tx.ApplicationID == 0 || tx.OnCompletion == transactions.UpdateApplicationOC {
+			switch program := tx.ApprovalProgram.(type) {
+			case nil:
+				tx.ApprovalProgram = fmt.Sprintf("#pragma version %d\nint 1", params.LogicSigVersion)
+			case string:
+				if program != "" && !strings.Contains(program, "#pragma version") {
+					pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+					tx.ApprovalProgram = pragma + program
+				}
+			case []byte:
+			}
+
+			switch program := tx.ClearStateProgram.(type) {
+			case nil:
+				tx.ClearStateProgram = tx.ApprovalProgram
+			case string:
+				if program != "" && !strings.Contains(program, "#pragma version") {
+					pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+					tx.ClearStateProgram = pragma + program
+				}
+			case []byte:
+			}
 		}
 
-		switch program := tx.ClearStateProgram.(type) {
-		case nil:
-			tx.ClearStateProgram = tx.ApprovalProgram
-		case string:
-			if program != "" && !strings.Contains(program, "#pragma version") {
-				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
-				tx.ClearStateProgram = pragma + program
-			}
-		case []byte:
-		}
 	}
 }
 
@@ -182,8 +200,7 @@ func assemble(source interface{}) []byte {
 		}
 		ops, err := logic.AssembleString(program)
 		if err != nil {
-			fmt.Printf("Bad program %v", ops.Errors)
-			panic(ops.Errors)
+			panic(fmt.Sprintf("Bad program %v", ops.Errors))
 		}
 		return ops.Program
 	case []byte:
@@ -208,6 +225,17 @@ func (tx Txn) Txn() transactions.Transaction {
 	case nil:
 		tx.Fee = basics.MicroAlgos{}
 	}
+
+	hb := &transactions.HeartbeatTxnFields{
+		HbAddress:     tx.HbAddress,
+		HbProof:       tx.HbProof,
+		HbSeed:        tx.HbSeed,
+		HbVoteID:      tx.HbVoteID,
+		HbKeyDilution: tx.HbKeyDilution,
+	}
+	if hb.MsgIsZero() {
+		hb = nil
+	}
 	return transactions.Transaction{
 		Type: tx.Type,
 		Header: transactions.Header{
@@ -229,6 +257,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			VoteLast:         tx.VoteLast,
 			VoteKeyDilution:  tx.VoteKeyDilution,
 			Nonparticipation: tx.Nonparticipation,
+			StateProofPK:     tx.StateProofPK,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         tx.Receiver,
@@ -256,8 +285,8 @@ func (tx Txn) Txn() transactions.Transaction {
 			OnCompletion:      tx.OnCompletion,
 			ApplicationArgs:   tx.ApplicationArgs,
 			Accounts:          tx.Accounts,
-			ForeignApps:       tx.ForeignApps,
-			ForeignAssets:     tx.ForeignAssets,
+			ForeignApps:       append([]basics.AppIndex(nil), tx.ForeignApps...),
+			ForeignAssets:     append([]basics.AssetIndex(nil), tx.ForeignAssets...),
 			Boxes:             tx.Boxes,
 			LocalStateSchema:  tx.LocalStateSchema,
 			GlobalStateSchema: tx.GlobalStateSchema,
@@ -270,6 +299,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			StateProof:     tx.StateProof,
 			Message:        tx.StateProofMsg,
 		},
+		HeartbeatTxnFields: hb,
 	}
 }
 

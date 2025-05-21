@@ -13,17 +13,21 @@ import (
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
 //            |-----> (*) UnmarshalMsg
+//            |-----> (*) UnmarshalMsgWithState
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> AccountApplicationModelMaxSize()
 //
 // AccountAssetModel
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> AccountAssetModelMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -71,7 +75,12 @@ func (_ *AccountApplicationModel) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AccountApplicationModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -95,7 +104,7 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 				if (*z).AppLocalState == nil {
 					(*z).AppLocalState = new(basics.AppLocalState)
 				}
-				bts, err = (*z).AppLocalState.UnmarshalMsg(bts)
+				bts, err = (*z).AppLocalState.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AppLocalState")
 					return
@@ -114,7 +123,7 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 				if (*z).AppParams == nil {
 					(*z).AppParams = new(basics.AppParams)
 				}
-				bts, err = (*z).AppParams.UnmarshalMsg(bts)
+				bts, err = (*z).AppParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AppParams")
 					return
@@ -155,7 +164,7 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 					if (*z).AppLocalState == nil {
 						(*z).AppLocalState = new(basics.AppLocalState)
 					}
-					bts, err = (*z).AppLocalState.UnmarshalMsg(bts)
+					bts, err = (*z).AppLocalState.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "AppLocalState")
 						return
@@ -172,7 +181,7 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 					if (*z).AppParams == nil {
 						(*z).AppParams = new(basics.AppParams)
 					}
-					bts, err = (*z).AppParams.UnmarshalMsg(bts)
+					bts, err = (*z).AppParams.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "AppParams")
 						return
@@ -191,6 +200,9 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 	return
 }
 
+func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *AccountApplicationModel) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*AccountApplicationModel)
 	return ok
@@ -216,6 +228,15 @@ func (z *AccountApplicationModel) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AccountApplicationModel) MsgIsZero() bool {
 	return ((*z).AppLocalState == nil) && ((*z).AppParams == nil)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AccountApplicationModelMaxSize() (s int) {
+	s = 1 + 16
+	s += basics.AppLocalStateMaxSize()
+	s += 11
+	s += basics.AppParamsMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -263,7 +284,12 @@ func (_ *AccountAssetModel) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AccountAssetModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -287,7 +313,7 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if (*z).AssetParams == nil {
 					(*z).AssetParams = new(basics.AssetParams)
 				}
-				bts, err = (*z).AssetParams.UnmarshalMsg(bts)
+				bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 					return
@@ -306,7 +332,7 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if (*z).AssetHolding == nil {
 					(*z).AssetHolding = new(basics.AssetHolding)
 				}
-				bts, err = (*z).AssetHolding.UnmarshalMsg(bts)
+				bts, err = (*z).AssetHolding.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AssetHolding")
 					return
@@ -347,7 +373,7 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if (*z).AssetParams == nil {
 						(*z).AssetParams = new(basics.AssetParams)
 					}
-					bts, err = (*z).AssetParams.UnmarshalMsg(bts)
+					bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "AssetParams")
 						return
@@ -364,7 +390,7 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if (*z).AssetHolding == nil {
 						(*z).AssetHolding = new(basics.AssetHolding)
 					}
-					bts, err = (*z).AssetHolding.UnmarshalMsg(bts)
+					bts, err = (*z).AssetHolding.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "AssetHolding")
 						return
@@ -383,6 +409,9 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *AccountAssetModel) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*AccountAssetModel)
 	return ok
@@ -408,4 +437,13 @@ func (z *AccountAssetModel) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *AccountAssetModel) MsgIsZero() bool {
 	return ((*z).AssetParams == nil) && ((*z).AssetHolding == nil)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func AccountAssetModelMaxSize() (s int) {
+	s = 1 + 13
+	s += basics.AssetParamsMaxSize()
+	s += 14
+	s += basics.AssetHoldingMaxSize()
+	return
 }

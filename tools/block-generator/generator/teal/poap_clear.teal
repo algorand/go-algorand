@@ -1,0 +1,5 @@
+#pragma version 8
+
+pushint 1
+return
+

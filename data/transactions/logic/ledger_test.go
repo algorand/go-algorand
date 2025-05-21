@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -45,9 +46,14 @@ import (
 )
 
 type balanceRecord struct {
-	addr     basics.Address
-	auth     basics.Address
-	balance  uint64
+	addr    basics.Address
+	auth    basics.Address
+	balance uint64
+	voting  basics.VotingData
+
+	proposed  basics.Round // The last round that this account proposed the accepted block
+	heartbeat basics.Round // The last round that this account sent a heartbeat to show it was online.
+
 	locals   map[basics.AppIndex]basics.TealKeyValue
 	holdings map[basics.AssetIndex]basics.AssetHolding
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
@@ -215,8 +221,14 @@ func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
-// BlockHdrCached returns the block header for the given round, if it is available
-func (l *Ledger) BlockHdrCached(round basics.Round) (bookkeeping.BlockHeader, error) {
+// OnlineStake returns the online stake that applies to the latest round (so
+// it's actually the online stake from 320 rounds ago)
+func (l *Ledger) OnlineStake() (basics.MicroAlgos, error) {
+	return basics.Algos(3333), nil
+}
+
+// BlockHdr returns the block header for the given round, if it is available
+func (l *Ledger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
 	hdr := bookkeeping.BlockHeader{}
 	// Return a fake seed that is different for each round
 	seed := committee.Seed{}
@@ -305,7 +317,39 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 
 			TotalBoxes:    uint64(boxesTotal),
 			TotalBoxBytes: uint64(boxBytesTotal),
+
+			LastProposed:  br.proposed,
+			LastHeartbeat: br.heartbeat,
 		},
+		VotingData: br.voting,
+	}, nil
+}
+
+// AgreementData is not a very high-fidelity fake. There's no time delay, it
+// just returns the data that's in AccountData, reshaped into an
+// OnlineAccountData.
+func (l *Ledger) AgreementData(addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, err := l.AccountData(addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	// You might imagine this conversion function exists. It does, but requires
+	// rewards handling because OnlineAccountData should have rewards
+	// paid. Here, we ignore that for simple tests.
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		// VotingData is not exposed to `voter_params_get`, the thinking is that
+		// we don't want them used as "free" storage. And thus far, we don't
+		// have compelling reasons to examine them in AVM.
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
 	}, nil
 }
 
@@ -328,7 +372,7 @@ func (l *Ledger) Authorizer(addr basics.Address) (basics.Address, error) {
 func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return basics.TealValue{}, false, fmt.Errorf("no such app %d", appIdx)
+		return basics.TealValue{}, false, fmt.Errorf("no app %d", appIdx)
 	}
 
 	// return most recent value if available
@@ -351,7 +395,7 @@ func (l *Ledger) GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue
 func (l *Ledger) SetGlobal(appIdx basics.AppIndex, key string, value basics.TealValue) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app %d", appIdx)
+		return fmt.Errorf("no app %d", appIdx)
 	}
 
 	// if writing the same value, return
@@ -375,7 +419,7 @@ func (l *Ledger) SetGlobal(appIdx basics.AppIndex, key string, value basics.Teal
 func (l *Ledger) DelGlobal(appIdx basics.AppIndex, key string) error {
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app %d", appIdx)
+		return fmt.Errorf("no app %d", appIdx)
 	}
 
 	exist := false
@@ -405,17 +449,17 @@ func (l *Ledger) NewBox(appIdx basics.AppIndex, key string, value []byte, appAdd
 	}
 	params, ok := l.applications[appIdx]
 	if !ok {
-		return fmt.Errorf("no such app %d", appIdx)
+		return fmt.Errorf("no app %d", appIdx)
 	}
 	if params.boxMods == nil {
 		params.boxMods = make(map[string][]byte)
 	}
 	if current, ok := params.boxMods[key]; ok {
 		if current != nil {
-			return fmt.Errorf("attempt to recreate %s", key)
+			return fmt.Errorf("attempt to recreate box %#v", key)
 		}
 	} else if _, ok := params.boxes[key]; ok {
-		return fmt.Errorf("attempt to recreate %s", key)
+		return fmt.Errorf("attempt to recreate box %#x", key)
 	}
 	params.boxMods[key] = value
 	l.applications[appIdx] = params
@@ -449,7 +493,7 @@ func (l *Ledger) SetBox(appIdx basics.AppIndex, key string, value []byte) error 
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("no such box %d", appIdx)
+		return fmt.Errorf("no box %d", appIdx)
 	}
 	params := l.applications[appIdx] // assured, based on above
 	if params.boxMods == nil {
@@ -487,7 +531,7 @@ func (l *Ledger) DelBox(appIdx basics.AppIndex, key string, appAddr basics.Addre
 func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) (basics.TealValue, bool, error) {
 	br, ok := l.balances[addr]
 	if !ok {
-		return basics.TealValue{}, false, fmt.Errorf("no such address")
+		return basics.TealValue{}, false, fmt.Errorf("no account: %s", addr)
 	}
 	tkvd, ok := br.locals[appIdx]
 	if !ok {
@@ -513,7 +557,7 @@ func (l *Ledger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 func (l *Ledger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key string, value basics.TealValue, accountIdx uint64) error {
 	br, ok := l.balances[addr]
 	if !ok {
-		return fmt.Errorf("no such address")
+		return fmt.Errorf("no account: %s", addr)
 	}
 	tkv, ok := br.locals[appIdx]
 	if !ok {
@@ -541,7 +585,7 @@ func (l *Ledger) SetLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 func (l *Ledger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key string, accountIdx uint64) error {
 	br, ok := l.balances[addr]
 	if !ok {
-		return fmt.Errorf("no such address")
+		return fmt.Errorf("no account: %s", addr)
 	}
 	tkv, ok := br.locals[appIdx]
 	if !ok {
@@ -573,7 +617,7 @@ func (l *Ledger) DelLocal(addr basics.Address, appIdx basics.AppIndex, key strin
 func (l *Ledger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
 	br, ok := l.balances[addr]
 	if !ok {
-		return false, fmt.Errorf("no such address")
+		return false, fmt.Errorf("no account: %s", addr)
 	}
 	_, ok = br.locals[appIdx]
 	return ok, nil
@@ -586,9 +630,9 @@ func (l *Ledger) AssetHolding(addr basics.Address, assetID basics.AssetIndex) (b
 		if asset, ok := br.holdings[assetID]; ok {
 			return asset, nil
 		}
-		return basics.AssetHolding{}, fmt.Errorf("No asset for account")
+		return basics.AssetHolding{}, fmt.Errorf("no asset %d for account %s", assetID, addr)
 	}
-	return basics.AssetHolding{}, fmt.Errorf("no such address")
+	return basics.AssetHolding{}, fmt.Errorf("no account: %s", addr)
 }
 
 // AssetParams gives the parameters of an ASA if it exists
@@ -596,7 +640,7 @@ func (l *Ledger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, bas
 	if asset, ok := l.assets[assetID]; ok {
 		return asset.AssetParams, asset.Creator, nil
 	}
-	return basics.AssetParams{}, basics.Address{}, fmt.Errorf("no such asset")
+	return basics.AssetParams{}, basics.Address{}, fmt.Errorf("no asset %d", assetID)
 }
 
 // AppParams gives the parameters of an App if it exists
@@ -604,7 +648,14 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 	if app, ok := l.applications[appID]; ok {
 		return app.AppParams, app.Creator, nil
 	}
-	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no such app %d", appID)
+	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no app %d", appID)
+}
+
+var testGenHash = crypto.Digest{0x03, 0x02, 0x03}
+
+// GenesisHash returns a phony genesis hash that can be tested against
+func (l *Ledger) GenesisHash() crypto.Digest {
+	return testGenHash
 }
 
 func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {
@@ -617,7 +668,7 @@ func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) err
 		tbr = newBalanceRecord(to, 0)
 	}
 	if fbr.balance < amount {
-		return fmt.Errorf("insufficient balance")
+		return fmt.Errorf("insufficient balance in %v. %d < %d", from, fbr.balance, amount)
 	}
 	fbr.balance -= amount
 	tbr.balance += amount
@@ -802,6 +853,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 				},
 			},
 			ExtraProgramPages: appl.ExtraProgramPages,
+			Version:           0,
 		}
 		l.NewApp(from, aid, params)
 		ad.ApplicationID = aid
@@ -826,9 +878,11 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	}
 	pass, cx, err := EvalContract(params.ApprovalProgram, gi, aid, ep)
 	if err != nil {
+		ad.EvalDelta = transactions.EvalDelta{}
 		return err
 	}
 	if !pass {
+		ad.EvalDelta = transactions.EvalDelta{}
 		return errors.New("Approval program failed")
 	}
 	ad.EvalDelta = cx.txn.EvalDelta
@@ -862,6 +916,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 		}
 		app.ApprovalProgram = appl.ApprovalProgram
 		app.ClearStateProgram = appl.ClearStateProgram
+		app.Version++
 		l.applications[aid] = app
 	}
 	return nil
@@ -899,11 +954,11 @@ func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 }
 
 // Get returns the AccountData of an address. This test ledger does
-// not handle rewards, so the pening rewards flag is ignored.
+// not handle rewards, so withPendingRewards is ignored.
 func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	br, ok := l.balances[addr]
 	if !ok {
-		return basics.AccountData{}, fmt.Errorf("addr %s not in test.Ledger", addr.String())
+		return basics.AccountData{}, fmt.Errorf("no account %s", addr)
 	}
 	return basics.AccountData{
 		MicroAlgos:     basics.MicroAlgos{Raw: br.balance},
@@ -911,6 +966,17 @@ func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.Accou
 		Assets:         map[basics.AssetIndex]basics.AssetHolding{},
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{},
 		AppParams:      map[basics.AppIndex]basics.AppParams{},
+		LastProposed:   br.proposed,
+		LastHeartbeat:  br.heartbeat,
+		// The fields below are not exposed to `acct_params_get`, the thinking
+		// is that we don't want them used as "free" storage.  And thus far, we
+		// don't have compelling reasons to examine them in AVM.
+		VoteID:          br.voting.VoteID,
+		SelectionID:     br.voting.SelectionID,
+		StateProofID:    br.voting.StateProofID,
+		VoteFirstValid:  br.voting.VoteFirstValid,
+		VoteLastValid:   br.voting.VoteLastValid,
+		VoteKeyDilution: br.voting.VoteKeyDilution,
 	}, nil
 }
 
@@ -924,7 +990,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 		params, found := l.applications[basics.AppIndex(cidx)]
 		return params.Creator, found, nil
 	}
-	return basics.Address{}, false, fmt.Errorf("%v %d is not in test.Ledger", ctype, cidx)
+	return basics.Address{}, false, fmt.Errorf("no creatable %v %d", ctype, cidx)
 }
 
 // SetKey creates a new key-value in {addr, aidx, global} storage

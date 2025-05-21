@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,5 +54,8 @@ func TestReleasedVersion(t *testing.T) {
 		require.True(t, ok, string(cv))
 		require.NotZero(t, params) // just making sure an empty one didn't get put in
 	}
+
+	require.Equal(t, versionStringFromIndex(len(consensusByNumber)-1), "vFuture")
+	require.Equal(t, versionStringFromIndex(40), "v40")
 
 }

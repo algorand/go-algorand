@@ -50,14 +50,7 @@ if { [catch {
     spawn goal clerk compile "$TEST_ROOT_DIR/small-sig.teal"
     expect {
         -re {[A-Z2-9]{58}} { set SMALL_SIG $expect_out(0,string) }
-        "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
-    }
-
-    teal "$TEST_ROOT_DIR/big-sig.teal" 2 1001 1
-    spawn goal clerk compile "$TEST_ROOT_DIR/big-sig.teal"
-    expect {
-        -re {[A-Z2-9]{58}} { ::AlgorandGoal::Abort "hash" }
-        -re {.*logicsig program size too large} { puts "bigsigcheck: pass" }
+        eof { ::AlgorandGoal::Abort $expect_out(buffer) }
         "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
@@ -65,15 +58,7 @@ if { [catch {
     spawn goal clerk compile "$TEST_ROOT_DIR/barely-fits-app.teal"
     expect {
         -re {[A-Z2-9]{58}} { puts "hash $expect_out(0,string)" }
-        "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
-    }
-
-    # MaxAppProgramLen = 2K * (1 + 3 pages max)
-    teal "$TEST_ROOT_DIR/big-app.teal" 2 8192 1 "int 0\nbalance\npop\n"
-    spawn goal clerk compile "$TEST_ROOT_DIR/big-app.teal"
-    expect {
-        -re {[A-Z2-9]{58}} { ::AlgorandGoal::Abort "hash" }
-        -re {.*app program size too large} { puts "bigappcheck: pass" }
+        eof { ::AlgorandGoal::Abort $expect_out(buffer) }
         "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
@@ -84,9 +69,10 @@ if { [catch {
         " - pass -" { puts "small-sig dryrun pass" }
         "REJECT" { ::AlgorandGoal::Abort $expect_out(buffer) }
         "static cost budget" { ::AlgorandGoal::Abort $expect_out(buffer) }
+        eof { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
-    teal "$TEST_ROOT_DIR/slow-sig.teal" 2 1 20001
+    teal "$TEST_ROOT_DIR/slow-sig.teal" 4 1 20001
     exec goal clerk compile "$TEST_ROOT_DIR/slow-sig.teal"
     exec goal clerk send -F "$TEST_ROOT_DIR/slow-sig.teal" -t GXBNLU4AXQABPLHXJDMTG2YXSDT4EWUZACT7KTPFXDQW52XPTIUS5OZ5HQ -a 100 -d $TEST_PRIMARY_NODE_DIR -o $TEST_ROOT_DIR/slow-sig.tx
     spawn goal clerk dryrun -P future -t $TEST_ROOT_DIR/slow-sig.tx  # Should succeed Check, fail Eval
@@ -94,6 +80,7 @@ if { [catch {
         "dynamic cost budget" { puts "slow-sig dryrun pass" }
         " - pass -" { ::AlgorandGoal::Abort $expect_out(buffer) }
         "REJECT" { ::AlgorandGoal::Abort $expect_out(buffer) }
+        eof { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
     # Shutdown the network

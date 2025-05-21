@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -50,12 +49,12 @@ var errTooManyPinnedEntries = &VerifiedTxnCacheError{errors.New("Too many pinned
 // errMissingPinnedEntry is being generated when we're trying to pin a transaction that does not appear in the cache
 var errMissingPinnedEntry = &VerifiedTxnCacheError{errors.New("Missing pinned entry")}
 
-// VerifiedTransactionCache provides a cached store of recently verified transactions. The cache is desiged two have two separate "levels". On the
+// VerifiedTransactionCache provides a cached store of recently verified transactions. The cache is designed to have two separate "levels". On the
 // bottom tier, the cache would be using a cyclic buffer, where old transactions would end up overridden by new ones. In order to support transactions
 // that goes into the transaction pool, we have a higher tier of pinned cache. Pinned transactions would not be cycled-away by new incoming transactions,
 // and would only get eliminated by updates to the transaction pool, which would inform the cache of updates to the pinned items.
 type VerifiedTransactionCache interface {
-	// Add adds a given transaction group and it's associated group context to the cache. If any of the transactions already appear
+	// Add adds a given transaction group and its associated group context to the cache. If any of the transactions already appear
 	// in the cache, the new entry overrides the old one.
 	Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext)
 	// AddPayset works in a similar way to Add, but is intended for adding an array of transaction groups, along with their corresponding contexts.
@@ -73,7 +72,7 @@ type VerifiedTransactionCache interface {
 type verifiedTransactionCache struct {
 	// Number of entries in each map (bucket).
 	entriesPerBucket int
-	// bucketsLock is the lock for syncornizing the access to the cache
+	// bucketsLock is the lock for synchronizing access to the cache
 	bucketsLock deadlock.Mutex
 	// buckets is the circular cache buckets buffer
 	buckets []map[transactions.Txid]*GroupContext
@@ -127,7 +126,6 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 	for txnGroupIndex := 0; txnGroupIndex < len(txnGroups); txnGroupIndex++ {
 		signedTxnGroup := txnGroups[txnGroupIndex]
 		verifiedTxn := 0
-		groupCtx.minAvmVersion = logic.ComputeMinAvmVersion(transactions.WrapSignedTxnsWithAD(signedTxnGroup))
 
 		baseBucket := v.base
 		for txnIdx := 0; txnIdx < len(signedTxnGroup); txnIdx++ {
@@ -264,7 +262,6 @@ type mockedCache struct {
 }
 
 func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
-	return
 }
 
 func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) {

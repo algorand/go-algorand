@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package logic
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -62,11 +63,7 @@ func TestOpcodesByVersionReordered(t *testing.T) { // nolint:paralleltest // man
 	partitiontest.PartitionTest(t)
 
 	// Make a copy to restore to the original
-	OpSpecsOrig := make([]OpSpec, len(OpSpecs))
-	for idx, opspec := range OpSpecs {
-		cp := opspec
-		OpSpecsOrig[idx] = cp
-	}
+	OpSpecsOrig := slices.Clone(OpSpecs)
 	defer func() {
 		OpSpecs = OpSpecsOrig
 	}()
@@ -88,11 +85,7 @@ func TestOpcodesByVersion(t *testing.T) {
 
 func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
-	OpSpecs2 := make([]OpSpec, len(OpSpecs))
-	for idx, opspec := range OpSpecs {
-		cp := opspec
-		OpSpecs2[idx] = cp
-	}
+	OpSpecs2 := slices.Clone(OpSpecs)
 
 	opSpecs := make([][]OpSpec, LogicVersion)
 	for v := uint64(1); v <= LogicVersion; v++ {

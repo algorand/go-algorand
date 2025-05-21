@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,7 +63,6 @@ func (rha *RemoteHookAdapter) registerHandler(w http.ResponseWriter, r *http.Req
 
 	// Proceed!
 	w.WriteHeader(http.StatusOK)
-	return
 }
 
 func (rha *RemoteHookAdapter) updateHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +80,6 @@ func (rha *RemoteHookAdapter) updateHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.WriteHeader(http.StatusOK)
-	return
 }
 
 func (rha *RemoteHookAdapter) completeHandler(w http.ResponseWriter, r *http.Request) {
@@ -100,5 +98,4 @@ func (rha *RemoteHookAdapter) completeHandler(w http.ResponseWriter, r *http.Req
 
 	// Proceed!
 	w.WriteHeader(http.StatusOK)
-	return
 }

@@ -35,19 +35,37 @@ missing_dep() {
 }
 
 GO_DEPS=(
-    "$GO_BIN/stringer"
-    "$GO_BIN/msgp"
-    "$GO_BIN/golangci-lint"
+    "msgp"
+    "golangci-lint"
+    "oapi-codegen"
+    "swagger"
 )
 
+check_go_binary_version() {
+  binary_name=$1
+  expected_version=$(grep "$binary_name" scripts/buildtools/versions | awk '{print $2}')
+  actual_version=$(go version -m "$GO_BIN/$binary_name" | awk 'NR==3 {print $3}')
+
+  if [ "$expected_version" != "$actual_version" ]; then
+      echo "$YELLOW_FG[WARNING]$END_FG_COLOR $binary_name version mismatch, expected $expected_version, but got $actual_version"
+      echo "Use 'install_buildtools.sh' to fix."
+  fi
+}
+
 check_deps() {
-    for path in ${GO_DEPS[*]}
+    for dep in ${GO_DEPS[*]}
     do
-        if [ ! -f "$path" ]
+        if [ ! -f "$GO_BIN/$dep" ]
         then
             # Parameter expansion is faster than invoking another process.
             # https://www.linuxjournal.com/content/bash-parameter-expansion
-            missing_dep "${path##*/}"
+            missing_dep "${dep##*/}"
+        fi
+
+        # go 1.17 on arm64 macs has an issue checking binaries with "go version", skip version check
+        if [[ "$(uname)" != "Darwin" ]] || [[ "$(uname -m)" != "arm64" ]] || ! [[ "$(go version | awk '{print $3}')" < "go1.17" ]]
+        then
+           check_go_binary_version "$dep"
         fi
     done
 
@@ -55,12 +73,6 @@ check_deps() {
     if ! which shellcheck > /dev/null
     then
         missing_dep shellcheck
-    fi
-
-    # Don't print `sqlite3`s location.
-    if ! which sqlite3 > /dev/null
-    then
-        missing_dep sqlite3
     fi
 }
 

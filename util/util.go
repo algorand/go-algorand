@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,34 @@ import (
 )
 
 /* misc */
+
+// GetFdLimits returns a current values for file descriptors limits.
+func GetFdLimits() (soft uint64, hard uint64, err error) {
+	var rLimit syscall.Rlimit
+	err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+	if err != nil {
+		return 0, 0, fmt.Errorf("GetFdSoftLimit() err: %w", err)
+	}
+	return rLimit.Cur, rLimit.Max, nil
+}
+
+// RaiseFdSoftLimit raises the file descriptors soft limit to the specified value,
+// or leave it unchanged if the value is less than the current.
+func RaiseFdSoftLimit(newLimit uint64) error {
+	soft, hard, err := GetFdLimits()
+	if err != nil {
+		return fmt.Errorf("RaiseFdSoftLimit() err: %w", err)
+	}
+	if newLimit <= soft {
+		// Current limit is sufficient; no need to change it.
+		return nil
+	}
+	if newLimit > hard {
+		// New limit exceeds the hard limit; set it to the hard limit.
+		newLimit = hard
+	}
+	return SetFdSoftLimit(newLimit)
+}
 
 // SetFdSoftLimit sets a new file descriptors soft limit.
 func SetFdSoftLimit(newLimit uint64) error {
@@ -61,4 +89,9 @@ func GetCurrentProcessTimes() (utime int64, stime int64, err error) {
 		stime = 0
 	}
 	return
+}
+
+// GetTotalMemory gets total system memory
+func GetTotalMemory() uint64 {
+	return getTotalMemory()
 }

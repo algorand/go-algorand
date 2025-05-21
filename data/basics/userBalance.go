@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@ package basics
 import (
 	"encoding/binary"
 	"fmt"
-	"reflect"
+	"slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -41,29 +41,6 @@ const (
 	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
 	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
-
-	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
-	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
-	// with config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount; note that the decoded
-	// parameter is used only for protecting the decoder against malicious encoded account data stream.
-	// protocol-specific contains would be tested once the decoding is complete.
-	encodedMaxAssetsPerAccount = 1024
-
-	// EncodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn
-	EncodedMaxAppLocalStates = 64
-
-	// EncodedMaxAppParams is the decoder limit for number of created apps in a single account.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated
-	EncodedMaxAppParams = 64
-
-	// EncodedMaxKeyValueEntries is the decoder limit for the length of a key/value store.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxLocalSchemaEntries and
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries
-	EncodedMaxKeyValueEntries = 1024
 )
 
 func (s Status) String() string {
@@ -105,16 +82,26 @@ type VotingData struct {
 }
 
 // OnlineAccountData contains the voting information for a single account.
+//
 //msgp:ignore OnlineAccountData
 type OnlineAccountData struct {
 	MicroAlgosWithRewards MicroAlgos
 	VotingData
+
+	IncentiveEligible bool
+	LastProposed      Round
+	LastHeartbeat     Round
 }
 
 // AccountData contains the data associated with a given address.
 //
-// This includes the account balance, cryptographic public keys,
-// consensus delegation status, asset data, and application data.
+// This includes the account balance, cryptographic public keys, consensus
+// status, asset params (for assets made by this account), asset holdings (for
+// assets the account is opted into), and application data (globals if account
+// created, locals if opted-in).  This can be thought of as the fully "hydrated"
+// structure and could take an arbitrary number of db queries to fill. As such,
+// it is mostly used only for shuttling complete accounts into the ledger
+// (genesis, catchpoints, REST API). And a lot of legacy tests.
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -170,6 +157,13 @@ type AccountData struct {
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
 
+	// LastProposed is the last round that the account is known to have
+	// proposed. It is updated at the start of the _next_ round.
+	LastProposed Round `codec:"lpr"`
+	// LastHeartbeat is the last round an account has indicated it is ready to
+	// vote by sending a heartbeat transaction, signed by its partkey.
+	LastHeartbeat Round `codec:"lhb"`
+
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed
 	// by the Index of the AssetID; the Creator is this account's address.
@@ -182,7 +176,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=encodedMaxAssetsPerAccount"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=bounds.EncodedMaxAssetsPerAccount"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -199,7 +193,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=encodedMaxAssetsPerAccount"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=bounds.EncodedMaxAssetsPerAccount"`
 
 	// AuthAddr is the address against which signatures/multisigs/logicsigs should be checked.
 	// If empty, the address of the account whose AccountData this is is used.
@@ -207,13 +201,18 @@ type AccountData struct {
 	// This allows key rotation, changing the members in a multisig, etc.
 	AuthAddr Address `codec:"spend"`
 
+	// IncentiveEligible indicates whether the account came online with the
+	// extra fee required to be eligible for block incentives. At proposal time,
+	// balance limits must also be met to receive incentives.
+	IncentiveEligible bool `codec:"ie"`
+
 	// AppLocalStates stores the local states associated with any applications
 	// that this account has opted in to.
-	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=EncodedMaxAppLocalStates"`
+	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=bounds.EncodedMaxAppLocalStates"`
 
 	// AppParams stores the global parameters and state associated with any
 	// applications that this account has created.
-	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=EncodedMaxAppParams"`
+	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=bounds.EncodedMaxAppParams"`
 
 	// TotalAppSchema stores the sum of all of the LocalStateSchemas
 	// and GlobalStateSchemas in this account (global for applications
@@ -247,11 +246,12 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAvailableAppProgramLen"`
-	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAvailableAppProgramLen"`
+	ApprovalProgram   []byte       `codec:"approv,allocbound=bounds.MaxAvailableAppProgramLen"`
+	ClearStateProgram []byte       `codec:"clearp,allocbound=bounds.MaxAvailableAppProgramLen"`
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
+	Version           uint64 `codec:"v"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the
@@ -267,10 +267,8 @@ type StateSchemas struct {
 // affecting the original
 func (ap *AppParams) Clone() (res AppParams) {
 	res = *ap
-	res.ApprovalProgram = make([]byte, len(ap.ApprovalProgram))
-	copy(res.ApprovalProgram, ap.ApprovalProgram)
-	res.ClearStateProgram = make([]byte, len(ap.ClearStateProgram))
-	copy(res.ClearStateProgram, ap.ClearStateProgram)
+	res.ApprovalProgram = slices.Clone(ap.ApprovalProgram)
+	res.ClearStateProgram = slices.Clone(ap.ClearStateProgram)
 	res.GlobalState = ap.GlobalState.Clone()
 	return
 }
@@ -372,14 +370,14 @@ type AssetParams struct {
 
 	// UnitName specifies a hint for the name of a unit of
 	// this asset.
-	UnitName string `codec:"un"`
+	UnitName string `codec:"un,allocbound=bounds.MaxAssetUnitNameBytes"`
 
 	// AssetName specifies a hint for the name of the asset.
-	AssetName string `codec:"an"`
+	AssetName string `codec:"an,allocbound=bounds.MaxAssetNameBytes"`
 
 	// URL specifies a URL where more information about the asset can be
 	// retrieved
-	URL string `codec:"au"`
+	URL string `codec:"au,allocbound=bounds.MaxAssetURLBytes"`
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.
@@ -465,7 +463,7 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
-func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
+func (u AccountData) MinBalance(proto *config.ConsensusParams) MicroAlgos {
 	return MinBalance(
 		proto,
 		uint64(len(u.Assets)),
@@ -486,7 +484,7 @@ func MinBalance(
 	totalAppParams uint64, totalAppLocalStates uint64,
 	totalExtraAppPages uint64,
 	totalBoxes uint64, totalBoxBytes uint64,
-) (res MicroAlgos) {
+) MicroAlgos {
 	var min uint64
 
 	// First, base MinBalance
@@ -521,29 +519,7 @@ func MinBalance(
 	boxByteCost := MulSaturate(proto.BoxByteMinBalance, totalBoxBytes)
 	min = AddSaturate(min, boxByteCost)
 
-	res.Raw = min
-	return res
-}
-
-// OnlineAccountData returns subset of AccountData as OnlineAccountData data structure.
-// Account is expected to be Online otherwise its is cleared out
-func (u AccountData) OnlineAccountData() OnlineAccountData {
-	if u.Status != Online {
-		// if the account is not Online and agreement requests it for some reason, clear it out
-		return OnlineAccountData{}
-	}
-
-	return OnlineAccountData{
-		MicroAlgosWithRewards: u.MicroAlgos,
-		VotingData: VotingData{
-			VoteID:          u.VoteID,
-			SelectionID:     u.SelectionID,
-			StateProofID:    u.StateProofID,
-			VoteFirstValid:  u.VoteFirstValid,
-			VoteLastValid:   u.VoteLastValid,
-			VoteKeyDilution: u.VoteKeyDilution,
-		},
-	}
+	return MicroAlgos{min}
 }
 
 // VotingStake returns the amount of MicroAlgos associated with the user's account
@@ -563,16 +539,7 @@ func (u OnlineAccountData) KeyDilution(proto config.ConsensusParams) uint64 {
 	return proto.DefaultKeyDilution
 }
 
-// IsZero checks if an AccountData value is the same as its zero value.
-func (u AccountData) IsZero() bool {
-	if u.Assets != nil && len(u.Assets) == 0 {
-		u.Assets = nil
-	}
-
-	return reflect.DeepEqual(u, AccountData{})
-}
-
-// NormalizedOnlineBalance returns a ``normalized'' balance for this account.
+// NormalizedOnlineBalance returns a “normalized” balance for this account.
 //
 // The normalization compensates for rewards that have not yet been applied,
 // by computing a balance normalized to round 0.  To normalize, we estimate
@@ -594,7 +561,7 @@ func (u AccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint6
 	return NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, proto)
 }
 
-// NormalizedOnlineAccountBalance returns a ``normalized'' balance for an account
+// NormalizedOnlineAccountBalance returns a “normalized” balance for an account
 // with the given parameters.
 //
 // The normalization compensates for rewards that have not yet been applied,

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,11 +18,23 @@ package util
 
 import (
 	"errors"
+	"math"
 	"syscall"
 	"time"
+	"unsafe"
 )
 
 /* misc */
+
+// GetFdLimits returns a current values for file descriptors limits.
+func GetFdLimits() (soft uint64, hard uint64, err error) {
+	return math.MaxUint64, math.MaxUint64, nil // syscall.RLIM_INFINITY
+}
+
+// RaiseFdSoftLimit raises the file descriptors soft limit.
+func RaiseFdSoftLimit(_ uint64) error {
+	return nil
+}
 
 // SetFdSoftLimit sets a new file descriptors soft limit.
 func SetFdSoftLimit(_ uint64) error {
@@ -62,4 +74,40 @@ func GetCurrentProcessTimes() (utime int64, stime int64, err error) {
 func filetimeToDuration(ft *syscall.Filetime) time.Duration {
 	n := int64(ft.HighDateTime)<<32 + int64(ft.LowDateTime) // in 100-nanosecond intervals
 	return time.Duration(n * 100)
+}
+
+// GetTotalMemory gets total system memory on Windows
+func GetTotalMemory() uint64 {
+	var memoryStatusEx MemoryStatusEx
+	memoryStatusEx.dwLength = uint32(unsafe.Sizeof(memoryStatusEx))
+
+	if err := globalMemoryStatusEx(&memoryStatusEx); err != nil {
+		return 0
+	}
+	return memoryStatusEx.ullTotalPhys
+}
+
+type MemoryStatusEx struct {
+	dwLength                uint32
+	dwMemoryLoad            uint32
+	ullTotalPhys            uint64
+	ullAvailPhys            uint64
+	ullTotalPageFile        uint64
+	ullAvailPageFile        uint64
+	ullTotalVirtual         uint64
+	ullAvailVirtual         uint64
+	ullAvailExtendedVirtual uint64
+}
+
+var (
+	modkernel32              = syscall.NewLazyDLL("kernel32.dll")
+	procGlobalMemoryStatusEx = modkernel32.NewProc("GlobalMemoryStatusEx")
+)
+
+func globalMemoryStatusEx(memoryStatusEx *MemoryStatusEx) error {
+	ret, _, _ := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(memoryStatusEx)))
+	if ret == 0 {
+		return syscall.GetLastError()
+	}
+	return nil
 }

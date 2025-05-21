@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -33,32 +33,33 @@ type selectionParameterListFn func(addr []basics.Address) (bool, []BalanceRecord
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
-func newAccount(t testing.TB, gen io.Reader, latest basics.Round, keyBatchesForward uint) (basics.Address, *crypto.SignatureSecrets, *crypto.VrfPrivkey, *crypto.OneTimeSignatureSecrets) {
+func newAccount(t testing.TB, gen io.Reader) (basics.Address, *crypto.SignatureSecrets, *crypto.VrfPrivkey) {
 	var seed crypto.Seed
 	gen.Read(seed[:])
 	s := crypto.GenerateSignatureSecrets(seed)
 	_, v := crypto.VrfKeygenFromSeed(seed)
-	o := crypto.GenerateOneTimeSignatureSecrets(basics.OneTimeIDForRound(latest, proto.DefaultKeyDilution).Batch, uint64(keyBatchesForward))
 	addr := basics.Address(s.SignatureVerifier)
-	return addr, s, &v, o
+	return addr, s, &v
 }
 
-func signTx(s *crypto.SignatureSecrets, t transactions.Transaction) transactions.SignedTxn {
-	return t.Sign(s)
+// testingenv creates a random set of participating accounts and the associated
+// selection parameters for use testing committee membership and credential
+// validation.  seedGen is provided as an external source of randomness for the
+// selection seed; if the caller persists seedGen between calls to testingenv,
+// each iteration that calls testingenv will exercise a new selection seed.
+// formerly, testingenv, generated transactions and one-time secrets as well,
+// but they were not used by the tests.
+func testingenv(t testing.TB, numAccounts, numTxs int, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey) {
+	return testingenvMoreKeys(t, numAccounts, numTxs, seedGen)
 }
 
-func testingenv(t testing.TB, numAccounts, numTxs int) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
-	return testingenvMoreKeys(t, numAccounts, numTxs, uint(5))
-}
-
-func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward uint) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
+func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey) {
+	if seedGen == nil {
+		seedGen = rand.New(rand.NewSource(1)) // same source as setting GODEBUG=randautoseed=0, same as pre-Go 1.20 default seed
+	}
 	P := numAccounts          // n accounts
-	TXs := numTxs             // n txns
 	maxMoneyAtStart := 100000 // max money start
 	minMoneyAtStart := 10000  // max money start
-	transferredMoney := 100   // max money/txn
-	maxFee := 10              // max maxFee/txn
-	E := basics.Round(50)     // max round
 
 	// generate accounts
 	genesis := make(map[basics.Address]basics.AccountData)
@@ -66,16 +67,14 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 	addrs := make([]basics.Address, P)
 	secrets := make([]*crypto.SignatureSecrets, P)
 	vrfSecrets := make([]*crypto.VrfPrivkey, P)
-	otSecrets := make([]*crypto.OneTimeSignatureSecrets, P)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lookback := basics.Round(2*proto.SeedRefreshInterval + proto.SeedLookback + 1)
 	var total basics.MicroAlgos
 	for i := 0; i < P; i++ {
-		addr, sigSec, vrfSec, otSec := newAccount(t, gen, lookback, keyBatchesForward)
+		addr, sigSec, vrfSec := newAccount(t, gen)
 		addrs[i] = addr
 		secrets[i] = sigSec
 		vrfSecrets[i] = vrfSec
-		otSecrets[i] = otSec
 
 		startamt := uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))
 		short := addr
@@ -83,40 +82,15 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 			Status:      basics.Online,
 			MicroAlgos:  basics.MicroAlgos{Raw: startamt},
 			SelectionID: vrfSec.Pubkey(),
-			VoteID:      otSec.OneTimeSignatureVerifier,
 		}
 		total.Raw += startamt
 	}
 
 	var seed Seed
-	rand.Read(seed[:])
+	seedGen.Read(seed[:])
 
-	tx := make([]transactions.SignedTxn, TXs)
-	for i := 0; i < TXs; i++ {
-		send := gen.Int() % P
-		recv := gen.Int() % P
-
-		saddr := addrs[send]
-		raddr := addrs[recv]
-		amt := basics.MicroAlgos{Raw: uint64(gen.Int() % transferredMoney)}
-		fee := basics.MicroAlgos{Raw: uint64(gen.Int() % maxFee)}
-
-		t := transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:     saddr,
-				Fee:        fee,
-				FirstValid: 0,
-				LastValid:  E,
-				Note:       make([]byte, 4),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: raddr,
-				Amount:   amt,
-			},
-		}
-		rand.Read(t.Note)
-		tx[i] = t.Sign(secrets[send])
+	for i := 0; i < numTxs; i++ {
+		seedGen.Read(make([]byte, 4)) // to match output from previous versions, which shared global RNG for seed & note
 	}
 
 	selParams := func(addr basics.Address) (bool, BalanceRecord, Seed, basics.MicroAlgos) {
@@ -124,7 +98,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 		if !ok {
 			return false, BalanceRecord{}, Seed{}, basics.MicroAlgos{Raw: 0}
 		}
-		return true, BalanceRecord{Addr: addr, OnlineAccountData: data.OnlineAccountData()}, seed, total
+		return true, BalanceRecord{Addr: addr, OnlineAccountData: basics_testing.OnlineAccountData(data)}, seed, total
 	}
 
 	selParamsList := func(addrs []basics.Address) (ok bool, records []BalanceRecord, seed Seed, total basics.MicroAlgos) {
@@ -141,7 +115,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 		return
 	}
 
-	return selParams, selParamsList, lookback, addrs, secrets, vrfSecrets, otSecrets, tx
+	return selParams, selParamsList, lookback, addrs, secrets, vrfSecrets
 }
 
 /* TODO deprecate these types after they have been removed successfully */

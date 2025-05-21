@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ import (
 
 	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/avm-abi/apps"
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/data/basics"
@@ -57,7 +58,8 @@ var (
 
 	extraPages uint32
 
-	onCompletion string
+	onCompletion  string
+	rejectVersion uint64
 
 	localSchemaUints      uint64
 	localSchemaByteSlices uint64
@@ -94,6 +96,7 @@ func init() {
 	appCmd.AddCommand(methodAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+	appCmd.PersistentFlags().Uint64Var(&rejectVersion, "reject-version", 0, "If set non-zero, reject for this app version or higher")
 	appCmd.PersistentFlags().StringArrayVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
@@ -127,6 +130,7 @@ func init() {
 	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
+	methodAppCmd.Flags().Uint64Var(&rejectVersion, "reject-version", 0, "RejectVersion for application transaction")
 	methodAppCmd.Flags().BoolVar(&methodCreatesApp, "create", false, "Create an application in this method call")
 	methodAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
 	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
@@ -162,10 +166,6 @@ func init() {
 	readStateAppCmd.Flags().BoolVar(&guessFormat, "guess-format", false, "Format application state using heuristics to guess data encoding.")
 
 	createAppCmd.MarkFlagRequired("creator")
-	createAppCmd.MarkFlagRequired("global-ints")
-	createAppCmd.MarkFlagRequired("global-byteslices")
-	createAppCmd.MarkFlagRequired("local-ints")
-	createAppCmd.MarkFlagRequired("local-byteslices")
 
 	optInAppCmd.MarkFlagRequired("app-id")
 	optInAppCmd.MarkFlagRequired("from")
@@ -202,7 +202,7 @@ func panicIfErr(err error) {
 func newAppCallBytes(arg string) apps.AppCallBytes {
 	appBytes, err := apps.NewAppCallBytes(arg)
 	if err != nil {
-		reportErrorf(err.Error())
+		reportErrorln(err.Error())
 	}
 	return appBytes
 }
@@ -223,19 +223,17 @@ type boxRef struct {
 // newBoxRef parses a command-line box ref, which is an optional appId, a comma,
 // and then the same format as an app call arg.
 func newBoxRef(arg string) boxRef {
-	parts := strings.SplitN(arg, ":", 2)
-	if len(parts) != 2 {
+	encoding, value, found := strings.Cut(arg, ":")
+	if !found {
 		reportErrorf("box refs should be of the form '[<app>,]encoding:value'")
 	}
-	encoding := parts[0] // tentative, may be <app>,<encoding>
-	value := parts[1]
-	parts = strings.SplitN(encoding, ",", 2)
 	appID := uint64(0)
-	if len(parts) == 2 {
+
+	if appStr, enc, found := strings.Cut(encoding, ","); found {
 		// There was a comma in the part before the ":"
-		encoding = parts[1]
+		encoding = enc
 		var err error
-		appID, err = strconv.ParseUint(parts[0], 10, 64)
+		appID, err = strconv.ParseUint(appStr, 10, 64)
 		if err != nil {
 			reportErrorf("Could not parse app id in box ref: %v", err)
 		}
@@ -398,7 +396,7 @@ func mustParseOnCompletion(ocString string) (oc transactions.OnCompletion) {
 }
 
 func getDataDirAndClient() (dataDir string, client libgoal.Client) {
-	dataDir = ensureSingleDataDir()
+	dataDir = datadir.EnsureSingleDataDir()
 	client = ensureFullClient(dataDir)
 	return
 }
@@ -483,17 +481,17 @@ var createAppCmd = &cobra.Command{
 		if outFilename == "" {
 			// Broadcast
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
-			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
@@ -513,7 +511,7 @@ var createAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -531,7 +529,7 @@ var updateAppCmd = &cobra.Command{
 		approvalProg, clearProg := mustParseProgArgs()
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, approvalProg, clearProg)
+		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, approvalProg, clearProg, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -558,23 +556,23 @@ var updateAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
-			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -584,7 +582,7 @@ var updateAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -601,7 +599,7 @@ var optInAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -628,23 +626,23 @@ var optInAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -654,7 +652,7 @@ var optInAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -671,7 +669,7 @@ var closeOutAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -698,23 +696,23 @@ var closeOutAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -724,7 +722,7 @@ var closeOutAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -741,7 +739,7 @@ var clearAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -768,23 +766,23 @@ var clearAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -794,7 +792,7 @@ var clearAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -811,7 +809,7 @@ var callAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -838,23 +836,23 @@ var callAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -864,7 +862,7 @@ var callAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -881,7 +879,7 @@ var deleteAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -908,23 +906,23 @@ var deleteAppCmd = &cobra.Command{
 		// Broadcast or write transaction to file
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lv)
+				if err2 != nil {
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -934,7 +932,7 @@ var deleteAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -1017,7 +1015,6 @@ var readStateAppCmd = &cobra.Command{
 		}
 
 		// Should be unreachable
-		return
 	},
 }
 
@@ -1035,25 +1032,29 @@ var infoAppCmd = &cobra.Command{
 		}
 		params := meta.Params
 
-		gsch := params.GlobalStateSchema
-		lsch := params.LocalStateSchema
-		epp := params.ExtraProgramPages
-
 		fmt.Printf("Application ID:        %d\n", appIdx)
 		fmt.Printf("Application account:   %v\n", basics.AppIndex(appIdx).Address())
 		fmt.Printf("Creator:               %v\n", params.Creator)
 		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
 		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))
 
+		ver := params.Version
+		if ver != nil {
+			fmt.Printf("Program version:       %d\n", *ver)
+		}
+
+		epp := params.ExtraProgramPages
 		if epp != nil {
 			fmt.Printf("Extra program pages:   %d\n", *epp)
 		}
 
+		gsch := params.GlobalStateSchema
 		if gsch != nil {
 			fmt.Printf("Max global byteslices: %d\n", gsch.NumByteSlice)
 			fmt.Printf("Max global integers:   %d\n", gsch.NumUint)
 		}
 
+		lsch := params.LocalStateSchema
 		if lsch != nil {
 			fmt.Printf("Max local byteslices:  %d\n", lsch.NumByteSlice)
 			fmt.Printf("Max local integers:    %d\n", lsch.NumUint)
@@ -1062,7 +1063,7 @@ var infoAppCmd = &cobra.Command{
 }
 
 // populateMethodCallTxnArgs parses and loads transactions from the files indicated by the values
-// slice. An error will occur if the transaction does not matched the expected type, it has a nonzero
+// slice. An error will occur if the transaction does not match the expected type, it has a nonzero
 // group ID, or if it is signed by a normal signature or Msig signature (but not Lsig signature)
 func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.SignedTxn, error) {
 	loadedTxns := make([]transactions.SignedTxn, len(values))
@@ -1184,7 +1185,7 @@ const maxAppArgs = 16
 // minus 1 for the final app argument becoming a tuple of the remaining method args
 const methodArgsTupleThreshold = maxAppArgs - 2
 
-// parseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
+// parseMethodArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
 // it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
 // if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
 func parseMethodArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationArgs *[][]byte) error {
@@ -1280,6 +1281,10 @@ var methodAppCmd = &cobra.Command{
 			case transactions.CloseOutOC, transactions.ClearStateOC:
 				reportWarnf("'--on-completion %s' may be ill-formed for use with --create", onCompletion)
 			}
+
+			if rejectVersion != 0 {
+				reportErrorf("--reject-version should not be provided with --create")
+			}
 		} else {
 			if appIdx == 0 {
 				reportErrorf("one of --app-id or --create must be provided")
@@ -1313,9 +1318,9 @@ var methodAppCmd = &cobra.Command{
 
 		var retType *abi.Type
 		if retTypeStr != abi.VoidReturnType {
-			theRetType, err := abi.TypeOf(retTypeStr)
-			if err != nil {
-				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, err)
+			theRetType, typeErr := abi.TypeOf(retTypeStr)
+			if typeErr != nil {
+				reportErrorf("cannot cast %s to abi type: %v", retTypeStr, typeErr)
 			}
 			retType = &theRetType
 		}
@@ -1371,7 +1376,7 @@ var methodAppCmd = &cobra.Command{
 
 		appCallTxn, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets, boxes,
-			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages)
+			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages, rejectVersion)
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
@@ -1404,9 +1409,9 @@ var methodAppCmd = &cobra.Command{
 		txnGroup = append(txnGroup, appCallTxn)
 		if len(txnGroup) > 1 {
 			// Only if transaction arguments are present, assign group ID
-			groupID, err := client.GroupID(txnGroup)
-			if err != nil {
-				reportErrorf("Cannot assign transaction group ID: %s", err)
+			groupID, gidErr := client.GroupID(txnGroup)
+			if gidErr != nil {
+				reportErrorf("Cannot assign transaction group ID: %s", gidErr)
 			}
 			for i := range txnGroup {
 				txnGroup[i].Group = groupID
@@ -1431,9 +1436,9 @@ var methodAppCmd = &cobra.Command{
 				continue
 			}
 
-			signedTxn, err := createSignedTransaction(client, shouldSign, dataDir, walletName, unsignedTxn, txnFromArgs.AuthAddr)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, signErr := createSignedTransaction(client, shouldSign, dataDir, walletName, unsignedTxn, txnFromArgs.AuthAddr)
+			if signErr != nil {
+				reportErrorf(errorSigningTX, signErr)
 			}
 
 			signedTxnGroup = append(signedTxnGroup, signedTxn)
@@ -1447,7 +1452,7 @@ var methodAppCmd = &cobra.Command{
 				err = writeSignedTxnsToFile(signedTxnGroup, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 			return
 		}
@@ -1460,9 +1465,9 @@ var methodAppCmd = &cobra.Command{
 
 		// Report tx details to user
 		if methodCreatesApp {
-			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 		} else if onCompletionEnum == transactions.UpdateApplicationOC {
-			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 		}
 
 		reportInfof("Issued %d transaction(s):", len(signedTxnGroup))
@@ -1477,12 +1482,12 @@ var methodAppCmd = &cobra.Command{
 		if !noWaitAfterSend {
 			_, err := waitForCommit(client, txid, lv)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 
 			resp, err := client.PendingTransactionInformation(txid)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 
 			if methodCreatesApp && resp.ApplicationIndex != nil && *resp.ApplicationIndex != 0 {

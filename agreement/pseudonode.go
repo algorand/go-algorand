@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -220,7 +220,7 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 		n.participationKeys = nil
 		return nil
 	}
-	balanceRound := balanceRound(voteRound, cparams)
+	balanceRound := BalanceRound(voteRound, cparams)
 
 	// measure the time it takes to acquire the voting keys.
 	beforeVotingKeysTime := time.Now()
@@ -289,7 +289,11 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 		return nil, nil
 	}
 
-	ve, err := n.factory.AssembleBlock(round)
+	addresses := make([]basics.Address, len(accounts))
+	for i := range accounts {
+		addresses[i] = accounts[i].Account
+	}
+	ve, err := n.factory.AssembleBlock(round, addresses)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
@@ -300,17 +304,17 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 	votes := make([]unauthenticatedVote, 0, len(accounts))
 	proposals := make([]proposal, 0, len(accounts))
 	for _, acc := range accounts {
-		payload, proposal, err := proposalForBlock(acc.Account, acc.VRF, ve, period, n.ledger)
-		if err != nil {
-			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", acc.Account, err)
+		payload, proposal, pErr := proposalForBlock(acc.Account, acc.VRF, ve, period, n.ledger)
+		if pErr != nil {
+			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", acc.Account, pErr)
 			continue
 		}
 
 		// attempt to make the vote
 		rv := rawVote{Sender: acc.Account, Round: round, Period: period, Step: propose, Proposal: proposal}
-		uv, err := makeVote(rv, acc.VotingSigner(), acc.VRF, n.ledger)
-		if err != nil {
-			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
+		uv, vErr := makeVote(rv, acc.VotingSigner(), acc.VRF, n.ledger)
+		if vErr != nil {
+			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", vErr)
 			continue
 		}
 
@@ -423,6 +427,9 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 				Type:         logspec.VoteBroadcast,
 				Sender:       vote.R.Sender.String(),
 				Hash:         vote.R.Proposal.BlockDigest.String(),
+				Round:        uint64(t.round),
+				Period:       uint64(t.period),
+				Step:         uint64(t.step),
 				ObjectRound:  uint64(vote.R.Round),
 				ObjectPeriod: uint64(vote.R.Period),
 				ObjectStep:   uint64(vote.R.Step),
@@ -550,6 +557,8 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.ProposalBroadcast,
 			Hash:         vote.R.Proposal.BlockDigest.String(),
+			Round:        uint64(t.round),
+			Period:       uint64(t.period),
 			ObjectRound:  uint64(vote.R.Round),
 			ObjectPeriod: uint64(vote.R.Period),
 		}

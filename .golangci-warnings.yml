@@ -5,15 +5,12 @@ run:
 linters:
   disable-all: true
   enable:
-    - deadcode
+    - gosec
     - partitiontest
-    - structcheck
-    - varcheck
-    - unconvert
-    - unused
-
 
 linters-settings:
+  gosec: # Go 1.22 makes G601 irrelevant
+    excludes: [G101, G103, G104, G107, G115, G202, G301, G302, G303, G304, G306, G307, G404, G601]
   custom:
     partitiontest:
       path: cmd/partitiontest_linter/plugin.so
@@ -53,9 +50,9 @@ issues:
     - path: _test\.go
       linters:
         - deadcode
+        - gosec
         - structcheck
         - varcheck
-        - unconvert
         - unused
     # Add all linters here -- Comment this block out for testing linters
     - path: test/linttest/lintissues\.go
@@ -63,7 +60,6 @@ issues:
         - deadcode
         - structcheck
         - varcheck
-        - unconvert
         - unused
     - path: crypto/secp256k1/secp256_test\.go
       linters:

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,8 +18,6 @@ package ledgercore
 
 import (
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -29,7 +27,7 @@ import (
 // separately, to better support on-disk and in-memory schemas that do not store them together.
 type AccountData struct {
 	AccountBaseData
-	VotingData
+	basics.VotingData
 }
 
 // AccountBaseData contains base account info like balance, status and total number of resources
@@ -39,6 +37,7 @@ type AccountBaseData struct {
 	RewardsBase        uint64
 	RewardedMicroAlgos basics.MicroAlgos
 	AuthAddr           basics.Address
+	IncentiveEligible  bool
 
 	TotalAppSchema      basics.StateSchema // Totals across created globals, and opted in locals.
 	TotalExtraAppPages  uint32             // Total number of extra pages across all created apps
@@ -48,23 +47,9 @@ type AccountBaseData struct {
 	TotalAssets         uint64             // Total of asset creations and optins (i.e. number of holdings)
 	TotalBoxes          uint64             // Total number of boxes associated to this account
 	TotalBoxBytes       uint64             // Total bytes for this account's boxes. keys _and_ values count
-}
 
-// VotingData holds participation information
-type VotingData struct {
-	VoteID       crypto.OneTimeSignatureVerifier
-	SelectionID  crypto.VRFVerifier
-	StateProofID merklesignature.Commitment
-
-	VoteFirstValid  basics.Round
-	VoteLastValid   basics.Round
-	VoteKeyDilution uint64
-}
-
-// OnlineAccountData holds MicroAlgosWithRewards and VotingData as needed for agreement
-type OnlineAccountData struct {
-	MicroAlgosWithRewards basics.MicroAlgos
-	VotingData
+	LastProposed  basics.Round // The last round that this account proposed the winning block.
+	LastHeartbeat basics.Round // The last round that this account sent a heartbeat to show it was online.
 }
 
 // ToAccountData returns ledgercore.AccountData from basics.AccountData
@@ -75,8 +60,8 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			MicroAlgos:         acct.MicroAlgos,
 			RewardsBase:        acct.RewardsBase,
 			RewardedMicroAlgos: acct.RewardedMicroAlgos,
-
-			AuthAddr: acct.AuthAddr,
+			AuthAddr:           acct.AuthAddr,
+			IncentiveEligible:  acct.IncentiveEligible,
 
 			TotalAppSchema:      acct.TotalAppSchema,
 			TotalExtraAppPages:  acct.TotalExtraAppPages,
@@ -86,8 +71,11 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			TotalAppLocalStates: uint64(len(acct.AppLocalStates)),
 			TotalBoxes:          acct.TotalBoxes,
 			TotalBoxBytes:       acct.TotalBoxBytes,
+
+			LastProposed:  acct.LastProposed,
+			LastHeartbeat: acct.LastHeartbeat,
 		},
-		VotingData: VotingData{
+		VotingData: basics.VotingData{
 			VoteID:          acct.VoteID,
 			SelectionID:     acct.SelectionID,
 			StateProofID:    acct.StateProofID,
@@ -105,6 +93,8 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.MicroAlgos = acct.MicroAlgos
 	a.RewardsBase = acct.RewardsBase
 	a.RewardedMicroAlgos = acct.RewardedMicroAlgos
+	a.AuthAddr = acct.AuthAddr
+	a.IncentiveEligible = acct.IncentiveEligible
 
 	a.VoteID = acct.VoteID
 	a.SelectionID = acct.SelectionID
@@ -113,11 +103,13 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.VoteLastValid = acct.VoteLastValid
 	a.VoteKeyDilution = acct.VoteKeyDilution
 
-	a.AuthAddr = acct.AuthAddr
 	a.TotalAppSchema = acct.TotalAppSchema
 	a.TotalExtraAppPages = acct.TotalExtraAppPages
 	a.TotalBoxes = acct.TotalBoxes
 	a.TotalBoxBytes = acct.TotalBoxBytes
+
+	a.LastProposed = acct.LastProposed
+	a.LastHeartbeat = acct.LastHeartbeat
 }
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
@@ -131,13 +123,31 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 // ClearOnlineState resets the account's fields to indicate that the account is an offline account
 func (u *AccountData) ClearOnlineState() {
 	u.Status = basics.Offline
-	u.VotingData = VotingData{}
+	u.VotingData = basics.VotingData{}
+}
+
+// Suspend sets the status to Offline, but does _not_ clear voting keys, so
+// that a heartbeat can bring the account back Online
+func (u *AccountData) Suspend() {
+	u.Status = basics.Offline
+	// To regain eligibility, the account will have to `keyreg` with the extra fee.
+	u.IncentiveEligible = false
+}
+
+// Suspended returns true if the account is suspended (offline with keys)
+func (u AccountData) Suspended() bool {
+	return u.Status == basics.Offline && !u.VoteID.IsEmpty()
+}
+
+// LastSeen returns the last round that the account was seen online
+func (u AccountData) LastSeen() basics.Round {
+	return max(u.LastProposed, u.LastHeartbeat)
 }
 
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
-func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.MicroAlgos) {
+func (u AccountData) MinBalance(proto *config.ConsensusParams) basics.MicroAlgos {
 	return basics.MinBalance(
 		proto,
 		uint64(u.TotalAssets),
@@ -146,6 +156,15 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.Micro
 		uint64(u.TotalExtraAppPages),
 		u.TotalBoxes, u.TotalBoxBytes,
 	)
+}
+
+// AvailableBalance returns the amount of MicroAlgos that are available for
+// spending without fully closing the account.
+func (u AccountData) AvailableBalance(proto *config.ConsensusParams) basics.MicroAlgos {
+	if left, o := basics.OSubA(u.MicroAlgos, u.MinBalance(proto)); !o {
+		return left
+	}
+	return basics.MicroAlgos{}
 }
 
 // IsZero checks if an AccountData value is the same as its zero value.
@@ -160,25 +179,21 @@ func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (m
 }
 
 // OnlineAccountData calculates the online account data given an AccountData, by adding the rewards.
-func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) OnlineAccountData {
+func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
 	if u.Status != basics.Online {
 		// if the account is not Online and agreement requests it for some reason, clear it out
-		return OnlineAccountData{}
+		return basics.OnlineAccountData{}
 	}
 
 	microAlgos, _, _ := basics.WithUpdatedRewards(
 		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
-	return OnlineAccountData{
+	return basics.OnlineAccountData{
 		MicroAlgosWithRewards: microAlgos,
-		VotingData: VotingData{
-			VoteID:          u.VoteID,
-			SelectionID:     u.SelectionID,
-			StateProofID:    u.StateProofID,
-			VoteFirstValid:  u.VoteFirstValid,
-			VoteLastValid:   u.VoteLastValid,
-			VoteKeyDilution: u.VoteKeyDilution,
-		},
+		VotingData:            u.VotingData,
+		IncentiveEligible:     u.IncentiveEligible,
+		LastProposed:          u.LastProposed,
+		LastHeartbeat:         u.LastHeartbeat,
 	}
 }
 

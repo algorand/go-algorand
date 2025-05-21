@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,16 +18,15 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
 // trackerDBInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
-func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr store.TrackerDBInitParams, err error) {
+func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefix string) (mgr trackerdb.InitParams, err error) {
 	dbs := l.trackerDB()
 	bdbs := l.blockDB()
 	log := l.trackerLog()
@@ -39,41 +38,57 @@ func trackerDBInitialize(l ledgerForTracker, catchpointEnabled bool, dbPathPrefi
 		return
 	}
 
-	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		arw := store.NewAccountsSQLReaderWriter(tx)
+	tp := trackerdb.Params{
+		InitAccounts:      l.GenesisAccounts(),
+		InitProto:         l.GenesisProtoVersion(),
+		GenesisHash:       l.GenesisHash(),
+		FromCatchpoint:    false,
+		CatchpointEnabled: catchpointEnabled,
+		DbPathPrefix:      dbPathPrefix,
+		BlockDb:           bdbs,
+	}
 
-		tp := store.TrackerDBParams{
-			InitAccounts:      l.GenesisAccounts(),
-			InitProto:         l.GenesisProtoVersion(),
-			GenesisHash:       l.GenesisHash(),
-			FromCatchpoint:    false,
-			CatchpointEnabled: catchpointEnabled,
-			DbPathPrefix:      dbPathPrefix,
-			BlockDb:           bdbs,
-		}
-		var err0 error
-		mgr, err0 = store.RunMigrations(ctx, tx, tp, log, store.AccountDBVersion)
-		if err0 != nil {
-			return err0
-		}
-		lastBalancesRound, err := arw.AccountsRound()
+	// run migrations
+	mgr, err = dbs.RunMigrations(context.Background(), tp, log, trackerdb.AccountDBVersion)
+	if err != nil {
+		return
+	}
+
+	// create reader for db
+	ar, err := dbs.MakeAccountsReader()
+	if err != nil {
+		return
+	}
+
+	// check current round
+	lastBalancesRound, err := ar.AccountsRound()
+	if err != nil {
+		return
+	}
+
+	// Check for blocks DB and tracker DB un-sync
+	if lastBalancesRound > lastestBlockRound {
+		log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
+		err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+			var aw trackerdb.AccountsWriterExt
+			aw, err = tx.MakeAccountsWriter()
+			if err != nil {
+				return err
+			}
+			err = aw.AccountsReset(ctx)
+			if err != nil {
+				return err
+			}
+			mgr, err = tx.RunMigrations(ctx, tp, log, trackerdb.AccountDBVersion)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 		if err != nil {
-			return err
+			return
 		}
-		// Check for blocks DB and tracker DB un-sync
-		if lastBalancesRound > lastestBlockRound {
-			log.Warnf("trackerDBInitialize: resetting accounts DB (on round %v, but blocks DB's latest is %v)", lastBalancesRound, lastestBlockRound)
-			err0 = arw.AccountsReset(ctx)
-			if err0 != nil {
-				return err0
-			}
-			mgr, err0 = store.RunMigrations(ctx, tx, tp, log, store.AccountDBVersion)
-			if err0 != nil {
-				return err0
-			}
-		}
-		return nil
-	})
+	}
 
 	return
 }

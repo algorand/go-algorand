@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,12 +59,11 @@ type ApplicationIndexerResponse struct {
 }
 
 type localLedger struct {
-	balances        map[basics.Address]basics.AccountData
-	txnGroup        []transactions.SignedTxn
-	groupIndex      int
-	round           uint64
-	aidx            basics.AppIndex
-	latestTimestamp int64
+	balances   map[basics.Address]basics.AccountData
+	txnGroup   []transactions.SignedTxn
+	groupIndex int
+	round      uint64
+	aidx       basics.AppIndex
 }
 
 func makeBalancesAdapter(
@@ -281,8 +280,12 @@ func (l *localLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (l *localLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
+func (l *localLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{}
+}
+
+func (l *localLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("localLedger: GetStateProofVerificationContext, needed for state proof verification, is not implemented in debugger")
 }
 
 func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
@@ -330,6 +333,38 @@ func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address
 	// Clear RewardsBase since tealdbg has no idea about rewards level so the underlying calculation with reward will fail.
 	ad.RewardsBase = 0
 	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+func (l *localLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// tealdbg does not understand rewards, so no pending rewards are applied.
+	// Further, it has no history, so we return the _current_ information,
+	// ignoring the `rnd` argument.
+	ad := l.balances[addr]
+	if ad.Status != basics.Online {
+		return basics.OnlineAccountData{}, nil
+	}
+
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}, nil
+}
+
+func (l *localLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, nil
+}
+
+func (l *localLedger) OnlineCirculation(rnd basics.Round, voteRound basics.Round) (basics.MicroAlgos, error) {
+	// A constant is fine for tealdbg
+	return basics.Algos(1_000_000_000), nil // 1B
 }
 
 func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

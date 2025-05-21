@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+// Package pingpong provides a transaction generating utility for performance testing.
+//
+//nolint:unused,structcheck,deadcode,varcheck // ignore unused pingpong code
 package pingpong
 
 import (
@@ -54,7 +57,7 @@ type CreatablesInfo struct {
 // pingPongAccount represents the account state for each account in the pingpong application
 // This includes the current balance and public/private keys tied to the account
 type pingPongAccount struct {
-	balance      uint64
+	balance      atomic.Uint64
 	balanceRound uint64
 
 	deadlock.Mutex
@@ -66,22 +69,22 @@ type pingPongAccount struct {
 }
 
 func (ppa *pingPongAccount) getBalance() uint64 {
-	return atomic.LoadUint64(&ppa.balance)
+	return ppa.balance.Load()
 }
 
 func (ppa *pingPongAccount) setBalance(balance uint64) {
-	atomic.StoreUint64(&ppa.balance, balance)
+	ppa.balance.Store(balance)
 }
 
 func (ppa *pingPongAccount) addBalance(offset int64) {
 	if offset >= 0 {
-		atomic.AddUint64(&ppa.balance, uint64(offset))
+		ppa.balance.Add(uint64(offset))
 		return
 	}
 	for {
-		v := atomic.LoadUint64(&ppa.balance)
+		v := ppa.balance.Load()
 		nv := v - uint64(-offset)
-		done := atomic.CompareAndSwapUint64(&ppa.balance, v, nv)
+		done := ppa.balance.CompareAndSwap(v, nv)
 		if done {
 			return
 		}
@@ -115,7 +118,7 @@ func (ppa *pingPongAccount) String() string {
 	ppa.Lock()
 	defer ppa.Unlock()
 	var ow strings.Builder
-	fmt.Fprintf(&ow, "%s %d", ppa.pk.String(), ppa.balance)
+	fmt.Fprintf(&ow, "%s %d", ppa.pk.String(), ppa.balance.Load())
 	if len(ppa.holdings) > 0 {
 		fmt.Fprintf(&ow, "[")
 		first := true
@@ -292,17 +295,19 @@ func (pps *WorkerState) scheduleAction() bool {
 		}
 		pps.refreshPos = 0
 	}
-	addr := pps.refreshAddrs[pps.refreshPos]
-	ai, err := pps.client.AccountInformation(addr, true)
-	if err == nil {
-		ppa := pps.accounts[addr]
+	if pps.cfg.NumApp > 0 || pps.cfg.NumAsset > 0 {
+		addr := pps.refreshAddrs[pps.refreshPos]
+		ai, err := pps.client.AccountInformation(addr, true)
+		if err == nil {
+			ppa := pps.accounts[addr]
 
-		pps.integrateAccountInfo(addr, ppa, ai)
-	} else {
-		if !pps.cfg.Quiet {
-			fmt.Printf("background refresh err: %v\n", err)
+			pps.integrateAccountInfo(addr, ppa, ai)
+		} else {
+			if !pps.cfg.Quiet {
+				fmt.Printf("background refresh err: %v\n", err)
+			}
+			return false
 		}
-		return false
 	}
 	pps.refreshPos++
 	return true
@@ -810,7 +815,14 @@ func (pps *WorkerState) sendFromTo(
 			sentCount++
 			pps.schedule(1)
 			var txid string
-			txid, sendErr = client.BroadcastTransaction(stxn)
+			if pps.cfg.AsyncSending {
+				sendErr = client.BroadcastTransactionAsync(stxn)
+				if sendErr == nil {
+					txid = stxn.Txn.ID().String()
+				}
+			} else {
+				txid, sendErr = client.BroadcastTransaction(stxn)
+			}
 			pps.recordTxidSent(txid, sendErr)
 		} else {
 			// Generate txn group
@@ -1024,11 +1036,11 @@ type paymentUpdate struct {
 }
 
 func (au *paymentUpdate) apply(pps *WorkerState) {
-	pps.accounts[au.from].balance -= (au.fee + au.amt)
+	pps.accounts[au.from].balance.Add(-(au.fee + au.amt))
 	// update account balance
 	to := pps.accounts[au.to]
 	if to != nil {
-		to.balance += au.amt
+		to.balance.Add(au.amt)
 	}
 }
 
@@ -1152,7 +1164,7 @@ type assetUpdate struct {
 }
 
 func (au *assetUpdate) apply(pps *WorkerState) {
-	pps.accounts[au.from].balance -= au.fee
+	pps.accounts[au.from].balance.Add(-au.fee)
 	pps.accounts[au.from].holdings[au.aidx] -= au.amt
 	to := pps.accounts[au.to]
 	if to.holdings == nil {
@@ -1205,7 +1217,7 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 		}
 		accounts = accounts[1:]
 	}
-	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, boxRefs)
+	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, boxRefs, 0)
 	if err != nil {
 		return
 	}
@@ -1228,7 +1240,7 @@ type appUpdate struct {
 }
 
 func (au *appUpdate) apply(pps *WorkerState) {
-	pps.accounts[au.from].balance -= au.fee
+	pps.accounts[au.from].balance.Add(-au.fee)
 }
 
 func (pps *WorkerState) constructNFTGenTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
@@ -1311,7 +1323,7 @@ type nftgenUpdate struct {
 }
 
 func (au *nftgenUpdate) apply(pps *WorkerState) {
-	pps.accounts[au.from].balance -= au.fee
+	pps.accounts[au.from].balance.Add(-au.fee)
 }
 
 func signTxn(signer *pingPongAccount, txn transactions.Transaction, cfg PpConfig) (stxn transactions.SignedTxn, err error) {

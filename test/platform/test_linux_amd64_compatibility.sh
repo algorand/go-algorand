@@ -7,11 +7,11 @@ BLUE_FG=$(tput setaf 4 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 OS_LIST=(
-    centos:7
-    quay.io/centos/centos:stream8
-    fedora:28
-    ubuntu:16.04
-    ubuntu:18.04
+    quay.io/centos/centos:stream9
+    fedora:39
+    fedora:40
+    ubuntu:20.04
+    ubuntu:22.04
 )
 
 FAILED=()

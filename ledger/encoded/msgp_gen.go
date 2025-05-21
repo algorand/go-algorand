@@ -6,6 +6,8 @@ import (
 	"sort"
 
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -13,25 +15,51 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> BalanceRecordV5MaxSize()
 //
 // BalanceRecordV6
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> BalanceRecordV6MaxSize()
 //
 // KVRecordV6
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> KVRecordV6MaxSize()
+//
+// OnlineAccountRecordV6
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//           |-----> OnlineAccountRecordV6MaxSize()
+//
+// OnlineRoundParamsRecordV6
+//             |-----> (*) MarshalMsg
+//             |-----> (*) CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> (*) Msgsize
+//             |-----> (*) MsgIsZero
+//             |-----> OnlineRoundParamsRecordV6MaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -71,7 +99,12 @@ func (_ *BalanceRecordV5) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *BalanceRecordV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *BalanceRecordV5) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -85,7 +118,7 @@ func (z *BalanceRecordV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Address.UnmarshalMsg(bts)
+			bts, err = (*z).Address.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Address")
 				return
@@ -93,7 +126,7 @@ func (z *BalanceRecordV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).AccountData.UnmarshalMsg(bts)
+			bts, err = (*z).AccountData.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AccountData")
 				return
@@ -123,13 +156,13 @@ func (z *BalanceRecordV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "pk":
-				bts, err = (*z).Address.UnmarshalMsg(bts)
+				bts, err = (*z).Address.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Address")
 					return
 				}
 			case "ad":
-				bts, err = (*z).AccountData.UnmarshalMsg(bts)
+				bts, err = (*z).AccountData.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AccountData")
 					return
@@ -147,6 +180,9 @@ func (z *BalanceRecordV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *BalanceRecordV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *BalanceRecordV5) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*BalanceRecordV5)
 	return ok
@@ -161,6 +197,13 @@ func (z *BalanceRecordV5) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *BalanceRecordV5) MsgIsZero() bool {
 	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func BalanceRecordV5MaxSize() (s int) {
+	s = 1 + 3 + basics.AddressMaxSize() + 3
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -233,7 +276,12 @@ func (_ *BalanceRecordV6) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *BalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *BalanceRecordV6) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0003 int
@@ -247,7 +295,7 @@ func (z *BalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			bts, err = (*z).Address.UnmarshalMsg(bts)
+			bts, err = (*z).Address.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Address")
 				return
@@ -255,7 +303,7 @@ func (z *BalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			bts, err = (*z).AccountData.UnmarshalMsg(bts)
+			bts, err = (*z).AccountData.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "AccountData")
 				return
@@ -289,7 +337,7 @@ func (z *BalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "struct-from-array", "Resources")
 					return
 				}
-				bts, err = zb0002.UnmarshalMsg(bts)
+				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Resources", zb0001)
 					return
@@ -329,13 +377,13 @@ func (z *BalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "a":
-				bts, err = (*z).Address.UnmarshalMsg(bts)
+				bts, err = (*z).Address.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Address")
 					return
 				}
 			case "b":
-				bts, err = (*z).AccountData.UnmarshalMsg(bts)
+				bts, err = (*z).AccountData.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "AccountData")
 					return
@@ -367,7 +415,7 @@ func (z *BalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						err = msgp.WrapError(err, "Resources")
 						return
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Resources", zb0001)
 						return
@@ -393,6 +441,9 @@ func (z *BalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *BalanceRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *BalanceRecordV6) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*BalanceRecordV6)
 	return ok
@@ -415,6 +466,21 @@ func (z *BalanceRecordV6) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *BalanceRecordV6) MsgIsZero() bool {
 	return ((*z).Address.MsgIsZero()) && ((*z).AccountData.MsgIsZero()) && (len((*z).Resources) == 0) && ((*z).ExpectingMoreEntries == false)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func BalanceRecordV6MaxSize() (s int) {
+	s = 1 + 2 + basics.AddressMaxSize() + 2
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
+	s += 2
+	s += msgp.MapHeaderSize
+	// Adding size of map keys for z.Resources
+	s += resourcesPerCatchpointFileChunkBackwardCompatible * (msgp.Uint64Size)
+	// Adding size of map values for z.Resources
+	s += resourcesPerCatchpointFileChunkBackwardCompatible
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
+	s += 2 + msgp.BoolSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -454,7 +520,12 @@ func (_ *KVRecordV6) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *KVRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *KVRecordV6) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -570,6 +641,9 @@ func (z *KVRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *KVRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *KVRecordV6) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*KVRecordV6)
 	return ok
@@ -584,4 +658,367 @@ func (z *KVRecordV6) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *KVRecordV6) MsgIsZero() bool {
 	return (len((*z).Key) == 0) && (len((*z).Value) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func KVRecordV6MaxSize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + KVRecordV6MaxKeyLength + 2 + msgp.BytesPrefixSize + KVRecordV6MaxValueLength
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *OnlineAccountRecordV6) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 6 bits */
+	if (*z).Address.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Data.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).NormalizedOnlineBalance == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).UpdateRound.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if (*z).VoteLastValid.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "addr"
+			o = append(o, 0xa4, 0x61, 0x64, 0x64, 0x72)
+			o = (*z).Address.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "data"
+			o = append(o, 0xa4, 0x64, 0x61, 0x74, 0x61)
+			o = (*z).Data.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "nob"
+			o = append(o, 0xa3, 0x6e, 0x6f, 0x62)
+			o = msgp.AppendUint64(o, (*z).NormalizedOnlineBalance)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "upd"
+			o = append(o, 0xa3, 0x75, 0x70, 0x64)
+			o = (*z).UpdateRound.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "vlv"
+			o = append(o, 0xa3, 0x76, 0x6c, 0x76)
+			o = (*z).VoteLastValid.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *OnlineAccountRecordV6) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OnlineAccountRecordV6)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *OnlineAccountRecordV6) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Address.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Address")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).UpdateRound.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "UpdateRound")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).NormalizedOnlineBalance, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "NormalizedOnlineBalance")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).VoteLastValid.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "VoteLastValid")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Data.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Data")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = OnlineAccountRecordV6{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "addr":
+				bts, err = (*z).Address.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Address")
+					return
+				}
+			case "upd":
+				bts, err = (*z).UpdateRound.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "UpdateRound")
+					return
+				}
+			case "nob":
+				(*z).NormalizedOnlineBalance, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "NormalizedOnlineBalance")
+					return
+				}
+			case "vlv":
+				bts, err = (*z).VoteLastValid.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "VoteLastValid")
+					return
+				}
+			case "data":
+				bts, err = (*z).Data.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Data")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *OnlineAccountRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *OnlineAccountRecordV6) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OnlineAccountRecordV6)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *OnlineAccountRecordV6) Msgsize() (s int) {
+	s = 1 + 5 + (*z).Address.Msgsize() + 4 + (*z).UpdateRound.Msgsize() + 4 + msgp.Uint64Size + 4 + (*z).VoteLastValid.Msgsize() + 5 + (*z).Data.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *OnlineAccountRecordV6) MsgIsZero() bool {
+	return ((*z).Address.MsgIsZero()) && ((*z).UpdateRound.MsgIsZero()) && ((*z).NormalizedOnlineBalance == 0) && ((*z).VoteLastValid.MsgIsZero()) && ((*z).Data.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func OnlineAccountRecordV6MaxSize() (s int) {
+	s = 1 + 5 + basics.AddressMaxSize() + 4 + basics.RoundMaxSize() + 4 + msgp.Uint64Size + 4 + basics.RoundMaxSize() + 5
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *OnlineRoundParamsRecordV6) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 3 bits */
+	if (*z).Data.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).Round.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "data"
+			o = append(o, 0xa4, 0x64, 0x61, 0x74, 0x61)
+			o = (*z).Data.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "rnd"
+			o = append(o, 0xa3, 0x72, 0x6e, 0x64)
+			o = (*z).Round.MarshalMsg(o)
+		}
+	}
+	return
+}
+
+func (_ *OnlineRoundParamsRecordV6) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OnlineRoundParamsRecordV6)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *OnlineRoundParamsRecordV6) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Round")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Data.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Data")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = OnlineRoundParamsRecordV6{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "rnd":
+				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Round")
+					return
+				}
+			case "data":
+				bts, err = (*z).Data.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "Data")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *OnlineRoundParamsRecordV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *OnlineRoundParamsRecordV6) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*OnlineRoundParamsRecordV6)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *OnlineRoundParamsRecordV6) Msgsize() (s int) {
+	s = 1 + 4 + (*z).Round.Msgsize() + 5 + (*z).Data.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *OnlineRoundParamsRecordV6) MsgIsZero() bool {
+	return ((*z).Round.MsgIsZero()) && ((*z).Data.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func OnlineRoundParamsRecordV6MaxSize() (s int) {
+	s = 1 + 4 + basics.RoundMaxSize() + 5
+	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
+	return
 }

@@ -71,7 +71,8 @@ while [ $CROUND -lt $TIMEOUT_ROUND ]; do
     CROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
-${gcmd} clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
+# send txn that valid right after the TIMEOUT_ROUND
+${gcmd} clerk send --firstvalid $((${TIMEOUT_ROUND} + 1))  --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
 
 cat >${TEMPDIR}/true.teal<<EOF
 #pragma version 2
@@ -156,7 +157,14 @@ printf '\x02' | dd of=${TEMPDIR}/true2.lsig bs=1 seek=0 count=1 conv=notrunc
 ${gcmd} clerk compile ${TEAL}/quine.teal -m
 trap 'rm ${TEAL}/quine.teal.*' EXIT
 if ! diff ${TEAL}/quine.map ${TEAL}/quine.teal.tok.map; then
-    echo "produced source maps do not match"
+    echo "produced source maps do not match: ${TEAL}/quine.map vs ${TEAL}/quine.teal.tok.map"
+    exit 1
+fi
+
+${gcmd} clerk compile ${TEAL}/sourcemap-test.teal -m
+trap 'rm ${TEAL}/sourcemap-test.teal.*' EXIT
+if ! diff ${TEAL}/sourcemap-test.map ${TEAL}/sourcemap-test.teal.tok.map; then
+    echo "produced source maps do not match: ${TEAL}/sourcemap-test.map vs ${TEAL}/sourcemap-test.teal.tok.map"
     exit 1
 fi
 

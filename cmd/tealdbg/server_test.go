@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -58,8 +57,7 @@ func (t testServerDebugFrontend) eventLoop() {
 			if n.Event == "completed" {
 				return
 			}
-			if n.Event == "registered" {
-			}
+			// No special action needed for 'registered' events
 			// simulate user delay to workaround race cond
 			time.Sleep(10 * time.Millisecond)
 			t.debugger.Resume()
@@ -105,17 +103,9 @@ func tryStartingServerDebug(t *testing.T, ds *DebugServer) (ok bool) {
 }
 
 func serverTestImpl(t *testing.T, run func(t *testing.T, ds *DebugServer) bool, dp *DebugParams) {
-	maxPortNum := 65000
-	minPortNum := 40000
-	attempt := 0
-	started := false
-	var ds DebugServer
-	for attempt < 5 && !started {
-		port = rand.Intn(maxPortNum-minPortNum) + minPortNum
-		ds = makeDebugServer("127.0.0.1", port, &mockFactory{}, dp)
-		started = run(t, &ds)
-		attempt++
-	}
+	// Using 0 as port should select a random available port.
+	ds := makeDebugServer("127.0.0.1", 0, &mockFactory{}, dp)
+	started := run(t, &ds)
 
 	require.True(t, started)
 	require.NotEmpty(t, ds)
@@ -124,13 +114,15 @@ func serverTestImpl(t *testing.T, run func(t *testing.T, ds *DebugServer) bool, 
 	require.NotNil(t, ds.server)
 }
 
-func TestServerRemote(t *testing.T) {
+func TestServerRemote(t *testing.T) { // nolint:paralleltest // Modifies global config (`port`).
 	partitiontest.PartitionTest(t)
+
 	serverTestImpl(t, tryStartingServerRemote, &DebugParams{})
 }
 
-func TestServerLocal(t *testing.T) {
+func TestServerLocal(t *testing.T) { // nolint:paralleltest // Modifies global config (`port`).
 	partitiontest.PartitionTest(t)
+
 	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 	dp := DebugParams{
 		ProgramNames: []string{"test"},

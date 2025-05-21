@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@ func loadKeyfileOrMnemonic(keyfile string, mnemonic string) crypto.Seed {
 	}
 
 	fmt.Fprintf(os.Stderr, "Must specify one of keyfile or mnemonic\n")
-	os.Exit(1)
+	os.Exit(1) //nolint:revive // intentional
 
 	panic("unreachable")
 }

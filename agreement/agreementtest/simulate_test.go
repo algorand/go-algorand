@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreementtest
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/rand"
 	"os"
 	"strconv"
@@ -78,9 +79,17 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
+func (b testValidatedBlock) Round() basics.Round {
+	return b.Inside.Round()
+}
+
+func (b testValidatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.Block {
 	b.Inside.BlockHeader.Seed = s
-	return b
+	b.Inside.BlockHeader.Proposer = proposer
+	if !eligible {
+		b.Inside.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
+	return agreement.Block(b.Inside)
 }
 
 type testBlockValidator struct{}
@@ -93,7 +102,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.ValidatedBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round, addrs []basics.Address) (agreement.UnfinishedBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
@@ -124,24 +133,10 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) agreement.Ledge
 func (l *testLedger) copy() *testLedger {
 	dup := new(testLedger)
 
-	dup.entries = make(map[basics.Round]bookkeeping.Block)
-	dup.certs = make(map[basics.Round]agreement.Certificate)
-	dup.state = make(map[basics.Address]basics.AccountData)
-	dup.notifications = make(map[basics.Round]signal)
-
-	for k, v := range l.entries {
-		dup.entries[k] = v
-	}
-	for k, v := range l.certs {
-		dup.certs[k] = v
-	}
-	for k, v := range l.state {
-		dup.state[k] = v
-	}
-	for k, v := range dup.notifications {
-		// note that old opened channels will now fire when these are closed
-		dup.notifications[k] = v
-	}
+	dup.entries = maps.Clone(l.entries)
+	dup.certs = maps.Clone(l.certs)
+	dup.state = maps.Clone(l.state)
+	dup.notifications = maps.Clone(l.notifications) // old opened channels will now fire when these are closed
 	dup.nextRound = l.nextRound
 
 	return dup
@@ -212,10 +207,10 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 		err := fmt.Errorf("Lookup called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
-	return l.state[a].OnlineAccountData(), nil
+	return basics_testing.OnlineAccountData(l.state[a]), nil
 }
 
-func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -227,7 +222,7 @@ func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
+		sum, overflowed = basics.OAddA(sum, basics_testing.OnlineAccountData(rec).VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}

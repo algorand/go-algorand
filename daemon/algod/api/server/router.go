@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,8 @@ import (
 	"net"
 	"net/http"
 
+	"golang.org/x/sync/semaphore"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
@@ -30,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/data"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/experimental"
 	npprivate "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/private"
 	nppublic "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/nonparticipating/public"
@@ -40,10 +43,18 @@ import (
 	"github.com/algorand/go-algorand/util/tokens"
 )
 
+// APINodeInterface describes all the node methods required by common and v2 APIs, and the server/router
+type APINodeInterface interface {
+	lib.NodeInterface
+	v2.NodeInterface
+}
+
 const (
 	apiV1Tag = "/v1"
 	// TokenHeader is the header where we put the token.
 	TokenHeader = "X-Algo-API-Token"
+	// MaxRequestBodyBytes is the maximum request body size that we allow in our APIs.
+	MaxRequestBodyBytes = "10MB"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -63,15 +74,28 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 }
 
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
-	if err := tokens.ValidateAPIToken(apiToken); err != nil {
-		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
-	}
+func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
+	// check admin token and init admin middleware
 	if err := tokens.ValidateAPIToken(adminAPIToken); err != nil {
 		logger.Errorf("Invalid adminAPIToken was passed to NewRouter ('%s'): %v", adminAPIToken, err)
 	}
-	adminAuthenticator := middlewares.MakeAuth(TokenHeader, []string{adminAPIToken})
-	apiAuthenticator := middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken})
+	adminMiddleware := []echo.MiddlewareFunc{
+		middlewares.MakeAuth(TokenHeader, []string{adminAPIToken}),
+	}
+
+	// check public api tokens and init public middleware
+	publicMiddleware := []echo.MiddlewareFunc{
+		middleware.BodyLimit(MaxRequestBodyBytes),
+	}
+	if apiToken == "" {
+		logger.Warn("Running with public API authentication disabled")
+	} else {
+		if err := tokens.ValidateAPIToken(apiToken); err != nil {
+			logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
+		}
+		publicMiddleware = append(publicMiddleware, middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken}))
+
+	}
 
 	e := echo.New()
 
@@ -83,7 +107,15 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 		middleware.RemoveTrailingSlash())
 	e.Use(
 		middlewares.MakeLogger(logger),
-		middlewares.MakeCORS(TokenHeader))
+		middleware.Gzip(),
+	)
+	// Optional middleware for Private Network Access Header (PNA). Must come before CORS middleware.
+	if node.Config().EnablePrivateNetworkAccessHeader {
+		e.Use(middlewares.MakePNA())
+	}
+	e.Use(
+		middlewares.MakeCORS(TokenHeader),
+	)
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
@@ -93,34 +125,46 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	// Route pprof requests to DefaultServeMux.
 	// The auth middleware removes /urlAuth/:token so that it can be routed correctly.
 	if node.Config().EnableProfiler {
-		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
-		e.GET(fmt.Sprintf("%s/debug/pprof/*", middlewares.URLAuthPrefix), echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
+		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminMiddleware...)
+		e.GET(fmt.Sprintf("%s/debug/pprof/*", middlewares.URLAuthPrefix), echo.WrapHandler(http.DefaultServeMux), adminMiddleware...)
 	}
 	// Registering common routes (no auth)
 	registerHandlers(e, "", common.Routes, ctx)
 
 	// Registering v1 routes
-	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx, apiAuthenticator)
+	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx, publicMiddleware...)
 
 	// Registering v2 routes
 	v2Handler := v2.Handlers{
-		Node:     apiNode{node},
-		Log:      logger,
-		Shutdown: shutdown,
+		Node:          node,
+		Log:           logger,
+		Shutdown:      shutdown,
+		KeygenLimiter: semaphore.NewWeighted(1),
 	}
-	nppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-	npprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
-	ppublic.RegisterHandlers(e, &v2Handler, apiAuthenticator)
-	pprivate.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+	nppublic.RegisterHandlers(e, &v2Handler, publicMiddleware...)
+	npprivate.RegisterHandlers(e, &v2Handler, adminMiddleware...)
+	ppublic.RegisterHandlers(e, &v2Handler, publicMiddleware...)
+	pprivate.RegisterHandlers(e, &v2Handler, adminMiddleware...)
+
+	if node.Config().EnableFollowMode {
+		data.RegisterHandlers(e, &v2Handler, publicMiddleware...)
+	}
 
 	if node.Config().EnableExperimentalAPI {
-		experimental.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+		experimental.RegisterHandlers(e, &v2Handler, publicMiddleware...)
 	}
 
 	return e
 }
 
-// apiNode wraps the AlgorandFullNode to provide v2.NodeInterface.
-type apiNode struct{ *node.AlgorandFullNode }
+// FollowerNode wraps the AlgorandFollowerNode to provide v2.NodeInterface.
+type FollowerNode struct{ *node.AlgorandFollowerNode }
 
-func (n apiNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+// LedgerForAPI implements the v2.Handlers interface
+func (n FollowerNode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }
+
+// APINode wraps the AlgorandFullNode to provide v2.NodeInterface.
+type APINode struct{ *node.AlgorandFullNode }
+
+// LedgerForAPI implements the v2.Handlers interface
+func (n APINode) LedgerForAPI() v2.LedgerForAPI { return n.Ledger() }

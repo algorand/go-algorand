@@ -10,13 +10,16 @@
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
+					"AdminAPIToken": "{{AdminAPIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
 					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -30,13 +33,16 @@
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
+					"AdminAPIToken": "{{AdminAPIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
 					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -50,13 +56,16 @@
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
+					"AdminAPIToken": "{{AdminAPIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
 					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -70,13 +79,16 @@
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
+					"AdminAPIToken": "{{AdminAPIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
 					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -90,13 +102,16 @@
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
+					"AdminAPIToken": "{{AdminAPIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
 					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -110,13 +125,16 @@
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
+					"AdminAPIToken": "{{AdminAPIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
 					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -130,13 +148,16 @@
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
+					"AdminAPIToken": "{{AdminAPIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
 					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -150,13 +171,16 @@
 					"NetAddress": "{{NetworkPort}}",
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
+					"AdminAPIToken": "{{AdminAPIToken}}",
 					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
 					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableIncomingMessageFilter\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -180,7 +204,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -198,13 +224,15 @@
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": false,
+					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": false,
+					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
-					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"EnableBlockStats": true,
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0,\"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -228,7 +256,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -252,7 +282,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -276,7 +308,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -294,13 +328,15 @@
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": false,
+					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": false,
+					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
-					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"EnableBlockStats": true,
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0,\"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -318,13 +354,15 @@
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
+					"EnableTelemetry": false,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
+					"EnableMetrics": false,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0,\"EnableAccountUpdatesStats\": true  }"
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -342,13 +380,15 @@
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
+					"EnableTelemetry": false,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
+					"EnableMetrics": false,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0,\"EnableAccountUpdatesStats\": true  }"
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -366,13 +406,15 @@
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": true,
+					"EnableTelemetry": false,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": true,
+					"EnableMetrics": false,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
-					"EnableBlockStats": true,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0,\"EnableAccountUpdatesStats\": true  }"
+					"EnableBlockStats": false,
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -396,7 +438,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -420,7 +464,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -444,7 +490,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -468,7 +516,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -486,13 +536,15 @@
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": false,
+					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": false,
+					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
-					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"EnableBlockStats": true,
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0,\"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -516,7 +568,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -540,7 +594,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -564,7 +620,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -582,13 +640,15 @@
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": false,
+					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": false,
+					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
-					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"EnableBlockStats": true,
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0,\"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -606,13 +666,15 @@
 					],
 					"APIEndpoint": "{{APIEndpoint}}",
 					"APIToken": "{{APIToken}}",
-					"EnableTelemetry": false,
+					"EnableTelemetry": true,
 					"TelemetryURI": "{{TelemetryURI}}",
-					"EnableMetrics": false,
+					"EnableMetrics": true,
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
-					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"EnableBlockStats": true,
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0,\"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -636,7 +698,9 @@
 					"MetricsURI": "{{MetricsURI}}",
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true}"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"EnableRuntimeMetrics\": true, \"EnableExperimentalAPI\": true, \"CadaverSizeTarget\": 0, \"EnableAccountUpdatesStats\": true, \"EnableNetDevMetrics\": true}",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -658,7 +722,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -680,7 +746,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -702,7 +770,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -724,7 +794,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -746,7 +818,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -768,7 +842,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -790,7 +866,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -812,7 +890,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -834,7 +914,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		},
@@ -856,7 +938,9 @@
 					"EnableMetrics": false,
 					"EnableService": false,
 					"EnableBlockStats": false,
-					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true  }"
+					"ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableProfiler\": true, \"EnableExperimentalAPI\": true, \"EnableNetDevMetrics\": true }",
+					"P2PBootstrap": false,
+					"PublicAddress": false
 				}
 			]
 		}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -35,7 +36,7 @@ import (
 func BenchmarkTxnTypes(b *testing.B) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	ledgertesting.BenchConsensusRange(b, 30, 0, func(b *testing.B, ver int, cv protocol.ConsensusVersion) {
-		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv)
+		l := newSimpleLedgerWithConsensusVersion(b, genBalances, cv, config.GetDefaultLocal())
 		defer l.Close()
 
 		createasa := txntest.Txn{

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,6 +29,7 @@ import (
 // properly decoded from ConsensusVersionView.
 // This test is only needed for agreement state serialization switch from reflection to msgp.
 func TestSerializableErrorBackwardCompatibility(t *testing.T) {
+	partitiontest.PartitionTest(t)
 
 	encodedEmpty, err := base64.StdEncoding.DecodeString("gqNFcnLAp1ZlcnNpb26jdjEw")
 	require.NoError(t, err)

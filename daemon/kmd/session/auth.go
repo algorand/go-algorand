@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,14 +52,11 @@ func validateHandleSecret(handleSecret []byte) error {
 }
 
 func splitHandle(walletHandle []byte) ([]byte, []byte, error) {
-	split := bytes.SplitN(walletHandle, wHandleTokenSplitChar, 2)
+	handleID, handleSecret, found := bytes.Cut(walletHandle, wHandleTokenSplitChar)
 
-	if len(split) != 2 {
+	if !found {
 		return nil, nil, fmt.Errorf("wrong number of token parts")
 	}
-
-	handleID := split[0]
-	handleSecret := split[1]
 
 	err := validateHandleID(handleID)
 	if err != nil {
@@ -227,7 +224,7 @@ func (sm *Manager) authMaybeRenewWalletHandleToken(walletHandleToken []byte, ren
 	}
 
 	// Compute how many seconds are left until the handle expires
-	expiresSeconds := int64(handle.expires.Sub(time.Now()).Seconds())
+	expiresSeconds := int64(time.Until(handle.expires).Seconds())
 
 	// Return the wallet and seconds remaining to expiration
 	return handle.wallet, expiresSeconds, nil

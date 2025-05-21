@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"slices"
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -223,7 +224,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		idxs = VcIdxs
 	}
 
-	sort.Slice(idxs, func(i, j int) bool { return idxs[i] < idxs[j] })
+	slices.Sort(idxs)
 
 	return tree.createProof(idxs)
 }

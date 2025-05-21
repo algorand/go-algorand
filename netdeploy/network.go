@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,11 @@ package netdeploy
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -29,7 +32,9 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/netdeploy/remote"
 	"github.com/algorand/go-algorand/nodecontrol"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -42,8 +47,8 @@ type NetworkCfg struct {
 	Name string `json:"Name,omitempty"`
 	// RelayDirs are directories where relays live (where we check for connection IP:Port)
 	// They are stored relative to root dir (e.g. "Primary")
-	RelayDirs    []string `json:"RelayDirs,omitempty"`
-	TemplateFile string   `json:"TemplateFile,omitempty"` // Template file used to create the network
+	RelayDirs []string        `json:"RelayDirs,omitempty"`
+	Template  NetworkTemplate `json:"Template,omitempty"` // Template file used to create the network
 }
 
 // Network represents an instance of a deployed network
@@ -55,27 +60,52 @@ type Network struct {
 	nodeExitCallback nodecontrol.AlgodExitErrorCallback
 }
 
+// TemplateOverride is a function that modifies the NetworkTemplate after it is read in.
+type TemplateOverride func(*NetworkTemplate)
+
+// OverrideDevMode turns on dev mode, regardless of whether the json says so.
+func OverrideDevMode(template *NetworkTemplate) {
+	template.Genesis.DevMode = true
+	if len(template.Nodes) > 0 {
+		template.Nodes[0].IsRelay = false
+	}
+}
+
+// OverrideConsensusVersion changes the protocol version of a template.
+func OverrideConsensusVersion(ver protocol.ConsensusVersion) TemplateOverride {
+	return func(template *NetworkTemplate) {
+		template.Genesis.ConsensusProtocol = ver
+	}
+}
+
+// OverrideKmdConfig changes the KMD config.
+func OverrideKmdConfig(kmdConfig TemplateKMDConfig) TemplateOverride {
+	return func(template *NetworkTemplate) {
+		template.kmdConfig = kmdConfig
+	}
+}
+
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
-func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrideDevMode bool) (Network, error) {
+func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrides ...TemplateOverride) (Network, error) {
 	n := Network{
 		rootDir:          rootDir,
 		nodeExitCallback: nodeExitCallback,
 	}
 	n.cfg.Name = name
-	n.cfg.TemplateFile = templateFile
 
-	template, err := loadTemplate(templateFile)
-	if err == nil {
-		if overrideDevMode {
-			template.Genesis.DevMode = true
-			if len(template.Nodes) > 0 {
-				template.Nodes[0].IsRelay = false
-			}
-		}
-		err = template.Validate()
+	var err error
+	template := defaultNetworkTemplate
+
+	if err = LoadTemplateFromReader(templateReader, &template); err != nil {
+		return n, err
 	}
-	if err != nil {
+
+	for _, overide := range overrides {
+		overide(&template)
+	}
+
+	if err = template.Validate(); err != nil {
 		return n, err
 	}
 
@@ -92,7 +122,7 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 		return n, err
 	}
 	template.Consensus = consensus
-	err = template.generateGenesisAndWallets(rootDir, n.cfg.Name, binDir)
+	err = template.generateGenesisAndWallets(rootDir, n.cfg.Name)
 	if err != nil {
 		return n, err
 	}
@@ -102,6 +132,7 @@ func CreateNetworkFromTemplate(name, rootDir, templateFile, binDir string, impor
 		return n, err
 	}
 	n.gen = template.Genesis
+	n.cfg.Template = template
 
 	err = n.Save(rootDir)
 	n.SetConsensus(binDir, consensus)
@@ -158,6 +189,16 @@ func (n Network) PrimaryDataDir() string {
 		return n.getNodeFullPath(nodeName)
 	}
 	panic(fmt.Errorf("neither relay directories nor node directories are defined for the network"))
+}
+
+// RelayDataDirs returns an array of relay data directories (not the nodes)
+func (n Network) RelayDataDirs() []string {
+	var directories []string
+	for _, dir := range n.cfg.RelayDirs {
+		directories = append(directories, n.getNodeFullPath(dir))
+	}
+	sort.Strings(directories)
+	return directories
 }
 
 // NodeDataDirs returns an array of node data directories (not the relays)
@@ -272,9 +313,9 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 
 	// Start Prime Relay and get its listening address
 
-	var peerAddressListBuilder strings.Builder
 	var relayAddress string
 	var err error
+	relayNameToAddress := map[string]string{}
 	for _, relayDir := range n.cfg.RelayDirs {
 		nodeFullPath := n.getNodeFullPath(relayDir)
 		nc := nodecontrol.MakeNodeController(binDir, nodeFullPath)
@@ -293,15 +334,10 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 		if err != nil {
 			return err
 		}
-
-		if peerAddressListBuilder.Len() != 0 {
-			peerAddressListBuilder.WriteString(";")
-		}
-		peerAddressListBuilder.WriteString(relayAddress)
+		relayNameToAddress[relayDir] = relayAddress
 	}
 
-	peerAddressList := peerAddressListBuilder.String()
-	err = n.startNodes(binDir, peerAddressList, redirectOutput)
+	err = n.startNodes(binDir, relayNameToAddress, redirectOutput)
 	return err
 }
 
@@ -331,21 +367,38 @@ func (n Network) GetPeerAddresses(binDir string) []string {
 		if err != nil {
 			continue
 		}
-		if strings.HasPrefix(relayAddress, "http://") {
-			relayAddress = relayAddress[7:]
-		}
-		peerAddresses = append(peerAddresses, relayAddress)
+		peerAddresses = append(peerAddresses, strings.TrimPrefix(relayAddress, "http://"))
 	}
 	return peerAddresses
 }
 
-func (n Network) startNodes(binDir, relayAddress string, redirectOutput bool) error {
-	args := nodecontrol.AlgodStartArgs{
-		PeerAddress:       relayAddress,
-		RedirectOutput:    redirectOutput,
-		ExitErrorCallback: n.nodeExitCallback,
+func (n Network) startNodes(binDir string, relayNameToAddress map[string]string, redirectOutput bool) error {
+	allRelaysAddresses := strings.Join(slices.Collect(maps.Values(relayNameToAddress)), ";")
+
+	nodeConfigToEntry := make(map[string]remote.NodeConfigGoal, len(n.cfg.Template.Nodes))
+	for _, n := range n.cfg.Template.Nodes {
+		nodeConfigToEntry[n.Name] = n
 	}
+
 	for _, nodeDir := range n.nodeDirs {
+		args := nodecontrol.AlgodStartArgs{
+			PeerAddress:       allRelaysAddresses,
+			RedirectOutput:    redirectOutput,
+			ExitErrorCallback: n.nodeExitCallback,
+		}
+		if n, ok := nodeConfigToEntry[nodeDir]; ok && len(n.PeerList) > 0 {
+			relayNames := strings.Split(n.PeerList, ";")
+			var peerAddresses []string
+			for _, relayName := range relayNames {
+				relayAddress, ok := relayNameToAddress[relayName]
+				if !ok {
+					return fmt.Errorf("relay %s is not defined in the network", relayName)
+				}
+				peerAddresses = append(peerAddresses, relayAddress)
+			}
+			args.PeerAddress = strings.Join(peerAddresses, ";")
+		}
+
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
 		_, err := nc.StartAlgod(args)
 		if err != nil {
@@ -370,13 +423,14 @@ func (n Network) StartNode(binDir, nodeDir string, redirectOutput bool) (err err
 
 // Stop the network, ensuring primary relay stops first
 // No return code - we try to kill them if we can (if we read valid PID file)
-func (n Network) Stop(binDir string) {
-	c := make(chan struct{}, len(n.cfg.RelayDirs)+len(n.nodeDirs))
+func (n Network) Stop(binDir string) (err error) {
+	c := make(chan error, len(n.cfg.RelayDirs)+len(n.nodeDirs))
 	stopNodeContoller := func(nc *nodecontrol.NodeController) {
+		var stopErr error
 		defer func() {
-			c <- struct{}{}
+			c <- stopErr
 		}()
-		nc.FullStop()
+		stopErr = nc.FullStop()
 	}
 	for _, relayDir := range n.cfg.RelayDirs {
 		relayDataDir := n.getNodeFullPath(relayDir)
@@ -394,9 +448,13 @@ func (n Network) Stop(binDir string) {
 	}
 	// wait until we finish stopping all the node controllers.
 	for i := cap(c); i > 0; i-- {
-		<-c
+		stopErr := <-c
+		if stopErr != nil {
+			err = stopErr
+		}
 	}
 	close(c)
+	return err
 }
 
 // NetworkNodeStatus represents the result from checking the status of a particular node instance
