@@ -537,7 +537,7 @@ type Box struct {
 	Round *uint64 `json:"round,omitempty"`
 
 	// Value The box value, base64 encoded.
-	Value []byte `json:"value"`
+	Value *[]byte `json:"value,omitempty"`
 }
 
 // BoxReference References a box of an application.

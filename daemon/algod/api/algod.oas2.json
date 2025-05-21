@@ -4154,8 +4154,7 @@
       "description": "Box name and its content.",
       "type": "object",
       "required": [
-        "name",
-        "value"
+        "name"
       ],
       "properties": {
         "round": {
