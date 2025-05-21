@@ -24,8 +24,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -60,8 +58,8 @@ func generateMssKat(startRound, atRound, numOfKeys uint64, messageToSign []byte)
 		return mssKat{}, fmt.Errorf("error: Signature round cann't be smaller then start round")
 	}
 
-	interval := config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval
-	stateProofSecrets, err := New(startRound, startRound+(interval*numOfKeys)-1, interval)
+	const spInterval = 256
+	stateProofSecrets, err := New(startRound, startRound+(spInterval*numOfKeys)-1, spInterval)
 	if err != nil {
 		return mssKat{}, fmt.Errorf("error: %w", err)
 	}

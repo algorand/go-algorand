@@ -975,7 +975,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound")
 			}
 			if params.StateProofExcludeTotalWeightWithRewards {
-				rewards := basics.PendingRewards(&ot, *params, oa.MicroAlgos, oa.RewardsBase, rewardsLevel)
+				rewards := params.PendingRewards(&ot, oa.MicroAlgos, oa.RewardsBase, rewardsLevel)
 				totalOnlineStake = ot.SubA(totalOnlineStake, rewards)
 				if ot.Overflowed {
 					return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound rewards")

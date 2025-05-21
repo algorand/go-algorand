@@ -132,7 +132,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		require.NotNil(t, initAccounts)
 		for _, acctdata := range initAccounts {
 			if acctdata.Status != basics.NotParticipating {
-				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+				totalRewardUnits += proto.RewardUnits(acctdata.MicroAlgos)
 			}
 		}
 	} else {
@@ -258,7 +258,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
 	for _, acctdata := range genesisInitState.Accounts {
-		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+		totalRewardUnits += proto.RewardUnits(acctdata.MicroAlgos)
 	}
 	poolBal, _, _, err := l.LookupLatest(poolAddr)
 	a.NoError(err, "could not get incentive pool balance")
@@ -1272,7 +1272,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 			var totalRewardUnits uint64
 			for _, acctdata := range initAccounts {
-				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
+				totalRewardUnits += proto.RewardUnits(acctdata.MicroAlgos)
 			}
 			poolBal, _, _, err := l.LookupLatest(testPoolAddr)
 			a.NoError(err, "could not get incentive pool balance")

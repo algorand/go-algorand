@@ -45,7 +45,7 @@ func Test_loadTelemetryConfig(t *testing.T) {
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs/logging/logging.config.example")
 
-	config, err := loadTelemetryConfig(configsPath)
+	config, err := LoadTelemetryConfig(configsPath)
 	a.NoError(err)
 
 	a.Equal(sample.Enable, config.Enable)
@@ -75,7 +75,7 @@ func Test_CreateSaveLoadTelemetryConfig(t *testing.T) {
 	err := config1.Save(configsPath)
 	a.NoError(err)
 
-	config2, err := loadTelemetryConfig(configsPath)
+	config2, err := LoadTelemetryConfig(configsPath)
 	a.NoError(err)
 
 	a.Equal(config1.Enable, config2.Enable)
@@ -115,7 +115,7 @@ func Test_SanitizeTelemetryString(t *testing.T) {
 func TestLoadTelemetryConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test1"
-	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
+	tc, err := LoadTelemetryConfig(testLoggingConfigFileName)
 	require.NoError(t, err)
 	require.Equal(t, true, tc.Enable)
 	// make sure the user name was loaded from the specified file
@@ -128,7 +128,7 @@ func TestLoadTelemetryConfig(t *testing.T) {
 func TestLoadTelemetryConfigBlankUsernamePassword(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test2"
-	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
+	tc, err := LoadTelemetryConfig(testLoggingConfigFileName)
 	require.NoError(t, err)
 	// make sure the user name was loaded from the specified file
 	require.Equal(t, defaultTelemetryUsername, tc.UserName)

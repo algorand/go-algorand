@@ -28,7 +28,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -341,12 +340,9 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	tempDir := os.TempDir()
-	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()
-	config.SetGlobalConfigFileRoot(tempDir)
 
-	cfg, err := ReadTelemetryConfigOrDefault("", "")
+	cfg, err := ReadTelemetryConfigOrDefault("", tempDir)
 	defaultCfgSettings := createTelemetryConfig()
-	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
 
 	a.Nil(err)
 	a.NotNil(cfg)

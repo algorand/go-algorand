@@ -24,7 +24,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -45,13 +44,9 @@ func TestLoadDefaultConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	currentRoot := config.SetGlobalConfigFileRoot(t.TempDir())
-	defer config.SetGlobalConfigFileRoot(currentRoot)
-
-	_, err := EnsureTelemetryConfig(nil, "")
-
+	temp := t.TempDir()
+	_, err := EnsureTelemetryConfig(nil, &temp)
 	a.Nil(err)
-
 }
 
 func isDefault(cfg TelemetryConfig) bool {
@@ -68,10 +63,8 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot := t.TempDir()
-	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
-	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
-	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
+	temp := t.TempDir()
+	globalLoggingPath := filepath.Join(temp, TelemetryConfigFilename)
 
 	dataDir := t.TempDir()
 	dataDirLoggingPath := filepath.Join(dataDir, TelemetryConfigFilename)
@@ -89,7 +82,7 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 	fout.Write([]byte("{\"Enable\":true}"))
 	fout.Close()
 
-	cfg, err := EnsureTelemetryConfig(&dataDir, "")
+	cfg, err := EnsureTelemetryConfig(&dataDir, &temp)
 	a.Nil(err)
 
 	_, err = os.Stat(globalLoggingPath)
@@ -99,7 +92,6 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 
 	a.Equal(cfg.FilePath, dataDirLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
-	a.NotEmpty(cfg.Version)
 
 	// We got this from the tiny file we wrote to earlier.
 	a.True(cfg.Enable)
@@ -113,16 +105,13 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	a := require.New(t)
 
 	globalConfigRoot := t.TempDir()
-	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
-	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
 
 	_, err := os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))
 
 	cfgPath := "/missing-directory"
-	cfg, err := EnsureTelemetryConfig(&cfgPath, "")
-
+	cfg, err := EnsureTelemetryConfig(&cfgPath, &globalConfigRoot)
 	a.Nil(err)
 	_, err = os.Stat(globalLoggingPath)
 	a.Nil(err)
@@ -132,7 +121,6 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	defaultCfg := createTelemetryConfig()
 	a.Equal(cfg.FilePath, globalLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
-	a.NotEmpty(cfg.Version)
 
 	a.True(isDefault(cfg))
 
@@ -145,14 +133,14 @@ func TestSaveLoadConfig(t *testing.T) {
 	a := require.New(t)
 
 	globalConfigRoot := t.TempDir()
-	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
-	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
 
 	configDir := t.TempDir()
 	err := os.Mkdir(configDir, 0777)
 
-	cfg, err := EnsureTelemetryConfig(&configDir, "")
+	cfg, err := EnsureTelemetryConfig(&configDir, &globalConfigRoot)
 	cfg.Name = "testname"
+	cfg.ChainID = "would end up set"
+	cfg.Version = "would also be set"
 	err = cfg.Save(cfg.FilePath)
 	a.NoError(err)
 

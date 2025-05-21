@@ -56,6 +56,7 @@ type TelemetryConfig struct {
 	Version            string       `json:"-"`
 	UserName           string
 	Password           string
+	DataDirectory      string `json:"-"` // distinguishes instances on the same node
 }
 
 // MarshalingTelemetryConfig is used for json serialization of the TelemetryConfig
