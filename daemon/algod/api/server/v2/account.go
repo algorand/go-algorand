@@ -255,6 +255,12 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			if ca.Params.DefaultFrozen != nil {
 				defaultFrozen = *ca.Params.DefaultFrozen
 			}
+			var lastGlobalFreeze uint64
+			if ca.Params.Frozen != nil {
+				// model.Asset doesn't know the LastGlobalFreeze value, so we
+				// fake it by setting it to MaxUint64 for basics.AssetParams.
+				lastGlobalFreeze = math.MaxUint64
+			}
 			var url string
 			if ca.Params.Url != nil {
 				url = *ca.Params.Url
@@ -269,17 +275,18 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			}
 
 			assetParams[basics.AssetIndex(ca.Index)] = basics.AssetParams{
-				Total:         ca.Params.Total,
-				Decimals:      uint32(ca.Params.Decimals),
-				DefaultFrozen: defaultFrozen,
-				UnitName:      unitName,
-				AssetName:     name,
-				URL:           url,
-				MetadataHash:  metadataHash,
-				Manager:       manager,
-				Reserve:       reserve,
-				Freeze:        freeze,
-				Clawback:      clawback,
+				Total:            ca.Params.Total,
+				Decimals:         uint32(ca.Params.Decimals),
+				DefaultFrozen:    defaultFrozen,
+				LastGlobalFreeze: lastGlobalFreeze,
+				UnitName:         unitName,
+				AssetName:        name,
+				URL:              url,
+				MetadataHash:     metadataHash,
+				Manager:          manager,
+				Reserve:          reserve,
+				Freeze:           freeze,
+				Clawback:         clawback,
 			}
 		}
 	}
@@ -491,6 +498,7 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 		Total:         params.Total,
 		Decimals:      uint64(params.Decimals),
 		DefaultFrozen: &frozen,
+		Frozen:        omitEmpty(uint64ToBool(params.LastGlobalFreeze)),
 		Name:          omitEmpty(printableUTF8OrEmpty(params.AssetName)),
 		NameB64:       sliceOrNil([]byte(params.AssetName)),
 		UnitName:      omitEmpty(printableUTF8OrEmpty(params.UnitName)),

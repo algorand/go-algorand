@@ -345,8 +345,9 @@ type CreatableLocator struct {
 type AssetHolding struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Amount uint64 `codec:"a"`
-	Frozen bool   `codec:"f"`
+	Amount           uint64 `codec:"a"`
+	Frozen           bool   `codec:"f"`
+	LastFreezeChange uint64 `codec:"fc"`
 }
 
 // AssetParams describes the parameters of an asset.
@@ -398,6 +399,10 @@ type AssetParams struct {
 	// Clawback specifies an account that is allowed to take units
 	// of this asset from any account.
 	Clawback Address `codec:"c"`
+
+	// LastGlobalFreeze specifies the last time (as a transaction counter) the
+	// asset was frozen globally, or 0 if the last global change was unfreeze.
+	LastGlobalFreeze uint64 `codec:"gf"`
 }
 
 // ToBeHashed implements crypto.Hashable

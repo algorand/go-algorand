@@ -891,7 +891,7 @@ Fields
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
 | 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
-| 1 | AssetFrozen | bool | Is the asset frozen or not |
+| 1 | AssetFrozen | bool | Is the asset effectively frozen, accounting for local and global freeze state |
 
 
 params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.

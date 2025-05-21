@@ -17,6 +17,9 @@
 package transactions
 
 import (
+	"errors"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -74,4 +77,39 @@ type AssetFreezeTxnFields struct {
 
 	// AssetFrozen is the new frozen value.
 	AssetFrozen bool `codec:"afrz"`
+}
+
+var errAssetIDCannotBeZero = errors.New("asset ID cannot be zero")
+var errCannotCloseAssetByClawback = errors.New("cannot close asset by clawback")
+var errFreezeAccountCannotBeEmpty = errors.New("freeze account cannot be empty")
+
+// wellFormed performs some stateless checks on the AssetConfig transaction
+func (ac AssetConfigTxnFields) wellFormed() error {
+	return nil
+}
+
+// wellFormed performs some stateless checks on the AssetTransfer transaction
+func (ax AssetTransferTxnFields) wellFormed() error {
+	if ax.XferAsset == 0 {
+		return errAssetIDCannotBeZero
+	}
+
+	if !ax.AssetSender.IsZero() && !ax.AssetCloseTo.IsZero() {
+		return errCannotCloseAssetByClawback
+	}
+
+	return nil
+}
+
+// wellFormed performs some stateless checks on the AssetFreeze transaction
+func (af AssetFreezeTxnFields) wellFormed(proto config.ConsensusParams) error {
+	if af.FreezeAsset == 0 {
+		return errAssetIDCannotBeZero
+	}
+
+	if !proto.EnableGlobalFreeze && af.FreezeAccount.IsZero() {
+		return errFreezeAccountCannotBeEmpty
+	}
+
+	return nil
 }

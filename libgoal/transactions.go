@@ -840,9 +840,11 @@ func (c *Client) MakeUnsignedAssetFreezeTx(index uint64, accountToChange string,
 	tx.Type = protocol.AssetFreezeTx
 	tx.FreezeAsset = basics.AssetIndex(index)
 
-	tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(accountToChange)
-	if err != nil {
-		return tx, err
+	if accountToChange != "" {
+		tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(accountToChange)
+		if err != nil {
+			return tx, err
+		}
 	}
 
 	tx.AssetFrozen = newFreezeSetting

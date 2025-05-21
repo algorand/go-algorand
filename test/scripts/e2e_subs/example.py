@@ -66,6 +66,11 @@ assert not err, err
 assert goal.holding(goal.account, gold)[1]
 assert goal.holding(joe, gold)[1]
 
+# Global freeze
+freeze3 = goal.afrz(flo, gold, "", True)
+txinfo, err = goal.send(freeze3)
+assert not err, err
+
 # App create
 teal = "test/scripts/e2e_subs/tealprogs"
 approval = goal.assemble(os.path.join(teal, "app-escrow.teal"))

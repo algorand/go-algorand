@@ -2892,11 +2892,15 @@ func opUncover(cx *EvalContext) error {
 	return nil
 }
 
-func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs assetHoldingFieldSpec) (sv stackValue, err error) {
+func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs assetHoldingFieldSpec, params *basics.AssetParams) (sv stackValue, err error) {
 	switch fs.field {
 	case AssetBalance:
 		sv.Uint = holding.Amount
 	case AssetFrozen:
+		isAccountFrozen := holding.Frozen
+		isAssetFrozen := params.LastGlobalFreeze > holding.LastFreezeChange
+		sv.Uint = boolToUint(isAccountFrozen || isAssetFrozen)
+	case AssetFrozenLocally:
 		sv.Uint = boolToUint(holding.Frozen)
 	default:
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
@@ -2934,6 +2938,8 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		sv.Bytes = params.Clawback[:]
 	case AssetCreator:
 		sv.Bytes = creator[:]
+	case AssetGlobalFrozen:
+		sv.Uint = boolToUint(params.LastGlobalFreeze > 0)
 	default:
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
@@ -4922,7 +4928,8 @@ func opAssetHoldingGet(cx *EvalContext) error {
 	if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
 		// the holding exists, read the value
 		exist = 1
-		value, err = cx.assetHoldingToValue(&holding, fs)
+		params, _, _ := cx.Ledger.AssetParams(asset) // Asset may be deleted, so empty params is fine
+		value, err = cx.assetHoldingToValue(&holding, fs, &params)
 		if err != nil {
 			return err
 		}

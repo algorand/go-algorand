@@ -143,6 +143,10 @@ func nilToZero[T any](valPtr *T) T {
 	return *valPtr
 }
 
+func uint64ToBool(in uint64) bool {
+	return in != 0
+}
+
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
 	// Compute transaction index in block
 	txID := tx.Txn.Txn.ID()

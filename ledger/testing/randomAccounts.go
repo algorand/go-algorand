@@ -135,6 +135,9 @@ func RandomAssetParams() basics.AssetParams {
 	if crypto.RandUint64()%5 != 0 {
 		crypto.RandBytes(ap.Clawback[:])
 	}
+	if crypto.RandUint64()%5 != 0 {
+		ap.LastGlobalFreeze = crypto.RandUint64()
+	}
 	return ap
 }
 
@@ -150,10 +153,15 @@ func RandomAssetHolding(forceFrozen bool) basics.AssetHolding {
 	if crypto.RandUint64()%5 != 0 {
 		amount = crypto.RandUint64()
 	}
+	var lastFreezeChange uint64
+	if crypto.RandUint64()%5 != 0 {
+		lastFreezeChange = crypto.RandUint64()
+	}
 
 	ah := basics.AssetHolding{
-		Amount: amount,
-		Frozen: frozen,
+		Amount:           amount,
+		Frozen:           frozen,
+		LastFreezeChange: lastFreezeChange,
 	}
 	return ah
 }
