@@ -569,6 +569,19 @@ func TestWebsocketVoteCompression(t *testing.T) {
 			}
 
 			require.True(t, matcher.Match())
+
+			// Verify compression feature is correctly reflected in peer properties
+			// Check peers have the correct compression capability
+			peers := netA.GetPeers(PeersConnectedIn)
+			require.Len(t, peers, 1)
+			peer := peers[0].(*wsPeer)
+			require.Equal(t, test.netBEnableCompression, peer.vpackVoteCompressionSupported())
+
+			peers = netB.GetPeers(PeersConnectedOut)
+			require.Len(t, peers, 1)
+			peer = peers[0].(*wsPeer)
+			require.Equal(t, test.netAEnableCompression, peer.vpackVoteCompressionSupported())
+
 		})
 	}
 }
