@@ -1522,7 +1522,12 @@ func TestP2PMetainfoExchange(t *testing.T) {
 		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
 	}, 2*time.Second, 50*time.Millisecond)
 
-	peers := netA.GetPeers(PeersConnectedIn)
+	var peers []Peer
+	require.Eventually(t, func() bool {
+		peers = netA.GetPeers(PeersConnectedIn)
+		return len(peers) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+
 	require.Len(t, peers, 1)
 	peer := peers[0].(*wsPeer)
 	require.True(t, peer.features&pfCompressedProposal != 0)
@@ -1581,6 +1586,7 @@ func TestP2PMetainfoV1vsV22(t *testing.T) {
 		peers = netA.GetPeers(PeersConnectedIn)
 		return len(peers) > 0
 	}, 2*time.Second, 50*time.Millisecond)
+	require.Len(t, peers, 1)
 	peer := peers[0].(*wsPeer)
 	require.False(t, peer.features&pfCompressedProposal != 0)
 	require.False(t, peer.vpackVoteCompressionSupported())
