@@ -43,6 +43,11 @@ func (block Block) TxnMerkleTreeSHA256() (*merklearray.Tree, error) {
 	return merklearray.BuildVectorCommitmentTree(&txnMerkleArray{block: block, hashType: crypto.Sha256}, crypto.HashFactory{HashType: crypto.Sha256})
 }
 
+// TxnMerkleTreeSHA512 works like TxnMerkleTreeSHA256, but uses SHA512 as the hash function.
+func (block Block) TxnMerkleTreeSHA512() (*merklearray.Tree, error) {
+	return merklearray.BuildVectorCommitmentTree(&txnMerkleArray{block: block, hashType: crypto.Sha512}, crypto.HashFactory{HashType: crypto.Sha512})
+}
+
 // txnMerkleArray is a representation of the transactions in this block,
 // along with their ApplyData, as an array for the merklearray package.
 type txnMerkleArray struct {

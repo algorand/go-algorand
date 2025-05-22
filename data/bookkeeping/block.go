@@ -41,8 +41,7 @@ type (
 		Round basics.Round `codec:"rnd"`
 
 		// The hash of the previous block
-		Branch BlockHash `codec:"prev"`
-
+		Branch    BlockHash               `codec:"prev"`
 		Branch512 [crypto.Sha512Size]byte `codec:"prev512"`
 
 		// Sortition seed
@@ -156,6 +155,9 @@ type (
 
 		// Root of transaction vector commitment merkle tree using SHA256 hash function
 		Sha256Commitment crypto.Digest `codec:"txn256"`
+
+		// Root of transaction vector commitment merkle tree using SHA512 hash function
+		Sha512Commitment [crypto.Sha512Size]byte `codec:"txn512"`
 	}
 
 	// ParticipationUpdates represents participation account data that
@@ -671,9 +673,18 @@ func (block Block) PaysetCommit() (TxnCommitments, error) {
 		}
 	}
 
+	var digestSHA512 [crypto.Sha512Size]byte
+	if params.EnableSha512BlockHash {
+		digestSHA512, err = block.paysetCommitSHA512()
+		if err != nil {
+			return TxnCommitments{}, err
+		}
+	}
+
 	return TxnCommitments{
 		Sha256Commitment:           digestSHA256,
 		NativeSha512_256Commitment: digestSHA512_256,
+		Sha512Commitment:           digestSHA512,
 	}, nil
 }
 
@@ -707,6 +718,18 @@ func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
 
 	rootSlice := tree.Root()
 	var rootAsByteArray crypto.Digest
+	copy(rootAsByteArray[:], rootSlice)
+	return rootAsByteArray, nil
+}
+
+func (block Block) paysetCommitSHA512() ([crypto.Sha512Size]byte, error) {
+	tree, err := block.TxnMerkleTreeSHA512()
+	if err != nil {
+		return [crypto.Sha512Size]byte{}, err
+	}
+
+	rootSlice := tree.Root()
+	var rootAsByteArray [crypto.Sha512Size]byte
 	copy(rootAsByteArray[:], rootSlice)
 	return rootAsByteArray, nil
 }
