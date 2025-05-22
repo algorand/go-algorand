@@ -342,19 +342,18 @@ func (n Network) Start(binDir string, redirectOutput bool) error {
 }
 
 // retry fetching the relay address
-func (n Network) getRelayAddress(nc nodecontrol.NodeController) (relayAddress string, err error) {
+func (n Network) getRelayAddress(nc nodecontrol.NodeController) (string, error) {
 	for i := 1; ; i++ {
-		relayAddress, err = nc.GetListeningAddress()
+		relayAddress, err := nc.GetListeningAddress()
 		if err == nil {
 			return relayAddress, nil
 		}
 		if i <= maxGetRelayAddressRetry {
 			time.Sleep(100 * time.Millisecond)
 		} else {
-			break
+			return "", err
 		}
 	}
-	return
 }
 
 // GetPeerAddresses returns an array of Relay addresses, if any; to be used to start nodes

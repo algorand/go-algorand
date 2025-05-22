@@ -143,7 +143,7 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 		now := time.Now()
 		// we don't have enough space to write the entry, so archive data
 		cyclic.writer.Close()
-		var err1 error
+
 		globPath := cyclic.getArchiveGlob()
 		oldarchives, err1 := filepath.Glob(globPath)
 		if err1 != nil && !os.IsNotExist(err1) {
