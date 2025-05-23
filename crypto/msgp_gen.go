@@ -241,6 +241,16 @@ import (
 //   |-----> (*) MsgIsZero
 //   |-----> SeedMaxSize()
 //
+// Sha512Digest
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//       |-----> Sha512DigestMaxSize()
+//
 // Signature
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
@@ -3239,6 +3249,60 @@ func (z *Seed) MsgIsZero() bool {
 func SeedMaxSize() (s int) {
 	// Calculating size of array: z
 	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *Sha512Digest) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, (*z)[:])
+	return
+}
+
+func (_ *Sha512Digest) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Sha512Digest)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Sha512Digest) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	o = bts
+	return
+}
+
+func (z *Sha512Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *Sha512Digest) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*Sha512Digest)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *Sha512Digest) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (Sha512Size * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *Sha512Digest) MsgIsZero() bool {
+	return (*z) == (Sha512Digest{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func Sha512DigestMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((Sha512Size) * (msgp.ByteSize))
 	return
 }
 

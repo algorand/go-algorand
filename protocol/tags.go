@@ -67,7 +67,7 @@ const NetIDVerificationTagMaxSize = 215
 
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
 // This value is dominated by the MaxTxnBytesPerBlock
-const ProposalPayloadTagMaxSize = 5250313
+const ProposalPayloadTagMaxSize = 5250594
 
 // StateProofSigTagMaxSize is the maximum size of a StateProofSigTag message
 const StateProofSigTagMaxSize = 6378
