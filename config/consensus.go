@@ -555,7 +555,7 @@ type ConsensusParams struct {
 	// Heartbeat support
 	Heartbeat bool
 
-	// EnableSha512BlockHash adds an additional SHA512 hash to the block header.
+	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
 	EnableSha512BlockHash bool
 }
 

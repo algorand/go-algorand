@@ -328,7 +328,7 @@ func (bh BlockHeader) Hash() BlockHash {
 	return BlockHash(crypto.HashObj(bh))
 }
 
-// Hash512 returns the hash of a block header using SHA512.
+// Hash512 returns the hash of a block header using SHA-512.
 func (bh BlockHeader) Hash512() crypto.Sha512Digest {
 	return crypto.Sha512Digest(crypto.GenericHashObj(crypto.HashFactory{HashType: crypto.Sha512}.NewHash(), bh))
 }
