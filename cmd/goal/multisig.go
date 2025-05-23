@@ -109,13 +109,13 @@ var addSigCmd = &cobra.Command{
 
 			var msig crypto.MultisigSig
 			if noSig {
-				multisigInfo, err := client.LookupMultisigAccount(wh, stxn.Txn.Sender.String())
-				if err != nil {
-					reportErrorf(msigLookupError, err)
+				multisigInfo, err1 := client.LookupMultisigAccount(wh, stxn.Txn.Sender.String())
+				if err1 != nil {
+					reportErrorf(msigLookupError, err1)
 				}
-				msig, err = msigInfoToMsig(multisigInfo)
-				if err != nil {
-					reportErrorf(msigParseError, err)
+				msig, err1 = msigInfoToMsig(multisigInfo)
+				if err1 != nil {
+					reportErrorf(msigParseError, err1)
 				}
 			} else {
 				if stxn.AuthAddr.IsZero() {

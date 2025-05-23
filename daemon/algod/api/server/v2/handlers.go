@@ -458,9 +458,9 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 
 	// check against configured total limit on assets/apps
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
-		if err != nil {
-			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		data, err1 := encode(handle, record)
+		if err1 != nil {
+			return internalError(ctx, err1, errFailedToEncodeResponse, v2.Log)
 		}
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
@@ -1526,8 +1526,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	// We didn't find it, return a failure
 	if !ok {
-		err := errors.New(errTransactionNotFound)
-		return notFound(ctx, err, err.Error(), v2.Log)
+		err1 := errors.New(errTransactionNotFound)
+		return notFound(ctx, err1, err1.Error(), v2.Log)
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
