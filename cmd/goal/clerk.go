@@ -69,11 +69,11 @@ var (
 	requestFilename    string
 	requestOutFilename string
 
-	simulateStartRound            uint64
+	simulateStartRound            basics.Round
 	simulateAllowEmptySignatures  bool
 	simulateAllowMoreLogging      bool
 	simulateAllowMoreOpcodeBudget bool
-	simulateExtraOpcodeBudget     uint64
+	simulateExtraOpcodeBudget     int
 
 	simulateFullTrace             bool
 	simulateEnableRequestTrace    bool
@@ -165,11 +165,11 @@ func init() {
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
 	simulateCmd.Flags().StringVar(&requestOutFilename, "request-only-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
-	simulateCmd.Flags().Uint64Var(&simulateStartRound, "round", 0, "Specify the round after which the simulation will take place. If not specified, the simulation will take place after the latest round.")
+	simulateCmd.Flags().Uint64Var((*uint64)(&simulateStartRound), "round", 0, "Specify the round after which the simulation will take place. If not specified, the simulation will take place after the latest round.")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
-	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
+	simulateCmd.Flags().IntVar(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
 
 	simulateCmd.Flags().BoolVar(&simulateFullTrace, "full-trace", false, "Enable all options for simulation execution trace")
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
@@ -190,7 +190,7 @@ var clerkCmd = &cobra.Command{
 	},
 }
 
-func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound uint64) (txn model.PendingTransactionResponse, err error) {
+func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound basics.Round) (txn model.PendingTransactionResponse, err error) {
 	// Get current round information
 	stat, err := client.Status()
 	if err != nil {
@@ -421,7 +421,7 @@ var sendCmd = &cobra.Command{
 		}
 		payment, err := client.ConstructPayment(
 			fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved,
-			leaseBytes, basics.Round(firstValid), basics.Round(lastValid),
+			leaseBytes, firstValid, lastValid,
 		)
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
@@ -1317,7 +1317,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				Round:                 basics.Round(simulateStartRound),
+				Round:                 simulateStartRound,
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
 				AllowUnnamedResources: simulateAllowUnnamedResources,
@@ -1343,7 +1343,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				Round:                 basics.Round(simulateStartRound),
+				Round:                 simulateStartRound,
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
 				AllowUnnamedResources: simulateAllowUnnamedResources,

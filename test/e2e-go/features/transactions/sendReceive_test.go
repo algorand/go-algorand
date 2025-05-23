@@ -135,7 +135,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		if waitForTransaction {
 			curStatus, _ := pongClient.Status()
 			curRound := curStatus.LastRound
-			err = fixture.WaitForRoundWithTimeout(curRound + uint64(1))
+			err = fixture.WaitForRoundWithTimeout(curRound + 1)
 			a.NoError(err)
 		}
 	}
@@ -145,10 +145,10 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	confirmed := true
 
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
-	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+uint64(5))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+uint64(5))
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pingTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+5)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pongTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+5)
 
 	pingBalance, err = pongClient.GetBalance(pingAccount)
 	a.NoError(err)
@@ -158,10 +158,10 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
-	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+uint64(5))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+uint64(5))
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pingTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+5)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pongTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+5)
 
 	pingBalance, err = pingClient.GetBalance(pingAccount)
 	a.NoError(err)

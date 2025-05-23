@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	txn "github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/tools/block-generator/util"
@@ -71,9 +72,9 @@ func (g *generator) resetPendingApps() {
 		appKindBoxes: make([]*appData, 0),
 		appKindSwap:  make([]*appData, 0),
 	}
-	g.pendingAppMap = map[appKind]map[uint64]*appData{
-		appKindBoxes: make(map[uint64]*appData),
-		appKindSwap:  make(map[uint64]*appData),
+	g.pendingAppMap = map[appKind]map[basics.AppIndex]*appData{
+		appKindBoxes: make(map[basics.AppIndex]*appData),
+		appKindSwap:  make(map[basics.AppIndex]*appData),
 	}
 }
 
@@ -123,7 +124,7 @@ func CumulativeEffects(report Report) EffectsReport {
 
 // ---- 3. App Transactions ----
 
-func (g *generator) generateAppTxn(round uint64, intra uint64) ([]txn.SignedTxn, uint64 /* numTxns */, uint64 /* appID */, error) {
+func (g *generator) generateAppTxn(round basics.Round, intra uint64) ([]txn.SignedTxn, uint64 /* numTxns */, basics.AppIndex, error) {
 	start := time.Now()
 	selection, err := weightedSelection(g.appTxWeights, getAppTxOptions(), appSwapCall)
 	if err != nil {
@@ -142,7 +143,7 @@ func (g *generator) generateAppTxn(round uint64, intra uint64) ([]txn.SignedTxn,
 
 // generateAppCallInternal is the main workhorse for generating app transactions.
 // Senders are always genesis accounts to avoid running out of funds.
-func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra uint64, hintApp *appData) (TxTypeID, []txn.SignedTxn, uint64 /* appID */, error) {
+func (g *generator) generateAppCallInternal(txType TxTypeID, round basics.Round, intra uint64, hintApp *appData) (TxTypeID, []txn.SignedTxn, basics.AppIndex, error) {
 	var senderIndex uint64
 	if hintApp != nil {
 		senderIndex = hintApp.sender
@@ -164,7 +165,7 @@ func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra uint64
 	var signedTxns []txn.SignedTxn
 	switch appCallType {
 	case appTxTypeCreate:
-		appID = g.txnCounter + intra + 1
+		appID = basics.AppIndex(g.txnCounter + intra + 1)
 		signedTxns = g.makeAppCreateTxn(kind, senderAcct, round, intra, appID)
 		reSignTxns(signedTxns)
 
@@ -214,8 +215,8 @@ func (g *generator) generateAppCallInternal(txType TxTypeID, round, intra uint64
 	return actual, signedTxns, appID, nil
 }
 
-func (g *generator) getAppData(existing bool, kind appKind, senderIndex, appID uint64) (*appData, bool /* appInMap */, bool /* senderOptedin */) {
-	var appMapOrPendingAppMap map[appKind]map[uint64]*appData
+func (g *generator) getAppData(existing bool, kind appKind, senderIndex uint64, appID basics.AppIndex) (*appData, bool /* appInMap */, bool /* senderOptedin */) {
+	var appMapOrPendingAppMap map[appKind]map[basics.AppIndex]*appData
 	if existing {
 		appMapOrPendingAppMap = g.appMap
 	} else {
@@ -239,7 +240,7 @@ func (g *generator) getAppData(existing bool, kind appKind, senderIndex, appID u
 // * it switches to create instead of optin when only opted into pending apps
 // * it switches to optin when noopoc if not opted in and follows the logic of the optins above
 // * the appID is 0 for creates, and otherwise a random appID from the existing apps for the kind
-func (g *generator) getActualAppCall(txType TxTypeID, senderIndex uint64) (TxTypeID, appKind, appTxType, uint64 /* appID */, error) {
+func (g *generator) getActualAppCall(txType TxTypeID, senderIndex uint64) (TxTypeID, appKind, appTxType, basics.AppIndex, error) {
 	isApp, kind, appTxType, err := parseAppTxType(txType)
 	if err != nil {
 		return "", 0, 0, 0, err

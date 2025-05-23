@@ -95,9 +95,9 @@ type StatusReport struct {
 	CatchpointCatchupAcquiredBlocks    uint64
 	UpgradePropose                     protocol.ConsensusVersion
 	UpgradeApprove                     bool
-	UpgradeDelay                       uint64
+	UpgradeDelay                       basics.Round
 	NextProtocolVoteBefore             basics.Round
-	NextProtocolApprovals              uint64
+	NextProtocolApprovals              basics.Round
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -788,7 +788,7 @@ func latestBlockStatus(ledger *data.Ledger, catchupService *catchup.Service) (s 
 
 	s.UpgradePropose = b.UpgradeVote.UpgradePropose
 	s.UpgradeApprove = b.UpgradeApprove
-	s.UpgradeDelay = uint64(b.UpgradeVote.UpgradeDelay)
+	s.UpgradeDelay = b.UpgradeVote.UpgradeDelay
 	s.NextProtocolVoteBefore = b.NextProtocolVoteBefore
 	s.NextProtocolApprovals = b.UpgradeState.NextProtocolApprovals
 
@@ -1448,12 +1448,12 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 }
 
 // SetSyncRound no-ops
-func (node *AlgorandFullNode) SetSyncRound(_ uint64) error {
+func (node *AlgorandFullNode) SetSyncRound(_ basics.Round) error {
 	return nil
 }
 
 // GetSyncRound returns 0 (not set) in the base node implementation
-func (node *AlgorandFullNode) GetSyncRound() uint64 {
+func (node *AlgorandFullNode) GetSyncRound() basics.Round {
 	return 0
 }
 

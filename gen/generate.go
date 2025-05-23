@@ -206,7 +206,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 			var part account.PersistedParticipation
 
 			wfilename := filepath.Join(outDir, config.RootKeyFilename(wallet.Name))
-			pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, firstWalletValid, lastWalletValid))
+			pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, uint64(firstWalletValid), uint64(lastWalletValid)))
 
 			root, rootDB, rootkeyErr := loadRootKey(wfilename)
 			if rootkeyErr != nil && !os.IsNotExist(rootkeyErr) {
@@ -258,10 +258,10 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 						return
 					}
 					if verbose {
-						verbosedOutput <- fmt.Sprintf("Generating %s's keys for a period of %d rounds", wallet.Name, basics.Round(lastWalletValid).SubSaturate(basics.Round(firstWalletValid)))
+						verbosedOutput <- fmt.Sprintf("Generating %s's keys for a period of %d rounds", wallet.Name, lastWalletValid.SubSaturate(firstWalletValid))
 					}
 
-					part, err1 = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
+					part, err1 = account.FillDBWithParticipationKeys(partDB, root.Address(), firstWalletValid, lastWalletValid, partKeyDilution)
 					if err1 != nil {
 						err1 = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err1)
 						os.Remove(pfilename)

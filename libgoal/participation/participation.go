@@ -38,7 +38,7 @@ func participationKeysPath(dataDir string, address basics.Address, firstValid, l
 // GenParticipationKeysTo creates a .partkey database for a given address, fills
 // it with keys, and saves it in the specified output directory. If the output
 // directory is empty, the key will be installed.
-func GenParticipationKeysTo(address string, firstValid, lastValid, keyDilution uint64, outDir string, installFunc func(keyPath string) error) (part account.Participation, filePath string, err error) {
+func GenParticipationKeysTo(address string, firstValid, lastValid basics.Round, keyDilution uint64, outDir string, installFunc func(keyPath string) error) (part account.Participation, filePath string, err error) {
 
 	install := outDir == ""
 	if install && installFunc == nil {
@@ -51,20 +51,18 @@ func GenParticipationKeysTo(address string, firstValid, lastValid, keyDilution u
 		return
 	}
 
-	firstRound, lastRound := basics.Round(firstValid), basics.Round(lastValid)
-
 	// If we are installing, generate in the temp dir
 	if install {
 		outDir = os.TempDir()
 	}
 	// Connect to the database
-	partKeyPath, err := participationKeysPath(outDir, parsedAddr, firstRound, lastRound)
+	partKeyPath, err := participationKeysPath(outDir, parsedAddr, firstValid, lastValid)
 	if err != nil {
 		return
 	}
 	_, err = os.Stat(partKeyPath)
 	if err == nil {
-		err = fmt.Errorf("ParticipationKeys exist for the range %d to %d", firstRound, lastRound)
+		err = fmt.Errorf("ParticipationKeys exist for the range %d to %d", firstValid, lastValid)
 		return
 	} else if !os.IsNotExist(err) {
 		err = fmt.Errorf("participation key file '%s' cannot be accessed : %w", partKeyPath, err)
@@ -85,11 +83,11 @@ func GenParticipationKeysTo(address string, firstValid, lastValid, keyDilution u
 	}
 
 	if keyDilution == 0 {
-		keyDilution = account.DefaultKeyDilution(firstRound, lastRound)
+		keyDilution = account.DefaultKeyDilution(firstValid, lastValid)
 	}
 
 	// Fill the database with new participation keys
-	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
+	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstValid, lastValid, keyDilution)
 	part = newPart.Participation
 	partdb.Close()
 

@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	assetID                 uint64
+	assetID                 basics.AssetIndex
 	assetCreator            string
 	assetTotal              uint64
 	assetDecimals           uint32
@@ -84,12 +84,12 @@ func init() {
 
 	destroyAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the destroy transaction (defaults to creator)")
 	destroyAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Creator account address for asset to destroy")
-	destroyAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to destroy")
+	destroyAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "Asset ID to destroy")
 	destroyAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to destroy")
 
 	configAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the config transaction")
 	configAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to configure (defaults to manager)")
-	configAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to configure")
+	configAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "Asset ID to configure")
 	configAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to configure")
 	configAssetCmd.Flags().StringVar(&assetNewManager, "new-manager", "", "New manager address")
 	configAssetCmd.Flags().StringVar(&assetNewReserve, "new-reserve", "", "New reserve address")
@@ -99,7 +99,7 @@ func init() {
 
 	sendAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
-	sendAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being transferred")
+	sendAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "ID of the asset being transferred")
 	sendAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being transferred")
 	sendAssetCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (if not specified, uses default account)")
 	sendAssetCmd.Flags().StringVarP(&toAddress, "to", "t", "", "Address to send to money to (required)")
@@ -110,7 +110,7 @@ func init() {
 
 	freezeAssetCmd.Flags().StringVar(&assetFreezer, "freezer", "", "Address to issue a freeze transaction from")
 	freezeAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
-	freezeAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being frozen")
+	freezeAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "ID of the asset being frozen")
 	freezeAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being frozen")
 	freezeAssetCmd.Flags().StringVar(&account, "account", "", "Account address to freeze/unfreeze")
 	freezeAssetCmd.Flags().BoolVar(&assetFrozen, "freeze", false, "Freeze or unfreeze")
@@ -119,7 +119,7 @@ func init() {
 	freezeAssetCmd.MarkFlagRequired("freeze")
 
 	optinAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being accepted")
-	optinAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being accepted")
+	optinAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "ID of the asset being accepted")
 	optinAssetCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to opt in to using the asset (if not specified, uses default account)")
 	optinAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
 
@@ -131,7 +131,7 @@ func init() {
 	addTxnFlags(freezeAssetCmd)
 	addTxnFlags(optinAssetCmd)
 
-	infoAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset to look up")
+	infoAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "ID of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "DEPRECATED! Unit name of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Unit name of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address of the asset creator")

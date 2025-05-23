@@ -74,18 +74,17 @@ func balanceRecordsFromDdr(ddr *v2.DryrunRequest) (records []basics.BalanceRecor
 		if err != nil {
 			return
 		}
-		appIdx := basics.AppIndex(a.Id)
 		ad := accounts[addr]
 		if ad.AppParams == nil {
 			ad.AppParams = make(map[basics.AppIndex]basics.AppParams, 1)
-			ad.AppParams[appIdx] = params
+			ad.AppParams[a.Id] = params
 		} else {
-			ap, ok := ad.AppParams[appIdx]
+			ap, ok := ad.AppParams[a.Id]
 			if ok {
 				v2.MergeAppParams(&ap, &params)
-				ad.AppParams[appIdx] = ap
+				ad.AppParams[a.Id] = ap
 			} else {
-				ad.AppParams[appIdx] = params
+				ad.AppParams[a.Id] = params
 			}
 		}
 		accounts[addr] = ad
