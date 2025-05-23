@@ -41,8 +41,10 @@ type (
 		Round basics.Round `codec:"rnd"`
 
 		// The hash of the previous block
-		Branch    BlockHash               `codec:"prev"`
-		Branch512 [crypto.Sha512Size]byte `codec:"prev512"`
+		Branch BlockHash `codec:"prev"`
+
+		// The hash of the previous block, using SHA-512
+		Branch512 crypto.Sha512Digest `codec:"prev512"`
 
 		// Sortition seed
 		Seed committee.Seed `codec:"seed"`
@@ -149,15 +151,15 @@ type (
 	// It contains multiple commitments based on different algorithms and hash functions, to support different use cases.
 	TxnCommitments struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
-		// Root of transaction merkle tree using SHA512_256 hash function.
+		// Root of transaction Merkle tree using the SHA-512/256 hash function.
 		// This commitment is computed based on the PaysetCommit type specified in the block's consensus protocol.
 		NativeSha512_256Commitment crypto.Digest `codec:"txn"`
 
-		// Root of transaction vector commitment merkle tree using SHA256 hash function
+		// Root of transaction vector commitment Merkle tree using the SHA-256 hash function.
 		Sha256Commitment crypto.Digest `codec:"txn256"`
 
-		// Root of transaction vector commitment merkle tree using SHA512 hash function
-		Sha512Commitment [crypto.Sha512Size]byte `codec:"txn512"`
+		// Root of transaction vector commitment Merkle tree using the SHA-512 hash function.
+		Sha512Commitment crypto.Sha512Digest `codec:"txn512"`
 	}
 
 	// ParticipationUpdates represents participation account data that
@@ -326,9 +328,8 @@ func (bh BlockHeader) Hash() BlockHash {
 }
 
 // Hash512 returns the hash of a block header using SHA512.
-func (bh BlockHeader) Hash512() [crypto.Sha512Size]byte {
-	h := crypto.GenericHashObj(crypto.HashFactory{HashType: crypto.Sha512}.NewHash(), bh)
-	return [crypto.Sha512Size]byte(h)
+func (bh BlockHeader) Hash512() crypto.Sha512Digest {
+	return crypto.Sha512Digest(crypto.GenericHashObj(crypto.HashFactory{HashType: crypto.Sha512}.NewHash(), bh))
 }
 
 // ToBeHashed implements the crypto.Hashable interface
@@ -673,7 +674,7 @@ func (block Block) PaysetCommit() (TxnCommitments, error) {
 		}
 	}
 
-	var digestSHA512 [crypto.Sha512Size]byte
+	var digestSHA512 crypto.Sha512Digest
 	if params.EnableSha512BlockHash {
 		digestSHA512, err = block.paysetCommitSHA512()
 		if err != nil {
@@ -722,14 +723,14 @@ func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
 	return rootAsByteArray, nil
 }
 
-func (block Block) paysetCommitSHA512() ([crypto.Sha512Size]byte, error) {
+func (block Block) paysetCommitSHA512() (crypto.Sha512Digest, error) {
 	tree, err := block.TxnMerkleTreeSHA512()
 	if err != nil {
-		return [crypto.Sha512Size]byte{}, err
+		return crypto.Sha512Digest{}, err
 	}
 
 	rootSlice := tree.Root()
-	var rootAsByteArray [crypto.Sha512Size]byte
+	var rootAsByteArray crypto.Sha512Digest
 	copy(rootAsByteArray[:], rootSlice)
 	return rootAsByteArray, nil
 }
