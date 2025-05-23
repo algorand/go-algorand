@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -1169,4 +1170,29 @@ func TestTracksCatchpointsWithoutStoring(t *testing.T) {
 	cfg.Archival = false
 	require.Equal(t, true, cfg.TracksCatchpoints())
 	require.Equal(t, false, cfg.StoresCatchpoints())
+}
+
+func TestEncodedAccountAllocationBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// ensure that all the supported protocols have value limits less or
+	// equal to their corresponding codec allocbounds
+	for protoVer, proto := range Consensus {
+		if proto.MaxAssetsPerAccount > 0 && proto.MaxAssetsPerAccount > bounds.EncodedMaxAssetsPerAccount {
+			require.Failf(t, "proto.MaxAssetsPerAccount > EncodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
+		}
+		if proto.MaxAppsCreated > 0 && proto.MaxAppsCreated > bounds.EncodedMaxAppParams {
+			require.Failf(t, "proto.MaxAppsCreated > EncodedMaxAppParams", "protocol version = %s", protoVer)
+		}
+		if proto.MaxAppsOptedIn > 0 && proto.MaxAppsOptedIn > bounds.EncodedMaxAppLocalStates {
+			require.Failf(t, "proto.MaxAppsOptedIn > EncodedMaxAppLocalStates", "protocol version = %s", protoVer)
+		}
+		if proto.MaxLocalSchemaEntries > bounds.EncodedMaxKeyValueEntries {
+			require.Failf(t, "proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries", "protocol version = %s", protoVer)
+		}
+		if proto.MaxGlobalSchemaEntries > bounds.EncodedMaxKeyValueEntries {
+			require.Failf(t, "proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries", "protocol version = %s", protoVer)
+		}
+		// There is no protocol limit to the number of Boxes per account, so that allocbound is not checked.
+	}
 }

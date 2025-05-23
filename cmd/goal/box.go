@@ -37,7 +37,7 @@ func init() {
 
 	appBoxCmd.AddCommand(appBoxInfoCmd)
 	appBoxCmd.AddCommand(appBoxListCmd)
-	appBoxCmd.PersistentFlags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	appBoxCmd.PersistentFlags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
 	appBoxCmd.MarkFlagRequired("app-id")
 
 	appBoxInfoCmd.Flags().StringVarP(&boxName, "name", "n", "", "Application box name. Use the same form as app-arg to name the box.")
@@ -92,7 +92,7 @@ var appBoxInfoCmd = &cobra.Command{
 		reportInfof("Name:  %s", boxName)
 
 		// Print box value
-		reportInfof("Value: %s", encodeBytesAsAppCallBytes(box.Value))
+		reportInfof("Value: %s", encodeBytesAsAppCallBytes(*box.Value))
 	},
 }
 
@@ -124,7 +124,7 @@ var appBoxListCmd = &cobra.Command{
 		for _, descriptor := range response.Boxes {
 			name := encodeBytesAsAppCallBytes(descriptor.Name)
 			if boxValues {
-				reportInfof("%s : %s", name, encodeBytesAsAppCallBytes(descriptor.Value))
+				reportInfof("%s : %s", name, encodeBytesAsAppCallBytes(*descriptor.Value))
 			} else {
 				reportInfoln(name)
 			}

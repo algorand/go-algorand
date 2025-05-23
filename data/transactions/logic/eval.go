@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -52,7 +53,7 @@ const maxStringSize = 4096
 const maxByteMathSize = 64
 
 // maxLogSize is the limit of total log size from n log calls in a program
-const maxLogSize = config.MaxEvalDeltaTotalLogSize
+const maxLogSize = bounds.MaxEvalDeltaTotalLogSize
 
 // maxLogCalls is the limit of total log calls during a program execution
 const maxLogCalls = 32
@@ -66,7 +67,7 @@ var maxAppCallDepth = 8
 // maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
 
-// maxTxGroupSize is the same as config.MaxTxGroupSize, but is a constant so
+// maxTxGroupSize is the same as bounds.MaxTxGroupSize, but is a constant so
 // that we can declare an array of this size. A unit test confirms that they
 // match.
 const maxTxGroupSize = 16
@@ -294,10 +295,10 @@ type UnnamedResourcePolicy interface {
 // EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
 type EvalConstants struct {
 	// MaxLogSize is the limit of total log size from n log calls in a program
-	MaxLogSize uint64
+	MaxLogSize int
 
 	// MaxLogCalls is the limit of total log calls during a program execution
-	MaxLogCalls uint64
+	MaxLogCalls int
 
 	// UnnamedResources, if provided, allows resources to be used without being named according to
 	// this policy.
@@ -307,8 +308,8 @@ type EvalConstants struct {
 // RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
 func RuntimeEvalConstants() EvalConstants {
 	return EvalConstants{
-		MaxLogSize:  uint64(maxLogSize),
-		MaxLogCalls: uint64(maxLogCalls),
+		MaxLogSize:  maxLogSize,
+		MaxLogCalls: maxLogCalls,
 	}
 }
 
@@ -5108,12 +5109,12 @@ func opOnlineStake(cx *EvalContext) error {
 func opLog(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 
-	if uint64(len(cx.txn.EvalDelta.Logs)) >= cx.MaxLogCalls {
+	if len(cx.txn.EvalDelta.Logs) >= cx.MaxLogCalls {
 		return fmt.Errorf("too many log calls in program. up to %d is allowed", cx.MaxLogCalls)
 	}
 	log := cx.Stack[last]
 	cx.logSize += len(log.Bytes)
-	if uint64(cx.logSize) > cx.MaxLogSize {
+	if cx.logSize > cx.MaxLogSize {
 		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, cx.MaxLogSize)
 	}
 	cx.txn.EvalDelta.Logs = append(cx.txn.EvalDelta.Logs, string(log.Bytes))

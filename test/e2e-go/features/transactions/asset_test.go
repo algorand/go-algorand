@@ -36,7 +36,7 @@ import (
 )
 
 type assetIDParams struct {
-	idx    uint64
+	idx    basics.AssetIndex
 	params model.AssetParams
 }
 
@@ -68,27 +68,26 @@ func TestAssetValidRounds(t *testing.T) {
 	client := fixture.LibGoalClient
 
 	// First, test valid rounds to last valid conversion
-	var firstValid, lastValid, lastRound, validRounds uint64
+	var firstValid, lastValid, lastRound, validRounds basics.Round
 
 	params, err := client.SuggestedParams()
 	a.NoError(err)
 	cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	a.True(ok)
-
+	maxTxnLife := basics.Round(cparams.MaxTxnLife)
 	firstValid = 0
 	lastValid = 0
-	validRounds = cparams.MaxTxnLife + 1
+	validRounds = maxTxnLife + 1
 	firstValid, lastValid, lastRound, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
 	a.True(firstValid == 1 || firstValid == lastRound)
-	a.Equal(firstValid+cparams.MaxTxnLife, lastValid)
+	a.Equal(firstValid+maxTxnLife, lastValid)
 
 	firstValid = 0
 	lastValid = 0
-	validRounds = cparams.MaxTxnLife + 2
+	validRounds = maxTxnLife + 2
 	_, _, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
-	a.Error(err)
-	a.True(strings.Contains(err.Error(), "cannot construct transaction: txn validity period"))
+	a.ErrorContains(err, "cannot construct transaction: txn validity period")
 
 	firstValid = 0
 	lastValid = 0
@@ -102,24 +101,24 @@ func TestAssetValidRounds(t *testing.T) {
 	validRounds = 1
 	firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
-	a.Equal(uint64(1), firstValid)
+	a.EqualValues(1, firstValid)
 	a.Equal(firstValid, lastValid)
 
 	firstValid = 1
 	lastValid = 0
-	validRounds = cparams.MaxTxnLife
+	validRounds = maxTxnLife
 	firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
-	a.Equal(uint64(1), firstValid)
-	a.Equal(cparams.MaxTxnLife, lastValid)
+	a.EqualValues(1, firstValid)
+	a.Equal(maxTxnLife, lastValid)
 
 	firstValid = 100
 	lastValid = 0
-	validRounds = cparams.MaxTxnLife
+	validRounds = maxTxnLife
 	firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
-	a.Equal(uint64(100), firstValid)
-	a.Equal(firstValid+cparams.MaxTxnLife-1, lastValid)
+	a.EqualValues(100, firstValid)
+	a.Equal(firstValid+maxTxnLife-1, lastValid)
 
 	// Second, test transaction creation
 	accountList, err := fixture.GetWalletsSortedByBalance()
@@ -154,7 +153,7 @@ func TestAssetValidRounds(t *testing.T) {
 	a.NoError(err)
 	// zeros are special cases
 	// first valid never should be zero
-	a.NotEqual(basics.Round(0), tx.FirstValid)
+	a.NotZero(tx.FirstValid)
 
 	params, err = client.SuggestedParams()
 	a.NoError(err)
@@ -162,13 +161,13 @@ func TestAssetValidRounds(t *testing.T) {
 
 	// ledger may advance between SuggestedParams and FillUnsignedTxTemplate calls
 	// expect validity sequence
-	var firstValidRange, lastValidRange []uint64
+	var firstValidRange, lastValidRange []basics.Round
 	for i := lastRoundBefore; i <= lastRoundAfter+1; i++ {
 		firstValidRange = append(firstValidRange, i)
-		lastValidRange = append(lastValidRange, i+cparams.MaxTxnLife)
+		lastValidRange = append(lastValidRange, i+maxTxnLife)
 	}
-	a.Contains(firstValidRange, uint64(tx.FirstValid))
-	a.Contains(lastValidRange, uint64(tx.LastValid))
+	a.Contains(firstValidRange, tx.FirstValid)
+	a.Contains(lastValidRange, tx.LastValid)
 
 	firstValid = 1
 	lastValid = 1
@@ -182,7 +181,7 @@ func TestAssetValidRounds(t *testing.T) {
 	tx, err = client.FillUnsignedTxTemplate(account0, firstValid, lastValid, fee, tx)
 	a.NoError(err)
 	a.Equal(basics.Round(1), tx.FirstValid)
-	a.Equal(basics.Round(cparams.MaxTxnLife+1), tx.LastValid)
+	a.Equal(maxTxnLife+1, tx.LastValid)
 }
 
 func TestAssetConfig(t *testing.T) {
@@ -568,7 +567,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	txCreate1, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txCreate1)
 	a.NoError(err)
 
-	assetID1 := txCount + 1
+	assetID1 := basics.AssetIndex(txCount + 1)
 	txSend, err := client1.MakeUnsignedAssetSendTx(assetID1, 0, account1, "", "")
 	a.NoError(err)
 	txSend, err = client1.FillUnsignedTxTemplate(account1, 0, 0, fee, txSend)
@@ -605,7 +604,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	txCreate2, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txCreate2)
 	a.NoError(err)
 
-	assetID3 := txCount + 1
+	assetID3 := basics.AssetIndex(txCount + 1)
 	txDestroy, err := client0.MakeUnsignedAssetDestroyTx(assetID3)
 	a.NoError(err)
 	txDestroy, err = client0.FillUnsignedTxTemplate(account0, 0, 0, fee, txDestroy)
@@ -746,7 +745,7 @@ func TestAssetSend(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 2)
-	var frozenIdx, nonFrozenIdx uint64
+	var frozenIdx, nonFrozenIdx basics.AssetIndex
 	for _, asset := range *info.CreatedAssets {
 		idx := asset.Index
 		cp := asset.Params
@@ -977,7 +976,7 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
 	var asset model.AssetParams
-	var assetIndex uint64
+	var assetIndex basics.AssetIndex
 	for _, cp := range *info.CreatedAssets {
 		asset = cp.Params
 		assetIndex = cp.Index
@@ -1078,7 +1077,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
 	var asset model.AssetParams
-	var assetIndex uint64
+	var assetIndex basics.AssetIndex
 	for _, cp := range *info.CreatedAssets {
 		asset = cp.Params
 		assetIndex = cp.Index
@@ -1095,7 +1094,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	nodeStatus, _ := client.Status()
 	consParams, err := client.ConsensusParams(nodeStatus.LastRound)
 	a.NoError(err)
-	err = fixture.WaitForRoundWithTimeout(curRound + consParams.MaxBalLookback + 1)
+	err = fixture.WaitForRoundWithTimeout(curRound + basics.Round(consParams.MaxBalLookback) + 1)
 	a.NoError(err)
 
 	// Check again that asset is visible

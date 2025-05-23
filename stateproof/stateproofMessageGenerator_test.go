@@ -17,9 +17,10 @@
 package stateproof
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -81,15 +82,15 @@ func TestStateProofMessage(t *testing.T) {
 		}
 		// since a state proof txn was created, we update the header with the next state proof round
 		// i.e network has accepted the state proof.
-		s.addBlock(basics.Round(tx.Txn.Message.LastAttestedRound + proto.StateProofInterval))
+		s.addBlock(tx.Txn.Message.LastAttestedRound + basics.Round(proto.StateProofInterval))
 		lastMessage = tx.Txn.Message
 	}
 }
 
 func verifySha256BlockHeadersCommitments(a *require.Assertions, message stateproofmsg.Message, blocks map[basics.Round]bookkeeping.BlockHeader) {
 	blkHdrArr := make(lightBlockHeaders, message.LastAttestedRound-message.FirstAttestedRound+1)
-	for i := uint64(0); i < message.LastAttestedRound-message.FirstAttestedRound+1; i++ {
-		hdr := blocks[basics.Round(message.FirstAttestedRound+i)]
+	for i := range message.LastAttestedRound - message.FirstAttestedRound + 1 {
+		hdr := blocks[message.FirstAttestedRound+i]
 		blkHdrArr[i] = hdr.ToLightBlockHeader()
 	}
 
@@ -217,7 +218,7 @@ func TestGenerateBlockProof(t *testing.T) {
 
 		verifyLightBlockHeaderProof(&tx, &proto, headers, a)
 
-		s.addBlock(basics.Round(tx.Txn.Message.LastAttestedRound + proto.StateProofInterval))
+		s.addBlock(tx.Txn.Message.LastAttestedRound + basics.Round(proto.StateProofInterval))
 		lastAttestedRound = basics.Round(tx.Txn.Message.LastAttestedRound)
 	}
 }
@@ -233,7 +234,7 @@ func verifyLightBlockHeaderProof(tx *transactions.SignedTxn, proto *config.Conse
 		lightheader := headers[headerIndex]
 		err = merklearray.VerifyVectorCommitment(
 			tx.Txn.Message.BlockHeadersCommitment,
-			map[uint64]crypto.Hashable{headerIndex: &lightheader},
+			map[uint64]crypto.Hashable{uint64(headerIndex): &lightheader},
 			proof.ToProof())
 
 		a.NoError(err)

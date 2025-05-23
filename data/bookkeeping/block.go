@@ -56,7 +56,7 @@ type (
 		TimeStamp int64 `codec:"ts"`
 
 		// Genesis ID to which this block belongs.
-		GenesisID string `codec:"gen,allocbound=config.MaxGenesisIDLen"`
+		GenesisID string `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
 
 		// Genesis hash to which this block belongs.
 		GenesisHash crypto.Digest `codec:"gh"`
@@ -170,11 +170,11 @@ type (
 		// ExpiredParticipationAccounts contains a list of online accounts
 		// that needs to be converted to offline since their
 		// participation key expired.
-		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxProposedExpiredOnlineAccounts"`
+		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=bounds.MaxProposedExpiredOnlineAccounts"`
 
 		// AbsentParticipationAccounts contains a list of online accounts that
 		// needs to be converted to offline since they are not proposing.
-		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=config.MaxMarkAbsent"`
+		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=bounds.MaxMarkAbsent"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -228,9 +228,10 @@ type (
 	// (instead of materializing it separately, like balances).
 	//msgp:ignore UpgradeState
 	UpgradeState struct {
-		CurrentProtocol       protocol.ConsensusVersion `codec:"proto"`
-		NextProtocol          protocol.ConsensusVersion `codec:"nextproto"`
-		NextProtocolApprovals uint64                    `codec:"nextyes"`
+		CurrentProtocol protocol.ConsensusVersion `codec:"proto"`
+		NextProtocol    protocol.ConsensusVersion `codec:"nextproto"`
+		// NextProtocolApprovals is the number of approvals for the next protocol proposal. It is expressed in basics.Round because it is a count of rounds.
+		NextProtocolApprovals basics.Round `codec:"nextyes"`
 		// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
 		// an upgrade taking place, this would be zero.
 		NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
@@ -264,7 +265,7 @@ type (
 	// A Block contains the Payset and metadata corresponding to a given Round.
 	Block struct {
 		BlockHeader
-		Payset transactions.Payset `codec:"txns,maxtotalbytes=config.MaxTxnBytesPerBlock"`
+		Payset transactions.Payset `codec:"txns,maxtotalbytes=bounds.MaxTxnBytesPerBlock"`
 	}
 )
 
@@ -517,7 +518,7 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 	}
 
 	// Clear out failed proposal
-	if r == s.NextProtocolVoteBefore && s.NextProtocolApprovals < params.UpgradeThreshold {
+	if r == s.NextProtocolVoteBefore && s.NextProtocolApprovals < basics.Round(params.UpgradeThreshold) {
 		s.NextProtocol = ""
 		s.NextProtocolApprovals = 0
 		s.NextProtocolVoteBefore = basics.Round(0)

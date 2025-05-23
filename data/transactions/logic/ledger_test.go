@@ -170,41 +170,41 @@ func (l *Ledger) Counter() uint64 {
 }
 
 // NewHolding sets the ASA balance of a given account.
-func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, frozen bool) {
+func (l *Ledger) NewHolding(addr basics.Address, assetID basics.AssetIndex, amount uint64, frozen bool) {
 	br, ok := l.balances[addr]
 	if !ok {
 		br = newBalanceRecord(addr, 0)
 	}
-	br.holdings[basics.AssetIndex(assetID)] = basics.AssetHolding{Amount: amount, Frozen: frozen}
+	br.holdings[assetID] = basics.AssetHolding{Amount: amount, Frozen: frozen}
 	l.balances[addr] = br
 }
 
 // NewLocals essentially "opts in" an address to an app id.
-func (l *Ledger) NewLocals(addr basics.Address, appID uint64) {
+func (l *Ledger) NewLocals(addr basics.Address, appID basics.AppIndex) {
 	if _, ok := l.balances[addr]; !ok {
 		l.balances[addr] = newBalanceRecord(addr, 0)
 	}
-	l.balances[addr].locals[basics.AppIndex(appID)] = basics.TealKeyValue{}
+	l.balances[addr].locals[appID] = basics.TealKeyValue{}
 }
 
 // NewLocal sets a local value of an app on an address
-func (l *Ledger) NewLocal(addr basics.Address, appID uint64, key string, value basics.TealValue) {
-	l.balances[addr].locals[basics.AppIndex(appID)][key] = value
+func (l *Ledger) NewLocal(addr basics.Address, appID basics.AppIndex, key string, value basics.TealValue) {
+	l.balances[addr].locals[appID][key] = value
 }
 
 // NoLocal removes a key from an address locals for an app.
-func (l *Ledger) NoLocal(addr basics.Address, appID uint64, key string) {
-	delete(l.balances[addr].locals[basics.AppIndex(appID)], key)
+func (l *Ledger) NoLocal(addr basics.Address, appID basics.AppIndex, key string) {
+	delete(l.balances[addr].locals[appID], key)
 }
 
 // NewGlobal sets a global value for an app
-func (l *Ledger) NewGlobal(appID uint64, key string, value basics.TealValue) {
-	l.applications[basics.AppIndex(appID)].GlobalState[key] = value
+func (l *Ledger) NewGlobal(appID basics.AppIndex, key string, value basics.TealValue) {
+	l.applications[appID].GlobalState[key] = value
 }
 
 // NoGlobal removes a global key for an app
-func (l *Ledger) NoGlobal(appID uint64, key string) {
-	delete(l.applications[basics.AppIndex(appID)].GlobalState, key)
+func (l *Ledger) NoGlobal(appID basics.AppIndex, key string) {
+	delete(l.applications[appID].GlobalState, key)
 }
 
 // Rekey sets the authAddr for an address.
@@ -996,9 +996,9 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 // SetKey creates a new key-value in {addr, aidx, global} storage
 func (l *Ledger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
 	if global {
-		l.NewGlobal(uint64(aidx), key, value)
+		l.NewGlobal(aidx, key, value)
 	} else {
-		l.NewLocal(addr, uint64(aidx), key, value)
+		l.NewLocal(addr, aidx, key, value)
 	}
 	return nil
 }
@@ -1006,9 +1006,9 @@ func (l *Ledger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, 
 // DelKey removes a key from {addr, aidx, global} storage
 func (l *Ledger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error {
 	if global {
-		l.NoGlobal(uint64(aidx), key)
+		l.NoGlobal(aidx, key)
 	} else {
-		l.NoLocal(addr, uint64(aidx), key)
+		l.NoLocal(addr, aidx, key)
 	}
 	return nil
 }

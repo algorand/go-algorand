@@ -61,9 +61,9 @@ func (tracer *cursorEvalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledg
 func (tracer *cursorEvalTracer) absolutePath() TxnPath {
 	path := make(TxnPath, len(tracer.relativeCursor))
 	for i, relativeGroupIndex := range tracer.relativeCursor {
-		absoluteIndex := uint64(relativeGroupIndex)
+		absoluteIndex := relativeGroupIndex
 		if i > 0 {
-			absoluteIndex += uint64(tracer.previousInnerTxns[i-1])
+			absoluteIndex += tracer.previousInnerTxns[i-1]
 		}
 		path[i] = absoluteIndex
 	}
@@ -97,7 +97,7 @@ type evalTracer struct {
 
 	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
 	// NOTE: this field scratchSlots is used only for scratch change exposure.
-	scratchSlots []uint64
+	scratchSlots []int
 
 	groups [][]transactions.SignedTxnWithAD
 }
@@ -126,7 +126,7 @@ func (tracer *evalTracer) getApplyDataAtPath(path TxnPath) (*transactions.ApplyD
 
 	for _, index := range path[1:] {
 		innerTxns := applyDataCursor.EvalDelta.InnerTxns
-		if index >= uint64(len(innerTxns)) {
+		if index >= len(innerTxns) {
 			return nil, fmt.Errorf("simulator debugger error: index %d out of range with length %d. Full path: %v", index, len(innerTxns), path)
 		}
 		applyDataCursor = &innerTxns[index].ApplyData
@@ -153,19 +153,19 @@ func (tracer *evalTracer) BeforeTxnGroup(ep *logic.EvalParams) {
 	if ep.GetCaller() != nil {
 		// If this is an inner txn group, save the txns
 		tracer.populateInnerTransactions(ep.TxnGroup)
-		tracer.result.TxnGroups[0].AppBudgetAdded += uint64(ep.Proto.MaxAppProgramCost)
+		tracer.result.TxnGroups[0].AppBudgetAdded += ep.Proto.MaxAppProgramCost
 	}
 	tracer.cursorEvalTracer.BeforeTxnGroup(ep)
 
 	// Currently only supports one (first) txn group
 	if ep.PooledApplicationBudget != nil && tracer.result.TxnGroups[0].AppBudgetAdded == 0 {
-		tracer.result.TxnGroups[0].AppBudgetAdded = uint64(*ep.PooledApplicationBudget)
+		tracer.result.TxnGroups[0].AppBudgetAdded = *ep.PooledApplicationBudget
 	}
 
 	// Override transaction group budget if specified in request, retrieve from tracer.result
 	if ep.PooledApplicationBudget != nil {
 		tracer.result.TxnGroups[0].AppBudgetAdded += tracer.result.EvalOverrides.ExtraOpcodeBudget
-		*ep.PooledApplicationBudget += int(tracer.result.EvalOverrides.ExtraOpcodeBudget)
+		*ep.PooledApplicationBudget += tracer.result.EvalOverrides.ExtraOpcodeBudget
 	}
 
 	if ep.GetCaller() == nil {
@@ -270,12 +270,12 @@ func (tracer *evalTracer) saveEvalDelta(evalDelta transactions.EvalDelta, appIDT
 }
 
 func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTraceUnit {
-	return OpcodeTraceUnit{PC: uint64(cx.PC())}
+	return OpcodeTraceUnit{PC: cx.PC()}
 }
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
 	tracer.popCount, tracer.addCount = cx.GetOpSpec().StackExplain(cx)
-	o.StackPopCount = uint64(tracer.popCount)
+	o.StackPopCount = tracer.popCount
 
 	stackHeight := len(cx.Stack)
 	tracer.stackHeightAfterDeletion = stackHeight - int(o.StackPopCount)
@@ -354,8 +354,8 @@ func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
 
 	switch currentOpcodeName {
 	case "store":
-		slot := uint64(cx.GetProgram()[cx.PC()+1])
-		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+		slot := cx.GetProgram()[cx.PC()+1]
+		tracer.scratchSlots = append(tracer.scratchSlots, int(slot))
 	case "stores":
 		prev := last - 1
 		slot := cx.Stack[prev].Uint
@@ -365,7 +365,7 @@ func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
 		if slot >= uint64(len(cx.Scratch)) {
 			return
 		}
-		tracer.scratchSlots = append(tracer.scratchSlots, slot)
+		tracer.scratchSlots = append(tracer.scratchSlots, int(slot))
 	}
 }
 
@@ -492,7 +492,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 
 	if cx.RunMode() == logic.ModeSig {
 		// Report cost for LogicSig program and exit
-		tracer.result.TxnGroups[0].Txns[groupIndex].LogicSigBudgetConsumed = uint64(cx.Cost())
+		tracer.result.TxnGroups[0].Txns[groupIndex].LogicSigBudgetConsumed = cx.Cost()
 		if tracer.result.ReturnTrace() {
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace.programTraceRef = nil
 		}
@@ -501,7 +501,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 
 	// Report cost of this program.
 	// If it is an inner app call, roll up its cost to the top level transaction.
-	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetConsumed += uint64(cx.Cost())
+	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetConsumed += cx.Cost()
 
 	if cx.TxnGroup[groupIndex].Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC {
 		if tracer.result.ReturnTrace() && (!pass || evalError != nil) {

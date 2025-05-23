@@ -36,6 +36,7 @@ import (
 
 	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
@@ -2885,11 +2886,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough) // not set
+		require.Zero(t, validThrough) // not set
 		require.Len(t, history, 3)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 2)
 	}
 
@@ -2903,11 +2904,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 2)
 	}
 
@@ -2921,11 +2922,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 	}
 }
@@ -3391,9 +3392,9 @@ func randomAppResourceData() trackerdb.ResourcesData {
 	}
 
 	// MaxAvailableAppProgramLen is conbined size of approval and clear state since it is bound by proto.MaxAppTotalProgramLen
-	rdApp.ApprovalProgram = make([]byte, config.MaxAvailableAppProgramLen/2)
+	rdApp.ApprovalProgram = make([]byte, bounds.MaxAvailableAppProgramLen/2)
 	crypto.RandBytes(rdApp.ApprovalProgram)
-	rdApp.ClearStateProgram = make([]byte, config.MaxAvailableAppProgramLen/2)
+	rdApp.ClearStateProgram = make([]byte, bounds.MaxAvailableAppProgramLen/2)
 	crypto.RandBytes(rdApp.ClearStateProgram)
 
 	maxGlobalState := make(basics.TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)

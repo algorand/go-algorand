@@ -41,29 +41,6 @@ const (
 	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
 	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
-
-	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
-	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
-	// with config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount; note that the decoded
-	// parameter is used only for protecting the decoder against malicious encoded account data stream.
-	// protocol-specific contains would be tested once the decoding is complete.
-	encodedMaxAssetsPerAccount = 1024
-
-	// EncodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn
-	EncodedMaxAppLocalStates = 64
-
-	// EncodedMaxAppParams is the decoder limit for number of created apps in a single account.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated
-	EncodedMaxAppParams = 64
-
-	// EncodedMaxKeyValueEntries is the decoder limit for the length of a key/value store.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxLocalSchemaEntries and
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries
-	EncodedMaxKeyValueEntries = 1024
 )
 
 func (s Status) String() string {
@@ -199,7 +176,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=encodedMaxAssetsPerAccount"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=bounds.EncodedMaxAssetsPerAccount"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -216,7 +193,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=encodedMaxAssetsPerAccount"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=bounds.EncodedMaxAssetsPerAccount"`
 
 	// AuthAddr is the address against which signatures/multisigs/logicsigs should be checked.
 	// If empty, the address of the account whose AccountData this is is used.
@@ -231,11 +208,11 @@ type AccountData struct {
 
 	// AppLocalStates stores the local states associated with any applications
 	// that this account has opted in to.
-	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=EncodedMaxAppLocalStates"`
+	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=bounds.EncodedMaxAppLocalStates"`
 
 	// AppParams stores the global parameters and state associated with any
 	// applications that this account has created.
-	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=EncodedMaxAppParams"`
+	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=bounds.EncodedMaxAppParams"`
 
 	// TotalAppSchema stores the sum of all of the LocalStateSchemas
 	// and GlobalStateSchemas in this account (global for applications
@@ -269,8 +246,8 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAvailableAppProgramLen"`
-	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAvailableAppProgramLen"`
+	ApprovalProgram   []byte       `codec:"approv,allocbound=bounds.MaxAvailableAppProgramLen"`
+	ClearStateProgram []byte       `codec:"clearp,allocbound=bounds.MaxAvailableAppProgramLen"`
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
@@ -393,14 +370,14 @@ type AssetParams struct {
 
 	// UnitName specifies a hint for the name of a unit of
 	// this asset.
-	UnitName string `codec:"un,allocbound=config.MaxAssetUnitNameBytes"`
+	UnitName string `codec:"un,allocbound=bounds.MaxAssetUnitNameBytes"`
 
 	// AssetName specifies a hint for the name of the asset.
-	AssetName string `codec:"an,allocbound=config.MaxAssetNameBytes"`
+	AssetName string `codec:"an,allocbound=bounds.MaxAssetNameBytes"`
 
 	// URL specifies a URL where more information about the asset can be
 	// retrieved
-	URL string `codec:"au,allocbound=config.MaxAssetURLBytes"`
+	URL string `codec:"au,allocbound=bounds.MaxAssetURLBytes"`
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.

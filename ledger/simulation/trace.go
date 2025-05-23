@@ -19,7 +19,7 @@ package simulation
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -29,13 +29,13 @@ import (
 
 // TxnPath is a "transaction path": e.g. [0, 0, 1] means the second inner txn of the first inner txn of the first txn.
 // You can use this transaction path to find the txn data in the `TxnResults` list.
-type TxnPath []uint64
+type TxnPath []int
 
 // TxnResult contains the simulation result for a single transaction
 type TxnResult struct {
 	Txn                    transactions.SignedTxnWithAD
-	AppBudgetConsumed      uint64
-	LogicSigBudgetConsumed uint64
+	AppBudgetConsumed      int
+	LogicSigBudgetConsumed int
 	Trace                  *TransactionTrace
 
 	// UnnamedResourcesAccessed is present if all of the following are true:
@@ -60,9 +60,9 @@ type TxnGroupResult struct {
 	// FailedAt is the path to the txn that failed inside of this group
 	FailedAt TxnPath
 	// AppBudgetAdded is the total opcode budget for this group
-	AppBudgetAdded uint64
+	AppBudgetAdded int
 	// AppBudgetConsumed is the total opcode cost used for this group
-	AppBudgetConsumed uint64
+	AppBudgetConsumed int
 
 	// UnnamedResourcesAccessed will be present if AllowUnnamedResources is true. In that case, it
 	// will be populated with the unnamed resources accessed by this transaction group from
@@ -91,24 +91,24 @@ const ResultLatestVersion = uint64(2)
 type ResultEvalOverrides struct {
 	AllowEmptySignatures  bool
 	AllowUnnamedResources bool
-	MaxLogCalls           *uint64
-	MaxLogSize            *uint64
-	ExtraOpcodeBudget     uint64
+	MaxLogCalls           *int
+	MaxLogSize            *int
+	ExtraOpcodeBudget     int
 	FixSigners            bool
 }
 
 // LogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
-const LogBytesLimit = uint64(65536)
+const LogBytesLimit = 65536
 
 // MaxExtraOpcodeBudget hardcode limit of how much extra budget one can add to one transaction group (which is group-size * logic-sig-budget)
-const MaxExtraOpcodeBudget = uint64(20000 * 16)
+const MaxExtraOpcodeBudget = 20000 * 16
 
 // AllowMoreLogging method modify the log limits from lift option:
 // - if lift log limits, then overload result from local Config
 // - otherwise, set `LogLimits` field to be nil
 func (eo ResultEvalOverrides) AllowMoreLogging(allow bool) ResultEvalOverrides {
 	if allow {
-		maxLogCalls, maxLogSize := uint64(config.MaxLogCalls), LogBytesLimit
+		maxLogCalls, maxLogSize := bounds.MaxLogCalls, LogBytesLimit
 		eo.MaxLogCalls = &maxLogCalls
 		eo.MaxLogSize = &maxLogSize
 	}
@@ -231,7 +231,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 // ScratchChange represents a write operation into a scratch slot
 type ScratchChange struct {
 	// Slot stands for the scratch slot id get written to
-	Slot uint64
+	Slot int
 
 	// NewValue is the stack value written to scratch slot
 	NewValue basics.TealValue
@@ -263,7 +263,7 @@ type StateOperation struct {
 // OpcodeTraceUnit contains the trace effects of a single opcode evaluation.
 type OpcodeTraceUnit struct {
 	// The PC of the opcode being evaluated
-	PC uint64
+	PC int
 
 	// SpawnedInners contains the indexes of traces for inner transactions spawned by this opcode,
 	// if any. These indexes refer to the InnerTraces array of the TransactionTrace object containing
@@ -274,7 +274,7 @@ type OpcodeTraceUnit struct {
 	StackAdded []basics.TealValue
 
 	// deleted element number from stack
-	StackPopCount uint64
+	StackPopCount int
 
 	// ScratchSlotChanges stands for write operations into scratch slots
 	ScratchSlotChanges []ScratchChange

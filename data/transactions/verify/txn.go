@@ -489,7 +489,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 			return tasksCtx.Err()
 		case worksets <- struct{}{}:
 			if len(nextWorkset) > 0 {
-				err := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
+				err1 := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
 					var grpErr error
 					// check if we've canceled the request while this was in the queue.
 					if tasksCtx.Err() != nil {
@@ -514,8 +514,8 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 					cache.AddPayset(txnGroups, groupCtxs)
 					return nil
 				}, nextWorkset, worksDoneCh)
-				if err != nil {
-					return err
+				if err1 != nil {
+					return err1
 				}
 				processing++
 				nextWorkset = nil

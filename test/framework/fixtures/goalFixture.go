@@ -82,7 +82,7 @@ func (f *GoalFixture) executeCommand(args ...string) (retStdout string, retStder
 // combine the error and the output so that we could return it as a single error object.
 func combineExecuteError(retStdout string, retStderr string, err error) error {
 	if err == nil {
-		return err
+		return nil
 	}
 	return fmt.Errorf("%v\nStdout:\n%s\nStderr:\n%s", err, retStdout, retStderr)
 }

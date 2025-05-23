@@ -43,9 +43,11 @@ containing per-round ledger differences that get compacted when actually written
 
 ## What codegen tool is used?
 
-We found that [oapi-codegen](https://github.com/deepmap/oapi-codegen) produced the cleanest code, and had an easy to work with codebase. There is an algorand fork of this project which contains a couple modifications that were needed to properly support our needs.
-
-Specifically, `uint64` types aren't strictly supported by OpenAPI. So we added a type-mapping feature to oapi-codegen.
+We found that [oapi-codegen](https://github.com/deepmap/oapi-codegen)
+produced the cleanest code, and had an easy to work with codebase. We
+initially forked it in `algorand/oapi-codegen` but found that features
+we added are now available in the upstream repo, so have migrated
+back.
 
 ## Why do we have algod.oas2.json and algod.oas3.yml?
 

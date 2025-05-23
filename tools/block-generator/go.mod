@@ -22,7 +22,6 @@ require (
 	github.com/algorand/falcon v0.1.0 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
 	github.com/algorand/msgp v1.1.60 // indirect
-	github.com/algorand/oapi-codegen v1.12.0-algorand.0 // indirect
 	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
 	github.com/aws/aws-sdk-go v1.34.0 // indirect
@@ -122,6 +121,7 @@ require (
 	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/olivere/elastic v6.2.14+incompatible // indirect
 	github.com/onsi/ginkgo/v2 v2.20.2 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect

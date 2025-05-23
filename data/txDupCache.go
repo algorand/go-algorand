@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-deadlock"
 
@@ -263,6 +263,6 @@ var saltedPool = sync.Pool{
 		// 2 x MaxAvailableAppProgramLen that covers
 		// max approve + clear state programs with max args for app create txn.
 		// other transactions are much smaller.
-		return make([]byte, 2*config.MaxAvailableAppProgramLen)
+		return make([]byte, 2*bounds.MaxAvailableAppProgramLen)
 	},
 }

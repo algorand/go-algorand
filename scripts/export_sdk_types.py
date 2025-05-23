@@ -53,7 +53,7 @@ def replace_between(filename, content, start_pattern, stop_pattern=None):
 
     start_idx = original.find(start_pattern)
     if start_idx == -1:
-        raise ValueError("Start pattern not found")
+        raise ValueError(f"Start pattern '{start_pattern}' not found in {filename}")
 
     start_idx += len(start_pattern)
     stop_idx = len(original)
@@ -67,17 +67,44 @@ def replace_between(filename, content, start_pattern, stop_pattern=None):
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(updated)
 
+def find_line(filename, s):
+    """
+    Returns the line from `filename` that contains `s`
+    Args:
+        filename (str): Path to the file to modify.
+        s (str): Name of the substring to look for
+    """
+    with open(filename, 'r', encoding='utf-8') as f:
+        original = f.read()
+
+    start_idx = original.find(s)
+    if start_idx == -1:
+        return ""
+    stop_idx = original.find("\n", start_idx)
+
+    return original[start_idx:stop_idx]
 
 SDK="../go-algorand-sdk/"
 
 def sdkize(input):
     # allocbounds are not used by the SDK. It's confusing to leave them in.
     input = re.sub(",allocbound=.*\"", '"', input)
+    input = re.sub("^//msgp:allocbound.*\n", '', input, flags=re.MULTILINE)
+
+    # protocol.ConsensusVersion and protocolConsensusVxx constants are
+    # the only things that stays in the protocol package. So we "hide"
+    # them from the replacements below, then switch it back
+    input = input.replace("protocol.ConsensusV", "protocolConsensusV")
+    input = input.replace("protocol.ConsensusFuture", "protocolConsensusFuture")
 
     # All types are in the same package in the SDK
     input = input.replace("basics.", "")
     input = input.replace("crypto.", "")
-    input = input.replace("protocol.", "")
+    input = re.sub(r'protocol\.\b', r'', input)
+
+    # and go back...
+    input = input.replace("protocolConsensusV", "protocol.ConsensusV")
+    input = input.replace("protocolConsensusFuture", "protocol.ConsensusFuture")
 
     # keyreg
     input = input.replace("OneTimeSignatureVerifier", "VotePK")
@@ -91,42 +118,74 @@ def sdkize(input):
 
     return input
 
-def export(src, dst, start, stop):
+def export(src, dst, start, stop=None):
     x = extract_between(src, start, stop)
     x = sdkize(x)
     replace_between(SDK+dst, x, start, stop)
     subprocess.run(["gofmt", "-w", SDK+dst])
 
+def export_type(name, src, dst):
+    export_thing("type {thing} ", name, src, dst)
+
+def export_var(name, src, dst):
+    export_thing("var {thing} ", name, src, dst)
+
+def export_func(name, src, dst):
+    export_thing("func {thing}(", name, src, dst)
+
+def export_thing(pattern, name, src, dst):
+    start = pattern.format(thing=name)
+    line = find_line(src, start)
+    if line == "":
+        raise ValueError(f"Unable to find {name} in {src}")
+    stop = "\n}\n" if line.endswith("{") else "\n"
+    x = extract_between(src, start, stop)
+    x = sdkize(x)
+    if dst.endswith(".go"):     # explicit dst
+        dst = f"{SDK}{dst}"
+    else:
+        dst = f"{SDK}types/{dst}.go"
+    replace_between(dst, x, start, stop)
+    subprocess.run(["gofmt", "-w", dst])
 
 if __name__ == "__main__":
-    # Replace the entire file, starting with "type ConsensusParams"
-    consensus = extract_between("config/consensus.go", "type ConsensusParams")
-    replace_between(SDK+"protocol/config/consensus.go", consensus, "type ConsensusParams")
+    # Replace the entire file, after "import" (basically just relicense it)
+    export("protocol/consensus.go", "protocol/consensus.go", "import")
 
-    # Common tranbsaction types
-    export("data/transactions/transaction.go", "types/transaction.go",
-           "type Header ", "\n}")
-    export("data/transactions/transaction.go", "types/transaction.go",
-           "type Transaction ", "\n}")
-    export("data/transactions/signedtxn.go", "types/transaction.go",
-           "type SignedTxn ", "\n}")
+    src = "config/consensus.go"
+    dst = "protocol/config/consensus.go"
+    export_type("ConsensusParams", src, dst)
+    export_type("ProposerPayoutRules", src, dst)
+    export_type("BonusPlan", src, dst)
+    export_type("PaysetCommitType", src, dst)
+    export_type("ConsensusProtocols", src, dst)
+    export_var("Consensus", src, dst)
+    export_func("initConsensusProtocols", src, dst)
+    export_type("Global", src, dst)
+    export_var("Protocol", src, dst)
+    # do _not_ export init(), since go-algorand sets bounds, SDK does not
 
-    # The transaction types
-    export("data/transactions/payment.go", "types/transaction.go",
-           "type PaymentTxnFields ", "\n}")
-    export("data/transactions/keyreg.go", "types/transaction.go",
-           "type KeyregTxnFields ", "\n}")
+    # Common transaction types
+    export_type("Header", "data/transactions/transaction.go", "transaction")
+    export_type("Transaction", "data/transactions/transaction.go", "transaction")
+    export_type("SignedTxn", "data/transactions/signedtxn.go", "transaction")
 
-    export("data/transactions/asset.go", "types/transaction.go",
-           "type AssetConfigTxnFields ", "\n}")
-    export("data/transactions/asset.go", "types/transaction.go",
-           "type AssetTransferTxnFields ", "\n}")
-    export("data/transactions/asset.go", "types/transaction.go",
-           "type AssetFreezeTxnFields ", "\n}")
-
-    export("data/transactions/application.go", "types/applications.go",
-           "type ApplicationCallTxnFields ", "\n}")
+    # The transaction types themselves
+    #  payment
+    export_type("PaymentTxnFields", "data/transactions/payment.go", "transaction")
+    #  keyreg
+    export_type("KeyregTxnFields", "data/transactions/keyreg.go", "transaction")
+    #  assets
+    export_type("AssetConfigTxnFields", "data/transactions/asset.go", "transaction")
+    export_type("AssetTransferTxnFields", "data/transactions/asset.go", "transaction")
+    export_type("AssetFreezeTxnFields", "data/transactions/asset.go", "transaction")
+    export_type("AssetIndex", "data/basics/userBalance.go", "asset")
+    export_type("AssetParams", "data/basics/userBalance.go", "asset")
+    #   apps
+    export_type("ApplicationCallTxnFields", "data/transactions/application.go", "applications")
+    export_type("AppIndex", "data/basics/userBalance.go", "applications")
 
     # StateDelta.  Eventually need to deal with all types from ledgercore.StateDelta down
-    export("data/basics/userBalance.go", "types/statedelta.go",
-           "type AppParams ", "\n}")
+    export_type("AppParams", "data/basics/userBalance.go", "statedelta")
+    export_type("TealKeyValue", "data/basics/teal.go", "statedelta")
+    export_type("TealValue", "data/basics/teal.go", "statedelta")
