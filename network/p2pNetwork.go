@@ -259,6 +259,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		config:                 cfg,
 		broadcastQueueHighPrio: make(chan broadcastRequest, outgoingMessagesBufferSize),
 		broadcastQueueBulk:     make(chan broadcastRequest, 100),
+		enableVoteCompression:  cfg.EnableVoteCompression,
 	}
 
 	if identityOpts != nil {
@@ -916,14 +917,15 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	}
 	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
-		wsPeerCore:    peerCore,
-		conn:          &wsPeerConnP2P{stream: stream},
-		outgoing:      !incoming,
-		identity:      netIdentPeerID,
-		peerType:      peerTypeP2P,
-		TelemetryGUID: pmi.telemetryID,
-		InstanceName:  pmi.instanceName,
-		features:      decodePeerFeatures(pmi.version, pmi.features),
+		wsPeerCore:            peerCore,
+		conn:                  &wsPeerConnP2P{stream: stream},
+		outgoing:              !incoming,
+		identity:              netIdentPeerID,
+		peerType:              peerTypeP2P,
+		TelemetryGUID:         pmi.telemetryID,
+		InstanceName:          pmi.instanceName,
+		features:              decodePeerFeatures(pmi.version, pmi.features),
+		enableVoteCompression: n.config.EnableVoteCompression,
 	}
 
 	localAddr, has := n.Address()
