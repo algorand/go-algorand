@@ -253,14 +253,14 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		}
 		return nil, noBlockErr
 	default:
-		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
+		bodyBytes, err1 := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
 		hf.log.Warnf("HTTPFetcher.getBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))
-		if err == nil {
-			err = makeErrHTTPResponse(response.StatusCode, blockURL, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
+		if err1 == nil {
+			err1 = makeErrHTTPResponse(response.StatusCode, blockURL, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
 		} else {
-			err = makeErrHTTPResponse(response.StatusCode, blockURL, err.Error())
+			err1 = makeErrHTTPResponse(response.StatusCode, blockURL, err1.Error())
 		}
-		return nil, err
+		return nil, err1
 	}
 
 	// at this point, we've already receieved the response headers. ensure that the

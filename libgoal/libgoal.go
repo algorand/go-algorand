@@ -227,7 +227,7 @@ func getDataDir(dataDir string) (string, error) {
 func getNodeController(binDir, dataDir string) (nc nodecontrol.NodeController, err error) {
 	dataDir, err = getDataDir(dataDir)
 	if err != nil {
-		return nodecontrol.NodeController{}, nil
+		return nodecontrol.NodeController{}, err
 	}
 
 	return nodecontrol.MakeNodeController(binDir, dataDir), nil
