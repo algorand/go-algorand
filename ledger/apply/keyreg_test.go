@@ -269,8 +269,8 @@ func createTestKeyregWithPeriod(t *testing.T, src basics.Address, sigVerifier cr
 		Header: transactions.Header{
 			Sender:     src,
 			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: basics.Round(defaultParticipationFirstRound),
-			LastValid:  basics.Round(defaultParticipationLastRound),
+			FirstValid: defaultParticipationFirstRound,
+			LastValid:  defaultParticipationLastRound,
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:       crypto.OneTimeSignatureVerifier(sigVerifier),

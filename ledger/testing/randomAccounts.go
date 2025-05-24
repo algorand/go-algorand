@@ -335,7 +335,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 					break
 				}
 			}
-			data.AppLocalStates[basics.AppIndex(aidx)] = ap
+			data.AppLocalStates[aidx] = ap
 		}
 	}
 
