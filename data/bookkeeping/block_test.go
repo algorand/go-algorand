@@ -1000,6 +1000,8 @@ func TestBlockHeader_Serialization(t *testing.T) {
 
 	a.Equal(crypto.Digest{}, blkHdr.TxnCommitments.Sha256Commitment)
 	a.NotEqual(crypto.Digest{}, blkHdr.TxnCommitments.NativeSha512_256Commitment)
+	a.Equal(crypto.Sha512Digest{}, blkHdr.TxnCommitments.Sha512Commitment)
+	a.Equal(crypto.Sha512Digest{}, blkHdr.Branch512)
 }
 
 func TestBonusUpgrades(t *testing.T) {
