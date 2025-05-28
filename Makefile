@@ -143,6 +143,13 @@ generate: deps
 
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
+api:
+	make -C daemon/algod/api
+
+logic:
+	make -C data/transactions/logic
+
+
 %/msgp_gen.go: deps ALWAYS
 		@set +e; \
 		printf "msgp: $(@D)..."; \
