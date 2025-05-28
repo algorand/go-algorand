@@ -1787,8 +1787,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 	for key, value := range boxes {
 		box := model.Box{Name: []byte(key[kvPrefixLen:])}
 		if values {
-			boxArray := []byte(value)
-			box.Value = &boxArray
+			box.Value = []byte(value)
 		}
 		responseBoxes = append(responseBoxes, box)
 	}
@@ -1830,7 +1829,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID basi
 	response := model.BoxResponse{
 		Round: omitEmpty(lastRound),
 		Name:  boxName,
-		Value: &value,
+		Value: value,
 	}
 	return ctx.JSON(http.StatusOK, response)
 }

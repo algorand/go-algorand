@@ -549,7 +549,7 @@ end:
 		currentRoundAfterBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
 		a.Equal(boxTest.name, boxResponse.Name)
-		a.Equal(boxTest.value, *boxResponse.Value)
+		a.Equal(boxTest.value, boxResponse.Value)
 		// To reduce flakiness, only check the round from boxes is within a range.
 		a.GreaterOrEqual(*boxResponse.Round, currentRoundBeforeBoxes)
 		a.LessOrEqual(*boxResponse.Round, currentRoundAfterBoxes)
