@@ -1004,6 +1004,52 @@ func TestBlockHeader_Serialization(t *testing.T) {
 	a.Equal(crypto.Sha512Digest{}, blkHdr.Branch512)
 }
 
+// TestBlockHeader_PreCheck_Branch512 tests the Branch512 validation in PreCheck
+func TestBlockHeader_PreCheck_Branch512(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	// Test consensus v40 (no EnableSha512BlockHash)
+	cv := protocol.ConsensusV40
+	prevHeader := BlockHeader{Round: 1, GenesisID: "test"}
+	prevHeader.CurrentProtocol = cv
+	crypto.RandBytes(prevHeader.GenesisHash[:])
+	// Make round 2 block that references block 1 as prev
+	currentHeader := BlockHeader{
+		Round: prevHeader.Round + 1, GenesisID: prevHeader.GenesisID, GenesisHash: prevHeader.GenesisHash,
+		Branch: prevHeader.Hash(),
+	}
+	currentHeader.CurrentProtocol = cv
+	// empty Branch512 passes
+	a.NoError(currentHeader.PreCheck(prevHeader))
+	// correct Branch512 fails
+	currentHeader.Branch512 = prevHeader.Hash512()
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 not allowed")
+	// non-empty Branch512 fails
+	crypto.RandBytes(currentHeader.Branch512[:])
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 not allowed")
+
+	// Test consensus future (EnableSha512BlockHash set)
+	cv = protocol.ConsensusFuture
+	prevHeader = BlockHeader{Round: 1, GenesisID: "test"}
+	prevHeader.CurrentProtocol = cv
+	crypto.RandBytes(prevHeader.GenesisHash[:])
+	currentHeader = BlockHeader{
+		Round: prevHeader.Round + 1, GenesisID: prevHeader.GenesisID, GenesisHash: prevHeader.GenesisHash,
+		Branch: prevHeader.Hash(),
+	}
+	currentHeader.CurrentProtocol = cv
+	// empty Branch512 fails
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
+	// correct Branch512 passes
+	currentHeader.Branch512 = prevHeader.Hash512()
+	a.NoError(currentHeader.PreCheck(prevHeader))
+	// incorrect Branch512 fails
+	crypto.RandBytes(currentHeader.Branch512[:])
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
+}
+
 func TestBonusUpgrades(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
