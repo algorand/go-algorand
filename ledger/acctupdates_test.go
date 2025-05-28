@@ -990,25 +990,19 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		`他们丢失了四季，惶惑之行开始`,
 		`这颗行星所有的酒馆，无法听到远方的呼喊`,
 		`野心勃勃的灯火，瞬间吞没黑暗的脸庞`,
-
-		// useful for testing prefix
-		"xxABC",
-		"xxBBB",
-		"xxBBC",
-		"xxCBA",
 	}
 
-	appIDset := make(map[uint64]struct{}, len(testingBoxNames))
-	boxNameToAppID := make(map[string]uint64, len(testingBoxNames))
-	const allBoxesAppID = 777
+	appIDset := make(map[basics.AppIndex]struct{}, len(testingBoxNames))
+	boxNameToAppID := make(map[string]basics.AppIndex, len(testingBoxNames))
+	var currentRound basics.Round
 
 	// keep adding one box key and one random appID (non-duplicated)
 	for i, boxName := range testingBoxNames {
-		currentRound := au.latest() + 1
+		currentRound = basics.Round(i + 1)
 
-		var appID uint64
+		var appID basics.AppIndex
 		for {
-			appID = crypto.RandUint64()
+			appID = basics.AppIndex(crypto.RandUint64())
 			_, preExisting := appIDset[appID]
 			if !preExisting {
 				break
@@ -1018,122 +1012,45 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		appIDset[appID] = struct{}{}
 		boxNameToAppID[boxName] = appID
 
+		boxChange := ledgercore.KvValueDelta{Data: []byte(boxName)}
 		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
-			apps.MakeBoxKey(appID, boxName):         {Data: []byte(boxName)},
-			apps.MakeBoxKey(allBoxesAppID, boxName): {Data: []byte(boxName)},
+			apps.MakeBoxKey(uint64(appID), boxName): boxChange,
 		})
 		auCommitSync(t, currentRound, au, ml)
 
-		// Advance conf.MaxAcctLookback rounds because LookupKeysByPrefix only
-		// sees kvs that make it to the DB. The deltas are not examined.  It
-		// might be nice to do so, but it's complicated.  If we decide to do so,
-		// we can stop advancing here
-
-		target := basics.Round(uint64(currentRound) + conf.MaxAcctLookback)
-		for au.latest() < target {
-			auNewBlock(t, au.latest()+1, au, accts, opts, nil)
-			auCommitSync(t, au.latest()+1, au, ml)
+		// ensure rounds
+		rnd := au.latest()
+		require.Equal(t, currentRound, rnd)
+		if uint64(currentRound) > conf.MaxAcctLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
+		} else {
+			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
 
-		// check that each box ended up in its unique app
+		// check input, see all present keys are all still there
 		for _, storedBoxName := range testingBoxNames[:i+1] {
-			_, res, _, err := au.LookupKeysByPrefix(apps.MakeBoxKey(boxNameToAppID[storedBoxName], ""), "", 10000, 100_000, false)
-
+			res, err := au.LookupKeysByPrefix(currentRound, apps.MakeBoxKey(uint64(boxNameToAppID[storedBoxName]), ""), 10000)
 			require.NoError(t, err)
 			require.Len(t, res, 1)
-			require.Contains(t, res, apps.MakeBoxKey(boxNameToAppID[storedBoxName], storedBoxName))
-		}
-
-		// check that the allBoxesAppID has all of them
-		_, res, next, err := au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), "", 10000, 100_000, false)
-		require.NoError(t, err)
-		require.Len(t, res, i+1)
-		require.Empty(t, next)
-		for _, storedBoxName := range testingBoxNames[:i+1] {
-			require.Contains(t, res, apps.MakeBoxKey(allBoxesAppID, storedBoxName))
+			require.Equal(t, apps.MakeBoxKey(uint64(boxNameToAppID[storedBoxName]), storedBoxName), res[0])
 		}
 	}
-
-	// all boxes have been created.
-
-	// show that when row limit is too low, paging kicks in
-	_, res, next, err := au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), "", 10, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 10)
-	require.NotEmpty(t, next)
-
-	// get the rest
-	_, res, next, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), next, 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, len(testingBoxNames)-10)
-	require.Empty(t, next)
-
-	// show that when byte limit is too low, paging kicks in
-	_, res, next, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), "", 10000, 1_000, false)
-	require.NoError(t, err)
-	boxCount := len(res)
-	require.Less(t, boxCount, len(testingBoxNames))
-	count := 0
-	for key, val := range res {
-		count += len(key) + len(val)
-	}
-	require.Less(t, count, 1_001)
-	require.Greater(t, count, 950) // got close though, right?
-	require.NotEmpty(t, next)
-
-	// get the rest
-	_, res, next, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), next, 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, len(testingBoxNames)-boxCount)
-	require.Empty(t, next)
-
-	// check that prefix works properly
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "x"), "", 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 4)
-
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "xx"), "", 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 4)
-
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "xxB"), "", 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 2) // xxBBB, xxBBC
-
-	// check that "next" works.
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "xx"), apps.MakeBoxKey(allBoxesAppID, "xxB"), 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 3) // xxBBB, xxBBC, XXCBA
-
-	// check that "next" works precisely
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "xx"), apps.MakeBoxKey(allBoxesAppID, "xxBBB"), 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 3) // xxBBB, xxBBC, XXCBA
 
 	// removing inserted boxes
 	for _, boxName := range testingBoxNames {
-		currentRound := au.latest() + 1
+		currentRound++
 
 		// remove inserted box
 		appID := boxNameToAppID[boxName]
 		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
-			// to make a delete actually hit the DB, OldData must not be nil.
-			apps.MakeBoxKey(uint64(appID), boxName): {OldData: []byte{0x01}},
+			apps.MakeBoxKey(uint64(appID), boxName): {},
 		})
 		auCommitSync(t, currentRound, au, ml)
 
-		// as we did during inserts, advance until the deletion is "visible" in the DB
-		target := basics.Round(uint64(currentRound) + conf.MaxAcctLookback)
-		for au.latest() < target {
-			auNewBlock(t, au.latest()+1, au, accts, opts, nil)
-			auCommitSync(t, au.latest()+1, au, ml)
-		}
-
-		// ensure recently removed key is not present, and it is not part of the
-		// result. We are grabbing all boxes under this (unique) appID.
-		_, res, _, err := au.LookupKeysByPrefix(apps.MakeBoxKey(uint64(appID), ""), "", 10000, 100_000, false)
+		// ensure recently removed key is not present, and it is not part of the result
+		res, err := au.LookupKeysByPrefix(currentRound, apps.MakeBoxKey(uint64(boxNameToAppID[boxName]), ""), 10000)
 		require.NoError(t, err)
-		require.Empty(t, res)
+		require.Len(t, res, 0)
 	}
 }
 

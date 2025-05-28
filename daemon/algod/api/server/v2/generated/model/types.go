@@ -527,10 +527,16 @@ type Box struct {
 	Name []byte `json:"name"`
 
 	// Round The round for which this information is relevant
-	Round *basics.Round `json:"round,omitempty"`
+	Round basics.Round `json:"round"`
 
 	// Value The box value, base64 encoded.
 	Value []byte `json:"value"`
+}
+
+// BoxDescriptor Box descriptor describes a Box.
+type BoxDescriptor struct {
+	// Name Base64 encoded box name
+	Name []byte `json:"name"`
 }
 
 // BoxReference References a box of an application.
@@ -1185,13 +1191,7 @@ type BoxResponse = Box
 
 // BoxesResponse defines model for BoxesResponse.
 type BoxesResponse struct {
-	Boxes []Box `json:"boxes"`
-
-	// NextToken Used for pagination, when making another request provide this token with the next parameter.
-	NextToken *string `json:"next-token,omitempty"`
-
-	// Round The round for which this information is relevant.
-	Round basics.Round `json:"round"`
+	Boxes []BoxDescriptor `json:"boxes"`
 }
 
 // CatchpointAbortResponse An catchpoint abort response.
@@ -1501,17 +1501,8 @@ type GetApplicationBoxByNameParams struct {
 
 // GetApplicationBoxesParams defines parameters for GetApplicationBoxes.
 type GetApplicationBoxesParams struct {
-	// Max Maximum number of boxes to return. Server may impose a lower limit.
+	// Max Max number of box names to return. If max is not set, or max == 0, returns all box-names.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
-
-	// Prefix A box name prefix, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
-	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
-
-	// Next A box name, in the goal app call arg form 'encoding:value'. When provided, the returned boxes begin (lexographically) with the supplied name. Callers may implement pagination by reinvoking the endpoint with the token from a previous call's next-token.
-	Next *string `form:"next,omitempty" json:"next,omitempty"`
-
-	// Values If true, box values will be returned.
-	Values *bool `form:"values,omitempty" json:"values,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.
