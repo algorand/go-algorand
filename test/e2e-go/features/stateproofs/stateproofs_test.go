@@ -644,7 +644,7 @@ func TestStateProofRecovery(t *testing.T) {
 
 	// at this point we expect the state proof chain to be completely caught up. However, In order to avoid flakiness on
 	// heavily loaded machines, we would wait some extra round for the state proofs to catch up
-	for ; rnd <= basics.Round(consensusParams.StateProofInterval)*expectedNumberOfStateProofs+numberOfGraceIntervals; rnd++ {
+	for ; rnd <= basics.Round(consensusParams.StateProofInterval)*(expectedNumberOfStateProofs+numberOfGraceIntervals); rnd++ {
 
 		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)

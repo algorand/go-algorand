@@ -844,7 +844,7 @@ func TestReadyEndpoint(t *testing.T) {
 
 		status1, err = client1.Status()
 		a.NoError(err)
-		a.Equal(status1.CatchupTime, uint64(0))
+		a.Equal(status1.CatchupTime, int64(0))
 		a.Empty(status1.Catchpoint)
 		break
 	}
