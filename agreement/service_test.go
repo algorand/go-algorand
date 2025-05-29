@@ -2543,6 +2543,7 @@ func TestAgreementServiceStartDeadline(t *testing.T) {
 	close(inputCh)
 	output := make(chan []action, 10)
 	ready := make(chan externalDemuxSignals, 1)
+	s.wg.Add(1)
 	s.mainLoop(inputCh, output, ready)
 
 	// check the ready channel:
