@@ -126,8 +126,7 @@ ${gcmd} app call --from "$ACCOUNT" --app-id "$APPID" --app-arg "str:set" --app-a
 cat "$TEMPDIR/box_create.txn" "$TEMPDIR/box_set.txn" > "$TEMPDIR/box_create_n_set.txn"
 ${gcmd} clerk group -i "$TEMPDIR/box_create_n_set.txn" -o "$TEMPDIR/box_group.txn"
 ${gcmd} clerk sign -i "$TEMPDIR/box_group.txn" -o "$TEMPDIR/box_group.stx"
-COMMIT=$(${gcmd} clerk rawsend -f "$TEMPDIR/box_group.stx" | grep "committed in round" | head -1 | awk '{print $6}')
-echo "Last box made in $COMMIT"
+${gcmd} clerk rawsend -f "$TEMPDIR/box_group.stx"
 
 echo "Confirm the NAME is $BOX_NAME"
 ${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME"
@@ -137,20 +136,10 @@ NAME=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Name | t
 VALUE=$(${gcmd} app box info --app-id "$APPID" --name "$BOX_NAME" | grep Value | tr -s ' ' | cut -d" " -f2-)
 [ "$VALUE" = str:$GREAT_VALUE ]
 
+sleep 15                        # again, app box list only hits DB
 
-# Confirm that we can still get the list of boxes (need to keep asking
-# until the returned results are for $ROUND)
-retry=0
-while [ $retry -lt 10 ]; do
-    BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
-    ROUND=$(echo "$BOX_LIST" | awk '/Round: / {print $2}')
-    if [[ "$COMMIT" == "$ROUND" ]]; then
-        break
-    fi
-    retry=$((retry + 1))
-    sleep 2
-done
-
+# Confirm that we can still get the list of boxes
+BOX_LIST=$(${gcmd} app box list --app-id "$APPID")
 EXPECTED="Boxes:
 b64:AQIDBA==
 str:base64
