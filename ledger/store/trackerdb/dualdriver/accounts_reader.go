@@ -142,20 +142,21 @@ func (ar *accountsReader) LookupKeyValue(key string) (pv trackerdb.PersistedKVDa
 }
 
 // LookupKeysByPrefix implements trackerdb.AccountsReader
-func (ar *accountsReader) LookupKeysByPrefix(prefix, next string, maxBoxes, maxBytes int, values bool) (basics.Round, map[string]string, string, error) {
-	roundP, resP, nextP, errP := ar.primary.LookupKeysByPrefix(prefix, next, maxBoxes, maxBytes, values)
-	roundS, resS, nextS, errS := ar.secondary.LookupKeysByPrefix(prefix, next, maxBoxes, maxBytes, values)
+func (ar *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+	roundP, errP := ar.primary.LookupKeysByPrefix(prefix, maxKeyNum, results, resultCount)
+	roundS, errS := ar.secondary.LookupKeysByPrefix(prefix, maxKeyNum, results, resultCount)
 	// coalesce errors
-	err := coalesceErrors(errP, errS)
+	err = coalesceErrors(errP, errS)
 	if err != nil {
-		return 0, nil, "", err
+		return
 	}
 	// check results match
-	if roundP != roundS || !cmp.Equal(resP, resS) || nextP != nextS {
-		return 0, nil, "", ErrInconsistentResult
+	if roundP != roundS {
+		err = ErrInconsistentResult
+		return
 	}
 	// return primary results
-	return roundP, resP, nextP, nil
+	return roundP, nil
 }
 
 // LookupResources implements trackerdb.AccountsReader
