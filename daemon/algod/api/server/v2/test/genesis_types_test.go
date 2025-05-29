@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,6 +46,7 @@ func getJSONTag(field reflect.StructField) string {
 // TestGenesisTypeCompatibility verifies that model.Genesis matches the field structure
 // of bookkeeping.Genesis, using the codec tags from bookkeeping as the source of truth.
 func TestGenesisTypeCompatibility(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// Test Genesis struct compatibility
 	verifyStructCompatibility(t, reflect.TypeOf(bookkeeping.Genesis{}), reflect.TypeOf(model.Genesis{}))
 
