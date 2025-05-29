@@ -81,7 +81,7 @@ type KvValueDelta struct {
 	// Data stores the most recent value (nil == deleted)
 	Data []byte
 
-	// OldData stores the previous value (nil == didn't exist)
+	// OldData stores the previous vlaue (nil == didn't exist)
 	OldData []byte
 }
 

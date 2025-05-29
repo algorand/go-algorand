@@ -19,8 +19,6 @@ package sqlitedriver
 import (
 	"database/sql"
 	"fmt"
-	"strings"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -36,7 +34,7 @@ type accountsDbQueries struct {
 	lookupAllResourcesStmt     *sql.Stmt
 	lookupLimitedResourcesStmt *sql.Stmt
 	lookupKvPairStmt           *sql.Stmt
-	lookupKvByRangeStmt        *sql.Stmt
+	lookupKeysByRangeStmt      *sql.Stmt
 	lookupCreatorStmt          *sql.Stmt
 }
 
@@ -117,7 +115,7 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKvByRangeStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key, kvstore.value FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
+	qs.lookupKeysByRangeStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -272,63 +270,43 @@ func (qs *accountsDbQueries) LookupKeyValue(key string) (pv trackerdb.PersistedK
 	return
 }
 
-// LookupKeysByPrefix returns a set of application boxes matching the `prefix`, beginning with `next`.
-func (qs *accountsDbQueries) LookupKeysByPrefix(prefix, next string, rowLimit, byteLimit int, values bool) (basics.Round, map[string]string, string, error) {
+// LookupKeysByPrefix returns a set of application boxed values matching the prefix.
+func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
 	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
 	if end == nil {
 		// Not an expected use case, it's asking for all keys, or all keys
-		// prefixed by some number of 0xFF bytes. That's not possible because
-		// there's always (at least) a "bx:<appid>" prefix.
-		return 0, nil, "", fmt.Errorf("lookup by strange prefix %#v", prefix)
+		// prefixed by some number of 0xFF bytes.
+		return 0, fmt.Errorf("lookup by strange prefix %#v", prefix)
 	}
-	if next != "" {
-		if !strings.HasPrefix(next, prefix) {
-			return 0, nil, "", fmt.Errorf("next %#v is not prefixed by %#v", next, prefix)
-		}
-		start = []byte(next)
-		next = "" // If we don't exceed limits, we want next=""
-	}
-	round := basics.Round(0)
-	boxes := make(map[string]string)
-	err0 := db.Retry(func() error {
+	err = db.Retry(func() error {
 		var rows *sql.Rows
-		rows, err := qs.lookupKvByRangeStmt.Query(start, end)
+		rows, err = qs.lookupKeysByRangeStmt.Query(start, end)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 
+		var v sql.NullString
+
 		for rows.Next() {
-			var k sql.NullString
-			var v sql.NullString
-			err = rows.Scan(&round, &k, &v)
+			if resultCount == maxKeyNum {
+				return nil
+			}
+			err = rows.Scan(&round, &v)
 			if err != nil {
 				return err
 			}
-			if k.Valid {
-				rowLimit--
-				byteLimit -= len(k.String)
-				if values {
-					byteLimit -= len(v.String)
+			if v.Valid {
+				if _, ok := results[v.String]; ok {
+					continue
 				}
-				// If including this box would exceed limits, set `next` and return
-				if rowLimit < 0 || byteLimit < 0 {
-					next = k.String
-					return nil
-				}
-				if values {
-					boxes[k.String] = v.String
-				} else {
-					boxes[k.String] = ""
-				}
+				results[v.String] = true
+				resultCount++
 			}
 		}
 		return nil
 	})
-	if err0 != nil {
-		return 0, nil, "", err0
-	}
-	return round, boxes, next, nil
+	return
 }
 
 // keyPrefixIntervalPreprocessing is implemented to generate an interval for DB queries that look up keys by prefix.
@@ -671,7 +649,7 @@ func (qs *accountsDbQueries) Close() {
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupLimitedResourcesStmt,
 		&qs.lookupKvPairStmt,
-		&qs.lookupKvByRangeStmt,
+		&qs.lookupKeysByRangeStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {
