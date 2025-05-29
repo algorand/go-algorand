@@ -82,7 +82,7 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3] # set PARITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
