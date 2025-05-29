@@ -2839,33 +2839,33 @@ func TestScratchBounds(t *testing.T) {
 	os := testProg(t, "int 5; store 1; load 1; return;", AssemblerMaxVersion)
 	sv := os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmUint64)
-	require.Equal(t, sv.Bound, static(5))
+	require.ElementsMatch(t, sv.Bound, static(5))
 
 	os = testProg(t, "int 5; store 1; load 1; int 1; int 1; stores; return;", AssemblerMaxVersion)
 	sv = os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmUint64)
-	require.Equal(t, sv.Bound, bound(1, 1))
+	require.ElementsMatch(t, sv.Bound, bound(1, 1))
 
 	// If the stack type for the slot index is a const, known at assembly time
 	// we can be sure of the slot we need to update
 	os = testProg(t, "int 5; store 1; load 1; int 1; byte 0xff; stores; return;", AssemblerMaxVersion)
 	sv = os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmBytes)
-	require.Equal(t, sv.Bound, static(1))
+	require.ElementsMatch(t, sv.Bound, static(1))
 
 	osv := os.known.scratchSpace[0]
 	require.Equal(t, osv.AVMType, avmUint64)
-	require.Equal(t, osv.Bound, static(0))
+	require.ElementsMatch(t, osv.Bound, static(0))
 
 	// Otherwise, we just union all stack types with the incoming type
 	os = testProg(t, "int 5; store 1; load 1; byte 0xaa; btoi; byte 0xff; stores; return;", AssemblerMaxVersion)
 	sv = os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmAny)
-	require.Equal(t, sv.Bound, static(0))
+	require.ElementsMatch(t, sv.Bound, static(0))
 
 	osv = os.known.scratchSpace[0]
 	require.Equal(t, osv.AVMType, avmAny)
-	require.Equal(t, osv.Bound, static(0))
+	require.ElementsMatch(t, osv.Bound, static(0))
 
 	testProg(t, "byte 0xff; store 1; load 1; return", AssemblerMaxVersion, exp(1, "return arg 0 wanted type uint64 ..."))
 }
