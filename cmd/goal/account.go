@@ -573,6 +573,7 @@ var assetDetailsCmd = &cobra.Command{
 		}
 
 		printAccountAssetsInformation(accountAddress, response)
+
 	},
 }
 var infoCmd = &cobra.Command{
@@ -776,7 +777,7 @@ func printAccountAssetsInformation(address string, response model.AccountAssetsI
 	fmt.Printf("Account: %s\n", address)
 	fmt.Printf("Round: %d\n", response.Round)
 	if response.NextToken != nil {
-		fmt.Printf("NextToken (use with --next to retrieve more account assets): %s\n", *response.NextToken)
+		fmt.Printf("NextToken (to retrieve more account assets): %s\n", *response.NextToken)
 	}
 	fmt.Printf("Assets:\n")
 	for _, asset := range *response.AssetHoldings {

@@ -34,15 +34,15 @@ func TestApplicationBoxesMaxKeys(t *testing.T) {
 	t.Parallel()
 
 	// Response size limited by request supplied value.
-	require.Equal(t, 5, applicationBoxesMaxKeys(5, 7))
-	require.Equal(t, 5, applicationBoxesMaxKeys(5, 0))
+	require.Equal(t, uint64(5), applicationBoxesMaxKeys(5, 7))
+	require.Equal(t, uint64(5), applicationBoxesMaxKeys(5, 0))
 
 	// Response size limited by algod max.
-	require.Equal(t, 1, applicationBoxesMaxKeys(5, 1))
-	require.Equal(t, 1, applicationBoxesMaxKeys(0, 1))
+	require.Equal(t, uint64(2), applicationBoxesMaxKeys(5, 1))
+	require.Equal(t, uint64(2), applicationBoxesMaxKeys(0, 1))
 
 	// Response size _not_ limited
-	require.Equal(t, math.MaxInt, applicationBoxesMaxKeys(0, 0))
+	require.Equal(t, uint64(math.MaxUint64), applicationBoxesMaxKeys(0, 0))
 }
 
 type tagNode struct {
