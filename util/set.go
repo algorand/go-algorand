@@ -32,7 +32,7 @@ func (s Set[T]) Add(elems ...T) Set[T] {
 
 // MakeSet constructs a set instance directly from elements.
 func MakeSet[T comparable](elems ...T) Set[T] {
-	return make(Set[T], len(elems)).Add(elems...)
+	return make(Set[T]).Add(elems...)
 }
 
 // Empty returns true if the set is empty.
