@@ -2,7 +2,7 @@ module github.com/algorand/go-algorand
 
 go 1.23.0
 
-toolchain go1.23.8
+toolchain go1.23.9
 
 require (
 	github.com/DataDog/zstd v1.5.2
