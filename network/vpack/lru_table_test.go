@@ -34,60 +34,60 @@ func TestLRUTableInsertLookupFetch(t *testing.T) {
 	// id1 is baseID | 1 (value was stored in slot 1)
 	require.EqualValues(t, baseID|1, id1)
 	// on insert, our slot 1 is now the MRU, so LRU is slot 0
-	require.Equal(t, lruSlotIndex(0), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(0), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// lookup for same value and bucketHash returns the same ID
 	id, ok := tab.lookup(100, bucketHash)
 	require.True(t, ok)
 	require.EqualValues(t, id1, id)
 	// MRU/LRU is unchanged
-	require.Equal(t, lruSlotIndex(0), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(0), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// second insert with new value for same hash sees MRU bit 1, so slot 0 is LRU
 	id2 := tab.insert(200, bucketHash)
 	require.EqualValues(t, baseID, id2)
 	// MRU/LRU is flipped
-	require.Equal(t, lruSlotIndex(1), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(1), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// old key (100) is still in slot 1
 	_, ok = tab.lookup(100, bucketHash)
 	require.True(t, ok)
 	// the act of lookup 100 flips the MRU bit to 1
-	require.Equal(t, lruSlotIndex(0), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(0), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// lookup for 200 (slot 0) → MRU bit flips to 0
 	_, ok = tab.lookup(200, bucketHash)
 	require.True(t, ok)
-	require.Equal(t, lruSlotIndex(1), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(1), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// third insert: evicts and replaces slot 1, and now MRU is slot 1
 	id3 := tab.insert(300, bucketHash)
 	require.EqualValues(t, baseID|1, id3)
-	require.Equal(t, lruSlotIndex(0), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(0), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// fetch(id3) returns the value 300 and keeps the MRU bit at slot 1
 	val, ok := tab.fetch(id3)
 	require.True(t, ok)
 	require.Equal(t, 300, val)
-	require.Equal(t, lruSlotIndex(0), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(0), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// after insert for a new value, slot 0 is evicted and assigned
 	id4 := tab.insert(400, bucketHash)
 	require.EqualValues(t, baseID, id4)
 	// now slot 1 is LRU
-	require.Equal(t, lruSlotIndex(1), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(1), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// fetch of 300 (slot 1) makes it the new MRU
 	val, ok = tab.fetch(id3)
 	require.True(t, ok)
 	require.Equal(t, 300, val)
-	require.Equal(t, lruSlotIndex(0), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(0), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 
 	// fetch of 400 (slot 0) makes it the new MRU
 	val, ok = tab.fetch(id4)
 	require.True(t, ok)
 	require.Equal(t, 400, val)
-	require.Equal(t, lruSlotIndex(1), tab.lruSlot(lruBucketIndex(bucketHash)))
+	require.Equal(t, lruSlotIndex(1), tab.getLRUSlot(lruBucketIndex(bucketHash)))
 }
 
 // TestLRUEvictionOrder verifies that the LRU table correctly evicts the least recently used item
@@ -109,18 +109,18 @@ func TestLRUEvictionOrder(t *testing.T) {
 	require.Equal(t, 200, val2)
 
 	// Both values should still be accessible
-	val, ok := tab.lookup(100, bucketHash)
+	refID, ok := tab.lookup(100, bucketHash)
 	require.True(t, ok, "First inserted value should still exist")
-	require.EqualValues(t, id1, val, "Reference ID for first value should match")
+	require.EqualValues(t, id1, refID, "Reference ID for first value should match")
 
-	val, ok = tab.lookup(200, bucketHash)
+	refID, ok = tab.lookup(200, bucketHash)
 	require.True(t, ok, "Second inserted value should exist")
-	require.EqualValues(t, id2, val, "Reference ID for second value should match")
+	require.EqualValues(t, id2, refID, "Reference ID for second value should match")
 
 	// Access the first value to make it MRU
-	val, ok = tab.lookup(100, bucketHash)
+	refID, ok = tab.lookup(100, bucketHash)
 	require.True(t, ok)
-	require.EqualValues(t, id1, val)
+	require.EqualValues(t, id1, refID)
 
 	// Now the second value (200) should be LRU
 	// Insert a third value - it should evict the second value (200)
@@ -130,21 +130,24 @@ func TestLRUEvictionOrder(t *testing.T) {
 	require.Equal(t, 300, val3)
 
 	// First value should still be accessible
-	val, ok = tab.lookup(100, bucketHash)
+	refID, ok = tab.lookup(100, bucketHash)
 	require.True(t, ok, "First value should still exist after third insert")
+	require.EqualValues(t, id1, refID)
 
 	// Second value should have been evicted
-	_, ok = tab.lookup(200, bucketHash)
+	refID, ok = tab.lookup(200, bucketHash)
 	require.False(t, ok, "Second value should be evicted as it was LRU")
+	require.EqualValues(t, 0, refID)
 
 	// But the third value should be accessible
-	val, ok = tab.lookup(300, bucketHash)
+	refID, ok = tab.lookup(300, bucketHash)
 	require.True(t, ok, "Third value should exist")
-	require.EqualValues(t, id3, val)
+	require.EqualValues(t, id3, refID)
 
 	// Now make the third value MRU
-	val, ok = tab.lookup(300, bucketHash)
+	refID, ok = tab.lookup(300, bucketHash)
 	require.True(t, ok)
+	require.EqualValues(t, id3, refID)
 
 	// Insert a fourth value - it should evict the first value (100)
 	id4 := tab.insert(400, bucketHash)
@@ -153,14 +156,17 @@ func TestLRUEvictionOrder(t *testing.T) {
 	require.Equal(t, 400, val4)
 
 	// First value should now be evicted
-	_, ok = tab.lookup(100, bucketHash)
+	refID, ok = tab.lookup(100, bucketHash)
 	require.False(t, ok, "First value should now be evicted as it became LRU")
+	require.EqualValues(t, 0, refID)
 
 	// Third and fourth values should be accessible
-	val, ok = tab.lookup(300, bucketHash)
+	refID, ok = tab.lookup(300, bucketHash)
 	require.True(t, ok, "Third value should still exist")
-	val, ok = tab.lookup(400, bucketHash)
+	require.EqualValues(t, id3, refID)
+	refID, ok = tab.lookup(400, bucketHash)
 	require.True(t, ok, "Fourth value should exist")
+	require.EqualValues(t, id4, refID)
 }
 
 // TestLRURefIDConsistency verifies that reference IDs remain consistent
@@ -196,83 +202,79 @@ func TestLRURefIDConsistency(t *testing.T) {
 }
 
 func TestLRUTableQuick(t *testing.T) {
-	cfg := &quick.Config{MaxCount: 5000}
+	cfg := &quick.Config{MaxCount: 50000}
 
-	// Test function that verifies LRU behavior with random operations
-	f := func(operations []uint32) bool {
+	// Property: when a third distinct value is inserted into a bucket, the
+	// previously least-recently-used (LRU) value must be evicted, while the
+	// previously most-recently-used (MRU) value survives.
+	prop := func(seq []uint32) bool {
 		var tab lruTable[uint32]
 
-		// Keep track of entries inserted per bucket to verify LRU eviction
-		bucketValues := make(map[uint16][]uint32)
-		bucketIds := make(map[uint16][]lruTableReferenceID)
+		// Per-bucket ordered list of values, index 0 == MRU, len<=2.
+		type order []uint32
+		expectedState := make(map[lruBucketIndex]order)
 
-		// Process each operation
-		for _, op := range operations {
-			// Use lower bits for the bucket hash to ensure collisions
-			h := uint16(op & 0x3ff)
-			// Insert the value and save it in our tracking maps
-			id := tab.insert(op, uint64(h))
-			// Track values and IDs per bucket
-			values := bucketValues[h]
-			ids := bucketIds[h]
+		for _, v := range seq {
+			h := uint64(v & lruTableBucketMask)
+			b := lruBucketIndex(h)
+			expectedBucket := expectedState[b]
 
-			// If we already have 2 values in this bucket, one will be evicted
-			// But we need to know which one is LRU to determine which gets evicted
-			if len(values) == 2 {
-				// Check if either value has been evicted
-				_, firstExists := tab.lookup(values[0], uint64(h))
-				_, secondExists := tab.lookup(values[1], uint64(h))
-
-				// One but not both should be evicted
-				if firstExists && secondExists {
-					return false // Neither was evicted
-				}
-				if !firstExists && !secondExists {
-					return false // Both were evicted
+			// First, try lookup.
+			if id, ok := tab.lookup(v, h); ok {
+				// Move found value to MRU position in state.
+				if len(expectedBucket) == 2 {
+					if expectedBucket[0] != v {
+						expectedBucket[0], expectedBucket[1] = v, expectedBucket[0]
+					}
+				} else if len(expectedBucket) == 1 {
+					expectedBucket[0] = v // already MRU
 				}
 
-				// One was evicted, keep the one that wasn't
-				if firstExists {
-					// First entry still exists, second was evicted
-					values = []uint32{values[0]}
-					ids = []lruTableReferenceID{ids[0]}
-				} else {
-					// Second entry still exists, first was evicted
-					values = []uint32{values[1]}
-					ids = []lruTableReferenceID{ids[1]}
+				// Round-trip fetch check.
+				fetched, okF := tab.fetch(id)
+				if !okF || fetched != v {
+					return false
 				}
+				expectedState[b] = expectedBucket
+				continue
 			}
 
-			// Verify lookup returns correct ID
-			lookupId, ok := tab.lookup(op, uint64(h))
-			if !ok || lookupId != id {
+			// Insert new distinct value.
+			_ = tab.insert(v, h)
+			// Update expected state.
+			switch len(expectedBucket) {
+			case 0: // Bucket was empty
+				expectedState[b] = order{v}
+				continue
+			case 1: // Bucket had one value
+				expectedState[b] = order{v, expectedBucket[0]}
+				continue
+			case 2: // Bucket was full, expect eviction of state[1]
+				lruVal := expectedBucket[1]
+
+				// After insert: MRU is v, survivor should be previous MRU (state[0])
+				expectedState[b] = order{v, expectedBucket[0]}
+
+				// Check LRU really went away
+				if _, ok := tab.lookup(lruVal, h); ok {
+					return false
+				}
+				// The previous MRU MUST still be present
+				if _, ok := tab.lookup(expectedBucket[0], h); !ok {
+					return false
+				}
+				// The newly inserted value must be present
+				if _, ok := tab.lookup(v, h); !ok {
+					return false
+				}
+			default: // Should not happen
 				return false
-			}
-			// Verify fetch returns correct value
-			fetchedVal, ok := tab.fetch(id)
-			if !ok || fetchedVal != op {
-				return false
-			}
-			// Update our tracking maps
-			values = append(values, op)
-			ids = append(ids, id)
-			if len(values) > 2 {
-				values = values[len(values)-2:]
-				ids = ids[len(ids)-2:]
-			}
-			bucketValues[h] = values
-			bucketIds[h] = ids
-
-			// Ocasionally access a previous value to change MRU state
-			if len(values) == 2 && (op&0x3 == 0) { // ~25% probability
-				// Access the first value to make it MRU
-				_, _ = tab.lookup(values[0], uint64(h))
 			}
 		}
 		return true
 	}
 
-	if err := quick.Check(f, cfg); err != nil {
+	if err := quick.Check(prop, cfg); err != nil {
 		t.Fatalf("quick-check failed: %v", err)
 	}
 }

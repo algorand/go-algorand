@@ -83,8 +83,8 @@ func (t *lruTable[K]) mruBitmask(b lruBucketIndex) (byteIdx uint32, mask byte) {
 	return byteIdx, mask
 }
 
-// lruSlot returns the index of the LRU slot in bucket b
-func (t *lruTable[K]) lruSlot(b lruBucketIndex) lruSlotIndex {
+// getLRUSlot returns the index of the LRU slot in bucket b
+func (t *lruTable[K]) getLRUSlot(b lruBucketIndex) lruSlotIndex {
 	byteIdx, mask := t.mruBitmask(b)
 	if (t.mru[byteIdx] & mask) == 0 {
 		return 1 // this bucket's bit is 0, meaning slot 1 is LRU
@@ -92,27 +92,28 @@ func (t *lruTable[K]) lruSlot(b lruBucketIndex) lruSlotIndex {
 	return 0 // this bucket's bit is 1, meaning slot 0 is LRU
 }
 
-// setMRU marks the given bucket and slot index as MRU
-func (t *lruTable[K]) setMRU(b lruBucketIndex, slot lruSlotIndex) {
+// setMRUSlot marks the given bucket and slot index as MRU
+func (t *lruTable[K]) setMRUSlot(b lruBucketIndex, slot lruSlotIndex) {
 	byteIdx, mask := t.mruBitmask(b)
-	if slot == 0 {
+	if slot == 0 { // want to set slot 0 to be MRU, so bucket bit should be 0
 		t.mru[byteIdx] &^= mask
-	} else {
+	} else { // want to set slot 1 to be MRU, so bucket bit should be 1
 		t.mru[byteIdx] |= mask
 	}
 }
 
 // lookup returns the reference ID of the given key, if it exists. The hash is
 // used to determine the bucket, and the key is used to determine the slot.
+// A lookup marks the found key as MRU.
 func (t *lruTable[K]) lookup(k K, h uint64) (id lruTableReferenceID, ok bool) {
 	b := lruBucketIndex(h & lruTableBucketMask)
 	bk := &t.bkt[b]
 	if bk.key[0] == k {
-		t.setMRU(b, 0)
+		t.setMRUSlot(b, 0)
 		return lruTableReferenceID(b << 1), true
 	}
 	if bk.key[1] == k {
-		t.setMRU(b, 1)
+		t.setMRUSlot(b, 1)
 		return lruTableReferenceID(b<<1 | 1), true
 	}
 	return 0, false
@@ -120,17 +121,17 @@ func (t *lruTable[K]) lookup(k K, h uint64) (id lruTableReferenceID, ok bool) {
 
 // insert inserts the given key into the table and returns its reference ID.
 // The hash is used to determine the bucket, and the LRU slot is used to
-// determine the slot.
+// determine the slot. The inserted key is marked as MRU.
 func (t *lruTable[K]) insert(k K, h uint64) lruTableReferenceID {
 	b := lruBucketIndex(h & lruTableBucketMask)
-	evict := t.lruSlot(b) // LRU slot
+	evict := t.getLRUSlot(b) // LRU slot
 	t.bkt[b].key[evict] = k
-	t.setMRU(b, evict) // new key -> MRU
+	t.setMRUSlot(b, evict) // new key -> MRU
 	return lruTableReferenceID((lruTableReferenceID(b) << 1) | lruTableReferenceID(evict))
 }
 
 // fetch returns the key by id and marks it as MRU. If the id is invalid, it
-// returns false (leading to a decoder error).
+// returns false (leading to a decoder error). The key is marked as MRU.
 func (t *lruTable[K]) fetch(id lruTableReferenceID) (K, bool) {
 	b := lruBucketIndex(id >> 1)
 	slot := lruSlotIndex(id & 1)
@@ -139,6 +140,6 @@ func (t *lruTable[K]) fetch(id lruTableReferenceID) (K, bool) {
 		return zero, false
 	}
 	// touch MRU bit
-	t.setMRU(b, slot)
+	t.setMRUSlot(b, slot)
 	return t.bkt[b].key[slot], true
 }
