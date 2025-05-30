@@ -19,6 +19,7 @@ package vpack
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,6 +35,7 @@ func makeTestPropBundle(seed byte) proposalEntry {
 }
 
 func TestPropWindowHPACK(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var w propWindow
 
 	// 1. Insert seven unique entries (fills the window).

@@ -20,10 +20,12 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLRUTableInsertLookupFetch(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var tab lruTable[int]
 
 	const bucketHash = 42          // deterministic hash for test
@@ -93,6 +95,7 @@ func TestLRUTableInsertLookupFetch(t *testing.T) {
 // TestLRUEvictionOrder verifies that the LRU table correctly evicts the least recently used item
 // when inserting into a full bucket. This test will fail if the lruSlot implementation is incorrect.
 func TestLRUEvictionOrder(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var tab lruTable[int]
 	bucketHash := uint64(42) // Use same hash to ensure both items go into the same bucket
 
@@ -172,6 +175,7 @@ func TestLRUEvictionOrder(t *testing.T) {
 // TestLRURefIDConsistency verifies that reference IDs remain consistent
 // and that fetch/lookup operations correctly mark items as MRU
 func TestLRURefIDConsistency(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	var tab lruTable[int]
 	bucketHash := uint64(42)
 
@@ -202,6 +206,7 @@ func TestLRURefIDConsistency(t *testing.T) {
 }
 
 func TestLRUTableQuick(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	cfg := &quick.Config{MaxCount: 50000}
 
 	// Property: when a third distinct value is inserted into a bucket, the
