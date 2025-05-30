@@ -93,7 +93,7 @@ func TestSyncRound(t *testing.T) {
 	b.CurrentProtocol = protocol.ConsensusCurrentVersion
 	err := node.Ledger().AddBlock(b, agreement.Certificate{})
 	require.NoError(t, err)
-	dbRound := uint64(node.Ledger().LatestTrackerCommitted())
+	dbRound := node.Ledger().LatestTrackerCommitted()
 	// Sync Round should be initialized to the ledger's dbRound + 1
 	require.Equal(t, dbRound+1, node.GetSyncRound())
 	// Set a new sync round
@@ -102,7 +102,7 @@ func TestSyncRound(t *testing.T) {
 	require.Equal(t, dbRound+11, node.GetSyncRound())
 	// Unset the sync round and make sure get returns 0
 	node.UnsetSyncRound()
-	require.Equal(t, uint64(0), node.GetSyncRound())
+	require.Zero(t, node.GetSyncRound())
 }
 
 func TestErrors(t *testing.T) {
@@ -156,7 +156,7 @@ func TestFastCatchupResume(t *testing.T) {
 	node.ctx = context.Background()
 
 	// Initialize sync round to a future round.
-	syncRound := uint64(10000)
+	syncRound := basics.Round(10000)
 	node.SetSyncRound(syncRound)
 	require.Equal(t, syncRound, node.GetSyncRound())
 
@@ -165,7 +165,7 @@ func TestFastCatchupResume(t *testing.T) {
 	<-out
 
 	// Verify the sync was reset.
-	assert.Equal(t, uint64(0), node.GetSyncRound())
+	assert.Zero(t, node.GetSyncRound())
 }
 
 // TestDefaultResourcePaths confirms that when no extra configuration is provided, all resources are created in the dataDir

@@ -105,12 +105,12 @@ func WriteNonDefaultValues(writer io.Writer, object, defaultObject interface{}, 
 		valName := extractValueName(line)
 		if valName == "" {
 			if !inContent {
-				if strings.Index(line, "{") < 0 {
+				if !strings.Contains(line, "{") {
 					return fmt.Errorf("error processing serialized object - we don't support nested types: %s", line)
 				}
 				inContent = true
 			} else {
-				if strings.Index(line, "}") < 0 {
+				if !strings.Contains(line, "}") {
 					return fmt.Errorf("error processing serialized object - we don't support nested types: %s", line)
 				}
 				inContent = false

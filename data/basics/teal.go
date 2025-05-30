@@ -44,7 +44,7 @@ type ValueDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Action DeltaAction `codec:"at"`
-	Bytes  string      `codec:"bs,allocbound=config.MaxAppBytesValueLen"`
+	Bytes  string      `codec:"bs,allocbound=bounds.MaxAppBytesValueLen"`
 	Uint   uint64      `codec:"ui"`
 }
 
@@ -71,7 +71,7 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 // StateDelta is a map from key/value store keys to ValueDeltas, indicating
 // what should happen for that key
 //
-//msgp:allocbound StateDelta config.MaxStateDeltaKeys,config.MaxAppBytesKeyLen
+//msgp:allocbound StateDelta bounds.MaxStateDeltaKeys,bounds.MaxAppBytesKeyLen
 type StateDelta map[string]ValueDelta
 
 // Equal checks whether two StateDeltas are equal. We don't check for nilness
@@ -79,33 +79,6 @@ type StateDelta map[string]ValueDelta
 // map is empty but not nil, we want to equal a decoded nil off the wire.
 func (sd StateDelta) Equal(o StateDelta) bool {
 	return maps.Equal(sd, o)
-}
-
-// Valid checks whether the keys and values in a StateDelta conform to the
-// consensus parameters' maximum lengths
-func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
-	if len(sd) > 0 && proto.MaxAppKeyLen == 0 {
-		return fmt.Errorf("delta not empty, but proto.MaxAppKeyLen is 0 (why did we make a delta?)")
-	}
-	for key, delta := range sd {
-		if len(key) > proto.MaxAppKeyLen {
-			return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), proto.MaxAppKeyLen)
-		}
-		switch delta.Action {
-		case SetBytesAction:
-			if len(delta.Bytes) > proto.MaxAppBytesValueLen {
-				return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(delta.Bytes))
-			}
-			if sum := len(key) + len(delta.Bytes); sum > proto.MaxAppSumKeyValueLens {
-				return fmt.Errorf("key/value total too long for key 0x%x: sum was %d", key, sum)
-			}
-		case SetUintAction:
-		case DeleteAction:
-		default:
-			return fmt.Errorf("unknown delta action: %v", delta.Action)
-		}
-	}
-	return nil
 }
 
 // StateSchema sets maximums on the number of each type that may be stored
@@ -212,7 +185,7 @@ func (tv *TealValue) String() string {
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
 //
-//msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries,config.MaxAppBytesKeyLen
+//msgp:allocbound TealKeyValue bounds.EncodedMaxKeyValueEntries,bounds.MaxAppBytesKeyLen
 type TealKeyValue map[string]TealValue
 
 // Clone returns a copy of a TealKeyValue that may be modified without

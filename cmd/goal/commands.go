@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -360,18 +361,18 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 		if len(walletID) == 0 {
 			// If we still don't have a default, check if there's only one wallet.
 			// If there is, make it the default and continue
-			wallets, err := kmd.ListWallets()
-			if err != nil {
-				return nil, nil, fmt.Errorf(errCouldNotListWallets, err)
+			wallets, err1 := kmd.ListWallets()
+			if err1 != nil {
+				return nil, nil, fmt.Errorf(errCouldNotListWallets, err1)
 			}
 			if len(wallets) == 1 {
 				// Only one wallet, so it's unambigious
 				walletID = []byte(wallets[0].ID)
 				accountList.setDefaultWalletID(walletID)
 			} else if len(wallets) == 0 {
-				return nil, nil, fmt.Errorf(errNoWallets)
+				return nil, nil, errors.New(errNoWallets)
 			} else {
-				return nil, nil, fmt.Errorf(errNoDefaultWallet)
+				return nil, nil, errors.New(errNoDefaultWallet)
 			}
 		}
 		// Fetch the wallet name (useful for error messages, and to check

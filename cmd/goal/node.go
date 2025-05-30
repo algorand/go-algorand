@@ -282,28 +282,6 @@ var startCmd = &cobra.Command{
 	},
 }
 
-var shutdownCmd = &cobra.Command{
-	Use:   "shutdown",
-	Short: "Shut down the node",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, _ []string) {
-		binDir, err := util.ExeDir()
-		if err != nil {
-			panic(err)
-		}
-		datadir.OnDataDirs(func(dataDir string) {
-			nc := nodecontrol.MakeNodeController(binDir, dataDir)
-			err := nc.Shutdown()
-
-			if err == nil {
-				reportInfoln(infoNodeShuttingDown)
-			} else {
-				reportErrorf(errorNodeFailedToShutdown, err)
-			}
-		})
-	},
-}
-
 func getRunHostedConfigFlag(dataDir string) bool {
 	// See if this instance wants to run Hosted, even if '-H' wasn't specified on our cmdline
 	cfg, err := config.LoadConfigFromDisk(dataDir)
@@ -504,28 +482,13 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
 
-		upgradeNextProtocolVoteBefore := uint64(0)
-		if stat.UpgradeNextProtocolVoteBefore != nil {
-			upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
-		}
+		upgradeNextProtocolVoteBefore := nilToZero(stat.UpgradeNextProtocolVoteBefore)
 
 		if upgradeNextProtocolVoteBefore > stat.LastRound {
-			upgradeVotesRequired := uint64(0)
-			upgradeNoVotes := uint64(0)
-			upgradeYesVotes := uint64(0)
-			upgradeVoteRounds := uint64(0)
-			if stat.UpgradeVotesRequired != nil {
-				upgradeVotesRequired = *stat.UpgradeVotesRequired
-			}
-			if stat.UpgradeNoVotes != nil {
-				upgradeNoVotes = *stat.UpgradeNoVotes
-			}
-			if stat.UpgradeYesVotes != nil {
-				upgradeYesVotes = *stat.UpgradeYesVotes
-			}
-			if stat.UpgradeVoteRounds != nil {
-				upgradeVoteRounds = *stat.UpgradeVoteRounds
-			}
+			upgradeVotesRequired := nilToZero(stat.UpgradeVotesRequired)
+			upgradeNoVotes := nilToZero(stat.UpgradeNoVotes)
+			upgradeYesVotes := nilToZero(stat.UpgradeYesVotes)
+			upgradeVoteRounds := nilToZero(stat.UpgradeVoteRounds)
 			statusString = statusString + "\n" + fmt.Sprintf(
 				infoNodeStatusConsensusUpgradeVoting,
 				upgradeYesVotes,

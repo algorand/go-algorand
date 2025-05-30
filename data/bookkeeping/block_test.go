@@ -100,9 +100,9 @@ func TestUpgradeVote(t *testing.T) {
 	s = UpgradeState{
 		CurrentProtocol:        proto1,
 		NextProtocol:           proto2,
-		NextProtocolApprovals:  config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold - 1,
-		NextProtocolVoteBefore: basics.Round(20),
-		NextProtocolSwitchOn:   basics.Round(30),
+		NextProtocolApprovals:  basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold) - 1,
+		NextProtocolVoteBefore: 20,
+		NextProtocolSwitchOn:   30,
 	}
 
 	// Check that applyUpgradeVote rejects concurrent proposal
@@ -122,9 +122,9 @@ func TestUpgradeVote(t *testing.T) {
 	s1, err = s.applyUpgradeVote(basics.Round(20), UpgradeVote{})
 	require.NoError(t, err)
 	require.Equal(t, s1.NextProtocol, protocol.ConsensusVersion(""))
-	require.Equal(t, s1.NextProtocolApprovals, uint64(0))
-	require.Equal(t, s1.NextProtocolVoteBefore, basics.Round(0))
-	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
+	require.Zero(t, s1.NextProtocolApprovals)
+	require.Zero(t, s1.NextProtocolVoteBefore)
+	require.Zero(t, s1.NextProtocolSwitchOn)
 
 	// Check that proposal gets approved with sufficient votes
 	s.NextProtocolApprovals++
@@ -137,9 +137,9 @@ func TestUpgradeVote(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, s1.CurrentProtocol, proto2)
 	require.Equal(t, s1.NextProtocol, protocol.ConsensusVersion(""))
-	require.Equal(t, s1.NextProtocolApprovals, uint64(0))
-	require.Equal(t, s1.NextProtocolVoteBefore, basics.Round(0))
-	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
+	require.Zero(t, s1.NextProtocolApprovals)
+	require.Zero(t, s1.NextProtocolVoteBefore)
+	require.Zero(t, s1.NextProtocolSwitchOn)
 }
 
 func TestUpgradeVariableDelay(t *testing.T) {

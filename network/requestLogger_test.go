@@ -53,7 +53,7 @@ func TestRequestLogger(t *testing.T) {
 		log:             dl,
 		config:          defaultConfig,
 		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:       "go-test-network-genesis",
+		genesisID:       "go-test-network-genesis",
 		NetworkID:       config.Devtestnet,
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},

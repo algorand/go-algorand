@@ -305,10 +305,7 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 	maxLen := len(out)
 	for i := 0; i < rowCount; i++ {
 		start := i * columnWidth
-		end := start + columnWidth
-		if end > maxLen {
-			end = maxLen
-		}
+		end := min(start+columnWidth, maxLen)
 		if start < len(out) {
 			row := strings.TrimSpace(out[start:end])
 			output := ""
@@ -321,8 +318,6 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 			outputRow(bodyTabWriter, output)
 		}
 	}
-
-	return
 }
 
 func outputRow(tabWriter *tabwriter.Writer, rowContent string) {

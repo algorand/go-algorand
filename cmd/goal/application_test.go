@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -27,14 +28,6 @@ import (
 func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-
-	makeRepeatSlice := func(size int, value string) []string {
-		slice := make([]string, size)
-		for i := range slice {
-			slice[i] = value
-		}
-		return slice
-	}
 
 	tests := []struct {
 		argTypes        []string
@@ -57,7 +50,7 @@ func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 			expectedAppArgs: [][]byte{{100}, {255, 255}},
 		},
 		{
-			argTypes: makeRepeatSlice(15, "string"),
+			argTypes: slices.Repeat([]string{"string"}, 15),
 			jsonArgs: []string{
 				`"a"`,
 				`"b"`,
@@ -94,7 +87,7 @@ func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 			},
 		},
 		{
-			argTypes: makeRepeatSlice(16, "string"),
+			argTypes: slices.Repeat([]string{"string"}, 16),
 			jsonArgs: []string{
 				`"a"`,
 				`"b"`,

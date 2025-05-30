@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -59,7 +60,7 @@ func TestSyncRestart(t *testing.T) {
 	a.NoError(err)
 	a.Equal(uint64(2), cfg.MaxAcctLookback)
 
-	waitTill := func(node string, round uint64) {
+	waitTill := func(node string, round basics.Round) {
 		controller, err := fixture.GetNodeController(node)
 		a.NoError(err)
 		err = fixture.GetAlgodClientForController(controller).WaitForRoundWithTimeout(round)
@@ -73,54 +74,54 @@ func TestSyncRestart(t *testing.T) {
 		return algod
 	}
 
-	getRound := func(node string) uint64 {
+	getRound := func(node string) basics.Round {
 		algod := getAlgod(node)
 		status, err := algod.Status()
 		a.NoError(err)
 		return status.LastRound
 	}
 
-	getSyncRound := func() uint64 {
+	getSyncRound := func() basics.Round {
 		followClient := getAlgod("Follower")
 		rResp, err := followClient.GetSyncRound()
 		a.NoError(err)
 		return rResp.Round
 	}
 
-	a.Equal(uint64(1), getSyncRound())
+	a.EqualValues(1, getSyncRound())
 
 	waitTill("Primary", 3)
 	// with a max account lookback of 2, and the sync round at 1,
 	// the follower cannot advance past round 2 = 1 - 1 + 2
 	waitTill("Follower", 2)
 	a.LessOrEqual(uint64(3), getRound("Primary"))
-	a.Equal(uint64(2), getRound("Follower"))
-	a.Equal(uint64(1), getSyncRound())
+	a.EqualValues(2, getRound("Follower"))
+	a.EqualValues(1, getSyncRound())
 
 	/** restart the network **/
 	fixture.ShutdownImpl(true)
 	fixture.Start()
 
 	a.LessOrEqual(uint64(3), getRound("Primary"))
-	a.Equal(uint64(1), getSyncRound())
-	a.Equal(uint64(2), getRound("Follower"))
+	a.EqualValues(1, getSyncRound())
+	a.EqualValues(2, getRound("Follower"))
 
 	waitTill("Primary", 6)
 	followerClient := getAlgod("Follower")
-	err = followerClient.SetSyncRound(uint64(3))
+	err = followerClient.SetSyncRound(3)
 	a.NoError(err)
-	a.Equal(uint64(3), getSyncRound())
+	a.EqualValues(3, getSyncRound())
 	// with a max account lookback of 2, and the sync round at 3,
 	// the follower cannot advance past round 4 = 3 - 1 + 2
 	waitTill("Follower", 4)
-	a.LessOrEqual(uint64(6), getRound("Primary"))
-	a.Equal(uint64(4), getRound("Follower"))
-	a.Equal(uint64(3), getSyncRound())
+	a.LessOrEqual(basics.Round(6), getRound("Primary"))
+	a.EqualValues(4, getRound("Follower"))
+	a.EqualValues(3, getSyncRound())
 
 	fixture.ShutdownImpl(true)
 	fixture.Start()
 
-	a.LessOrEqual(uint64(6), getRound("Primary"))
-	a.Equal(uint64(4), getRound("Follower"))
-	a.Equal(uint64(3), getSyncRound())
+	a.LessOrEqual(basics.Round(6), getRound("Primary"))
+	a.EqualValues(4, getRound("Follower"))
+	a.EqualValues(3, getSyncRound())
 }

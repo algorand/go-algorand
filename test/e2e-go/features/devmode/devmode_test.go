@@ -63,11 +63,11 @@ func testDevMode(t *testing.T, version protocol.ConsensusVersion) {
 	require.Equal(t, blkOffset, resp.Offset)
 
 	// 2 transactions should be sent within one normal confirmation time.
-	for i := uint64(0); i < 2; i++ {
+	for i := basics.Round(0); i < 2; i++ {
 		round := firstRound + i
 		txn = fixture.SendMoneyAndWait(round, 100001, 1000, sender.Address, receiver.String(), "")
 		// SendMoneyAndWait subtracts 1 from firstValid
-		require.Equal(t, round-1, uint64(txn.Txn.Txn.FirstValid))
+		require.Equal(t, round-1, txn.Txn.Txn.FirstValid)
 		newBlk, err := fixture.AlgodClient.Block(round)
 		require.NoError(t, err)
 		newBlkSeconds := newBlk.Block.TimeStamp
@@ -103,7 +103,7 @@ func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) 
 
 	fundingTx, err := fixture.LibGoalClient.SendPaymentFromWalletWithLease(wh, nil, sender.Address, receiver.String(), 1000, 100000, nil, "", [32]byte{1, 2, 3}, basics.Round(curRound).SubSaturate(1), 0)
 	require.NoError(t, err)
-	txn, err := fixture.WaitForConfirmedTxn(curRound+uint64(5), fundingTx.ID().String())
+	txn, err := fixture.WaitForConfirmedTxn(curRound+5, fundingTx.ID().String())
 	require.NoError(t, err)
 	require.NotNil(t, txn.ConfirmedRound)
 	_, err = fixture.AlgodClient.Block(*txn.ConfirmedRound)

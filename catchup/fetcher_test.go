@@ -109,15 +109,15 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	return
 }
 
-func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks int) {
-	var err error
-	for i := 0; i < numBlocks; i++ {
+func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks basics.Round) {
+	for range numBlocks {
+		var err error
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.TxnCommitments, err = blk.PaysetCommit()
 		require.NoError(t, err)
 
-		err := ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
+		err = ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
 		require.NoError(t, err)
 
 		hdr, err := ledger.BlockHdr(blk.BlockHeader.Round)
@@ -287,9 +287,8 @@ func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics 
 func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, outMsg network.OutgoingMessage) (e error) {
 
 	hashKey := uint64(0)
-	channel, found := p.responseChannels[hashKey]
-	if !found {
-	}
+	require.Contains(p.t, p.responseChannels, hashKey)
+	channel := p.responseChannels[hashKey]
 
 	select {
 	case channel <- &network.Response{Topics: outMsg.Topics}:

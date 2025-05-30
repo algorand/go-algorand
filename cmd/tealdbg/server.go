@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 )
@@ -89,11 +90,11 @@ type DebugParams struct {
 	DdrBlob          []byte
 	IndexerURL       string
 	IndexerToken     string
-	Round            uint64
+	Round            basics.Round
 	LatestTimestamp  int64
 	RunMode          string
 	DisableSourceMap bool
-	AppID            uint64
+	AppID            basics.AppIndex
 	Painless         bool
 	ListenForDrReq   bool
 }
@@ -156,9 +157,9 @@ func (ds *DebugServer) startDebug() (err error) {
 	}
 
 	go func() {
-		err := ds.server.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			log.Panicf("failed to listen: %v", err)
+		err1 := ds.server.ListenAndServe()
+		if err1 != nil && err1 != http.ErrServerClosed {
+			log.Panicf("failed to listen: %v", err1)
 		}
 	}()
 	defer ds.server.Shutdown(context.Background())
@@ -241,5 +242,4 @@ func (ds *DebugServer) dryrunReqHander(w http.ResponseWriter, r *http.Request) {
 
 	// let the main thread to exit
 	close(ds.spinoffCh)
-	return
 }

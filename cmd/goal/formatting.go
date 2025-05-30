@@ -154,7 +154,7 @@ func jsonPrintable(str string) bool {
 		if r >= utf8.RuneSelf {
 			return false
 		}
-		if htmlSafeSet[r] == false {
+		if !htmlSafeSet[r] {
 			return false
 		}
 	}
@@ -206,4 +206,12 @@ func encodeBytesAsAppCallBytes(value []byte) string {
 	}
 
 	return "b64:" + base64.StdEncoding.EncodeToString(value)
+}
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
 }

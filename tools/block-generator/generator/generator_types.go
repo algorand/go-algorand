@@ -34,9 +34,9 @@ import (
 type Generator interface {
 	WriteReport(output io.Writer) error
 	WriteGenesis(output io.Writer) error
-	WriteBlock(output io.Writer, round uint64) error
+	WriteBlock(output io.Writer, round basics.Round) error
 	WriteAccount(output io.Writer, accountString string) error
-	WriteDeltas(output io.Writer, round uint64) error
+	WriteDeltas(output io.Writer, round basics.Round) error
 	WriteStatus(output io.Writer) error
 	Stop()
 }
@@ -54,7 +54,7 @@ type generator struct {
 	numAccounts uint64
 
 	// Block stuff
-	round         uint64
+	round         basics.Round
 	txnCounter    uint64
 	prevBlockHash string
 	timestamp     int64
@@ -85,7 +85,7 @@ type generator struct {
 
 	// pendingAppMap provides a live mapping from appID to appData for each appKind
 	// for the current round
-	pendingAppMap map[appKind]map[uint64]*appData
+	pendingAppMap map[appKind]map[basics.AppIndex]*appData
 
 	// pendingAppSlice provides a live slice of appData for each appKind. The reason
 	// for maintaining both appMap and pendingAppSlice is to enable
@@ -95,12 +95,12 @@ type generator struct {
 
 	// appMap and appSlice store the information from their corresponding pending*
 	// data structures at the end of each round and for the rest of the experiment
-	appMap   map[appKind]map[uint64]*appData
+	appMap   map[appKind]map[basics.AppIndex]*appData
 	appSlice map[appKind][]*appData
 
 	// accountAppOptins is used to keep track of which accounts have opted into
-	// and app and enable random selection.
-	accountAppOptins map[appKind]map[uint64][]uint64
+	// an app and enable random selection.
+	accountAppOptins map[appKind]map[uint64][]basics.AppIndex
 
 	transactionWeights []float32
 
@@ -120,14 +120,14 @@ type generator struct {
 	// latestBlockMsgp caches the latest written block
 	latestBlockMsgp []byte
 
-	// latestPaysetWithExpectedID provides the ordered payest transactions
+	// latestPaysetWithExpectedID provides the ordered payset transactions
 	// together the expected asset/app IDs (or 0 if not applicable)
 	latestPaysetWithExpectedID []txnWithExpectedID
 
-	roundOffset uint64
+	roundOffset basics.Round
 }
 type assetData struct {
-	assetID uint64
+	assetID basics.AssetIndex
 	creator uint64
 	name    string
 	// Holding at index 0 is the creator.
@@ -137,7 +137,7 @@ type assetData struct {
 }
 
 type appData struct {
-	appID  uint64
+	appID  basics.AppIndex
 	sender uint64
 	kind   appKind
 	optins map[uint64]bool
@@ -150,7 +150,7 @@ type assetHolding struct {
 
 // Report is the generation report.
 type Report struct {
-	InitialRound uint64              `json:"initial_round"`
+	InitialRound basics.Round        `json:"initial_round"`
 	Counters     map[string]uint64   `json:"counters"`
 	Transactions map[TxTypeID]TxData `json:"transactions"`
 }

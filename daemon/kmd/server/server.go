@@ -63,12 +63,10 @@ type WalletServerConfig struct {
 // WalletServer deals with serving API requests
 type WalletServer struct {
 	WalletServerConfig
-	netPath      string
-	pidPath      string
-	lockPath     string
-	fileLock     *flock.Flock
-	sockPath     string
-	tmpSocketDir string
+	netPath  string
+	pidPath  string
+	lockPath string
+	fileLock *flock.Flock
 
 	// This mutex protects shutdown, which lets us know if we died unexpectedly
 	// or as a result of being killed
@@ -225,9 +223,9 @@ func (ws *WalletServer) start(kill chan os.Signal) (died chan error, sock string
 		ws.mux.Unlock()
 
 		// Shut down the server
-		err := srv.Shutdown(context.Background())
-		if err != nil {
-			ws.Log.Warnf("non-nil error stopping kmd wallet HTTP server: %s", err)
+		err1 := srv.Shutdown(context.Background())
+		if err1 != nil {
+			ws.Log.Warnf("non-nil error stopping kmd wallet HTTP server: %s", err1)
 		}
 	}()
 

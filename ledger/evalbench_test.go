@@ -176,7 +176,7 @@ func (g *benchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Addre
 					GenesisHash: gh,
 				},
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: basics.AppIndex(appIdx),
+					ApplicationID: appIdx,
 					OnCompletion:  transactions.OptInOC,
 				},
 			}

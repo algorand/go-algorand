@@ -13,7 +13,6 @@ require (
 	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.1.0
 	github.com/algorand/msgp v1.1.60
-	github.com/algorand/oapi-codegen v1.12.0-algorand.0
 	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.34.0
@@ -44,6 +43,7 @@ require (
 	github.com/miekg/dns v1.1.62
 	github.com/multiformats/go-multiaddr v0.13.0
 	github.com/multiformats/go-multiaddr-dns v0.4.0
+	github.com/oapi-codegen/runtime v1.1.1
 	github.com/olivere/elastic v6.2.14+incompatible
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/client_model v0.6.1
@@ -58,7 +58,7 @@ require (
 	golang.org/x/sys v0.32.0
 	golang.org/x/text v0.24.0
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
-	pgregory.net/rapid v0.6.2
+	pgregory.net/rapid v1.2.0
 )
 
 require (

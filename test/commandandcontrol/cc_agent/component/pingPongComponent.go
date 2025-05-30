@@ -72,7 +72,6 @@ func (componentInstance *PingPongComponentInstance) Process(command Command) (er
 				log.Infof("ping pong process started")
 			}
 		}
-		break
 	case "stop":
 		log.Infof("terminating Ping Pong")
 		err = componentInstance.Terminate()
@@ -82,7 +81,6 @@ func (componentInstance *PingPongComponentInstance) Process(command Command) (er
 		} else {
 			log.Infof("ping pong process terminated")
 		}
-		break
 	default:
 		log.Warnf("unsupported pingpong action '%s'", command.command)
 	}

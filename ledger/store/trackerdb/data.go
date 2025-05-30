@@ -112,8 +112,8 @@ type ResourcesData struct {
 	KeyValue           basics.TealKeyValue `codec:"p"`
 
 	// application global params ( basics.AppParams )
-	ApprovalProgram               []byte              `codec:"q,allocbound=config.MaxAvailableAppProgramLen"`
-	ClearStateProgram             []byte              `codec:"r,allocbound=config.MaxAvailableAppProgramLen"`
+	ApprovalProgram               []byte              `codec:"q,allocbound=bounds.MaxAvailableAppProgramLen"`
+	ClearStateProgram             []byte              `codec:"r,allocbound=bounds.MaxAvailableAppProgramLen"`
 	GlobalState                   basics.TealKeyValue `codec:"s"`
 	LocalStateSchemaNumUint       uint64              `codec:"t"`
 	LocalStateSchemaNumByteSlice  uint64              `codec:"u"`
@@ -132,6 +132,8 @@ type ResourcesData struct {
 	// consensus parameter is being set. Once the above consensus takes place, this field would be populated with the
 	// correct round number.
 	UpdateRound uint64 `codec:"z"`
+
+	Version uint64 `codec:"A"`
 }
 
 // BaseVotingData is the base struct used to store voting data
@@ -552,7 +554,8 @@ func (rd *ResourcesData) IsEmptyAppFields() bool {
 		rd.LocalStateSchemaNumByteSlice == 0 &&
 		rd.GlobalStateSchemaNumUint == 0 &&
 		rd.GlobalStateSchemaNumByteSlice == 0 &&
-		rd.ExtraProgramPages == 0
+		rd.ExtraProgramPages == 0 &&
+		rd.Version == 0
 }
 
 // IsApp returns true if the flag is ResourceFlagsEmptyApp and the fields are not empty.
@@ -730,6 +733,7 @@ func (rd *ResourcesData) ClearAppParams() {
 	rd.GlobalStateSchemaNumUint = 0
 	rd.GlobalStateSchemaNumByteSlice = 0
 	rd.ExtraProgramPages = 0
+	rd.Version = 0
 	hadHolding := (rd.ResourceFlags & ResourceFlagsNotHolding) == ResourceFlagsHolding
 	rd.ResourceFlags -= rd.ResourceFlags & ResourceFlagsOwnership
 	rd.ResourceFlags &= ^ResourceFlagsEmptyApp
@@ -748,6 +752,7 @@ func (rd *ResourcesData) SetAppParams(ap basics.AppParams, haveHoldings bool) {
 	rd.GlobalStateSchemaNumUint = ap.GlobalStateSchema.NumUint
 	rd.GlobalStateSchemaNumByteSlice = ap.GlobalStateSchema.NumByteSlice
 	rd.ExtraProgramPages = ap.ExtraProgramPages
+	rd.Version = ap.Version
 	rd.ResourceFlags |= ResourceFlagsOwnership
 	if !haveHoldings {
 		rd.ResourceFlags |= ResourceFlagsNotHolding
@@ -775,6 +780,7 @@ func (rd *ResourcesData) GetAppParams() basics.AppParams {
 			},
 		},
 		ExtraProgramPages: rd.ExtraProgramPages,
+		Version:           rd.Version,
 	}
 }
 
