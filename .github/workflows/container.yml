@@ -10,7 +10,7 @@ on:
 jobs:
   build-and-push:
     name: Build and Push to DockerHub
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
