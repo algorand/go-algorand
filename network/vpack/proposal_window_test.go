@@ -39,7 +39,7 @@ func TestPropWindowHPACK(t *testing.T) {
 	var w propWindow
 
 	// 1. Insert seven unique entries (fills the window).
-	for i := 0; i < windowSize; i++ {
+	for i := 0; i < proposalWindowSize; i++ {
 		pb := makeTestPropBundle(byte(i))
 		w.insertNew(pb)
 		require.Equal(t, i+1, w.size, "size incorrect after insertNew")
@@ -48,10 +48,10 @@ func TestPropWindowHPACK(t *testing.T) {
 	}
 
 	// 2. Verify byRef/lookup mapping for current content.
-	for idx := 1; idx <= windowSize; idx++ {
+	for idx := 1; idx <= proposalWindowSize; idx++ {
 		prop, ok := w.byRef(idx)
 		require.True(t, ok)
-		expectedSeed := byte(windowSize - idx) // newest (idx==1) == seed 6, oldest (idx==7) == seed 0
+		expectedSeed := byte(proposalWindowSize - idx) // newest (idx==1) == seed 6, oldest (idx==7) == seed 0
 		want := makeTestPropBundle(expectedSeed)
 		require.Equal(t, want, prop)
 	}
@@ -60,7 +60,7 @@ func TestPropWindowHPACK(t *testing.T) {
 	evicted := makeTestPropBundle(0)
 	newEntry := makeTestPropBundle(7)
 	w.insertNew(newEntry)
-	require.Equal(t, windowSize, w.size, "size after eviction incorrect")
+	require.Equal(t, proposalWindowSize, w.size, "size after eviction incorrect")
 
 	// Oldest should now be former seed 1, and evicted one should not be found.
 	require.Equal(t, 0, w.lookup(evicted), "evicted entry still found")
@@ -73,7 +73,7 @@ func TestPropWindowHPACK(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, newEntry, prop)
 
-	prop, ok = w.byRef(windowSize)
+	prop, ok = w.byRef(proposalWindowSize)
 	require.True(t, ok)
 	require.Equal(t, makeTestPropBundle(1), prop)
 }

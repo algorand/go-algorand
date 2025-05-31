@@ -26,9 +26,9 @@ type proposalEntry struct {
 	mask               uint8                    // which fields were present
 }
 
-// windowSize is fixed because hdr[1] holds only 3 bits for the reference code
+// proposalWindowSize is fixed because hdr[1] holds only 3 bits for the reference code
 // (0 = literal, 1-7 = index).
-const windowSize = 7
+const proposalWindowSize = 7
 
 // propWindow implements a small sliding window for vote proposal bundles.
 // It behaves like the dynamic table defined in RFC 7541 (HPACK), but is limited
@@ -36,9 +36,9 @@ const windowSize = 7
 // provide effective compression, since usually almost all the votes in a round
 // are for the same proposal value.
 type propWindow struct {
-	entries [windowSize]proposalEntry // circular buffer
-	head    int                       // slot of the oldest entry
-	size    int                       // number of live entries (0 ... windowSize)
+	entries [proposalWindowSize]proposalEntry // circular buffer
+	head    int                               // slot of the oldest entry
+	size    int                               // number of live entries (0 ... windowSize)
 }
 
 // lookup returns the 1-based HPACK index of pv.  It walks from the oldest entry
@@ -46,7 +46,7 @@ type propWindow struct {
 // small table. Returns 0 if not found.
 func (w *propWindow) lookup(pv proposalEntry) int {
 	for i := range w.size {
-		slot := (w.head + i) % windowSize // oldest first
+		slot := (w.head + i) % proposalWindowSize // oldest first
 		if w.entries[slot] == pv {
 			// Convert position to HPACK index.
 			// Example: size == 7
@@ -70,28 +70,26 @@ func (w *propWindow) byRef(idx int) (prop proposalEntry, ok bool) {
 	// convert HPACK index (1 == newest, w.size == oldest) to physical slot
 	// newest slot is (head + size - 1) % windowSize
 	// logical slot idx is (idx - 1) positions from newest
-	physical := (w.head + w.size - idx) % windowSize
-	// Example: size == 7, head == 3
-	//   logical idx == 1 (newest) -> slot (3 + 7 - 1) % 7 == slot 2
-	//   logical idx == 2          -> slot (3 + 7 - 2) % 7 == slot 1
-	//   logical idx == 3          -> slot (3 + 7 - 3) % 7 == slot 0
-	//   logical idx == 4          -> slot (3 + 7 - 4) % 7 == slot 6
-	//   logical idx == 5          -> slot (3 + 7 - 5) % 7 == slot 5
-	//   logical idx == 6          -> slot (3 + 7 - 6) % 7 == slot 4
-	//   logical idx == 7 (oldest) -> slot (3 + 7 - 7) % 7 == slot 3
+	physical := (w.head + w.size - idx) % proposalWindowSize
+	// Example: size == 7, head == 2
+	//   logical idx == 1 (newest) -> slot (2 + 7 - 1) % 7 == slot 1
+	//   logical idx == 2          -> slot (2 + 7 - 2) % 7 == slot 0
+	//   logical idx == 3          -> slot (2 + 7 - 3) % 7 == slot 6
+	//   ...
+	//   logical idx == 7 (oldest) -> slot (2 + 7 - 7) % 7 == slot 2
 	return w.entries[physical], true
 }
 
 // insertNew puts pv into the table as the newest entry (HPACK index 1).
 // When the table is full, the oldest one is overwritten.
 func (w *propWindow) insertNew(pv proposalEntry) {
-	if w.size == windowSize {
+	if w.size == proposalWindowSize {
 		// Evict the oldest element at w.head, then advance head.
 		w.entries[w.head] = pv
-		w.head = (w.head + 1) % windowSize
+		w.head = (w.head + 1) % proposalWindowSize
 	} else {
 		// Store at the slot just after the current newest.
-		pos := (w.head + w.size) % windowSize
+		pos := (w.head + w.size) % proposalWindowSize
 		w.entries[pos] = pv
 		w.size++
 	}
