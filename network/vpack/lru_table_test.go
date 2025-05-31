@@ -20,9 +20,22 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
+
+// TestLRUTableInvalidID tests the fetch function with an invalid ID
+func TestLRUTableInvalidID(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Test fetch with invalid ID (greater than lruTableSize)
+	var table lruTable[pkSigPair]
+	var invalidID lruTableReferenceID = 1024 // greater than lruTableSize
+	result, ok := table.fetch(invalidID)
+	require.False(t, ok)
+	require.Equal(t, pkSigPair{}, result)
+}
 
 func TestLRUTableInsertLookupFetch(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -203,6 +216,32 @@ func TestLRURefIDConsistency(t *testing.T) {
 	require.True(t, ok2)
 	require.Equal(t, 100, val1)
 	require.Equal(t, 200, val2)
+}
+
+// TestLRUErrorPaths tests the error paths in fetch operations to ensure 100% coverage
+func TestLRUErrorPaths(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// The lruTableSize in lru_table.go is 512, so we need to create an ID
+	// where the bucket index (id >> 1) exceeds this value
+	// If bucket index >= 512, fetch should return false
+	invalidBucketID := lruTableReferenceID(1024 << 1) // (1024 is > 512)
+
+	// Create a decoder with an empty LRU table
+	dec := &StatefulDecoder{}
+
+	// Attempt to access references with invalid bucket IDs
+	_, ok := dec.sndTable.fetch(invalidBucketID)
+	require.False(t, ok)
+	_, ok = dec.pkTable.fetch(invalidBucketID)
+	require.False(t, ok)
+	_, ok = dec.pk2Table.fetch(invalidBucketID)
+	require.False(t, ok)
+
+	// Attempt to access an invalid proposal reference by looking up a proposal that doesn't exist
+	prop := proposalEntry{dig: crypto.Digest{1}, encdig: crypto.Digest{2}}
+	index := dec.proposalWindow.lookup(prop)
+	require.Equal(t, 0, index)
 }
 
 func TestLRUTableQuick(t *testing.T) {
