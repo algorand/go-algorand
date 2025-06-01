@@ -270,7 +270,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 	// r.per: pass through, if present
 	if (hdr0 & bitPer) != 0 {
 		if pos+1 > len(src) {
-			return nil, errors.New("truncated rnd marker")
+			return nil, errors.New("truncated per marker")
 		}
 		n := msgpVaruintLen(src[pos])
 		if pos+n > len(src) {
@@ -300,7 +300,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		}
 		if (hdr0 & bitOper) != 0 {
 			if pos+1 > len(src) {
-				return nil, errors.New("truncated rnd marker")
+				return nil, errors.New("truncated oper marker")
 			}
 			n := msgpVaruintLen(src[pos])
 			if pos+n > len(src) {
@@ -372,7 +372,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 	if (hdr1 & hdr1SndRef) != 0 { // reference
 		id, err := decodeDynamicRef(src, &pos)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding snd ref: %w", err)
 		}
 		addr, ok := d.sndTable.fetch(id)
 		if !ok {
@@ -393,7 +393,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 	// r.step: pass through, if present
 	if (hdr0 & bitStep) != 0 {
 		if pos+1 > len(src) {
-			return nil, errors.New("truncated rnd marker")
+			return nil, errors.New("truncated step marker")
 		}
 		n := msgpVaruintLen(src[pos])
 		if pos+n > len(src) {
@@ -407,7 +407,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 	if (hdr1 & hdr1PkRef) != 0 { // reference
 		id, err := decodeDynamicRef(src, &pos)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding pk ref: %w", err)
 		}
 		pkb, ok := d.pkTable.fetch(id)
 		if !ok {
@@ -432,7 +432,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 	if (hdr1 & hdr1Pk2Ref) != 0 { // reference
 		id, err := decodeDynamicRef(src, &pos)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding pk2 ref: %w", err)
 		}
 		pk2b, ok := d.pk2Table.fetch(id)
 		if !ok {

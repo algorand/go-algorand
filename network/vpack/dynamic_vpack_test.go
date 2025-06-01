@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/agreement"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -215,164 +214,93 @@ func TestStatefulRndDelta(t *testing.T) {
 func TestStatefulDecoderErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	pf := make([]byte, 80)
-	crypto.RandBytes(pf)
+	fullVote := slices.Concat(
+		// Header with all hdr0 optional bits set, but no hdr1 bits
+		[]byte{byte(bitPer | bitDig | bitStep | bitEncDig | bitOper | bitOprop), 0x00},
+		make([]byte, 80),               // Credential prefix (80 bytes)
+		[]byte{msgpUint32},             // Per field marker
+		[]byte{0x01, 0x02, 0x03, 0x04}, // Per value (4 bytes)
+		make([]byte, 32),               // Digest (32 bytes)
+		make([]byte, 32),               // EncDig (32 bytes)
+		[]byte{msgpUint32},             // Oper field marker
+		[]byte{0x01, 0x02, 0x03, 0x04}, // Oper value (4 bytes)
+		make([]byte, 32),               // Oprop (32 bytes)
+		[]byte{msgpUint32},             // Round marker (msgpack marker)
+		[]byte{0x01, 0x02, 0x03, 0x04}, // Round value (4 bytes)
+		make([]byte, 32),               // Sender (32 bytes)
+		[]byte{msgpUint32},             // Step field marker
+		[]byte{0x01, 0x02, 0x03, 0x04}, // Step value (4 bytes)
+		make([]byte, 96),               // pk + p1s (96 bytes: 32 for pk, 64 for p1s)
+		make([]byte, 96),               // pk2 + p2s (96 bytes: 32 for pk2, 64 for p2s)
+		make([]byte, 64),               // sig.s (64 bytes)
+	)
 
-	cases := []struct {
-		name string
+	refVote := slices.Concat(
+		// Header with all hdr1 reference bits set, but no hdr0 bits
+		[]byte{0x00, byte(hdr1SndRef | hdr1PkRef | hdr1Pk2Ref | hdr1RndLiteral)},
+		make([]byte, 80),   // Credential prefix
+		[]byte{0x07},       // Round literal (fixint 7)
+		[]byte{0x01, 0x02}, // Sender ref ID
+		[]byte{0x03, 0x04}, // pk ref ID
+		[]byte{0x05, 0x06}, // pk2 ref ID
+		make([]byte, 64),   // sig.s
+	)
+
+	for _, tc := range []struct {
 		want string
 		buf  []byte
 	}{
-		{
-			name: "input-short", want: "input shorter than header",
-			buf: []byte{0x01},
-		},
-		{
-			name: "pf-trunc", want: "truncated pf",
-			buf: []byte{0x00, 0x00},
-		},
-		{
-			name: "per-marker-trunc", want: "truncated rnd marker",
-			buf: slices.Concat([]byte{bitPer, 0x00}, pf),
-		},
-		{
-			name: "per-value-trunc", want: "truncated per",
-			buf: slices.Concat([]byte{bitPer, 0x00}, pf, []byte{msgpUint32, 0x00}),
-		},
-		{
-			name: "dig-trunc", want: "truncated digest",
-			buf: slices.Concat([]byte{bitDig, 0x00}, pf, make([]byte, 10)),
-		},
-		{
-			name: "encdig-trunc", want: "truncated encdig",
-			buf: slices.Concat([]byte{bitEncDig, 0x00}, pf, make([]byte, 10)),
-		},
-		{
-			name: "oper-marker-trunc", want: "truncated rnd marker",
-			buf: slices.Concat([]byte{bitOper, 0x00}, pf, []byte{0x00}),
-		},
-		{
-			name: "oper-marker-trunc-2", want: "truncated rnd marker",
-			buf: slices.Concat([]byte{bitOper, 0x00}, pf),
-		},
-		{
-			name: "oper-value-trunc", want: "truncated oper",
-			buf: slices.Concat([]byte{bitOper, 0x00}, pf, []byte{msgpUint32, 0x01}),
-		},
-		{
-			name: "oprop-trunc", want: "truncated oprop",
-			buf: slices.Concat([]byte{bitOprop, 0x00}, pf, make([]byte, 10)),
-		},
-		{
-			name: "bad-prop-ref", want: "bad proposal ref",
-			buf: slices.Concat([]byte{0x00, byte(1 << hdr1PropShift)}, pf, []byte{0x00}),
-		},
-		{
-			name: "snd-ref-trunc", want: "truncated ref id",
-			buf: slices.Concat([]byte{0x00, byte(hdr1SndRef)}, pf, []byte{0x00}),
-		},
-		{
-			name: "bad-sender-ref", want: "bad sender ref",
-			buf: slices.Concat(
-				[]byte{0x00, byte(hdr1SndRef | hdr1RndLiteral)},
-				pf,
-				[]byte{0x07},       // Round literal value (fixint 7)
-				[]byte{0xFF, 0xFF}, // Invalid sender reference ID (255)
-			),
-		},
-		{
-			name: "snd-literal-trunc", want: "truncated sender",
-			buf: slices.Concat([]byte{0x00, 0x00}, pf, []byte{0x00}),
-		},
-		{
-			name: "step-marker-trunc", want: "truncated rnd marker",
-			buf: slices.Concat([]byte{bitStep, 0x00}, pf, []byte{0x00}, make([]byte, 32)),
-		},
-		{
-			name: "step-value-trunc", want: "truncated step",
-			buf: slices.Concat([]byte{bitStep, 0x00}, pf, []byte{0x00}, make([]byte, 32), []byte{msgpUint32}),
-		},
-		{
-			name: "pk-ref-trunc", want: "truncated ref id",
-			buf: slices.Concat([]byte{0x00, byte(hdr1PkRef)}, pf, []byte{0x00}, make([]byte, 32)),
-		},
-		{
-			name: "bad-pk-ref", want: "bad pk ref",
-			buf: slices.Concat(
-				[]byte{0x00, byte(hdr1RndLiteral | hdr1PkRef)},
-				pf,
-				[]byte{0x08},       // Round literal value (fixint 8)
-				make([]byte, 32),   // Sender (32 bytes)
-				[]byte{0xFF, 0xFF}, // Invalid pk reference ID (255)
-			),
-		},
-		{
-			name: "pk-literal-trunc", want: "truncated pk bundle",
-			buf: slices.Concat([]byte{0x00, 0x00}, pf, []byte{0x00}, make([]byte, 32)),
-		},
-		{
-			name: "pk2-ref-trunc", want: "truncated ref id",
-			buf: slices.Concat([]byte{0x00, byte(hdr1Pk2Ref)}, pf, []byte{0x00}, make([]byte, 32), make([]byte, 96)),
-		},
-		{
-			name: "bad-pk2-ref", want: "bad pk2 ref",
-			buf: slices.Concat(
-				[]byte{0x00, byte(hdr1RndLiteral | hdr1Pk2Ref)},
-				pf,
-				[]byte{0x09},       // Round literal value (fixint 9)
-				make([]byte, 32),   // Sender (32 bytes)
-				make([]byte, 96),   // pk (32 bytes) + p1s (64 bytes)
-				[]byte{0xFF, 0xFF}, // Invalid pk2 reference ID (255)
-			),
-		},
-		{
-			name: "pk2-literal-trunc", want: "truncated pk2 bundle",
-			buf: slices.Concat([]byte{0x00, 0x00}, pf, []byte{0x00}, make([]byte, 32), make([]byte, 96)),
-		},
-		{
-			name: "rnd-literal-trunc", want: "truncated rnd",
-			buf: slices.Concat(
-				[]byte{0x00, byte(hdr1RndLiteral)},
-				pf,
-				[]byte{0xCE}, // high value for round (CE requires multiple bytes, but we only provide one)
-			),
-		},
-		{
-			name: "sig-s-trunc", want: "truncated sig.s",
-			buf: slices.Concat([]byte{0x00, 0x00}, pf, []byte{0x00}, make([]byte, 32), make([]byte, 96), make([]byte, 96)),
-		},
-		{
-			name: "length-mismatch", want: "length mismatch",
-			buf: slices.Concat([]byte{0x00, 0x00}, pf, []byte{0x00}, make([]byte, 32), make([]byte, 96), make([]byte, 96), make([]byte, 64), []byte{0x01}),
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+		// Truncation errors
+		{"input shorter than header", fullVote[:1]},
+		{"truncated pf", fullVote[:2]},
+		{"truncated per marker", fullVote[:82]},
+		{"truncated per", fullVote[:83]},
+		{"truncated digest", fullVote[:87]},
+		{"truncated encdig", fullVote[:119]},
+		{"truncated oper marker", fullVote[:151]},
+		{"truncated oper", fullVote[:152]},
+		{"truncated oprop", fullVote[:160]},
+		{"truncated rnd marker", fullVote[:188]},
+		{"truncated rnd", fullVote[:189]},
+		{"truncated sender", fullVote[:193]},
+		{"truncated step marker", fullVote[:225]},
+		{"truncated step", fullVote[:226]},
+		{"truncated pk bundle", fullVote[:234]},
+		{"truncated pk2 bundle", fullVote[:334]},
+		{"truncated sig.s", fullVote[:422]},
+		// Reference ID decoding errors
+		{"error decoding snd ref", refVote[:84]},
+		{"error decoding pk ref", refVote[:86]},
+		{"error decoding pk2 ref", refVote[:88]},
+		{"bad sender ref", slices.Concat(refVote[:83], []byte{0xFF, 0xFF})},
+		{"bad pk ref", slices.Concat(refVote[:85], []byte{0xFF, 0xFF})},
+		{"bad pk2 ref", slices.Concat(refVote[:87], []byte{0xFF, 0xFF})},
+		{"bad proposal ref", slices.Concat(
+			[]byte{0x00, byte(3 << hdr1PropShift)}, // proposal reference ID 3 (invalid, StatefulDecoder is empty)
+			make([]byte, 80),                       // pf
+			[]byte{0x01},                           // round (fixint 1)
+		)},
+		{"length mismatch: expected", slices.Concat(fullVote, []byte{0xFF, 0xFF})},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
 			dec := &StatefulDecoder{}
-			_, err := dec.Decompress(nil, c.buf)
-			require.ErrorContains(t, err, c.want)
+			_, err := dec.Decompress(nil, tc.buf)
+			require.ErrorContains(t, err, tc.want)
 		})
 	}
 }
 
-// TestStatefulEncoderErrors verifies that encoder detects obvious malformed inputs.
 func TestStatefulEncoderErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	enc := &StatefulEncoder{}
 
-	// 1) Source too short
+	// Source too short error
 	_, err := enc.Compress(nil, []byte{0x00})
 	require.ErrorContains(t, err, "src too short")
 
-	// 2) Length mismatch: valid stateless buffer with an extra byte at the end
+	// Length mismatch error
 	vote := generateRandomVote().Example(0)
-	vote.Sig.PKSigOld = [64]byte{}
-
-	// Set deterministic round so delta tests are predictable below
-	vote.R.Round = basics.Round(10)
-
 	stEnc := NewStatelessEncoder()
 	statelessBuf, err := stEnc.CompressVote(nil, protocol.EncodeMsgp(vote))
 	require.NoError(t, err)
@@ -381,10 +309,8 @@ func TestStatefulEncoderErrors(t *testing.T) {
 	_, err = enc.Compress(nil, badBuf)
 	require.ErrorContains(t, err, "length mismatch")
 
-	// 3) Buffer overflow behavior test
-	// First get a valid compressed vote with nil dst to determine needed size
+	// Test nil dst
 	compressedBuf, err := enc.Compress(nil, statelessBuf)
 	require.NoError(t, err)
-	// Verify we got a result with some length
 	require.Greater(t, len(compressedBuf), 0)
 }
