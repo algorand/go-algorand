@@ -46,7 +46,7 @@ import (
 // defaultKMDTimeoutSecs is the default number of seconds after which kmd will
 // kill itself if there are no requests. This can be overridden with
 // SetKMDStartArgs
-const defaultKMDTimeoutSecs = 60
+const defaultKMDTimeoutSecs = 180
 
 // DefaultKMDDataDir is the name of the directory within the algod data directory where kmd data goes
 const DefaultKMDDataDir = nodecontrol.DefaultKMDDataDir
