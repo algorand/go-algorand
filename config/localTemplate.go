@@ -620,7 +620,7 @@ type Local struct {
 
 	// EnableP2PHybridMode turns on both websockets and P2P networking.
 	// Enabling this setting also requires PublicAddress to be set.
-	EnableP2PHybridMode bool `version[34]:"false"`
+	EnableP2PHybridMode bool `version[34]:"false" version[36]:"true"`
 
 	// P2PHybridNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
 	P2PHybridNetAddress string `version[34]:""`
