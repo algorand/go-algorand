@@ -39,7 +39,7 @@ const (
 )
 
 const (
-	headerSize = 2 // 1 byte for mask, 1 byte for future use
+	headerSize = 2 // 1 byte for StatelessEncoder, 1 byte for StatefulEncoder
 
 	maxMsgpVaruintSize   = 9 // max size of a varuint is 8 bytes + 1 byte for the marker
 	msgpBin8Len32Size    = len(msgpBin8Len32) + 32
