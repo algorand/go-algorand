@@ -144,6 +144,7 @@ func TestProcessStageBlocksDownloadNilCert(t *testing.T) {
 	blk2 := blk1
 	blk2.BlockHeader.Round = 2
 	blk2.BlockHeader.Branch = blk1.Hash()
+	blk2.BlockHeader.Branch512 = blk1.Hash512()
 	blk2.TxnCommitments, err = blk2.PaysetCommit()
 	require.NoError(t, err)
 
