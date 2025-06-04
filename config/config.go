@@ -261,8 +261,8 @@ func GetGlobalConfigFileRoot() (string, error) {
 	return globalConfigFileRoot, err
 }
 
-// deriveConfigFilePath retrieves the default directory for global (not per-instance) config files
-// By default we store in ~/.algorand/.
+// deriveConfigFilePath retrieves the directory (~/.algorand) for global (not
+// per-instance) config files.
 func deriveConfigFilePath() (string, error) {
 	currentUser, err := user.Current()
 	if err != nil {

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config/bounds"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -644,13 +643,12 @@ type BonusPlan struct {
 	DecayInterval uint64
 }
 
-// KeyDilution returns the key dilution for this account,
+// EffectiveKeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
-func (proto ConsensusParams) KeyDilution(u basics.OnlineAccountData) uint64 {
-	if u.VoteKeyDilution != 0 {
-		return u.VoteKeyDilution
+func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
+	if kd != 0 {
+		return kd
 	}
-
 	return proto.DefaultKeyDilution
 }
 
