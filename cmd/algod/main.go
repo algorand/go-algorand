@@ -74,7 +74,7 @@ func main() {
 func run() int {
 	dataDir := resolveDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
-	config.UpdateVersionDataDir(absolutePath)
+	config.DataDirectory = absolutePath
 
 	if *seed != "" {
 		seedVal, err := strconv.ParseInt(*seed, 10, 64)
@@ -215,12 +215,19 @@ func run() int {
 	isTest := os.Getenv("ALGOTEST") != ""
 	remoteTelemetryEnabled := false
 	if !isTest {
-		telemetryConfig, err1 := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
-		if err1 != nil {
-			fmt.Fprintln(os.Stdout, "error loading telemetry config", err1)
+		root, err1 := config.GetGlobalConfigFileRoot()
+		var cfgDir *string
+		if err1 == nil {
+			cfgDir = &root
 		}
-		if os.IsPermission(err1) {
-			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err1)
+		telemetryConfig, err1 := logging.EnsureTelemetryConfig(&dataDir, cfgDir)
+		config.AnnotateTelemetry(&telemetryConfig, genesis.ID())
+		if err1 != nil {
+			if os.IsPermission(err1) {
+				fmt.Fprintf(os.Stderr, "permission error on accessing telemetry config: %v", err1)
+			} else {
+				fmt.Fprintf(os.Stderr, "error loading telemetry config: %v", err1)
+			}
 			return 1
 		}
 		fmt.Fprintf(os.Stdout, "Telemetry configured from '%s'\n", telemetryConfig.FilePath)

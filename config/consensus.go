@@ -643,6 +643,15 @@ type BonusPlan struct {
 	DecayInterval uint64
 }
 
+// EffectiveKeyDilution returns the key dilution for this account,
+// returning the default key dilution if not explicitly specified.
+func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
+	if kd != 0 {
+		return kd
+	}
+	return proto.DefaultKeyDilution
+}
+
 // PaysetCommitType enumerates possible ways for the block header to commit to
 // the set of transactions in the block.
 type PaysetCommitType int

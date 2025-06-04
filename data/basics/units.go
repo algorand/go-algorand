@@ -22,7 +22,6 @@ import (
 	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -53,11 +52,6 @@ func (a MicroAlgos) IsZero() bool {
 // ToUint64 converts the amount of algos to uint64
 func (a MicroAlgos) ToUint64() uint64 {
 	return a.Raw
-}
-
-// RewardUnits returns the number of reward units in some number of algos
-func (a MicroAlgos) RewardUnits(proto config.ConsensusParams) uint64 {
-	return a.Raw / proto.RewardUnit
 }
 
 // We generate our own encoders and decoders for MicroAlgos
