@@ -98,7 +98,7 @@ func (g *generator) initializeLedger() {
 	g.ledger = l
 }
 
-func (g *generator) minTxnsForBlock(round uint64) uint64 {
+func (g *generator) minTxnsForBlock(round basics.Round) uint64 {
 	// There are no transactions in the 0th round
 	if round == 0 {
 		return 0
@@ -206,12 +206,11 @@ func countInners(ad txn.ApplyData) int {
 }
 
 // introspectLedgerVsGenerator is only called when the --verbose command line argument is specified.
-func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs []error) {
+func (g *generator) introspectLedgerVsGenerator(round basics.Round, intra uint64) (errs []error) {
 	if !g.verbose {
 		errs = append(errs, fmt.Errorf("introspectLedgerVsGenerator called when verbose=false"))
 	}
 
-	round := basics.Round(roundNumber)
 	block, err := g.ledger.Block(round)
 	if err != nil {
 		round = err.(ledgercore.ErrNoEntry).Committed
@@ -247,7 +246,6 @@ func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs
 		sum += cnt
 	}
 	fmt.Print("--------------------\n")
-	fmt.Printf("roundNumber (generator): %d\n", roundNumber)
 	fmt.Printf("round (ledger): %d\n", round)
 	fmt.Printf("g.txnCounter + intra: %d\n", g.txnCounter+intra)
 	fmt.Printf("block.BlockHeader.TxnCounter: %d\n", block.BlockHeader.TxnCounter)
@@ -263,20 +261,21 @@ func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs
 	// ---- FROM THE LEDGER: box and createable evidence ---- //
 
 	ledgerBoxEvidenceCount := 0
-	ledgerBoxEvidence := make(map[uint64][]uint64)
+	ledgerBoxEvidence := make(map[basics.AppIndex][]uint64)
 	boxes := ledgerStateDeltas.KvMods
 	for k := range boxes {
-		appID, nameIEsender, _ := apps.SplitBoxKey(k)
+		appNum, nameIEsender, _ := apps.SplitBoxKey(k)
+		appID := basics.AppIndex(appNum)
 		ledgerBoxEvidence[appID] = append(ledgerBoxEvidence[appID], binary.LittleEndian.Uint64([]byte(nameIEsender))-1)
 		ledgerBoxEvidenceCount++
 	}
 
 	// TODO: can get richer info about app-Creatables from:
 	// updates.Accts.AppResources
-	ledgerCreatableAppsEvidence := make(map[uint64]uint64)
+	ledgerCreatableAppsEvidence := make(map[basics.AppIndex]uint64)
 	for creatableID, creatable := range ledgerStateDeltas.Creatables {
 		if creatable.Ctype == basics.AppCreatable {
-			ledgerCreatableAppsEvidence[uint64(creatableID)] = accountToIndex(creatable.Creator)
+			ledgerCreatableAppsEvidence[basics.AppIndex(creatableID)] = accountToIndex(creatable.Creator)
 		}
 	}
 	fmt.Printf("ledgerBoxEvidenceCount: %d\n", ledgerBoxEvidenceCount)
@@ -284,13 +283,13 @@ func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs
 
 	// ---- FROM THE GENERATOR: expected created and optins ---- //
 
-	expectedCreated := map[appKind]map[uint64]uint64{
-		appKindBoxes: make(map[uint64]uint64),
-		appKindSwap:  make(map[uint64]uint64),
+	expectedCreated := map[appKind]map[basics.AppIndex]uint64{
+		appKindBoxes: make(map[basics.AppIndex]uint64),
+		appKindSwap:  make(map[basics.AppIndex]uint64),
 	}
-	expectedOptins := map[appKind]map[uint64]map[uint64]bool{
-		appKindBoxes: make(map[uint64]map[uint64]bool),
-		appKindSwap:  make(map[uint64]map[uint64]bool),
+	expectedOptins := map[appKind]map[basics.AppIndex]map[uint64]bool{
+		appKindBoxes: make(map[basics.AppIndex]map[uint64]bool),
+		appKindSwap:  make(map[basics.AppIndex]map[uint64]bool),
 	}
 
 	expectedOptinsCount := 0
@@ -309,20 +308,20 @@ func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs
 
 	// ---- COMPARE LEDGER AND GENERATOR EVIDENCE ---- //
 
-	ledgerCreatablesUnexpected := map[uint64]uint64{}
+	ledgerCreatablesUnexpected := map[basics.AppIndex]uint64{}
 	for creatableID, creator := range ledgerCreatableAppsEvidence {
 		if expectedCreated[appKindSwap][creatableID] != creator && expectedCreated[appKindBoxes][creatableID] != creator {
 			ledgerCreatablesUnexpected[creatableID] = creator
 		}
 	}
-	generatorExpectedCreatablesNotFound := map[uint64]uint64{}
+	generatorExpectedCreatablesNotFound := map[basics.AppIndex]uint64{}
 	for creatableID, creator := range expectedCreated[appKindBoxes] {
 		if ledgerCreatableAppsEvidence[creatableID] != creator {
 			generatorExpectedCreatablesNotFound[creatableID] = creator
 		}
 	}
 
-	ledgerBoxOptinsUnexpected := map[uint64][]uint64{}
+	ledgerBoxOptinsUnexpected := map[basics.AppIndex][]uint64{}
 	for appId, boxOptins := range ledgerBoxEvidence {
 		for _, optin := range boxOptins {
 			if _, ok := expectedOptins[appKindBoxes][appId][optin]; !ok {
@@ -331,7 +330,7 @@ func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs
 		}
 	}
 
-	generatorExpectedOptinsNotFound := map[uint64][]uint64{}
+	generatorExpectedOptinsNotFound := map[basics.AppIndex][]uint64{}
 	for appId, appOptins := range expectedOptins[appKindBoxes] {
 		for optin := range appOptins {
 			if !slices.Contains(ledgerBoxEvidence[appId], optin) {

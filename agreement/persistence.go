@@ -107,8 +107,8 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 	}()
 
 	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
-		return err
+		_, err1 := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
+		return err1
 	})
 	if err == nil {
 		return

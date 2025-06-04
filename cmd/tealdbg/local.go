@@ -379,19 +379,19 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs[i].program = data
 			if IsTextFile(data) {
 				source := string(data)
-				ops, err := logic.AssembleString(source)
+				ops, err1 := logic.AssembleString(source)
 				if ops.Version > r.proto.LogicSigVersion {
 					return fmt.Errorf("program version (%d) is beyond the maximum supported protocol version (%d)", ops.Version, r.proto.LogicSigVersion)
 				}
-				if err != nil {
+				if err1 != nil {
 					errorLines := ""
 					for _, lineError := range ops.Errors {
 						errorLines = fmt.Sprintf("%s\n%s", errorLines, lineError.Error())
 					}
 					if errorLines != "" {
-						return fmt.Errorf("%w:%s", err, errorLines)
+						return fmt.Errorf("%w:%s", err1, errorLines)
 					}
-					return err
+					return err1
 				}
 				r.runs[i].program = ops.Program
 				if !dp.DisableSourceMap {
@@ -415,7 +415,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				txn := r.txnGroup[dp.GroupIndex]
 				appIdx := txn.Txn.ApplicationID
 				if appIdx == 0 {
-					appIdx = basics.AppIndex(dp.AppID)
+					appIdx = dp.AppID
 				}
 
 				b, states, err = makeBalancesAdapter(
@@ -452,7 +452,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			appIdx := stxn.Txn.ApplicationID
 			if appIdx == 0 { // app create, use ApprovalProgram from the transaction
 				if len(stxn.Txn.ApprovalProgram) > 0 {
-					appIdx = basics.AppIndex(dp.AppID)
+					appIdx = dp.AppID
 					b, states, err = makeBalancesAdapter(
 						balances, r.txnGroup, gi,
 						r.protoName, dp.Round, dp.LatestTimestamp,

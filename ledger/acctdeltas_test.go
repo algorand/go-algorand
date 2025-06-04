@@ -946,15 +946,16 @@ func TestLookupKeysByPrefix(t *testing.T) {
 
 	for index, testCase := range testCases {
 		t.Run("lookupKVByPrefix-testcase-"+strconv.Itoa(index), func(t *testing.T) {
-			_, actual, _, err := qs.LookupKeysByPrefix(string(testCase.prefix), "", len(kvPairDBPrepareSet), 1_000_000, false)
+			actual := make(map[string]bool)
+			_, err := qs.LookupKeysByPrefix(string(testCase.prefix), uint64(len(kvPairDBPrepareSet)), actual, 0)
 			if err != nil {
 				require.NotEmpty(t, testCase.err, testCase.prefix)
 				require.Contains(t, err.Error(), testCase.err)
 			} else {
 				require.Empty(t, testCase.err)
-				expected := make(map[string]string)
+				expected := make(map[string]bool)
 				for _, name := range testCase.expectedNames {
-					expected[string(name)] = ""
+					expected[string(name)] = true
 				}
 				require.Equal(t, actual, expected)
 			}
@@ -1023,7 +1024,8 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 
 		b.Run("lookupKVByPrefix-DBsize"+strconv.Itoa(currentDBSize), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, results, _, err := qs.LookupKeysByPrefix(prefix, "", currentDBSize, 1_000_000, false)
+				results := make(map[string]bool)
+				_, err := qs.LookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
 				require.NoError(b, err)
 				require.True(b, len(results) >= 1)
 			}
@@ -2886,11 +2888,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough) // not set
+		require.Zero(t, validThrough) // not set
 		require.Len(t, history, 3)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 2)
 	}
 
@@ -2904,11 +2906,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 2)
 	}
 
@@ -2922,11 +2924,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 	}
 }

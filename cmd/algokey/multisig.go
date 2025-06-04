@@ -85,15 +85,15 @@ var multisigCmd = &cobra.Command{
 			}
 
 			ver, thresh, pks := stxn.Msig.Preimage()
-			addr, err := crypto.MultisigAddrGen(ver, thresh, pks)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot generate multisig addr: %v\n", err)
+			addr, err1 := crypto.MultisigAddrGen(ver, thresh, pks)
+			if err1 != nil {
+				fmt.Fprintf(os.Stderr, "Cannot generate multisig addr: %v\n", err1)
 				os.Exit(1)
 			}
 
-			stxn.Msig, err = crypto.MultisigSign(stxn.Txn, addr, ver, thresh, pks, *key)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot add multisig signature: %v\n", err)
+			stxn.Msig, err1 = crypto.MultisigSign(stxn.Txn, addr, ver, thresh, pks, *key)
+			if err1 != nil {
+				fmt.Fprintf(os.Stderr, "Cannot add multisig signature: %v\n", err1)
 				os.Exit(1)
 			}
 
@@ -147,9 +147,9 @@ var appendAuthAddrCmd = &cobra.Command{
 		// Convert the addresses into public keys
 		pks := make([]crypto.PublicKey, len(params[1:]))
 		for i, addrStr := range params[1:] {
-			addr, err := basics.UnmarshalChecksumAddress(addrStr)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Cannot decode address: %v\n", err)
+			addr, err1 := basics.UnmarshalChecksumAddress(addrStr)
+			if err1 != nil {
+				fmt.Fprintf(os.Stderr, "Cannot decode address: %v\n", err1)
 				os.Exit(1)
 			}
 			pks[i] = crypto.PublicKey(addr)

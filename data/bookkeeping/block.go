@@ -43,6 +43,9 @@ type (
 		// The hash of the previous block
 		Branch BlockHash `codec:"prev"`
 
+		// The hash of the previous block, using SHA-512
+		Branch512 crypto.Sha512Digest `codec:"prev512"`
+
 		// Sortition seed
 		Seed committee.Seed `codec:"seed"`
 
@@ -148,12 +151,15 @@ type (
 	// It contains multiple commitments based on different algorithms and hash functions, to support different use cases.
 	TxnCommitments struct {
 		_struct struct{} `codec:",omitempty,omitemptyarray"`
-		// Root of transaction merkle tree using SHA512_256 hash function.
+		// Root of transaction Merkle tree using the SHA-512/256 hash function.
 		// This commitment is computed based on the PaysetCommit type specified in the block's consensus protocol.
 		NativeSha512_256Commitment crypto.Digest `codec:"txn"`
 
-		// Root of transaction vector commitment merkle tree using SHA256 hash function
+		// Root of transaction vector commitment Merkle tree using the SHA-256 hash function.
 		Sha256Commitment crypto.Digest `codec:"txn256"`
+
+		// Root of transaction vector commitment Merkle tree using the SHA-512 hash function.
+		Sha512Commitment crypto.Sha512Digest `codec:"txn512"`
 	}
 
 	// ParticipationUpdates represents participation account data that
@@ -222,9 +228,10 @@ type (
 	// (instead of materializing it separately, like balances).
 	//msgp:ignore UpgradeState
 	UpgradeState struct {
-		CurrentProtocol       protocol.ConsensusVersion `codec:"proto"`
-		NextProtocol          protocol.ConsensusVersion `codec:"nextproto"`
-		NextProtocolApprovals uint64                    `codec:"nextyes"`
+		CurrentProtocol protocol.ConsensusVersion `codec:"proto"`
+		NextProtocol    protocol.ConsensusVersion `codec:"nextproto"`
+		// NextProtocolApprovals is the number of approvals for the next protocol proposal. It is expressed in basics.Round because it is a count of rounds.
+		NextProtocolApprovals basics.Round `codec:"nextyes"`
 		// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
 		// an upgrade taking place, this would be zero.
 		NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
@@ -319,6 +326,11 @@ func (bh BlockHeader) Alive(tx transactions.Header) error {
 // The hash of a block is the hash of its header.
 func (bh BlockHeader) Hash() BlockHash {
 	return BlockHash(crypto.HashObj(bh))
+}
+
+// Hash512 returns the hash of a block header using SHA-512.
+func (bh BlockHeader) Hash512() crypto.Sha512Digest {
+	return crypto.Sha512Digest(crypto.GenericHashObj(crypto.HashFactory{HashType: crypto.Sha512}.NewHash(), bh))
 }
 
 // ToBeHashed implements the crypto.Hashable interface
@@ -506,7 +518,7 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 	}
 
 	// Clear out failed proposal
-	if r == s.NextProtocolVoteBefore && s.NextProtocolApprovals < params.UpgradeThreshold {
+	if r == s.NextProtocolVoteBefore && s.NextProtocolApprovals < basics.Round(params.UpgradeThreshold) {
 		s.NextProtocol = ""
 		s.NextProtocolApprovals = 0
 		s.NextProtocolVoteBefore = basics.Round(0)
@@ -628,6 +640,9 @@ func MakeBlock(prev BlockHeader) Block {
 			Bonus:        bonus,
 		},
 	}
+	if params.EnableSha512BlockHash {
+		blk.Branch512 = prev.Hash512()
+	}
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	if err != nil {
 		logging.Base().Warnf("MakeBlock: computing empty TxnCommitments: %v", err)
@@ -660,9 +675,18 @@ func (block Block) PaysetCommit() (TxnCommitments, error) {
 		}
 	}
 
+	var digestSHA512 crypto.Sha512Digest
+	if params.EnableSha512BlockHash {
+		digestSHA512, err = block.paysetCommitSHA512()
+		if err != nil {
+			return TxnCommitments{}, err
+		}
+	}
+
 	return TxnCommitments{
 		Sha256Commitment:           digestSHA256,
 		NativeSha512_256Commitment: digestSHA512_256,
+		Sha512Commitment:           digestSHA512,
 	}, nil
 }
 
@@ -700,6 +724,18 @@ func (block Block) paysetCommitSHA256() (crypto.Digest, error) {
 	return rootAsByteArray, nil
 }
 
+func (block Block) paysetCommitSHA512() (crypto.Sha512Digest, error) {
+	tree, err := block.TxnMerkleTreeSHA512()
+	if err != nil {
+		return crypto.Sha512Digest{}, err
+	}
+
+	rootSlice := tree.Root()
+	var rootAsByteArray crypto.Sha512Digest
+	copy(rootAsByteArray[:], rootSlice)
+	return rootAsByteArray, nil
+}
+
 // PreCheck checks if the block header bh is a valid successor to
 // the previous block's header, prev.
 func (bh BlockHeader) PreCheck(prev BlockHeader) error {
@@ -718,6 +754,12 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	// check the pointer to the previous block
 	if bh.Branch != prev.Hash() {
 		return fmt.Errorf("block branch incorrect %v != %v", bh.Branch, prev.Hash())
+	}
+
+	if params.EnableSha512BlockHash && bh.Branch512 != prev.Hash512() {
+		return fmt.Errorf("block branch512 incorrect %v != %v", bh.Branch512, prev.Hash512())
+	} else if !params.EnableSha512BlockHash && bh.Branch512 != (crypto.Sha512Digest{}) {
+		return fmt.Errorf("block branch512 not allowed: %v", bh.Branch512)
 	}
 
 	// check upgrade state

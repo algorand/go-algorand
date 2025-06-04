@@ -126,7 +126,7 @@ func killPID(pid int) (killed bool, err error) {
 		// Send null signal - if process still exists, it'll return nil
 		// So when we get an error, assume it's gone.
 		if err = process.Signal(syscall.Signal(0)); err != nil {
-			return false, nil
+			return false, nil //nolint:nilerr // intentional
 		}
 		select {
 		case <-waitLong:

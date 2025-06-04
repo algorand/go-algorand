@@ -159,6 +159,9 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	if proto.Payouts.Enabled {
 		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
 	}
+	if proto.EnableSha512BlockHash {
+		blk.BlockHeader.Branch512 = lastBlock.Hash512()
+	}
 
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
@@ -287,6 +290,9 @@ func TestLedgerBlockHeaders(t *testing.T) {
 
 	if proto.SupportGenesisHash {
 		correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+	}
+	if proto.EnableSha512BlockHash {
+		correctHeader.Branch512 = lastBlock.Hash512()
 	}
 
 	initNextBlockHeader(&correctHeader, lastBlock, proto)
@@ -1295,6 +1301,9 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 			if proto.SupportGenesisHash {
 				correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+			}
+			if proto.EnableSha512BlockHash {
+				correctHeader.Branch512 = lastBlock.Hash512()
 			}
 
 			initNextBlockHeader(&correctHeader, lastBlock, proto)

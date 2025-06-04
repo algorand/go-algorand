@@ -52,7 +52,7 @@ import (
 const basicTestCatchpointInterval = 4
 
 func waitForCatchpointGeneration(t *testing.T, fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) string {
-	err := client.WaitForRoundWithTimeout(uint64(catchpointRound + 1))
+	err := client.WaitForRoundWithTimeout(catchpointRound + 1)
 	if err != nil {
 		return ""
 	}
@@ -371,11 +371,11 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
-	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(targetCatchpointRound + 1))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(targetCatchpointRound + 1)
 	a.NoError(err)
 
 	// ensure the raw block can be downloaded (including cert)
-	_, err = usingNodeRestClient.RawBlock(uint64(targetCatchpointRound))
+	_, err = usingNodeRestClient.RawBlock(targetCatchpointRound)
 	a.NoError(err)
 }
 
@@ -439,8 +439,8 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			defer primaryNode.StopAlgod()
 
 			// Let the network make some progress
-			currentRound := uint64(1)
-			targetRound := uint64(21)
+			currentRound := basics.Round(1)
+			targetRound := basics.Round(21)
 			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 			log.Infof("Building ledger history..")
 			for {
@@ -844,7 +844,7 @@ func TestReadyEndpoint(t *testing.T) {
 
 		status1, err = client1.Status()
 		a.NoError(err)
-		a.Equal(status1.CatchupTime, uint64(0))
+		a.Equal(status1.CatchupTime, int64(0))
 		a.Empty(status1.Catchpoint)
 		break
 	}

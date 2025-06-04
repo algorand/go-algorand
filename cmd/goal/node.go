@@ -482,28 +482,13 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
 
-		upgradeNextProtocolVoteBefore := uint64(0)
-		if stat.UpgradeNextProtocolVoteBefore != nil {
-			upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
-		}
+		upgradeNextProtocolVoteBefore := nilToZero(stat.UpgradeNextProtocolVoteBefore)
 
 		if upgradeNextProtocolVoteBefore > stat.LastRound {
-			upgradeVotesRequired := uint64(0)
-			upgradeNoVotes := uint64(0)
-			upgradeYesVotes := uint64(0)
-			upgradeVoteRounds := uint64(0)
-			if stat.UpgradeVotesRequired != nil {
-				upgradeVotesRequired = *stat.UpgradeVotesRequired
-			}
-			if stat.UpgradeNoVotes != nil {
-				upgradeNoVotes = *stat.UpgradeNoVotes
-			}
-			if stat.UpgradeYesVotes != nil {
-				upgradeYesVotes = *stat.UpgradeYesVotes
-			}
-			if stat.UpgradeVoteRounds != nil {
-				upgradeVoteRounds = *stat.UpgradeVoteRounds
-			}
+			upgradeVotesRequired := nilToZero(stat.UpgradeVotesRequired)
+			upgradeNoVotes := nilToZero(stat.UpgradeNoVotes)
+			upgradeYesVotes := nilToZero(stat.UpgradeYesVotes)
+			upgradeVoteRounds := nilToZero(stat.UpgradeVoteRounds)
 			statusString = statusString + "\n" + fmt.Sprintf(
 				infoNodeStatusConsensusUpgradeVoting,
 				upgradeYesVotes,
