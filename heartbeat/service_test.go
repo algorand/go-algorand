@@ -190,13 +190,30 @@ func (am *mockedAcctManager) addParticipant(addr basics.Address, otss *crypto.On
 
 type txnSink struct {
 	t    *testing.T
+	mu   deadlock.Mutex
 	txns [][]transactions.SignedTxn
 }
 
 func (ts *txnSink) BroadcastInternalSignedTxGroup(group []transactions.SignedTxn) error {
 	ts.t.Logf("sinking %+v", group[0].Txn.Header)
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 	ts.txns = append(ts.txns, group)
 	return nil
+}
+
+func (ts *txnSink) empty() bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return len(ts.txns) == 0
+}
+
+func (ts *txnSink) drain() [][]transactions.SignedTxn {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	txns := ts.txns
+	ts.txns = nil
+	return txns
 }
 
 func TestStartStop(t *testing.T) {
@@ -239,7 +256,7 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
 	time.Sleep(time.Second)
-	a.Empty(sink.txns)
+	a.True(sink.empty())
 
 	// make "part keys" and install them
 	kd := uint64(100)
@@ -257,7 +274,7 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	acct.VoteID = otss1.OneTimeSignatureVerifier
 	a.NoError(ledger.addBlock(table{joe: acct, mary: acct})) // in effect, "keyreg" with otss1
 	time.Sleep(time.Second)
-	a.Empty(sink.txns)
+	a.True(sink.empty())
 
 	// now we have to make it seem like joe has been challenged. We obtain the
 	// payout rules to find the first challenge round, skip forward to it, then
@@ -269,21 +286,22 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	for ledger.LastRound() < basics.Round(rules.ChallengeInterval+rules.ChallengeGracePeriod/2) {
 		a.NoError(ledger.addBlock(table{}))
 		time.Sleep(10 * time.Millisecond)
-		a.Empty(sink.txns)
+		a.True(sink.empty())
 	}
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
 	time.Sleep(time.Second)
-	a.Empty(sink.txns) // Just kidding, no heartbeat yet, joe isn't eligible
+	a.True(sink.empty()) // Just kidding, no heartbeat yet, joe isn't eligible
 
 	acct.IncentiveEligible = true
 	a.NoError(ledger.addBlock(table{joe: acct}))
 	time.Sleep(time.Second)
 	// challenge is already in place, it counts immediately, so service will heartbeat
-	a.Len(sink.txns, 1) // only one heartbeat (for joe) despite having two part records
-	a.Len(sink.txns[0], 1)
-	a.Equal(sink.txns[0][0].Txn.Type, protocol.HeartbeatTx)
-	a.Equal(sink.txns[0][0].Txn.HbAddress, joe)
+	txns := sink.drain()
+	a.Len(txns, 1) // only one heartbeat (for joe) despite having two part records
+	a.Len(txns[0], 1)
+	a.Equal(txns[0][0].Txn.Type, protocol.HeartbeatTx)
+	a.Equal(txns[0][0].Txn.HbAddress, joe)
 
 	s.Stop()
 }
