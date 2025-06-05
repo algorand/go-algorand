@@ -169,17 +169,6 @@ func (l *mockedLedger) LookupAgreement(round basics.Round, addr basics.Address) 
 	return basics.OnlineAccountData{}, nil
 }
 
-// waitFor confirms that the Service made it through the last block in the
-// ledger and is waiting for the next. The Service is written such that it
-// operates properly without this sort of wait, but for testing, we often want
-// to wait so that we can confirm that the Service *didn't* do something.
-func (l *mockedLedger) waitFor(s *Service, a *require.Assertions) {
-	a.Eventually(func() bool { // delay and confirm that the service advances to wait for next block
-		_, ok := l.waiters[l.LastRound()+1]
-		return ok
-	}, time.Second, 10*time.Millisecond)
-}
-
 type mockedAcctManager []account.ParticipationRecordForRound
 
 func (am *mockedAcctManager) Keys(rnd basics.Round) []account.ParticipationRecordForRound {
@@ -249,7 +238,7 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	acct := ledgercore.AccountData{}
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
-	ledger.waitFor(s, a)
+	time.Sleep(time.Second)
 	a.Empty(sink.txns)
 
 	// make "part keys" and install them
@@ -267,7 +256,7 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	acct.VoteKeyDilution = kd
 	acct.VoteID = otss1.OneTimeSignatureVerifier
 	a.NoError(ledger.addBlock(table{joe: acct, mary: acct})) // in effect, "keyreg" with otss1
-	ledger.waitFor(s, a)
+	time.Sleep(time.Second)
 	a.Empty(sink.txns)
 
 	// now we have to make it seem like joe has been challenged. We obtain the
@@ -279,17 +268,17 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	rules := config.Consensus[hdr.CurrentProtocol].Payouts
 	for ledger.LastRound() < basics.Round(rules.ChallengeInterval+rules.ChallengeGracePeriod/2) {
 		a.NoError(ledger.addBlock(table{}))
-		ledger.waitFor(s, a)
+		time.Sleep(10 * time.Millisecond)
 		a.Empty(sink.txns)
 	}
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
-	ledger.waitFor(s, a)
+	time.Sleep(time.Second)
 	a.Empty(sink.txns) // Just kidding, no heartbeat yet, joe isn't eligible
 
 	acct.IncentiveEligible = true
 	a.NoError(ledger.addBlock(table{joe: acct}))
-	ledger.waitFor(s, a)
+	time.Sleep(time.Second)
 	// challenge is already in place, it counts immediately, so service will heartbeat
 	a.Len(sink.txns, 1) // only one heartbeat (for joe) despite having two part records
 	a.Len(sink.txns[0], 1)
