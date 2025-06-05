@@ -169,17 +169,6 @@ func (l *mockedLedger) LookupAgreement(round basics.Round, addr basics.Address) 
 	return basics.OnlineAccountData{}, nil
 }
 
-// waitFor confirms that the Service made it through the last block in the
-// ledger and is waiting for the next. The Service is written such that it
-// operates properly without this sort of wait, but for testing, we often want
-// to wait so that we can confirm that the Service *didn't* do something.
-func (l *mockedLedger) waitFor(s *Service, a *require.Assertions) {
-	a.Eventually(func() bool { // delay and confirm that the service advances to wait for next block
-		_, ok := l.waiters[l.LastRound()+1]
-		return ok
-	}, time.Second, 10*time.Millisecond)
-}
-
 type mockedAcctManager []account.ParticipationRecordForRound
 
 func (am *mockedAcctManager) Keys(rnd basics.Round) []account.ParticipationRecordForRound {
@@ -201,13 +190,30 @@ func (am *mockedAcctManager) addParticipant(addr basics.Address, otss *crypto.On
 
 type txnSink struct {
 	t    *testing.T
+	mu   deadlock.Mutex
 	txns [][]transactions.SignedTxn
 }
 
 func (ts *txnSink) BroadcastInternalSignedTxGroup(group []transactions.SignedTxn) error {
 	ts.t.Logf("sinking %+v", group[0].Txn.Header)
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 	ts.txns = append(ts.txns, group)
 	return nil
+}
+
+func (ts *txnSink) empty() bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return len(ts.txns) == 0
+}
+
+func (ts *txnSink) drain() [][]transactions.SignedTxn {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	txns := ts.txns
+	ts.txns = nil
+	return txns
 }
 
 func TestStartStop(t *testing.T) {
@@ -249,8 +255,8 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	acct := ledgercore.AccountData{}
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
-	ledger.waitFor(s, a)
-	a.Empty(sink.txns)
+	time.Sleep(time.Second)
+	a.True(sink.empty())
 
 	// make "part keys" and install them
 	kd := uint64(100)
@@ -267,8 +273,8 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	acct.VoteKeyDilution = kd
 	acct.VoteID = otss1.OneTimeSignatureVerifier
 	a.NoError(ledger.addBlock(table{joe: acct, mary: acct})) // in effect, "keyreg" with otss1
-	ledger.waitFor(s, a)
-	a.Empty(sink.txns)
+	time.Sleep(time.Second)
+	a.True(sink.empty())
 
 	// now we have to make it seem like joe has been challenged. We obtain the
 	// payout rules to find the first challenge round, skip forward to it, then
@@ -279,22 +285,23 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	rules := config.Consensus[hdr.CurrentProtocol].Payouts
 	for ledger.LastRound() < basics.Round(rules.ChallengeInterval+rules.ChallengeGracePeriod/2) {
 		a.NoError(ledger.addBlock(table{}))
-		ledger.waitFor(s, a)
-		a.Empty(sink.txns)
+		time.Sleep(10 * time.Millisecond)
+		a.True(sink.empty())
 	}
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
-	ledger.waitFor(s, a)
-	a.Empty(sink.txns) // Just kidding, no heartbeat yet, joe isn't eligible
+	time.Sleep(time.Second)
+	a.True(sink.empty()) // Just kidding, no heartbeat yet, joe isn't eligible
 
 	acct.IncentiveEligible = true
 	a.NoError(ledger.addBlock(table{joe: acct}))
-	ledger.waitFor(s, a)
+	time.Sleep(time.Second)
 	// challenge is already in place, it counts immediately, so service will heartbeat
-	a.Len(sink.txns, 1) // only one heartbeat (for joe) despite having two part records
-	a.Len(sink.txns[0], 1)
-	a.Equal(sink.txns[0][0].Txn.Type, protocol.HeartbeatTx)
-	a.Equal(sink.txns[0][0].Txn.HbAddress, joe)
+	txns := sink.drain()
+	a.Len(txns, 1) // only one heartbeat (for joe) despite having two part records
+	a.Len(txns[0], 1)
+	a.Equal(txns[0][0].Txn.Type, protocol.HeartbeatTx)
+	a.Equal(txns[0][0].Txn.HbAddress, joe)
 
 	s.Stop()
 }
