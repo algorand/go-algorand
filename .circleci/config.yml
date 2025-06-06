@@ -64,83 +64,6 @@ slack-fail-stop-step: &slack-fail-post-step
 # ===== Workflow Definitions =====
 workflows:
   version: 2
-  nightly_build_and_test:
-    jobs:
-      - build_nightly:
-          name: << matrix.platform >>_build_nightly
-          matrix: &matrix-nightly
-            parameters:
-              platform: ["amd64", "arm64", "mac_arm64"]
-          filters: &filters-nightly
-            branches:
-              only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - test_nightly:
-          name: << matrix.platform >>_test_nightly
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - integration_nightly:
-          name: << matrix.platform >>_integration_nightly
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - e2e_expect_nightly:
-          name: << matrix.platform >>_e2e_expect_nightly
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_build_nightly
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - e2e_subs_nightly:
-          name: << matrix.platform >>_e2e_subs_nightly
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_build_nightly
-          context:
-            - slack-secrets
-            - aws-secrets
-          <<: *slack-fail-post-step
-
-      - tests_verification_job_nightly:
-          name: << matrix.platform >>_<< matrix.job_type >>_verification
-          matrix:
-            parameters:
-              platform: ["amd64", "arm64", "mac_arm64"]
-              job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
-          requires:
-            - << matrix.platform >>_<< matrix.job_type >>
-          context: slack-secrets
-          <<: *slack-fail-post-step
-
-      - upload_binaries:
-          name: << matrix.platform >>_upload_binaries
-          matrix:
-            <<: *matrix-nightly
-          requires:
-            - << matrix.platform >>_test_nightly_verification
-            - << matrix.platform >>_integration_nightly_verification
-            - << matrix.platform >>_e2e_expect_nightly_verification
-            - << matrix.platform >>_e2e_subs_nightly
-          context:
-            - slack-secrets
-            - aws-secrets
-          <<: *slack-fail-post-step
 
   "circleci_build_and_test":
     jobs:
@@ -153,6 +76,7 @@ workflows:
             branches:
               ignore:
                 - /rel\/.*/
+                - master
                 - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
           <<: *slack-fail-post-step
