@@ -42,8 +42,14 @@ func TestRewards(t *testing.T) {
 
 		levels := []uint64{uint64(0), uint64(1), uint64(30), uint64(3000)}
 		for _, level := range levels {
-			money, rewards := proto.Money(ad, ad.RewardsBase+level)
-			require.Equal(t, money.Raw, ad.MicroAlgos.Raw+level*proto.RewardUnits(ad.MicroAlgos))
+			money := func(u basics.AccountData, rewardsLevel uint64) (balance basics.MicroAlgos, rewards basics.MicroAlgos) {
+				u = proto.WithUpdatedRewards(u, rewardsLevel)
+				return u.MicroAlgos, u.RewardedMicroAlgos
+			}
+
+			balance, rewards := money(ad, ad.RewardsBase+level)
+
+			require.Equal(t, balance.Raw, ad.MicroAlgos.Raw+level*proto.RewardUnits(ad.MicroAlgos))
 			require.Equal(t, rewards.Raw, ad.RewardedMicroAlgos.Raw+level*proto.RewardUnits(ad.MicroAlgos))
 		}
 	}

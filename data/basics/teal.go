@@ -108,6 +108,25 @@ func (sm StateSchema) NumEntries() (tot uint64) {
 	return tot
 }
 
+// MinBalance computes the MinBalance requirements for a StateSchema based on
+// the requirements for the state values in the schema.
+func (sm StateSchema) MinBalance(reqs BalanceRequirements) MicroAlgos {
+	// Flat cost for each key/value pair
+	flatCost := MulSaturate(reqs.SchemaMinBalancePerEntry, sm.NumEntries())
+
+	// Cost for uints
+	uintCost := MulSaturate(reqs.SchemaUintMinBalance, sm.NumUint)
+
+	// Cost for byte slices
+	bytesCost := MulSaturate(reqs.SchemaBytesMinBalance, sm.NumByteSlice)
+
+	// Sum the separate costs
+	min := AddSaturate(flatCost, uintCost)
+	min = AddSaturate(min, bytesCost)
+
+	return MicroAlgos{Raw: min}
+}
+
 // TealType is an enum of the types in a TEAL program: Bytes and Uint
 type TealType uint64
 

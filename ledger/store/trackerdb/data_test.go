@@ -1203,7 +1203,7 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	require.Equal(t, ba.StateProofID, oa.StateProofID)
 
 	rewardsLevel := uint64(1)
-	microAlgos, _, _ := config.WithUpdatedRewards(
+	microAlgos, _, _ := config.RewardsUpdates(
 		proto, basics.Online, oa.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
 	)
 	oad := ba.GetOnlineAccountData(proto, rewardsLevel)

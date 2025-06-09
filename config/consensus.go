@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -650,6 +651,20 @@ func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
 		return kd
 	}
 	return proto.DefaultKeyDilution
+}
+
+// BalanceRequirements returns all the consensus values that determine min balance.
+func (proto ConsensusParams) BalanceRequirements() basics.BalanceRequirements {
+	return basics.BalanceRequirements{
+		MinBalance:               proto.MinBalance,
+		AppFlatParamsMinBalance:  proto.AppFlatParamsMinBalance,
+		AppFlatOptInMinBalance:   proto.AppFlatOptInMinBalance,
+		BoxFlatMinBalance:        proto.BoxFlatMinBalance,
+		BoxByteMinBalance:        proto.BoxByteMinBalance,
+		SchemaMinBalancePerEntry: proto.SchemaMinBalancePerEntry,
+		SchemaUintMinBalance:     proto.SchemaUintMinBalance,
+		SchemaBytesMinBalance:    proto.SchemaBytesMinBalance,
+	}
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to

@@ -134,8 +134,7 @@ type AccountData struct {
 	// If the account is Status=Offline or Status=Online, its
 	// effective balance (if a transaction were to be issued
 	// against this account) may be higher, as computed by
-	// AccountData.Money().  That function calls
-	// AccountData.WithUpdatedRewards() to apply the deferred
+	// proto.WithUpdatedRewards() which applies the deferred
 	// rewards to AccountData.MicroAlgos.
 	RewardsBase uint64 `codec:"ebase"`
 
@@ -408,6 +407,84 @@ func (app AppIndex) ToBeHashed() (protocol.HashID, []byte) {
 // Address yields the "app address" of the app
 func (app AppIndex) Address() Address {
 	return Address(crypto.HashObj(app))
+}
+
+// BalanceRequirements defines the amounts an account must hold, based on
+// various resources the account has. The names are taken directly from
+// config.ConsensusParams, as this struct only exists so that `basics` does not
+// need to `config` directly.
+type BalanceRequirements struct {
+	MinBalance              uint64
+	AppFlatParamsMinBalance uint64
+	AppFlatOptInMinBalance  uint64
+	BoxFlatMinBalance       uint64
+	BoxByteMinBalance       uint64
+
+	SchemaMinBalancePerEntry uint64
+	SchemaUintMinBalance     uint64
+	SchemaBytesMinBalance    uint64
+}
+
+// MinBalance computes the minimum balance requirements for an account based on
+// some consensus parameters. MinBalance should correspond roughly to how much
+// storage the account is allowed to store on disk.
+func (u AccountData) MinBalance(reqs BalanceRequirements) MicroAlgos {
+	return MinBalance(
+		reqs,
+		uint64(len(u.Assets)),
+		u.TotalAppSchema,
+		uint64(len(u.AppParams)), uint64(len(u.AppLocalStates)),
+		uint64(u.TotalExtraAppPages),
+		u.TotalBoxes, u.TotalBoxBytes,
+	)
+}
+
+// MinBalance computes the minimum balance requirements for an account based on
+// some consensus parameters. MinBalance should correspond roughly to how much
+// storage the account is allowed to store on disk.
+func MinBalance(
+	reqs BalanceRequirements,
+	totalAssets uint64,
+	totalAppSchema StateSchema,
+	totalAppParams uint64, totalAppLocalStates uint64,
+	totalExtraAppPages uint64,
+	totalBoxes uint64, totalBoxBytes uint64,
+) MicroAlgos {
+	var min uint64
+
+	// First, base MinBalance
+	min = reqs.MinBalance
+
+	// MinBalance for each Asset
+	assetCost := MulSaturate(reqs.MinBalance, totalAssets)
+	min = AddSaturate(min, assetCost)
+
+	// Base MinBalance for each created application
+	appCreationCost := MulSaturate(reqs.AppFlatParamsMinBalance, totalAppParams)
+	min = AddSaturate(min, appCreationCost)
+
+	// Base MinBalance for each opted in application
+	appOptInCost := MulSaturate(reqs.AppFlatOptInMinBalance, totalAppLocalStates)
+	min = AddSaturate(min, appOptInCost)
+
+	// MinBalance for state usage measured by LocalStateSchemas and
+	// GlobalStateSchemas
+	schemaCost := totalAppSchema.MinBalance(reqs)
+	min = AddSaturate(min, schemaCost.Raw)
+
+	// MinBalance for each extra app program page
+	extraAppProgramLenCost := MulSaturate(reqs.AppFlatParamsMinBalance, totalExtraAppPages)
+	min = AddSaturate(min, extraAppProgramLenCost)
+
+	// Base MinBalance for each created box
+	boxBaseCost := MulSaturate(reqs.BoxFlatMinBalance, totalBoxes)
+	min = AddSaturate(min, boxBaseCost)
+
+	// Per byte MinBalance for boxes
+	boxByteCost := MulSaturate(reqs.BoxByteMinBalance, totalBoxBytes)
+	min = AddSaturate(min, boxByteCost)
+
+	return MicroAlgos{min}
 }
 
 // VotingStake returns the amount of MicroAlgos associated with the user's account

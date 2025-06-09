@@ -29,12 +29,6 @@ func (proto ConsensusParams) RewardUnits(a basics.MicroAlgos) uint64 {
 	return a.Raw / proto.RewardUnit
 }
 
-// Money returns the amount of MicroAlgos associated with the user's account
-func (proto ConsensusParams) Money(u basics.AccountData, rewardsLevel uint64) (money basics.MicroAlgos, rewards basics.MicroAlgos) {
-	e := proto.WithUpdatedRewards(u, rewardsLevel)
-	return e.MicroAlgos, e.RewardedMicroAlgos
-}
-
 // PendingRewards computes the amount of rewards (in microalgos) that
 // have yet to be added to the account balance.
 func (proto ConsensusParams) PendingRewards(ot *basics.OverflowTracker, microAlgos basics.MicroAlgos, rewardsBase uint64, rewardsLevel uint64) basics.MicroAlgos {
@@ -43,9 +37,9 @@ func (proto ConsensusParams) PendingRewards(ot *basics.OverflowTracker, microAlg
 	return basics.MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
 }
 
-// WithUpdatedRewards returns an updated number of algos, total rewards and new rewards base
-// to reflect rewards up to some rewards level.
-func WithUpdatedRewards(
+// RewardsUpdates returns an updated number of algos, total rewards, and rewards
+// base to reflect rewards up to some rewards level.
+func RewardsUpdates(
 	proto ConsensusParams, status basics.Status, microAlgosIn basics.MicroAlgos, rewardedMicroAlgosIn basics.MicroAlgos, rewardsBaseIn uint64, rewardsLevelIn uint64,
 ) (basics.MicroAlgos, basics.MicroAlgos, uint64) {
 	if status == basics.NotParticipating {
@@ -58,7 +52,7 @@ func WithUpdatedRewards(
 	rewards := basics.MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
 	microAlgosOut := ot.AddA(microAlgosIn, rewards)
 	if ot.Overflowed {
-		panic(fmt.Sprintf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", microAlgosIn, rewardsUnits, rewardsLevelIn, rewardsBaseIn))
+		panic(fmt.Sprintf("RewardsUpdates(): overflowed account balance when applying rewards %v + %d*(%d-%d)", microAlgosIn, rewardsUnits, rewardsLevelIn, rewardsBaseIn))
 	}
 	rewardsBaseOut := rewardsLevelIn
 	// The total reward over the lifetime of the account could exceed a 64-bit
@@ -70,7 +64,7 @@ func WithUpdatedRewards(
 // WithUpdatedRewards returns an updated number of algos in an AccountData
 // to reflect rewards up to some rewards level.
 func (proto ConsensusParams) WithUpdatedRewards(u basics.AccountData, rewardsLevel uint64) basics.AccountData {
-	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = WithUpdatedRewards(
+	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = RewardsUpdates(
 		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
 

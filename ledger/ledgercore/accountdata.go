@@ -114,7 +114,7 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
 func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {
-	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = config.WithUpdatedRewards(
+	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = config.RewardsUpdates(
 		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
 	return u
@@ -148,8 +148,8 @@ func (u AccountData) LastSeen() basics.Round {
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
 func (u AccountData) MinBalance(proto *config.ConsensusParams) basics.MicroAlgos {
-	return config.MinBalance(
-		proto,
+	return basics.MinBalance(
+		proto.BalanceRequirements(),
 		u.TotalAssets,
 		u.TotalAppSchema,
 		u.TotalAppParams, u.TotalAppLocalStates,
@@ -185,7 +185,7 @@ func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLeve
 		return basics.OnlineAccountData{}
 	}
 
-	microAlgos, _, _ := config.WithUpdatedRewards(
+	microAlgos, _, _ := config.RewardsUpdates(
 		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
 	return basics.OnlineAccountData{

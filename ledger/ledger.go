@@ -557,7 +557,7 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	// Intentionally apply (pending) rewards up to rnd.
 	data, rnd, withoutRewards, err := l.accts.lookupLatest(addr)
 	if err != nil {
-		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+		return basics.AccountData{}, 0, basics.MicroAlgos{}, err
 	}
 	return data, rnd, withoutRewards, nil
 }

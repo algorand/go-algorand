@@ -267,8 +267,8 @@ func computeAccountMinBalance(client *libgoal.Client, cfg PpConfig) (fundingRequ
 		optInCost := uint64(cfg.NumApp) * proto.AppFlatOptInMinBalance * uint64(maxAppsOptedIn)
 		maxGlobalSchema := basics.StateSchema{NumUint: proto.MaxGlobalSchemaEntries, NumByteSlice: proto.MaxGlobalSchemaEntries}
 		maxLocalSchema := basics.StateSchema{NumUint: proto.MaxLocalSchemaEntries, NumByteSlice: proto.MaxLocalSchemaEntries}
-		schemaCost := uint64(cfg.NumApp) * (proto.MinBalanceForSchema(maxGlobalSchema).Raw*uint64(maxAppsCreated) +
-			proto.MinBalanceForSchema(maxLocalSchema).Raw*uint64(maxAppsOptedIn))
+		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(proto.BalanceRequirements()).Raw*uint64(maxAppsCreated) +
+			maxLocalSchema.MinBalance(proto.BalanceRequirements()).Raw*uint64(maxAppsOptedIn))
 		fundingRequiredBalance += creationCost + optInCost + schemaCost
 		runningRequiredBalance += creationCost + optInCost + schemaCost
 	}
