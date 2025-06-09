@@ -48,9 +48,8 @@ func TestLocal_SaveThenLoad(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	c1, err := loadWithoutDefaults(defaultConfig)
-	require.NoError(t, err)
-	c1, err = migrate(c1)
+	c1 := loadWithoutDefaults(t, defaultConfig)
+	c1, err := migrate(c1, nil)
 	require.NoError(t, err)
 	var b1 bytes.Buffer
 	ser1 := json.NewEncoder(&b1)
@@ -250,20 +249,26 @@ func TestLocal_ConfigExampleIsCorrect(t *testing.T) {
 // version (before new parameters exist), so we don't
 // see their default (zero) values and instead see the
 // new default because they won't exist in the old file.
-func loadWithoutDefaults(cfg Local) (Local, error) {
+func loadWithoutDefaults(t *testing.T, c any) Local {
 	file, err := os.CreateTemp("", "lwd")
-	if err != nil {
-		return Local{}, err
-	}
+	require.NoError(t, err)
 	name := file.Name()
 	file.Close()
 	defer os.Remove(name)
-	err = cfg.SaveToFile(name)
-	if err != nil {
-		return Local{}, err
+	switch c := c.(type) {
+	case Local:
+		cfg := c
+		err = cfg.SaveToFile(name)
+		require.NoError(t, err)
+	default:
+		b, err := json.Marshal(c)
+		require.NoError(t, err)
+		err = os.WriteFile(name, b, 0600)
+		require.NoError(t, err)
 	}
-	cfg, err = loadConfigFromFile(name)
-	return cfg, err
+	cfg, err := loadConfigFromFile(name)
+	require.NoError(t, err)
+	return cfg
 }
 
 func TestLocal_ConfigMigrate(t *testing.T) {
@@ -271,24 +276,23 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	a := require.New(t)
 
-	c0, err := loadWithoutDefaults(GetVersionedDefaultLocalConfig(0))
+	c0 := loadWithoutDefaults(t, versionedDefaultLocal[0].Interface())
+	c0, err := migrate(c0, nil)
 	a.NoError(err)
-	c0, err = migrate(c0)
-	a.NoError(err)
-	cLatest, err := migrate(defaultLocal)
+	cLatest, err := migrate(defaultLocal, nil)
 	a.NoError(err)
 
 	a.Equal(defaultLocal, c0)
 	a.Equal(defaultLocal, cLatest)
 
 	cLatest.Version = getLatestConfigVersion() + 1
-	_, err = migrate(cLatest)
+	_, err = migrate(cLatest, nil)
 	a.Error(err)
 
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
 	c0Modified.BaseLoggerDebugLevel = GetVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
-	c0Modified, err = migrate(c0Modified)
+	c0Modified, err = migrate(c0Modified, nil)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
 }
@@ -302,17 +306,44 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	// ignore v=0 since config-v0.json does not have all the fields but we want to allow configs with
+	// Version field not set (i.e. Version=0) to be checked against the new "all values are default" logic
+	for configVersion := uint32(1); configVersion <= getLatestConfigVersion(); configVersion++ {
 		c, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
 		a.NoError(err)
-		modified, err := migrate(c)
+		modified, err := migrate(c, nil)
 		a.NoError(err)
 		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
-	_, err = migrate(cNext)
+	_, err = migrate(cNext, nil)
 	a.Error(err)
+}
+
+func TestLocal_ExplicitFieldMigration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, v := range []uint32{0, 27, 30, 35} {
+		t.Run(fmt.Sprintf("Version %d", v), func(t *testing.T) {
+			// EnableTxBacklogRateLimiting has default changed from false (27) to true (30)
+			content := fmt.Sprintf(`{
+	"Version": %d,
+	"EnableTxBacklogRateLimiting": false
+}`, v)
+
+			file, err := os.CreateTemp("", "exfld")
+			require.NoError(t, err)
+			name := file.Name()
+			defer file.Close()
+			defer os.Remove(name)
+			_, err = file.WriteString(content)
+			require.NoError(t, err)
+			c0, err := loadConfigFromFile(name)
+			require.NoError(t, err)
+			require.False(t, c0.EnableTxBacklogRateLimiting)
+		})
+	}
 }
 
 // Verify that nobody is changing the shipping default configurations
