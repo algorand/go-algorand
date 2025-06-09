@@ -342,6 +342,10 @@ func TestLocal_ExplicitFieldMigration(t *testing.T) {
 			c0, err := loadConfigFromFile(name)
 			require.NoError(t, err)
 			require.False(t, c0.EnableTxBacklogRateLimiting)
+
+			// make sure everything else is set to default
+			c0.EnableTxBacklogRateLimiting = true // override the default value to be able to compare
+			require.Equal(t, defaultLocal, c0)
 		})
 	}
 }
