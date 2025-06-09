@@ -157,6 +157,11 @@ func mergeConfigFromFile(configpath string, source Local) (Local, map[string]int
 			return source, nil, errors.New("config file version is greater than the latest supported version")
 		}
 
+		if currentVersion != 0 {
+			// if version is set we'll compare only two versioned defaults
+			latestVersion = currentVersion
+		}
+		// try to find any config default that matches to explicitFields
 		for v := currentVersion; v <= latestVersion; v++ {
 			vcfg := versionedDefaultLocal[v]
 			if matchDefaultVsMap(vcfg, explicitFields, currentVersion) {
