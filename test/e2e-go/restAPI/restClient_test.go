@@ -410,8 +410,8 @@ func TestAccountParticipationInfo(t *testing.T) {
 	a.NoError(err)
 	a.Equal(randomVotePKStr, string(account.Participation.VoteParticipationKey), "API must print correct root voting key")
 	a.Equal(randomSelPKStr, string(account.Participation.SelectionParticipationKey), "API must print correct vrf key")
-	a.Equal(uint64(firstRound), account.Participation.VoteFirstValid, "API must print correct first participation round")
-	a.Equal(uint64(lastRound), account.Participation.VoteLastValid, "API must print correct last participation round")
+	a.Equal(firstRound, account.Participation.VoteFirstValid, "API must print correct first participation round")
+	a.Equal(lastRound, account.Participation.VoteLastValid, "API must print correct last participation round")
 	a.Equal(dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
 	// TODO: should we update the v1 API to support state proof? Currently it does not return this field.
 }

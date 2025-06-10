@@ -56,10 +56,10 @@ func randomBlock(r basics.Round) blockEntry {
 	}
 }
 
-func randomInitChain(proto protocol.ConsensusVersion, nblock int) []blockEntry {
+func randomInitChain(proto protocol.ConsensusVersion, nblock basics.Round) []blockEntry {
 	res := make([]blockEntry, 0)
-	for i := 0; i < nblock; i++ {
-		blkent := randomBlock(basics.Round(i))
+	for i := range nblock {
+		blkent := randomBlock(i)
 		blkent.cert = agreement.Certificate{}
 		blkent.block.CurrentProtocol = proto
 		res = append(res, blkent)

@@ -45,7 +45,7 @@ import (
 )
 
 var (
-	appIdx     uint64
+	appIdx     basics.AppIndex
 	appCreator string
 
 	approvalProgFile string
@@ -153,15 +153,15 @@ func init() {
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
 	// working
-	callAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	optInAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	closeOutAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	clearAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	deleteAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	infoAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	methodAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	callAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	optInAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	closeOutAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	clearAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	deleteAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	readStateAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	updateAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	infoAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	methodAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
 
 	// Add common transaction flags to all txn-generating app commands
 	addTxnFlags(createAppCmd)
@@ -312,7 +312,6 @@ func parseLocalRef(arg string) localRef {
 	// one is missing, so we should have a number or an address.  Try to parse
 	// it as a number. If it fails, assume an address, because at this stage we
 	// don't parse addresses.
-
 	if appID, err := strconv.ParseUint(one, 10, 64); err == nil {
 		return localRef{
 			appID:   appID,
@@ -579,9 +578,9 @@ var createAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				txn, err := waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorln(err)
+				txn, err1 := waitForCommit(client, txid, lv)
+				if err1 != nil {
+					reportErrorln(err1)
 				}
 				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
 					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
@@ -1098,7 +1097,6 @@ var readStateAppCmd = &cobra.Command{
 		}
 
 		// Should be unreachable
-		return
 	},
 }
 
@@ -1117,7 +1115,7 @@ var infoAppCmd = &cobra.Command{
 		params := meta.Params
 
 		fmt.Printf("Application ID:        %d\n", appIdx)
-		fmt.Printf("Application account:   %v\n", basics.AppIndex(appIdx).Address())
+		fmt.Printf("Application account:   %v\n", appIdx.Address())
 		fmt.Printf("Creator:               %v\n", params.Creator)
 		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
 		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))

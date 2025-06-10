@@ -176,9 +176,9 @@ type WebsocketNetwork struct {
 
 	phonebook phonebook.Phonebook
 
-	GenesisID string
+	genesisID string
 	NetworkID protocol.NetworkID
-	RandomID  string
+	randomID  string
 
 	ready     atomic.Int32
 	readyChan chan struct{}
@@ -302,6 +302,8 @@ type msgBroadcaster struct {
 	broadcastQueueBulk     chan broadcastRequest
 	// slowWritingPeerMonitorInterval defines the interval between two consecutive tests for slow peer writing
 	slowWritingPeerMonitorInterval time.Duration
+	// enableVoteCompression controls whether vote compression is enabled
+	enableVoteCompression bool
 }
 
 // msgHandler contains the logic for handling incoming messages and managing a readBuffer. It provides
@@ -582,6 +584,7 @@ func (wn *WebsocketNetwork) setup() {
 		config:                 wn.config,
 		broadcastQueueHighPrio: make(chan broadcastRequest, wn.outgoingMessagesBufferSize),
 		broadcastQueueBulk:     make(chan broadcastRequest, 100),
+		enableVoteCompression:  wn.config.EnableVoteCompression,
 	}
 	if wn.broadcaster.slowWritingPeerMonitorInterval == 0 {
 		wn.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
@@ -608,7 +611,7 @@ func (wn *WebsocketNetwork) setup() {
 
 	var rbytes [10]byte
 	crypto.RandBytes(rbytes[:])
-	wn.RandomID = base64.StdEncoding.EncodeToString(rbytes[:])
+	wn.randomID = base64.StdEncoding.EncodeToString(rbytes[:])
 
 	if wn.config.EnableIncomingMessageFilter {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
@@ -716,7 +719,7 @@ func (wn *WebsocketNetwork) Start() error {
 
 	go wn.postMessagesOfInterestThread()
 
-	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.GenesisID, wn.PublicAddress(), wn.RandomID)
+	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.genesisID, wn.PublicAddress(), wn.randomID)
 
 	return nil
 }
@@ -810,40 +813,99 @@ func (wn *WebsocketNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageVa
 func (wn *WebsocketNetwork) ClearValidatorHandlers() {
 }
 
-func (wn *WebsocketNetwork) setHeaders(header http.Header) {
-	localTelemetryGUID := wn.log.GetTelemetryGUID()
-	localInstanceName := wn.log.GetInstanceName()
-	header.Set(TelemetryIDHeader, localTelemetryGUID)
-	header.Set(InstanceNameHeader, localInstanceName)
-	header.Set(AddressHeader, wn.PublicAddress())
-	header.Set(NodeRandomHeader, wn.RandomID)
+type peerMetadataProvider interface {
+	TelemetryGUID() string
+	InstanceName() string
+	GenesisID() string
+	PublicAddress() string
+	RandomID() string
+	SupportedProtoVersions() []string
+	Config() config.Local
+}
+
+// TelemetryGUID returns the telemetry GUID of this node.
+func (wn *WebsocketNetwork) TelemetryGUID() string {
+	return wn.log.GetTelemetryGUID()
+}
+
+// InstanceName returns the instance name of this node.
+func (wn *WebsocketNetwork) InstanceName() string {
+	return wn.log.GetInstanceName()
+}
+
+// GenesisID returns the genesis ID of this node.
+func (wn *WebsocketNetwork) GenesisID() string {
+	return wn.genesisID
+}
+
+// RandomID returns the random ID of this node.
+func (wn *WebsocketNetwork) RandomID() string {
+	return wn.randomID
+}
+
+// SupportedProtoVersions returns the supported protocol versions of this node.
+func (wn *WebsocketNetwork) SupportedProtoVersions() []string {
+	return wn.supportedProtocolVersions
+}
+
+// Config returns the configuration of this node.
+func (wn *WebsocketNetwork) Config() config.Local {
+	return wn.config
+}
+
+func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvider) {
+	header.Set(TelemetryIDHeader, meta.TelemetryGUID())
+	header.Set(InstanceNameHeader, meta.InstanceName())
+	if pa := meta.PublicAddress(); pa != "" {
+		header.Set(AddressHeader, pa)
+	}
+	if rid := meta.RandomID(); rid != "" {
+		header.Set(NodeRandomHeader, rid)
+	}
+	header.Set(GenesisHeader, meta.GenesisID())
+
+	// set the features header (comma-separated list)
+	header.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
+	features := []string{PeerFeatureProposalCompression}
+	if meta.Config().EnableVoteCompression {
+		features = append(features, PeerFeatureVoteVpackCompression)
+	}
+	header.Set(PeerFeaturesHeader, strings.Join(features, ","))
+
+	if netProtoVer != "" {
+		// for backward compatibility, include the ProtocolVersion header in request as well.
+		header.Set(ProtocolVersionHeader, netProtoVer)
+	}
+	for _, v := range meta.SupportedProtoVersions() {
+		header.Add(ProtocolAcceptVersionHeader, v)
+	}
 }
 
 // checkServerResponseVariables check that the version and random-id in the request headers matches the server ones.
 // it returns true if it's a match, and false otherwise.
 func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header, addr string) (bool, string) {
-	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(otherHeader)
+	matchingVersion, otherVersion := checkProtocolVersionMatch(otherHeader, wn.supportedProtocolVersions)
 	if matchingVersion == "" {
 		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, wn.supportedProtocolVersions, otherVersion, otherHeader)))
 		return false, ""
 	}
 	otherRandom := otherHeader.Get(NodeRandomHeader)
-	if otherRandom == wn.RandomID || otherRandom == "" {
+	if otherRandom == wn.randomID || otherRandom == "" {
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		if otherRandom == "" {
 			// missing header.
-			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, otherHeader)))
+			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.randomID, otherHeader)))
 		} else {
-			wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", addr, wn.RandomID)
+			wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", addr, wn.randomID)
 		}
 		return false, ""
 	}
 	otherGenesisID := otherHeader.Get(GenesisHeader)
-	if wn.GenesisID != otherGenesisID {
+	if wn.genesisID != otherGenesisID {
 		if otherGenesisID != "" {
-			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, otherHeader)))
+			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.genesisID, otherGenesisID, otherHeader)))
 		} else {
-			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.GenesisID, otherHeader)
+			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.genesisID, otherHeader)
 		}
 		return false, ""
 	}
@@ -893,17 +955,17 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 }
 
 // checkProtocolVersionMatch test ProtocolAcceptVersionHeader and ProtocolVersionHeader headers from the request/response and see if it can find a match.
-func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) (matchingVersion string, otherVersion string) {
+func checkProtocolVersionMatch(otherHeaders http.Header, ourSupportedProtocolVersions []string) (matchingVersion string, otherVersion string) {
 	otherAcceptedVersions := otherHeaders[textproto.CanonicalMIMEHeaderKey(ProtocolAcceptVersionHeader)]
 	for _, otherAcceptedVersion := range otherAcceptedVersions {
 		// do we have a matching version ?
-		if slices.Contains(wn.supportedProtocolVersions, otherAcceptedVersion) {
+		if slices.Contains(ourSupportedProtocolVersions, otherAcceptedVersion) {
 			return otherAcceptedVersion, ""
 		}
 	}
 
 	otherVersion = otherHeaders.Get(ProtocolVersionHeader)
-	if slices.Contains(wn.supportedProtocolVersions, otherVersion) {
+	if slices.Contains(ourSupportedProtocolVersions, otherVersion) {
 		return otherVersion, otherVersion
 	}
 
@@ -923,8 +985,8 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		return http.StatusNotFound
 	}
 
-	if wn.GenesisID != otherGenesisID {
-		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", remoteAddrForLogging, wn.GenesisID, otherGenesisID, request.Header)))
+	if wn.genesisID != otherGenesisID {
+		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", remoteAddrForLogging, wn.genesisID, otherGenesisID, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching genesis-id"})
 		response.WriteHeader(http.StatusPreconditionFailed)
 		n, err := response.Write([]byte("mismatching genesis ID"))
@@ -939,7 +1001,7 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		var message string
 		// missing header.
-		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %s did not include random ID header in request. mine=%s headers %#v", remoteAddrForLogging, wn.RandomID, request.Header)))
+		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %s did not include random ID header in request. mine=%s headers %#v", remoteAddrForLogging, wn.randomID, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing random ID header"})
 		message = fmt.Sprintf("Request was missing a %s header", NodeRandomHeader)
 		response.WriteHeader(http.StatusPreconditionFailed)
@@ -948,10 +1010,10 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
 		}
 		return http.StatusPreconditionFailed
-	} else if otherRandom == wn.RandomID {
+	} else if otherRandom == wn.randomID {
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		var message string
-		wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", remoteAddrForLogging, wn.RandomID)
+		wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", remoteAddrForLogging, wn.randomID)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "matching random ID header"})
 		message = fmt.Sprintf("Request included matching %s=%s header", NodeRandomHeader, otherRandom)
 		response.WriteHeader(http.StatusLoopDetected)
@@ -978,7 +1040,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		return
 	}
 
-	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(request.Header)
+	matchingVersion, otherVersion := checkProtocolVersionMatch(request.Header, wn.supportedProtocolVersions)
 	if matchingVersion == "" {
 		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", trackedRequest.remoteHost, wn.supportedProtocolVersions, otherVersion, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching protocol version"})
@@ -997,11 +1059,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 
 	responseHeader := make(http.Header)
-	wn.setHeaders(responseHeader)
-	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
-	responseHeader.Set(GenesisHeader, wn.GenesisID)
-	// set the features we support
-	responseHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
+	setHeaders(responseHeader, matchingVersion, wn)
 	var challenge string
 	if wn.prioScheme != nil {
 		challenge = wn.prioScheme.NewPrioChallenge()
@@ -1035,18 +1093,19 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	client, _ := wn.GetHTTPClient(trackedRequest.remoteAddress())
 	peer := &wsPeer{
-		wsPeerCore:        makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
-		conn:              wsPeerWebsocketConnImpl{conn},
-		outgoing:          false,
-		InstanceName:      trackedRequest.otherInstanceName,
-		incomingMsgFilter: wn.incomingMsgFilter,
-		prioChallenge:     challenge,
-		createTime:        trackedRequest.created,
-		version:           matchingVersion,
-		identity:          peerID,
-		identityChallenge: peerIDChallenge,
-		identityVerified:  atomic.Uint32{},
-		features:          decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
+		wsPeerCore:            makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
+		conn:                  wsPeerWebsocketConnImpl{conn},
+		outgoing:              false,
+		InstanceName:          trackedRequest.otherInstanceName,
+		incomingMsgFilter:     wn.incomingMsgFilter,
+		prioChallenge:         challenge,
+		createTime:            trackedRequest.created,
+		version:               matchingVersion,
+		identity:              peerID,
+		identityChallenge:     peerIDChallenge,
+		identityVerified:      atomic.Uint32{},
+		features:              decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression: wn.config.EnableVoteCompression,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
@@ -1331,17 +1390,18 @@ func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
 
 // preparePeerData prepares batches of data for sending.
 // It performs zstd compression for proposal massages if they this is a prio request and has proposal.
-func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([]byte, crypto.Digest) {
+func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([]byte, []byte, crypto.Digest) {
 	tbytes := []byte(request.tag)
 	mbytes := make([]byte, len(tbytes)+len(request.data))
 	copy(mbytes, tbytes)
 	copy(mbytes[len(tbytes):], request.data)
+	var compressedData []byte
 
 	var digest crypto.Digest
 	if request.tag != protocol.MsgDigestSkipTag && len(request.data) >= messageFilterSize {
 		digest = crypto.Hash(mbytes)
 	}
-
+	// Compress proposals -- all proposals are compressed as of wsnet 2.2
 	if prio && request.tag == protocol.ProposalPayloadTag {
 		compressed, logMsg := zstdCompressMsg(tbytes, request.data)
 		if len(logMsg) > 0 {
@@ -1349,7 +1409,15 @@ func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) (
 		}
 		mbytes = compressed
 	}
-	return mbytes, digest
+	// Optionally compress votes: only supporting peers will receive it.
+	if prio && request.tag == protocol.AgreementVoteTag && wn.enableVoteCompression {
+		var logMsg string
+		compressedData, logMsg = vpackCompressVote(tbytes, request.data)
+		if len(logMsg) > 0 {
+			wn.log.Warn(logMsg)
+		}
+	}
+	return mbytes, compressedData, digest
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1366,7 +1434,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 	}
 
 	start := time.Now()
-	data, digest := wn.preparePeerData(request, prio)
+	data, dataWithCompression, digest := wn.preparePeerData(request, prio)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1377,7 +1445,13 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		if Peer(peer) == request.except {
 			continue
 		}
-		ok := peer.writeNonBlock(request.ctx, data, prio, digest, request.enqueueTime)
+		dataToSend := data
+		// check whether to send a compressed vote. dataWithCompression will be empty if this node
+		// has not enabled vote compression.
+		if peer.vpackVoteCompressionSupported() && len(dataWithCompression) > 0 {
+			dataToSend = dataWithCompression
+		}
+		ok := peer.writeNonBlock(request.ctx, dataToSend, prio, digest, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1832,13 +1906,13 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 	return
 }
 
-// ProtocolVersionHeader HTTP header for protocol version.
+// ProtocolVersionHeader HTTP header for network protocol version.
 const ProtocolVersionHeader = "X-Algorand-Version"
 
-// ProtocolAcceptVersionHeader HTTP header for accept protocol version. Client use this to advertise supported protocol versions.
+// ProtocolAcceptVersionHeader HTTP header for accept network protocol version. Client use this to advertise supported protocol versions.
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
-// SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
+// SupportedProtocolVersions contains the list of supported network protocol versions by this node ( in order of preference ).
 var SupportedProtocolVersions = []string{"2.2"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
@@ -1883,6 +1957,10 @@ const PeerFeaturesHeader = "X-Algorand-Peer-Features"
 // supports proposal payload compression with zstd
 const PeerFeatureProposalCompression = "ppzstd"
 
+// PeerFeatureVoteVpackCompression is a value for PeerFeaturesHeader indicating peer
+// supports agreement vote message compression with vpack
+const PeerFeatureVoteVpackCompression = "avvpack"
+
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
 var errBadAddr = errors.New("bad address")
@@ -1890,8 +1968,6 @@ var errBadAddr = errors.New("bad address")
 var errNetworkClosing = errors.New("WebsocketNetwork shutting down")
 
 var errBcastCallerCancel = errors.New("caller cancelled broadcast")
-
-var errBcastInvalidArray = errors.New("invalid broadcast array")
 
 var errBcastQFull = errors.New("broadcast queue full")
 
@@ -1979,9 +2055,9 @@ func (t *HTTPPAddressBoundTransport) RoundTrip(req *http.Request) (*http.Respons
 // control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
 // are included in this range.
 func filterASCII(unfilteredString string) (filteredString string) {
-	for i, r := range unfilteredString {
+	for _, r := range unfilteredString {
 		if int(r) >= 0x20 && int(r) <= 0x7e {
-			filteredString += string(unfilteredString[i])
+			filteredString += string(r)
 		} else {
 			filteredString += unprintableCharacterGlyph
 		}
@@ -2001,10 +2077,7 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 	defer wn.wg.Done()
 
 	requestHeader := make(http.Header)
-	wn.setHeaders(requestHeader)
-	for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
-		requestHeader.Add(ProtocolAcceptVersionHeader, supportedProtocolVersion)
-	}
+	setHeaders(requestHeader, wn.protocolVersion, wn)
 
 	var idChallenge identityChallengeValue
 	if wn.identityScheme != nil {
@@ -2012,13 +2085,7 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		idChallenge = wn.identityScheme.AttachChallenge(requestHeader, theirAddr)
 	}
 
-	// for backward compatibility, include the ProtocolVersion header as well.
-	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
-	// set the features header (comma-separated list)
-	requestHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
 	SetUserAgentHeader(requestHeader)
-	myInstanceName := wn.log.GetInstanceName()
-	requestHeader.Set(InstanceNameHeader, myInstanceName)
 	var websocketDialer = websocket.Dialer{
 		Proxy:             http.ProxyFromEnvironment,
 		HandshakeTimeout:  45 * time.Second,
@@ -2120,6 +2187,7 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		version:                     matchingVersion,
 		identity:                    peerID,
 		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression:       wn.config.EnableVoteCompression,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 
@@ -2215,7 +2283,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		log:               log,
 		config:            config,
 		phonebook:         pb,
-		GenesisID:         genesisID,
+		genesisID:         genesisID,
 		NetworkID:         networkID,
 		nodeInfo:          nodeInfo,
 		resolveSRVRecords: tools_network.ReadFromSRV,
@@ -2463,4 +2531,4 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 }
 
 // GetGenesisID returns the network-specific genesisID.
-func (wn *WebsocketNetwork) GetGenesisID() string { return wn.GenesisID }
+func (wn *WebsocketNetwork) GetGenesisID() string { return wn.genesisID }

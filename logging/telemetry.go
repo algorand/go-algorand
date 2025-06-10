@@ -36,7 +36,7 @@ const telemetryPrefix = "/"
 const telemetrySeparator = "/"
 const logBufferDepth = 2
 
-// EnableTelemetry configures and enables telemetry based on the config provided
+// EnableTelemetryContext configures and enables telemetry based on the config provided
 func EnableTelemetryContext(ctx context.Context, cfg TelemetryConfig, l *logger) (err error) {
 	telemetry, err := makeTelemetryStateContext(ctx, cfg, createElasticHookContext)
 	if err != nil {
@@ -198,7 +198,7 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 			*/
 
 			// If the directory exists...
-			if _, err := os.Stat(*dataDir); err == nil {
+			if _, err1 := os.Stat(*dataDir); err1 == nil {
 
 				// Remember, if we had a data directory supplied we want to save the config there
 				configPath = filepath.Join(*dataDir, TelemetryConfigFilename)

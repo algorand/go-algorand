@@ -137,7 +137,7 @@ func run() int {
 	}
 
 	// If data directory doesn't exist, we can't run. Don't bother trying.
-	if _, err := os.Stat(absolutePath); err != nil {
+	if _, err1 := os.Stat(absolutePath); err1 != nil {
 		fmt.Fprintf(os.Stderr, "Data directory %s does not appear to be valid\n", dataDir)
 		return 1
 	}
@@ -215,12 +215,12 @@ func run() int {
 	isTest := os.Getenv("ALGOTEST") != ""
 	remoteTelemetryEnabled := false
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
-		if err != nil {
-			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
+		telemetryConfig, err1 := logging.EnsureTelemetryConfig(&dataDir, genesis.ID())
+		if err1 != nil {
+			fmt.Fprintln(os.Stdout, "error loading telemetry config", err1)
 		}
-		if os.IsPermission(err) {
-			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
+		if os.IsPermission(err1) {
+			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err1)
 			return 1
 		}
 		fmt.Fprintf(os.Stdout, "Telemetry configured from '%s'\n", telemetryConfig.FilePath)
@@ -240,23 +240,23 @@ func run() int {
 			}
 			// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
 			ctx, telemetryCancelFn := context.WithTimeout(context.Background(), defaultStaticTelemetryStartupTimeout)
-			err = log.EnableTelemetryContext(ctx, telemetryConfig)
+			err1 = log.EnableTelemetryContext(ctx, telemetryConfig)
 			telemetryCancelFn()
-			if err != nil {
-				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
+			if err1 != nil {
+				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err1)
 
 				// Remote telemetry init loop
 				go func() {
 					for {
 						time.Sleep(defaultStaticTelemetryBGDialRetry)
 						// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
-						err := log.EnableTelemetryContext(context.Background(), telemetryConfig)
+						err1 := log.EnableTelemetryContext(context.Background(), telemetryConfig)
 						// Error occurs only if URI is defined and we need to retry later
-						if err == nil {
+						if err1 == nil {
 							// Remote telemetry enabled or empty static URI, stop retrying
 							return
 						}
-						fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
+						fmt.Fprintln(os.Stdout, "error creating telemetry hook", err1)
 						// Try to reenable every minute
 					}
 				}()
@@ -343,18 +343,18 @@ func run() int {
 	if peerOverrideArray != nil {
 		phonebookAddresses = peerOverrideArray
 	} else {
-		ex, err := os.Executable()
-		if err != nil {
-			log.Errorf("cannot locate node executable: %s", err)
+		ex, err1 := os.Executable()
+		if err1 != nil {
+			log.Errorf("cannot locate node executable: %s", err1)
 		} else {
 			phonebookDirs := []string{filepath.Dir(ex), dataDir}
 			for _, phonebookDir := range phonebookDirs {
-				phonebookAddresses, err = config.LoadPhonebook(phonebookDir)
-				if err == nil {
+				phonebookAddresses, err1 = config.LoadPhonebook(phonebookDir)
+				if err1 == nil {
 					log.Debugf("Static phonebook loaded from %s", phonebookDir)
 					break
 				} else {
-					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err)
+					log.Debugf("Cannot load static phonebook from %s dir: %v", phonebookDir, err1)
 				}
 			}
 		}

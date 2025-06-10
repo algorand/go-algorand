@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -97,7 +98,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, seedGen io.Reader
 		if !ok {
 			return false, BalanceRecord{}, Seed{}, basics.MicroAlgos{Raw: 0}
 		}
-		return true, BalanceRecord{Addr: addr, OnlineAccountData: data.OnlineAccountData()}, seed, total
+		return true, BalanceRecord{Addr: addr, OnlineAccountData: basics_testing.OnlineAccountData(data)}, seed, total
 	}
 
 	selParamsList := func(addrs []basics.Address) (ok bool, records []BalanceRecord, seed Seed, total basics.MicroAlgos) {

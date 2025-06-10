@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -184,7 +185,7 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 	pingWalletHandle, err := pingClient.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	startTime := time.Now()
-	var lastTxnSendRound uint64
+	var lastTxnSendRound basics.Round
 	for curStatus.LastVersion == initialStatus.LastVersion {
 		iterationStartTime := time.Now()
 		if lastTxnSendRound != curStatus.LastRound {

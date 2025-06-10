@@ -432,9 +432,8 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 				// Fill in applyData, so that consumers don't have to implement a
 				// stateful TEAL interpreter to apply state changes
 				ad.EvalDelta = evalDelta
-			} else {
-				// Ignore logic eval errors and rejections from the ClearStateProgram
 			}
+			// Ignore logic eval errors and rejections from the ClearStateProgram
 		}
 
 		return closeOutApplication(balances, header.Sender, appIdx)

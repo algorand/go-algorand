@@ -38,8 +38,6 @@ var rootCmd = &cobra.Command{
 }
 
 type exitError struct {
-	error
-
 	exitCode     int
 	errorMessage string
 }

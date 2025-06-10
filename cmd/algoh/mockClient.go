@@ -31,7 +31,7 @@ import (
 // Helpers to initialize mockClient //
 //////////////////////////////////////
 
-func makeNodeStatuses(blocks ...uint64) (ret []model.NodeStatusResponse) {
+func makeNodeStatuses(blocks ...basics.Round) (ret []model.NodeStatusResponse) {
 	ret = make([]model.NodeStatusResponse, 0, len(blocks))
 	for _, block := range blocks {
 		ret = append(ret, model.NodeStatusResponse{LastRound: block})
@@ -39,8 +39,8 @@ func makeNodeStatuses(blocks ...uint64) (ret []model.NodeStatusResponse) {
 	return ret
 }
 
-func makeBlocks(blocks ...uint64) (ret map[uint64]rpcs.EncodedBlockCert) {
-	ret = map[uint64]rpcs.EncodedBlockCert{}
+func makeBlocks(blocks ...basics.Round) (ret map[basics.Round]rpcs.EncodedBlockCert) {
+	ret = map[basics.Round]rpcs.EncodedBlockCert{}
 	for _, block := range blocks {
 		ret[block] = rpcs.EncodedBlockCert{Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(block)}}}
 	}
@@ -51,18 +51,18 @@ func makeBlocks(blocks ...uint64) (ret map[uint64]rpcs.EncodedBlockCert) {
 
 type mockClient struct {
 	StatusCalls        int
-	BlockCalls         map[uint64]int
+	BlockCalls         map[basics.Round]int
 	GetGoRoutinesCalls int
 	HealthCheckCalls   int
 	error              []error
 	status             []model.NodeStatusResponse
 	routine            []string
-	block              map[uint64]rpcs.EncodedBlockCert
+	block              map[basics.Round]rpcs.EncodedBlockCert
 }
 
-func makeMockClient(error []error, status []model.NodeStatusResponse, block map[uint64]rpcs.EncodedBlockCert, routine []string) mockClient {
+func makeMockClient(error []error, status []model.NodeStatusResponse, block map[basics.Round]rpcs.EncodedBlockCert, routine []string) mockClient {
 	return mockClient{
-		BlockCalls: make(map[uint64]int),
+		BlockCalls: make(map[basics.Round]int),
 		error:      error,
 		status:     status,
 		block:      block,
@@ -93,7 +93,7 @@ func (c *mockClient) Status() (s model.NodeStatusResponse, e error) {
 	return
 }
 
-func (c *mockClient) RawBlock(block uint64) (b []byte, e error) {
+func (c *mockClient) RawBlock(block basics.Round) (b []byte, e error) {
 	c.BlockCalls[block]++
 	e = c.nextError()
 	bl, ok := c.block[block]

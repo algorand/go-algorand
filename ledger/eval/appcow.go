@@ -415,7 +415,7 @@ func (cb *roundCowState) delKey(addr basics.Address, aidx basics.AppIndex, globa
 	// Write the value delta associated with deleting this key
 	lsd, err := cb.ensureStorageDelta(addr, aidx, global, remainAllocAction, accountIdx)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	vdelta, ok := lsd.kvCow[key]

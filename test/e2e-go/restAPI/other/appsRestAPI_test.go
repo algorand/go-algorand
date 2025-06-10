@@ -120,7 +120,7 @@ return
 	a.NoError(err)
 
 	// call app, which will issue an ASA create inner txn
-	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, libgoal.RefBundle{}, 0)
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(createdAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
 	a.NoError(err)
@@ -264,7 +264,7 @@ end:
 	var createdBoxCount uint64 = 0
 
 	// define operate box helper
-	operateBoxAndSendTxn := func(operation string, boxNames []string, boxValues []string, errPrefix ...string) uint64 {
+	operateBoxAndSendTxn := func(operation string, boxNames []string, boxValues []string, errPrefix ...string) {
 		txns := make([]transactions.Transaction, len(boxNames))
 		txIDs := make(map[string]string, len(boxNames))
 
@@ -277,7 +277,7 @@ end:
 			refs := libgoal.RefBundle{Boxes: []basics.BoxRef{{App: 0, Name: boxNames[i]}}}
 
 			txns[i], err = testClient.MakeUnsignedAppNoOpTx(
-				uint64(createdAppID), appArgs, refs, 0,
+				createdAppID, appArgs, refs, 0,
 			)
 			a.NoError(err)
 			txns[i], err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, txns[i])
@@ -301,16 +301,15 @@ end:
 		err = testClient.BroadcastTransactionGroup(stxns)
 		if len(errPrefix) == 0 {
 			a.NoError(err)
-			tx, wErr := helper.WaitForTransaction(t, testClient, txns[0].ID().String(), 30*time.Second)
-			a.NoError(wErr)
-			return *tx.ConfirmedRound
+			_, err = helper.WaitForTransaction(t, testClient, txns[0].ID().String(), 30*time.Second)
+			a.NoError(err)
+		} else {
+			a.ErrorContains(err, errPrefix[0])
 		}
-		a.ErrorContains(err, errPrefix[0])
-		return 0
 	}
 
-	// `assertErrorResponse` confirms the _Result limit exceeded_ when max=requestedMax
-	assertErrorResponse := func(err error, requestedMax uint64) {
+	// `assertErrorResponse` confirms the _Result limit exceeded_ error response provides expected fields and values.
+	assertErrorResponse := func(err error, expectedCount, requestedMax uint64) {
 		a.Error(err)
 		e := err.(client.HTTPError)
 		a.Equal(400, e.StatusCode)
@@ -318,30 +317,29 @@ end:
 		a.Equal("Result limit exceeded", e.ErrorString)
 		a.EqualValues(100000, e.Data["max-api-box-per-application"])
 		a.EqualValues(requestedMax, e.Data["max"])
+		a.EqualValues(expectedCount, e.Data["total-boxes"])
 
-		a.Len(e.Data, 2, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", e.Data))
+		a.Len(e.Data, 3, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", e.Data))
 	}
 
 	// `assertBoxCount` sanity checks that the REST API respects `expectedCount` through different queries against app ID = `createdAppID`.
-	assertBoxCount := func(expectedCount uint64, prefix string) {
+	assertBoxCount := func(expectedCount uint64) {
 		// Query without client-side limit.
-		resp, err := testClient.ApplicationBoxes(uint64(createdAppID), prefix, nil, 0, false)
+		resp, err := testClient.ApplicationBoxes(createdAppID, 0)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 
 		// Query with requested max < expected expectedCount.
-		if expectedCount > 1 {
-			_, err = testClient.ApplicationBoxes(uint64(createdAppID), prefix, nil, expectedCount-1, false)
-			assertErrorResponse(err, expectedCount-1)
-		}
+		_, err = testClient.ApplicationBoxes(createdAppID, expectedCount-1)
+		assertErrorResponse(err, expectedCount, expectedCount-1)
 
 		// Query with requested max == expected expectedCount.
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), prefix, nil, expectedCount, false)
+		resp, err = testClient.ApplicationBoxes(createdAppID, expectedCount)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 
 		// Query with requested max > expected expectedCount.
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), prefix, nil, expectedCount+1, false)
+		resp, err = testClient.ApplicationBoxes(createdAppID, expectedCount+1)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 	}
@@ -367,7 +365,7 @@ end:
 			a.Failf("Unknown operation %s", operation)
 		}
 
-		round := operateBoxAndSendTxn(operation, boxNames, boxValues)
+		operateBoxAndSendTxn(operation, boxNames, boxValues)
 
 		if operation == "create" {
 			for _, box := range boxNames {
@@ -381,13 +379,9 @@ end:
 			createdBoxCount -= uint64(len(boxNames))
 		}
 
-		// /boxes/ endpoint only examines DB, so we wait until its response includes the round we made the boxes in.
 		var resp model.BoxesResponse
-		for resp.Round < round {
-			resp, err = testClient.ApplicationBoxes(uint64(createdAppID), "", nil, 0, false)
-			a.NoError(err)
-			time.Sleep(time.Second)
-		}
+		resp, err = testClient.ApplicationBoxes(createdAppID, 0)
+		a.NoError(err)
 
 		expectedCreatedBoxes := make([]string, 0, createdBoxCount)
 		for name, isCreate := range createdBoxName {
@@ -407,9 +401,6 @@ end:
 	}
 
 	testingBoxNames := []string{
-		`simple1`,
-		`simple2`,
-		`simple3`,
 		` `,
 		`     	`,
 		` ? = % ;`,
@@ -448,10 +439,7 @@ end:
 	}
 
 	// Happy Vanilla paths:
-	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), "", nil, 0, false)
-	a.NoError(err)
-	a.Empty(resp.Boxes)
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), "str:xxx", nil, 0, false)
+	resp, err := testClient.ApplicationBoxes(createdAppID, 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -461,10 +449,10 @@ end:
 	// querying it for boxes _DOES NOT ERROR_. There is no easy way to tell
 	// the difference between non-existing boxes for an app that once existed
 	// vs. an app the NEVER existed.
-	nonexistantAppIndex := uint64(1337)
+	nonexistantAppIndex := basics.AppIndex(1337)
 	_, err = testClient.ApplicationInformation(nonexistantAppIndex)
 	a.ErrorContains(err, "application does not exist")
-	resp, err = testClient.ApplicationBoxes(nonexistantAppIndex, "", nil, 0, false)
+	resp, err = testClient.ApplicationBoxes(nonexistantAppIndex, 0)
 	a.NoError(err)
 	a.Len(resp.Boxes, 0)
 
@@ -481,23 +469,7 @@ end:
 		operateAndMatchRes("create", strSliceTest)
 	}
 
-	assertBoxCount(uint64(len(testingBoxNames)), "")
-	assertBoxCount(3, "str:simpl")
-	assertBoxCount(1, "str:simple1")
-	assertBoxCount(0, "str:simple10")
-
-	// test with a prefix
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), "str:simpl", nil, 0, false)
-	a.NoError(err)
-	a.ElementsMatch([]model.Box{{Name: []byte("simple1")}, {Name: []byte("simple2")}, {Name: []byte("simple3")}},
-		resp.Boxes)
-
-	// test with prefix and a next
-	simple2 := "str:simple2"
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), "str:simpl", &simple2, 0, false)
-	a.NoError(err)
-	a.ElementsMatch([]model.Box{{Name: []byte("simple2")}, {Name: []byte("simple3")}},
-		resp.Boxes)
+	assertBoxCount(uint64(len(testingBoxNames)))
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
@@ -510,7 +482,7 @@ end:
 		operateAndMatchRes("delete", strSliceTest)
 	}
 
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), "", nil, 0, false)
+	resp, err = testClient.ApplicationBoxes(createdAppID, 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -531,35 +503,26 @@ end:
 		{[]byte{0, 248, 255, 32}, "b64:APj/IA==", []byte("lux56")},
 	}
 
-	round := uint64(0)
 	for _, boxTest := range boxTests {
 		// Box values are 5 bytes, as defined by the test TEAL program.
 		operateBoxAndSendTxn("create", []string{string(boxTest.name)}, []string{""})
-		round = operateBoxAndSendTxn("set", []string{string(boxTest.name)}, []string{string(boxTest.value)})
+		operateBoxAndSendTxn("set", []string{string(boxTest.name)}, []string{string(boxTest.value)})
 
 		currentRoundBeforeBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
-		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxTest.encodedName)
+		boxResponse, err := testClient.GetApplicationBoxByName(createdAppID, boxTest.encodedName)
 		a.NoError(err)
 		currentRoundAfterBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
 		a.Equal(boxTest.name, boxResponse.Name)
 		a.Equal(boxTest.value, boxResponse.Value)
 		// To reduce flakiness, only check the round from boxes is within a range.
-		a.GreaterOrEqual(*boxResponse.Round, currentRoundBeforeBoxes)
-		a.LessOrEqual(*boxResponse.Round, currentRoundAfterBoxes)
+		a.GreaterOrEqual(boxResponse.Round, currentRoundBeforeBoxes)
+		a.LessOrEqual(boxResponse.Round, currentRoundAfterBoxes)
 	}
 
 	const numberOfBoxesRemaining = uint64(3)
-
-	// wait for boxes to hit the DB
-	for resp.Round < round {
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), "", nil, 0, false)
-		a.NoError(err)
-		time.Sleep(time.Second)
-	}
-
-	assertBoxCount(numberOfBoxesRemaining, "")
+	assertBoxCount(numberOfBoxesRemaining)
 
 	// Non-vanilla. Wasteful but correct. Can delete an app without first cleaning up its boxes.
 	appAccountData, err := testClient.AccountData(createdAppID.Address().String())
@@ -568,7 +531,7 @@ end:
 	a.Equal(uint64(30), appAccountData.TotalBoxBytes)
 
 	// delete the app
-	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, libgoal.RefBundle{}, 0)
+	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(createdAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appDeleteTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appDeleteTxn)
 	a.NoError(err)
@@ -577,11 +540,10 @@ end:
 	_, err = helper.WaitForTransaction(t, testClient, appDeleteTxID, 30*time.Second)
 	a.NoError(err)
 
-	_, err = testClient.ApplicationInformation(uint64(createdAppID))
+	_, err = testClient.ApplicationInformation(createdAppID)
 	a.ErrorContains(err, "application does not exist")
 
-	assertBoxCount(numberOfBoxesRemaining, "")
-	assertBoxCount(1, "str:f")
+	assertBoxCount(numberOfBoxesRemaining)
 }
 
 func TestBlockLogs(t *testing.T) {
@@ -680,7 +642,7 @@ func TestBlockLogs(t *testing.T) {
 
 	// call app twice
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(createdAppID), nil, libgoal.RefBundle{}, 0,
+		createdAppID, nil, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn0, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
@@ -723,22 +685,22 @@ func TestBlockLogs(t *testing.T) {
 	expected = model.BlockLogsResponse{
 		Logs: []model.AppCallLogs{
 			{
-				ApplicationIndex: uint64(createdAppID),
+				ApplicationIndex: createdAppID,
 				TxId:             stxn0.ID().String(),
 				Logs:             [][]byte{dd0000dd, {}, deadDood},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID + 3),
+				ApplicationIndex: createdAppID + 3,
 				TxId:             stxn0.ID().String(),
 				Logs:             [][]byte{deadBeef},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID),
+				ApplicationIndex: createdAppID,
 				TxId:             stxn1.ID().String(),
 				Logs:             [][]byte{dd0000dd, {}, deadDood},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID + 5),
+				ApplicationIndex: createdAppID + 5,
 				TxId:             stxn1.ID().String(),
 				Logs:             [][]byte{deadBeef},
 			},

@@ -33,10 +33,10 @@ func TestValidRounds(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
-	var firstValid, lastValid, validRounds uint64
+	var firstValid, lastValid, validRounds, lastRound basics.Round
 
-	lastRound := uint64(1)
-	maxTxnLife := uint64(1000)
+	lastRound = 1
+	const maxTxnLife = 1000
 
 	firstValid = 0
 	lastValid = 0
@@ -87,8 +87,8 @@ func TestValidRounds(t *testing.T) {
 	validRounds = 0
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(uint64(1), fv)
-	a.Equal(maxTxnLife+1, lv)
+	a.EqualValues(1, fv)
+	a.EqualValues(maxTxnLife+1, lv)
 
 	firstValid = 0
 	lastValid = lastRound + 1
@@ -119,32 +119,32 @@ func TestValidRounds(t *testing.T) {
 	validRounds = 1
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(uint64(1), fv)
-	a.Equal(uint64(1), lv)
+	a.EqualValues(1, fv)
+	a.EqualValues(1, lv)
 
 	firstValid = 1
 	lastValid = 1
 	validRounds = 0
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(uint64(1), fv)
-	a.Equal(uint64(1), lv)
+	a.EqualValues(1, fv)
+	a.EqualValues(1, lv)
 
 	firstValid = 100
 	lastValid = 0
 	validRounds = maxTxnLife
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(uint64(100), fv)
-	a.Equal(100+maxTxnLife-1, lv)
+	a.EqualValues(100, fv)
+	a.EqualValues(100+maxTxnLife-1, lv)
 
 	firstValid = 100
 	lastValid = maxTxnLife
 	validRounds = 0
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(uint64(100), fv)
-	a.Equal(maxTxnLife, lv)
+	a.EqualValues(100, fv)
+	a.EqualValues(maxTxnLife, lv)
 }
 
 // bbrs just saves typing
