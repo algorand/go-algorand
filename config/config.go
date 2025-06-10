@@ -17,6 +17,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -139,9 +140,23 @@ func mergeConfigFromFile(configpath string, source Local) (Local, map[string]int
 	if err != nil {
 		return source, nil, err
 	}
-	defer f.Close()
+	data, err := io.ReadAll(f)
+	_ = f.Close()
+	if err != nil {
+		return source, nil, err
+	}
 
-	explicitFields, err := loadConfigAsMap(f)
+	reader := bytes.NewReader(data)
+	err = loadConfig(reader, &source)
+	if err != nil {
+		return source, nil, err
+	}
+
+	_, err = reader.Seek(0, 0)
+	if err != nil {
+		return source, nil, err
+	}
+	explicitFields, err := loadConfigAsMap(reader)
 	if err != nil {
 		return source, nil, err
 	}
@@ -171,14 +186,6 @@ func mergeConfigFromFile(configpath string, source Local) (Local, map[string]int
 		}
 	}
 
-	_, err = f.Seek(0, 0)
-	if err != nil {
-		return source, nil, err
-	}
-	err = loadConfig(f, &source)
-	if err != nil {
-		return source, nil, err
-	}
 	source, err = enrichNetworkingConfig(source)
 	return source, explicitFields, err
 }
