@@ -18,7 +18,6 @@ package transactions
 
 import (
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -33,20 +32,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestApplicationCallFieldsNotChanged(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	af := ApplicationCallTxnFields{}
-	s := reflect.ValueOf(&af).Elem()
-
-	if s.NumField() != 14 {
-		t.Errorf("You added or removed a field from transactions.ApplicationCallTxnFields. " +
-			"Please ensure you have updated ApplicationCallTxnFields.Empty() and then " +
-			"fix this test")
-	}
-}
-
 func TestResourceRefEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -54,7 +39,7 @@ func TestResourceRefEmpty(t *testing.T) {
 	assert.True(t, ResourceRef{}.Empty())
 	for _, nz := range basics_testing.NearZeros(t, ResourceRef{}) {
 		rr := nz.(ResourceRef)
-		assert.False(t, rr.Empty(), rr)
+		assert.False(t, rr.Empty(), "Empty is disregarding a non-zero field in %+v", rr)
 	}
 }
 
@@ -69,7 +54,7 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 
 	for _, nz := range basics_testing.NearZeros(t, ac) {
 		fields := nz.(ApplicationCallTxnFields)
-		a.False(fields.Empty(), fields)
+		a.False(fields.Empty(), "Empty is disregarding a non-zero field in %+v", fields)
 	}
 
 	// Everything below here ought to be redundant after the NearZeros loop.
