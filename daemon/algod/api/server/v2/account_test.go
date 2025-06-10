@@ -103,7 +103,7 @@ func TestAccount(t *testing.T) {
 		},
 		AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx1: assetParams1, assetIdx2: assetParams2},
 	}
-	b := proto.WithUpdatedRewards(a, 100)
+	b := a.WithUpdatedRewards(proto.RewardUnit, 100)
 
 	addr := basics.Address{}.String()
 	conv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)

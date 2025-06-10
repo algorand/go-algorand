@@ -579,7 +579,7 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
 	withoutRewards = data.MicroAlgos
-	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
+	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion].RewardUnit, rewardsLevel)
 	return data, rnd, withoutRewards, nil
 }
 

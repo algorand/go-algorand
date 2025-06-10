@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -134,7 +135,7 @@ type AccountData struct {
 	// If the account is Status=Offline or Status=Online, its
 	// effective balance (if a transaction were to be issued
 	// against this account) may be higher, as computed by
-	// proto.WithUpdatedRewards() which applies the deferred
+	// WithUpdatedRewards() which applies the deferred
 	// rewards to AccountData.MicroAlgos.
 	RewardsBase uint64 `codec:"ebase"`
 
@@ -409,6 +410,48 @@ func (app AppIndex) Address() Address {
 	return Address(crypto.HashObj(app))
 }
 
+// PendingRewards computes the amount of rewards (in microalgos) that
+// have yet to be added to the account balance.
+func PendingRewards(ot *OverflowTracker, unitSize uint64, microAlgos MicroAlgos, rewardsBase uint64, rewardsLevel uint64) MicroAlgos {
+	rewardsUnits := microAlgos.RewardUnits(unitSize)
+	rewardsDelta := ot.Sub(rewardsLevel, rewardsBase)
+	return MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
+}
+
+// WithUpdatedRewards returns an updated number of algos, total rewards and new rewards base
+// to reflect rewards up to some rewards level.
+func WithUpdatedRewards(
+	rewardUnits uint64, status Status, microAlgosIn MicroAlgos, rewardedMicroAlgosIn MicroAlgos, rewardsBaseIn uint64, rewardsLevelIn uint64,
+) (MicroAlgos, MicroAlgos, uint64) {
+	if status == NotParticipating {
+		return microAlgosIn, rewardedMicroAlgosIn, rewardsBaseIn
+	}
+
+	var ot OverflowTracker
+	rewardsUnits := microAlgosIn.RewardUnits(rewardUnits)
+	rewardsDelta := ot.Sub(rewardsLevelIn, rewardsBaseIn)
+	rewards := MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
+	microAlgosOut := ot.AddA(microAlgosIn, rewards)
+	if ot.Overflowed {
+		logging.Base().Panicf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", microAlgosIn, rewardsUnits, rewardsLevelIn, rewardsBaseIn)
+	}
+	rewardsBaseOut := rewardsLevelIn
+	// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
+	// this rewardAlgos counter could potentially roll over.
+	rewardedMicroAlgosOut := MicroAlgos{Raw: rewardedMicroAlgosIn.Raw + rewards.Raw}
+	return microAlgosOut, rewardedMicroAlgosOut, rewardsBaseOut
+}
+
+// WithUpdatedRewards returns an updated number of algos in an AccountData
+// to reflect rewards up to some rewards level.
+func (u AccountData) WithUpdatedRewards(rewardUnit uint64, rewardsLevel uint64) AccountData {
+	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = WithUpdatedRewards(
+		rewardUnit, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
+	)
+
+	return u
+}
+
 // BalanceRequirements defines the amounts an account must hold, based on
 // various resources the account has. The names are taken directly from
 // config.ConsensusParams, as this struct only exists so that `basics` does not
@@ -492,6 +535,72 @@ func MinBalance(
 // caller has already updated rewards appropriately using WithUpdatedRewards().
 func (u OnlineAccountData) VotingStake() MicroAlgos {
 	return u.MicroAlgosWithRewards
+}
+
+// NormalizedOnlineBalance returns a “normalized” balance for this account.
+//
+// The normalization compensates for rewards that have not yet been applied,
+// by computing a balance normalized to round 0.  To normalize, we estimate
+// the microalgo balance that an account should have had at round 0, in order
+// to end up at its current balance when rewards are included.
+//
+// The benefit of the normalization procedure is that an account's normalized
+// balance does not change over time (unlike the actual algo balance that includes
+// rewards).  This makes it possible to compare normalized balances between two
+// accounts, to sort them, and get results that are close to what we would get
+// if we computed the exact algo balance of the accounts at a given round number.
+//
+// The normalization can lead to some inconsistencies in comparisons between
+// account balances, because the growth rate of rewards for accounts depends
+// on how recently the account has been touched (our rewards do not implement
+// compounding).  However, online accounts have to periodically renew
+// participation keys, so the scale of the inconsistency is small.
+func (u AccountData) NormalizedOnlineBalance(rewardUnit uint64) uint64 {
+	return NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, rewardUnit)
+}
+
+// NormalizedOnlineAccountBalance returns a “normalized” balance for an account
+// with the given parameters.
+//
+// The normalization compensates for rewards that have not yet been applied,
+// by computing a balance normalized to round 0.  To normalize, we estimate
+// the microalgo balance that an account should have had at round 0, in order
+// to end up at its current balance when rewards are included.
+//
+// The benefit of the normalization procedure is that an account's normalized
+// balance does not change over time (unlike the actual algo balance that includes
+// rewards).  This makes it possible to compare normalized balances between two
+// accounts, to sort them, and get results that are close to what we would get
+// if we computed the exact algo balance of the accounts at a given round number.
+//
+// The normalization can lead to some inconsistencies in comparisons between
+// account balances, because the growth rate of rewards for accounts depends
+// on how recently the account has been touched (our rewards do not implement
+// compounding).  However, online accounts have to periodically renew
+// participation keys, so the scale of the inconsistency is small.
+func NormalizedOnlineAccountBalance(status Status, rewardsBase uint64, microAlgos MicroAlgos, rewardUnit uint64) uint64 {
+	if status != Online {
+		return 0
+	}
+
+	// If this account had one RewardUnit of microAlgos in round 0, it would
+	// have perRewardUnit microAlgos at the account's current rewards level.
+	perRewardUnit := rewardsBase + rewardUnit
+
+	// To normalize, we compute, mathematically,
+	// u.MicroAlgos / perRewardUnit * proto.RewardUnit, as
+	// (u.MicroAlgos * proto.RewardUnit) / perRewardUnit.
+	norm, overflowed := Muldiv(microAlgos.ToUint64(), rewardUnit, perRewardUnit)
+
+	// Mathematically should be impossible to overflow
+	// because perRewardUnit >= proto.RewardUnit, as long
+	// as u.RewardBase isn't huge enough to cause overflow..
+	if overflowed {
+		logging.Base().Panicf("overflow computing normalized balance %d * %d / (%d + %d)",
+			microAlgos.ToUint64(), rewardUnit, rewardsBase, rewardUnit)
+	}
+
+	return norm
 }
 
 // BalanceRecord pairs an account's address with its associated data.

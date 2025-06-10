@@ -130,7 +130,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 	})
 
 	for i := 0; i < len(onlineAccounts); i++ {
-		dbtop, err := ar.AccountsOnlineTop(rnd, 0, uint64(i), proto)
+		dbtop, err := ar.AccountsOnlineTop(rnd, 0, uint64(i), proto.RewardUnit)
 		require.NoError(t, err)
 		require.Equal(t, i, len(dbtop))
 
@@ -140,7 +140,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 		}
 	}
 
-	top, err := ar.AccountsOnlineTop(rnd, 0, uint64(len(onlineAccounts)+1), proto)
+	top, err := ar.AccountsOnlineTop(rnd, 0, uint64(len(onlineAccounts)+1), proto.RewardUnit)
 	require.NoError(t, err)
 	require.Equal(t, len(top), len(onlineAccounts))
 }
@@ -2335,7 +2335,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		// check round 1
 		rnd := basics.Round(1)
-		online, err := ar.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err := ar.AccountsOnlineTop(rnd, 0, 10, proto.RewardUnit)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(online))
 		require.NotContains(t, online, addrC)
@@ -2374,7 +2374,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		// check round 2
 		rnd = basics.Round(2)
-		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto.RewardUnit)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(online))
 		require.NotContains(t, online, addrA)
@@ -2407,7 +2407,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		// check round 3
 		rnd = basics.Round(3)
-		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto.RewardUnit)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(online))
 		require.NotContains(t, online, addrA)

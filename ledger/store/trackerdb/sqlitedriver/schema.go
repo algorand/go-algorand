@@ -284,7 +284,7 @@ func accountsAddNormalizedBalance(e db.Executable, proto config.ConsensusParams)
 			return err
 		}
 
-		normBalance := proto.NormalizedOnlineBalance(data)
+		normBalance := data.NormalizedOnlineBalance(proto.RewardUnit)
 		if normBalance > 0 {
 			_, err = e.Exec("UPDATE accountbase SET normalizedonlinebalance=? WHERE address=?", normBalance, addrbuf)
 			if err != nil {

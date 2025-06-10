@@ -989,7 +989,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				if err == nil {
 					ledgercore.AssignAccountData(&data, ad)
 					withoutRewards = data.MicroAlgos // record balance before updating rewards
-					data = rewardsProto.WithUpdatedRewards(data, rewardsLevel)
+					data = data.WithUpdatedRewards(rewardsProto.RewardUnit, rewardsLevel)
 				}
 			}()
 			withRewards = false

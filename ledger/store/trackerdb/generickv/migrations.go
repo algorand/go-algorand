@@ -168,7 +168,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 			var bad trackerdb.BaseAccountData
 			bad.SetAccountData(&account)
 			// insert the account
-			_, err = aow.InsertAccount(addr, proto.NormalizedOnlineBalance(account), bad)
+			_, err = aow.InsertAccount(addr, account.NormalizedOnlineBalance(proto.RewardUnit), bad)
 			if err != nil {
 				return err
 			}
@@ -185,7 +185,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 				baseOnlineAD.MicroAlgos = bad.MicroAlgos
 				baseOnlineAD.RewardsBase = bad.RewardsBase
 
-				_, err = oaow.InsertOnlineAccount(addr, proto.NormalizedOnlineBalance(account), baseOnlineAD, uint64(updRound), uint64(baseOnlineAD.VoteLastValid))
+				_, err = oaow.InsertOnlineAccount(addr, account.NormalizedOnlineBalance(proto.RewardUnit), baseOnlineAD, uint64(updRound), uint64(baseOnlineAD.VoteLastValid))
 				if err != nil {
 					return err
 				}

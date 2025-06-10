@@ -54,6 +54,11 @@ func (a MicroAlgos) ToUint64() uint64 {
 	return a.Raw
 }
 
+// RewardUnits returns the number of reward units in some number of algos
+func (a MicroAlgos) RewardUnits(unitSize uint64) uint64 {
+	return a.Raw / unitSize
+}
+
 // We generate our own encoders and decoders for MicroAlgos
 // because we want it to appear as an integer, even though
 // we represent it as a single-element struct.

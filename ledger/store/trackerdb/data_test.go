@@ -1190,8 +1190,8 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	require.Equal(t, data.VoteKeyDilution, ba.VoteKeyDilution)
 	require.Equal(t, data.StateProofID, ba.StateProofID)
 
-	normBalance := config.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
-	require.Equal(t, normBalance, ba.NormalizedOnlineBalance(proto))
+	normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto.RewardUnit)
+	require.Equal(t, normBalance, ba.NormalizedOnlineBalance(proto.RewardUnit))
 	oa := ba.GetOnlineAccount(addr, normBalance)
 
 	require.Equal(t, addr, oa.Address)
@@ -1203,10 +1203,10 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	require.Equal(t, ba.StateProofID, oa.StateProofID)
 
 	rewardsLevel := uint64(1)
-	microAlgos, _, _ := config.RewardsUpdates(
-		proto, basics.Online, oa.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
+	microAlgos, _, _ := basics.WithUpdatedRewards(
+		proto.RewardUnit, basics.Online, oa.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
 	)
-	oad := ba.GetOnlineAccountData(proto, rewardsLevel)
+	oad := ba.GetOnlineAccountData(proto.RewardUnit, rewardsLevel)
 
 	require.Equal(t, microAlgos, oad.MicroAlgosWithRewards)
 	require.Equal(t, ba.VoteID, oad.VoteID)

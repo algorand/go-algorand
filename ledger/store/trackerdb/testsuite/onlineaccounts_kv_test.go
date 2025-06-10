@@ -60,7 +60,7 @@ func CustomTestOnlineAccountsWriteRead(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA := dataA.NormalizedOnlineBalance(t.proto)
+	normalizedBalA := dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	// write
 	refA, err := oaw.InsertOnlineAccount(addrA, normalizedBalA, dataA, updRoundA, lastValidA)
@@ -77,7 +77,7 @@ func CustomTestOnlineAccountsWriteRead(t *customT) {
 
 	// write a new version
 	dataA.MicroAlgos = basics.MicroAlgos{Raw: uint64(321)}
-	normalizedBalA = dataA.NormalizedOnlineBalance(t.proto)
+	normalizedBalA = dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 	updRoundA = uint64(450)
 	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA, dataA, updRoundA, lastValidA)
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func CustomTestOnlineAccountHistory(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto)
+	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	refA1, err := oaw.InsertOnlineAccount(addrA, normalizedBalA1, dataA1, uint64(2), uint64(2))
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func CustomTestOnlineAccountHistory(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA2 := dataA2.NormalizedOnlineBalance(t.proto)
+	normalizedBalA2 := dataA2.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	refA2, err := oaw.InsertOnlineAccount(addrA, normalizedBalA2, dataA2, uint64(3), uint64(3))
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func CustomTestOnlineAccountHistory(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalB1 := dataB1.NormalizedOnlineBalance(t.proto)
+	normalizedBalB1 := dataB1.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	refB1, err := oaw.InsertOnlineAccount(addrB, normalizedBalB1, dataB1, uint64(3), uint64(3))
 	require.NoError(t, err)
@@ -192,27 +192,27 @@ func CustomTestOnlineAccountsAll(t *customT) {
 	dataA0 := trackerdb.BaseOnlineAccountData{
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(200)},
 	}
-	_, err = oaw.InsertOnlineAccount(addrA, dataA0.NormalizedOnlineBalance(t.proto), dataA0, 0, voteLastValid)
+	_, err = oaw.InsertOnlineAccount(addrA, dataA0.NormalizedOnlineBalance(t.proto.RewardUnit), dataA0, 0, voteLastValid)
 	require.NoError(t, err)
 
 	dataA1 := trackerdb.BaseOnlineAccountData{
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(250)},
 	}
-	_, err = oaw.InsertOnlineAccount(addrA, dataA1.NormalizedOnlineBalance(t.proto), dataA1, 1, voteLastValid)
+	_, err = oaw.InsertOnlineAccount(addrA, dataA1.NormalizedOnlineBalance(t.proto.RewardUnit), dataA1, 1, voteLastValid)
 	require.NoError(t, err)
 
 	addrB := basics.Address(crypto.Hash([]byte("b")))
 	dataB := trackerdb.BaseOnlineAccountData{
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(100)},
 	}
-	_, err = oaw.InsertOnlineAccount(addrB, dataB.NormalizedOnlineBalance(t.proto), dataB, 0, voteLastValid)
+	_, err = oaw.InsertOnlineAccount(addrB, dataB.NormalizedOnlineBalance(t.proto.RewardUnit), dataB, 0, voteLastValid)
 	require.NoError(t, err)
 
 	addrC := basics.Address(crypto.Hash([]byte("c")))
 	dataC := trackerdb.BaseOnlineAccountData{
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(30)},
 	}
-	_, err = oaw.InsertOnlineAccount(addrC, dataC.NormalizedOnlineBalance(t.proto), dataC, 0, voteLastValid)
+	_, err = oaw.InsertOnlineAccount(addrC, dataC.NormalizedOnlineBalance(t.proto.RewardUnit), dataC, 0, voteLastValid)
 	require.NoError(t, err)
 
 	//
@@ -257,7 +257,7 @@ func CustomTestAccountsOnlineTop(t *customT) {
 			MicroAlgos:     microAlgos,
 			RewardsBase:    rewardBase,
 		}
-		normalizedBal := data.NormalizedOnlineBalance(t.proto)
+		normalizedBal := data.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 		// write
 		_, err := oaw.InsertOnlineAccount(addr, normalizedBal, data, updRound, lastValid)
@@ -267,13 +267,13 @@ func CustomTestAccountsOnlineTop(t *customT) {
 	}
 
 	// read (all)
-	poA, err := ar.AccountsOnlineTop(basics.Round(0), 0, 10, t.proto)
+	poA, err := ar.AccountsOnlineTop(basics.Round(0), 0, 10, t.proto.RewardUnit)
 	require.NoError(t, err)
 	require.Contains(t, poA, testData[9]) // most money
 	require.Contains(t, poA, testData[0]) // least money
 
 	// read (just a few)
-	poA, err = ar.AccountsOnlineTop(basics.Round(0), 1, 2, t.proto)
+	poA, err = ar.AccountsOnlineTop(basics.Round(0), 1, 2, t.proto.RewardUnit)
 	require.NoError(t, err)
 	require.Len(t, poA, 2)
 	require.Contains(t, poA, testData[8]) // (second most money, we skipped 1)
@@ -296,7 +296,7 @@ func CustomTestLookupOnlineAccountDataByAddress(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA := dataA.NormalizedOnlineBalance(t.proto)
+	normalizedBalA := dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	refA, err := oaw.InsertOnlineAccount(addrA, normalizedBalA, dataA, updRoundA, lastValidA)
 	require.NoError(t, err)
@@ -357,7 +357,7 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA0 := dataA0.NormalizedOnlineBalance(t.proto)
+	normalizedBalA0 := dataA0.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA0, dataA0, uint64(0), uint64(21))
 	require.NoError(t, err)
@@ -369,7 +369,7 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalB2 := dataB0.NormalizedOnlineBalance(t.proto)
+	normalizedBalB2 := dataB0.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	_, err = oaw.InsertOnlineAccount(addrB, normalizedBalB2, dataB0, uint64(0), uint64(2))
 	require.NoError(t, err)
@@ -382,7 +382,7 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto)
+	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA1, dataA1, uint64(1), uint64(21))
 	require.NoError(t, err)
@@ -395,7 +395,7 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(187)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalA2 := dataA1.NormalizedOnlineBalance(t.proto)
+	normalizedBalA2 := dataA1.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA2, dataA2, uint64(2), uint64(21))
 	require.NoError(t, err)
@@ -407,7 +407,7 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(721)},
 		RewardsBase:    uint64(200),
 	}
-	normalizedBalC2 := dataC2.NormalizedOnlineBalance(t.proto)
+	normalizedBalC2 := dataC2.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	_, err = oaw.InsertOnlineAccount(addrC, normalizedBalC2, dataC2, uint64(2), uint64(21))
 	require.NoError(t, err)
@@ -422,7 +422,7 @@ func CustomTestOnlineAccountsDelete(t *customT) {
 
 	// check accounts
 	// expected: A touched [2], C touched [2]
-	oas, err := ar.AccountsOnlineTop(basics.Round(4), 0, 99, t.proto)
+	oas, err := ar.AccountsOnlineTop(basics.Round(4), 0, 99, t.proto.RewardUnit)
 	require.NoError(t, err)
 	require.Len(t, oas, 3)
 	require.Equal(t, oas[addrA].MicroAlgos, dataA2.MicroAlgos) // check item
@@ -459,7 +459,7 @@ func CustomTestAccountsOnlineExpired(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(20)},
 		RewardsBase:    uint64(0),
 	}
-	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto)
+	normalizedBalA1 := dataA1.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA1, dataA1, uint64(0), uint64(2))
 	require.NoError(t, err)
@@ -470,7 +470,7 @@ func CustomTestAccountsOnlineExpired(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(100)},
 		RewardsBase:    uint64(0),
 	}
-	normalizedBalA2 := dataA2.NormalizedOnlineBalance(t.proto)
+	normalizedBalA2 := dataA2.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	_, err = oaw.InsertOnlineAccount(addrA, normalizedBalA2, dataA2, uint64(1), uint64(5))
 	require.NoError(t, err)
@@ -483,7 +483,7 @@ func CustomTestAccountsOnlineExpired(t *customT) {
 		MicroAlgos:     basics.MicroAlgos{Raw: uint64(75)},
 		RewardsBase:    uint64(0),
 	}
-	normalizedBalB1 := dataB1.NormalizedOnlineBalance(t.proto)
+	normalizedBalB1 := dataB1.NormalizedOnlineBalance(t.proto.RewardUnit)
 
 	_, err = oaw.InsertOnlineAccount(addrB, normalizedBalB1, dataB1, uint64(2), uint64(7))
 	require.NoError(t, err)
@@ -498,33 +498,33 @@ func CustomTestAccountsOnlineExpired(t *customT) {
 	//
 
 	// read (none)
-	expAccts, err := ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(0), t.proto, 0)
+	expAccts, err := ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(0), t.proto.RewardUnit, 0)
 	require.NoError(t, err)
 	require.Empty(t, expAccts)
 
 	// read (at acct round, voteRnd > lastValid)
-	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(4), t.proto, 0)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(4), t.proto.RewardUnit, 0)
 	require.NoError(t, err)
 	require.Len(t, expAccts, 1)
 	require.Equal(t, expAccts[addrA].MicroAlgosWithRewards, basics.MicroAlgos{Raw: uint64(20)}) // check item
 
 	// read (at acct round, voteRnd = lastValid)
-	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(2), t.proto, 0)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(2), t.proto.RewardUnit, 0)
 	require.NoError(t, err)
 	require.Empty(t, expAccts)
 
 	// read (at acct round, voteRnd < lastValid)
-	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(1), t.proto, 0)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(0), basics.Round(1), t.proto.RewardUnit, 0)
 	require.NoError(t, err)
 	require.Empty(t, expAccts)
 
 	// read (take latest exp value)
-	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(1), basics.Round(4), t.proto, 0)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(1), basics.Round(4), t.proto.RewardUnit, 0)
 	require.NoError(t, err)
 	require.Len(t, expAccts, 0)
 
 	// read (all)
-	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(3), basics.Round(20), t.proto, 0)
+	expAccts, err = ar.ExpiredOnlineAccountsForRound(basics.Round(3), basics.Round(20), t.proto.RewardUnit, 0)
 	require.Len(t, expAccts, 2)
 	require.Equal(t, expAccts[addrA].MicroAlgosWithRewards, basics.MicroAlgos{Raw: uint64(100)}) // check item
 	require.Equal(t, expAccts[addrB].MicroAlgosWithRewards, basics.MicroAlgos{Raw: uint64(75)})  // check item
