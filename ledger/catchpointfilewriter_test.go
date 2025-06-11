@@ -1199,6 +1199,12 @@ assert
 		require.Empty(t, vb.Block().AbsentParticipationAccounts)
 	}
 
+	require.Eventually(t, func() bool {
+		gr, _ := dl.generator.LatestCommitted()
+		vr, _ := dl.validator.LatestCommitted()
+		return gr == vr
+	}, 1*time.Second, 50*time.Millisecond)
+
 	// wait for tracker to flush
 	testCatchpointFlushRound(dl.generator)
 	testCatchpointFlushRound(dl.validator)
