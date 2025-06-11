@@ -116,6 +116,11 @@ def sdkize(input):
     # transaction - for some reason, ApplicationCallTxnFields is wrapped in this nothing-burger
     input = input.replace("ApplicationCallTxnFields", "ApplicationFields")
 
+    # These are "string" in the SDK, even though we actually have
+    # `protocol.ConsensusVersion` available.  Who knows?
+    for field in ["UpgradePropose", "CurrentProtocol", "NextProtocol"]:
+        input = re.sub(field+"\\s+protocol.ConsensusVersion", field+" string", input)
+
     return input
 
 def export(src, dst, start, stop=None):
