@@ -160,7 +160,7 @@ func TestAccountDBInit(t *testing.T) {
 
 		checkAccounts(t, tx, 0, accts)
 
-		newDB, err = tx.Testing().AccountsInitLightTest(t, accts, proto)
+		newDB, err = tx.Testing().AccountsInitLightTest(t, accts, proto.RewardUnit)
 		require.NoError(t, err)
 		require.False(t, newDB)
 		checkAccounts(t, tx, 0, accts)
@@ -2056,7 +2056,7 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 		batchCount = 1
 	}
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	rewardUnit := config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit
 	dbs, _ := storetesting.DbOpenTest(b, false)
 	cleanup := func() {
 		dbs.Close()
@@ -2064,7 +2064,7 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
-	_, err = sqlitedriver.AccountsInitLightTest(b, tx, make(map[basics.Address]basics.AccountData), proto)
+	_, err = sqlitedriver.AccountsInitLightTest(b, tx, nil, rewardUnit)
 	require.NoError(b, err)
 	err = tx.Commit()
 	require.NoError(b, err)

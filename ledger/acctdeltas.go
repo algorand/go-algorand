@@ -100,7 +100,7 @@ const MaxEncodedBaseAccountDataSize = 350
 const MaxEncodedBaseResourceDataSize = 20000
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
+func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, rewardUnit uint64) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]trackerdb.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].Address = balance.Address
@@ -110,7 +110,7 @@ func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.Co
 			return nil, err
 		}
 		normalizedAccountBalances[i].AccountData.SetAccountData(&accountDataV5)
-		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(proto.RewardUnit)
+		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(rewardUnit)
 		type resourcesRow struct {
 			aidx basics.CreatableIndex
 			trackerdb.ResourcesData

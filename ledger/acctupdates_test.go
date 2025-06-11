@@ -87,7 +87,7 @@ func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, 
 	totals.RewardsLevel = rewardLevel
 	for _, ar := range accts {
 		for _, data := range ar {
-			totals.AddAccount(proto, data, &ot)
+			totals.AddAccount(proto.RewardUnit, data, &ot)
 		}
 	}
 	require.False(t, ot.Overflowed)
