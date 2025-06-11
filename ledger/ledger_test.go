@@ -29,6 +29,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -244,9 +245,9 @@ func TestLedgerBasic(t *testing.T) {
 func TestLedgerBlockHeaders(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	a := require.New(t)
+	a := assert.New(t)
 
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 100)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -257,7 +258,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
 	for _, acctdata := range genesisInitState.Accounts {
@@ -350,6 +351,9 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	}
 	a.NotEmpty(wrongVersion)
 	badBlock.BlockHeader.CurrentProtocol = wrongVersion
+	if !config.Consensus[wrongVersion].EnableSha512BlockHash {
+		badBlock.BlockHeader.Branch512 = crypto.Sha512Digest{}
+	}
 	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
@@ -379,6 +383,14 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Branch[0]++
 	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
+
+	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+	badBlock.BlockHeader.Branch512 = crypto.Sha512Digest{}
+	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch512 incorrect")
+
+	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+	badBlock.BlockHeader.Branch512[0]++
+	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch512 incorrect")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.RewardsLevel++
