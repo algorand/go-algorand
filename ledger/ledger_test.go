@@ -29,6 +29,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -244,166 +245,187 @@ func TestLedgerBasic(t *testing.T) {
 func TestLedgerBlockHeaders(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	a := require.New(t)
+	a := assert.New(t)
 
-	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 100)
-	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, cfg)
-	a.NoError(err, "could not open ledger")
-	defer l.Close()
+	for _, cv := range []protocol.ConsensusVersion{
+		protocol.ConsensusV25, // some oldish version to test against backward compatibility
+		protocol.ConsensusCurrentVersion,
+		protocol.ConsensusFuture,
+	} {
+		genesisInitState, _ := ledgertesting.GenerateInitState(t, cv, 100)
+		const inMem = true
+		cfg := config.GetDefaultLocal()
+		cfg.Archival = true
+		l, err := OpenLedger(logging.Base(), t.Name()+string(cv), inMem, genesisInitState, cfg)
+		a.NoError(err, "could not open ledger")
+		defer l.Close()
 
-	lastBlock, err := l.Block(l.Latest())
-	a.NoError(err, "could not get last block")
+		lastBlock, err := l.Block(l.Latest())
+		a.NoError(err, "could not get last block")
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	poolAddr := testPoolAddr
-	var totalRewardUnits uint64
-	for _, acctdata := range genesisInitState.Accounts {
-		totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
-	}
-	poolBal, _, _, err := l.LookupLatest(poolAddr)
-	a.NoError(err, "could not get incentive pool balance")
-
-	correctHeader := bookkeeping.BlockHeader{
-		Round:  l.Latest() + 1,
-		Branch: lastBlock.Hash(),
-		// Seed:       does not matter,
-		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
-		Proposer:     basics.Address{0x01}, // Must be set to _something_.
-		TimeStamp:    0,
-		GenesisID:    t.Name(),
-		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
-		UpgradeState: lastBlock.UpgradeState,
-		// UpgradeVote: empty,
-	}
-
-	emptyBlock := bookkeeping.Block{
-		BlockHeader: correctHeader,
-	}
-	correctHeader.TxnCommitments, err = emptyBlock.PaysetCommit()
-	require.NoError(t, err)
-
-	correctHeader.RewardsPool = testPoolAddr
-	correctHeader.FeeSink = testSinkAddr
-
-	if proto.SupportGenesisHash {
-		correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
-	}
-	if proto.EnableSha512BlockHash {
-		correctHeader.Branch512 = lastBlock.Hash512()
-	}
-
-	initNextBlockHeader(&correctHeader, lastBlock, proto)
-
-	var badBlock bookkeeping.Block
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Round++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "ledger does not have entry")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Round--
-	a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Round = 0
-	a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.GenesisID = ""
-	a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID missing")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.GenesisID = "incorrect"
-	a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID mismatch")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.UpgradePropose = "invalid"
-	a.ErrorContains(l.appendUnvalidated(badBlock), "proposed upgrade wait rounds 0")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.UpgradePropose = "invalid"
-	badBlock.BlockHeader.UpgradeDelay = 20000
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.UpgradeApprove = true
-	a.ErrorContains(l.appendUnvalidated(badBlock), "approval without an active proposal")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.CurrentProtocol = "incorrect"
-	a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.CurrentProtocol = ""
-	a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported", "header with empty current protocol")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	var wrongVersion protocol.ConsensusVersion
-	for ver := range config.Consensus {
-		if ver != correctHeader.CurrentProtocol {
-			wrongVersion = ver
-			break
+		proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
+		poolAddr := testPoolAddr
+		var totalRewardUnits uint64
+		for _, acctdata := range genesisInitState.Accounts {
+			totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
 		}
+		poolBal, _, _, err := l.LookupLatest(poolAddr)
+		a.NoError(err, "could not get incentive pool balance")
+
+		correctHeader := bookkeeping.BlockHeader{
+			Round:  l.Latest() + 1,
+			Branch: lastBlock.Hash(),
+			// Seed:       does not matter,
+			Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
+			TimeStamp:    0,
+			GenesisID:    t.Name(),
+			RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
+			UpgradeState: lastBlock.UpgradeState,
+			// UpgradeVote: empty,
+		}
+		if proto.Payouts.Enabled {
+			correctHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+		}
+
+		emptyBlock := bookkeeping.Block{
+			BlockHeader: correctHeader,
+		}
+		correctHeader.TxnCommitments, err = emptyBlock.PaysetCommit()
+		require.NoError(t, err)
+
+		correctHeader.RewardsPool = testPoolAddr
+		correctHeader.FeeSink = testSinkAddr
+
+		if proto.SupportGenesisHash {
+			correctHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+		}
+		if proto.EnableSha512BlockHash {
+			correctHeader.Branch512 = lastBlock.Hash512()
+		}
+
+		initNextBlockHeader(&correctHeader, lastBlock, proto)
+
+		var badBlock bookkeeping.Block
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Round++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "ledger does not have entry")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Round--
+		a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Round = 0
+		a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.GenesisID = ""
+		a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID missing")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.GenesisID = "incorrect"
+		a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID mismatch")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.UpgradePropose = "invalid"
+		a.ErrorContains(l.appendUnvalidated(badBlock), "proposed upgrade wait rounds 0")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.UpgradePropose = "invalid"
+		badBlock.BlockHeader.UpgradeDelay = 20000
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.UpgradeApprove = true
+		a.ErrorContains(l.appendUnvalidated(badBlock), "approval without an active proposal")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.CurrentProtocol = "incorrect"
+		a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.CurrentProtocol = ""
+		a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported", "header with empty current protocol")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		var wrongVersion protocol.ConsensusVersion
+		for ver := range config.Consensus {
+			if ver != correctHeader.CurrentProtocol {
+				wrongVersion = ver
+				break
+			}
+		}
+		a.NotEmpty(wrongVersion)
+		badBlock.BlockHeader.CurrentProtocol = wrongVersion
+		if !config.Consensus[wrongVersion].EnableSha512BlockHash {
+			badBlock.BlockHeader.Branch512 = crypto.Sha512Digest{}
+		}
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.NextProtocol = "incorrect"
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.NextProtocolApprovals++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect number of upgrade approvals")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.NextProtocolVoteBefore++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol vote deadline")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.NextProtocolSwitchOn++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol switch round")
+
+		// TODO test upgrade cases with a valid upgrade in progress
+
+		// TODO test timestamp bounds
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Branch = bookkeeping.BlockHash{}
+		a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.Branch[0]++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
+
+		if proto.EnableSha512BlockHash {
+			badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+			badBlock.BlockHeader.Branch512 = crypto.Sha512Digest{}
+			a.ErrorContains(l.appendUnvalidated(badBlock), "block branch512 incorrect")
+
+			badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+			badBlock.BlockHeader.Branch512[0]++
+			a.ErrorContains(l.appendUnvalidated(badBlock), "block branch512 incorrect")
+		}
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.RewardsLevel++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.RewardsRate++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.RewardsResidue++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
+
+		// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
+		a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
+
+		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+		badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
+		a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
+
+		correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
+		a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 	}
-	a.NotEmpty(wrongVersion)
-	badBlock.BlockHeader.CurrentProtocol = wrongVersion
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.NextProtocol = "incorrect"
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.NextProtocolApprovals++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect number of upgrade approvals")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.NextProtocolVoteBefore++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol vote deadline")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.NextProtocolSwitchOn++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol switch round")
-
-	// TODO test upgrade cases with a valid upgrade in progress
-
-	// TODO test timestamp bounds
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Branch = bookkeeping.BlockHash{}
-	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.Branch[0]++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.RewardsLevel++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.RewardsRate++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.RewardsResidue++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
-
-	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
-	a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
-
-	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
-	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
-	a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
-
-	correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
-	a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 }
 
 func TestLedgerSingleTx(t *testing.T) {
