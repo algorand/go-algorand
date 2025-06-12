@@ -482,7 +482,7 @@ var appExecuteCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		reportWarnf("app interact is deprecated and will be removed soon. Please speak up if the feature matters to you.")
-		time.Sleep(5 * time.Second)
+		time.Sleep(3 * time.Second)
 
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
