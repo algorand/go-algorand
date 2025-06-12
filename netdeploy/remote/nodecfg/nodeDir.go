@@ -294,6 +294,8 @@ func (nd *nodeDir) configureTelemetry(enable bool) (err error) {
 		return cfgErr
 	}
 
+	config.AnnotateTelemetry(&cfg, nd.configurator.genesisData.ID())
+
 	// Override default enabling of new telemetry config
 	if created {
 		cfg.Enable = false
