@@ -2,9 +2,9 @@
 # go-algorand
 | **Branch**      | **Build Status** |
 | --------------- | ---------------- |
-| **rel/stable**  | [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fstable.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fstable) |
-| **rel/beta**    | [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fbeta.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fbeta) |
-| **rel/nightly** | [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fnightly.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fnightly) |
+| **rel/stable**  | [![Nightly Tests](https://github.com/algorand/go-algorand/actions/workflows/ci-nightly.yml/badge.svg?branch=rel%2Fstable)](https://github.com/algorand/go-algorand/actions/workflows/ci-nightly.yml) |
+| **rel/beta**    | [![Nightly Tests](https://github.com/algorand/go-algorand/actions/workflows/ci-nightly.yml/badge.svg?branch=rel%2Fbeta)](https://github.com/algorand/go-algorand/actions/workflows/ci-nightly.yml) |
+| **rel/nightly** | [![Nightly Tests](https://github.com/algorand/go-algorand/actions/workflows/ci-nightly.yml/badge.svg?branch=rel%2Fnightly)](https://github.com/algorand/go-algorand/actions/workflows/ci-nightly.yml) |
 
 
 **Algorand's** official implementation in Go.

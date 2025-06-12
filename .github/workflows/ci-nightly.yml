@@ -409,7 +409,7 @@ jobs:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
         with:
-          name: workspace-ubuntu-24.04-${{ github.run_id }}
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: /tmp/
       - name: Extract workspace archive
         run: |
