@@ -170,8 +170,10 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     KEEP_TEMPS_CMD_STR=""
 
-    # If the platform is arm64, we want to pass "--keep-temps" into e2e_client_runner.py
+    # For one platform, we want to pass "--keep-temps" into e2e_client_runner.py
     # so that we can keep the temporary test artifact for use in the indexer e2e tests.
+    # This is done in the CI environment, where the CI_KEEP_TEMP_PLATFORM variable is set to the platform
+    # that should keep the temporary test artifact.
     # The file is located at ${TEMPDIR}/net_done.tar.bz2
     if [ -n "$CI_KEEP_TEMP_PLATFORM" ] && [ "$CI_KEEP_TEMP_PLATFORM" == "$CI_PLATFORM" ]; then
       echo "Setting --keep-temps so that an e2e artifact can be saved."
