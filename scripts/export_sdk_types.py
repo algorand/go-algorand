@@ -88,8 +88,8 @@ SDK="../go-algorand-sdk/"
 
 def sdkize(input):
     # allocbounds are not used by the SDK. It's confusing to leave them in.
-    input = re.sub(",allocbound=.*\"", '"', input)
-    input = re.sub("^//msgp:allocbound.*\n", '', input, flags=re.MULTILINE)
+    input = re.sub(",(allocbound|maxtotalbytes)=.*\"", '"', input)
+    input = re.sub("^\\s*//msgp:(allocbound|sort|ignore).*\n", '', input, flags=re.MULTILINE)
 
     # protocol.ConsensusVersion and protocolConsensusVxx constants are
     # the only things that stays in the protocol package. So we "hide"
@@ -98,9 +98,7 @@ def sdkize(input):
     input = input.replace("protocol.ConsensusFuture", "protocolConsensusFuture")
 
     # All types are in the same package in the SDK
-    input = input.replace("basics.", "")
-    input = input.replace("crypto.", "")
-    input = re.sub(r'protocol\.\b', r'', input)
+    input = re.sub(r'(basics|crypto|committee|transactions|protocol)\.\b', r'', input)
 
     # and go back...
     input = input.replace("protocolConsensusV", "protocol.ConsensusV")
@@ -115,6 +113,11 @@ def sdkize(input):
 
     # transaction - for some reason, ApplicationCallTxnFields is wrapped in this nothing-burger
     input = input.replace("ApplicationCallTxnFields", "ApplicationFields")
+
+    # These are "string" in the SDK, even though we actually have
+    # `protocol.ConsensusVersion` available.  Who knows?
+    for field in ["UpgradePropose", "CurrentProtocol", "NextProtocol"]:
+        input = re.sub(field+"\\s+protocol.ConsensusVersion", field+" string", input)
 
     return input
 
@@ -184,6 +187,24 @@ if __name__ == "__main__":
     #   apps
     export_type("ApplicationCallTxnFields", "data/transactions/application.go", "applications")
     export_type("AppIndex", "data/basics/userBalance.go", "applications")
+
+    # Block
+    export_type("BlockHeader", "data/bookkeeping/block.go", "block")
+    export_type("TxnCommitments", "data/bookkeeping/block.go", "block")
+    export_type("ParticipationUpdates", "data/bookkeeping/block.go", "block")
+    export_type("RewardsState", "data/bookkeeping/block.go", "block")
+    export_type("UpgradeVote", "data/bookkeeping/block.go", "block")
+    export_type("UpgradeState", "data/bookkeeping/block.go", "block")
+    export_type("StateProofTrackingData", "data/bookkeeping/block.go", "block")
+    export_type("Block", "data/bookkeeping/block.go", "block")
+    export_type("Payset", "data/transactions/payset.go", "block")
+    export_type("SignedTxnInBlock", "data/transactions/signedtxn.go", "block")
+    export_type("SignedTxnWithAD", "data/transactions/signedtxn.go", "block")
+    export_type("ApplyData", "data/transactions/transaction.go", "block")
+    export_type("EvalDelta", "data/transactions/teal.go", "block")
+    export_type("StateDelta", "data/basics/teal.go", "block")
+    export_type("ValueDelta", "data/basics/teal.go", "block")
+    export_type("DeltaAction", "data/basics/teal.go", "block")
 
     # StateDelta.  Eventually need to deal with all types from ledgercore.StateDelta down
     export_type("AppParams", "data/basics/userBalance.go", "statedelta")
