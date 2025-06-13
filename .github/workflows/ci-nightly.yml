@@ -301,7 +301,7 @@ jobs:
     env:
       E2E_TEST_FILTER: SCRIPTS
       CI_PLATFORM: ${{ matrix.platform }}
-      CI_KEEP_TEMP_PLATFORM: amd64
+      CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
