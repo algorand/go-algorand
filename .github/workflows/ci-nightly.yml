@@ -321,6 +321,12 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: github-actions
+          aws-region: ${{ secrets.AWS_REGION }}
       - name: Run E2E subs tests
         run: |
           scripts/configure_dev.sh
