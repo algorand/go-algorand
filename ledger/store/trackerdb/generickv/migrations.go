@@ -132,7 +132,7 @@ func (m *migrator) setVersion(ctx context.Context, version int32) error {
 }
 
 func (m *migrator) initialVersion(ctx context.Context) error {
-	proto := config.Consensus[m.params.InitProto]
+	rewardUnit := config.Consensus[m.params.InitProto].RewardUnit
 
 	// TODO: make this a batch scope
 	err := m.db.TransactionContext(ctx, func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -168,7 +168,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 			var bad trackerdb.BaseAccountData
 			bad.SetAccountData(&account)
 			// insert the account
-			_, err = aow.InsertAccount(addr, account.NormalizedOnlineBalance(proto), bad)
+			_, err = aow.InsertAccount(addr, account.NormalizedOnlineBalance(rewardUnit), bad)
 			if err != nil {
 				return err
 			}
@@ -176,7 +176,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 			// build a ledgercore.AccountData to track the totals
 			ad := ledgercore.ToAccountData(account)
 			// track the totals
-			totals.AddAccount(proto, ad, &ot)
+			totals.AddAccount(rewardUnit, ad, &ot)
 
 			// insert online account (if online)
 			if bad.Status == basics.Online {
@@ -185,7 +185,7 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 				baseOnlineAD.MicroAlgos = bad.MicroAlgos
 				baseOnlineAD.RewardsBase = bad.RewardsBase
 
-				_, err = oaow.InsertOnlineAccount(addr, account.NormalizedOnlineBalance(proto), baseOnlineAD, uint64(updRound), uint64(baseOnlineAD.VoteLastValid))
+				_, err = oaow.InsertOnlineAccount(addr, account.NormalizedOnlineBalance(rewardUnit), baseOnlineAD, uint64(updRound), uint64(baseOnlineAD.VoteLastValid))
 				if err != nil {
 					return err
 				}

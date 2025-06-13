@@ -389,7 +389,7 @@ func RandomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rew
 
 // RandomDeltasImpl generates a random set of accounts delta
 func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableID *basics.CreatableIndex) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	rewardUnit := config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit
 	totals = make(map[basics.Address]ledgercore.AccountData)
 
 	updates = ledgercore.MakeAccountDeltas(len(base))
@@ -508,7 +508,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 					updates.UpsertAssetResource(addr, aidx, res.Params, res.Holding)
 				}
 			}
-			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
+			imbalance += int64(old.WithUpdatedRewards(rewardUnit, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
 		}
 	}
@@ -562,7 +562,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 				updates.UpsertAssetResource(addr, aidx, res.Params, res.Holding)
 			}
 		}
-		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
+		imbalance += int64(old.WithUpdatedRewards(rewardUnit, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 		totals[addr] = new
 	}
 

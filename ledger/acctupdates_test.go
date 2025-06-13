@@ -87,7 +87,7 @@ func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, 
 	totals.RewardsLevel = rewardLevel
 	for _, ar := range accts {
 		for _, data := range ar {
-			totals.AddAccount(proto, data, &ot)
+			totals.AddAccount(proto.RewardUnit, data, &ot)
 		}
 	}
 	require.False(t, ot.Overflowed)
@@ -2263,7 +2263,7 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 			d, validThrough, withoutRewards, err := au.lookupLatest(addr)
 			require.NoError(t, err)
-			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough]), d)
+			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto.RewardUnit, rewardsLevels[validThrough]), d)
 			require.Equal(t, accts[validThrough][addr].MicroAlgos, withoutRewards)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
