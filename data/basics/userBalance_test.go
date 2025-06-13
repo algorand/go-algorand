@@ -23,7 +23,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -38,7 +37,7 @@ func TestEmptyEncoding(t *testing.T) {
 func TestRewards(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const unitSize = 1_000_000
 	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
 	for _, accountAlgo := range accountAlgos {
 		ad := AccountData{
@@ -50,9 +49,13 @@ func TestRewards(t *testing.T) {
 
 		levels := []uint64{uint64(0), uint64(1), uint64(30), uint64(3000)}
 		for _, level := range levels {
-			money, rewards := ad.Money(proto, ad.RewardsBase+level)
-			require.Equal(t, money.Raw, ad.MicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(proto))
-			require.Equal(t, rewards.Raw, ad.RewardedMicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(proto))
+			money := func(u AccountData, rewardsLevel uint64) (balance MicroAlgos, rewards MicroAlgos) {
+				u = u.WithUpdatedRewards(unitSize, rewardsLevel)
+				return u.MicroAlgos, u.RewardedMicroAlgos
+			}
+			balance, rewards := money(ad, ad.RewardsBase+level)
+			require.Equal(t, balance.Raw, ad.MicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(unitSize))
+			require.Equal(t, rewards.Raw, ad.RewardedMicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(unitSize))
 		}
 	}
 }
@@ -60,7 +63,7 @@ func TestRewards(t *testing.T) {
 func TestWithUpdatedRewardsPanics(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const unitSize = 1_000_000
 	t.Run("AlgoPanic", func(t *testing.T) {
 		paniced := false
 		func() {
@@ -79,7 +82,7 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 				RewardedMicroAlgos: MicroAlgos{Raw: 0},
 				RewardsBase:        0,
 			}
-			a.WithUpdatedRewards(proto, 100)
+			a.WithUpdatedRewards(unitSize, 100)
 		}()
 		require.Equal(t, true, paniced)
 	})
@@ -91,8 +94,8 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 			RewardedMicroAlgos: MicroAlgos{Raw: ^uint64(0)},
 			RewardsBase:        0,
 		}
-		b := a.WithUpdatedRewards(proto, 100)
-		require.Equal(t, 100*a.MicroAlgos.RewardUnits(proto)-1, b.RewardedMicroAlgos.Raw)
+		b := a.WithUpdatedRewards(unitSize, 100)
+		require.Equal(t, 100*a.MicroAlgos.RewardUnits(unitSize)-1, b.RewardedMicroAlgos.Raw)
 	})
 }
 

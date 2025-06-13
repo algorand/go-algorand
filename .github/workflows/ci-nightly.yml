@@ -301,7 +301,7 @@ jobs:
     env:
       E2E_TEST_FILTER: SCRIPTS
       CI_PLATFORM: ${{ matrix.platform }}
-      CI_KEEP_TEMP_PLATFORM: amd64
+      CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -399,58 +399,58 @@ jobs:
               ]
             }
 
-  # upload:
-  #   needs: [verify_nightly]
-  #   strategy:
-  #     matrix:
-  #       platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-  #   runs-on: ${{ matrix.platform }}
-  #   steps:
-  #     - name: Download workspace archive
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: workspace-ubuntu-24.04-${{ github.run_id }}
-  #         path: /tmp/
-  #     - name: Extract workspace archive
-  #       run: |
-  #         tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
-  #         rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
-  #       shell: bash
-  #     - name: Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v4.2.1
-  #       with:
-  #         role-to-assume: ${{ secrets.AWS_ROLE }}
-  #         role-session-name: github-actions
-  #         aws-region: ${{ secrets.AWS_REGION }}
-  #     - name: Upload Binaries
-  #       env:
-  #         AWS_REGION: ${{ secrets.AWS_REGION }}
-  #         S3_REGION: ${{ secrets.AWS_REGION }}
-  #         S3_RELEASE_BUCKET: ${{ secrets.S3_RELEASE_BUCKET }}
-  #       timeout-minutes: 20
-  #       run: |
-  #         if [[ "${{ github.ref }}" == "refs/heads/rel/nightly" ]]; then
-  #           export NIGHTLY_BUILD="true"
-  #         fi
-  #         export TRAVIS_BRANCH="${{ github.ref_name }}"
-  #         scripts/travis/deploy_packages.sh
-  #       shell: bash
-  #     - name: Notify Slack on failure
-  #       if: failure()
-  #       uses: slackapi/slack-github-action@v2.1.0
-  #       with:
-  #         webhook: ${{ secrets.SLACK_WEBHOOK }}
-  #         webhook-type: webhook-trigger
-  #         payload: |
-  #           {
-  #             "text": "🚨 Upload Failure Alert",
-  #             "blocks": [
-  #               {
-  #                 "type": "section",
-  #                 "text": {
-  #                   "type": "mrkdwn",
-  #                   "text": "*Upload Failure in Nightly Build*\n\n• Job: `upload`\n• Branch: `${{ github.ref_name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-  #                 }
-  #               }
-  #             ]
-  #           }
+  upload:
+    needs: [verify_nightly]
+    strategy:
+      matrix:
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: github-actions
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Upload Binaries
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          S3_REGION: ${{ secrets.AWS_REGION }}
+          S3_RELEASE_BUCKET: ${{ secrets.S3_RELEASE_BUCKET }}
+        timeout-minutes: 20
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/rel/nightly" ]]; then
+            export NIGHTLY_BUILD="true"
+          fi
+          export TRAVIS_BRANCH="${{ github.ref_name }}"
+          scripts/travis/deploy_packages.sh
+        shell: bash
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: webhook-trigger
+          payload: |
+            {
+              "text": "🚨 Upload Failure Alert",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Upload Failure in Nightly Build*\n\n• Job: `upload`\n• Branch: `${{ github.ref_name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }

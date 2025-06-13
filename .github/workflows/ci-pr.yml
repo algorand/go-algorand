@@ -10,6 +10,7 @@ env:
   KMD_NOUSB: True
   BUILD_TYPE: integration
   ALGOTEST: 1
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
   
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
@@ -57,7 +58,7 @@ jobs:
         path: /tmp/workspace-${{ matrix.platform }}.tar.gz
         retention-days: 1
     - name: Notify Slack on failure
-      if: failure()
+      if: failure() && env.SLACK_WEBHOOK != ''
       uses: slackapi/slack-github-action@v2.1.0
       with:
         webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -122,7 +123,7 @@ jobs:
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -200,7 +201,7 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -267,7 +268,7 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -302,7 +303,7 @@ jobs:
     env:
       E2E_TEST_FILTER: SCRIPTS
       CI_PLATFORM: ${{ matrix.platform }}
-      CI_KEEP_TEMP_PLATFORM: amd64
+      CI_KEEP_TEMP_PLATFORM: ""
       SHORT_TEST_FLAG: "-short"
     steps:
       - name: Download workspace archive
@@ -331,7 +332,7 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -382,7 +383,7 @@ jobs:
               TestGoalWithExpect \
               TestTealdbgWithExpect
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}

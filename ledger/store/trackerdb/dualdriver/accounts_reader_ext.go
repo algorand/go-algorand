@@ -19,7 +19,6 @@ package dualdriver
 import (
 	"context"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -73,9 +72,9 @@ func (ar *accountsReaderExt) AccountsOnlineRoundParams() (onlineRoundParamsData 
 }
 
 // AccountsOnlineTop implements trackerdb.AccountsReaderExt
-func (ar *accountsReaderExt) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (onlineAccounts map[basics.Address]*ledgercore.OnlineAccount, err error) {
-	onlineAccountsP, errP := ar.primary.AccountsOnlineTop(rnd, offset, n, proto)
-	onlineAccountsS, errS := ar.secondary.AccountsOnlineTop(rnd, offset, n, proto)
+func (ar *accountsReaderExt) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, rewardUnit uint64) (onlineAccounts map[basics.Address]*ledgercore.OnlineAccount, err error) {
+	onlineAccountsP, errP := ar.primary.AccountsOnlineTop(rnd, offset, n, rewardUnit)
+	onlineAccountsS, errS := ar.secondary.AccountsOnlineTop(rnd, offset, n, rewardUnit)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {
@@ -284,9 +283,9 @@ func (ar *accountsReaderExt) OnlineAccountsAll(maxAccounts uint64) (accounts []t
 }
 
 // ExpiredOnlineAccountsForRound implements trackerdb.AccountsReaderExt
-func (ar *accountsReaderExt) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (expAccounts map[basics.Address]*basics.OnlineAccountData, err error) {
-	expAccountsP, errP := ar.primary.ExpiredOnlineAccountsForRound(rnd, voteRnd, proto, rewardsLevel)
-	expAccountsS, errS := ar.secondary.ExpiredOnlineAccountsForRound(rnd, voteRnd, proto, rewardsLevel)
+func (ar *accountsReaderExt) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, rewardUnit uint64, rewardsLevel uint64) (expAccounts map[basics.Address]*basics.OnlineAccountData, err error) {
+	expAccountsP, errP := ar.primary.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardUnit, rewardsLevel)
+	expAccountsS, errS := ar.secondary.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardUnit, rewardsLevel)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {
