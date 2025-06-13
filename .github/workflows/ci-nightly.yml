@@ -406,7 +406,7 @@ jobs:
             }
 
   upload:
-    needs: [verify_nightly]
+    needs: [verify_nightly, e2e_subs_nightly]
     strategy:
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
