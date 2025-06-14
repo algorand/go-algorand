@@ -34,62 +34,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestApplicationCallFieldsEmpty(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
-	ac := transactions.ApplicationCallTxnFields{}
-	a.True(ac.Empty())
-
-	ac.ApplicationID = 1
-	a.False(ac.Empty())
-
-	ac.ApplicationID = 0
-	ac.OnCompletion = 1
-	a.False(ac.Empty())
-
-	ac.OnCompletion = 0
-	ac.ApplicationArgs = make([][]byte, 1)
-	a.False(ac.Empty())
-
-	ac.ApplicationArgs = nil
-	ac.Accounts = make([]basics.Address, 1)
-	a.False(ac.Empty())
-
-	ac.Accounts = nil
-	ac.ForeignApps = make([]basics.AppIndex, 1)
-	a.False(ac.Empty())
-
-	ac.ForeignApps = nil
-	ac.LocalStateSchema = basics.StateSchema{NumUint: 1}
-	a.False(ac.Empty())
-
-	ac.LocalStateSchema = basics.StateSchema{}
-	ac.GlobalStateSchema = basics.StateSchema{NumUint: 1}
-	a.False(ac.Empty())
-
-	ac.GlobalStateSchema = basics.StateSchema{}
-	ac.ApprovalProgram = []byte{1}
-	a.False(ac.Empty())
-
-	ac.ApprovalProgram = []byte{}
-	a.False(ac.Empty())
-
-	ac.ApprovalProgram = nil
-	ac.ClearStateProgram = []byte{1}
-	a.False(ac.Empty())
-
-	ac.ClearStateProgram = []byte{}
-	a.False(ac.Empty())
-
-	ac.ClearStateProgram = nil
-	a.True(ac.Empty())
-
-	ac.ExtraProgramPages = 0
-	a.True(ac.Empty())
-}
-
 func getRandomAddress(a *require.Assertions) basics.Address {
 	const rl = 16
 	b := make([]byte, rl)

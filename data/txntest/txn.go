@@ -83,6 +83,7 @@ type Txn struct {
 	ForeignApps       []basics.AppIndex
 	ForeignAssets     []basics.AssetIndex
 	Boxes             []transactions.BoxRef
+	Access            []transactions.ResourceRef
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
 	ApprovalProgram   interface{} // string, nil, or []bytes if already compiled
@@ -116,6 +117,10 @@ func (tx *Txn) internalCopy() {
 	tx.Boxes = append([]transactions.BoxRef(nil), tx.Boxes...)
 	for i := 0; i < len(tx.Boxes); i++ {
 		tx.Boxes[i].Name = append([]byte(nil), tx.Boxes[i].Name...)
+	}
+	tx.Access = append([]transactions.ResourceRef(nil), tx.Access...)
+	for i := 0; i < len(tx.Access); i++ {
+		tx.Access[i].Box.Name = append([]byte(nil), tx.Access[i].Box.Name...)
 	}
 
 	// Programs may or may not actually be byte slices.  The other
@@ -288,6 +293,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			ForeignApps:       append([]basics.AppIndex(nil), tx.ForeignApps...),
 			ForeignAssets:     append([]basics.AssetIndex(nil), tx.ForeignAssets...),
 			Boxes:             tx.Boxes,
+			Access:            tx.Access,
 			LocalStateSchema:  tx.LocalStateSchema,
 			GlobalStateSchema: tx.GlobalStateSchema,
 			ApprovalProgram:   assemble(tx.ApprovalProgram),
