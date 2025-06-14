@@ -284,10 +284,17 @@ func (nd *nodeDir) configureAdminAPIToken(token string) (err error) {
 }
 
 func (nd *nodeDir) configureTelemetry(enable bool) (err error) {
-	cfg, created, cfgErr := logging.EnsureTelemetryConfigCreated(nil, "")
+	root, err := config.GetGlobalConfigFileRoot()
+	var cfgDir *string
+	if err == nil {
+		cfgDir = &root
+	}
+	cfg, created, cfgErr := logging.EnsureTelemetryConfigCreated(nil, cfgDir)
 	if cfgErr != nil {
 		return cfgErr
 	}
+
+	config.AnnotateTelemetry(&cfg, nd.configurator.genesisData.ID())
 
 	// Override default enabling of new telemetry config
 	if created {

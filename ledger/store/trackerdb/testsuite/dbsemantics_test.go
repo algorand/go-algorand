@@ -43,7 +43,7 @@ func CustomTestTransaction(t *customT) {
 	}
 
 	// insert the account
-	normBalanceA := dataA.NormalizedOnlineBalance(t.proto)
+	normBalanceA := dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 	refA, err := aow.InsertAccount(addrA, normBalanceA, dataA)
 	require.NoError(t, err)
 
@@ -67,7 +67,7 @@ func CustomTestTransaction(t *customT) {
 
 		// update the account
 		dataA.RewardsBase = 98287
-		normBalanceA = dataA.NormalizedOnlineBalance(t.proto)
+		normBalanceA = dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 		_, err = aow.UpdateAccount(refA, normBalanceA, dataA)
 		require.NoError(t, err)
 

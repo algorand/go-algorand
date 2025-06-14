@@ -25,7 +25,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/util/uuid"
 )
 
@@ -73,11 +72,6 @@ func createTelemetryConfig() TelemetryConfig {
 	}
 }
 
-// LoadTelemetryConfig loads the TelemetryConfig from the config file
-func LoadTelemetryConfig(configPath string) (TelemetryConfig, error) {
-	return loadTelemetryConfig(configPath)
-}
-
 // Save saves the TelemetryConfig to the config file
 func (cfg TelemetryConfig) Save(configPath string) error {
 	f, err := os.Create(configPath)
@@ -116,10 +110,9 @@ func (cfg TelemetryConfig) getHostGUID() string {
 
 // getInstanceName allows us to distinguish between multiple instances running on the same node.
 func (cfg TelemetryConfig) getInstanceName() string {
-	p := config.GetCurrentVersion().DataDirectory
 	hash := sha256.New()
 	hash.Write([]byte(cfg.GUID))
-	hash.Write([]byte(p))
+	hash.Write([]byte(cfg.DataDirectory))
 	pathHash := sha256.Sum256(hash.Sum(nil))
 	pathHashStr := base64.StdEncoding.EncodeToString(pathHash[:])
 
@@ -138,8 +131,9 @@ func SanitizeTelemetryString(input string, maxParts int) string {
 	return input
 }
 
-// Returns err if os.Open fails or if config is mal-formed
-func loadTelemetryConfig(path string) (TelemetryConfig, error) {
+// LoadTelemetryConfig loads the TelemetryConfig from the config file. It
+// returns err if os.Open fails or if config is mal-formed
+func LoadTelemetryConfig(path string) (TelemetryConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return createTelemetryConfig(), err
