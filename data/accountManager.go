@@ -95,9 +95,6 @@ func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.S
 // HasLiveKeys returns true if we have any Participation
 // keys valid for the specified round range (inclusive)
 func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
 	return manager.registry.HasLiveKeys(from, to)
 }
 
