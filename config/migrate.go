@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"time"
 )
 
 //go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example -t ../test/testdata/configs/config-v%d.json
@@ -29,7 +30,7 @@ import (
 // it's implemented in ./config/defaults_gen.go, and should be the only "consumer" of this exported variable
 var AutogenLocal = GetVersionedDefaultLocalConfig(getLatestConfigVersion())
 
-func migrate(cfg Local) (newCfg Local, err error) {
+func migrate(cfg Local, explicitFields map[string]interface{}) (newCfg Local, err error) {
 	newCfg = cfg
 	latestConfigVersion := getLatestConfigVersion()
 
@@ -51,6 +52,13 @@ func migrate(cfg Local) (newCfg Local, err error) {
 			if !hasTag {
 				continue
 			}
+
+			// Check if this field was explicitly set in the config file
+			// If it was, skip migration for this field to preserve user intent
+			if _, wasExplicitlySet := explicitFields[field.Name]; wasExplicitlySet && field.Name != "Version" {
+				continue
+			}
+
 			if nextVersionDefaultValue == "" {
 				switch reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Kind() {
 				case reflect.Map:
@@ -109,6 +117,63 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		}
 	}
 	return
+}
+
+// matchDefaultVsMap checks if the config file is just a full dump of default values at some version
+func matchDefaultVsMap(vcfg reflect.Value, explicitFields map[string]interface{}, version uint32) bool {
+	extraFields := 0
+	structFields := vcfg.NumField()
+
+	// special handling for explicit version values from a config file:
+	// version 1-10: these version are legacy and we do not apply any special handling for them.
+	//     basically because these older config files were hand-written (not generated) and miss fields
+	//     so that return true like it matches defaults so that apply the original migration logic.
+	// version 0, 11-last: apply the following logic:
+	//     if a config file (explicitFields) has all the fields set to default values matching to vcfg
+	//     then we consider it a full dump of the default config for that version => return true
+	//     and the original migration logic will apply.
+	//     (note, a config file might have extra fields that not in Local definition anymore so ignore them)
+	//     if a config file has some fields set to non-default values, then return false indication the
+	//     config file is not a full dump of the default config for that version.
+	if version >= 1 && version <= 10 {
+		return true
+	}
+
+	for fieldName, fieldValue := range explicitFields {
+		if fieldName == "Version" {
+			continue
+		}
+		if !vcfg.FieldByName(fieldName).IsValid() {
+			// some older configs may have fields that do not exist in the current version of the config.
+			extraFields++
+			continue
+		}
+
+		switch vcfg.FieldByName(fieldName).Kind() {
+		case reflect.Map, reflect.Array:
+			// do nothing, map/array values not supported in this function
+		case reflect.Bool:
+			if vcfg.FieldByName(fieldName).Bool() != fieldValue.(bool) {
+				return false
+			}
+		case reflect.Int, reflect.Int32, reflect.Int64:
+			if vcfg.FieldByName(fieldName).Int() != int64(fieldValue.(float64)) {
+				return false
+			}
+		case reflect.Uint, reflect.Uint32, reflect.Uint64:
+			if vcfg.FieldByName(fieldName).Uint() != uint64(fieldValue.(float64)) {
+				return false
+			}
+		case reflect.String:
+			if vcfg.FieldByName(fieldName).String() != fieldValue.(string) {
+				return false
+			}
+		default:
+			panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local field %s", vcfg.FieldByName(fieldName).Kind(), fieldName))
+		}
+	}
+	// now make sure that all structFields are accounted for in the explicitFields map
+	return structFields == len(explicitFields)-extraFields
 }
 
 func getLatestConfigVersion() uint32 {
@@ -217,4 +282,137 @@ func GetNonDefaultConfigValues(cfg Local, fieldNames []string) map[string]interf
 		}
 	}
 	return ret
+}
+
+// getVersionedLocalDefinitions returns an array of reflect.Type definitions for Local struct
+// where each index corresponds to a version and contains only fields defined in that version
+// with their appropriate default values as struct tags.
+func getVersionedLocalDefinitions() []reflect.Type {
+	localType := reflect.TypeOf(Local{})
+	latestVersion := getLatestConfigVersion()
+
+	// Create array to hold type definitions for each version
+	versionTypes := make([]reflect.Type, latestVersion+1)
+
+	for version := uint32(0); version <= latestVersion; version++ {
+		var fields []reflect.StructField
+
+		for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {
+			field := localType.Field(fieldNum)
+
+			// Check if this field exists in the current version
+			fieldDefaultValue, hasVersionTag := getFieldDefaultForVersion(field, version)
+			if !hasVersionTag {
+				continue
+			}
+
+			// Create new field with updated tag containing only the default value for this version
+			newField := reflect.StructField{
+				Name:      field.Name,
+				Type:      field.Type,
+				Tag:       reflect.StructTag(fmt.Sprintf(`default:"%s"`, fieldDefaultValue)),
+				PkgPath:   field.PkgPath,
+				Anonymous: field.Anonymous,
+				Offset:    field.Offset,
+				Index:     field.Index,
+			}
+
+			fields = append(fields, newField)
+		}
+
+		// Create struct type for this version
+		versionTypes[version] = reflect.StructOf(fields)
+	}
+
+	return versionTypes
+}
+
+// getFieldDefaultForVersion returns the default value for a field at a specific version
+// and whether the field exists in that version
+func getFieldDefaultForVersion(field reflect.StructField, version uint32) (string, bool) {
+	// Look for the highest version tag that is <= the requested version
+	var latestValue string
+	var hasAnyVersion bool
+
+	for v := uint32(0); v <= version; v++ {
+		if value, hasTag := reflect.StructTag(field.Tag).Lookup(fmt.Sprintf("version[%d]", v)); hasTag {
+			latestValue = value
+			hasAnyVersion = true
+		}
+	}
+
+	return latestValue, hasAnyVersion
+}
+
+// getVersionedLocalInstance creates an instance of Local struct for a specific version
+// with only fields that exist in that version set to their default values
+func getVersionedLocalInstance(version uint32) reflect.Value {
+	versionTypes := getVersionedLocalDefinitions()
+	if version >= uint32(len(versionTypes)) {
+		return reflect.Value{}
+	}
+
+	// Create instance of the versioned type
+	versionType := versionTypes[version]
+	instance := reflect.New(versionType).Elem()
+
+	// Set default values from tags
+	for i := 0; i < instance.NumField(); i++ {
+		field := instance.Field(i)
+		fieldType := versionType.Field(i)
+
+		if defaultValue, ok := fieldType.Tag.Lookup("default"); ok && defaultValue != "" {
+			setFieldValue(field, defaultValue)
+		}
+	}
+
+	return instance
+}
+
+// setFieldValue sets a reflect.Value to the string representation of its default value
+func setFieldValue(field reflect.Value, value string) {
+	if !field.CanSet() {
+		return
+	}
+
+	switch field.Kind() {
+	case reflect.Bool:
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			field.SetBool(boolVal)
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if field.Type() == reflect.TypeOf(time.Duration(0)) {
+			if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+				field.SetInt(intVal)
+			}
+		} else {
+			if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+				field.SetInt(intVal)
+			}
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if uintVal, err := strconv.ParseUint(value, 10, 64); err == nil {
+			field.SetUint(uintVal)
+		}
+	case reflect.String:
+		field.SetString(value)
+	case reflect.Map:
+		if value == "" {
+			field.Set(reflect.MakeMap(field.Type()))
+		}
+	case reflect.Slice:
+		if value == "" {
+			field.Set(reflect.MakeSlice(field.Type(), 0, 0))
+		}
+	}
+}
+
+var versionedDefaultLocal []reflect.Value
+
+// build dynamic config struct definition based on version tags in Local struct
+func init() {
+	// Initialize versioned definitions on package load
+	for version := uint32(0); version <= getLatestConfigVersion(); version++ {
+		versionedDefaultLocal = append(versionedDefaultLocal, getVersionedLocalInstance(version))
+	}
 }
