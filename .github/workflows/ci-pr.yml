@@ -120,7 +120,7 @@ jobs:
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORT_TEST_FLAG \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 8 \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 2 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK != ''
@@ -172,7 +172,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 4
       E2E_TEST_FILTER: GO
-      PARALLEL_FLAG: "-p 8"
+      PARALLEL_FLAG: "-p 2"
       SHORT_TEST_FLAG: "-short"
     steps:
       - name: Download workspace archive
@@ -239,7 +239,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 4
       E2E_TEST_FILTER: EXPECT
-      PARALLEL_FLAG: "-p 8"
+      PARALLEL_FLAG: "-p 2"
       SHORT_TEST_FLAG: "-short"
     steps:
       - name: Download workspace archive
