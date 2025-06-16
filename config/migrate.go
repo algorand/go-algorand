@@ -407,12 +407,13 @@ func setFieldValue(field reflect.Value, value string) {
 	}
 }
 
-var versionedDefaultLocal []reflect.Value
+// var versionedDefaultLocal []reflect.Value
+var versionedDefaultLocal = map[uint32]reflect.Value{}
 
-// build dynamic config struct definition based on version tags in Local struct
-func init() {
-	// Initialize versioned definitions on package load
-	for version := uint32(0); version <= getLatestConfigVersion(); version++ {
-		versionedDefaultLocal = append(versionedDefaultLocal, getVersionedLocalInstance(version))
-	}
-}
+// // build dynamic config struct definition based on version tags in Local struct
+// func init() {
+// 	// Initialize versioned definitions on package load
+// 	for version := uint32(0); version <= getLatestConfigVersion(); version++ {
+// 		versionedDefaultLocal = append(versionedDefaultLocal, getVersionedLocalInstance(version))
+// 	}
+// }

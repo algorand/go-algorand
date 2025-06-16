@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -177,8 +178,13 @@ func mergeConfigFromFile(configpath string, source Local) (Local, map[string]int
 			latestVersion = currentVersion
 		}
 		// try to find any config default that matches to explicitFields
+		var vcfg reflect.Value
+		var ok bool
 		for v := currentVersion; v <= latestVersion; v++ {
-			vcfg := versionedDefaultLocal[v]
+			if vcfg, ok = versionedDefaultLocal[v]; !ok {
+				vcfg = getVersionedLocalInstance(v)
+				versionedDefaultLocal[v] = vcfg
+			}
 			if matchDefaultVsMap(vcfg, explicitFields, currentVersion) {
 				explicitFields = nil
 				break
