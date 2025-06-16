@@ -163,7 +163,7 @@ func mergeConfigFromFile(configpath string, source Local) (Local, map[string]int
 	}
 	// it is possible that the config file is just a full dump of default values at some version
 	// in this case ignore the explicit fields all together
-	if explicitFields != nil {
+	if len(explicitFields) > 0 {
 		latestVersion := getLatestConfigVersion()
 		currentVersion := uint32(0)
 		if version, ok := explicitFields["Version"]; ok {

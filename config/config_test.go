@@ -275,8 +275,7 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-
-	c0 := loadWithoutDefaults(t, versionedDefaultLocal[0].Interface())
+	c0 := loadWithoutDefaults(t, getVersionedLocalInstance(0).Interface())
 	c0, err := migrate(c0, nil)
 	a.NoError(err)
 	cLatest, err := migrate(defaultLocal, nil)
