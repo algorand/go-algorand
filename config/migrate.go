@@ -30,7 +30,7 @@ import (
 // it's implemented in ./config/defaults_gen.go, and should be the only "consumer" of this exported variable
 var AutogenLocal = GetVersionedDefaultLocalConfig(getLatestConfigVersion())
 
-func migrate(cfg Local, explicitFields map[string]interface{}) (newCfg Local, err error) {
+func migrate(cfg Local, explicitFields map[string]any) (newCfg Local, err error) {
 	newCfg = cfg
 	latestConfigVersion := getLatestConfigVersion()
 
@@ -406,14 +406,3 @@ func setFieldValue(field reflect.Value, value string) {
 		}
 	}
 }
-
-// var versionedDefaultLocal []reflect.Value
-var versionedDefaultLocal = map[uint32]reflect.Value{}
-
-// // build dynamic config struct definition based on version tags in Local struct
-// func init() {
-// 	// Initialize versioned definitions on package load
-// 	for version := uint32(0); version <= getLatestConfigVersion(); version++ {
-// 		versionedDefaultLocal = append(versionedDefaultLocal, getVersionedLocalInstance(version))
-// 	}
-// }

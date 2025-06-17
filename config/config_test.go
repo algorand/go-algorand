@@ -250,21 +250,22 @@ func TestLocal_ConfigExampleIsCorrect(t *testing.T) {
 // see their default (zero) values and instead see the
 // new default because they won't exist in the old file.
 func loadWithoutDefaults(t *testing.T, c any) Local {
-	file, err := os.CreateTemp("", "lwd")
-	require.NoError(t, err)
-	name := file.Name()
-	file.Close()
-	defer os.Remove(name)
+	tempDir := t.TempDir()
+	name := filepath.Join(tempDir, fmt.Sprintf("config-%p.json", t))
+	var err error
+
 	switch c := c.(type) {
 	case Local:
 		cfg := c
 		err = cfg.SaveToFile(name)
 		require.NoError(t, err)
-	default:
-		b, err := json.Marshal(c)
+	case reflect.Value:
+		b, err := json.Marshal(c.Interface())
 		require.NoError(t, err)
 		err = os.WriteFile(name, b, 0600)
 		require.NoError(t, err)
+	default:
+		require.Failf(t, "Unsupported type for loadWithoutDefaults", "Type: %T", c)
 	}
 	cfg, err := loadConfigFromFile(name)
 	require.NoError(t, err)
@@ -275,7 +276,7 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
-	c0 := loadWithoutDefaults(t, getVersionedLocalInstance(0).Interface())
+	c0 := loadWithoutDefaults(t, getVersionedLocalInstance(0))
 	c0, err := migrate(c0, nil)
 	a.NoError(err)
 	cLatest, err := migrate(defaultLocal, nil)
@@ -331,12 +332,9 @@ func TestLocal_ExplicitFieldMigration(t *testing.T) {
 	"EnableTxBacklogRateLimiting": false
 }`, v)
 
-			file, err := os.CreateTemp("", "exfld")
-			require.NoError(t, err)
-			name := file.Name()
-			defer file.Close()
-			defer os.Remove(name)
-			_, err = file.WriteString(content)
+			tempDir := t.TempDir()
+			name := filepath.Join(tempDir, fmt.Sprintf("config-v%d-%p.json", v, t))
+			err := os.WriteFile(name, []byte(content), 0600)
 			require.NoError(t, err)
 			c0, err := loadConfigFromFile(name)
 			require.NoError(t, err)

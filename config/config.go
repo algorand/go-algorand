@@ -136,6 +136,8 @@ func mergeConfigFromDir(root string, source Local) (Local, error) {
 	return c, err
 }
 
+var versionedDefaultLocal = map[uint32]reflect.Value{}
+
 func mergeConfigFromFile(configpath string, source Local) (Local, map[string]interface{}, error) {
 	f, err := os.Open(configpath)
 	if err != nil {
