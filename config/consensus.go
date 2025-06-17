@@ -562,6 +562,12 @@ type ConsensusParams struct {
 
 	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
 	EnableSha512BlockHash bool
+
+	// EnableInnerClawbackWithoutSenderHolding allows an inner clawback (axfer
+	// w/ AssetSender) even if the Sender holding of the asset is not
+	// available. This parameters can be removed and assumed true after the
+	// first consensus release in which it is set true.
+	EnableInnerClawbackWithoutSenderHolding bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1433,6 +1439,7 @@ func initConsensusProtocols() {
 	vFuture.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
 	vFuture.MaxAppAccess = 16           // Twice as many, though cross products are explicit
 	vFuture.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
+	vFuture.EnableInnerClawbackWithoutSenderHolding = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

@@ -113,16 +113,6 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 }
 
 func (cx *EvalContext) allows(tx *transactions.Transaction, calleeVer uint64) error {
-	// if the caller is pre-sharing, it can't prepare transactions with
-	// resources that are not available, so `tx` is surely legal.
-	if cx.version < sharedResourcesVersion {
-		// this is important, not just an optimization, because a pre-sharing
-		// creation txn has access to the app and app account it is currently
-		// creating (and therefore can pass that access down), but cx.available
-		// doesn't track that properly until v9's protocol upgrade. See
-		// TestInnerAppCreateAndOptin for an example.
-		return nil
-	}
 	switch tx.Type {
 	case protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx:
 		// these transactions don't touch cross-product resources, so no error is possible
@@ -257,11 +247,17 @@ func (cx *EvalContext) requireLocals(acct basics.Address, id basics.AppIndex) er
 }
 
 func (cx *EvalContext) allowsAssetTransfer(hdr *transactions.Header, tx *transactions.AssetTransferTxnFields) error {
-	err := cx.requireHolding(hdr.Sender, tx.XferAsset)
-	if err != nil {
-		return fmt.Errorf("axfer Sender: %w", err)
+	// After EnableInnerClawbackWithoutSenderHolding appears in a consensus
+	// update, we should remove it from consensus params and assume it's true in
+	// the netx release. It only needs to be in there so that it gates the
+	// beahvior change in the release it first appears.
+	if !cx.Proto.EnableInnerClawbackWithoutSenderHolding || tx.AssetSender.IsZero() {
+		err := cx.requireHolding(hdr.Sender, tx.XferAsset)
+		if err != nil {
+			return fmt.Errorf("axfer Sender: %w", err)
+		}
 	}
-	err = cx.requireHolding(tx.AssetReceiver, tx.XferAsset)
+	err := cx.requireHolding(tx.AssetReceiver, tx.XferAsset)
 	if err != nil {
 		return fmt.Errorf("axfer AssetReceiver: %w", err)
 	}

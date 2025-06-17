@@ -1982,7 +1982,7 @@ func opBtoi(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	ibytes := cx.Stack[last].Bytes
 	if len(ibytes) > 8 {
-		return fmt.Errorf("btoi arg too long, got [%d]bytes", len(ibytes))
+		return fmt.Errorf("btoi arg too long, got %d bytes", len(ibytes))
 	}
 	value := uint64(0)
 	for _, b := range ibytes {
@@ -4709,8 +4709,7 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppInd
 		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].App != 0 {
 			return cx.txn.Txn.Access[ref-1].App, nil
 		}
-
-		return 0, fmt.Errorf("App index %d beyond txn.ForeignApps", ref)
+		return 0, fmt.Errorf("%d is not a valid foreign app slot", ref)
 	}
 	// Otherwise it's direct
 	return basics.AppIndex(ref), nil
@@ -4851,7 +4850,7 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
 			return cx.txn.Txn.Access[ref-1].Asset, nil
 		}
-		return 0, fmt.Errorf("Asset index %d beyond access arrays", ref)
+		return 0, fmt.Errorf("%d is not a valid foreign asset slot", ref)
 	}
 	// Otherwise it's direct
 	return basics.AssetIndex(ref), nil

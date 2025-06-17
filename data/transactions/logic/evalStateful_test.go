@@ -1084,7 +1084,7 @@ byte "ALGO"
 	// check that actual app id ok instead of indirect reference
 	text = `int 100; txn ApplicationArgs 0; app_global_get_ex; int 1; ==; assert; byte "ALGO"; ==`
 	testApp(t, text, now)
-	testApp(t, text, pre, "App index 100 beyond") // but not in old teal
+	testApp(t, text, pre, "100 is not a valid foreign app slot") // but not in old teal
 
 	// check app_global_get default value
 	text = "byte 0x414c474f55; app_global_get; int 0; =="
@@ -1286,7 +1286,7 @@ func TestAssets(t *testing.T) {
 		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, nowCross, "unavailable Account")
 
 		// for params get, presence in ForeignAssets has always be required
-		testApp(t, "int 6; asset_params_get AssetTotal", pre, "Asset index 6 beyond")
+		testApp(t, "int 6; asset_params_get AssetTotal", pre, "6 is not a valid foreign asset slot")
 		testApp(t, "int 6; asset_params_get AssetTotal", now, "unavailable Asset 6")
 		testApp(t, "int 6; asset_params_get AssetTotal", nowCross, "unavailable Asset 6")
 		testApp(t, "int 6; asset_params_get AssetTotal", nowSimple, "unavailable Asset 6")
@@ -1337,7 +1337,7 @@ func TestAssets(t *testing.T) {
 
 		if version < 5 {
 			// Can't run these with AppCreator anyway
-			testApp(t, strings.ReplaceAll(assetsTestProgram, "int 0//asset", "int 55"), pre, "Asset index 55 beyond")
+			testApp(t, strings.ReplaceAll(assetsTestProgram, "int 0//asset", "int 55"), pre, "55 is not a valid foreign asset slot")
 			testApp(t, strings.ReplaceAll(assetsTestProgram, "int 55", "int 0"), pre, "assert failed pc=53") // AssetBalance => 0,0
 		}
 

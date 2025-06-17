@@ -921,7 +921,7 @@ func TestInnerRekey(t *testing.T) {
 // the outer app could have opted-in.  But this technique tests something
 // interesting, that the inner app can perform an opt-in on the outer app, which
 // tests that the newly created app's holdings are available. In practice, the
-// helper shold rekey it back, but we don't bother here.
+// helper should rekey it back, but we don't bother here.
 func TestInnerAppCreateAndOptin(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
