@@ -89,7 +89,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 4
       CIRCLECI: true
-      SHORT_TEST_FLAG: "-short"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -119,7 +119,7 @@ jobs:
           gotestsum --format standard-verbose \
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
-            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORT_TEST_FLAG \
+            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
@@ -240,7 +240,7 @@ jobs:
       PARTITION_TOTAL: 4
       E2E_TEST_FILTER: EXPECT
       PARALLEL_FLAG: "-p 4"
-      SHORT_TEST_FLAG: "-short"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
