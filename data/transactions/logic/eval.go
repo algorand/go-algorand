@@ -1152,12 +1152,10 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 		}
 		// and add the appID to `createdApps`
-		if cx.EvalParams.Proto.LogicSigVersion >= sharedResourcesVersion {
-			if cx.EvalParams.available.createdApps == nil {
-				cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
-			}
-			cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
+		if cx.EvalParams.available.createdApps == nil {
+			cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
 		}
+		cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
 	}
 
 	// Check the I/O budget for reading if this is the first top-level app call

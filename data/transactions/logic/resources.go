@@ -101,16 +101,6 @@ func (r *resources) fill(tx *transactions.Transaction, ep *EvalParams) {
 }
 
 func (cx *EvalContext) allows(tx *transactions.Transaction, calleeVer uint64) error {
-	// if the caller is pre-sharing, it can't prepare transactions with
-	// resources that are not available, so `tx` is surely legal.
-	if cx.version < sharedResourcesVersion {
-		// this is important, not just an optimization, because a pre-sharing
-		// creation txn has access to the app and app account it is currently
-		// creating (and therefore can pass that access down), but cx.available
-		// doesn't track that properly until v9's protocol upgrade. See
-		// TestInnerAppCreateAndOptin for an example.
-		return nil
-	}
 	switch tx.Type {
 	case protocol.PaymentTx, protocol.KeyRegistrationTx, protocol.AssetConfigTx:
 		// these transactions don't touch cross-product resources, so no error is possible
