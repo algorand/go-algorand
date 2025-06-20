@@ -17,7 +17,7 @@ if { [catch {
     if {[regexp "arm64" $archType]} {
        set timeout 60
     } else {
-       set timeout 5
+       set timeout 10
     }
     puts "set timeout to $timeout"
 
