@@ -628,15 +628,9 @@ func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 		}
 		ep.available.createdAsas[aid] = struct{}{}
 	}
-	if aid := ad.ApplicationID; aid != 0 {
-		if ep.available == nil {
-			ep.available = ep.computeAvailability()
-		}
-		if ep.available.createdApps == nil {
-			ep.available.createdApps = make(map[basics.AppIndex]struct{})
-		}
-		ep.available.createdApps[aid] = struct{}{}
-	}
+	// we don't need to add ad.ApplicationID to createdApps, because that is
+	// done at the beginning of app execution now, so that newly created apps
+	// will already have their appID present.
 }
 
 type frame struct {
@@ -1152,12 +1146,10 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 		}
 		// and add the appID to `createdApps`
-		if cx.EvalParams.Proto.LogicSigVersion >= sharedResourcesVersion {
-			if cx.EvalParams.available.createdApps == nil {
-				cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
-			}
-			cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
+		if cx.EvalParams.available.createdApps == nil {
+			cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
 		}
+		cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
 	}
 
 	// Check the I/O budget for reading if this is the first top-level app call
@@ -4285,8 +4277,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
 		for appID := range cx.available.createdApps {
-			createdAddress := cx.GetApplicationAddress(appID)
-			if addr == createdAddress {
+			if addr == cx.GetApplicationAddress(appID) {
 				return true
 			}
 		}
