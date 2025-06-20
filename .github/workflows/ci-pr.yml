@@ -89,7 +89,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 4
       CIRCLECI: true
-      SHORT_TEST_FLAG: "-short"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -119,8 +119,8 @@ jobs:
           gotestsum --format standard-verbose \
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
-            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORT_TEST_FLAG \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
+            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK != ''
@@ -165,15 +165,15 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 16
+      PARTITION_TOTAL: 4
       E2E_TEST_FILTER: GO
-      PARALLEL_FLAG: "-p 1"
-      SHORT_TEST_FLAG: "-short"
+      PARALLEL_FLAG: "-p 4"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -232,15 +232,15 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 4
+      PARTITION_TOTAL: 8
       E2E_TEST_FILTER: EXPECT
-      PARALLEL_FLAG: "-p 1"
-      SHORT_TEST_FLAG: "-short"
+      PARALLEL_FLAG: "-p 4"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
