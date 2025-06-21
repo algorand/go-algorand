@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 // The constants below control opcode evaluation and MAY NOT be changed without
@@ -275,12 +276,6 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
-type BoxRef struct {
-	App  basics.AppIndex
-	Name string
-}
-
 // UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
 // This should only be used during simulation or debugging.
 type UnnamedResourcePolicy interface {
@@ -496,7 +491,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedApps:     make(map[basics.AppIndex]struct{}),
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
-		boxes:          make(map[BoxRef]bool),
+		boxes:          make(map[basics.BoxRef]bool),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
@@ -1082,29 +1077,16 @@ func (cx *EvalContext) evalStates() []evalState {
 		// should be located outside of the evalState, with the PC.
 		var stack []any
 		if cx.groupIndex == i {
-			stack = convertSlice(cx.Stack, func(sv stackValue) any {
-				return sv.asAny()
-			})
+			stack = util.Map(cx.Stack, stackValue.asAny)
 		}
 
 		states[i] = evalState{
 			Scratch: scratchAsAny,
 			Stack:   stack,
-			Logs:    convertSlice(cx.TxnGroup[i].EvalDelta.Logs, func(s string) []byte { return []byte(s) }),
+			Logs:    util.Map(cx.TxnGroup[i].EvalDelta.Logs, func(s string) []byte { return []byte(s) }),
 		}
 	}
 	return states
-}
-
-func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
-	if input == nil {
-		return nil
-	}
-	output := make([]Y, len(input))
-	for i := range input {
-		output[i] = fn(input[i])
-	}
-	return output
 }
 
 // EvalContract executes stateful program as the gi'th transaction in params
@@ -1148,7 +1130,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		// make any "0 index" box refs available now that we have an appID.
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				cx.EvalParams.available.boxes[BoxRef{cx.appID, string(br.Name)}] = false
+				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(br.Name)}] = false
 			}
 		}
 		// and add the appID to `createdApps`
@@ -1162,11 +1144,17 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	// Check the I/O budget for reading if this is the first top-level app call
 	if cx.caller == nil && !cx.readBudgetChecked {
-		boxRefCount := uint64(0) // Intentionally counts duplicates
+		bumps := uint64(0) // Intentionally counts duplicates
 		for _, tx := range cx.TxnGroup {
-			boxRefCount += uint64(len(tx.Txn.Boxes))
+			bumps += uint64(len(tx.Txn.Boxes))
+			for _, rr := range tx.Txn.Access {
+				// A box or an empty ref is an io quota bump
+				if !rr.Box.Empty() || rr.Empty() {
+					bumps++
+				}
+			}
 		}
-		cx.ioBudget = boxRefCount * cx.Proto.BytesPerBoxReference
+		cx.ioBudget = bumps * cx.Proto.BytesPerBoxReference
 
 		used := uint64(0)
 		for br := range cx.available.boxes {
@@ -1994,7 +1982,7 @@ func opBtoi(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	ibytes := cx.Stack[last].Bytes
 	if len(ibytes) > 8 {
-		return fmt.Errorf("btoi arg too long, got [%d]bytes", len(ibytes))
+		return fmt.Errorf("btoi arg too long, got %d bytes", len(ibytes))
 	}
 	value := uint64(0)
 	for _, b := range ibytes {
@@ -4247,7 +4235,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	// created earlier in the group, or because of group sharing)
 	ok := cx.availableAccount(addr)
 	if !ok {
-		return addr, 0, fmt.Errorf("invalid Account reference %s", addr)
+		return addr, 0, fmt.Errorf("unavailable Account %s", addr)
 	}
 	// available, but not in txn.Accounts. Return 1 higher to signal.
 	return addr, uint64(len(cx.txn.Txn.Accounts) + 1), nil
@@ -4715,9 +4703,13 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppInd
 	if foreign {
 		// In old versions, a foreign reference must be an index in ForeignApps or 0
 		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-			return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+			return cx.txn.Txn.ForeignApps[ref-1], nil
 		}
-		return 0, fmt.Errorf("App index %d beyond txn.ForeignApps", ref)
+		// it seems most consistent to allow slot access into tx.Access if it is used with an old app.
+		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].App != 0 {
+			return cx.txn.Txn.Access[ref-1].App, nil
+		}
+		return 0, fmt.Errorf("%d is not a valid foreign app slot", ref)
 	}
 	// Otherwise it's direct
 	return basics.AppIndex(ref), nil
@@ -4747,8 +4739,12 @@ func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 	// given to anyone who cares about semantics in the first few rounds of
 	// a new network - don't use indexes for references, use the App ID
 	if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+		return cx.txn.Txn.ForeignApps[ref-1], nil
 	}
+	if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].App != 0 {
+		return cx.txn.Txn.Access[ref-1].App, nil
+	}
+
 	return 0, fmt.Errorf("unavailable App %d", ref)
 }
 
@@ -4770,21 +4766,22 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 			}
 		}
 
-		// Do an extra check to give a better error. The app is definitely
-		// available. If the addr is too, then the trouble is they must have
-		// come from different transactions, and the HOLDING is the problem.
+		// Do an extra check to give a better error, which also allows the
+		// UnnamedResources code to notice that the account must be available as
+		// well.
 
 		acctOK := cx.availableAccount(addr)
+		localsErr := fmt.Errorf("unavailable Local State %s x %d", addr, aid)
 		switch {
 		case err != nil && acctOK:
-			// do nothing, err contains the an Asset specific problem
+			// do nothing, err contains the an App specific problem
 		case err == nil && acctOK:
 			// although both are available, the LOCALS are not
-			err = fmt.Errorf("unavailable Local State %s x %d", addr, aid)
+			err = localsErr
 		case err != nil && !acctOK:
-			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+			err = fmt.Errorf("unavailable Account %s, %w, %w", addr, err, localsErr)
 		case err == nil && !acctOK:
-			err = fmt.Errorf("unavailable Account %s", addr)
+			err = fmt.Errorf("unavailable Account %s, %w", addr, localsErr)
 		}
 
 		return basics.Address{}, 0, 0, err
@@ -4800,7 +4797,32 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 	if err != nil {
 		return basics.Address{}, 0, 0, err
 	}
-	return addr, app, addrIdx, nil
+
+	// But if the transaction is using tx.Access, we must be more stringent, or
+	// else we open up to accessing a huge cross-product of locals.
+	if cx.txn.Txn.Access == nil {
+		return addr, app, addrIdx, nil
+	}
+
+	if addr == cx.txn.Txn.Sender && app == cx.appID {
+		return addr, app, addrIdx, nil
+	}
+
+	if slices.ContainsFunc(cx.txn.Txn.Access,
+		func(rr transactions.ResourceRef) bool {
+			// See if any holding in tx.Access matches what we need
+			if l := rr.Locals; !l.Empty() {
+				laddr, lapp, _ := l.Resolve(cx.txn.Txn.Access, cx.txn.Txn.Sender)
+				if laddr == addr && lapp == app {
+					return true
+				}
+			}
+			return false
+		}) {
+		return addr, app, addrIdx, nil
+	}
+	return basics.Address{}, 0, 0, fmt.Errorf("unavailable Local State %s x %d is not in tx.Access", addr, app)
+
 }
 
 func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.AssetIndex, err error) {
@@ -4822,9 +4844,13 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 	if foreign {
 		// In old versions, a foreign reference must be an index in ForeignAssets
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+			return cx.txn.Txn.ForeignAssets[ref], nil
 		}
-		return 0, fmt.Errorf("Asset index %d beyond txn.ForeignAssets", ref)
+		// it seems most consistent to allow slot access into tx.Access if it is used with an old app.
+		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
+			return cx.txn.Txn.Access[ref-1].Asset, nil
+		}
+		return 0, fmt.Errorf("%d is not a valid foreign asset slot", ref)
 	}
 	// Otherwise it's direct
 	return basics.AssetIndex(ref), nil
@@ -4832,9 +4858,8 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 
 const lastForbiddenResource = 255
 
-// resolveAsset figures out what Asset an integer is referring to, considering 0 as
-// current app first, then uses the integer as is if it is an availableAsset, then
-// tries to perform a slot lookup.
+// resolveAsset figures out what Asset an integer is referring to, checking if
+// the integer is an availableAsset, then tries to perform a slot lookup.
 func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err error) {
 	if cx.Proto.AppForbidLowResources {
 		defer func() {
@@ -4852,7 +4877,10 @@ func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err erro
 	// given to anyone who cares about semantics in the first few rounds of
 	// a new network - don't use indexes for references, use the Asset ID
 	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+		return cx.txn.Txn.ForeignAssets[ref], nil
+	}
+	if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
+		return cx.txn.Txn.Access[ref-1].Asset, nil
 	}
 	return 0, fmt.Errorf("unavailable Asset %d", ref)
 }
@@ -4899,7 +4927,27 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 	if err != nil {
 		return basics.Address{}, 0, err
 	}
-	return addr, asset, nil
+
+	// But if the transaction is using tx.Access, we must be more stringent, or
+	// else we open up to accessing a huge cross-product of holdings.
+	if cx.txn.Txn.Access == nil {
+		return addr, asset, nil
+	}
+
+	if slices.ContainsFunc(cx.txn.Txn.Access,
+		func(rr transactions.ResourceRef) bool {
+			// See if any holding in tx.Access matches what we need
+			if h := rr.Holding; !h.Empty() {
+				haddr, hasset, _ := h.Resolve(cx.txn.Txn.Access, cx.txn.Txn.Sender)
+				if haddr == addr && hasset == asset {
+					return true
+				}
+			}
+			return false
+		}) {
+		return addr, asset, nil
+	}
+	return basics.Address{}, 0, fmt.Errorf("unavailable Holding %s x %d is not in tx.Access", addr, asset)
 }
 
 func opAssetHoldingGet(cx *EvalContext) error {
@@ -5209,7 +5257,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("unavailable Asset %d", aid)
+	return 0, fmt.Errorf("unavailable Asset %d during assignment %v", aid, cx.available)
 }
 
 // availableAsset determines whether an asset is "available". Before
@@ -5220,7 +5268,10 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 // transaction (axfer,acfg,afrz), but not for holding lookups or assignments to
 // an inner static array.
 func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
-	// Ensure that aid is in Foreign Assets
+	// Check if aid is in an access array
+	if slices.ContainsFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool { return rr.Asset == aid }) {
+		return true
+	}
 	if slices.Contains(cx.txn.Txn.ForeignAssets, aid) {
 		return true
 	}
@@ -5262,7 +5313,10 @@ func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 }
 
 func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
-	// Ensure that aid is in Foreign Apps
+	// Check if aid is in an access array
+	if slices.ContainsFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool { return rr.App == aid }) {
+		return true
+	}
 	if slices.Contains(cx.txn.Txn.ForeignApps, aid) {
 		return true
 	}

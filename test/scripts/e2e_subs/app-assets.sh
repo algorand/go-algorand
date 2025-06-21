@@ -125,7 +125,7 @@ ASSETID=$(asset-create 1000000  --name "e2e" --unitname "e" | asset-id)
 [ "$(balance "$SMALL")" = 996000 ] # 1000 fee
 
 ${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$APPACCT"
-appl "optin():void" --foreign-asset="$ASSETID" --from="$SMALL"
+appl "optin(uint64):void" --app-arg "int:$ASSETID" --foreign-asset="$ASSETID" --from="$SMALL"
 [ "$(balance "$APPACCT")" = 998000 ] # 1000 fee
 [ "$(balance "$SMALL")" = 995000 ]
 
@@ -202,19 +202,36 @@ ${gcmd} asset config --manager $SMALL --assetid $ASSETID --new-clawback $APPACCT
 cb_addr=$(${gcmd} asset info --assetid $ASSETID | clawback_addr)
 [ "$cb_addr" = "$APPACCT" ] #app is set as clawback address
 # transfer asset from $SMALL to $USER
-appl "transfer(uint64):void"  --app-arg="int:1000"  --foreign-asset="$ASSETID" --from="$SMALL" --app-account="$USER2"
+appl "transfer(uint64,uint64,address,address):void" \
+     --app-arg="int:$ASSETID" --app-arg="int:1000" --app-arg="addr:$SMALL" --app-arg="addr:$USER2" \
+     --foreign-asset="$ASSETID" --from="$SMALL" --app-account="$USER2"
 [ $(asset_bal "$USER2") = 1000 ]
 [ $(asset_bal "$SMALL") = 998000 ]
 # transfer asset from $USER to $SMALL
-appl "transfer(uint64):void"  --app-arg="int:100" --foreign-asset="$ASSETID" --from="$USER2" --app-account="$SMALL"
+# With just the accounts and assets, --access won't work b/c the holding is required
+EXPERROR='unavailable Holding'
+RES=$(appl "transfer(uint64,uint64,address,address):void" --from="$USER2" \
+     --app-arg="int:$ASSETID" --app-arg="int:100"  --app-arg="addr:$USER2" --app-arg="addr:$SMALL" \
+     --foreign-asset="$ASSETID" --app-account="$SMALL" --access 2>&1 || true)
+if [[ $RES != *"${EXPERROR}"* ]]; then
+    date '+app-assets FAIL transfer should fail without explicit holding %Y%m%d_%H%M%S'
+    exit 1
+fi
+
+appl "transfer(uint64,uint64,address,address):void" --from="$USER2" \
+     --app-arg="int:$ASSETID" --app-arg="int:100" --app-arg="addr:$USER2" --app-arg="addr:$SMALL" \
+     --access \
+     --foreign-asset="$ASSETID" --app-account="$SMALL" \
+     --holding="$ASSETID,$USER2" --holding "$ASSETID,$SMALL"
 [ $(asset_bal "$USER2") = 900 ]
 [ $(asset_bal "$SMALL") = 998100 ]
 
-# opt in more assets
+# opt in more assets, show that --access works on the first
 ASSETID2=$(asset-create 1000000  --name "alpha" --unitname "a"  | asset-id)
-appl "optin():void" --foreign-asset="$ASSETID2" --from="$SMALL"
+! appl "optin(uint64):void" --access --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" --from="$SMALL" || exit 1
+appl "optin(uint64):void" --access --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" --from="$SMALL" --holding "$ASSETID2,app($APPID)"
 ASSETID3=$(asset-create 1000000  --name "beta" --unitname "b"  | asset-id)
-appl "optin():void" --foreign-asset="$ASSETID3" --from="$SMALL"
+appl "optin(uint64):void" --app-arg "int:$ASSETID3" --foreign-asset="$ASSETID3" --from="$SMALL"
 
 IDs="$ASSETID
 $ASSETID2

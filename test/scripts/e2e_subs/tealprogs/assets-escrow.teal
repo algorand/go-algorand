@@ -1,12 +1,12 @@
 #pragma version 5
         // This application accepts these actions on assets
-        // optin():void  - opt in the app to an asset
+        // optin(uint64):void  - opt in the app to an asset. asset is arg[1]
         // close():void - opt out the app from an asset
         // deposit():void - deposit assets on app and hold until withdraw is requested;
         //                  update the asset balance in app's local state
         // withdraw(uint64):void - withdraw assets from and update the asset balance in app's local state.
         //                         approve if withdraw amount < balance
-        // transfer(uint64):void - app has clawback auth to transfer assets between accounts
+        // transfer(uint64,uint64,address,address):void - app has clawback auth to do it (asset, amount, from, to)
         // create(uint64):void - app creates assets
         // mint():void - withdraw assets created by app
         // freeze(uint64):void - freeze/unfreeze an asset on an account
@@ -66,7 +66,7 @@ handle_optin:
 handle_noop:
         // opt in app to asset to enable axfer
         txn ApplicationArgs 0
-        byte "optin():void"
+        byte "optin(uint64):void"
         ==
         bz not_optin
         byte "optin"
@@ -79,7 +79,8 @@ handle_noop:
          int 0
          itxn_field AssetAmount
 
-         txna Assets 0
+         txna ApplicationArgs 1
+         btoi
          itxn_field XferAsset
 
          global CurrentApplicationAddress
@@ -191,7 +192,7 @@ not_withdraw:
         return
 not_close:
         txn ApplicationArgs 0
-        byte "transfer(uint64):void"
+        byte "transfer(uint64,uint64,address,address):void"
         ==
         bz not_transfer
 
@@ -200,17 +201,18 @@ not_close:
             int axfer
             itxn_field TypeEnum
 
-            txna Assets 0
+            txn ApplicationArgs 1
+            btoi
             itxn_field XferAsset
 
-            txn ApplicationArgs 1
+            txn ApplicationArgs 2
             btoi
             itxn_field AssetAmount
 
-            txn Sender
+            txn ApplicationArgs 3
             itxn_field AssetSender
 
-            txna Accounts 1
+            txna ApplicationArgs 4
             itxn_field AssetReceiver
 
         itxn_submit

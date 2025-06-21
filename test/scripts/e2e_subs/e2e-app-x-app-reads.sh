@@ -21,8 +21,15 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs
 
 # Creating an app that attempts to read APPID's global state without setting
 # foreignapps should fail
-EXPERR="App index 1 beyond txn.ForeignApps"
+EXPERR="1 is not a valid foreign app slot"
 RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 2\nint 1') 2>&1 || true)
+if [[ $RES != *"$EXPERR"* ]]; then
+    date '+x-app-reads FAIL expected disallowed foreign global read to fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# Same result when using --access (even though --foreign-asset makes the slot "legal", just not an app)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --access --foreign-asset $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 2\nint 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
     date '+x-app-reads FAIL expected disallowed foreign global read to fail %Y%m%d_%H%M%S'
     false
@@ -31,10 +38,17 @@ fi
 # Creating an app that attempts to read APPID's global state and compare with
 # "bar" should make it past the foreign-app check, but fail since
 # "xxx" != "bar"
-EXPERR="rejected by ApprovalProgram"
+EXPERR="assert failed pc=26"
 RES=$(${gcmd} app create --creator ${ACCOUNT} --foreign-app $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 2\nint 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
-    date '+x-app-reads FAIL expected disallowed foreign global read to fail %Y%m%d_%H%M%S'
+    date '+x-app-reads FAIL expected foreign global mismatched read to fail %Y%m%d_%H%M%S'
+    false
+fi
+
+# Same result with --access
+RES=$(${gcmd} app create --creator ${ACCOUNT} --access --foreign-app $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 2\nint 1') 2>&1 || true)
+if [[ $RES != *"$EXPERR"* ]]; then
+    date '+x-app-reads FAIL expected foreign global mismatched read to fail with --access %Y%m%d_%H%M%S'
     false
 fi
 
@@ -42,5 +56,7 @@ fi
 ${gcmd} app call --app-id $APPID --from $ACCOUNT --app-arg "str:bar"
 
 # Creating other app should now succeed with properly set foreignapps
-AARGS="{args: [{encoding: \"int\", value: \"$APPID\"}], foreignapps: [$APPID]}"
 ${gcmd} app create --creator ${ACCOUNT} --foreign-app $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 2\nint 1')
+
+# Using --access also works
+${gcmd} app create --creator ${ACCOUNT} --access --foreign-app $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf '#pragma version 2\nint 1')
