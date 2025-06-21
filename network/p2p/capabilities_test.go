@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"math/rand"
 	"sync"
@@ -314,4 +315,54 @@ func TestCapabilities_ExcludesSelf(t *testing.T) {
 	err := disc[0].Close()
 	require.NoError(t, err)
 	disc[0].wg.Wait()
+}
+
+// TestCapabilities_NoPeers makes sure no errors logged when no peers in routing table on advertise
+func TestCapabilities_NoPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// create a single host/DHT => no peers in routing table
+	cfg := config.GetDefaultLocal()
+	tmpdir := t.TempDir()
+	pk, err := GetPrivKey(cfg, tmpdir)
+	require.NoError(t, err)
+	ps, err := peerstore.NewPeerStore(nil, "")
+	require.NoError(t, err)
+	h, err := libp2p.New(
+		libp2p.ListenAddrStrings("/dns4/localhost/tcp/0"),
+		libp2p.Identity(pk),
+		libp2p.Peerstore(ps))
+	require.NoError(t, err)
+	defer h.Close()
+
+	ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, func() []peer.AddrInfo { return nil })
+	require.NoError(t, err)
+	err = ht.Bootstrap(context.Background())
+	require.NoError(t, err)
+	defer ht.Close()
+
+	disc, err := algodht.MakeDiscovery(ht)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetLevel(logging.Info)
+	log.SetOutput(&buf)
+
+	cd := &CapabilitiesDiscovery{
+		disc: disc,
+		dht:  ht,
+		log:  log,
+	}
+	defer cd.Close()
+
+	cd.AdvertiseCapabilities(Archival)
+
+	// sleep 3x capAdvertisementInitialDelay to allow for the log messages to be generated
+	time.Sleep(3 * capAdvertisementInitialDelay)
+
+	logData := buf.String()
+	require.NotContains(t, logData, "advertised capability")
+	require.NotContains(t, logData, "failed to advertise for capability")
+	require.NotContains(t, logData, "failed to find any peer in table")
 }
