@@ -1117,7 +1117,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
-			return false, nil, fmt.Errorf("Attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
+			return false, nil, fmt.Errorf("attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
 		}
 	}
 
@@ -1354,18 +1354,18 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // static checks and reject programs that are invalid. Prior to v4,
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
-func CheckContract(program []byte, params *EvalParams) error {
-	return check(program, params, ModeApp)
+func CheckContract(program []byte, gi int, params *EvalParams) error {
+	return check(program, gi, params, ModeApp)
 }
 
 // CheckSignature should be faster than EvalSignature.  It can perform static
 // checks and reject programs that are invalid. Prior to v4, these static checks
 // include a cost estimate that must be low enough (controlled by params.Proto).
 func CheckSignature(gi int, params *EvalParams) error {
-	return check(params.TxnGroup[gi].Lsig.Logic, params, ModeSig)
+	return check(params.TxnGroup[gi].Lsig.Logic, gi, params, ModeSig)
 }
 
-func check(program []byte, params *EvalParams, mode RunMode) (err error) {
+func check(program []byte, gi int, params *EvalParams, mode RunMode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
@@ -1387,6 +1387,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	cx.runMode = mode
 	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
+	cx.txn = &params.TxnGroup[gi]
 
 	if err := cx.begin(program); err != nil {
 		return err
@@ -1427,6 +1428,16 @@ func (cx *EvalContext) begin(program []byte) error {
 	}
 	if version > cx.Proto.LogicSigVersion {
 		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
+	}
+	// We disallow pre-sharedResources programs with tx.Access for the same
+	// reason that we don't allow resource sharing to happen for low version
+	// programs. We don't want programs to have access to unexpected
+	// things. Worse, we don't want to deal with the potentially new sitation
+	// that a preSharing program could have access to an account and an ASA, but
+	// not the corresponding holding. We DO allow logicsigs, because they can't
+	// access state anyway.
+	if version < sharedResourcesVersion && cx.runMode == ModeApp && len(cx.txn.Txn.Access) > 0 {
+		return fmt.Errorf("pre-sharedResources program cannot be invoked with tx.Access")
 	}
 
 	cx.version = version

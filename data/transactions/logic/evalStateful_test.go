@@ -624,7 +624,7 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 
 	ep.Trace = &strings.Builder{}
 
-	err := CheckContract(program, ep)
+	err := CheckContract(program, gi, ep)
 	if checkProblem == "" {
 		require.NoError(t, err, "Error in CheckContract %v", ep.Trace)
 	} else {
@@ -1224,10 +1224,6 @@ func TestAssets(t *testing.T) {
 		txn := makeSampleAppl(888)
 		pre := defaultAppParamsWithVersion(directRefEnabledVersion-1, txn)
 		require.GreaterOrEqual(t, version, uint64(directRefEnabledVersion))
-		preCross := defaultAppParamsWithVersion(directRefEnabledVersion-1, txn)
-		convertEPToAccess(preCross, true)
-		preSimple := defaultAppParamsWithVersion(directRefEnabledVersion-1, txn)
-		convertEPToAccess(preSimple, false)
 
 		now := defaultAppParamsWithVersion(version, txn)
 		// Make an ep that has the transactions with all the basic stuff AND implied cross products
@@ -1248,48 +1244,50 @@ func TestAssets(t *testing.T) {
 		// bear in mind: the sample transaction has ForeignAccounts{55,77}
 		testApp(t, "int 5; int 55; asset_holding_get AssetBalance", now, "invalid Account reference 5")
 		// the foreign arrays are converted into tx.Access for nowCross. 5 is not an Address in tx.Access
-		testApp(t, "int 5; int 55; asset_holding_get AssetBalance", nowCross, "address reference 5 is not an Address")
-		testApp(t, "int 5; int 55; asset_holding_get AssetBalance", nowSimple, "address reference 5 is not an Address")
-		testApp(t, "int 50; int 55; asset_holding_get AssetBalance", nowCross, "invalid Account reference 5")  // too big
-		testApp(t, "int 50; int 55; asset_holding_get AssetBalance", nowSimple, "invalid Account reference 5") // too big
+		if version >= sharedResourcesVersion {
+			testApp(t, "int 5; int 55; asset_holding_get AssetBalance", nowCross, "address reference 5 is not an Address")
+			testApp(t, "int 5; int 55; asset_holding_get AssetBalance", nowSimple, "address reference 5 is not an Address")
+			testApp(t, "int 50; int 55; asset_holding_get AssetBalance", nowCross, "invalid Account reference 5")  // too big
+			testApp(t, "int 50; int 55; asset_holding_get AssetBalance", nowSimple, "invalid Account reference 5") // too big
+		}
 		// was legal to get asset balance on a non-ForeignAsset
 		testApp(t, "int 0; int 54; asset_holding_get AssetBalance; ==", pre)
-		// but if using tx.Access we require explicitness, even back in v3
-		testApp(t, "int 0; int 54; asset_holding_get AssetBalance; ==", preCross,
-			"is not in tx.Access")
-		testApp(t, "int 0; int 54; asset_holding_get AssetBalance; ==", preSimple,
-			"is not in tx.Access")
-		// Even if the ASSET is in tx.Access, you must have the HOLDING
-		testApp(t, "int 0; int 55; asset_holding_get AssetBalance; ==", preCross)
-		testApp(t, "int 0; int 55; asset_holding_get AssetBalance; ==", preSimple,
-			"is not in tx.Access")
 		// after directRefEnabledVersion, the asset must be included (whether using Foreign or Access)
 		testApp(t, "int 0; int 54; asset_holding_get AssetBalance", now, "unavailable Asset 54")
-		testApp(t, "int 0; int 54; asset_holding_get AssetBalance", nowCross, "unavailable Asset 54")
-		testApp(t, "int 0; int 54; asset_holding_get AssetBalance", nowSimple, "unavailable Asset 54")
-
+		if version >= sharedResourcesVersion {
+			testApp(t, "int 0; int 54; asset_holding_get AssetBalance", nowCross, "unavailable Asset 54")
+			testApp(t, "int 0; int 54; asset_holding_get AssetBalance", nowSimple, "unavailable Asset 54")
+		}
 		// it wasn't legal to use a direct ref for account
 		testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
 			directRefEnabledVersion-1, exp(1, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
 		// but it is now (empty asset yields 0,0 on stack)
 		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
-		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, nowCross)
-		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, nowSimple,
-			"unavailable Holding MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAYG54XDH4 x 55")
+		if version >= sharedResourcesVersion {
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, nowCross)
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, nowSimple,
+				"unavailable Holding MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAYG54XDH4 x 55")
+		}
 		// This is receiver, who is in Accounts array
 		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, now)
-		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, nowCross)
-		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, nowSimple,
-			"unavailable Holding MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAY62VUCHY x 55")
+		if version >= sharedResourcesVersion {
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, nowCross)
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, nowSimple,
+				"unavailable Holding MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAY62VUCHY x 55")
+		}
 		// But this address is not in Accounts, so illegal
 		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, now, "unavailable Account")
-		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, nowCross, "unavailable Account")
+		if version >= sharedResourcesVersion {
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, nowCross, "unavailable Account")
+		}
 
 		// for params get, presence in ForeignAssets has always be required
 		testApp(t, "int 6; asset_params_get AssetTotal", pre, "6 is not a valid foreign asset slot")
 		testApp(t, "int 6; asset_params_get AssetTotal", now, "unavailable Asset 6")
-		testApp(t, "int 6; asset_params_get AssetTotal", nowCross, "unavailable Asset 6")
-		testApp(t, "int 6; asset_params_get AssetTotal", nowSimple, "unavailable Asset 6")
+		if version >= sharedResourcesVersion {
+			testApp(t, "int 6; asset_params_get AssetTotal", nowCross, "unavailable Asset 6")
+			testApp(t, "int 6; asset_params_get AssetTotal", nowSimple, "unavailable Asset 6")
+		}
 
 		params := basics.AssetParams{
 			Total:         1000,
@@ -1309,28 +1307,33 @@ func TestAssets(t *testing.T) {
 		// For consistency you can now use an indirect ref in holding_get
 		// (recall ForeignAssets[0] = 55, which has balance 123)
 		testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 1; ==; assert; int 123; ==", now)
-		// (recall Access[1] = 55, which has balance 123, tx.Access slots are always 1 based, so use 2.
-		testApp(t, "int 0; int 2; asset_holding_get AssetBalance; int 1; ==; assert; int 123; ==", nowCross)
+		if version >= sharedResourcesVersion {
+			// (recall Access[1] = 55, which has balance 123, tx.Access slots are always 1 based, so use 2.
+			testApp(t, "int 0; int 2; asset_holding_get AssetBalance; int 1; ==; assert; int 123; ==", nowCross)
+		}
 		// but previous code would still try to read ASA 0
 		testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 0; ==; assert; int 0; ==", pre)
 
 		testApp(t, assetsTestProgram, now)
-		// To run it with tx.Access, use slot #2 for the asset, and directly use the Receiver
-		assetsTestProgramA := substitute(assetsTestProgram, map[string]string{
-			"int 0//asset":    "int 2//asset",
-			"txna Accounts 1": "txn Receiver",
-		})
-		testApp(t, assetsTestProgramA, nowCross)
-
 		// In current versions, can swap out the account index for the account
 		testApp(t, strings.ReplaceAll(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\""), now)
-		testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\""), nowCross)
 		// Or an asset index for the asset id
 		testApp(t, strings.ReplaceAll(assetsTestProgram, "int 0//asset", "int 55"), now)
-		testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 2//asset", "int 55"), nowCross)
 		// Or an index for the asset id
 		testApp(t, strings.ReplaceAll(assetsTestProgram, "int 55", "int 0"), now)
-		testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 55", "int 2"), nowCross)
+
+		// same tests, but with tx.Access
+		if version >= sharedResourcesVersion {
+			// To run it with tx.Access, use slot #2 for the asset, and directly use the Receiver
+			assetsTestProgramA := substitute(assetsTestProgram, map[string]string{
+				"int 0//asset":    "int 2//asset",
+				"txna Accounts 1": "txn Receiver",
+			})
+			testApp(t, assetsTestProgramA, nowCross)
+			testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\""), nowCross)
+			testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 2//asset", "int 55"), nowCross)
+			testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 55", "int 2"), nowCross)
+		}
 
 		// but old code cannot
 		testProg(t, strings.ReplaceAll(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\""), directRefEnabledVersion-1, exp(4, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
@@ -1351,8 +1354,9 @@ intc_0 // 0
 `
 		ledger.NewHolding(txn.Txn.Sender, 55, 123, false)
 		testApp(t, source, now)
-		testApp(t, source, nowCross)
-
+		if version >= sharedResourcesVersion {
+			testApp(t, source, nowCross)
+		}
 		// check asset_holding_get with invalid field number
 		ops := testProg(t, source, version)
 		require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
@@ -1808,7 +1812,7 @@ intc_1
 			txn.Txn.Type = protocol.ApplicationCallTx
 			txn.Txn.ApplicationID = 100
 			ep := defaultAppParams(txn)
-			err := CheckContract(ops.Program, ep)
+			err := CheckContract(ops.Program, 0, ep)
 			require.NoError(t, err)
 
 			ledger := NewLedger(

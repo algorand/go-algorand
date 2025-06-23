@@ -4506,7 +4506,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, 2)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
-			err := CheckContract(ops.Program, aep)
+			err := CheckContract(ops.Program, 0, aep)
 			require.NoError(t, err, source)
 			_, err = EvalApp(ops.Program, 0, 0, aep)
 			if spec.Name != "return" {

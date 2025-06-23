@@ -240,20 +240,23 @@ func TestAppAccess(t *testing.T) {
 	}
 
 	getSchema := "int 500; app_params_get AppGlobalNumByteSlice; !; assert; pop; int 1"
-	// In v8, the first tx can read app params of 500, because it's in its
-	// access array, but the second can't
-	TestApps(t, []string{getSchema, getSchema}, txntest.Group(&appl0, &appl1), 8, nil,
-		Exp(1, "unavailable App 500"))
-	// In v9, the second can, because the first can.
+	// before v9, no tx.Acccess
+	TestLogicRange(t, 5, 8, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		tx.Access = []transactions.ResourceRef{{Asset: 500}}
+		TestApp(t, getSchema, ep,
+			"pre-sharedResources program cannot be invoked with tx.Access", // fails at check time
+			"pre-sharedResources program cannot be invoked with tx.Access")
+	})
+	// In v9, both can use 500, even though only the first has it in tx.Access
 	TestApps(t, []string{getSchema, getSchema}, txntest.Group(&appl0, &appl1), 9, nil)
 
 	getLocalEx := `txn Sender; int 500; byte "some-key"; app_local_get_ex; pop; pop; int 1`
 
-	// In contrast, here there's no help from v9, because the second tx is
-	// reading the locals for a different account.
+	// In contrast, when the second tx is reading the locals for a different
+	// account, no help
 
 	// app_local_get* requires the address and the app exist, else the program fails
-	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0, &appl1), 8, nil,
+	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0, &appl1), 9, nil,
 		Exp(0, "no account"))
 
 	_, _, ledger := MakeSampleEnv()
@@ -273,8 +276,6 @@ func TestAppAccess(t *testing.T) {
 	// foreign-app is not repeated in appl2 because the holding being accessed
 	// is the one from tx0.
 	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0, &appl2), 9, ledger)
-	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0, &appl2), 8, ledger, // version 8 does not get sharing
-		Exp(1, "unavailable App 500"))
 
 	// Checking if an account is opted in has pretty much the same rules
 	optInCheck500 := "txn Sender; int 500; app_opted_in"
@@ -291,8 +292,6 @@ func TestAppAccess(t *testing.T) {
 	// foreign-app is not repeated in appl2 because the holding being accessed
 	// is the one from tx0.
 	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl2), 9, ledger)
-	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl2), 8, ledger, // version 8 does not get sharing
-		Exp(1, "unavailable App 500"))
 
 	// Confirm sharing applies to the app id called in tx0, not just access array
 	optInCheck900 := "txn Sender; int 900; app_opted_in; !" // we did not opt any senders into 900
@@ -301,9 +300,6 @@ func TestAppAccess(t *testing.T) {
 	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl1), 9, ledger,
 		Exp(1, "unavailable Local State "+appl1.Sender.String()))
 	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl2), 9, ledger)
-	fmt.Println("unavailable Local State " + appl2.Sender.String() + " x 900 is not in tx.Access")
-	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl2), 8, ledger, // v8=no sharing
-		Exp(1, "unavailable App 900")) // without sharing, even the app is unavailable, let along locals
 
 	// Now, confirm that *setting* a local state in tx1 that was made available
 	// in tx0 works.  The extra check here is that the change is recorded
@@ -385,13 +381,9 @@ gtxn 0 Applications 0; byte 0xAA; app_local_get_ex`}
 			App:     uint64(len(appl1.Access)),
 			Address: 0,
 		}})
-	TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
-		Exp(0, "unavailable Account "+appl1.Sender.String()))
 	// same for app_local_del
 	sources = []string{`gtxn 1 Sender; byte "key"; app_local_del; int 1`}
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
-	TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
-		Exp(0, "unavailable Account "+appl1.Sender.String()))
 }
 
 // TestBetterLocalErrors confirms that we get specific errors about the missing

@@ -54,6 +54,7 @@ var NoTrack = notrack
 var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes
+var TestAppFull = testAppFull
 var TestLogicRange = testLogicRange
 var TestProg = testProg
 var WithPanicOpcode = withPanicOpcode
