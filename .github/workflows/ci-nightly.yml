@@ -84,11 +84,11 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 8
+      PARTITION_TOTAL: 4
       CIRCLECI: true
     steps:
       - name: Download workspace archive
@@ -120,7 +120,7 @@ jobs:
             --junitfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure()
@@ -165,14 +165,14 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 8
+      PARTITION_TOTAL: 4
       E2E_TEST_FILTER: GO
-      PARALLEL_FLAG: "-p 1"
+      PARALLEL_FLAG: "-p 4"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -231,14 +231,14 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        partition_id: [0, 1]
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7]
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 2
+      PARTITION_TOTAL: 8
       E2E_TEST_FILTER: EXPECT
-      PARALLEL_FLAG: "-p 1"
+      PARALLEL_FLAG: "-p 4"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
