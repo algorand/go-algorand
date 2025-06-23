@@ -120,7 +120,7 @@ jobs:
             --junitfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure()
@@ -165,12 +165,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        partition_id: [0] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 1
+      PARTITION_TOTAL: 2
       E2E_TEST_FILTER: GO
       PARALLEL_FLAG: "-p 4"
     steps:
