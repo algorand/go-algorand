@@ -141,7 +141,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -162,8 +162,10 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
+          file: ./test_results/**/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
   integration:
     needs: [build]
     strategy:
@@ -224,7 +226,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -234,6 +236,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
+          file: ./test_results/**/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -297,7 +300,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -307,6 +310,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
+          file: ./test_results/**/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -367,7 +371,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
@@ -377,6 +381,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
+          file: ./test_results/**/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
