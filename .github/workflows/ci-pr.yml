@@ -377,13 +377,6 @@ jobs:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
           path: ~/test_results
           retention-days: 7
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          file: /home/runner/test_results/${{ matrix.platform }}_e2e_subs/results.xml
-          token: ${{ env.CODECOV_TOKEN }}
-          fail_ci_if_error: false
 
   verify:
     needs: [test, integration, e2e_expect]
