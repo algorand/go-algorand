@@ -326,13 +326,13 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	return nil
 }
 
-func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams) error {
-	err := logic.CheckContract(ac.ApprovalProgram, evalParams)
+func checkPrograms(ac *transactions.ApplicationCallTxnFields, gi int, evalParams *logic.EvalParams) error {
+	err := logic.CheckContract(ac.ApprovalProgram, gi, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
 	}
 
-	err = logic.CheckContract(ac.ClearStateProgram, evalParams)
+	err = logic.CheckContract(ac.ClearStateProgram, gi, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
 	}
@@ -398,7 +398,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 			return err
 		}
 
-		err = checkPrograms(&ac, evalParams)
+		err = checkPrograms(&ac, gi, evalParams)
 		if err != nil {
 			return err
 		}

@@ -17,6 +17,7 @@
 package apply
 
 import (
+	"bytes"
 	"fmt"
 	"maps"
 	"math/rand"
@@ -337,40 +338,86 @@ func TestAppCallAddressByIndex(t *testing.T) {
 	a.ErrorContains(err, "invalid Account reference 2")
 }
 
-func TestAppCallCheckPrograms(t *testing.T) {
+func TestAppCallCheckProgramCosts(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
 	var ac transactions.ApplicationCallTxnFields
 	// This check is for static costs. v26 is last with static cost checking
 	proto := config.Consensus[protocol.ConsensusV26]
-	ep := logic.NewAppEvalParams(nil, &proto, nil)
+	stads := []transactions.SignedTxnWithAD{{
+		SignedTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{},
+		},
+	}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	proto.MaxAppProgramCost = 1
-	err := checkPrograms(&ac, ep)
+	err := checkPrograms(&ac, 0, ep)
 	a.ErrorContains(err, "check failed on ApprovalProgram")
 
 	program := []byte{2, 0x20, 1, 1, 0x22} // version, intcb, int 1
 	ac.ApprovalProgram = program
 	ac.ClearStateProgram = program
 
-	err = checkPrograms(&ac, ep)
+	err = checkPrograms(&ac, 0, ep)
 	a.ErrorContains(err, "check failed on ApprovalProgram")
 
 	proto.MaxAppProgramCost = 10
-	err = checkPrograms(&ac, ep)
+	err = checkPrograms(&ac, 0, ep)
 	a.NoError(err)
 
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	err = checkPrograms(&ac, ep)
+	err = checkPrograms(&ac, 0, ep)
 	a.ErrorContains(err, "check failed on ClearStateProgram")
 
 	ac.ClearStateProgram = program
-	err = checkPrograms(&ac, ep)
+	err = checkPrograms(&ac, 0, ep)
 	a.NoError(err)
+}
+
+func TestAppCallCheckProgramsWithAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(t)
+
+	var ac transactions.ApplicationCallTxnFields
+	for _, cv := range []protocol.ConsensusVersion{
+		protocol.ConsensusCurrentVersion,
+		protocol.ConsensusFuture,
+	} {
+		proto := config.Consensus[cv]
+		stads := []transactions.SignedTxnWithAD{{
+			SignedTxn: transactions.SignedTxn{
+				Txn: transactions.Transaction{},
+			},
+		}}
+		ep := logic.NewAppEvalParams(stads, &proto, nil)
+		program := []byte{2, 0x20, 1, 1, 0x22} // version, intcb, int 1
+		ac.ApprovalProgram = program
+		ac.ClearStateProgram = bytes.Clone(program)
+
+		err := checkPrograms(&ac, 0, ep)
+		a.NoError(err)
+
+		ep.TxnGroup[0].Txn.Access = []transactions.ResourceRef{{Address: basics.Address{0x01}}}
+		err = checkPrograms(&ac, 0, ep)
+		a.ErrorContains(err, "check failed on ApprovalProgram: pre-sharedResources program")
+
+		ac.ApprovalProgram[0] = 9
+		err = checkPrograms(&ac, 0, ep)
+		a.ErrorContains(err, "check failed on ClearStateProgram: pre-sharedResources program")
+
+		ac.ClearStateProgram[0] = 9
+		err = checkPrograms(&ac, 0, ep)
+		a.NoError(err)
+	}
+
 }
 
 func TestAppCallCreate(t *testing.T) {
