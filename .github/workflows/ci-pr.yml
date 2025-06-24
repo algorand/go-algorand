@@ -149,7 +149,7 @@ jobs:
           retention-days: 7
       - name: Upload coverage
         # Only upload coverage from ubuntu-24.04 platform
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
@@ -158,7 +158,12 @@ jobs:
           token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
           fail_ci_if_error: false
-
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
   integration:
     needs: [build]
     strategy:
@@ -225,6 +230,12 @@ jobs:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   e2e_expect:
     needs: [build]
@@ -292,6 +303,12 @@ jobs:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   e2e_subs:
     needs: [build]
@@ -356,6 +373,12 @@ jobs:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   verify:
     needs: [test, integration, e2e_expect]
