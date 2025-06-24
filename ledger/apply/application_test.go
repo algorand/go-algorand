@@ -275,6 +275,7 @@ func (b *testBalances) SetParams(params config.ConsensusParams) {
 
 func TestAppCallGetParam(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -315,6 +316,7 @@ func TestAppCallGetParam(t *testing.T) {
 
 func TestAppCallAddressByIndex(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -347,11 +349,7 @@ func TestAppCallCheckProgramCosts(t *testing.T) {
 	var ac transactions.ApplicationCallTxnFields
 	// This check is for static costs. v26 is last with static cost checking
 	proto := config.Consensus[protocol.ConsensusV26]
-	stads := []transactions.SignedTxnWithAD{{
-		SignedTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{},
-		},
-	}}
+	stads := []transactions.SignedTxnWithAD{{}}
 	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	proto.MaxAppProgramCost = 1
@@ -392,11 +390,7 @@ func TestAppCallCheckProgramsWithAccess(t *testing.T) {
 		protocol.ConsensusFuture,
 	} {
 		proto := config.Consensus[cv]
-		stads := []transactions.SignedTxnWithAD{{
-			SignedTxn: transactions.SignedTxn{
-				Txn: transactions.Transaction{},
-			},
-		}}
+		stads := []transactions.SignedTxnWithAD{{}}
 		ep := logic.NewAppEvalParams(stads, &proto, nil)
 		program := []byte{2, 0x20, 1, 1, 0x22} // version, intcb, int 1
 		ac.ApprovalProgram = program
@@ -422,6 +416,7 @@ func TestAppCallCheckProgramsWithAccess(t *testing.T) {
 
 func TestAppCallCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -460,6 +455,7 @@ func TestAppCallCreate(t *testing.T) {
 // TestAppCallApplyCreate carefully tracks and validates balance record updates
 func TestAppCallApplyCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -476,7 +472,8 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b := newTestBalances()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewAppEvalParams(nil, &proto, nil)
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	var txnCounter uint64 = 1
 
@@ -557,6 +554,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 // TestAppCallApplyCreateOptIn checks balance record fields without tracking substages
 func TestAppCallApplyCreateOptIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -576,7 +574,8 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	b := newTestBalancesPass()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewAppEvalParams(nil, &proto, nil)
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
@@ -603,6 +602,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 
 func TestAppCallOptIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -720,6 +720,7 @@ func TestAppCallOptIn(t *testing.T) {
 
 func TestAppCallClearState(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -889,6 +890,7 @@ func TestAppCallClearState(t *testing.T) {
 
 func TestAppCallApplyCloseOut(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -984,6 +986,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 
 func TestAppCallApplyUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1011,7 +1014,8 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b := newTestBalances()
 	b.SetProto(protocol.ConsensusV28)
 	proto := b.ConsensusParams()
-	ep := logic.NewAppEvalParams(nil, &proto, nil)
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	cbr := basics.AccountData{
@@ -1134,6 +1138,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 
 func TestAppCallApplyDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1255,6 +1260,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1276,7 +1282,8 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	b := newTestBalancesPass()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewAppEvalParams(nil, &proto, nil)
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
@@ -1304,6 +1311,7 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 
 func TestAppCallApplyCreateDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1325,7 +1333,8 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	b := newTestBalancesPass()
 	b.SetProto(protocol.ConsensusFuture)
 	proto := b.ConsensusParams()
-	ep := logic.NewAppEvalParams(nil, &proto, nil)
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
