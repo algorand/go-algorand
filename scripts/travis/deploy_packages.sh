@@ -29,6 +29,8 @@ if [ "${NIGHTLY_BUILD}" == "true" ]; then
     if [ "${OSARCH}" == "darwin/arm64" ]; then
         ./scripts/travis/build.sh --make_universal
         OSARCH="darwin/universal"
+    else
+        scripts/travis/build.sh --make_debug
     fi
     NO_BUILD=true
 fi

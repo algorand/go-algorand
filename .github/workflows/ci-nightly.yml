@@ -302,6 +302,7 @@ jobs:
       E2E_TEST_FILTER: SCRIPTS
       CI_PLATFORM: ${{ matrix.platform }}
       CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
+      S3_TESTDATA: ${{ secrets.S3_TESTDATA }}
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -321,6 +322,12 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: github-actions
+          aws-region: ${{ secrets.AWS_REGION }}
       - name: Run E2E subs tests
         run: |
           scripts/configure_dev.sh
@@ -400,7 +407,7 @@ jobs:
             }
 
   upload:
-    needs: [verify_nightly]
+    needs: [verify_nightly, e2e_subs_nightly]
     strategy:
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
