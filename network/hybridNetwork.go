@@ -32,14 +32,13 @@ import (
 type HybridP2PNetwork struct {
 	p2pNetwork *P2PNetwork
 	wsNetwork  *WebsocketNetwork
-	genesisID  string
 
 	useP2PAddress bool
 }
 
 // NewHybridP2PNetwork constructs a GossipNode that combines P2PNetwork and WebsocketNetwork
 // Hybrid mode requires both P2P and WS to be running in server (NetAddress set) or client (NetAddress empty) mode.
-func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (*HybridP2PNetwork, error) {
+func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo) (*HybridP2PNetwork, error) {
 	if err := cfg.ValidateP2PHybridConfig(); err != nil {
 		return nil, err
 	}
@@ -48,7 +47,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	p2pcfg.NetAddress = cfg.P2PHybridNetAddress
 	p2pcfg.IncomingConnectionsLimit = cfg.P2PHybridIncomingConnectionsLimit
 	identityTracker := NewIdentityTracker()
-	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID, nodeInfo, &identityOpts{tracker: identityTracker})
+	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisInfo, nodeInfo, &identityOpts{tracker: identityTracker})
 	if err != nil {
 		return nil, err
 	}
@@ -57,14 +56,13 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 		tracker: identityTracker,
 		scheme:  NewIdentityChallengeScheme(NetIdentityDedupNames(cfg.PublicAddress, p2pnet.PeerID().String()), NetIdentitySigner(p2pnet.PeerIDSigner())),
 	}
-	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisID, networkID, nodeInfo, &identOpts)
+	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisInfo, nodeInfo, &identOpts)
 	if err != nil {
 		return nil, err
 	}
 	return &HybridP2PNetwork{
 		p2pNetwork: p2pnet,
 		wsNetwork:  wsnet,
-		genesisID:  genesisID,
 	}, nil
 }
 
@@ -236,7 +234,7 @@ func (n *HybridP2PNetwork) OnNetworkAdvance() {
 
 // GetGenesisID returns the network-specific genesisID.
 func (n *HybridP2PNetwork) GetGenesisID() string {
-	return n.genesisID
+	return n.wsNetwork.GetGenesisID()
 }
 
 // called from wsPeer to report that it has closed

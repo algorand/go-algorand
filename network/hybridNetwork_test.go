@@ -43,10 +43,11 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 	const p2pKeyDir = ""
 
 	identDiscValue := networkPeerIdentityDisconnect.GetUint64Value()
+	genesisInfo := GenesisInfo{genesisID, "net"}
 
 	relayCfg := cfg
 	relayCfg.ForceRelayMessages = true
-	netA, err := NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisID, "net", &nopeNodeInfo{})
+	netA, err := NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisInfo, &nopeNodeInfo{})
 	require.NoError(t, err)
 
 	err = netA.Start()
@@ -65,7 +66,7 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 	relayCfg.NetAddress = addr
 	relayCfg.PublicAddress = addr
 	relayCfg.P2PHybridNetAddress = "127.0.0.1:0"
-	netA, err = NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisID, "net", &nopeNodeInfo{})
+	netA, err = NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisInfo, &nopeNodeInfo{})
 	require.NoError(t, err)
 
 	err = netA.Start()
@@ -86,14 +87,14 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 
 	phoneBookAddresses := []string{multiAddrStr, addr}
 
-	netB, err := NewHybridP2PNetwork(log.With("node", "netB"), cfg, "", phoneBookAddresses, genesisID, "net", &nopeNodeInfo{})
+	netB, err := NewHybridP2PNetwork(log.With("node", "netB"), cfg, "", phoneBookAddresses, genesisInfo, &nopeNodeInfo{})
 	require.NoError(t, err)
 	// for netB start the p2p network first
 	err = netB.p2pNetwork.Start()
 	require.NoError(t, err)
 	defer netB.Stop()
 
-	netC, err := NewHybridP2PNetwork(log.With("node", "netC"), cfg, "", phoneBookAddresses, genesisID, "net", &nopeNodeInfo{})
+	netC, err := NewHybridP2PNetwork(log.With("node", "netC"), cfg, "", phoneBookAddresses, genesisInfo, &nopeNodeInfo{})
 	require.NoError(t, err)
 	// for netC start the ws network first
 	err = netC.wsNetwork.Start()
@@ -190,12 +191,13 @@ func TestHybridNetwork_ValidateConfig(t *testing.T) {
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ":0"
 	cfg.P2PHybridNetAddress = ""
+	genesisInfo := GenesisInfo{genesisID, "net"}
 
-	_, err := NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisID, "net", &nopeNodeInfo{})
+	_, err := NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisInfo, &nopeNodeInfo{})
 	require.ErrorContains(t, err, "both NetAddress and P2PHybridNetAddress")
 
 	cfg.NetAddress = ""
 	cfg.P2PHybridNetAddress = ":0"
-	_, err = NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisID, "net", &nopeNodeInfo{})
+	_, err = NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisInfo, &nopeNodeInfo{})
 	require.ErrorContains(t, err, "both NetAddress and P2PHybridNetAddress")
 }

@@ -56,8 +56,7 @@ type P2PNetwork struct {
 	service     p2p.Service
 	log         logging.Logger
 	config      config.Local
-	genesisID   string
-	networkID   protocol.NetworkID
+	genesisInfo GenesisInfo
 	ctx         context.Context
 	ctxCancel   context.CancelFunc
 	peerStats   map[peer.ID]*p2pPeerStats
@@ -213,7 +212,7 @@ var gossipSubTags = map[protocol.Tag]string{
 }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
-func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo, identityOpts *identityOpts) (*P2PNetwork, error) {
+func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, node NodeInfo, identityOpts *identityOpts) (*P2PNetwork, error) {
 	const readBufferLen = 2048
 
 	// create Peerstore and add phonebook addresses
@@ -221,7 +220,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	for malAddr, malErr := range malformedAddrs {
 		log.Infof("Ignoring malformed phonebook address %s: %s", malAddr, malErr)
 	}
-	pstore, err := peerstore.NewPeerStore(addrInfo, string(networkID))
+	pstore, err := peerstore.NewPeerStore(addrInfo, string(genesisInfo.NetworkID))
 	if err != nil {
 		return nil, err
 	}
@@ -230,8 +229,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	net := &P2PNetwork{
 		log:           log,
 		config:        cfg,
-		genesisID:     genesisID,
-		networkID:     networkID,
+		genesisInfo:   genesisInfo,
 		topicTags:     gossipSubTags,
 		wsPeers:       make(map[peer.ID]*wsPeer),
 		wsPeersToIDs:  make(map[*wsPeer]peer.ID),
@@ -317,7 +315,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 	bootstrapper := &bootstrapper{
 		cfg:               cfg,
-		networkID:         networkID,
+		networkID:         net.genesisInfo.NetworkID,
 		phonebookPeers:    addrInfos,
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
@@ -326,7 +324,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	net.bootstrapperStop = bootstrapper.stop
 
 	if cfg.EnableDHTProviders {
-		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, networkID, net.log, bootstrapper.BootstrapFunc)
+		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, net.genesisInfo.NetworkID, net.log, bootstrapper.BootstrapFunc)
 		if err0 != nil {
 			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
 			return nil, err
@@ -462,7 +460,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 
 	// fetch peers from DNS
 	var dnsPeers, dhtPeers []peer.AddrInfo
-	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.networkID, dnsaddr.NewMultiaddrDNSResolveController(n.config.DNSSecurityTXTEnforced(), ""))
+	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.genesisInfo.NetworkID, dnsaddr.NewMultiaddrDNSResolveController(n.config.DNSSecurityTXTEnforced(), ""))
 
 	// discover peers from DHT
 	if n.capabilitiesDiscovery != nil {
@@ -486,7 +484,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 			for i := range dhtArchivalPeers {
 				replace[i] = &dhtArchivalPeers[i]
 			}
-			n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.ArchivalRole)
+			n.pstore.ReplacePeerList(replace, string(n.genesisInfo.NetworkID), phonebook.ArchivalRole)
 		}
 	}
 
@@ -496,7 +494,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 		replace[i] = &peers[i]
 	}
 	if len(peers) > 0 {
-		n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.RelayRole)
+		n.pstore.ReplacePeerList(replace, string(n.genesisInfo.NetworkID), phonebook.RelayRole)
 	}
 	return len(peers)
 }
@@ -549,7 +547,7 @@ func (n *P2PNetwork) httpdThread() {
 
 // GetGenesisID implements GossipNode
 func (n *P2PNetwork) GetGenesisID() string {
-	return n.genesisID
+	return n.genesisInfo.GenesisID
 }
 
 // Address returns a string and whether that is a 'final' address or guessed.
@@ -797,11 +795,6 @@ func (n *P2PNetwork) TelemetryGUID() string {
 // InstanceName returns the instance name of this node.
 func (n *P2PNetwork) InstanceName() string {
 	return n.log.GetInstanceName()
-}
-
-// GenesisID returns the genesis ID of this node.
-func (n *P2PNetwork) GenesisID() string {
-	return n.genesisID
 }
 
 // SupportedProtoVersions returns the supported protocol versions of this node.
