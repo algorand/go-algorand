@@ -4,6 +4,13 @@ on:
     branches: 
       - master
       - 'rel/**'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to run tests on'
+        required: true
+        default: 'master'
+        type: string
 
 env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
@@ -32,6 +39,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
+        ref: ${{ github.event.inputs.branch || github.ref }}
         fetch-depth: 0
     - name: Get Go version
       id: go_version
@@ -163,7 +171,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: /home/runner/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
+          file: /home/runner/test_results/${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -236,7 +244,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: /home/runner/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
+          file: /home/runner/test_results/${{ matrix.platform }}_integration_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -309,7 +317,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: /home/runner/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
+          file: /home/runner/test_results/${{ matrix.platform }}_e2e_expect_nightly/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -430,6 +438,7 @@ jobs:
 
   upload:
     needs: [verify_nightly, e2e_subs_nightly]
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/rel/')
     strategy:
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
