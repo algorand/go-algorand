@@ -142,7 +142,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -150,7 +150,7 @@ jobs:
           retention-days: 7
       - name: Upload coverage
         # Only upload coverage from ubuntu-24.04 platform
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
@@ -158,6 +158,13 @@ jobs:
         with:
           token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
+          fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: /home/runner/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
   integration_nightly:
@@ -219,12 +226,19 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: /home/runner/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   e2e_expect_nightly:
     needs: [build]
@@ -285,12 +299,19 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: /home/runner/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   e2e_subs_nightly:
     needs: [build]
@@ -355,7 +376,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
