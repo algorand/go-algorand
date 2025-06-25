@@ -162,7 +162,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: /home/runner/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -236,7 +236,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: /home/runner/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -310,7 +310,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          file: /home/runner/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
           token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
