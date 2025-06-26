@@ -17,6 +17,8 @@
 package vpack
 
 import (
+	"encoding/binary"
+	"hash/fnv"
 	"testing"
 	"testing/quick"
 
@@ -248,6 +250,13 @@ func TestLRUTableQuick(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	cfg := &quick.Config{MaxCount: 50000}
 
+	hashfn := func(v uint32) uint64 {
+		// use FNV-1 for hashing test values
+		h64 := fnv.New64()
+		h64.Write([]byte(binary.LittleEndian.AppendUint32(nil, v)))
+		return h64.Sum64()
+	}
+
 	// Property: when a third distinct value is inserted into a bucket, the
 	// previously least-recently-used (LRU) value must be evicted, while the
 	// previously most-recently-used (MRU) value survives.
@@ -259,7 +268,7 @@ func TestLRUTableQuick(t *testing.T) {
 		expectedState := make(map[lruBucketIndex]order)
 
 		for _, v := range seq {
-			h := uint64(v & lruTableBucketMask)
+			h := hashfn(v)
 			b := lruBucketIndex(h)
 			expectedBucket := expectedState[b]
 

@@ -18,8 +18,6 @@ package vpack
 
 import (
 	"encoding/binary"
-
-	"github.com/cespare/xxhash/v2"
 )
 
 // lruTable is a fixed-size, 2-way set-associative hash table with 512 buckets.
@@ -71,8 +69,9 @@ func (p *pkSigPair) hash() uint64 {
 type addressValue [32]byte
 
 func (v *addressValue) hash() uint64 {
-	// Users can create vanity addresses, so we use xxhash.
-	return xxhash.Sum64(v[:])
+	// addresses are fairly uniformly distributed, so we can use a simple XOR
+	return binary.LittleEndian.Uint64(v[:8]) ^ binary.LittleEndian.Uint64(v[8:16]) ^
+		binary.LittleEndian.Uint64(v[16:24]) ^ binary.LittleEndian.Uint64(v[24:])
 }
 
 // mruBitmask returns the byte index and bit mask for the MRU bit of bucket b.
