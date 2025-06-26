@@ -1,15 +1,21 @@
-#pragma version 5
+#pragma version 9
+        // This is intended to be very similar to assets-escrow.teal,
+        // but show how such an application would be written with
+        // tx.Access (or shared resources) in mind.  All resources are
+        // specified as app args, so that inspecting the txn local
+        // foreign-arrays is avoided.
+
         // This application accepts these actions on assets
-        // optin():void  - opt in the app to an asset
-        // close():void - opt out the app from an asset
+        // optin(uint64):void  - opt in the app to an asset.
+        // close(uint64):void - opt out the app from an asset
         // deposit():void - deposit assets on app and hold until withdraw is requested;
         //                  update the asset balance in app's local state
-        // withdraw(uint64):void - withdraw assets from and update the asset balance in app's local state.
+        // withdraw(uint64,uint64):void - withdraw arg 1 units of arg 2 asset and update the asset balance in app's local state.
         //                         approve if withdraw amount < balance
-        // transfer(uint64):void - app has clawback auth to transfer assets between accounts
+        // transfer(uint64,uint64,address,address):void - app has clawback auth to do it (asset, amount, from, to)
         // create(uint64):void - app creates assets
-        // mint():void - withdraw assets created by app
-        // freeze(uint64):void - freeze/unfreeze an asset on an account
+        // mint(uint64):void - withdraw assets created by app
+        // freeze(uint64,bool):void - freeze/unfreeze an asset on an account
 
         // ApplicationID is zero in inital creation txn
         txn ApplicationID
@@ -66,7 +72,7 @@ handle_optin:
 handle_noop:
         // opt in app to asset to enable axfer
         txn ApplicationArgs 0
-        byte "optin():void"
+        byte "optin(uint64):void"
         ==
         bz not_optin
         byte "optin"
@@ -79,7 +85,8 @@ handle_noop:
          int 0
          itxn_field AssetAmount
 
-         txna Assets 0
+         txna ApplicationArgs 1
+         btoi
          itxn_field XferAsset
 
          global CurrentApplicationAddress
@@ -129,7 +136,7 @@ not_optin:
         return
 not_deposit:
         txn ApplicationArgs 0
-        byte "withdraw(uint64):void"
+        byte "withdraw(uint64,uint64):void"
         ==
         bz not_withdraw
 
@@ -141,7 +148,7 @@ not_deposit:
         app_local_get
 
         // Subtract the request and replace. Rejects on underflow
-        txn ApplicationArgs 1
+        txn ApplicationArgs 2
         btoi
         -
         app_local_put
@@ -150,10 +157,11 @@ not_deposit:
          int axfer
          itxn_field TypeEnum
 
-         txna Assets 0
+         txn ApplicationArgs 1
+         btoi
          itxn_field XferAsset
 
-         txn ApplicationArgs 1
+         txn ApplicationArgs 2
          btoi
          itxn_field AssetAmount
 
@@ -165,7 +173,7 @@ not_deposit:
         return
 not_withdraw:
         txn ApplicationArgs 0
-        byte "close():void"
+        byte "close(uint64):void"
         ==
         bz not_close
 
@@ -174,7 +182,8 @@ not_withdraw:
             int axfer
             itxn_field TypeEnum
 
-            txna Assets 0
+            txna ApplicationArgs 1
+            btoi
             itxn_field XferAsset
 
             int 0
@@ -191,7 +200,7 @@ not_withdraw:
         return
 not_close:
         txn ApplicationArgs 0
-        byte "transfer(uint64):void"
+        byte "transfer(uint64,uint64,address):void"
         ==
         bz not_transfer
 
@@ -200,17 +209,18 @@ not_close:
             int axfer
             itxn_field TypeEnum
 
-            txna Assets 0
+            txn ApplicationArgs 1
+            btoi
             itxn_field XferAsset
 
-            txn ApplicationArgs 1
+            txn ApplicationArgs 2
             btoi
             itxn_field AssetAmount
 
             txn Sender
             itxn_field AssetSender
 
-            txna Accounts 1
+            txna ApplicationArgs 3
             itxn_field AssetReceiver
 
         itxn_submit
@@ -245,7 +255,7 @@ not_transfer:
         return
 not_create:
         txn ApplicationArgs 0
-        byte "mint():void"
+        byte "mint(uint64):void"
         ==
         bz not_mint
         // Handle mint.  Next txn slot must pay our app account
@@ -270,7 +280,8 @@ not_create:
          int axfer
          itxn_field TypeEnum
 
-         txna Assets 0
+         txn ApplicationArgs 1
+         btoi
          itxn_field XferAsset
 
          gtxns Amount
@@ -284,7 +295,7 @@ not_create:
         return
 not_mint:
         txn ApplicationArgs 0
-        byte "freeze(uint64):void"
+        byte "freeze(uint64,bool):void"
         ==
         bz not_freeze
 
@@ -293,10 +304,11 @@ not_mint:
           int afrz
           itxn_field TypeEnum
 
-          txna Assets 0
+          txn ApplicationArgs 1
+          btoi
           itxn_field FreezeAsset
 
-          txn ApplicationArgs 1
+          txn ApplicationArgs 2
           btoi
           itxn_field FreezeAssetFrozen
 

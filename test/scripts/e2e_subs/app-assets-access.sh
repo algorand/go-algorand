@@ -1,9 +1,10 @@
 #!/bin/bash
 
+# This test is very similar to app-assets.sh, but uses --access pervasively.
+
 filename=$(basename "$0")
 scriptname="${filename%.*}"
 date "+${scriptname} start %Y%m%d_%H%M%S"
-
 
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"
@@ -61,12 +62,13 @@ function assets {
     goal account info -a "$acct" | awk '/Held Assets:/,/Created Apps:/' | grep "ID*" | awk -F'[, ]' '{print $4}'
 }
 
-APPID=$(${gcmd} app create --creator "${SMALL}" --approval-prog=${TEAL}/assets-escrow.teal --global-byteslices 4 --global-ints 0 --local-byteslices 0 --local-ints 1  --clear-prog=${TEAL}/approve-all.teal | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator "${SMALL}" --approval-prog=${TEAL}/assets-escrow9.teal --global-byteslices 4 --global-ints 0 --local-byteslices 0 --local-ints 1  --clear-prog=<(printf '#pragma version 9\nint 1') | grep Created | awk '{ print $6 }')
 [ "$(balance "$SMALL")" = 998000 ] # 1000 fee
 
+# Use --access on all app calls
 function appl {
     method=$1; shift
-    ${gcmd} app call --app-id="$APPID" --app-arg="str:$method" "$@"
+    ${gcmd} app call --app-id="$APPID" --app-arg="str:$method" --access "$@"
 }
 
 function app-txid {
@@ -125,10 +127,12 @@ ASSETID=$(asset-create 1000000  --name "e2e" --unitname "e" | asset-id)
 [ "$(balance "$SMALL")" = 996000 ] # 1000 fee
 
 ${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$APPACCT"
-appl "optin():void" --foreign-asset="$ASSETID" --from="$SMALL"
+! appl "optin(uint64):void" --app-arg "int:$ASSETID" --foreign-asset="$ASSETID" --from="$SMALL" || exit 1
+appl "optin(uint64):void" --app-arg "int:$ASSETID" --foreign-asset="$ASSETID" --from="$SMALL" --holding "$ASSETID,app($APPID)"
 [ "$(balance "$APPACCT")" = 998000 ] # 1000 fee
 [ "$(balance "$SMALL")" = 995000 ]
 
+# Deposit is exactly like app-assets.sh only sender's local state is accessed
 appl "deposit():void" -o "$T/deposit.tx" --from="$SMALL"
 asset-deposit 1000 $ASSETID -o "$T/axfer1.tx"
 cat "$T/deposit.tx" "$T/axfer1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
@@ -139,11 +143,13 @@ ${gcmd} clerk rawsend -f "$T/group.stx"
 [ "$(asset_bal "$SMALL")" = 999000 ]  # asset balance
 [ "$(asset_ids "$APPACCT")" = $ASSETID ]
 [ "$(asset_bal "$APPACCT")" = 1000 ]
-[ "$(balance "$SMALL")" =        993000 ] # 2 fees
-[ "$(balance "$APPACCT")" =      998000 ]
+[ "$(balance "$SMALL")" = 993000 ] # 2 fees
+[ "$(balance "$APPACCT")" = 998000 ]
 
 # Withdraw 100 in app. Confirm that inner txn is visible to transaction API.
-TXID=$(appl "withdraw(uint64):void" --app-arg="int:100"  --foreign-asset="$ASSETID" --from="$SMALL" | app-txid)
+! appl "withdraw(uint64,uint64):void" --app-arg="int:$ASSETID" --app-arg="int:100" --foreign-asset="$ASSETID" --from="$SMALL" || exit 1
+WITHDRAW=("withdraw(uint64,uint64):void" --app-arg="int:$ASSETID" --from="$SMALL" --holding "$ASSETID,app($APPID)" --holding "$ASSETID,$SMALL")
+TXID=$(appl "${WITHDRAW[@]}" --app-arg="int:100" | app-txid)
 [ "$(rest "/v2/transactions/pending/$TXID" \
         | jq '.["inner-txns"][0].txn.txn.aamt')" = 100 ]
 [ "$(rest "/v2/transactions/pending/$TXID?format=msgpack" | msgpacktool -d \
@@ -152,30 +158,30 @@ TXID=$(appl "withdraw(uint64):void" --app-arg="int:100"  --foreign-asset="$ASSET
 ROUND=$(rest "/v2/transactions/pending/$TXID" | jq '.["confirmed-round"]')
 rest "/v2/blocks/$ROUND" | jq .block.txns[0].dt.itx
 
-[ "$(asset_bal "$SMALL")" = 999100 ]   #  100 asset withdrawn
-[ "$(asset_bal "$APPACCT")" = 900 ] # 100 asset withdrawn
-[ "$(balance "$SMALL")" =        992000 ] # 1 fee
-[ "$(balance "$APPACCT")" =        997000 ] # fee paid by app
+[ "$(asset_bal "$SMALL")" = 999100 ] # 100 asset withdrawn
+[ "$(asset_bal "$APPACCT")" = 900 ]  # 100 asset withdrawn
+[ "$(balance "$SMALL")" = 992000 ]   # 1 fee
+[ "$(balance "$APPACCT")" = 997000 ] # fee paid by app
 
-appl "withdraw(uint64):void" --app-arg="int:100" --foreign-asset="$ASSETID"  --fee 2000 --from="$SMALL"
-[ "$(asset_bal "$SMALL")" = 999200 ]   #  100 asset withdrawn
+appl "${WITHDRAW[@]}" --app-arg="int:100" --fee 2000
+[ "$(asset_bal "$SMALL")" = 999200 ] # 100 asset withdrawn
+[ "$(asset_bal "$APPACCT")" = 800 ]  # 100 asset withdrawn
 [ "$(balance "$SMALL")" = 990000 ]   # 2000 fee
-[ "$(asset_bal "$APPACCT")" = 800 ] # 100 asset  withdrawn
 [ "$(balance "$APPACCT")" = 997000 ] # fee credit used
 
 # Try to withdraw too much
-appl "withdraw(uint64):void" --app-arg="int:1000"  --foreign-asset="$ASSETID" --from="$SMALL"  && exit 1
-[ "$(asset_bal "$SMALL")" = 999200 ]   # no change
-[ "$(asset_bal "$APPACCT")" = 800 ]   # no change
+! appl "${WITHDRAW[@]}" --app-arg="int:1000" || exit 1
+[ "$(asset_bal "$SMALL")" = 999200 ] # no changes
+[ "$(asset_bal "$APPACCT")" = 800 ]
 [ "$(balance "$SMALL")" = 990000 ]
 [ "$(balance "$APPACCT")" = 997000 ]
 
 # Show that it works AT exact asset balance
-appl "withdraw(uint64):void" --app-arg="int:800" --foreign-asset="$ASSETID" --from="$SMALL"
+appl "${WITHDRAW[@]}" --app-arg="int:800"
 [ "$(asset_bal "$SMALL")" = 1000000 ]
 [ "$(asset_bal "$APPACCT")" = 0 ]
 [ "$(balance "$SMALL")" = 989000 ]
-[ "$(balance "$APPACCT")" = 996000 ]
+[ "$(balance "$APPACCT")" = 996000 ] # app paid the fee for inner axfer
 
 USER=$(${gcmd} account new | awk '{ print $6 }') #new account
 ${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$USER" #fund account
@@ -202,20 +208,48 @@ ${gcmd} asset config --manager $SMALL --assetid $ASSETID --new-clawback $APPACCT
 cb_addr=$(${gcmd} asset info --assetid $ASSETID | clawback_addr)
 [ "$cb_addr" = "$APPACCT" ] #app is set as clawback address
 # transfer asset from $SMALL to $USER
-appl "transfer(uint64):void" --app-arg="int:1000" --foreign-asset="$ASSETID" --from="$SMALL" --app-account="$USER2"
+# With just the accounts and asset, won't work b/c the holdings are required
+RES=$(appl "transfer(uint64,uint64,address):void" --from="$SMALL" \
+     --app-arg="int:$ASSETID" --app-arg="int:1000" --app-arg="addr:$USER2" \
+     --foreign-asset="$ASSETID" --app-account="$USER2" 2>&1) && {
+    date '+app-assets-access FAIL transfer should fail without explicit holding %Y%m%d_%H%M%S'
+    exit 1
+}
+# allowsAssetTransfer checks the AssetReceiver before AssetSender, so we get that error.
+[[ $RES == *"unavailable Holding $USER2 x $ASSETID"* ]]   # failure should be for the holding
+
+# Need access to both holdings.
+appl "transfer(uint64,uint64,address):void" \
+     --from="$SMALL"  --holding="$ASSETID,$SMALL" \
+     --app-arg="int:$ASSETID" --app-arg="int:1000" \
+     --app-arg="addr:$USER2" --holding="$ASSETID,$USER2"
+
+
 [ $(asset_bal "$USER2") = 1000 ]
 [ $(asset_bal "$SMALL") = 998000 ]
-# transfer asset from $USER to $SMALL
-appl "transfer(uint64):void" --app-arg="int:100" --foreign-asset="$ASSETID" --from="$USER2" --app-account="$SMALL"
+# transfer asset from $USER2 to $SMALL (this invocation tries to just
+# specify the asset and the recipientaccount) It fails becasue with
+# --access, cross-products are not implicitly available.
+RES=$(appl "transfer(uint64,uint64,address):void" --from="$USER2" \
+     --app-arg="int:$ASSETID" --app-arg="int:100" --app-asset="$ASSETID" \
+     --app-arg="addr:$SMALL" --app-account="$SMALL" 2>&1) && {
+    date '+app-assets FAIL transfer using --access should fail without explicit holding %Y%m%d_%H%M%S'
+    exit 1
+}
+[[ $RES == *"unavailable Holding"* ]]   # failure should be for the holding
+
+appl "transfer(uint64,uint64,address):void" --from="$USER2" --holding="$ASSETID,$USER2" \
+     --app-arg="int:$ASSETID" --app-arg="int:100" \
+     --app-arg="addr:$SMALL" --holding="$ASSETID,$SMALL"
 
 [ $(asset_bal "$USER2") = 900 ]
 [ $(asset_bal "$SMALL") = 998100 ]
 
-# opt in more assets, show that --access works on the first
-ASSETID2=$(asset-create 1000000  --name "alpha" --unitname "a"  | asset-id)
-appl "optin():void" --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" --from="$SMALL" || exit 1
-ASSETID3=$(asset-create 1000000  --name "beta" --unitname "b"  | asset-id)
-appl "optin():void" --app-arg "int:$ASSETID3" --foreign-asset="$ASSETID3" --from="$SMALL"
+# opt in more assets. --holding for the app/asset is needed
+ASSETID2=$(asset-create 1000000  --name "alpha" --unitname "a" | asset-id)
+appl "optin(uint64):void" --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" --from="$SMALL" --holding "$ASSETID2,app($APPID)"
+ASSETID3=$(asset-create 1000000  --name "beta" --unitname "b" | asset-id)
+appl "optin(uint64):void" --app-arg "int:$ASSETID3" --foreign-asset="$ASSETID3" --from="$SMALL" --holding "$ASSETID3,app($APPID)"
 
 IDs="$ASSETID
 $ASSETID2
@@ -223,12 +257,28 @@ $ASSETID3"
 [[ "$(asset_ids "$APPACCT")" = $IDs ]]  # account has 3 assets
 
 # opt out of assets
-appl "close():void"  --foreign-asset="$ASSETID2" --from="$SMALL"
+RES=$(appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" 2>&1) && {
+    date '+app-assets FAIL close using --access should fail without explicit app holding %Y%m%d_%H%M%S'
+    exit 1
+}
+[[ $RES == *"unavailable Holding $APPACCT x $ASSETID2"* ]]   # app can't close itself unless its holding is available
+
+# add that holding, but still nto enough...
+RES=$(appl "close(uint64):void" --from="$SMALL" --holding="$ASSETID2,$APPACCT" 2>&1) && {
+    date '+app-assets FAIL close using --access should fail without explicit sender holding %Y%m%d_%H%M%S'
+    exit 1
+}
+[[ $RES == *"unavailable Holding $SMALL x $ASSETID2"* ]]   # app closes to sender, so needs that holding too
+
+appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" \
+     --holding="$ASSETID2,$APPACCT" --holding="$ASSETID2,$SMALL"
 IDs="$ASSETID
 $ASSETID3"
 [[ "$(asset_ids "$APPACCT")" = $IDs ]] # account has 2 assets
-appl "close():void" --foreign-asset="$ASSETID" --from="$SMALL"
-appl "close():void" --foreign-asset="$ASSETID3" --from="$SMALL"
+appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID" \
+     --holding="$ASSETID,$APPACCT" --holding="$ASSETID,$SMALL"
+appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID3" \
+     --holding="$ASSETID3,$APPACCT" --holding="$ASSETID3,$SMALL"
 [[ "$(asset_ids "$APPACCT")" = "" ]] # account has no assets
 
 # app creates asset
@@ -239,7 +289,9 @@ appl "create(uint64):void" --app-arg="int:1000000" --from="$SMALL"
 # mint asset
 APPASSETID=$(asset_ids "$APPACCT")
 asset-optin --assetid "$APPASSETID" -a $SMALL #opt in to asset
-appl "mint():void" --from="$SMALL" --foreign-asset="$APPASSETID" -o "$T/mint.tx"
+appl "mint(uint64):void" --from="$SMALL" --app-arg "int:$APPASSETID" \
+     --holding="$APPASSETID,app($APPID)" --holding="$APPASSETID,$SMALL" \
+     -o "$T/mint.tx"
 payin 1000 -o "$T/pay1.tx"
 cat "$T/mint.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
 sign group
@@ -254,20 +306,27 @@ $APPASSETID"
 [ "$(asset_bal "$APPACCT")" = 999000 ] # 1k sent
 
 # freeze asset
-appl "freeze(uint64):void"  --app-arg="int:1" --foreign-asset="$APPASSETID" --from="$SMALL"
+RES=$(appl "freeze(uint64,bool):void" --from="$SMALL" --app-arg="int:$APPASSETID" --app-arg="int:1" --foreign-asset="$APPASSETID" 2>&1) && {
+    date '+app-assets FAIL freeze using --access should fail without explicit sender holding %Y%m%d_%H%M%S'
+    exit 1
+}
+[[ $RES == *"unavailable Holding $SMALL x $APPASSETID"* ]]
+appl "freeze(uint64,bool):void" --from="$SMALL" --app-arg="int:$APPASSETID" --app-arg="int:1" --holding="$APPASSETID,$SMALL"
+
 # fail since asset is frozen on $SMALL
-appl "mint():void" --from="$SMALL" -o "$T/mint.tx" --foreign-asset="$APPASSETID"
+appl "mint(uint64):void" --from="$SMALL" --app-arg="int:$APPASSETID" \
+     --holding="$APPASSETID,app($APPID)" --holding="$APPASSETID,$SMALL" \
+      -o "$T/mint.tx"
 payin 1000 -o "$T/pay1.tx"
 cat "$T/mint.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
 sign group
-${gcmd} clerk rawsend -f "$T/group.stx"  && exit 1
+${gcmd} clerk rawsend -f "$T/group.stx" && exit 1 # fail or exit
+
+
 # unfreeze asset
-appl "freeze(uint64):void" --app-arg="int:0" --foreign-asset="$APPASSETID" --from="$SMALL"
-appl "mint():void" --from="$SMALL" -o "$T/mint.tx" --foreign-asset="$APPASSETID"
-payin 1000 -o "$T/pay1.tx"
-cat "$T/mint.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
-sign group
-${gcmd} clerk rawsend -f "$T/group.stx"
+appl "freeze(uint64,bool):void" --app-arg="int:$APPASSETID" --app-arg="int:0" --holding="$APPASSETID,$SMALL" --from="$SMALL"
+# try to resend that same group
+${gcmd} clerk rawsend -f "$T/group.stx"                     # try again
 [ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" = 2000 ] # minted 1000
 
 date "+${scriptname} OK %Y%m%d_%H%M%S"
