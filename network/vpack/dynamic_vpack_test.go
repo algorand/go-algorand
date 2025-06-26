@@ -314,3 +314,15 @@ func TestStatefulEncoderErrors(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, len(compressedBuf), 0)
 }
+
+func TestStatefulEncoderHeaderBits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// Ensure that the three bits allocated in hdr1 for proposal references
+	// matches the size of the proposal window.
+	got := int(hdr1PropMask >> hdr1PropShift)
+	require.Equal(t, proposalWindowSize, got,
+		"hdr1PropMask (%d) and proposalWindowSize (%d) must stay in sync", got, proposalWindowSize)
+
+	// Ensure that the header encoding of hdr1RndLiteral is zero
+	require.Equal(t, hdr1RndLiteral, 0)
+}

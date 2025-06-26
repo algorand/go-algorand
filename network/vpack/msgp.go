@@ -92,23 +92,23 @@ func decodeMsgpVaruint(buf []byte) uint64 {
 // msg-pack varuint encoder (≤ 64-bit)
 func appendMsgpVaruint(dst []byte, v uint64) []byte {
 	switch {
-	case v < 0x80:
+	case v < 0x80: // fixint
 		return append(dst, byte(v))
 	case v <= 0xff:
-		return append(dst, 0xcc, byte(v))
+		return append(dst, msgpUint8, byte(v))
 	case v <= 0xffff:
 		var tmp [3]byte
-		tmp[0] = 0xcd
+		tmp[0] = msgpUint16
 		binary.BigEndian.PutUint16(tmp[1:], uint16(v))
 		return append(dst, tmp[:]...)
 	case v <= 0xffffffff:
 		var tmp [5]byte
-		tmp[0] = 0xce
+		tmp[0] = msgpUint32
 		binary.BigEndian.PutUint32(tmp[1:], uint32(v))
 		return append(dst, tmp[:]...)
 	default:
 		var tmp [9]byte
-		tmp[0] = 0xcf
+		tmp[0] = msgpUint64
 		binary.BigEndian.PutUint64(tmp[1:], v)
 		return append(dst, tmp[:]...)
 	}

@@ -139,8 +139,7 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	if idx := e.proposalWindow.lookup(prop); idx != 0 {
 		hdr1 |= byte(idx) << hdr1PropShift // set 001..111
 	} else {
-		// not found: send literal and add to window
-		hdr1 |= 0 << hdr1PropShift // set 000
+		// not found: send literal and add to window (don't touch hdr1)
 		e.proposalWindow.insertNew(prop)
 		// write proposal bytes as StatelessEncoder would
 		if (hdr0 & bitDig) != 0 {
@@ -169,8 +168,7 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	case rnd == e.lastRnd-1:
 		hdr1 |= hdr1RndDeltaMinus1
 	default:
-		// pass through literal bytes
-		hdr1 |= hdr1RndLiteral // set 00
+		// pass through literal bytes (don't touch hdr1)
 		out = append(out, src[pos:pos+n]...)
 	}
 	pos += n
@@ -324,7 +322,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		var ok bool
 		prop, ok = d.proposalWindow.byRef(int(propRef))
 		if !ok {
-			return nil, errors.New("bad proposal ref")
+			return nil, fmt.Errorf("bad proposal ref: %v", propRef)
 		}
 	}
 
@@ -376,7 +374,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		}
 		addr, ok := d.sndTable.fetch(id)
 		if !ok {
-			return nil, errors.New("bad sender ref")
+			return nil, fmt.Errorf("bad sender ref: %v", id)
 		}
 		out = append(out, addr[:]...)
 	} else { // literal
@@ -411,7 +409,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		}
 		pkb, ok := d.pkTable.fetch(id)
 		if !ok {
-			return nil, errors.New("bad pk ref")
+			return nil, fmt.Errorf("bad pk ref: %v", id)
 		}
 		out = append(out, pkb.pk[:]...)
 		out = append(out, pkb.sig[:]...)
@@ -436,7 +434,7 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		}
 		pk2b, ok := d.pk2Table.fetch(id)
 		if !ok {
-			return nil, errors.New("bad pk2 ref")
+			return nil, fmt.Errorf("bad pk2 ref: %v", id)
 		}
 		out = append(out, pk2b.pk[:]...)
 		out = append(out, pk2b.sig[:]...)
