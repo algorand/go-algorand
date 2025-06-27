@@ -17,7 +17,6 @@ require (
 	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.34.0
-	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cockroachdb/pebble v0.0.0-20230807162746-af8c5f279001
 	github.com/consensys/gnark-crypto v0.12.1
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c
@@ -67,6 +66,7 @@ require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.7.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/errors v1.8.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f // indirect
 	github.com/cockroachdb/redact v1.0.8 // indirect
