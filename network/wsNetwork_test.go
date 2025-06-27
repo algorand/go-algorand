@@ -4660,6 +4660,7 @@ func TestWsNetworkPhonebookMix(t *testing.T) {
 		},
 		nil,
 		nil,
+		nil,
 	)
 	require.NoError(t, err)
 	addrs := net.phonebook.GetAddresses(10, phonebook.RelayRole)

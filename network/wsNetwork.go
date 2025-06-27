@@ -189,6 +189,8 @@ type WebsocketNetwork struct {
 	readyChan chan struct{}
 
 	meshUpdateRequests chan meshRequest
+	meshStrategy       meshStrategy
+	meshCreator        MeshStrategyCreator // save parameter to use in setup()
 
 	// Keep a record of pending outgoing connections so
 	// we don't start duplicates connection attempts.
@@ -544,7 +546,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 	return outPeers
 }
 
-func (wn *WebsocketNetwork) setup() {
+func (wn *WebsocketNetwork) setup() error {
 	var preferredResolver dnssec.ResolverIf
 	if wn.config.DNSSecurityRelayAddrEnforced() {
 		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress, wn.log)
@@ -595,6 +597,23 @@ func (wn *WebsocketNetwork) setup() {
 		wn.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
+	meshCreator := wn.meshCreator
+	if meshCreator == nil {
+		meshCreator = &GenericMeshStrategyCreator{}
+	}
+	var err error
+	wn.meshStrategy, err = meshCreator.create(
+		wn.ctx, wn.meshUpdateRequests, meshThreadInterval,
+		withMeshNetMesh(wn.meshThreadInner),
+		withMeshNetDisconnect(wn.DisconnectPeers),
+		withMeshPeerStatReport(func() {
+			wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
+		}),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create mesh strategy: %w", err)
+	}
+
 	wn.readyChan = make(chan struct{})
 	wn.tryConnectAddrs = make(map[string]int64)
 	wn.eventualReadyDelay = time.Minute
@@ -639,6 +658,7 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.relayMessages {
 		wn.registerMessageInterest(protocol.StateProofSigTag)
 	}
+	return nil
 }
 
 // Start makes network connections and threads
@@ -1540,50 +1560,27 @@ type meshRequest struct {
 	done       chan struct{}
 }
 
-// meshThread maintains the network, e.g. that we have sufficient connectivity to peers
 func (wn *WebsocketNetwork) meshThread() {
 	defer wn.wg.Done()
-	timer := time.NewTicker(meshThreadInterval)
-	defer timer.Stop()
+	wn.meshStrategy.meshThread()
+}
+
+func (wn *WebsocketNetwork) meshThreadInner() bool {
+	wn.refreshRelayArchivePhonebookAddresses()
+
+	// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
+	// kick off the creation of new connections.
 	for {
-		var request meshRequest
-		select {
-		case <-timer.C:
-			request.disconnect = false
-			request.done = nil
-		case request = <-wn.meshUpdateRequests:
-		case <-wn.ctx.Done():
-			return
+		if wn.checkNewConnectionsNeeded() {
+			// new connections were created.
+			break
 		}
-
-		if request.disconnect {
-			wn.DisconnectPeers()
+		if !wn.checkExistingConnectionsNeedDisconnecting() {
+			// no connection were removed.
+			break
 		}
-
-		wn.refreshRelayArchivePhonebookAddresses()
-
-		// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
-		// kick off the creation of new connections.
-		for {
-			if wn.checkNewConnectionsNeeded() {
-				// new connections were created.
-				break
-			}
-			if !wn.checkExistingConnectionsNeedDisconnecting() {
-				// no connection were removed.
-				break
-			}
-		}
-
-		if request.done != nil {
-			close(request.done)
-		}
-
-		// send the currently connected peers information to the
-		// telemetry server; that would allow the telemetry server
-		// to construct a cross-node map of all the nodes interconnections.
-		wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
 	}
+	return true
 }
 
 func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
@@ -2267,7 +2264,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo, identityOpts *identityOpts) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo, identityOpts *identityOpts, meshCreator MeshStrategyCreator) (wn *WebsocketNetwork, err error) {
 	pb := phonebook.MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 
@@ -2286,6 +2283,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		genesisInfo:       genesisInfo,
 		nodeInfo:          nodeInfo,
 		resolveSRVRecords: tools_network.ReadFromSRV,
+		meshCreator:       meshCreator,
 		peerStater: peerConnectionStater{
 			log:                           log,
 			peerConnectionsUpdateInterval: time.Duration(config.PeerConnectionsUpdateInterval) * time.Second,
@@ -2302,13 +2300,15 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		wn.identityTracker = NewIdentityTracker()
 	}
 
-	wn.setup()
+	if err = wn.setup(); err != nil {
+		return nil, err
+	}
 	return wn, nil
 }
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
 func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebookAddresses, GenesisInfo{genesisID, networkID}, nil, nil)
+	return NewWebsocketNetwork(log, config, phonebookAddresses, GenesisInfo{genesisID, networkID}, nil, nil, nil)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node

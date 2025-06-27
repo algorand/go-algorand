@@ -18,6 +18,8 @@ package network
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -76,6 +78,10 @@ type P2PNetwork struct {
 	wsPeersChangeCounter           atomic.Int32
 	wsPeersConnectivityCheckTicker *time.Ticker
 	peerStater                     peerConnectionStater
+
+	meshUpdateRequests chan meshRequest
+	meshStrategy       meshStrategy
+	meshCreator        MeshStrategyCreator // save parameter to use in setup()
 
 	relayMessages bool // True if we should relay messages from other nodes (nominally true for relays, false otherwise)
 	wantTXGossip  atomic.Bool
@@ -212,7 +218,7 @@ var gossipSubTags = map[protocol.Tag]string{
 }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
-func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, node NodeInfo, identityOpts *identityOpts) (*P2PNetwork, error) {
+func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, node NodeInfo, identityOpts *identityOpts, meshCreator MeshStrategyCreator) (*P2PNetwork, error) {
 	const readBufferLen = 2048
 
 	// create Peerstore and add phonebook addresses
@@ -237,6 +243,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		nodeInfo:      node,
 		pstore:        pstore,
 		relayMessages: relayMessages,
+		meshCreator:   meshCreator,
 		peerStater: peerConnectionStater{
 			log:                           log,
 			peerConnectionsUpdateInterval: time.Duration(cfg.PeerConnectionsUpdateInterval) * time.Second,
@@ -334,8 +341,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 
 	net.httpServer = p2p.MakeHTTPServer(h)
 
-	err = net.setup()
-	if err != nil {
+	if err = net.setup(); err != nil {
 		return nil, err
 	}
 
@@ -346,6 +352,25 @@ func (n *P2PNetwork) setup() error {
 	if n.broadcaster.slowWritingPeerMonitorInterval == 0 {
 		n.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
+	n.meshUpdateRequests = make(chan meshRequest, 5)
+	meshCreator := n.meshCreator
+	if meshCreator == nil {
+		meshCreator = &GenericMeshStrategyCreator{}
+	}
+	var err error
+	n.meshStrategy, err = meshCreator.create(
+		n.ctx, n.meshUpdateRequests, meshThreadInterval,
+		withMeshExpJitterBackoff(),
+		withMeshNetMesh(n.meshThreadInner),
+		withMeshNetDisconnect(n.innerStop),
+		withMeshPeerStatReport(func() {
+			n.peerStater.sendPeerConnectionsTelemetryStatus(n)
+		}),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create mesh strategy: %w", err)
+	}
+
 	return nil
 }
 
@@ -393,6 +418,7 @@ func (n *P2PNetwork) Start() error {
 	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n, "network", "P2PNetwork")
 
+	n.meshUpdateRequests <- meshRequest{false, nil}
 	n.wg.Add(1)
 	go n.meshThread()
 
@@ -455,7 +481,7 @@ func (n *P2PNetwork) innerStop() {
 }
 
 // meshThreadInner fetches nodes from DHT and attempts to connect to them
-func (n *P2PNetwork) meshThreadInner() int {
+func (n *P2PNetwork) meshThreadInner() bool {
 	defer n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 
 	// fetch peers from DNS
@@ -496,43 +522,132 @@ func (n *P2PNetwork) meshThreadInner() int {
 	if len(peers) > 0 {
 		n.pstore.ReplacePeerList(replace, string(n.genesisInfo.NetworkID), phonebook.RelayRole)
 	}
-	return len(peers)
+	return len(peers) > 0
 }
 
 func (n *P2PNetwork) meshThread() {
 	defer n.wg.Done()
+	n.meshStrategy.meshThread()
+}
 
-	timer := time.NewTicker(1) // start immediately and reset after
+type meshStrategy interface {
+	meshThread()
+}
 
-	// Add exponential backoff with jitter to the mesh thread to handle new networks startup
-	// when no DNS or DHT peers are available.
-	// The parameters produce approximate the following delays (although they are random but the sequence give the idea):
-	// 2 2.4 4.6 9 20 19.5 28 24 14 14 35 60 60
-	ebf := backoff.NewExponentialDecorrelatedJitter(2*time.Second, meshThreadInterval, 3.0, rand.NewSource(rand.Int63()))
-	eb := ebf()
+type genericMeshStrategy struct {
+	ctx                context.Context
+	meshUpdateRequests chan meshRequest
+	meshThreadInterval time.Duration
+	meshConfig
+}
+
+type meshConfig struct {
+	backoff        backoff.BackoffStrategy
+	netMesh        func() bool
+	netDisconnect  func()
+	peerStatReport func()
+}
+
+type meshStrategyOption func(*meshConfig)
+
+func withMeshExpJitterBackoff() meshStrategyOption {
+	return func(cfg *meshConfig) {
+		// Add exponential backoff with jitter to the mesh thread to handle new networks startup
+		// when no DNS or DHT peers are available.
+		// The parameters produce approximate the following delays (although they are random but the sequence give the idea):
+		// 2 2.4 4.6 9 20 19.5 28 24 14 14 35 60 60
+		ebf := backoff.NewExponentialDecorrelatedJitter(2*time.Second, meshThreadInterval, 3.0, rand.NewSource(rand.Int63()))
+		eb := ebf()
+		cfg.backoff = eb
+	}
+}
+func withMeshNetMesh(netMesh func() bool) meshStrategyOption {
+	return func(cfg *meshConfig) {
+		cfg.netMesh = netMesh
+	}
+}
+func withMeshNetDisconnect(netDisconnect func()) meshStrategyOption {
+	return func(cfg *meshConfig) {
+		cfg.netDisconnect = netDisconnect
+	}
+}
+func withMeshPeerStatReport(peerStatReport func()) meshStrategyOption {
+	return func(cfg *meshConfig) {
+		cfg.peerStatReport = peerStatReport
+	}
+}
+
+func newGenericMeshStrategy(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (*genericMeshStrategy, error) {
+	var cfg meshConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if cfg.netMesh == nil {
+		return nil, errors.New("mesh function is not set")
+	}
+	if cfg.netDisconnect == nil {
+		return nil, errors.New("disconnect function is not set")
+	}
+
+	return &genericMeshStrategy{
+		ctx:                ctx,
+		meshUpdateRequests: meshUpdateRequests,
+		meshThreadInterval: meshThreadInterval,
+		meshConfig:         cfg,
+	}, nil
+}
+
+func (m *genericMeshStrategy) meshThread() {
+	timer := time.NewTicker(m.meshThreadInterval)
 
 	defer timer.Stop()
 	for {
+		var request meshRequest
 		select {
 		case <-timer.C:
-			numPeers := n.meshThreadInner()
-			if numPeers > 0 {
+			request.disconnect = false
+			request.done = nil
+		case request = <-m.meshUpdateRequests:
+		case <-m.ctx.Done():
+			return
+		}
+
+		if request.disconnect {
+			m.netDisconnect()
+		}
+
+		hasPeers := m.netMesh()
+		if m.backoff != nil {
+			if hasPeers {
 				// found something, reset timer to the default value
 				timer.Reset(meshThreadInterval)
-				eb.Reset()
+				m.backoff.Reset()
 			} else {
 				// no peers found, backoff
-				timer.Reset(eb.Delay())
+				timer.Reset(m.backoff.Delay())
 			}
-		case <-n.ctx.Done():
-			return
+		}
+		if request.done != nil {
+			close(request.done)
 		}
 
 		// send the currently connected peers information to the
 		// telemetry server; that would allow the telemetry server
 		// to construct a cross-node map of all the nodes interconnections.
-		n.peerStater.sendPeerConnectionsTelemetryStatus(n)
+		m.peerStatReport()
+		// m.peerStater.sendPeerConnectionsTelemetryStatus(n)
 	}
+}
+
+type MeshStrategyCreator interface {
+	create(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (meshStrategy, error)
+}
+
+type GenericMeshStrategyCreator struct {
+}
+
+func (c *GenericMeshStrategyCreator) create(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (meshStrategy, error) {
+	return newGenericMeshStrategy(ctx, meshUpdateRequests, meshThreadInterval, opts...)
 }
 
 func (n *P2PNetwork) httpdThread() {
@@ -649,7 +764,21 @@ func (n *P2PNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.Resp
 // `replace` optionally drops existing connections before making new ones.
 // `quit` chan allows cancellation.
 func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
-	n.meshThreadInner()
+	request := meshRequest{disconnect: false}
+	if quit != nil {
+		request.done = make(chan struct{})
+	}
+	select {
+	case n.meshUpdateRequests <- request:
+	case <-quit:
+		return
+	}
+	if request.done != nil {
+		select {
+		case <-request.done:
+		case <-quit:
+		}
+	}
 }
 
 func addrInfoToWsPeerCore(n *P2PNetwork, addrInfo *peer.AddrInfo) (wsPeerCore, bool) {
