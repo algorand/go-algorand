@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -95,7 +96,7 @@ return
 	lc := basics.StateSchema{}
 
 	// create app
-	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, nil, nil, nil, nil, transactions.NoOpOC, approv, clst, gl, lc, 0, 0)
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, libgoal.RefBundle{}, transactions.NoOpOC, approv, clst, gl, lc, 0, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -119,7 +120,7 @@ return
 	a.NoError(err)
 
 	// call app, which will issue an ASA create inner txn
-	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(createdAppID, nil, nil, nil, nil, nil, 0)
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(createdAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
 	a.NoError(err)
@@ -231,8 +232,7 @@ end:
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
 		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
@@ -274,15 +274,10 @@ end:
 				[]byte(boxNames[i]),
 				[]byte(boxValues[i]),
 			}
-			boxRef := transactions.BoxRef{
-				Name:  []byte(boxNames[i]),
-				Index: 0,
-			}
+			refs := libgoal.RefBundle{Boxes: []basics.BoxRef{{App: 0, Name: boxNames[i]}}}
 
 			txns[i], err = testClient.MakeUnsignedAppNoOpTx(
-				createdAppID, appArgs,
-				nil, nil, nil,
-				[]transactions.BoxRef{boxRef}, 0,
+				createdAppID, appArgs, refs, 0,
 			)
 			a.NoError(err)
 			txns[i], err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, txns[i])
@@ -536,7 +531,7 @@ end:
 	a.Equal(uint64(30), appAccountData.TotalBoxBytes)
 
 	// delete the app
-	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(createdAppID, nil, nil, nil, nil, nil, 0)
+	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(createdAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appDeleteTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appDeleteTxn)
 	a.NoError(err)
@@ -617,8 +612,7 @@ func TestBlockLogs(t *testing.T) {
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
 		outerApproval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
@@ -648,8 +642,7 @@ func TestBlockLogs(t *testing.T) {
 
 	// call app twice
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		createdAppID, nil, nil, nil,
-		nil, nil, 0,
+		createdAppID, nil, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn0, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
