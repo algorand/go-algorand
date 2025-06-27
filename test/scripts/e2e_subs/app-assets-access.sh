@@ -228,10 +228,10 @@ appl "transfer(uint64,uint64,address):void" \
 [ $(asset_bal "$USER2") = 1000 ]
 [ $(asset_bal "$SMALL") = 998000 ]
 # transfer asset from $USER2 to $SMALL (this invocation tries to just
-# specify the asset and the recipientaccount) It fails becasue with
+# specify the asset and the recipient account) It fails because with
 # --access, cross-products are not implicitly available.
 RES=$(appl "transfer(uint64,uint64,address):void" --from="$USER2" \
-     --app-arg="int:$ASSETID" --app-arg="int:100" --app-asset="$ASSETID" \
+     --app-arg="int:$ASSETID" --app-arg="int:100" --foreign-asset="$ASSETID" \
      --app-arg="addr:$SMALL" --app-account="$SMALL" 2>&1) && {
     date '+app-assets FAIL transfer using --access should fail without explicit holding %Y%m%d_%H%M%S'
     exit 1
