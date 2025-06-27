@@ -71,10 +71,10 @@ type Local struct {
 	// PeerPingPeriodSeconds is deprecated and unused.
 	PeerPingPeriodSeconds int `version[0]:"0"`
 
-	// TLSCertFile is the certificate file used for the websocket network if povided.
+	// TLSCertFile is the certificate file used for the websocket network if provided.
 	TLSCertFile string `version[0]:""`
 
-	// TLSKeyFile is the key file used for the websocket network if povided.
+	// TLSKeyFile is the key file used for the websocket network if provided.
 	TLSKeyFile string `version[0]:""`
 
 	// BaseLoggerDebugLevel specifies the logging level for algod (node.log). The levels range from 0 (critical error / silent) to 5 (debug / verbose). The default value is 4 (‘Info’ - fairly verbose).
@@ -495,7 +495,7 @@ type Local struct {
 	// 0  : default behavior.
 	// 3  : speed up catchup by skipping necessary validations
 	// 12 : perform all validation methods (normal and additional). These extra tests helps to verify the integrity of the compiled executable against
-	//      previously used executabled, and would not provide any additional security guarantees.
+	//      previously used executable, and would not provide any additional security guarantees.
 	CatchupBlockValidateMode int `version[16]:"0"`
 
 	// EnableAccountUpdatesStats specifies whether or not to emit the AccountUpdates telemetry event.
