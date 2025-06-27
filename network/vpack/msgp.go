@@ -17,6 +17,7 @@
 package vpack
 
 import (
+	"encoding/binary"
 	"fmt"
 )
 
@@ -58,6 +59,59 @@ const (
 
 func isMsgpFixint(b byte) bool {
 	return b>>7 == 0
+}
+func msgpVaruintLen(first byte) int {
+	switch first {
+	case msgpUint8:
+		return 2
+	case msgpUint16:
+		return 3
+	case msgpUint32:
+		return 5
+	case msgpUint64:
+		return 9
+	default: // fixint
+		return 1
+	}
+}
+func decodeMsgpVaruint(buf []byte) uint64 {
+	switch buf[0] {
+	case msgpUint8:
+		return uint64(buf[1])
+	case msgpUint16:
+		return uint64(binary.BigEndian.Uint16(buf[1:]))
+	case msgpUint32:
+		return uint64(binary.BigEndian.Uint32(buf[1:]))
+	case msgpUint64:
+		return binary.BigEndian.Uint64(buf[1:])
+	default: // fixint
+		return uint64(buf[0])
+	}
+}
+
+// msg-pack varuint encoder (≤ 64-bit)
+func appendMsgpVaruint(dst []byte, v uint64) []byte {
+	switch {
+	case v < 0x80: // fixint
+		return append(dst, byte(v))
+	case v <= 0xff:
+		return append(dst, msgpUint8, byte(v))
+	case v <= 0xffff:
+		var tmp [3]byte
+		tmp[0] = msgpUint16
+		binary.BigEndian.PutUint16(tmp[1:], uint16(v))
+		return append(dst, tmp[:]...)
+	case v <= 0xffffffff:
+		var tmp [5]byte
+		tmp[0] = msgpUint32
+		binary.BigEndian.PutUint32(tmp[1:], uint32(v))
+		return append(dst, tmp[:]...)
+	default:
+		var tmp [9]byte
+		tmp[0] = msgpUint64
+		binary.BigEndian.PutUint64(tmp[1:], v)
+		return append(dst, tmp[:]...)
+	}
 }
 
 // msgpVoteParser provides a zero-allocation msgpVoteParser for vote messages.
