@@ -4707,10 +4707,6 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppInd
 		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
 			return cx.txn.Txn.ForeignApps[ref-1], nil
 		}
-		// it seems most consistent to allow slot access into tx.Access if it is used with an old app.
-		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].App != 0 {
-			return cx.txn.Txn.Access[ref-1].App, nil
-		}
 		return 0, fmt.Errorf("%d is not a valid foreign app slot", ref)
 	}
 	// Otherwise it's direct
@@ -4776,7 +4772,7 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 		localsErr := fmt.Errorf("unavailable Local State %s x %d", addr, aid)
 		switch {
 		case err != nil && acctOK:
-			// do nothing, err contains the an App specific problem
+			// do nothing, err contains an App specific problem
 		case err == nil && acctOK:
 			// although both are available, the LOCALS are not
 			err = localsErr
@@ -4800,31 +4796,7 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 		return basics.Address{}, 0, 0, err
 	}
 
-	// But if the transaction is using tx.Access, we must be more stringent, or
-	// else we open up to accessing a huge cross-product of locals.
-	if cx.txn.Txn.Access == nil {
-		return addr, app, addrIdx, nil
-	}
-
-	if addr == cx.txn.Txn.Sender && app == cx.appID {
-		return addr, app, addrIdx, nil
-	}
-
-	if slices.ContainsFunc(cx.txn.Txn.Access,
-		func(rr transactions.ResourceRef) bool {
-			// See if any holding in tx.Access matches what we need
-			if l := rr.Locals; !l.Empty() {
-				laddr, lapp, _ := l.Resolve(cx.txn.Txn.Access, cx.txn.Txn.Sender)
-				if laddr == addr && lapp == app {
-					return true
-				}
-			}
-			return false
-		}) {
-		return addr, app, addrIdx, nil
-	}
-	return basics.Address{}, 0, 0, fmt.Errorf("unavailable Local State %s x %d is not in tx.Access", addr, app)
-
+	return addr, app, addrIdx, nil
 }
 
 func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.AssetIndex, err error) {
@@ -4847,10 +4819,6 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 		// In old versions, a foreign reference must be an index in ForeignAssets
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 			return cx.txn.Txn.ForeignAssets[ref], nil
-		}
-		// it seems most consistent to allow slot access into tx.Access if it is used with an old app.
-		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
-			return cx.txn.Txn.Access[ref-1].Asset, nil
 		}
 		return 0, fmt.Errorf("%d is not a valid foreign asset slot", ref)
 	}
@@ -4907,7 +4875,7 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 		acctOK := cx.availableAccount(addr)
 		switch {
 		case err != nil && acctOK:
-			// do nothing, err contains the an Asset specific problem
+			// do nothing, err contains an Asset specific problem
 		case err == nil && acctOK:
 			// although both are available, the HOLDING is not
 			err = fmt.Errorf("unavailable Holding %s x %d", addr, aid)
@@ -4930,26 +4898,7 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 		return basics.Address{}, 0, err
 	}
 
-	// But if the transaction is using tx.Access, we must be more stringent, or
-	// else we open up to accessing a huge cross-product of holdings.
-	if cx.txn.Txn.Access == nil {
-		return addr, asset, nil
-	}
-
-	if slices.ContainsFunc(cx.txn.Txn.Access,
-		func(rr transactions.ResourceRef) bool {
-			// See if any holding in tx.Access matches what we need
-			if h := rr.Holding; !h.Empty() {
-				haddr, hasset, _ := h.Resolve(cx.txn.Txn.Access, cx.txn.Txn.Sender)
-				if haddr == addr && hasset == asset {
-					return true
-				}
-			}
-			return false
-		}) {
-		return addr, asset, nil
-	}
-	return basics.Address{}, 0, fmt.Errorf("unavailable Holding %s x %d is not in tx.Access", addr, asset)
+	return addr, asset, nil
 }
 
 func opAssetHoldingGet(cx *EvalContext) error {
