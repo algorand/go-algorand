@@ -4534,7 +4534,7 @@ func opAppLocalPut(cx *EvalContext) error {
 	// programs. The test here is to ensure that we didn't get access to the
 	// address from another txn, but don't have access to the local state.
 	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
-		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
+		return fmt.Errorf("unavailable Local State %d+%s", cx.appID, addr)
 	}
 
 	// if writing the same value, don't record in EvalDelta, matching ledger
@@ -4629,7 +4629,7 @@ func opAppLocalDel(cx *EvalContext) error {
 	// programs. The test here is to ensure that we didn't get access to the
 	// address from another txn, but don't have access to the local state.
 	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
-		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
+		return fmt.Errorf("unavailable Local State %d+%s", cx.appID, addr)
 	}
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
@@ -4769,7 +4769,8 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 		// well.
 
 		acctOK := cx.availableAccount(addr)
-		localsErr := fmt.Errorf("unavailable Local State %s x %d", addr, aid)
+		localsErr := fmt.Errorf("unavailable Local State %d+%s", aid, addr)
+
 		switch {
 		case err != nil && acctOK:
 			// do nothing, err contains an App specific problem
@@ -4878,7 +4879,7 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 			// do nothing, err contains an Asset specific problem
 		case err == nil && acctOK:
 			// although both are available, the HOLDING is not
-			err = fmt.Errorf("unavailable Holding %s x %d", addr, aid)
+			err = fmt.Errorf("unavailable Holding %d+%s", aid, addr)
 		case err != nil && !acctOK:
 			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
 		case err == nil && !acctOK:
@@ -4897,7 +4898,6 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 	if err != nil {
 		return basics.Address{}, 0, err
 	}
-
 	return addr, asset, nil
 }
 

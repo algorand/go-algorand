@@ -1266,14 +1266,14 @@ func TestAssets(t *testing.T) {
 		if version >= sharedResourcesVersion {
 			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, nowCross)
 			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, nowSimple,
-				"unavailable Holding MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAYG54XDH4 x 55")
+				"unavailable Holding 55+MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAYG54XDH4")
 		}
 		// This is receiver, who is in Accounts array
 		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, now)
 		if version >= sharedResourcesVersion {
 			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, nowCross)
 			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, nowSimple,
-				"unavailable Holding MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAY62VUCHY x 55")
+				"unavailable Holding 55+MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAY62VUCHY")
 		}
 		// But this address is not in Accounts, so illegal
 		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, now, "unavailable Account")

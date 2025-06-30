@@ -111,8 +111,8 @@ func init() {
 	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
 	appCmd.PersistentFlags().StringArrayVar(&appStrBoxes, "box", nil, "A Box that may be accessed by this transaction. Use the same form as app-arg to name the box, preceded by an optional app-id and comma. Zero or omitted app-id indicates the box is accessible by the app being called.")
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
-	appCmd.PersistentFlags().StringArrayVar(&appStrHoldings, "holding", nil, "A Holding that may be accessed from application logic. An asset-id followed by a comma and an address")
-	appCmd.PersistentFlags().StringArrayVar(&appStrLocals, "local", nil, "A Local State that may be accessed from application logic. An optional app-id and comma, followed by an address. Zero or omitted app-id indicates the local state for app being called.")
+	appCmd.PersistentFlags().StringSliceVar(&appStrHoldings, "holding", nil, "A Holding that may be accessed from application logic. An asset-id followed by a comma and an address")
+	appCmd.PersistentFlags().StringSliceVar(&appStrLocals, "local", nil, "A Local State that may be accessed from application logic. An optional app-id and comma, followed by an address. Zero or omitted app-id indicates the local state for app being called.")
 	appCmd.PersistentFlags().BoolVar(&appUseAccess, "access", false, "Put references into the transaction's access list, instead of foreign arrays.")
 	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg, app-account, foreign-app, foreign-asset, local, holding, and box)")
 
@@ -284,7 +284,7 @@ func parseBoxRef(arg string) boxRef {
 // parseHoldingRef parses a command-line box ref, which is an assetId and an
 // optional address, separated by a comma. No address means Sender.
 func parseHoldingRef(arg string) holdingRef {
-	assetStr, address, _ := strings.Cut(arg, ",")
+	assetStr, address, _ := strings.Cut(arg, "+")
 	assetID := parseUInt64(assetStr, "asset id", "holding ref")
 
 	return holdingRef{
@@ -299,7 +299,7 @@ func parseHoldingRef(arg string) holdingRef {
 // non-sensical LocalRef - it would make the local state of the sender for the
 // current app available. That is implicitly available already.
 func parseLocalRef(arg string) localRef {
-	one, two, both := strings.Cut(arg, ",")
+	one, two, both := strings.Cut(arg, "+")
 
 	if both {
 		appID := parseUInt64(one, "app id", "local ref")

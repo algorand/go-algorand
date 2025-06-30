@@ -8877,7 +8877,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atAssetHoldingLimit.
 					addAssetHoldings(assets[assetHoldingLimitIndex], otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[assetHoldingLimitIndex]),
+				fmt.Sprintf("logic eval error: unavailable Holding %d+%s", assets[assetHoldingLimitIndex], otherAccounts[0]),
 			)
 
 			// Over app local limit
@@ -8885,7 +8885,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atAppLocalLimit.
 					addAppLocals(appID, otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+				fmt.Sprintf("logic eval error: unavailable Local State %d+%s", appID, otherAccounts[0]),
 			)
 
 			// Over total cross-product limit with asset holding
@@ -8893,7 +8893,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atCombinedLimit.
 					addAssetHoldings(assets[1], otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[1]),
+				fmt.Sprintf("logic eval error: unavailable Holding %d+%s", assets[1], otherAccounts[0]),
 			)
 
 			// Over total cross-product limit with app local
@@ -8901,7 +8901,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atCombinedLimit.
 					addAppLocals(appID, otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+				fmt.Sprintf("logic eval error: unavailable Local State %d+%s", appID, otherAccounts[0]),
 			)
 		})
 	}

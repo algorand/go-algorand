@@ -85,9 +85,9 @@ func TestParseHoldingRef(t *testing.T) {
 	require.EqualValues(t, 12, hr.assetID)
 	require.Zero(t, hr.address)
 
-	hr = parseHoldingRef("1232,junk")
+	hr = parseHoldingRef("1232+JUNK")
 	require.EqualValues(t, 1232, hr.assetID)
-	require.Equal(t, "junk", hr.address)
+	require.Equal(t, "JUNK", hr.address)
 }
 
 func TestParseLocalRef(t *testing.T) {
@@ -98,22 +98,23 @@ func TestParseLocalRef(t *testing.T) {
 	assert.EqualValues(t, 12, lr.appID)
 	assert.Zero(t, lr.address)
 
-	lr = parseLocalRef("1232,junk")
+	lr = parseLocalRef("1232+JUNK")
 	assert.EqualValues(t, 1232, lr.appID)
-	assert.Equal(t, "junk", lr.address)
+	assert.Equal(t, "JUNK", lr.address)
 
-	lr = parseLocalRef("0,junk")
+	lr = parseLocalRef("0+JUNK")
 	assert.Zero(t, lr.appID)
-	assert.Equal(t, "junk", lr.address)
+	assert.Equal(t, "JUNK", lr.address)
 
-	lr = parseLocalRef("stuff")
+	lr = parseLocalRef("STUFF")
 	assert.Zero(t, lr.appID)
-	assert.Equal(t, "stuff", lr.address)
+	assert.Equal(t, "STUFF", lr.address)
 }
 
 func TestBytesToAppCallBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
 	testCases := []struct {
 		input    []byte
 		expected string

@@ -106,7 +106,7 @@ func TestAppSharing(t *testing.T) {
 
 	// Now txn0 passes, but txn1 has an error because it can't see app 500 locals for appl1.Sender
 	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl1), 9, ledger,
-		Exp(1, "unavailable Local State "+appl1.Sender.String()))
+		Exp(1, "unavailable Local State 500+"+appl1.Sender.String()))
 
 	// But it's ok in appl2, because appl2 uses the same Sender, even though the
 	// localref is not repeated in appl2 because the locals being accessed is
@@ -120,7 +120,7 @@ func TestAppSharing(t *testing.T) {
 
 	// as above, appl1 can't see the local state, but appl2 can b/c sender is same as appl0
 	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl1), 9, ledger,
-		Exp(1, "unavailable Local State "+appl1.Sender.String()))
+		Exp(1, "unavailable Local State 900+"+appl1.Sender.String()))
 	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl2), 9, ledger)
 	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl2), 8, ledger, // v8=no sharing
 		Exp(1, "unavailable App 900"))
@@ -135,7 +135,7 @@ func TestAppSharing(t *testing.T) {
 	appl1.ApplicationArgs = [][]byte{appl0.Sender[:]} // tx1 will try to modify local state exposed in tx0
 	// appl0.Sender is available, but 901's local state for it isn't (only 900 is, since 900 was called in tx0)
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
-		Exp(1, "unavailable Local State "+appl0.Sender.String()))
+		Exp(1, "unavailable Local State 901+"+appl0.Sender.String()))
 	// Add 901 to tx0's ForeignApps, and it works
 	appl0.ForeignApps = append(appl0.ForeignApps, 901) // well, it will after we opt in
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
@@ -170,12 +170,12 @@ func TestAppSharing(t *testing.T) {
 	ledger.NewLocals(pay1.Receiver, 900) // opt in
 	sources = []string{`gtxn 1 Receiver; byte "key"; byte "val"; app_local_put; int 1`}
 	TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
-		Exp(0, "unavailable Local State "+pay1.Receiver.String()))
+		Exp(0, "unavailable Local State 900+"+pay1.Receiver.String()))
 
 	// same for app_local_del
 	sources = []string{`gtxn 1 Receiver; byte "key"; app_local_del; int 1`}
 	TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
-		Exp(0, "unavailable Local State "+pay1.Receiver.String()))
+		Exp(0, "unavailable Local State 900+"+pay1.Receiver.String()))
 
 	// now, use an app call in tx1, with 900 in the foreign apps, so the local state is available
 	appl1.ForeignApps = append(appl1.ForeignApps, 900)
@@ -286,7 +286,7 @@ func TestAppAccess(t *testing.T) {
 
 	// Now txn0 passes, but txn1 has an error because it can't see app 500 locals for appl1.Sender
 	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl1), 9, ledger,
-		Exp(1, "unavailable Local State "+appl1.Sender.String()))
+		Exp(1, "unavailable Local State 500+"+appl1.Sender.String()))
 
 	// But it's ok in appl2, because appl2 uses the same Sender, even though the
 	// foreign-app is not repeated in appl2 because the holding being accessed
@@ -298,7 +298,7 @@ func TestAppAccess(t *testing.T) {
 
 	// as above, appl1 can't see the local state, but appl2 can b/c sender is same as appl0
 	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl1), 9, ledger,
-		Exp(1, "unavailable Local State "+appl1.Sender.String()))
+		Exp(1, "unavailable Local State 900+"+appl1.Sender.String()))
 	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl2), 9, ledger)
 
 	// Now, confirm that *setting* a local state in tx1 that was made available
@@ -311,11 +311,11 @@ func TestAppAccess(t *testing.T) {
 	appl1.ApplicationArgs = [][]byte{appl0.Sender[:]} // tx1 will try to modify local state exposed in tx0
 	// appl0.Sender is available, but 901's local state for it isn't (only 900's is, since 900 was called in tx0)
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
-		Exp(1, "unavailable Local State "+appl0.Sender.String()))
+		Exp(1, "unavailable Local State 901+"+appl0.Sender.String()))
 	// Add 901 to tx0's Access. Still won't work because we don't include the Locals yet
 	appl0.Access = append(appl0.Access, transactions.ResourceRef{App: 901})
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
-		Exp(1, "unavailable Local State "+appl0.Sender.String()+" x 901"))
+		Exp(1, "unavailable Local State 901+"+appl0.Sender.String()))
 	// Now add the LocalsRef
 	appl0.Access = append(appl0.Access, transactions.ResourceRef{
 		Locals: transactions.LocalsRef{
@@ -362,12 +362,12 @@ gtxn 0 Applications 0; byte 0xAA; app_local_get_ex`}
 	ledger.NewLocals(pay1.Receiver, 900) // opt in
 	sources = []string{`gtxn 1 Receiver; byte "key"; byte "val"; app_local_put; int 1`}
 	TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
-		Exp(0, "unavailable Local State "+pay1.Receiver.String()))
+		Exp(0, "unavailable Local State 900+"+pay1.Receiver.String()))
 
 	// same for app_local_del
 	sources = []string{`gtxn 1 Receiver; byte "key"; app_local_del; int 1`}
 	TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
-		Exp(0, "unavailable Local State "+pay1.Receiver.String()))
+		Exp(0, "unavailable Local State 900+"+pay1.Receiver.String()))
 
 	// now, use an app call in tx1, with 900 in Access
 	appl1.Access = append(appl1.Access, transactions.ResourceRef{App: 900})
@@ -375,7 +375,7 @@ gtxn 0 Applications 0; byte 0xAA; app_local_get_ex`}
 	sources = []string{`gtxn 1 Sender; byte "key"; byte "val"; app_local_put; int 1`}
 	// not enough: app 900 is in Access, but not the locals
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
-		Exp(0, "unavailable Local State "+appl1.Sender.String()))
+		Exp(0, "unavailable Local State 900+"+appl1.Sender.String()))
 	appl1.Access = append(appl1.Access, transactions.ResourceRef{
 		Locals: transactions.LocalsRef{
 			App:     uint64(len(appl1.Access)),
@@ -636,7 +636,7 @@ func TestOtherTxSharing(t *testing.T) {
 		withRef := appl
 		withRef.ForeignAssets = []basics.AssetIndex{200}
 		TestApps(t, []string{"", holdingAccess}, txntest.Group(&keyreg, &withRef), 9, ledger,
-			Exp(1, "unavailable Holding "+senderAcct.String()))
+			Exp(1, "unavailable Holding 200+"+senderAcct.String()))
 	})
 	t.Run("pay", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
 		// The receiver is available for algo balance reading
@@ -706,7 +706,7 @@ func TestOtherTxSharing(t *testing.T) {
 		appl.ApplicationArgs = [][]byte{senderAcct[:], {byte(afrz.FreezeAsset)}}
 		TestApps(t, []string{"", senderBalance}, txntest.Group(&afrz, &appl), 9, ledger)
 		TestApps(t, []string{"", holdingAccess}, txntest.Group(&afrz, &appl), 9, ledger,
-			Exp(1, "unavailable Holding "+senderAcct.String()))
+			Exp(1, "unavailable Holding 200+"+senderAcct.String()))
 	})
 }
 
@@ -886,7 +886,7 @@ int 1
 		ledger.NewHolding(payAcct, asa1, 1, false)
 		appl.ApplicationArgs = [][]byte{payAcct[:], {asa1}}
 		TestApps(t, []string{"", "", axferToArgs}, txntest.Group(&axfer, &pay, &appl), 9, ledger,
-			Exp(2, "unavailable Holding "+payAcct.String()))
+			Exp(2, "unavailable Holding 201+"+payAcct.String()))
 	})
 
 	t.Run("afrz", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
@@ -907,12 +907,12 @@ int 1
 		// can't axfer to the afrz sender because appAcct holding is not available from afrz
 		appl.ApplicationArgs = [][]byte{senderAcct[:], {asa1}}
 		TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
-			Exp(1, "unavailable Holding "+appAcct.String()))
+			Exp(1, "unavailable Holding 201+"+appAcct.String()))
 		appl.ForeignAssets = []basics.AssetIndex{asa1}
 		// _still_ can't axfer to sender because afrz sender's holding does NOT
 		// become available (not note that complaint is now about that account)
 		TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
-			Exp(1, "unavailable Holding "+senderAcct.String()))
+			Exp(1, "unavailable Holding 201+"+senderAcct.String()))
 
 		// and not to the receiver which isn't in afrz
 		appl.ApplicationArgs = [][]byte{receiverAcct[:], {asa1}}
@@ -933,7 +933,7 @@ int 1
 		appl.ForeignAssets = []basics.AssetIndex{asa2}
 		// once added to appl's foreign array, the appl still lacks access to other's holding
 		TestApps(t, []string{"", axferToArgs}, txntest.Group(&afrz, &appl), 9, ledger,
-			Exp(1, "unavailable Holding "+otherAcct.String()))
+			Exp(1, "unavailable Holding 202+"+otherAcct.String()))
 
 		// appl can acfg the asset from tx0 (which requires asset available, not holding)
 		appl.ForeignAssets = []basics.AssetIndex{}
@@ -973,10 +973,10 @@ int 1
 		appl.ApplicationArgs = [][]byte{otherAcct[:], {asa2}}
 		TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger,
 			Exp(1, "unavailable Asset 202"))
-		// And adding asa2 does not fix this problem, because the other x 202 holding is unavailable
+		// And adding asa2 does not fix this problem, because the other 202 holding is unavailable
 		appl.ForeignAssets = []basics.AssetIndex{asa2}
 		TestApps(t, []string{"", axferToArgs}, txntest.Group(&appl0, &appl), 9, ledger,
-			Exp(1, "axfer AssetReceiver: unavailable Holding "+otherAcct.String()+" x 202"))
+			Exp(1, "axfer AssetReceiver: unavailable Holding 202+"+otherAcct.String()))
 
 		// Now, conduct similar tests, but with the apps performing the
 		// pays/axfers invoked from an outer app. Use various versions to check
@@ -1018,14 +1018,14 @@ int 1
 		// passed account's local state (which isn't available to the caller)
 		innerCallWithAccount := fmt.Sprintf(innerCallTemplate, "addr "+otherAcct.String()+"; itxn_field Accounts")
 		TestApps(t, []string{"", innerCallWithAccount}, txntest.Group(&appl0, &appl), 9, ledger,
-			Exp(1, "appl ApplicationID: unavailable Local State "+otherAcct.String()))
+			Exp(1, "appl ApplicationID: unavailable Local State 88+"+otherAcct.String()))
 		// the caller can't fix by passing 88 as a foreign app, because doing so
 		// is not much different than the current situation: 88 is being called,
 		// it's already available.
 		innerCallWithBoth := fmt.Sprintf(innerCallTemplate,
 			"addr "+otherAcct.String()+"; itxn_field Accounts; int 88; itxn_field Applications")
 		TestApps(t, []string{"", innerCallWithBoth}, txntest.Group(&appl0, &appl), 9, ledger,
-			Exp(1, "appl ApplicationID: unavailable Local State "+otherAcct.String()))
+			Exp(1, "appl ApplicationID: unavailable Local State 88+"+otherAcct.String()))
 
 		// the caller *can* do it if it originally had access to that 88 holding.
 		appl0.ForeignApps = []basics.AppIndex{88}
@@ -1038,7 +1038,7 @@ int 1
 		appl.ApplicationArgs = [][]byte{{11}, otherAcct[:], {asa1}}
 		appl0.ForeignApps = []basics.AppIndex{11}
 		TestApps(t, []string{"", innerCallWithBoth}, txntest.Group(&appl0, &appl), 9, ledger,
-			Exp(1, "appl ForeignApps: unavailable Local State "+otherAcct.String()))
+			Exp(1, "appl ForeignApps: unavailable Local State 88+"+otherAcct.String()))
 
 	})
 

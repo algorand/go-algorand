@@ -235,14 +235,14 @@ func (cx *EvalContext) requireHolding(acct basics.Address, id basics.AssetIndex)
 		return nil
 	}
 	if !cx.allowsHolding(acct, id) {
-		return fmt.Errorf("unavailable Holding %s x %d would be accessible", acct, id)
+		return fmt.Errorf("unavailable Holding %d+%s would be accessible", id, acct)
 	}
 	return nil
 }
 
 func (cx *EvalContext) requireLocals(acct basics.Address, id basics.AppIndex) error {
 	if !cx.allowsLocals(acct, id) {
-		return fmt.Errorf("unavailable Local State %s x %d would be accessible", acct, id)
+		return fmt.Errorf("unavailable Local State %d+%s would be accessible", id, acct)
 	}
 	return nil
 }
