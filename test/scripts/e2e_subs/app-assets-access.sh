@@ -216,7 +216,7 @@ RES=$(appl "transfer(uint64,uint64,address):void" --from="$SMALL" \
     exit 1
 }
 # allowsAssetTransfer checks the AssetReceiver before AssetSender, so we get that error.
-[[ $RES == *"unavailable Holding $USER2 x $ASSETID"* ]]   # failure should be for the holding
+[[ $RES == *"unavailable Holding $USER2 x $ASSETID"* ]] || exit 1
 
 # Need access to both holdings.
 appl "transfer(uint64,uint64,address):void" \
@@ -236,7 +236,7 @@ RES=$(appl "transfer(uint64,uint64,address):void" --from="$USER2" \
     date '+app-assets FAIL transfer using --access should fail without explicit holding %Y%m%d_%H%M%S'
     exit 1
 }
-[[ $RES == *"unavailable Holding"* ]]   # failure should be for the holding
+[[ $RES == *"unavailable Holding"* ]] || exit 1
 
 appl "transfer(uint64,uint64,address):void" --from="$USER2" --holding="$ASSETID,$USER2" \
      --app-arg="int:$ASSETID" --app-arg="int:100" \
@@ -254,32 +254,32 @@ appl "optin(uint64):void" --app-arg "int:$ASSETID3" --foreign-asset="$ASSETID3" 
 IDs="$ASSETID
 $ASSETID2
 $ASSETID3"
-[[ "$(asset_ids "$APPACCT")" = $IDs ]]  # account has 3 assets
+[[ "$(asset_ids "$APPACCT")" = $IDs ]] || exit 1  # account has 3 assets
 
 # opt out of assets
 RES=$(appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" 2>&1) && {
     date '+app-assets FAIL close using --access should fail without explicit app holding %Y%m%d_%H%M%S'
     exit 1
 }
-[[ $RES == *"unavailable Holding $APPACCT x $ASSETID2"* ]]   # app can't close itself unless its holding is available
+[[ $RES == *"unavailable Holding $APPACCT x $ASSETID2"* ]] || exit 1 # app can't close itself unless its holding is available
 
-# add that holding, but still nto enough...
-RES=$(appl "close(uint64):void" --from="$SMALL" --holding="$ASSETID2,$APPACCT" 2>&1) && {
+# add that holding, but still not enough...
+RES=$(appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" --holding="$ASSETID2,$APPACCT" 2>&1) && {
     date '+app-assets FAIL close using --access should fail without explicit sender holding %Y%m%d_%H%M%S'
     exit 1
 }
-[[ $RES == *"unavailable Holding $SMALL x $ASSETID2"* ]]   # app closes to sender, so needs that holding too
+[[ $RES == *"unavailable Holding $SMALL x $ASSETID2"* ]] || exit 1   # app closes to sender, so needs that holding too
 
 appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" \
      --holding="$ASSETID2,$APPACCT" --holding="$ASSETID2,$SMALL"
 IDs="$ASSETID
 $ASSETID3"
-[[ "$(asset_ids "$APPACCT")" = $IDs ]] # account has 2 assets
+[[ "$(asset_ids "$APPACCT")" = $IDs ]] || exit 1 # account has 2 assets
 appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID" \
      --holding="$ASSETID,$APPACCT" --holding="$ASSETID,$SMALL"
 appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID3" \
      --holding="$ASSETID3,$APPACCT" --holding="$ASSETID3,$SMALL"
-[[ "$(asset_ids "$APPACCT")" = "" ]] # account has no assets
+[[ "$(asset_ids "$APPACCT")" = "" ]] || exit 1 # account has no assets
 
 # app creates asset
 appl "create(uint64):void" --app-arg="int:1000000" --from="$SMALL"
@@ -301,7 +301,7 @@ IDs="$ASSETID
 $ASSETID2
 $ASSETID3
 $APPASSETID"
-[[ "$(asset_ids "$SMALL")" = $IDs ]] # has new asset
+[[ "$(asset_ids "$SMALL")" = $IDs ]] || exit 1 # has new asset
 [ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" =  1000 ] # correct balances
 [ "$(asset_bal "$APPACCT")" = 999000 ] # 1k sent
 
@@ -310,7 +310,7 @@ RES=$(appl "freeze(uint64,bool):void" --from="$SMALL" --app-arg="int:$APPASSETID
     date '+app-assets FAIL freeze using --access should fail without explicit sender holding %Y%m%d_%H%M%S'
     exit 1
 }
-[[ $RES == *"unavailable Holding $SMALL x $APPASSETID"* ]]
+[[ $RES == *"unavailable Holding $SMALL x $APPASSETID"* ]] || exit 1
 appl "freeze(uint64,bool):void" --from="$SMALL" --app-arg="int:$APPASSETID" --app-arg="int:1" --holding="$APPASSETID,$SMALL"
 
 # fail since asset is frozen on $SMALL

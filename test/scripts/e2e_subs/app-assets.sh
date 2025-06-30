@@ -220,16 +220,16 @@ appl "optin():void" --app-arg "int:$ASSETID3" --foreign-asset="$ASSETID3" --from
 IDs="$ASSETID
 $ASSETID2
 $ASSETID3"
-[[ "$(asset_ids "$APPACCT")" = $IDs ]]  # account has 3 assets
+[[ "$(asset_ids "$APPACCT")" = $IDs ]] || exit 1  # account has 3 assets
 
 # opt out of assets
 appl "close():void"  --foreign-asset="$ASSETID2" --from="$SMALL"
 IDs="$ASSETID
 $ASSETID3"
-[[ "$(asset_ids "$APPACCT")" = $IDs ]] # account has 2 assets
+[[ "$(asset_ids "$APPACCT")" = $IDs ]] || exit 1 # account has 2 assets
 appl "close():void" --foreign-asset="$ASSETID" --from="$SMALL"
 appl "close():void" --foreign-asset="$ASSETID3" --from="$SMALL"
-[[ "$(asset_ids "$APPACCT")" = "" ]] # account has no assets
+[[ "$(asset_ids "$APPACCT")" = "" ]] || exit 1 # account has no assets
 
 # app creates asset
 appl "create(uint64):void" --app-arg="int:1000000" --from="$SMALL"
@@ -249,7 +249,7 @@ IDs="$ASSETID
 $ASSETID2
 $ASSETID3
 $APPASSETID"
-[[ "$(asset_ids "$SMALL")" = $IDs ]] # has new asset
+[[ "$(asset_ids "$SMALL")" = $IDs ]] || exit 1 # has new asset
 [ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" =  1000 ] # correct balances
 [ "$(asset_bal "$APPACCT")" = 999000 ] # 1k sent
 
