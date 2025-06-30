@@ -207,20 +207,24 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		NetworkID: genesis.Network,
 	}
 	if cfg.EnableP2PHybridMode {
-		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node)
+		var meshStrategy network.MeshStrategyCreator = &network.GenericMeshStrategyCreator{}
+		if cfg.NetAddress != "" {
+			meshStrategy = &network.HybridRelayMeshStrategyCreator{}
+		}
+		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, meshStrategy)
 		if err != nil {
 			log.Errorf("could not create hybrid p2p node: %v", err)
 			return nil, err
 		}
 	} else if cfg.EnableP2P {
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil, nil)
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil, &network.GenericMeshStrategyCreator{})
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
 		}
 	} else {
 		var wsNode *network.WebsocketNetwork
-		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesisInfo, node, nil, nil)
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesisInfo, node, nil, &network.GenericMeshStrategyCreator{})
 		if err != nil {
 			log.Errorf("could not create websocket node: %v", err)
 			return nil, err

@@ -722,8 +722,8 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.wg.Add(1)
 		go wn.httpdThread()
 	}
-	wn.wg.Add(1)
-	go wn.meshThread()
+
+	wn.meshStrategy.start()
 
 	// we shouldn't have any ticker here.. but in case we do - just stop it.
 	if wn.peersConnectivityCheckTicker != nil {
@@ -804,6 +804,7 @@ func (wn *WebsocketNetwork) Stop() {
 	if err != nil {
 		wn.log.Warnf("problem shutting down %s: %v", listenAddr, err)
 	}
+	wn.meshStrategy.stop()
 	wn.wg.Wait()
 	if wn.listener != nil {
 		wn.log.Debugf("closed %s", listenAddr)
@@ -1552,17 +1553,11 @@ func (wn *WebsocketNetwork) connectedForIP(host string) (totalConnections int) {
 	return
 }
 
-const meshThreadInterval = time.Minute
 const cliqueResolveInterval = 5 * time.Minute
 
 type meshRequest struct {
 	disconnect bool
 	done       chan struct{}
-}
-
-func (wn *WebsocketNetwork) meshThread() {
-	defer wn.wg.Done()
-	wn.meshStrategy.meshThread()
 }
 
 func (wn *WebsocketNetwork) meshThreadInner() bool {
