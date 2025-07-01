@@ -4,6 +4,13 @@ on:
     branches: 
       - master
       - 'rel/**'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to run tests on'
+        required: true
+        default: 'master'
+        type: string
 
 env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
@@ -11,6 +18,7 @@ env:
   KMD_NOUSB: True
   BUILD_TYPE: integration
   ALGOTEST: 1
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
 
 concurrency:
   group: nightly-${{ github.ref }}
@@ -31,6 +39,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
+        ref: ${{ github.event.inputs.branch || github.ref }}
         fetch-depth: 0
     - name: Get Go version
       id: go_version
@@ -59,7 +68,7 @@ jobs:
         path: /tmp/workspace-${{ matrix.platform }}.tar.gz
         retention-days: 1
     - name: Notify Slack on failure
-      if: failure()
+      if: failure() && env.SLACK_WEBHOOK != ''
       uses: slackapi/slack-github-action@v2.1.0
       with:
         webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -84,11 +93,11 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 8
+      PARTITION_TOTAL: 2
       CIRCLECI: true
     steps:
       - name: Download workspace archive
@@ -123,7 +132,7 @@ jobs:
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -141,7 +150,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -149,7 +158,7 @@ jobs:
           retention-days: 7
       - name: Upload coverage
         # Only upload coverage from ubuntu-24.04 platform
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
@@ -158,6 +167,13 @@ jobs:
           token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
           fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   integration_nightly:
     needs: [build]
@@ -165,14 +181,14 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 8
+      PARTITION_TOTAL: 2
       E2E_TEST_FILTER: GO
-      PARALLEL_FLAG: "-p 1"
+      PARALLEL_FLAG: "-p 4"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -200,7 +216,7 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -218,12 +234,19 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration_nightly/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   e2e_expect_nightly:
     needs: [build]
@@ -238,7 +261,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 2
       E2E_TEST_FILTER: EXPECT
-      PARALLEL_FLAG: "-p 1"
+      PARALLEL_FLAG: "-p 4"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -266,7 +289,7 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -284,12 +307,19 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect_nightly/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   e2e_subs_nightly:
     needs: [build]
@@ -336,7 +366,7 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs_nightly \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -354,7 +384,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
@@ -387,7 +417,7 @@ jobs:
               TestGoalWithExpect \
               TestTealdbgWithExpect
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
@@ -408,6 +438,7 @@ jobs:
 
   upload:
     needs: [verify_nightly, e2e_subs_nightly]
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/rel/')
     strategy:
       matrix:
         platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
@@ -443,7 +474,7 @@ jobs:
           scripts/travis/deploy_packages.sh
         shell: bash
       - name: Notify Slack on failure
-        if: failure()
+        if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
