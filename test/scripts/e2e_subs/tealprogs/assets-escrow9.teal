@@ -1,0 +1,340 @@
+#pragma version 9
+        // This is intended to be very similar to assets-escrow.teal,
+        // but show how such an application would be written with
+        // tx.Access (or shared resources) in mind.  All resources are
+        // specified as app args, so that inspecting the txn local
+        // foreign-arrays is avoided.
+
+        // This application accepts these actions on assets
+        // optin(uint64):void  - opt in the app to an asset.
+        // close(uint64):void - opt out the app from an asset
+        // deposit():void - deposit assets on app and hold until withdraw is requested;
+        //                  update the asset balance in app's local state
+        // withdraw(uint64,uint64):void - withdraw arg 1 units of arg 2 asset and update the asset balance in app's local state.
+        //                         approve if withdraw amount < balance
+        // transfer(uint64,uint64,address,address):void - app has clawback auth to do it (asset, amount, from, to)
+        // create(uint64):void - app creates assets
+        // mint(uint64):void - withdraw assets created by app
+        // freeze(uint64,bool):void - freeze/unfreeze an asset on an account
+
+        // ApplicationID is zero in inital creation txn
+        txn ApplicationID
+        bz handle_createapp
+
+        // Handle possible OnCompletion type. We don't have to
+        // worry about handling ClearState, because the
+        // ClearStateProgram will execute in that case, not the
+        // ApprovalProgram.
+
+        txn OnCompletion
+        int NoOp
+        ==
+        bnz handle_noop
+
+        txn OnCompletion
+        int OptIn
+        ==
+        bnz handle_optin
+
+        txn OnCompletion
+        int CloseOut
+        ==
+        bnz handle_closeout
+
+        txn OnCompletion
+        int UpdateApplication
+        ==
+        bnz handle_updateapp
+
+        txn OnCompletion
+        int DeleteApplication
+        ==
+        bnz handle_deleteapp
+        // Unexpected OnCompletion value. Should be unreachable.
+        err
+
+handle_createapp:
+        int 1
+        return
+
+handle_optin:
+        // Let anyone optin with a single txn, with no arguments.  If
+        // it's not a single txn, fall through to handle_noop, so that
+        // a deposit can be made while opting in.
+        // We should standardize a behaviour like this in ABI.
+        global GroupSize
+        int 1
+        ==
+        bz handle_noop
+        int 1
+        return
+
+handle_noop:
+        // opt in app to asset to enable axfer
+        txn ApplicationArgs 0
+        byte "optin(uint64):void"
+        ==
+        bz not_optin
+        byte "optin"
+        callsub debug
+
+        itxn_begin
+         int axfer
+         itxn_field TypeEnum
+
+         int 0
+         itxn_field AssetAmount
+
+         txna ApplicationArgs 1
+         btoi
+         itxn_field XferAsset
+
+         global CurrentApplicationAddress
+         itxn_field AssetReceiver
+        itxn_submit
+
+        int 1
+        return
+not_optin:
+        txn ApplicationArgs 0
+        byte "deposit():void"
+        ==
+        bz not_deposit
+
+        byte "deposit"
+        callsub debug
+
+        // Handle a deposit. Next txn slot must axfer our app account
+        txn GroupIndex
+        int 1
+        +
+        dup
+        dup
+
+        gtxns TypeEnum
+        int axfer
+        ==
+        assert
+
+        gtxns AssetReceiver
+        global CurrentApplicationAddress
+        ==
+        assert
+
+        gtxns AssetAmount
+
+        // Track the amount this sender deposited in their local state
+        int 0
+        byte "balance"
+        dup2
+        app_local_get
+        uncover 3    // pull up the Amount
+        +
+        app_local_put
+
+        int 1
+        return
+not_deposit:
+        txn ApplicationArgs 0
+        byte "withdraw(uint64,uint64):void"
+        ==
+        bz not_withdraw
+
+        // Handle withdraw.
+
+        int 0
+        byte "balance"
+        dup2
+        app_local_get
+
+        // Subtract the request and replace. Rejects on underflow
+        txn ApplicationArgs 2
+        btoi
+        -
+        app_local_put
+
+        itxn_begin
+         int axfer
+         itxn_field TypeEnum
+
+         txn ApplicationArgs 1
+         btoi
+         itxn_field XferAsset
+
+         txn ApplicationArgs 2
+         btoi
+         itxn_field AssetAmount
+
+         txn Sender
+         itxn_field AssetReceiver
+        itxn_submit
+
+        int 1
+        return
+not_withdraw:
+        txn ApplicationArgs 0
+        byte "close(uint64):void"
+        ==
+        bz not_close
+
+        // Handle close.
+        itxn_begin
+            int axfer
+            itxn_field TypeEnum
+
+            txna ApplicationArgs 1
+            btoi
+            itxn_field XferAsset
+
+            int 0
+            itxn_field AssetAmount
+
+            txn Sender
+            itxn_field AssetReceiver
+
+            txn Sender
+            itxn_field AssetCloseTo
+        itxn_submit
+
+        int 1
+        return
+not_close:
+        txn ApplicationArgs 0
+        byte "transfer(uint64,uint64,address):void"
+        ==
+        bz not_transfer
+
+        // Handle transfer.
+        itxn_begin
+            int axfer
+            itxn_field TypeEnum
+
+            txn ApplicationArgs 1
+            btoi
+            itxn_field XferAsset
+
+            txn ApplicationArgs 2
+            btoi
+            itxn_field AssetAmount
+
+            txn Sender
+            itxn_field AssetSender
+
+            txna ApplicationArgs 3
+            itxn_field AssetReceiver
+
+        itxn_submit
+
+        int 1
+        return
+
+not_transfer:
+        txn ApplicationArgs 0
+        byte "create(uint64):void"
+        ==
+        bz not_create
+        // Handle create.
+        itxn_begin
+          int acfg
+          itxn_field TypeEnum
+
+          txn ApplicationArgs 1
+          btoi
+          itxn_field ConfigAssetTotal
+          int 0
+          itxn_field ConfigAssetDecimals
+          byte "x"
+          itxn_field ConfigAssetUnitName
+          byte "X"
+          itxn_field ConfigAssetName
+          global CurrentApplicationAddress
+          itxn_field ConfigAssetFreeze
+
+        itxn_submit
+        int 1
+        return
+not_create:
+        txn ApplicationArgs 0
+        byte "mint(uint64):void"
+        ==
+        bz not_mint
+        // Handle mint.  Next txn slot must pay our app account
+        txn GroupIndex
+        int 1
+        +
+        dup
+        dup
+
+        gtxns TypeEnum
+        int pay
+        ==
+        assert
+
+        gtxns Receiver
+        global CurrentApplicationAddress
+        ==
+        assert
+
+        // mint asset
+        itxn_begin
+         int axfer
+         itxn_field TypeEnum
+
+         txn ApplicationArgs 1
+         btoi
+         itxn_field XferAsset
+
+         gtxns Amount
+         itxn_field AssetAmount
+
+         txn Sender
+         itxn_field AssetReceiver
+        itxn_submit
+
+        int 1
+        return
+not_mint:
+        txn ApplicationArgs 0
+        byte "freeze(uint64,bool):void"
+        ==
+        bz not_freeze
+
+        //Handle freeze
+        itxn_begin
+          int afrz
+          itxn_field TypeEnum
+
+          txn ApplicationArgs 1
+          btoi
+          itxn_field FreezeAsset
+
+          txn ApplicationArgs 2
+          btoi
+          itxn_field FreezeAssetFrozen
+
+          txn Sender
+          itxn_field FreezeAssetAccount
+
+        itxn_submit
+
+        int 1
+        return
+not_freeze:
+        // Unknown call "method"
+        err
+
+handle_closeout:
+        int 1
+        return
+
+handle_updateapp:
+handle_deleteapp:
+        txn Sender
+        global CreatorAddress
+        ==
+        return
+debug:
+        byte "debug"
+        swap
+        app_global_put
+        retsub
