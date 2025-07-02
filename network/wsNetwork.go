@@ -804,6 +804,7 @@ func (wn *WebsocketNetwork) Stop() {
 	if err != nil {
 		wn.log.Warnf("problem shutting down %s: %v", listenAddr, err)
 	}
+	close(wn.meshUpdateRequests)
 	wn.meshStrategy.stop()
 	wn.wg.Wait()
 	if wn.listener != nil {

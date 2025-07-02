@@ -453,6 +453,7 @@ func (n *P2PNetwork) Stop() {
 	n.service.Close()
 	n.bootstrapperStop()
 	n.httpServer.Close()
+	close(n.meshUpdateRequests)
 	n.meshStrategy.stop()
 	n.wg.Wait()
 }
