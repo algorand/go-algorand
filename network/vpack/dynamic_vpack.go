@@ -20,6 +20,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/algorand/msgp/msgp"
 )
 
 // The second byte in the header is used by StatefulEncoder and
@@ -50,6 +52,12 @@ const (
 	hdr1SndRef = 1 << 5
 	hdr1PkRef  = 1 << 6
 	hdr1Pk2Ref = 1 << 7
+
+	// sizes used below
+	pfSize     = 80 // committee.VrfProof
+	digestSize = 32 // crypto.Digest (and basics.Address)
+	sigSize    = 64 // crypto.Signature
+	pkSize     = 32 // crypto.PublicKey
 )
 
 // StatefulEncoder compresses votes by using references to previously seen values
@@ -75,64 +83,143 @@ type dynamicTableState struct {
 	lastRnd uint64
 }
 
-func encodeDynamicRef(id lruTableReferenceID, dst *[]byte) {
-	*dst = binary.BigEndian.AppendUint16(*dst, uint16(id))
+// statefulReader helps StatefulEncoder and StatefulDecoder to read from a
+// source buffer with bounds checking.
+type statefulReader struct {
+	src []byte
+	pos int
 }
 
-func decodeDynamicRef(src []byte, pos *int) (lruTableReferenceID, error) {
-	if *pos+2 > len(src) {
-		return 0, errors.New("truncated ref id")
+func (r *statefulReader) readFixed(n int, field string) ([]byte, error) {
+	if r.pos+n > len(r.src) {
+		return nil, fmt.Errorf("truncated %s", field)
 	}
-	id := binary.BigEndian.Uint16(src[*pos : *pos+2])
-	*pos += 2
+	data := r.src[r.pos : r.pos+n]
+	r.pos += n
+	return data, nil
+}
+
+func (r *statefulReader) readVaruintBytes(field string) ([]byte, error) {
+	if r.pos+1 > len(r.src) {
+		return nil, fmt.Errorf("truncated %s marker", field)
+	}
+	more, err := msgpVaruintRemaining(r.src[r.pos])
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s marker: %w", field, err)
+	}
+	total := 1 + more
+	if r.pos+total > len(r.src) {
+		return nil, fmt.Errorf("truncated %s", field)
+	}
+	data := r.src[r.pos : r.pos+total]
+	r.pos += total
+	return data, nil
+}
+
+func (r *statefulReader) readVaruint(field string) ([]byte, uint64, error) {
+	data, err := r.readVaruintBytes(field)
+	if err != nil {
+		return nil, 0, err
+	}
+	// decode: readVaruintBytes has already validated the marker
+	var value uint64
+	switch len(data) {
+	case 1: // fixint (values 0-127)
+		value = uint64(data[0])
+	case 2: // uint8 (marker + uint8)
+		value = uint64(data[1])
+	case 3: // uint16 (marker + uint16)
+		value = uint64(binary.BigEndian.Uint16(data[1:]))
+	case 5: // uint32 (marker + uint32)
+		value = uint64(binary.BigEndian.Uint32(data[1:]))
+	case 9: // uint64 (marker + uint64)
+		value = binary.BigEndian.Uint64(data[1:])
+	default:
+		return nil, 0, fmt.Errorf("readVaruint: %s unexpected length %d", field, len(data))
+	}
+
+	return data, value, nil
+}
+
+// readDynamicRef reads an LRU table reference ID from the statefulReader.
+func (r *statefulReader) readDynamicRef(field string) (lruTableReferenceID, error) {
+	if r.pos+2 > len(r.src) {
+		return 0, fmt.Errorf("truncated %s", field)
+	}
+	id := binary.BigEndian.Uint16(r.src[r.pos : r.pos+2])
+	r.pos += 2
 	return lruTableReferenceID(id), nil
+}
+
+// appendDynamicRef encodes an LRU table reference ID and appends it to dst.
+func appendDynamicRef(dst []byte, id lruTableReferenceID) []byte {
+	return binary.BigEndian.AppendUint16(dst, uint16(id))
 }
 
 // Compress takes a vote compressed by StatelessEncoder, and additionally
 // compresses it using dynamic references to previously seen values.
 func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
-	if len(src) < 2 {
+	r := statefulReader{src: src, pos: 0}
+
+	// Read header
+	header, err := r.readFixed(2, "header")
+	if err != nil {
 		return nil, errors.New("src too short")
 	}
-	hdr0 := src[0] // from StatelessEncoder
-	var hdr1 byte  // StatefulEncoder header
-	pos := 2       // position in src
+	hdr0 := header[0] // from StatelessEncoder
+	var hdr1 byte     // StatefulEncoder header
 
 	// prepare output, leave room for 2-byte header
 	out := dst[:0]
 	out = append(out, hdr0, 0) // will fill in with hdr1 later
 
 	// cred.pf: pass through
-	out = append(out, src[pos:pos+80]...)
-	pos += 80
+	pf, err := r.readFixed(pfSize, "pf")
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, pf...)
 
 	// r.per: pass through, if present
 	if (hdr0 & bitPer) != 0 {
-		n := msgpVaruintLen(src[pos])
-		out = append(out, src[pos:pos+n]...)
-		pos += n
+		perData, err := r.readVaruintBytes("r.per")
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, perData...)
 	}
 
 	// r.prop: check LRU window
 	// copy proposal fields for table lookup
 	var prop proposalEntry
 	if (hdr0 & bitDig) != 0 {
-		copy(prop.dig[:], src[pos:pos+32])
-		pos += 32
+		dig, err := r.readFixed(digestSize, "dig")
+		if err != nil {
+			return nil, err
+		}
+		copy(prop.dig[:], dig)
 	}
 	if (hdr0 & bitEncDig) != 0 {
-		copy(prop.encdig[:], src[pos:pos+32])
-		pos += 32
+		encdig, err := r.readFixed(digestSize, "encdig")
+		if err != nil {
+			return nil, err
+		}
+		copy(prop.encdig[:], encdig)
 	}
 	if (hdr0 & bitOper) != 0 {
-		n := msgpVaruintLen(src[pos])
-		copy(prop.operEnc[:], src[pos:pos+n])
-		prop.operLen = uint8(n)
-		pos += n
+		operData, err := r.readVaruintBytes("oper")
+		if err != nil {
+			return nil, err
+		}
+		copy(prop.operEnc[:], operData)
+		prop.operLen = uint8(len(operData))
 	}
 	if (hdr0 & bitOprop) != 0 {
-		copy(prop.oprop[:], src[pos:pos+32])
-		pos += 32
+		oprop, err := r.readFixed(digestSize, "oprop")
+		if err != nil {
+			return nil, err
+		}
+		copy(prop.oprop[:], oprop)
 	}
 	prop.mask = hdr0 & propFieldsMask
 
@@ -157,8 +244,10 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	}
 
 	// r.rnd: perform delta encoding
-	n := msgpVaruintLen(src[pos])
-	rnd := decodeMsgpVaruint(src[pos : pos+n])
+	rndData, rnd, err := r.readVaruint("rnd")
+	if err != nil {
+		return nil, err
+	}
 
 	switch { // delta encoding
 	case rnd == e.lastRnd:
@@ -169,20 +258,22 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 		hdr1 |= hdr1RndDeltaMinus1
 	default:
 		// pass through literal bytes (don't touch hdr1)
-		out = append(out, src[pos:pos+n]...)
+		out = append(out, rndData...)
 	}
-	pos += n
 	e.lastRnd = rnd
 
 	// r.snd: check LRU table
+	sndData, err := r.readFixed(digestSize, "sender")
+	if err != nil {
+		return nil, err
+	}
 	var snd addressValue
-	copy(snd[:], src[pos:pos+32])
-	pos += 32
+	copy(snd[:], sndData)
 	sndH := snd.hash()
 	if id, ok := e.sndTable.lookup(snd, sndH); ok {
 		// found in table, use reference
 		hdr1 |= hdr1SndRef
-		encodeDynamicRef(id, &out)
+		out = appendDynamicRef(out, id)
 	} else { // not found, add to table and use literal
 		out = append(out, snd[:]...)
 		e.sndTable.insert(snd, sndH)
@@ -190,23 +281,27 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 
 	// r.step: pass through, if present
 	if (hdr0 & bitStep) != 0 {
-		n := msgpVaruintLen(src[pos])
-		out = append(out, src[pos:pos+n]...)
-		pos += n
+		stepData, err := r.readVaruintBytes("step")
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, stepData...)
 	}
 
 	// sig.p + sig.p1s: check LRU table
+	pkBundle, err := r.readFixed(pkSize+sigSize, "pk bundle")
+	if err != nil {
+		return nil, err
+	}
 	var pk pkSigPair
-	copy(pk.pk[:], src[pos:pos+32])
-	pos += 32
-	copy(pk.sig[:], src[pos:pos+64])
-	pos += 64
+	copy(pk.pk[:], pkBundle[:pkSize])
+	copy(pk.sig[:], pkBundle[pkSize:])
 
 	pkH := pk.hash()
 	if id, ok := e.pkTable.lookup(pk, pkH); ok {
 		// found in table, use reference
 		hdr1 |= hdr1PkRef
-		encodeDynamicRef(id, &out)
+		out = appendDynamicRef(out, id)
 	} else { // not found, add to table and use literal
 		out = append(out, pk.pk[:]...)
 		out = append(out, pk.sig[:]...)
@@ -214,17 +309,19 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	}
 
 	// sig.p2 + sig.p2s: check LRU table
+	pk2Bundle, err := r.readFixed(pkSize+sigSize, "pk2 bundle")
+	if err != nil {
+		return nil, err
+	}
 	var pk2 pkSigPair
-	copy(pk2.pk[:], src[pos:pos+32])
-	pos += 32
-	copy(pk2.sig[:], src[pos:pos+64])
-	pos += 64
+	copy(pk2.pk[:], pk2Bundle[:pkSize])
+	copy(pk2.sig[:], pk2Bundle[pkSize:])
 
 	pk2H := pk2.hash()
 	if id, ok := e.pk2Table.lookup(pk2, pk2H); ok {
 		// found in table, use reference
 		hdr1 |= hdr1Pk2Ref
-		encodeDynamicRef(id, &out)
+		out = appendDynamicRef(out, id)
 	} else { // not found, add to table and use literal
 		out = append(out, pk2.pk[:]...)
 		out = append(out, pk2.sig[:]...)
@@ -232,11 +329,14 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	}
 
 	// sig.s: pass through
-	out = append(out, src[pos:pos+64]...)
-	pos += 64
+	sigs, err := r.readFixed(sigSize, "sig.s")
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, sigs...)
 
-	if pos != len(src) {
-		return nil, fmt.Errorf("length mismatch: expected %d, got %d", len(src), pos)
+	if r.pos != len(src) {
+		return nil, fmt.Errorf("length mismatch: expected %d, got %d", len(src), r.pos)
 	}
 
 	// fill in stateful header (hdr0 is unchanged)
@@ -247,35 +347,34 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 // Decompress reverses StatefulEncoder, and writes a valid stateless vpack
 // format buffer into dst. Caller must then pass it to StatelessDecoder.
 func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
-	if len(src) < 2 {
+	r := statefulReader{src: src, pos: 0}
+
+	// Read header
+	header, err := r.readFixed(2, "header")
+	if err != nil {
 		return nil, errors.New("input shorter than header")
 	}
-	hdr0 := src[0] // from StatelessEncoder
-	hdr1 := src[1] // from StatefulEncoder
-	pos := 2       // position in src
+	hdr0 := header[0] // from StatelessEncoder
+	hdr1 := header[1] // from StatefulEncoder
 
 	// prepare out; stateless size <= original
 	out := dst[:0]
 	out = append(out, hdr0, 0) // StatelessDecoder-compatible header
 
 	// cred.pf: pass through
-	if pos+80 > len(src) {
-		return nil, errors.New("truncated pf")
+	pf, err := r.readFixed(pfSize, "pf")
+	if err != nil {
+		return nil, err
 	}
-	out = append(out, src[pos:pos+80]...)
-	pos += 80
+	out = append(out, pf...)
 
 	// r.per: pass through, if present
 	if (hdr0 & bitPer) != 0 {
-		if pos+1 > len(src) {
-			return nil, errors.New("truncated per marker")
+		perData, err := r.readVaruintBytes("per")
+		if err != nil {
+			return nil, err
 		}
-		n := msgpVaruintLen(src[pos])
-		if pos+n > len(src) {
-			return nil, errors.New("truncated per")
-		}
-		out = append(out, src[pos:pos+n]...)
-		pos += n
+		out = append(out, perData...)
 	}
 
 	// r.prop: check for reference to LRU window
@@ -283,37 +382,33 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 	propRef := (hdr1 & hdr1PropMask) >> hdr1PropShift // index in range [0, 7]
 	if propRef == 0 {                                 // literal follows
 		if (hdr0 & bitDig) != 0 {
-			if pos+32 > len(src) {
-				return nil, errors.New("truncated digest")
+			dig, err := r.readFixed(digestSize, "digest")
+			if err != nil {
+				return nil, err
 			}
-			copy(prop.dig[:], src[pos:pos+32])
-			pos += 32
+			copy(prop.dig[:], dig)
 		}
 		if (hdr0 & bitEncDig) != 0 {
-			if pos+32 > len(src) {
-				return nil, errors.New("truncated encdig")
+			encdig, err := r.readFixed(digestSize, "encdig")
+			if err != nil {
+				return nil, err
 			}
-			copy(prop.encdig[:], src[pos:pos+32])
-			pos += 32
+			copy(prop.encdig[:], encdig)
 		}
 		if (hdr0 & bitOper) != 0 {
-			if pos+1 > len(src) {
-				return nil, errors.New("truncated oper marker")
+			operData, err := r.readVaruintBytes("oper")
+			if err != nil {
+				return nil, err
 			}
-			n := msgpVaruintLen(src[pos])
-			if pos+n > len(src) {
-				return nil, errors.New("truncated oper")
-			}
-			copy(prop.operEnc[:], src[pos:pos+n])
-			prop.operLen = uint8(n)
-			pos += n
+			copy(prop.operEnc[:], operData)
+			prop.operLen = uint8(len(operData))
 		}
 		if (hdr0 & bitOprop) != 0 {
-			if pos+32 > len(src) {
-				return nil, errors.New("truncated oprop")
+			oprop, err := r.readFixed(digestSize, "oprop")
+			if err != nil {
+				return nil, err
 			}
-			copy(prop.oprop[:], src[pos:pos+32])
-			pos += 32
+			copy(prop.oprop[:], oprop)
 		}
 		prop.mask = hdr0 & propFieldsMask
 		// add literal to the proposal window
@@ -345,32 +440,28 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 	switch hdr1 & hdr1RndMask {
 	case hdr1RndDeltaSame:
 		rnd = d.lastRnd
-		out = appendMsgpVaruint(out, rnd)
+		out = msgp.AppendUint64(out, rnd)
 	case hdr1RndDeltaPlus1:
 		rnd = d.lastRnd + 1
-		out = appendMsgpVaruint(out, rnd)
+		out = msgp.AppendUint64(out, rnd)
 	case hdr1RndDeltaMinus1:
 		rnd = d.lastRnd - 1
-		out = appendMsgpVaruint(out, rnd)
+		out = msgp.AppendUint64(out, rnd)
 	case hdr1RndLiteral:
-		if pos+1 > len(src) {
-			return nil, errors.New("truncated rnd marker")
+		rndData, rndVal, err := r.readVaruint("rnd")
+		if err != nil {
+			return nil, err
 		}
-		n := msgpVaruintLen(src[pos])
-		if pos+n > len(src) {
-			return nil, errors.New("truncated rnd")
-		}
-		rnd = decodeMsgpVaruint(src[pos : pos+n])
-		out = append(out, src[pos:pos+n]...)
-		pos += n
+		rnd = rndVal
+		out = append(out, rndData...)
 	}
 	d.lastRnd = rnd
 
 	// r.snd: check for reference to LRU table
 	if (hdr1 & hdr1SndRef) != 0 { // reference
-		id, err := decodeDynamicRef(src, &pos)
+		id, err := r.readDynamicRef("snd ref")
 		if err != nil {
-			return nil, fmt.Errorf("error decoding snd ref: %w", err)
+			return nil, err
 		}
 		addr, ok := d.sndTable.fetch(id)
 		if !ok {
@@ -378,34 +469,30 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		}
 		out = append(out, addr[:]...)
 	} else { // literal
-		if pos+32 > len(src) {
-			return nil, errors.New("truncated sender")
+		sndData, err := r.readFixed(digestSize, "sender")
+		if err != nil {
+			return nil, err
 		}
 		var addr addressValue
-		copy(addr[:], src[pos:pos+32])
+		copy(addr[:], sndData)
 		out = append(out, addr[:]...)
 		_ = d.sndTable.insert(addr, addr.hash())
-		pos += 32
 	}
 
 	// r.step: pass through, if present
 	if (hdr0 & bitStep) != 0 {
-		if pos+1 > len(src) {
-			return nil, errors.New("truncated step marker")
+		stepData, err := r.readVaruintBytes("step")
+		if err != nil {
+			return nil, err
 		}
-		n := msgpVaruintLen(src[pos])
-		if pos+n > len(src) {
-			return nil, errors.New("truncated step")
-		}
-		out = append(out, src[pos:pos+n]...)
-		pos += n
+		out = append(out, stepData...)
 	}
 
 	// sig.p + p1s: check for reference to LRU table
 	if (hdr1 & hdr1PkRef) != 0 { // reference
-		id, err := decodeDynamicRef(src, &pos)
+		id, err := r.readDynamicRef("pk ref")
 		if err != nil {
-			return nil, fmt.Errorf("error decoding pk ref: %w", err)
+			return nil, err
 		}
 		pkb, ok := d.pkTable.fetch(id)
 		if !ok {
@@ -414,23 +501,23 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		out = append(out, pkb.pk[:]...)
 		out = append(out, pkb.sig[:]...)
 	} else { // literal
-		if pos+96 > len(src) {
-			return nil, errors.New("truncated pk bundle")
+		pkBundle, err := r.readFixed(pkSize+sigSize, "pk bundle")
+		if err != nil {
+			return nil, err
 		}
 		var pkb pkSigPair
-		copy(pkb.pk[:], src[pos:pos+32])
-		copy(pkb.sig[:], src[pos+32:pos+96])
+		copy(pkb.pk[:], pkBundle[:pkSize])
+		copy(pkb.sig[:], pkBundle[pkSize:])
 		out = append(out, pkb.pk[:]...)
 		out = append(out, pkb.sig[:]...)
 		_ = d.pkTable.insert(pkb, pkb.hash())
-		pos += 96
 	}
 
 	// sig.p2 + p2s: check for reference to LRU table
 	if (hdr1 & hdr1Pk2Ref) != 0 { // reference
-		id, err := decodeDynamicRef(src, &pos)
+		id, err := r.readDynamicRef("pk2 ref")
 		if err != nil {
-			return nil, fmt.Errorf("error decoding pk2 ref: %w", err)
+			return nil, err
 		}
 		pk2b, ok := d.pk2Table.fetch(id)
 		if !ok {
@@ -439,27 +526,27 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		out = append(out, pk2b.pk[:]...)
 		out = append(out, pk2b.sig[:]...)
 	} else { // literal
-		if pos+96 > len(src) {
-			return nil, errors.New("truncated pk2 bundle")
+		pk2Bundle, err := r.readFixed(pkSize+sigSize, "pk2 bundle")
+		if err != nil {
+			return nil, err
 		}
 		var pk2b pkSigPair
-		copy(pk2b.pk[:], src[pos:pos+32])
-		copy(pk2b.sig[:], src[pos+32:pos+96])
+		copy(pk2b.pk[:], pk2Bundle[:pkSize])
+		copy(pk2b.sig[:], pk2Bundle[pkSize:])
 		out = append(out, pk2b.pk[:]...)
 		out = append(out, pk2b.sig[:]...)
 		_ = d.pk2Table.insert(pk2b, pk2b.hash())
-		pos += 96
 	}
 
 	// sig.s: pass through
-	if pos+64 > len(src) {
-		return nil, errors.New("truncated sig.s")
+	sigs, err := r.readFixed(sigSize, "sig.s")
+	if err != nil {
+		return nil, err
 	}
-	out = append(out, src[pos:pos+64]...)
-	pos += 64
+	out = append(out, sigs...)
 
-	if pos != len(src) {
-		return nil, fmt.Errorf("length mismatch: expected %d, got %d", len(src), pos)
+	if r.pos != len(src) {
+		return nil, fmt.Errorf("length mismatch: expected %d, got %d", len(src), r.pos)
 	}
 	return out, nil
 }

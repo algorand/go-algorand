@@ -376,21 +376,9 @@ func (d *StatelessDecoder) varuint(fieldName string) error {
 		return fmt.Errorf("not enough data to read varuint marker for field %s", fieldName)
 	}
 	marker := d.src[d.pos] // read msgpack varuint marker
-	moreBytes := 0
-	switch marker {
-	case msgpUint8:
-		moreBytes = 1
-	case msgpUint16:
-		moreBytes = 2
-	case msgpUint32:
-		moreBytes = 4
-	case msgpUint64:
-		moreBytes = 8
-	default: // fixint uses a single byte for marker+value
-		if !isMsgpFixint(marker) {
-			return fmt.Errorf("not a fixint for field %s, got %d", fieldName, marker)
-		}
-		moreBytes = 0
+	moreBytes, err := msgpVaruintRemaining(marker)
+	if err != nil {
+		return fmt.Errorf("invalid varuint marker %d for field %s: %w", marker, fieldName, err)
 	}
 
 	if d.pos+1+moreBytes > len(d.src) {

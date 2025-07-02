@@ -17,8 +17,11 @@
 package vpack
 
 import (
+	"math"
+	"reflect"
 	"slices"
 	"testing"
+	"unsafe"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
@@ -211,39 +214,49 @@ func TestStatefulRndDelta(t *testing.T) {
 	}
 }
 
+func TestStatefulEncodeRef(t *testing.T) {
+	// ensure lruTableReferenceID can fit in uint16 encoding used in appendDynamicRef
+	partitiontest.PartitionTest(t)
+	var id lruTableReferenceID
+	require.Equal(t, uintptr(2), unsafe.Sizeof(id), "lruTableReferenceID should occupy 2 bytes (uint16)")
+	require.Equal(t, reflect.Uint16, reflect.TypeOf(id).Kind(), "lruTableReferenceID underlying kind should be uint16")
+	maxID := lruTableReferenceID((lruTableSize-1)<<1 | 1) // last bucket, last slot
+	require.LessOrEqual(t, uint32(maxID), uint32(math.MaxUint16))
+}
+
 func TestStatefulDecoderErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	fullVote := slices.Concat(
 		// Header with all hdr0 optional bits set, but no hdr1 bits
 		[]byte{byte(bitPer | bitDig | bitStep | bitEncDig | bitOper | bitOprop), 0x00},
-		make([]byte, 80),               // Credential prefix (80 bytes)
+		make([]byte, pfSize),           // Credential prefix (80 bytes)
 		[]byte{msgpUint32},             // Per field marker
 		[]byte{0x01, 0x02, 0x03, 0x04}, // Per value (4 bytes)
-		make([]byte, 32),               // Digest (32 bytes)
-		make([]byte, 32),               // EncDig (32 bytes)
+		make([]byte, digestSize),       // Digest (32 bytes)
+		make([]byte, digestSize),       // EncDig (32 bytes)
 		[]byte{msgpUint32},             // Oper field marker
 		[]byte{0x01, 0x02, 0x03, 0x04}, // Oper value (4 bytes)
-		make([]byte, 32),               // Oprop (32 bytes)
+		make([]byte, digestSize),       // Oprop (32 bytes)
 		[]byte{msgpUint32},             // Round marker (msgpack marker)
 		[]byte{0x01, 0x02, 0x03, 0x04}, // Round value (4 bytes)
-		make([]byte, 32),               // Sender (32 bytes)
+		make([]byte, digestSize),       // Sender (32 bytes)
 		[]byte{msgpUint32},             // Step field marker
 		[]byte{0x01, 0x02, 0x03, 0x04}, // Step value (4 bytes)
-		make([]byte, 96),               // pk + p1s (96 bytes: 32 for pk, 64 for p1s)
-		make([]byte, 96),               // pk2 + p2s (96 bytes: 32 for pk2, 64 for p2s)
-		make([]byte, 64),               // sig.s (64 bytes)
+		make([]byte, pkSize+sigSize),   // pk + p1s (96 bytes: 32 for pk, 64 for p1s)
+		make([]byte, pkSize+sigSize),   // pk2 + p2s (96 bytes: 32 for pk2, 64 for p2s)
+		make([]byte, sigSize),          // sig.s (64 bytes)
 	)
 
 	refVote := slices.Concat(
 		// Header with all hdr1 reference bits set, but no hdr0 bits
 		[]byte{0x00, byte(hdr1SndRef | hdr1PkRef | hdr1Pk2Ref | hdr1RndLiteral)},
-		make([]byte, 80),   // Credential prefix
-		[]byte{0x07},       // Round literal (fixint 7)
-		[]byte{0x01, 0x02}, // Sender ref ID
-		[]byte{0x03, 0x04}, // pk ref ID
-		[]byte{0x05, 0x06}, // pk2 ref ID
-		make([]byte, 64),   // sig.s
+		make([]byte, pfSize),  // Credential prefix
+		[]byte{0x07},          // Round literal (fixint 7)
+		[]byte{0x01, 0x02},    // Sender ref ID
+		[]byte{0x03, 0x04},    // pk ref ID
+		[]byte{0x05, 0x06},    // pk2 ref ID
+		make([]byte, sigSize), // sig.s
 	)
 
 	for _, tc := range []struct {
@@ -269,15 +282,15 @@ func TestStatefulDecoderErrors(t *testing.T) {
 		{"truncated pk2 bundle", fullVote[:334]},
 		{"truncated sig.s", fullVote[:422]},
 		// Reference ID decoding errors
-		{"error decoding snd ref", refVote[:84]},
-		{"error decoding pk ref", refVote[:86]},
-		{"error decoding pk2 ref", refVote[:88]},
+		{"truncated snd ref", refVote[:84]},
+		{"truncated pk ref", refVote[:86]},
+		{"truncated pk2 ref", refVote[:88]},
 		{"bad sender ref", slices.Concat(refVote[:83], []byte{0xFF, 0xFF})},
 		{"bad pk ref", slices.Concat(refVote[:85], []byte{0xFF, 0xFF})},
 		{"bad pk2 ref", slices.Concat(refVote[:87], []byte{0xFF, 0xFF})},
 		{"bad proposal ref", slices.Concat(
 			[]byte{0x00, byte(3 << hdr1PropShift)}, // proposal reference ID 3 (invalid, StatefulDecoder is empty)
-			make([]byte, 80),                       // pf
+			make([]byte, pfSize),                   // pf
 			[]byte{0x01},                           // round (fixint 1)
 		)},
 		{"length mismatch: expected", slices.Concat(fullVote, []byte{0xFF, 0xFF})},
@@ -313,6 +326,122 @@ func TestStatefulEncoderErrors(t *testing.T) {
 	compressedBuf, err := enc.Compress(nil, statelessBuf)
 	require.NoError(t, err)
 	require.Greater(t, len(compressedBuf), 0)
+
+	// Test bounds checking errors
+	testCases := []struct {
+		name string
+		buf  []byte
+		want string
+	}{
+		{
+			name: "truncated pf",
+			buf:  []byte{0x00, 0x00}, // header only, no pf
+			want: "truncated pf",
+		},
+		{
+			name: "truncated r.per marker",
+			buf:  append([]byte{byte(bitPer), 0x00}, make([]byte, pfSize)...), // header + pf, no per marker
+			want: "truncated r.per marker",
+		},
+		{
+			name: "truncated r.per",
+			buf:  append([]byte{byte(bitPer), 0x00}, append(make([]byte, pfSize), msgpUint32)...), // header + pf + per marker, no per data
+			want: "truncated r.per",
+		},
+		{
+			name: "truncated dig",
+			buf:  append([]byte{byte(bitDig), 0x00}, make([]byte, pfSize)...), // header + pf, no dig
+			want: "truncated dig",
+		},
+		{
+			name: "truncated encdig",
+			// When bitDig is not set but bitEncDig is set, we expect encdig directly after pf
+			buf:  append([]byte{byte(bitEncDig), 0x00}, make([]byte, pfSize)...), // header + pf, no encdig
+			want: "truncated encdig",
+		},
+		{
+			name: "truncated oper marker",
+			buf:  append([]byte{byte(bitOper), 0x00}, make([]byte, pfSize)...), // header + pf, no oper marker
+			want: "truncated oper marker",
+		},
+		{
+			name: "truncated oper",
+			buf:  append([]byte{byte(bitOper), 0x00}, append(make([]byte, pfSize), msgpUint32)...), // header + pf + oper marker, no oper data
+			want: "truncated oper",
+		},
+		{
+			name: "truncated oprop",
+			buf:  append([]byte{byte(bitOprop), 0x00}, make([]byte, pfSize)...), // header + pf, no oprop
+			want: "truncated oprop",
+		},
+		{
+			name: "truncated rnd marker",
+			buf:  append([]byte{0x00, 0x00}, make([]byte, pfSize)...), // header + pf, no rnd marker
+			want: "truncated rnd marker",
+		},
+		{
+			name: "truncated rnd",
+			buf:  append([]byte{0x00, 0x00}, append(make([]byte, pfSize), msgpUint32)...), // header + pf + rnd marker, no rnd data
+			want: "truncated rnd",
+		},
+		{
+			name: "truncated sender",
+			buf:  append([]byte{0x00, 0x00}, append(make([]byte, pfSize), 0x07)...), // header + pf + rnd (fixint), no sender
+			want: "truncated sender",
+		},
+		{
+			name: "truncated step marker",
+			buf:  append([]byte{byte(bitStep), 0x00}, append(make([]byte, pfSize), append([]byte{0x07}, make([]byte, digestSize)...)...)...), // header + pf + rnd + sender, no step marker
+			want: "truncated step marker",
+		},
+		{
+			name: "truncated step",
+			buf:  append([]byte{byte(bitStep), 0x00}, append(make([]byte, pfSize), append([]byte{0x07}, append(make([]byte, digestSize), msgpUint32)...)...)...), // header + pf + rnd + sender + step marker, no step data
+			want: "truncated step",
+		},
+		{
+			name: "truncated pk bundle",
+			buf:  append([]byte{0x00, 0x00}, append(make([]byte, pfSize), append([]byte{0x07}, make([]byte, digestSize)...)...)...), // header + pf + rnd + sender, no pk bundle
+			want: "truncated pk bundle",
+		},
+		{
+			name: "truncated pk2 bundle",
+			buf:  append([]byte{0x00, 0x00}, append(make([]byte, pfSize), append([]byte{0x07}, append(make([]byte, digestSize), make([]byte, pkSize+sigSize)...)...)...)...), // header + pf + rnd + sender + pk bundle, no pk2 bundle
+			want: "truncated pk2 bundle",
+		},
+		{
+			name: "truncated sig.s",
+			buf:  append([]byte{0x00, 0x00}, append(make([]byte, pfSize), append([]byte{0x07}, append(make([]byte, digestSize), append(make([]byte, pkSize+sigSize), make([]byte, pkSize+sigSize)...)...)...)...)...), // everything except sig.s
+			want: "truncated sig.s",
+		},
+		{
+			name: "invalid r.per marker",
+			buf:  append([]byte{byte(bitPer), 0x00}, append(make([]byte, pfSize), 0xFF)...), // header + pf + invalid per marker
+			want: "invalid r.per marker",
+		},
+		{
+			name: "invalid oper marker",
+			buf:  append([]byte{byte(bitOper), 0x00}, append(make([]byte, pfSize), 0xFF)...), // header + pf + invalid oper marker
+			want: "invalid oper marker",
+		},
+		{
+			name: "invalid rnd marker",
+			buf:  append([]byte{0x00, 0x00}, append(make([]byte, pfSize), 0xFF)...), // header + pf + invalid rnd marker
+			want: "invalid rnd marker",
+		},
+		{
+			name: "invalid step marker",
+			buf:  append([]byte{byte(bitStep), 0x00}, append(make([]byte, pfSize), append([]byte{0x07}, append(make([]byte, digestSize), 0xFF)...)...)...), // header + pf + rnd + sender + invalid step marker
+			want: "invalid step marker",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := enc.Compress(nil, tc.buf)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
 }
 
 func TestStatefulEncoderHeaderBits(t *testing.T) {

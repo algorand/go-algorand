@@ -17,7 +17,6 @@
 package vpack
 
 import (
-	"encoding/binary"
 	"fmt"
 )
 
@@ -60,59 +59,27 @@ const (
 func isMsgpFixint(b byte) bool {
 	return b>>7 == 0
 }
-func msgpVaruintLen(first byte) int {
+
+// msgpVaruintRemaining looks at the first byte of a msgpack-encoded variable-length unsigned integer,
+// and returns the number of bytes remaining in the encoded value (not including the first byte).
+func msgpVaruintRemaining(first byte) (int, error) {
 	switch first {
 	case msgpUint8:
-		return 2
+		return 1, nil
 	case msgpUint16:
-		return 3
+		return 2, nil
 	case msgpUint32:
-		return 5
+		return 4, nil
 	case msgpUint64:
-		return 9
-	default: // fixint
-		return 1
-	}
-}
-func decodeMsgpVaruint(buf []byte) uint64 {
-	switch buf[0] {
-	case msgpUint8:
-		return uint64(buf[1])
-	case msgpUint16:
-		return uint64(binary.BigEndian.Uint16(buf[1:]))
-	case msgpUint32:
-		return uint64(binary.BigEndian.Uint32(buf[1:]))
-	case msgpUint64:
-		return binary.BigEndian.Uint64(buf[1:])
-	default: // fixint
-		return uint64(buf[0])
+		return 8, nil
+	default:
+		if !isMsgpFixint(first) {
+			return 0, fmt.Errorf("msgpVaruintLen: expected fixint or varuint tag, got 0x%02x", first)
+		}
+		return 0, nil
 	}
 }
 
-// msg-pack varuint encoder (≤ 64-bit)
-func appendMsgpVaruint(dst []byte, v uint64) []byte {
-	switch {
-	case v < 0x80: // fixint
-		return append(dst, byte(v))
-	case v <= 0xff:
-		return append(dst, msgpUint8, byte(v))
-	case v <= 0xffff:
-		var tmp [3]byte
-		tmp[0] = msgpUint16
-		binary.BigEndian.PutUint16(tmp[1:], uint16(v))
-		return append(dst, tmp[:]...)
-	case v <= 0xffffffff:
-		var tmp [5]byte
-		tmp[0] = msgpUint32
-		binary.BigEndian.PutUint32(tmp[1:], uint32(v))
-		return append(dst, tmp[:]...)
-	default:
-		var tmp [9]byte
-		tmp[0] = msgpUint64
-		binary.BigEndian.PutUint64(tmp[1:], v)
-		return append(dst, tmp[:]...)
-	}
-}
 
 // msgpVoteParser provides a zero-allocation msgpVoteParser for vote messages.
 type msgpVoteParser struct {
@@ -225,23 +192,13 @@ func (p *msgpVoteParser) readUintBytes() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// fixint is a single byte containing marker and value
-	if isMsgpFixint(b) {
-		return p.data[startPos : startPos+1], nil
+	dataSize, err := msgpVaruintRemaining(b)
+	if err != nil {
+		return nil, err
 	}
-	// otherwise, we expect a tag byte followed by the value
-	var dataSize int
-	switch b {
-	case msgpUint8:
-		dataSize = 1
-	case msgpUint16:
-		dataSize = 2
-	case msgpUint32:
-		dataSize = 4
-	case msgpUint64:
-		dataSize = 8
-	default:
-		return nil, fmt.Errorf("expected uint tag, got 0x%02x", b)
+	// fixint is a single byte containing marker and value
+	if dataSize == 0 {
+		return p.data[startPos : startPos+1], nil
 	}
 	if err := p.ensureBytes(dataSize); err != nil {
 		return nil, err

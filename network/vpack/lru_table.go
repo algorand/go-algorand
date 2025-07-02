@@ -52,8 +52,8 @@ type lruTableReferenceID uint16
 // pkSigPair is a 32-byte public key + 64-byte signature
 // used for the LRU tables for p+p1s and p2+p2s.
 type pkSigPair struct {
-	pk  [32]byte
-	sig [64]byte
+	pk  [pkSize]byte
+	sig [sigSize]byte
 }
 
 func (p *pkSigPair) hash() uint64 {
@@ -66,7 +66,7 @@ func (p *pkSigPair) hash() uint64 {
 }
 
 // addressValue is a 32-byte address used for the LRU table for snd.
-type addressValue [32]byte
+type addressValue [digestSize]byte
 
 func (v *addressValue) hash() uint64 {
 	// addresses are fairly uniformly distributed, so we can use a simple XOR
