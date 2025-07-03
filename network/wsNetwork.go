@@ -804,7 +804,6 @@ func (wn *WebsocketNetwork) Stop() {
 	if err != nil {
 		wn.log.Warnf("problem shutting down %s: %v", listenAddr, err)
 	}
-	close(wn.meshUpdateRequests)
 	wn.meshStrategy.stop()
 	wn.wg.Wait()
 	if wn.listener != nil {
@@ -2266,8 +2265,8 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 
 	addresses := make([]string, 0, len(phonebookAddresses))
 	for _, a := range phonebookAddresses {
-		_, err := addr.ParseHostOrURL(a)
-		if err == nil {
+		_, err0 := addr.ParseHostOrURL(a)
+		if err0 == nil {
 			addresses = append(addresses, a)
 		}
 	}

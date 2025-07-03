@@ -159,6 +159,7 @@ func (m *genericMeshStrategy) stop() {
 	m.wg.Wait()
 }
 
+// MeshStrategyCreator is an interface for creating mesh strategies.
 type MeshStrategyCreator interface {
 	create(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (meshStrategy, error)
 }
@@ -207,14 +208,20 @@ func (c *HybridRelayMeshStrategyCreator) create(ctx context.Context, meshUpdateR
 	c.wg.Add(2)
 	go func() {
 		defer c.wg.Done()
-		for req := range meshUpdateRequests {
+		select {
+		case <-ctx.Done():
+			return
+		case req := <-meshUpdateRequests:
 			c.out <- req
 		}
 	}()
 
 	go func() {
 		defer c.wg.Done()
-		for req := range c.p2pMeshUpdateRequests {
+		select {
+		case <-ctx.Done():
+			return
+		case req := <-c.p2pMeshUpdateRequests:
 			c.out <- req
 		}
 	}()
