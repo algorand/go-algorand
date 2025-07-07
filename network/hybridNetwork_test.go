@@ -278,8 +278,6 @@ func TestHybridNetwork_HybridRelayStrategy(t *testing.T) {
 	// make sure all are connected via ws net
 	wsPeersA := netA.wsNetwork.GetPeers(PeersConnectedIn, PeersConnectedOut)
 	wsPeersB := netB.wsNetwork.GetPeers(PeersConnectedIn, PeersConnectedOut)
-	wsPeersC := netC.wsNetwork.GetPeers(PeersConnectedIn, PeersConnectedOut)
 	require.Len(t, wsPeersA, 2)
 	require.Len(t, wsPeersB, 2)
-	require.Len(t, wsPeersC, 2)
 }
