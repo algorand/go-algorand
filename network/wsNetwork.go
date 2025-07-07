@@ -485,7 +485,7 @@ func (wn *WebsocketNetwork) RegisterHTTPHandlerFunc(path string, handler func(ht
 // RequestConnectOutgoing tries to actually do the connect to new peers.
 // `replace` drop all connections first and find new peers.
 func (wn *WebsocketNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
-	request := meshRequest{disconnect: false}
+	request := meshRequest{}
 	if quit != nil {
 		request.done = make(chan struct{})
 	}
@@ -605,7 +605,6 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.meshStrategy, err = meshCreator.create(
 		wn.ctx, wn.meshUpdateRequests, meshThreadInterval,
 		withMeshNetMesh(wn.meshThreadInner),
-		withMeshNetDisconnect(wn.DisconnectPeers),
 		withMeshPeerStatReport(func() {
 			wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
 		}),
@@ -714,7 +713,7 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.identityScheme = NewIdentityChallengeScheme(NetIdentityDedupNames(wn.config.PublicAddress))
 	}
 
-	wn.meshUpdateRequests <- meshRequest{false, nil}
+	wn.meshUpdateRequests <- meshRequest{}
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
 	}
@@ -1556,8 +1555,7 @@ func (wn *WebsocketNetwork) connectedForIP(host string) (totalConnections int) {
 const cliqueResolveInterval = 5 * time.Minute
 
 type meshRequest struct {
-	disconnect bool
-	done       chan struct{}
+	done chan struct{}
 }
 
 func (wn *WebsocketNetwork) meshThreadInner() bool {

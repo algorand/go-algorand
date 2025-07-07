@@ -359,7 +359,6 @@ func (n *P2PNetwork) setup() error {
 		n.ctx, n.meshUpdateRequests, meshThreadInterval,
 		withMeshExpJitterBackoff(),
 		withMeshNetMesh(n.meshThreadInner),
-		withMeshNetDisconnect(n.DisconnectPeers),
 		withMeshPeerStatReport(func() {
 			n.peerStater.sendPeerConnectionsTelemetryStatus(n)
 		}),
@@ -415,7 +414,7 @@ func (n *P2PNetwork) Start() error {
 	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n, "network", "P2PNetwork")
 
-	n.meshUpdateRequests <- meshRequest{false, nil}
+	n.meshUpdateRequests <- meshRequest{}
 	n.meshStrategy.start()
 
 	if n.capabilitiesDiscovery != nil {
@@ -636,7 +635,7 @@ func (n *P2PNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.Resp
 // `replace` optionally drops existing connections before making new ones.
 // `quit` chan allows cancellation.
 func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
-	request := meshRequest{disconnect: false}
+	request := meshRequest{}
 	if quit != nil {
 		request.done = make(chan struct{})
 	}

@@ -45,7 +45,6 @@ type genericMeshStrategy struct {
 type meshConfig struct {
 	backoff        backoff.BackoffStrategy
 	netMesh        func() bool
-	netDisconnect  func()
 	peerStatReport func()
 	closer         func()
 }
@@ -72,11 +71,6 @@ func withMeshNetMesh(netMesh func() bool) meshStrategyOption {
 		cfg.netMesh = netMesh
 	}
 }
-func withMeshNetDisconnect(netDisconnect func()) meshStrategyOption {
-	return func(cfg *meshConfig) {
-		cfg.netDisconnect = netDisconnect
-	}
-}
 func withMeshPeerStatReport(peerStatReport func()) meshStrategyOption {
 	return func(cfg *meshConfig) {
 		cfg.peerStatReport = peerStatReport
@@ -96,9 +90,6 @@ func newGenericMeshStrategy(ctx context.Context, meshUpdateRequests chan meshReq
 	if cfg.netMesh == nil {
 		return nil, errors.New("mesh function is not set")
 	}
-	if cfg.netDisconnect == nil {
-		return nil, errors.New("disconnect function is not set")
-	}
 
 	return &genericMeshStrategy{
 		ctx:                ctx,
@@ -117,15 +108,10 @@ func (m *genericMeshStrategy) meshThread() {
 		var request meshRequest
 		select {
 		case <-timer.C:
-			request.disconnect = false
 			request.done = nil
 		case request = <-m.meshUpdateRequests:
 		case <-m.ctx.Done():
 			return
-		}
-
-		if request.disconnect {
-			m.netDisconnect()
 		}
 
 		hasPeers := m.netMesh()
@@ -194,11 +180,6 @@ func (c *HybridRelayMeshStrategyCreator) create(ctx context.Context, meshUpdateR
 	if err != nil {
 		return nil, err
 	}
-	wsNetDisconnect := strategy.netDisconnect
-	strategy.netDisconnect = func() {
-		wsNetDisconnect()
-		c.p2pMeshOptions.netDisconnect()
-	}
 	wsNetPeerStatReport := strategy.peerStatReport
 	strategy.peerStatReport = func() {
 		wsNetPeerStatReport()
@@ -236,9 +217,6 @@ func newHybridRelayMeshStrategy(ctx context.Context, meshUpdateRequests chan mes
 	}
 	if cfg.netMesh == nil {
 		return nil, errors.New("mesh function is not set")
-	}
-	if cfg.netDisconnect == nil {
-		return nil, errors.New("disconnect function is not set")
 	}
 
 	return &hybridRelayMeshStrategy{
@@ -279,9 +257,6 @@ func (c *dummyMeshCreator) create(ctx context.Context, meshUpdateRequests chan m
 	}
 	if cfg.netMesh == nil {
 		return nil, errors.New("mesh function is not set")
-	}
-	if cfg.netDisconnect == nil {
-		return nil, errors.New("disconnect function is not set")
 	}
 	c.mc = cfg
 	c.meshUpdateRequests = meshUpdateRequests
