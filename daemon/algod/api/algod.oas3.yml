@@ -2814,8 +2814,8 @@
           },
           "idx": {
             "description": "Index of the transaction in the block's payset.",
-            "format": "uint64",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           },
           "proof": {
             "description": "Proof of transaction membership.",
@@ -2831,8 +2831,8 @@
           },
           "treedepth": {
             "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-            "format": "uint64",
-            "type": "integer"
+            "type": "integer",
+            "x-go-type": "uint64"
           }
         },
         "required": [
@@ -3963,9 +3963,10 @@
             "in": "query",
             "name": "max",
             "schema": {
-              "format": "uint64",
-              "type": "integer"
-            }
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
           }
         ],
         "responses": {

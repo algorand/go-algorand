@@ -1756,7 +1756,7 @@
           },
           {
             "type": "integer",
-            "format": "uint64",
+            "x-go-type": "uint64",
             "description": "Max number of box names to return. If max is not set, or max == 0, returns all box-names.",
             "name": "max",
             "in": "query"
@@ -4079,12 +4079,12 @@
         "treedepth": {
           "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
           "type": "integer",
-          "format": "uint64"
+          "x-go-type": "uint64"
         },
         "idx": {
           "description": "Index of the transaction in the block's payset.",
           "type": "integer",
-          "format": "uint64"
+          "x-go-type": "uint64"
         },
         "hashtype": {
           "type": "string",
