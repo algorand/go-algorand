@@ -143,6 +143,9 @@ func (m *genericMeshStrategy) start() {
 
 func (m *genericMeshStrategy) stop() {
 	m.wg.Wait()
+	if m.closer != nil {
+		m.closer()
+	}
 }
 
 // MeshStrategyCreator is an interface for creating mesh strategies.
