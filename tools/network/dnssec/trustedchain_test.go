@@ -274,7 +274,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	a.Contains(err.Error(), "failed to verify test. KSK against digest in parent DS")
 }
 
-func TestEnsureTrustChainFailures(t *testing.T) {
+func TestEnsureTrustChainError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)

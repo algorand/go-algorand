@@ -1379,7 +1379,7 @@ int 1
 	})
 }
 
-func TestCreateOldAppFails(t *testing.T) {
+func TestCreateOldAppErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
