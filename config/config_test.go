@@ -773,7 +773,7 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 				PublicAddress:       test.publicAddress,
 			}
 			err := c.ValidateP2PHybridConfig()
-			require.Equal(t, test.err, err != nil, fmt.Sprintf("%s: %v => %v", name, test, err))
+			require.Equal(t, test.err, err != nil, "%s: %v => %v", name, test, err)
 		})
 	}
 }

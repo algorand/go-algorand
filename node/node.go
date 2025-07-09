@@ -210,7 +210,7 @@ recreateNetwork:
 	if cfg.EnableP2PHybridMode {
 		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
 		if err != nil {
-			if !errors.As(err, &config.P2PHybridConfigError{}) {
+			if _, ok := err.(config.P2PHybridConfigError); !ok {
 				log.Errorf("could not create hybrid p2p node: %v", err)
 				return nil, err
 			}
@@ -218,7 +218,11 @@ recreateNetwork:
 			cfg.EnableP2PHybridMode = false
 
 			// indicate we need to start logging the error into the log periodically
-			node.hybridError = fmt.Sprintf("could not create hybrid p2p node: %v", err)
+			fallbackNetName := "WS"
+			if cfg.EnableP2P {
+				fallbackNetName = "P2P"
+			}
+			node.hybridError = fmt.Sprintf("could not create hybrid p2p node: %v. Falling back to %s network", err, fallbackNetName)
 			log.Error(node.hybridError)
 
 			goto recreateNetwork

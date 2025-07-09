@@ -1381,5 +1381,7 @@ func TestNodeMakeFullHybrid(t *testing.T) {
 	require.IsType(t, &network.WebsocketNetwork{}, node.net)
 
 	node.Stop()
-	require.Contains(t, buf.String(), "P2PHybridMode requires both NetAddress")
+	messages := buf.String()
+	require.Contains(t, messages, "could not create hybrid p2p node: P2PHybridMode requires both NetAddress")
+	require.Contains(t, messages, "Falling back to WS network")
 }
