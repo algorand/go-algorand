@@ -128,6 +128,7 @@ var passThruSource = main(`
 `)
 
 const boxVersion = 36
+const boxQuotaBumpVersion = 41
 
 func boxFee(p config.ConsensusParams, nameAndValueSize uint64) uint64 {
 	return p.BoxFlatMinBalance + p.BoxByteMinBalance*(nameAndValueSize)
@@ -539,16 +540,20 @@ func TestBoxIOBudgets(t *testing.T) {
 			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (1024) exceeded")
-		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (1024) exceeded")
+			call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
 			"write budget (2048) exceeded")
 		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (3072) exceeded")
-		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are 4 box refs
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (3072) exceeded")
+			call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		}
+		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are enough box refs
 			"below min") // big box would need more balance
 		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
 			"write budget (4096) exceeded")
@@ -572,11 +577,10 @@ func TestBoxIOBudgets(t *testing.T) {
 		dl.txgroup("", &fundApp, create)
 
 		// Now that we've created a 4,096 byte box, test READ budget
-		// It works at the start, because call still has 4 brs.
+		// It works at the start, because call still has enough brs.
 		dl.txn(call.Args("check", "x", "\x00"))
-		call.Boxes = call.Boxes[:3]
-		dl.txn(call.Args("check", "x", "\x00"),
-			"box read budget (3072) exceeded")
+		call.Boxes = call.Boxes[:len(call.Boxes)-1] // remove one ref
+		dl.txn(call.Args("check", "x", "\x00"), "box read budget")
 
 		// Give a budget over 32768, confirm failure anyway
 		empties := [32]transactions.BoxRef{}
@@ -603,7 +607,7 @@ func TestBoxInners(t *testing.T) {
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 
-		boxID := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
+		boxID := dl.fundedApp(addrs[0], 4_000_000, boxAppSource)  // there are some big boxes made
 		passID := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
 		call := txntest.Txn{
 			Type:          "appl",
@@ -621,11 +625,19 @@ func TestBoxInners(t *testing.T) {
 		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
 
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (1024) exceeded")
-		dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
-		call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
-		dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (1024) exceeded")
+			dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
+			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+			dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+		} else {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (2048) exceeded")
+			dl.txn(call.Args("create", "x", "\x08\x00")) // 2048
+			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+			dl.txn(call.Args("create", "y", "\x10\x00")) // 4096
+		}
 
 		require.Len(t, call.Boxes, 2)
 		setX := call.Args("set", "x", "A")
