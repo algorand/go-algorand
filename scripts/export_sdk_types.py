@@ -202,8 +202,6 @@ if __name__ == "__main__":
     export_type("HoldingRef", "data/transactions/application.go", "applications")
     export_type("LocalsRef", "data/transactions/application.go", "applications")
     export_type("AppIndex", "data/basics/userBalance.go", "applications")
-    export_type("AppIndex", "data/basics/userBalance.go", "applications")
-    export_type("AppIndex", "data/basics/userBalance.go", "applications")
 
     # Block
     export_type("BlockHeader", "data/bookkeeping/block.go", "block")

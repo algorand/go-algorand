@@ -351,18 +351,17 @@ func (br BoxRef) Empty() bool {
 // Resolve looks up the referenced app and returns it with the name. 0 is
 // returned if the App index is 0, meaning "current app".
 func (br BoxRef) Resolve(access []ResourceRef) (basics.AppIndex, string, error) {
-	app := basics.AppIndex(0)
 	switch {
 	case br.Index == 0:
 		return 0, string(br.Name), nil
 	case br.Index <= uint64(len(access)): // 1-based
-		app = access[br.Index-1].App
-		if app == 0 {
-			return 0, "", fmt.Errorf("box Index reference %d is not an App", br.Index)
+		rr := access[br.Index-1]
+		if app := rr.App; app != 0 {
+			return app, string(br.Name), nil
 		}
-		return app, string(br.Name), nil
+		return 0, "", fmt.Errorf("box Index reference %d is not an App", br.Index)
 	default:
-		return app, "", fmt.Errorf("box Index %d outside tx.Access", br.Index)
+		return 0, "", fmt.Errorf("box Index %d outside tx.Access", br.Index)
 	}
 }
 
