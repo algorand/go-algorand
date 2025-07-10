@@ -1454,7 +1454,7 @@ func TestAssetDisambiguation(t *testing.T) {
 
 				tx.ForeignAssets = []basics.AssetIndex{1, 256}
 				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-					// direct use of assets IDs id disallowed, so 1 is still the 1th slot (256)
+					// direct use of assets IDs is disallowed, so 1 is still the 1th slot (256)
 					testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
 				} else {
 					// Since 1 IS available, 1 means the assetid=1, not the 1th slot
