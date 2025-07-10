@@ -211,11 +211,10 @@ appl "transfer(uint64):void" --app-arg="int:100" --foreign-asset="$ASSETID" --fr
 [ $(asset_bal "$USER2") = 900 ]
 [ $(asset_bal "$SMALL") = 998100 ]
 
-# opt in more assets, show that --access works on the first
 ASSETID2=$(asset-create 1000000  --name "alpha" --unitname "a"  | asset-id)
-appl "optin():void" --app-arg "int:$ASSETID2" --foreign-asset="$ASSETID2" --from="$SMALL" || exit 1
+appl "optin():void" --foreign-asset="$ASSETID2" --from="$SMALL"
 ASSETID3=$(asset-create 1000000  --name "beta" --unitname "b"  | asset-id)
-appl "optin():void" --app-arg "int:$ASSETID3" --foreign-asset="$ASSETID3" --from="$SMALL"
+appl "optin():void" --foreign-asset="$ASSETID3" --from="$SMALL"
 
 IDs="$ASSETID
 $ASSETID2
