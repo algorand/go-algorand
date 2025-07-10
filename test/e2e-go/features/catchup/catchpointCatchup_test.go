@@ -285,7 +285,7 @@ func getFixture(consensusParams *config.ConsensusParams) *fixtures.RestClientFix
 	return &fixture
 }
 
-func TestCatchpointCatchupFailure(t *testing.T) {
+func TestCatchpointCatchupErr(t *testing.T) {
 	// Overview of this test:
 	// Start a two-node network (primary has 100%, using has 0%)
 	// create a web proxy, have the using node use it as a peer, blocking all requests for round #2. ( and allowing everything else )
