@@ -108,7 +108,7 @@ def sdkize(input):
     input = input.replace("OneTimeSignatureVerifier", "VotePK")
     input = input.replace("VRFVerifier", "VRFPK")
     input = input.replace("merklesignature.Commitment", "MerkleVerifier")
-    # appl - Someone had the bright idea to change the names of this fields (and the type) in the SDK.
+    # appl - Someone had the bright idea to change the names of these fields (and the type) in the SDK.
     input = input.replace("Boxes []BoxRef", "BoxReferences []BoxReference")
     input = re.sub("Box\\s+BoxRef", "Box BoxReference", input)
 
