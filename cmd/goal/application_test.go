@@ -141,6 +141,7 @@ func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 func TestCliAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+	a := require.New(t)
 
 	type testCase struct {
 		address string
@@ -156,13 +157,11 @@ func TestCliAddress(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.address, func(t *testing.T) {
-			if tc.valid {
-				value := cliAddress(tc.address)
-				require.Equal(t, tc.value, value)
-			} else {
-				require.Panics(t, func() { cliAddress(tc.address) })
-			}
-		})
+		if tc.valid {
+			value := cliAddress(tc.address)
+			a.Equal(tc.value, value)
+		} else {
+			a.Panics(func() { cliAddress(tc.address) })
+		}
 	}
 }
