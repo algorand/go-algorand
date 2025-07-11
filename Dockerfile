@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 as builder
+FROM ubuntu:24.04 as builder
 
 ARG GO_VERSION="1.23.9"
 

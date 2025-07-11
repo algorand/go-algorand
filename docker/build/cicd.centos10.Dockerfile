@@ -1,6 +1,6 @@
 ARG ARCH="amd64"
 
-FROM quay.io/centos/centos:stream9
+FROM quay.io/centos/centos:stream10
 ARG GOLANG_VERSION
 ARG ARCH="amd64"
 RUN dnf install -y epel-release epel-next-release && dnf config-manager --set-enabled crb && \
