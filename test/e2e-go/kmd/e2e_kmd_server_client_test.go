@@ -45,7 +45,7 @@ func TestServerStartsStopsSuccessfully(t *testing.T) {
 	a.NoError(err)
 }
 
-func TestBadAuthFails(t *testing.T) {
+func TestBadAuthErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 

@@ -1285,7 +1285,7 @@ int 1`,
 	}
 }
 
-func TestSimulateTransactionVerificationFailure(t *testing.T) {
+func TestSimulateTransactionVerificationErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

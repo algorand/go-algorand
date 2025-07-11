@@ -915,7 +915,7 @@ func TestEnsureAndResolveGenesisDirs_migrate(t *testing.T) {
 	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite-wal"))
 }
 
-func TestEnsureAndResolveGenesisDirs_migrateCrashFail(t *testing.T) {
+func TestEnsureAndResolveGenesisDirs_migrateCrashErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := GetDefaultLocal()
@@ -947,7 +947,7 @@ func TestEnsureAndResolveGenesisDirs_migrateCrashFail(t *testing.T) {
 	require.NoFileExists(t, filepath.Join(hotDir, "crash.sqlite-shm"))
 }
 
-func TestEnsureAndResolveGenesisDirs_migrateSPFail(t *testing.T) {
+func TestEnsureAndResolveGenesisDirs_migrateSPErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := GetDefaultLocal()

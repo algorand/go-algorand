@@ -562,7 +562,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 		return true
 	}
 
-	// test expected failuire
+	// test expected failure
 	consensusParams.InitialRewardsRateCalculation = false
 	require.False(t, runTest())
 
@@ -658,7 +658,7 @@ func TestNextRewardsRateWithFix(t *testing.T) {
 	}
 }
 
-func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
+func TestNextRewardsRateErrsWithoutFix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

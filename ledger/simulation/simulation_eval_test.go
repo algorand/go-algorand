@@ -2647,7 +2647,7 @@ byte "hello"; log; int 1`,
 	})
 }
 
-func TestFailingLogicSigPCandStack(t *testing.T) {
+func TestInvalidLogicSigPCandStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2768,7 +2768,7 @@ byte "hello"; log; int 1`,
 	})
 }
 
-func TestFailingApp(t *testing.T) {
+func TestInvalidApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -4448,7 +4448,7 @@ app_local_put
 	}
 }
 
-func TestGlobalStateTypeChangeFailure(t *testing.T) {
+func TestGlobalStateTypeChangeErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6561,7 +6561,7 @@ func makeProgramToCallInner(t *testing.T, program string) string {
 	return wrapCodeWithVersionAndReturn(itxnSubmitCode)
 }
 
-func TestAppCallInnerTxnApplyDataOnFail(t *testing.T) {
+func TestAppCallInnerTxnApplyDataOnErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6671,7 +6671,7 @@ byte "finished asset create"
 log
 `
 
-func TestNonAppCallInnerTxnApplyDataOnFail(t *testing.T) {
+func TestNonAppCallInnerTxnApplyDataOnErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6769,7 +6769,7 @@ byte "finished asset config"
 log
 `
 
-func TestInnerTxnNonAppCallFailure(t *testing.T) {
+func TestInnerTxnNonAppCallErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -8952,7 +8952,7 @@ func TestFixSigners(t *testing.T) {
 		innerProgram := fmt.Sprintf(`#pragma version 9
 		txn ApplicationID
 		bz end
-		
+
 		// Rekey to the the innerRekeyAddr
 		itxn_begin
 		int pay
@@ -8962,7 +8962,7 @@ func TestFixSigners(t *testing.T) {
 		addr %s
 		itxn_field RekeyTo
 		itxn_submit
-		
+
 		end:
 		int 1
 		`, innerRekeyAddr)
