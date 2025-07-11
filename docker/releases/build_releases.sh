@@ -76,7 +76,7 @@ case $NETWORK in
 esac
 
 IFS='' read -r -d '' DOCKERFILE <<EOF
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y ca-certificates curl --no-install-recommends && \
     curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf - && \

@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 ubuntu:20.04
+FROM --platform=linux/amd64 ubuntu:24.04
 ARG GOLANG_VERSION
 
 RUN apt-get update && apt-get install -y git wget autoconf jq bsdmainutils shellcheck make python3 libtool g++

@@ -21,7 +21,7 @@ Development is done using the Go Programming Language. The Go version is specifi
 
 ### Linux / OSX
 
-We currently strive to support Debian-based distributions, with Ubuntu 20.04 as our official release target. Building on Arch Linux also works well. Our core engineering team uses Linux and OSX, so both environments are well-supported for development.
+We currently strive to support Debian-based distributions, with Ubuntu 24.04 as our official release target. Building on Arch Linux also works well. Our core engineering team uses Linux and OSX, so both environments are well-supported for development.
 
 **OSX Only**: [Homebrew (brew)](https://brew.sh) must be installed before continuing. [Here](https://docs.brew.sh/Installation) are the installation requirements.
 
