@@ -74,7 +74,7 @@ func msgpVaruintRemaining(first byte) (int, error) {
 		return 8, nil
 	default:
 		if !isMsgpFixint(first) {
-			return 0, fmt.Errorf("msgpVaruintLen: expected fixint or varuint tag, got 0x%02x", first)
+			return 0, fmt.Errorf("msgpVaruintRemaining: expected fixint or varuint tag, got 0x%02x", first)
 		}
 		return 0, nil
 	}

@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/algorand/msgp/msgp"
 )
@@ -252,9 +253,9 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	switch { // delta encoding
 	case rnd == e.lastRnd:
 		hdr1 |= hdr1RndDeltaSame
-	case rnd == e.lastRnd+1:
+	case rnd == e.lastRnd+1 && e.lastRnd < math.MaxUint64: // avoid overflow
 		hdr1 |= hdr1RndDeltaPlus1
-	case rnd == e.lastRnd-1:
+	case rnd == e.lastRnd-1 && e.lastRnd > 0: // avoid underflow
 		hdr1 |= hdr1RndDeltaMinus1
 	default:
 		// pass through literal bytes (don't touch hdr1)
@@ -442,9 +443,15 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		rnd = d.lastRnd
 		out = msgp.AppendUint64(out, rnd)
 	case hdr1RndDeltaPlus1:
+		if d.lastRnd == math.MaxUint64 {
+			return nil, fmt.Errorf("round overflow: lastRnd %d", d.lastRnd)
+		}
 		rnd = d.lastRnd + 1
 		out = msgp.AppendUint64(out, rnd)
 	case hdr1RndDeltaMinus1:
+		if d.lastRnd == 0 {
+			return nil, fmt.Errorf("round underflow: lastRnd %d", d.lastRnd)
+		}
 		rnd = d.lastRnd - 1
 		out = msgp.AppendUint64(out, rnd)
 	case hdr1RndLiteral:
