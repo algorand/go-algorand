@@ -182,9 +182,9 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 
 	// r.per: pass through, if present
 	if (hdr0 & bitPer) != 0 {
-		perData, err := r.readVaruintBytes("r.per")
-		if err != nil {
-			return nil, err
+		perData, err1 := r.readVaruintBytes("r.per")
+		if err1 != nil {
+			return nil, err1
 		}
 		out = append(out, perData...)
 	}
@@ -193,31 +193,31 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	// copy proposal fields for table lookup
 	var prop proposalEntry
 	if (hdr0 & bitDig) != 0 {
-		dig, err := r.readFixed(digestSize, "dig")
-		if err != nil {
-			return nil, err
+		dig, err1 := r.readFixed(digestSize, "dig")
+		if err1 != nil {
+			return nil, err1
 		}
 		copy(prop.dig[:], dig)
 	}
 	if (hdr0 & bitEncDig) != 0 {
-		encdig, err := r.readFixed(digestSize, "encdig")
-		if err != nil {
-			return nil, err
+		encdig, err1 := r.readFixed(digestSize, "encdig")
+		if err1 != nil {
+			return nil, err1
 		}
 		copy(prop.encdig[:], encdig)
 	}
 	if (hdr0 & bitOper) != 0 {
-		operData, err := r.readVaruintBytes("oper")
-		if err != nil {
-			return nil, err
+		operData, err1 := r.readVaruintBytes("oper")
+		if err1 != nil {
+			return nil, err1
 		}
 		copy(prop.operEnc[:], operData)
 		prop.operLen = uint8(len(operData))
 	}
 	if (hdr0 & bitOprop) != 0 {
-		oprop, err := r.readFixed(digestSize, "oprop")
-		if err != nil {
-			return nil, err
+		oprop, err1 := r.readFixed(digestSize, "oprop")
+		if err1 != nil {
+			return nil, err1
 		}
 		copy(prop.oprop[:], oprop)
 	}
@@ -281,9 +281,9 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 
 	// r.step: pass through, if present
 	if (hdr0 & bitStep) != 0 {
-		stepData, err := r.readVaruintBytes("step")
-		if err != nil {
-			return nil, err
+		stepData, err1 := r.readVaruintBytes("step")
+		if err1 != nil {
+			return nil, err1
 		}
 		out = append(out, stepData...)
 	}
@@ -305,7 +305,7 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	} else { // not found, add to table and use literal
 		out = append(out, pk.pk[:]...)
 		out = append(out, pk.sig[:]...)
-		_ = e.pkTable.insert(pk, pkH)
+		e.pkTable.insert(pk, pkH)
 	}
 
 	// sig.p2 + sig.p2s: check LRU table
@@ -325,7 +325,7 @@ func (e *StatefulEncoder) Compress(dst, src []byte) ([]byte, error) {
 	} else { // not found, add to table and use literal
 		out = append(out, pk2.pk[:]...)
 		out = append(out, pk2.sig[:]...)
-		_ = e.pk2Table.insert(pk2, pk2H)
+		e.pk2Table.insert(pk2, pk2H)
 	}
 
 	// sig.s: pass through
@@ -370,9 +370,9 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 
 	// r.per: pass through, if present
 	if (hdr0 & bitPer) != 0 {
-		perData, err := r.readVaruintBytes("per")
-		if err != nil {
-			return nil, err
+		perData, err1 := r.readVaruintBytes("per")
+		if err1 != nil {
+			return nil, err1
 		}
 		out = append(out, perData...)
 	}
@@ -382,31 +382,31 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 	propRef := (hdr1 & hdr1PropMask) >> hdr1PropShift // index in range [0, 7]
 	if propRef == 0 {                                 // literal follows
 		if (hdr0 & bitDig) != 0 {
-			dig, err := r.readFixed(digestSize, "digest")
-			if err != nil {
-				return nil, err
+			dig, err1 := r.readFixed(digestSize, "digest")
+			if err1 != nil {
+				return nil, err1
 			}
 			copy(prop.dig[:], dig)
 		}
 		if (hdr0 & bitEncDig) != 0 {
-			encdig, err := r.readFixed(digestSize, "encdig")
-			if err != nil {
-				return nil, err
+			encdig, err1 := r.readFixed(digestSize, "encdig")
+			if err1 != nil {
+				return nil, err1
 			}
 			copy(prop.encdig[:], encdig)
 		}
 		if (hdr0 & bitOper) != 0 {
-			operData, err := r.readVaruintBytes("oper")
-			if err != nil {
-				return nil, err
+			operData, err1 := r.readVaruintBytes("oper")
+			if err1 != nil {
+				return nil, err1
 			}
 			copy(prop.operEnc[:], operData)
 			prop.operLen = uint8(len(operData))
 		}
 		if (hdr0 & bitOprop) != 0 {
-			oprop, err := r.readFixed(digestSize, "oprop")
-			if err != nil {
-				return nil, err
+			oprop, err1 := r.readFixed(digestSize, "oprop")
+			if err1 != nil {
+				return nil, err1
 			}
 			copy(prop.oprop[:], oprop)
 		}
@@ -448,9 +448,9 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		rnd = d.lastRnd - 1
 		out = msgp.AppendUint64(out, rnd)
 	case hdr1RndLiteral:
-		rndData, rndVal, err := r.readVaruint("rnd")
-		if err != nil {
-			return nil, err
+		rndData, rndVal, err1 := r.readVaruint("rnd")
+		if err1 != nil {
+			return nil, err1
 		}
 		rnd = rndVal
 		out = append(out, rndData...)
@@ -459,9 +459,9 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 
 	// r.snd: check for reference to LRU table
 	if (hdr1 & hdr1SndRef) != 0 { // reference
-		id, err := r.readDynamicRef("snd ref")
-		if err != nil {
-			return nil, err
+		id, err1 := r.readDynamicRef("snd ref")
+		if err1 != nil {
+			return nil, err1
 		}
 		addr, ok := d.sndTable.fetch(id)
 		if !ok {
@@ -469,30 +469,30 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		}
 		out = append(out, addr[:]...)
 	} else { // literal
-		sndData, err := r.readFixed(digestSize, "sender")
-		if err != nil {
-			return nil, err
+		sndData, err1 := r.readFixed(digestSize, "sender")
+		if err1 != nil {
+			return nil, err1
 		}
 		var addr addressValue
 		copy(addr[:], sndData)
 		out = append(out, addr[:]...)
-		_ = d.sndTable.insert(addr, addr.hash())
+		d.sndTable.insert(addr, addr.hash())
 	}
 
 	// r.step: pass through, if present
 	if (hdr0 & bitStep) != 0 {
-		stepData, err := r.readVaruintBytes("step")
-		if err != nil {
-			return nil, err
+		stepData, err1 := r.readVaruintBytes("step")
+		if err1 != nil {
+			return nil, err1
 		}
 		out = append(out, stepData...)
 	}
 
 	// sig.p + p1s: check for reference to LRU table
 	if (hdr1 & hdr1PkRef) != 0 { // reference
-		id, err := r.readDynamicRef("pk ref")
-		if err != nil {
-			return nil, err
+		id, err1 := r.readDynamicRef("pk ref")
+		if err1 != nil {
+			return nil, err1
 		}
 		pkb, ok := d.pkTable.fetch(id)
 		if !ok {
@@ -501,23 +501,23 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		out = append(out, pkb.pk[:]...)
 		out = append(out, pkb.sig[:]...)
 	} else { // literal
-		pkBundle, err := r.readFixed(pkSize+sigSize, "pk bundle")
-		if err != nil {
-			return nil, err
+		pkBundle, err1 := r.readFixed(pkSize+sigSize, "pk bundle")
+		if err1 != nil {
+			return nil, err1
 		}
 		var pkb pkSigPair
 		copy(pkb.pk[:], pkBundle[:pkSize])
 		copy(pkb.sig[:], pkBundle[pkSize:])
 		out = append(out, pkb.pk[:]...)
 		out = append(out, pkb.sig[:]...)
-		_ = d.pkTable.insert(pkb, pkb.hash())
+		d.pkTable.insert(pkb, pkb.hash())
 	}
 
 	// sig.p2 + p2s: check for reference to LRU table
 	if (hdr1 & hdr1Pk2Ref) != 0 { // reference
-		id, err := r.readDynamicRef("pk2 ref")
-		if err != nil {
-			return nil, err
+		id, err1 := r.readDynamicRef("pk2 ref")
+		if err1 != nil {
+			return nil, err1
 		}
 		pk2b, ok := d.pk2Table.fetch(id)
 		if !ok {
@@ -526,16 +526,16 @@ func (d *StatefulDecoder) Decompress(dst, src []byte) ([]byte, error) {
 		out = append(out, pk2b.pk[:]...)
 		out = append(out, pk2b.sig[:]...)
 	} else { // literal
-		pk2Bundle, err := r.readFixed(pkSize+sigSize, "pk2 bundle")
-		if err != nil {
-			return nil, err
+		pk2Bundle, err1 := r.readFixed(pkSize+sigSize, "pk2 bundle")
+		if err1 != nil {
+			return nil, err1
 		}
 		var pk2b pkSigPair
 		copy(pk2b.pk[:], pk2Bundle[:pkSize])
 		copy(pk2b.sig[:], pk2Bundle[pkSize:])
 		out = append(out, pk2b.pk[:]...)
 		out = append(out, pk2b.sig[:]...)
-		_ = d.pk2Table.insert(pk2b, pk2b.hash())
+		d.pk2Table.insert(pk2b, pk2b.hash())
 	}
 
 	// sig.s: pass through

@@ -20,7 +20,7 @@ package vpack
 // Some fields may be omitted, so a mask is used to indicate which fields
 // are present (bitDig, bitEncDig, bitOper, bitOprop).
 type proposalEntry struct {
-	dig, encdig, oprop [32]byte
+	dig, encdig, oprop [digestSize]byte
 	operEnc            [maxMsgpVaruintSize]byte // msgp varuint encoding of oper
 	operLen            uint8                    // length of operEnc
 	mask               uint8                    // which fields were present

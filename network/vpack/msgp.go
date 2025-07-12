@@ -80,7 +80,6 @@ func msgpVaruintRemaining(first byte) (int, error) {
 	}
 }
 
-
 // msgpVoteParser provides a zero-allocation msgpVoteParser for vote messages.
 type msgpVoteParser struct {
 	data []byte
