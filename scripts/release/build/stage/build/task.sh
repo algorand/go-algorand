@@ -31,7 +31,7 @@ else
 fi
 
 # Run RPM build in Centos 9 Docker container
-sg docker "docker build -t algocentosbuild - < $HOME/go/src/github.com/algorand/go-algorand/scripts/release/common/docker/centos9.Dockerfile"
+sg docker "docker build -t algocentosbuild - < $HOME/go/src/github.com/algorand/go-algorand/scripts/release/common/docker/centos10.Dockerfile"
 sg docker "docker run --rm --env-file ${HOME}/build_env_docker --mount type=bind,src=${HOME},dst=/root/subhome algocentosbuild /root/subhome/go/src/github.com/algorand/go-algorand/scripts/release/build/rpm/build.sh"
 
 echo

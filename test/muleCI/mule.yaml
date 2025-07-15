@@ -15,9 +15,9 @@ agents:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
       - GOARCH=amd64
-  - name: cicd.centos9.amd64
-    dockerFilePath: docker/build/cicd.centos9.Dockerfile
-    image: algorand/go-algorand-ci-linux-centos9
+  - name: cicd.centos10.amd64
+    dockerFilePath: docker/build/cicd.centos10.Dockerfile
+    image: algorand/go-algorand-ci-linux-centos10
     version: scripts/configure_dev-deps.sh
     arch: amd64
     env:
@@ -92,12 +92,12 @@ tasks:
 
   - task: docker.Make
     name: archive
-    agent: cicd.centos9.amd64
+    agent: cicd.centos10.amd64
     target: archive
 
   - task: docker.Make
     name: rpm.amd64
-    agent: cicd.centos9.amd64
+    agent: cicd.centos10.amd64
     target: mule-package-rpm
 
   - task: docker.Make
