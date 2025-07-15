@@ -213,8 +213,8 @@ ifeq ($(OS_TYPE),darwin)
 			echo "Warning: Binary $$binary exists in arm64 but not in amd64"; \
 		fi; \
 	done
-        # for node_exporter cross-compilation is using universal binary already
-        cp -f $(GOBIN)-darwin-arm64/node_exporter $(GOBIN)/node_exporter
+		# for node_exporter cross-compilation is using universal binary already
+		cp -f $(GOBIN)-darwin-arm64/node_exporter $(GOBIN)/node_exporter
 else
 	echo "OS_TYPE must be darwin for universal builds, skipping"
 endif
