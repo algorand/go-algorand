@@ -147,20 +147,6 @@ func TestLocal_EnrichNetworkingConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	c1 = Local{
-		NetAddress:          "test1",
-		EnableP2PHybridMode: true,
-	}
-	c2, err = enrichNetworkingConfig(c1)
-	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
-
-	c1 = Local{
-		P2PHybridNetAddress: "test1",
-		EnableP2PHybridMode: true,
-	}
-	c2, err = enrichNetworkingConfig(c1)
-	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
-
-	c1 = Local{
 		EnableP2PHybridMode: true,
 		PublicAddress:       "test2",
 	}
@@ -759,16 +745,20 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 		enableP2PHybridMode bool
 		p2pHybridNetAddress string
 		netAddress          string
+		publicAddress       string
 		err                 bool
 	}{
-		{false, "", "", false},
-		{false, ":0", "", false},
-		{false, "", ":0", false},
-		{false, ":0", ":0", false},
-		{true, "", "", false},
-		{true, ":0", "", true},
-		{true, "", ":0", true},
-		{true, ":0", ":0", false},
+		{false, "", "", "", false},
+		{false, ":0", "", "", false},
+		{false, "", ":0", "", false},
+		{false, ":0", ":0", "", false},
+		{true, "", "", "", false},
+		{true, ":0", "", "", true},
+		{true, ":0", "", "pub", true},
+		{true, "", ":0", "", true},
+		{true, "", ":0", "pub", true},
+		{true, ":0", ":0", "", true},
+		{true, ":0", ":0", "pub", false},
 	}
 
 	for i, test := range tests {
@@ -780,9 +770,10 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 				EnableP2PHybridMode: test.enableP2PHybridMode,
 				P2PHybridNetAddress: test.p2pHybridNetAddress,
 				NetAddress:          test.netAddress,
+				PublicAddress:       test.publicAddress,
 			}
 			err := c.ValidateP2PHybridConfig()
-			require.Equal(t, test.err, err != nil, name)
+			require.Equal(t, test.err, err != nil, "%s: %v => %v", name, test, err)
 		})
 	}
 }
@@ -924,7 +915,7 @@ func TestEnsureAndResolveGenesisDirs_migrate(t *testing.T) {
 	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite-wal"))
 }
 
-func TestEnsureAndResolveGenesisDirs_migrateCrashFail(t *testing.T) {
+func TestEnsureAndResolveGenesisDirs_migrateCrashErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := GetDefaultLocal()
@@ -956,7 +947,7 @@ func TestEnsureAndResolveGenesisDirs_migrateCrashFail(t *testing.T) {
 	require.NoFileExists(t, filepath.Join(hotDir, "crash.sqlite-shm"))
 }
 
-func TestEnsureAndResolveGenesisDirs_migrateSPFail(t *testing.T) {
+func TestEnsureAndResolveGenesisDirs_migrateSPErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := GetDefaultLocal()

@@ -514,7 +514,7 @@ func TestP2PBootstrapFunc(t *testing.T) {
 	require.GreaterOrEqual(t, len(addr.Addrs), 1)
 }
 
-func TestP2PdnsLookupBootstrapPeersFailure(t *testing.T) {
+func TestP2PdnsLookupBootstrapPeersErr(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 

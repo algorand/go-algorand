@@ -89,7 +89,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 4
       CIRCLECI: true
-      SHORT_TEST_FLAG: "-short"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -119,8 +119,8 @@ jobs:
           gotestsum --format standard-verbose \
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
-            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORT_TEST_FLAG \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
+            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK != ''
@@ -141,7 +141,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -149,7 +149,7 @@ jobs:
           retention-days: 7
       - name: Upload coverage
         # Only upload coverage from ubuntu-24.04 platform
-        if: matrix.platform == 'ubuntu-24.04'
+        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
@@ -158,6 +158,13 @@ jobs:
           token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
           fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   integration:
     needs: [build]
@@ -165,15 +172,15 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 16
+      PARTITION_TOTAL: 4
       E2E_TEST_FILTER: GO
-      PARALLEL_FLAG: "-p 1"
-      SHORT_TEST_FLAG: "-short"
+      PARALLEL_FLAG: "-p 4"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -219,12 +226,19 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   e2e_expect:
     needs: [build]
@@ -232,15 +246,15 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 4
+      PARTITION_TOTAL: 8
       E2E_TEST_FILTER: EXPECT
-      PARALLEL_FLAG: "-p 1"
-      SHORT_TEST_FLAG: "-short"
+      PARALLEL_FLAG: "-p 4"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -286,12 +300,19 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   e2e_subs:
     needs: [build]
@@ -304,7 +325,7 @@ jobs:
       E2E_TEST_FILTER: SCRIPTS
       CI_PLATFORM: ${{ matrix.platform }}
       CI_KEEP_TEMP_PLATFORM: ""
-      SHORT_TEST_FLAG: "-short"
+      SHORTTEST: "-short"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -350,7 +371,7 @@ jobs:
                 }
               ]
             }
-      - name: Upload test results
+      - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}

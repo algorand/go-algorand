@@ -1247,8 +1247,8 @@ func (p *failRoundCowParent) lookup(basics.Address) (ledgercore.AccountData, err
 	return ledgercore.AccountData{}, fmt.Errorf("disk I/O fail (on purpose)")
 }
 
-// TestExpiredAccountGenerationWithDiskFailure tests edge cases where disk failures can lead to ledger look up failures
-func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
+// TestExpiredAccountGenerationWithDiskErr tests edge cases where disk failures can lead to ledger look up failures
+func TestExpiredAccountGenerationWithDiskErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

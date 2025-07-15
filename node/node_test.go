@@ -17,6 +17,7 @@
 package node
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1350,4 +1351,37 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestNodeMakeFullHybrid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ":0"
+
+	node, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
+	err = node.Start()
+	require.NoError(t, err)
+	require.IsType(t, &network.WebsocketNetwork{}, node.net)
+
+	node.Stop()
+	messages := buf.String()
+	require.Contains(t, messages, "could not create hybrid p2p node: P2PHybridMode requires both NetAddress")
+	require.Contains(t, messages, "Falling back to WS network")
 }
