@@ -101,7 +101,7 @@ func PrefetchAccounts(ctx context.Context, l Ledger, rnd basics.Round, txnGroups
 // groupTask helps to organize the account loading for each transaction group.
 type groupTask struct {
 	// incompleteCount is the number of resources+balances still pending and need to be loaded
-	// this variable is used by as atomic variable to synchronize the readiness of the group taks.
+	// it is used to synchronize the readiness of the group task.
 	incompleteCount atomic.Int64
 	// the group task index - aligns with the index of the transaction group in the
 	// provided groups slice.

@@ -129,7 +129,7 @@ type roundCowBase struct {
 	// execution. The AccountData is always an historical one, then therefore won't be changing.
 	// The underlying (accountupdates) infrastructure may provide additional cross-round caching which
 	// are beyond the scope of this cache.
-	// The account data store here is always the account data without the rewards.
+	// The account data stored here is always the account data without the rewards.
 	accounts map[basics.Address]ledgercore.AccountData
 
 	// The online accounts that we've already accessed during this round evaluation. This is a
