@@ -44,6 +44,16 @@ go test -v ./agreement/...                    # Run tests in package tree rooted
 go test -v ./agreement/                       # Run tests for just the agreement package
 ```
 
+### Running E2E tests
+E2E tests run one or more algod processes, each with their own data directory containing logs and configuration (created in a subdirectory of TESTDIR). If an E2E test fails, useful information can often be found in the node.log files produced by algod while running the test. For example:
+```bash
+export NODEBINDIR=~/go/bin # path to algod, goal, etc. Code changes to goal or algod require rebuilding with "make" to place new binaries here before running E2E tests.
+export TESTDATADIR=`pwd`/test/testdata # path to go-algorand/test/testdata
+export TESTDIR=/tmp
+# network and node data will be created in /tmp/TestAssetSend/, logs in /tmp/TestAssetSend/Primary/node.log and /tmp/TestAssetSend/Node/node.log
+go test ./test/e2e-go/features/transactions -run TestAssetSend -v -timeout=0
+```
+
 ## Architecture Overview
 
 ### Main Binaries
