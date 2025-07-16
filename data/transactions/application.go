@@ -56,7 +56,7 @@ const (
 	// TestEncodedAppTxnAllocationBounds
 	encodedMaxBoxes = 32
 
-	// encodedMaxAcces sets the allocation bound for the maximum number of
+	// encodedMaxAccess sets the allocation bound for the maximum number of
 	// references in Access that a transaction decoded off of the wire can
 	// contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds

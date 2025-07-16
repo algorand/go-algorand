@@ -282,7 +282,7 @@ type ConsensusParams struct {
 
 	// maximum number of "foreign references" (accounts, asa, app, boxes) that
 	// can be attached to a single app call.  Modern transactions can use
-	// MaxAccess references in txn.Access to access more.
+	// MaxAppAccess references in txn.Access to access more.
 	MaxAppTotalTxnReferences int
 
 	// maximum cost of application approval program or clear state program
