@@ -195,7 +195,7 @@ ifeq ($(OS_TYPE),darwin)
 	mkdir -p $(GOBIN)
 	for binary in $$(ls $(GOBIN)-darwin-arm64); do \
 		skip=false; \
-		for nongo_file in $(NONGO_BIN_FILES) $(GOBIN)/update.sh ; do \
+		for nongo_file in $(NONGO_BIN_FILES) $(GOBIN)/node_exporter $(GOBIN)/update.sh ; do \
 			if [ "$(GOBIN)/$$binary" = "$$nongo_file" ]; then \
 				echo "Skipping non-binary file: $$binary"; \
 				skip=true; \
