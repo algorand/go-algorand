@@ -217,7 +217,7 @@ type accountCreatableKey struct {
 	cidx    basics.CreatableIndex
 }
 
-func loadAccountsAddAccountTask(addr *basics.Address, wt *groupTask, accountTasks map[basics.Address]*preloaderTask, queue *preloaderTaskQueue) {
+func (pq *preloaderTaskQueue) addAccountTask(addr *basics.Address, wt *groupTask, accountTasks map[basics.Address]*preloaderTask) {
 	if addr.IsZero() {
 		return
 	}
@@ -229,11 +229,11 @@ func loadAccountsAddAccountTask(addr *basics.Address, wt *groupTask, accountTask
 		}
 		wt.balancesCount++
 		accountTasks[*addr] = newTask
-		queue.enqueue(newTask)
+		pq.enqueue(newTask)
 	}
 }
 
-func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask, queue *preloaderTaskQueue) {
+func (pq *preloaderTaskQueue) addResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
 	if cidx == 0 {
 		return
 	}
@@ -253,11 +253,11 @@ func loadAccountsAddResourceTask(addr *basics.Address, cidx basics.CreatableInde
 		}
 		wt.resourcesCount++
 		resourceTasks[key] = newTask
-		queue.enqueue(newTask)
+		pq.enqueue(newTask)
 	}
 }
 
-func loadAccountsAddKvTask(app basics.AppIndex, name []byte, wt *groupTask, kvTasks map[string]*preloaderTask, queue *preloaderTaskQueue) {
+func (pq *preloaderTaskQueue) addKvTask(app basics.AppIndex, name []byte, wt *groupTask, kvTasks map[string]*preloaderTask) {
 	if app == 0 || len(name) == 0 {
 		return
 	}
@@ -270,7 +270,7 @@ func loadAccountsAddKvTask(app basics.AppIndex, name []byte, wt *groupTask, kvTa
 		}
 		wt.kvCount++
 		kvTasks[key] = newTask
-		queue.enqueue(newTask)
+		pq.enqueue(newTask)
 	}
 }
 
@@ -326,48 +326,48 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 			stxn := &p.txnGroups[i][j]
 			switch stxn.Txn.Type {
 			case protocol.PaymentTx:
-				loadAccountsAddAccountTask(&stxn.Txn.Receiver, task, accountTasks, queue)
-				loadAccountsAddAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks, queue)
+				queue.addAccountTask(&stxn.Txn.Receiver, task, accountTasks)
+				queue.addAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks)
 			case protocol.AssetConfigTx:
-				loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks, queue)
+				queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks)
 			case protocol.AssetTransferTx:
 				if !stxn.Txn.AssetSender.IsZero() {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
+					queue.addResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
 				} else {
 					if stxn.Txn.AssetAmount == 0 && (stxn.Txn.AssetReceiver == stxn.Txn.Sender) { // opt in
-						loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+						queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
 					}
 					if stxn.Txn.AssetAmount != 0 { // zero transfer is noop
-						loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+						queue.addResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
 					}
 				}
 				if !stxn.Txn.AssetReceiver.IsZero() {
 					if stxn.Txn.AssetAmount != 0 || (stxn.Txn.AssetReceiver == stxn.Txn.Sender) {
 						// if not zero transfer or opt in then prefetch
-						loadAccountsAddResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+						queue.addResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
 					}
 				}
 				if !stxn.Txn.AssetCloseTo.IsZero() {
-					loadAccountsAddResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks, queue)
+					queue.addResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
 				}
 			case protocol.AssetFreezeTx:
 				if !stxn.Txn.FreezeAccount.IsZero() {
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks, queue)
-					loadAccountsAddAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks, queue)
+					queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks)
+					queue.addResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks)
+					queue.addAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks)
 				}
 			case protocol.ApplicationCallTx:
 				if stxn.Txn.ApplicationID != 0 {
 					// load the global - so that we'll have the program
-					loadAccountsAddResourceTask(nil, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
+					queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks)
 					// load the local - so that we'll have the local state
 					// TODO: this is something we need to decide if we want to enable, since not
 					// every application call would use local storage.
 					if (stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC) ||
 						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.CloseOutOC) ||
 						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC) {
-						loadAccountsAddResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks, queue)
+						queue.addResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks)
 					}
 				}
 
@@ -384,7 +384,7 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 						app = stxn.Txn.ForeignApps[br.Index-1]
 					}
 					if app != 0 {
-						loadAccountsAddKvTask(app, br.Name, task, kvTasks, queue)
+						queue.addKvTask(app, br.Name, task, kvTasks)
 					}
 				}
 
@@ -393,12 +393,12 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 			case protocol.StateProofTx:
 			case protocol.KeyRegistrationTx: // No extra accounts besides the sender
 			case protocol.HeartbeatTx:
-				loadAccountsAddAccountTask(&stxn.Txn.HbAddress, task, accountTasks, queue)
+				queue.addAccountTask(&stxn.Txn.HbAddress, task, accountTasks)
 			}
 
 			// If you add new addresses here, also add them in getTxnAddresses().
 			if !stxn.Txn.Sender.IsZero() {
-				loadAccountsAddAccountTask(&stxn.Txn.Sender, task, accountTasks, queue)
+				queue.addAccountTask(&stxn.Txn.Sender, task, accountTasks)
 			}
 		}
 		totalBalances += task.balancesCount
