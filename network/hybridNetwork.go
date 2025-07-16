@@ -34,6 +34,7 @@ type HybridP2PNetwork struct {
 	wsNetwork  *WebsocketNetwork
 
 	useP2PAddress bool
+	meshStrategy  meshStrategy
 }
 
 // NewHybridP2PNetwork constructs a GossipNode that combines P2PNetwork and WebsocketNetwork
@@ -48,13 +49,14 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	p2pcfg.IncomingConnectionsLimit = cfg.P2PHybridIncomingConnectionsLimit
 	identityTracker := NewIdentityTracker()
 
-	var p2pDummyMeshCreator *dummyMeshCreator
-	p2pMeshCreator := meshCreator
-	if p2pMeshCreator == nil && cfg.NetAddress != "" {
-		p2pDummyMeshCreator = &dummyMeshCreator{}
-		p2pMeshCreator = p2pDummyMeshCreator
+	subnetMeshCreator := meshCreator
+	if meshCreator == nil && cfg.NetAddress != "" {
+		// no mesh strategy and this node is a listening node
+		// then override and use hybrid relay meshing strategy
+		subnetMeshCreator = &noopMeshStrategyCreator{}
 	}
-	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisInfo, nodeInfo, &identityOpts{tracker: identityTracker}, p2pMeshCreator)
+
+	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisInfo, nodeInfo, &identityOpts{tracker: identityTracker}, subnetMeshCreator)
 	if err != nil {
 		return nil, err
 	}
@@ -63,22 +65,63 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 		tracker: identityTracker,
 		scheme:  NewIdentityChallengeScheme(NetIdentityDedupNames(cfg.PublicAddress, p2pnet.PeerID().String()), NetIdentitySigner(p2pnet.PeerIDSigner())),
 	}
-	wsMeshCreator := meshCreator
-	if wsMeshCreator == nil && cfg.NetAddress != "" {
-		hybridRelayMeshCreator := &HybridRelayMeshStrategyCreator{
-			p2pMeshOptions:        p2pDummyMeshCreator.mc,
-			p2pMeshUpdateRequests: p2pDummyMeshCreator.meshUpdateRequests,
-		}
-		wsMeshCreator = hybridRelayMeshCreator
-	}
-	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisInfo, nodeInfo, &identOpts, wsMeshCreator)
+	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisInfo, nodeInfo, &identOpts, subnetMeshCreator)
 	if err != nil {
 		return nil, err
 	}
-	return &HybridP2PNetwork{
-		p2pNetwork: p2pnet,
-		wsNetwork:  wsnet,
-	}, nil
+
+	var hybridMeshStrategy meshStrategy = &noopMeshStrategy{}
+	if meshCreator == nil && cfg.NetAddress != "" {
+		// no mesh strategy and this node is a listening node
+		// then override and use hybrid relay meshing strategy
+		creator := GenericMeshStrategyCreator{}
+		out := make(chan meshRequest, 5)
+		var wg sync.WaitGroup
+		hybridMeshStrategy, err = creator.create(
+			wsnet.ctx, out, meshThreadInterval,
+			withMeshNetMesh(wsnet.meshThreadInner),
+			withMeshPeerStatReport(func() {
+				wsnet.peerStater.sendPeerConnectionsTelemetryStatus(wsnet)
+				p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(p2pnet)
+			}),
+			withMeshCloser(func() {
+				wg.Wait()
+				close(out)
+			}),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create hybrid mesh strategy: %w", err)
+		}
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-wsnet.ctx.Done():
+				return
+			case req := <-wsnet.meshUpdateRequests:
+				out <- req
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			select {
+			case <-wsnet.ctx.Done():
+				return
+			case req := <-p2pnet.meshUpdateRequests:
+				out <- req
+			}
+		}()
+	}
+
+	hn := &HybridP2PNetwork{
+		p2pNetwork:   p2pnet,
+		wsNetwork:    wsnet,
+		meshStrategy: hybridMeshStrategy,
+	}
+
+	return hn, nil
 }
 
 // Address implements GossipNode
@@ -192,7 +235,11 @@ func (n *HybridP2PNetwork) Start() error {
 	err := n.runParallel(func(net GossipNode) error {
 		return net.Start()
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	n.meshStrategy.start()
+	return nil
 }
 
 // Stop implements GossipNode
@@ -201,6 +248,8 @@ func (n *HybridP2PNetwork) Stop() {
 		net.Stop()
 		return nil
 	})
+
+	n.meshStrategy.stop()
 }
 
 // RegisterHandlers adds to the set of given message handlers.

@@ -162,107 +162,95 @@ func (c *GenericMeshStrategyCreator) create(ctx context.Context, meshUpdateReque
 	return newGenericMeshStrategy(ctx, meshUpdateRequests, meshThreadInterval, opts...)
 }
 
-// HybridRelayMeshStrategyCreator is a creator for the hybrid relay mesh strategy used in hybrid relays:
-// first attempt to connect to relays using WS net, and if not enough peers then continue with P2P net.
-type HybridRelayMeshStrategyCreator struct {
-	p2pMeshOptions        meshConfig
-	p2pMeshUpdateRequests chan meshRequest
+// // HybridRelayMeshStrategyCreator is a creator for the hybrid relay mesh strategy used in hybrid relays:
+// // first attempt to connect to relays using WS net, and if not enough peers then continue with P2P net.
+// type HybridRelayMeshStrategyCreator struct {
+// 	p2pNet *P2PNetwork
+// 	wsNet  *WebsocketNetwork
 
-	out chan meshRequest
-	wg  sync.WaitGroup
-}
+// 	out chan meshRequest
+// 	wg  sync.WaitGroup
+// }
 
-func (c *HybridRelayMeshStrategyCreator) create(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (meshStrategy, error) {
-	c.out = make(chan meshRequest, 5)
-	opts = append(opts, withMeshCloser(func() {
-		// wait for meshUpdateRequests fan-in goroutines to finish and close the output channel
-		c.wg.Wait()
-		close(c.out)
-	}))
-	strategy, err := newHybridRelayMeshStrategy(ctx, c.out, meshThreadInterval, opts...)
-	if err != nil {
-		return nil, err
-	}
-	wsNetPeerStatReport := strategy.peerStatReport
-	strategy.peerStatReport = func() {
-		wsNetPeerStatReport()
-		c.p2pMeshOptions.peerStatReport()
-	}
+// func (c *HybridRelayMeshStrategyCreator) create(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (meshStrategy, error) {
+// 	c.out = make(chan meshRequest, 5)
+// 	opts = append(opts, withMeshCloser(func() {
+// 		// wait for meshUpdateRequests fan-in goroutines to finish and close the output channel
+// 		c.wg.Wait()
+// 		close(c.out)
+// 	}))
+// 	strategy, err := newHybridRelayMeshStrategy(ctx, c.out, meshThreadInterval, opts...)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	wsNetPeerStatReport := strategy.peerStatReport
+// 	strategy.peerStatReport = func() {
+// 		wsNetPeerStatReport()
+// 		c.p2pMeshOptions.peerStatReport()
+// 	}
 
-	c.wg.Add(2)
-	go func() {
-		defer c.wg.Done()
-		select {
-		case <-ctx.Done():
-			return
-		case req := <-meshUpdateRequests:
-			c.out <- req
-		}
-	}()
+// 	c.wg.Add(2)
+// 	go func() {
+// 		defer c.wg.Done()
+// 		select {
+// 		case <-ctx.Done():
+// 			return
+// 		case req := <-meshUpdateRequests:
+// 			c.out <- req
+// 		}
+// 	}()
 
-	go func() {
-		defer c.wg.Done()
-		select {
-		case <-ctx.Done():
-			return
-		case req := <-c.p2pMeshUpdateRequests:
-			c.out <- req
-		}
-	}()
+// 	go func() {
+// 		defer c.wg.Done()
+// 		select {
+// 		case <-ctx.Done():
+// 			return
+// 		case req := <-c.p2pMeshUpdateRequests:
+// 			c.out <- req
+// 		}
+// 	}()
 
-	return strategy, nil
-}
+// 	return strategy, nil
+// }
 
-func newHybridRelayMeshStrategy(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (*hybridRelayMeshStrategy, error) {
-	var cfg meshConfig
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-	if cfg.netMesh == nil {
-		return nil, errors.New("mesh function is not set")
-	}
+// func newHybridRelayMeshStrategy(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (*hybridRelayMeshStrategy, error) {
+// 	var cfg meshConfig
+// 	for _, opt := range opts {
+// 		opt(&cfg)
+// 	}
+// 	if cfg.netMesh == nil {
+// 		return nil, errors.New("mesh function is not set")
+// 	}
 
-	return &hybridRelayMeshStrategy{
-		genericMeshStrategy: genericMeshStrategy{
-			ctx:                ctx,
-			meshUpdateRequests: meshUpdateRequests,
-			meshThreadInterval: meshThreadInterval,
-			meshConfig:         cfg,
-		},
-	}, nil
-}
+// 	return &hybridRelayMeshStrategy{
+// 		genericMeshStrategy: genericMeshStrategy{
+// 			ctx:                ctx,
+// 			meshUpdateRequests: meshUpdateRequests,
+// 			meshThreadInterval: meshThreadInterval,
+// 			meshConfig:         cfg,
+// 		},
+// 	}, nil
+// }
 
-func (m *hybridRelayMeshStrategy) meshThread() {
-	m.genericMeshStrategy.meshThread()
-}
+// func (m *hybridRelayMeshStrategy) meshThread() {
+// 	m.genericMeshStrategy.meshThread()
+// }
 
-func (m *hybridRelayMeshStrategy) start() {
-	m.wg.Add(1)
-	go m.meshThread()
-}
+// func (m *hybridRelayMeshStrategy) start() {
+// 	m.wg.Add(1)
+// 	go m.meshThread()
+// }
 
-func (m *hybridRelayMeshStrategy) stop() {
-	m.wg.Wait()
-	if m.closer != nil {
-		m.closer()
-	}
-}
+// func (m *hybridRelayMeshStrategy) stop() {
+// 	m.wg.Wait()
+// 	if m.closer != nil {
+// 		m.closer()
+// 	}
+// }
 
-type dummyMeshCreator struct {
-	mc                 meshConfig
-	meshUpdateRequests chan meshRequest
-}
+type noopMeshStrategyCreator struct{}
 
-func (c *dummyMeshCreator) create(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (meshStrategy, error) {
-	var cfg meshConfig
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-	if cfg.netMesh == nil {
-		return nil, errors.New("mesh function is not set")
-	}
-	c.mc = cfg
-	c.meshUpdateRequests = meshUpdateRequests
+func (c *noopMeshStrategyCreator) create(ctx context.Context, meshUpdateRequests chan meshRequest, meshThreadInterval time.Duration, opts ...meshStrategyOption) (meshStrategy, error) {
 	return &noopMeshStrategy{}, nil
 }
 
