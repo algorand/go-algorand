@@ -51,7 +51,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 
 	subnetMeshCreator := meshCreator
 	if meshCreator == nil && cfg.NetAddress != "" {
-		// no mesh strategy and this node is a listening node
+		// no mesh strategy and this node is a listening/relaying node
 		// then override and use hybrid relay meshing strategy
 		subnetMeshCreator = &noopMeshStrategyCreator{}
 	}
@@ -72,47 +72,13 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 
 	var hybridMeshStrategy meshStrategy = &noopMeshStrategy{}
 	if meshCreator == nil && cfg.NetAddress != "" {
-		// no mesh strategy and this node is a listening node
+		// no mesh strategy and this node is a listening/relaying node
 		// then override and use hybrid relay meshing strategy
-		creator := GenericMeshStrategyCreator{}
-		out := make(chan meshRequest, 5)
-		var wg sync.WaitGroup
-		hybridMeshStrategy, err = creator.create(
-			wsnet.ctx, out, meshThreadInterval,
-			withMeshNetMesh(wsnet.meshThreadInner),
-			withMeshPeerStatReport(func() {
-				wsnet.peerStater.sendPeerConnectionsTelemetryStatus(wsnet)
-				p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(p2pnet)
-			}),
-			withMeshCloser(func() {
-				wg.Wait()
-				close(out)
-			}),
-		)
+		creator := HybridRelayMeshStrategyCreator{p2pnet: p2pnet, wsnet: wsnet}
+		hybridMeshStrategy, err = creator.create()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create hybrid mesh strategy: %w", err)
 		}
-
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			select {
-			case <-wsnet.ctx.Done():
-				return
-			case req := <-wsnet.meshUpdateRequests:
-				out <- req
-			}
-		}()
-
-		go func() {
-			defer wg.Done()
-			select {
-			case <-wsnet.ctx.Done():
-				return
-			case req := <-p2pnet.meshUpdateRequests:
-				out <- req
-			}
-		}()
 	}
 
 	hn := &HybridP2PNetwork{

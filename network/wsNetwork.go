@@ -599,15 +599,17 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
 	meshCreator := wn.meshCreator
 	if meshCreator == nil {
-		meshCreator = &GenericMeshStrategyCreator{}
+		meshCreator = &BaseMeshStrategyCreator{}
 	}
 	var err error
 	wn.meshStrategy, err = meshCreator.create(
-		wn.ctx, wn.meshUpdateRequests, meshThreadInterval,
+		withContext(wn.ctx),
 		withMeshNetMesh(wn.meshThreadInner),
 		withMeshPeerStatReport(func() {
 			wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
 		}),
+		withMeshUpdateRequest(wn.meshUpdateRequests),
+		withMeshUpdateInterval(meshThreadInterval),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh strategy: %w", err)

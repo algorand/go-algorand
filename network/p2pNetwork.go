@@ -352,16 +352,18 @@ func (n *P2PNetwork) setup() error {
 	n.meshUpdateRequests = make(chan meshRequest, 5)
 	meshCreator := n.meshCreator
 	if meshCreator == nil {
-		meshCreator = &GenericMeshStrategyCreator{}
+		meshCreator = &BaseMeshStrategyCreator{}
 	}
 	var err error
 	n.meshStrategy, err = meshCreator.create(
-		n.ctx, n.meshUpdateRequests, meshThreadInterval,
+		withContext(n.ctx),
 		withMeshExpJitterBackoff(),
 		withMeshNetMesh(n.meshThreadInner),
 		withMeshPeerStatReport(func() {
 			n.peerStater.sendPeerConnectionsTelemetryStatus(n)
 		}),
+		withMeshUpdateRequest(n.meshUpdateRequests),
+		withMeshUpdateInterval(meshThreadInterval),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create mesh strategy: %w", err)
