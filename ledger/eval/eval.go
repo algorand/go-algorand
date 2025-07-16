@@ -2086,7 +2086,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
-	preloadedTxnsData := prefetcher.PrefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	preloadedTxnsData := prefetcher.PrefetchResources(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
 	// ensure that before we exit from this method, the account loading is no longer active.
 	defer func() {
 		accountLoadingCancel()

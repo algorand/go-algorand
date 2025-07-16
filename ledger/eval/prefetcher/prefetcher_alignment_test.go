@@ -213,7 +213,7 @@ func parseLoadedAccountDataEntries(loadedAccountDataEntries []prefetcher.LoadedA
 	return res
 }
 
-func parseLoadedResourcesEntries(loadedResourcesEntries []prefetcher.LoadedResourcesEntry) (apps map[basics.Address]map[basics.AppIndex]struct{}, assets map[basics.Address]map[basics.AssetIndex]struct{}, creators map[creatable]struct{}) {
+func parseLoadedResourcesEntries(loadedResourcesEntries []prefetcher.LoadedResourceEntry) (apps map[basics.Address]map[basics.AppIndex]struct{}, assets map[basics.Address]map[basics.AssetIndex]struct{}, creators map[creatable]struct{}) {
 	for _, e := range loadedResourcesEntries {
 		cr := creatable{
 			cindex: e.CreatableIndex,
@@ -299,7 +299,7 @@ func (ld *ledgerData) pretend(before ...basics.Address) {
 func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) ledgerData {
 	group := makeGroupFromTxn(txn)
 
-	ch := prefetcher.PrefetchAccounts(
+	ch := prefetcher.PrefetchResources(
 		context.Background(), l, 1,
 		[][]transactions.SignedTxnWithAD{group},
 		feeSink(), config.Consensus[proto])
