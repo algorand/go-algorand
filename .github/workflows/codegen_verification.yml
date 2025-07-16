@@ -6,7 +6,7 @@ on:
   pull_request:
 jobs:
   codegen_verification:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     services:
       converter:
         image: swaggerapi/swagger-converter@sha256:dcfd1c2537f5f271cb4ec942d08aa59ca41b9a24078040061a772afca7e548ae # v1.0.4
