@@ -791,12 +791,12 @@ func (n *P2PNetwork) OnNetworkAdvance() {
 
 // TelemetryGUID returns the telemetry GUID of this node.
 func (n *P2PNetwork) TelemetryGUID() string {
-	return n.log.GetTelemetryGUID()
+	return ""
 }
 
 // InstanceName returns the instance name of this node.
 func (n *P2PNetwork) InstanceName() string {
-	return n.log.GetInstanceName()
+	return ""
 }
 
 // SupportedProtoVersions returns the supported protocol versions of this node.

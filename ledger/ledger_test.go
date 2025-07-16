@@ -358,9 +358,17 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		}
 		a.NotEmpty(wrongVersion)
 		badBlock.BlockHeader.CurrentProtocol = wrongVersion
-		if !config.Consensus[wrongVersion].EnableSha512BlockHash {
+		// Handle Branch512 field mismatch between correctHeader and wrongVersion's expectations
+		// We want to set the Branch512 header to match wrongVersion so that PreCheck will reach
+		// the intended "UpgradeState mismatch" error, which happens after the Branch512 check.
+		if !proto.EnableSha512BlockHash && config.Consensus[wrongVersion].EnableSha512BlockHash {
+			// correctHeader has empty Branch512, but wrongVersion expects it during validation
+			badBlock.BlockHeader.Branch512 = lastBlock.Hash512()
+		} else if proto.EnableSha512BlockHash && !config.Consensus[wrongVersion].EnableSha512BlockHash {
+			// correctHeader has non-zero Branch512, but wrongVersion doesn't support it
 			badBlock.BlockHeader.Branch512 = crypto.Sha512Digest{}
 		}
+		// Otherwise, Branch512 is already correct (both support or both don't support SHA512)
 		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
 
 		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
