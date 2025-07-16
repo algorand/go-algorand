@@ -40,7 +40,8 @@ make deps                                     # Check/install dependencies
 ### Single Test Execution
 ```bash
 go test -v -run TestName ./path/to/package    # Run specific test
-go test -v ./agreement/...                    # Run tests in package tree
+go test -v ./agreement/...                    # Run tests in package tree rooted at agreement
+go test -v ./agreement/                       # Run tests for just the agreement package
 ```
 
 ## Architecture Overview
