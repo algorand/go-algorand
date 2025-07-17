@@ -77,8 +77,8 @@ type P2PNetwork struct {
 	peerStater                     peerConnectionStater
 
 	meshUpdateRequests chan meshRequest
-	meshStrategy       meshStrategy
-	meshCreator        MeshStrategyCreator // save parameter to use in setup()
+	mesher             mesher
+	meshCreator        MeshCreator // save parameter to use in setup()
 
 	relayMessages bool // True if we should relay messages from other nodes (nominally true for relays, false otherwise)
 	wantTXGossip  atomic.Bool
@@ -215,7 +215,7 @@ var gossipSubTags = map[protocol.Tag]string{
 }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
-func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, node NodeInfo, identityOpts *identityOpts, meshCreator MeshStrategyCreator) (*P2PNetwork, error) {
+func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, node NodeInfo, identityOpts *identityOpts, meshCreator MeshCreator) (*P2PNetwork, error) {
 	const readBufferLen = 2048
 
 	// create Peerstore and add phonebook addresses
@@ -352,21 +352,21 @@ func (n *P2PNetwork) setup() error {
 	n.meshUpdateRequests = make(chan meshRequest, 5)
 	meshCreator := n.meshCreator
 	if meshCreator == nil {
-		meshCreator = &BaseMeshStrategyCreator{}
+		meshCreator = &BaseMeshCreator{}
 	}
 	var err error
-	n.meshStrategy, err = meshCreator.create(
+	n.mesher, err = meshCreator.create(
 		withContext(n.ctx),
 		withMeshExpJitterBackoff(),
-		withMeshNetMesh(n.meshThreadInner),
-		withMeshPeerStatReport(func() {
+		withMeshNetMeshFn(n.meshThreadInner),
+		withMeshPeerStatReporter(func() {
 			n.peerStater.sendPeerConnectionsTelemetryStatus(n)
 		}),
 		withMeshUpdateRequest(n.meshUpdateRequests),
 		withMeshUpdateInterval(meshThreadInterval),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create mesh strategy: %w", err)
+		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
 	return nil
@@ -417,7 +417,7 @@ func (n *P2PNetwork) Start() error {
 	go n.broadcaster.broadcastThread(&n.wg, n, "network", "P2PNetwork")
 
 	n.meshUpdateRequests <- meshRequest{}
-	n.meshStrategy.start()
+	n.mesher.start()
 
 	if n.capabilitiesDiscovery != nil {
 		n.capabilitiesDiscovery.AdvertiseCapabilities(n.nodeInfo.Capabilities()...)
@@ -454,7 +454,7 @@ func (n *P2PNetwork) Stop() {
 	n.service.Close()
 	n.bootstrapperStop()
 	n.httpServer.Close()
-	n.meshStrategy.stop()
+	n.mesher.stop()
 	n.wg.Wait()
 }
 

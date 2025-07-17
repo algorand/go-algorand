@@ -189,8 +189,8 @@ type WebsocketNetwork struct {
 	readyChan chan struct{}
 
 	meshUpdateRequests chan meshRequest
-	meshStrategy       meshStrategy
-	meshCreator        MeshStrategyCreator // save parameter to use in setup()
+	mesher             mesher
+	meshCreator        MeshCreator // save parameter to use in setup()
 
 	// Keep a record of pending outgoing connections so
 	// we don't start duplicates connection attempts.
@@ -599,20 +599,20 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
 	meshCreator := wn.meshCreator
 	if meshCreator == nil {
-		meshCreator = &BaseMeshStrategyCreator{}
+		meshCreator = &BaseMeshCreator{}
 	}
 	var err error
-	wn.meshStrategy, err = meshCreator.create(
+	wn.mesher, err = meshCreator.create(
 		withContext(wn.ctx),
-		withMeshNetMesh(wn.meshThreadInner),
-		withMeshPeerStatReport(func() {
+		withMeshNetMeshFn(wn.meshThreadInner),
+		withMeshPeerStatReporter(func() {
 			wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
 		}),
 		withMeshUpdateRequest(wn.meshUpdateRequests),
 		withMeshUpdateInterval(meshThreadInterval),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create mesh strategy: %w", err)
+		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
 	wn.readyChan = make(chan struct{})
@@ -724,7 +724,7 @@ func (wn *WebsocketNetwork) Start() error {
 		go wn.httpdThread()
 	}
 
-	wn.meshStrategy.start()
+	wn.mesher.start()
 
 	// we shouldn't have any ticker here.. but in case we do - just stop it.
 	if wn.peersConnectivityCheckTicker != nil {
@@ -805,7 +805,7 @@ func (wn *WebsocketNetwork) Stop() {
 	if err != nil {
 		wn.log.Warnf("problem shutting down %s: %v", listenAddr, err)
 	}
-	wn.meshStrategy.stop()
+	wn.mesher.stop()
 	wn.wg.Wait()
 	if wn.listener != nil {
 		wn.log.Debugf("closed %s", listenAddr)
@@ -2259,7 +2259,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo, identityOpts *identityOpts, meshCreator MeshStrategyCreator) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo, identityOpts *identityOpts, meshCreator MeshCreator) (wn *WebsocketNetwork, err error) {
 	pb := phonebook.MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 

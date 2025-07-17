@@ -34,12 +34,12 @@ type HybridP2PNetwork struct {
 	wsNetwork  *WebsocketNetwork
 
 	useP2PAddress bool
-	meshStrategy  meshStrategy
+	mesher        mesher
 }
 
 // NewHybridP2PNetwork constructs a GossipNode that combines P2PNetwork and WebsocketNetwork
 // Hybrid mode requires both P2P and WS to be running in server (NetAddress set) or client (NetAddress empty) mode.
-func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo, meshCreator MeshStrategyCreator) (*HybridP2PNetwork, error) {
+func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo, meshCreator MeshCreator) (*HybridP2PNetwork, error) {
 	if err := cfg.ValidateP2PHybridConfig(); err != nil {
 		return nil, err
 	}
@@ -49,15 +49,15 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	p2pcfg.IncomingConnectionsLimit = cfg.P2PHybridIncomingConnectionsLimit
 	identityTracker := NewIdentityTracker()
 
-	var subnetMeshCreator MeshStrategyCreator = meshCreator
-	var hybridMeshCreator MeshStrategyCreator = &noopMeshStrategyCreator{}
-	_, isHybridMeshCreator := meshCreator.(*HybridRelayMeshStrategyCreator)
+	var subnetMeshCreator MeshCreator = meshCreator
+	var hybridMeshCreator MeshCreator = &noopMeshCreator{}
+	_, isHybridMeshCreator := meshCreator.(*HybridRelayMeshCreator)
 	if meshCreator == nil && cfg.IsHybridServer() || isHybridMeshCreator {
-		// no mesh strategy provided and this node is a listening/relaying node
-		// then override and use hybrid relay meshing strategy
-		// or, if a hybrid relay strategy requested explicitly, do the same
-		subnetMeshCreator = &noopMeshStrategyCreator{}
-		hybridMeshCreator = &HybridRelayMeshStrategyCreator{}
+		// no mesh creator provided and this node is a listening/relaying node
+		// then override and use hybrid relay meshing
+		// or, if a hybrid relay meshing requested explicitly, do the same
+		subnetMeshCreator = &noopMeshCreator{}
+		hybridMeshCreator = &HybridRelayMeshCreator{}
 	}
 
 	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisInfo, nodeInfo, &identityOpts{tracker: identityTracker}, subnetMeshCreator)
@@ -74,17 +74,17 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 		return nil, err
 	}
 
-	hybridMeshStrategy, err := hybridMeshCreator.create(
+	hybridMesh, err := hybridMeshCreator.create(
 		withWebsocketNetwork(wsnet),
 		withP2PNetwork(p2pnet))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create hybrid mesh strategy: %w", err)
+		return nil, fmt.Errorf("failed to create hybrid mesh: %w", err)
 	}
 
 	hn := &HybridP2PNetwork{
-		p2pNetwork:   p2pnet,
-		wsNetwork:    wsnet,
-		meshStrategy: hybridMeshStrategy,
+		p2pNetwork: p2pnet,
+		wsNetwork:  wsnet,
+		mesher:     hybridMesh,
 	}
 
 	return hn, nil
@@ -204,7 +204,7 @@ func (n *HybridP2PNetwork) Start() error {
 	if err != nil {
 		return err
 	}
-	n.meshStrategy.start()
+	n.mesher.start()
 	return nil
 }
 
@@ -215,7 +215,7 @@ func (n *HybridP2PNetwork) Stop() {
 		return nil
 	})
 
-	n.meshStrategy.stop()
+	n.mesher.stop()
 }
 
 // RegisterHandlers adds to the set of given message handlers.
