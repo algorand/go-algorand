@@ -51,7 +51,6 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 
 	var subnetMeshCreator MeshStrategyCreator = meshCreator
 	var hybridMeshCreator MeshStrategyCreator = &noopMeshStrategyCreator{}
-	var hybridMeshStrategy meshStrategy = &noopMeshStrategy{}
 	_, isHybridMeshCreator := meshCreator.(*HybridRelayMeshStrategyCreator)
 	if meshCreator == nil && cfg.NetAddress != "" || isHybridMeshCreator {
 		// no mesh strategy provided and this node is a listening/relaying node
@@ -75,10 +74,10 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 		return nil, err
 	}
 
-	if hybridMeshStrategy, err = hybridMeshCreator.create(
+	hybridMeshStrategy, err := hybridMeshCreator.create(
 		withWebsocketNetwork(wsnet),
-		withP2PNetwork(p2pnet),
-	); err != nil {
+		withP2PNetwork(p2pnet))
+	if err != nil {
 		return nil, fmt.Errorf("failed to create hybrid mesh strategy: %w", err)
 	}
 
