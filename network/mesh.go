@@ -137,8 +137,8 @@ func (m *baseMeshStrategy) meshThread() {
 		hasPeers := m.netMesh()
 		if m.backoff != nil {
 			if hasPeers {
-				// found something, reset timer to the default value
-				timer.Reset(meshThreadInterval)
+				// found something, reset timer to the configured value
+				timer.Reset(m.meshThreadInterval)
 				m.backoff.Reset()
 			} else {
 				// no peers found, backoff
