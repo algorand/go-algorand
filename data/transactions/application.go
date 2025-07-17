@@ -601,8 +601,8 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 }
 
 // IndexByAddress converts an address into an integer offset into [txn.Sender,
-// XXX[0], ...], returning the index at the first match. XXX is tx.Access or
-// tx.Accounts. It returns an error if there is no such match.
+// tx.<list>[0], ...], returning the index at the first match. <list> is
+// tx.Access or tx.Accounts. It returns an error if there is no such match.
 func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender basics.Address) (uint64, error) {
 	// Index 0 always corresponds to the sender
 	if target == sender {
