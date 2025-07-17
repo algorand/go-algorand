@@ -312,7 +312,7 @@ func (lr LocalsRef) Empty() bool {
 // Resolve looks up the referenced address and app in the access list. 0 is
 // returned if the App index is 0, meaning "current app".
 func (lr LocalsRef) Resolve(access []ResourceRef, sender basics.Address) (basics.Address, basics.AppIndex, error) {
-	address := sender
+	address := sender // Returned when lr.Address == 0
 	if lr.Address != 0 {
 		if lr.Address > uint64(len(access)) { // recall that Access is 1-based
 			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d outside tx.Access", lr.Address)
