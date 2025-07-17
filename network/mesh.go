@@ -47,6 +47,10 @@ type meshConfig struct {
 	netMesh            func() bool
 	peerStatReport     func()
 	closer             func()
+
+	// wsnet and p2pnet are used in hybrid relay mode
+	wsnet  *WebsocketNetwork
+	p2pnet *P2PNetwork
 }
 
 type meshStrategyOption func(*meshConfig)
@@ -93,6 +97,18 @@ func withMeshUpdateInterval(d time.Duration) meshStrategyOption {
 func withContext(ctx context.Context) meshStrategyOption {
 	return func(cfg *meshConfig) {
 		cfg.ctx = ctx
+	}
+}
+
+func withWebsocketNetwork(wsnet *WebsocketNetwork) meshStrategyOption {
+	return func(cfg *meshConfig) {
+		cfg.wsnet = wsnet
+	}
+}
+
+func withP2PNetwork(p2pnet *P2PNetwork) meshStrategyOption {
+	return func(cfg *meshConfig) {
+		cfg.p2pnet = p2pnet
 	}
 }
 
@@ -184,23 +200,29 @@ func (c *BaseMeshStrategyCreator) create(opts ...meshStrategyOption) (meshStrate
 
 // HybridRelayMeshStrategyCreator is a creator for the hybrid relay mesh strategy used in hybrid relays:
 // always use wsnet nodes
-type HybridRelayMeshStrategyCreator struct {
-	p2pnet *P2PNetwork
-	wsnet  *WebsocketNetwork
-}
+type HybridRelayMeshStrategyCreator struct{}
 
 func (c *HybridRelayMeshStrategyCreator) create(opts ...meshStrategyOption) (meshStrategy, error) {
+	var cfg meshConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	if cfg.wsnet == nil || cfg.p2pnet == nil {
+		return nil, errors.New("both websocket and p2p networks must be provided")
+	}
+
 	out := make(chan meshRequest, 5)
 	var wg sync.WaitGroup
 
 	creator := BaseMeshStrategyCreator{}
-	ctx := c.wsnet.ctx
+	ctx := cfg.wsnet.ctx
 	strategy, err := creator.create(
 		withContext(ctx),
-		withMeshNetMesh(c.wsnet.meshThreadInner),
+		withMeshNetMesh(cfg.wsnet.meshThreadInner),
 		withMeshPeerStatReport(func() {
-			c.wsnet.peerStater.sendPeerConnectionsTelemetryStatus(c.wsnet)
-			c.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(c.p2pnet)
+			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.wsnet)
+			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.p2pnet)
 		}),
 		withMeshCloser(func() {
 			wg.Wait()
@@ -219,7 +241,7 @@ func (c *HybridRelayMeshStrategyCreator) create(opts ...meshStrategyOption) (mes
 		select {
 		case <-ctx.Done():
 			return
-		case req := <-c.wsnet.meshUpdateRequests:
+		case req := <-cfg.wsnet.meshUpdateRequests:
 			out <- req
 		}
 	}()
@@ -229,7 +251,7 @@ func (c *HybridRelayMeshStrategyCreator) create(opts ...meshStrategyOption) (mes
 		select {
 		case <-ctx.Done():
 			return
-		case req := <-c.p2pnet.meshUpdateRequests:
+		case req := <-cfg.p2pnet.meshUpdateRequests:
 			out <- req
 		}
 	}()
