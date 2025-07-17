@@ -52,7 +52,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	var subnetMeshCreator MeshStrategyCreator = meshCreator
 	var hybridMeshCreator MeshStrategyCreator = &noopMeshStrategyCreator{}
 	_, isHybridMeshCreator := meshCreator.(*HybridRelayMeshStrategyCreator)
-	if meshCreator == nil && cfg.NetAddress != "" || isHybridMeshCreator {
+	if meshCreator == nil && cfg.IsHybridServer() || isHybridMeshCreator {
 		// no mesh strategy provided and this node is a listening/relaying node
 		// then override and use hybrid relay meshing strategy
 		// or, if a hybrid relay strategy requested explicitly, do the same
