@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -77,11 +78,13 @@ type prefetcherAlignmentTestLedger struct {
 	apps     map[basics.Address]map[basics.AppIndex]ledgercore.AppResource
 	assets   map[basics.Address]map[basics.AssetIndex]ledgercore.AssetResource
 	creators map[basics.CreatableIndex]basics.Address
+	kvs      map[string][]byte
 
 	requestedBalances map[basics.Address]struct{}
 	requestedApps     map[basics.Address]map[basics.AppIndex]struct{}
 	requestedAssets   map[basics.Address]map[basics.AssetIndex]struct{}
 	requestedCreators map[creatable]struct{}
+	requestedKvs      map[string]struct{}
 
 	// Protects requested* variables.
 	mu deadlock.Mutex
@@ -170,7 +173,17 @@ func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basic
 }
 
 func (l *prefetcherAlignmentTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
-	panic("not implemented")
+	l.mu.Lock()
+	if l.requestedKvs == nil {
+		l.requestedKvs = make(map[string]struct{})
+	}
+	l.requestedKvs[key] = struct{}{}
+	l.mu.Unlock()
+
+	if value, has := l.kvs[key]; has {
+		return value, nil
+	}
+	return nil, nil
 }
 
 func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -209,6 +222,18 @@ func parseLoadedAccountDataEntries(loadedAccountDataEntries []prefetcher.LoadedA
 	res := make(map[basics.Address]struct{})
 	for _, e := range loadedAccountDataEntries {
 		res[*e.Address] = struct{}{}
+	}
+	return res
+}
+
+func parseLoadedKVEntries(loadedKVEntries []prefetcher.LoadedKVEntry) map[string]struct{} {
+	if len(loadedKVEntries) == 0 {
+		return nil
+	}
+
+	res := make(map[string]struct{})
+	for _, e := range loadedKVEntries {
+		res[e.Key] = struct{}{}
 	}
 	return res
 }
@@ -282,6 +307,7 @@ type ledgerData struct {
 	Apps     map[basics.Address]map[basics.AppIndex]struct{}
 	Assets   map[basics.Address]map[basics.AssetIndex]struct{}
 	Creators map[creatable]struct{}
+	KVs      map[string]struct{}
 }
 
 // pretend adds the `before` addresses to the Accounts. It "pretends" that the
@@ -314,12 +340,14 @@ func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) l
 
 	accounts := parseLoadedAccountDataEntries(loaded.Accounts)
 	apps, assets, creators := parseLoadedResourcesEntries(loaded.Resources)
+	kvs := parseLoadedKVEntries(loaded.KVs)
 
 	return ledgerData{
 		Accounts: accounts,
 		Apps:     apps,
 		Assets:   assets,
 		Creators: creators,
+		KVs:      kvs,
 	}
 }
 
@@ -342,6 +370,7 @@ func run(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Transa
 	l.requestedApps = nil
 	l.requestedAssets = nil
 	l.requestedCreators = nil
+	l.requestedKvs = nil
 
 	runEval(t, l, txn)
 	requestedData := ledgerData{
@@ -349,6 +378,7 @@ func run(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Transa
 		Apps:     l.requestedApps,
 		Assets:   l.requestedAssets,
 		Creators: l.requestedCreators,
+		KVs:      l.requestedKvs,
 	}
 
 	return requestedData, prefetched
@@ -1469,6 +1499,335 @@ func TestEvaluatorPrefetcherAlignmentHeartbeat(t *testing.T) {
 			HbSeed:        committee.Seed(genesisHash()),
 			HbVoteID:      otss.OneTimeSignatureVerifier,
 			HbKeyDilution: 123,
+		},
+	}
+
+	requested, prefetched := run(t, l, txn)
+
+	prefetched.pretend(rewardsPool())
+	require.Equal(t, requested, prefetched)
+}
+
+func TestEvaluatorPrefetcherAlignmentApplicationCallWithBoxReference(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	appID := basics.AppIndex(5)
+	boxName := []byte("test-box")
+	boxKey := apps.MakeBoxKey(uint64(appID), string(boxName))
+	boxValue := []byte("test-value")
+
+	l := &prefetcherAlignmentTestLedger{
+		balances: map[basics.Address]ledgercore.AccountData{
+			rewardsPool(): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
+				},
+			},
+			makeAddress(1): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
+					TotalAppParams:      1,
+					TotalAppLocalStates: 1,
+				},
+			},
+			makeAddress(2): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
+					TotalAppLocalStates: 1,
+				},
+			},
+		},
+		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
+			makeAddress(1): {
+				appID: {
+					AppParams: &basics.AppParams{
+						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+					},
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+			makeAddress(2): {
+				appID: {
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+		},
+		creators: map[basics.CreatableIndex]basics.Address{
+			basics.CreatableIndex(appID): makeAddress(1),
+		},
+		kvs: map[string][]byte{
+			boxKey: boxValue,
+		},
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(2),
+			GenesisHash: genesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: appID,
+			Boxes: []transactions.BoxRef{
+				{
+					Index: 0, // refers to the ApplicationID
+					Name:  boxName,
+				},
+			},
+		},
+	}
+
+	requested, prefetched := run(t, l, txn)
+
+	prefetched.pretend(rewardsPool())
+	require.Equal(t, requested, prefetched)
+}
+
+func TestEvaluatorPrefetcherAlignmentApplicationCallWithMultipleBoxes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	appID := basics.AppIndex(5)
+	box1Name := []byte("box1")
+	box2Name := []byte("box2")
+	box1Key := apps.MakeBoxKey(uint64(appID), string(box1Name))
+	box2Key := apps.MakeBoxKey(uint64(appID), string(box2Name))
+	box1Value := []byte("value1")
+	box2Value := []byte("value2")
+
+	l := &prefetcherAlignmentTestLedger{
+		balances: map[basics.Address]ledgercore.AccountData{
+			rewardsPool(): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
+				},
+			},
+			makeAddress(1): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
+					TotalAppParams:      1,
+					TotalAppLocalStates: 1,
+				},
+			},
+			makeAddress(2): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
+					TotalAppLocalStates: 1,
+				},
+			},
+		},
+		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
+			makeAddress(1): {
+				appID: {
+					AppParams: &basics.AppParams{
+						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+					},
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+			makeAddress(2): {
+				appID: {
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+		},
+		creators: map[basics.CreatableIndex]basics.Address{
+			basics.CreatableIndex(appID): makeAddress(1),
+		},
+		kvs: map[string][]byte{
+			box1Key: box1Value,
+			box2Key: box2Value,
+		},
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(2),
+			GenesisHash: genesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: appID,
+			Boxes: []transactions.BoxRef{
+				{
+					Index: 0,
+					Name:  box1Name,
+				},
+				{
+					Index: 0,
+					Name:  box2Name,
+				},
+			},
+		},
+	}
+
+	requested, prefetched := run(t, l, txn)
+
+	prefetched.pretend(rewardsPool())
+	require.Equal(t, requested, prefetched)
+}
+
+func TestEvaluatorPrefetcherAlignmentApplicationCallWithNonExistentBox(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	appID := basics.AppIndex(5)
+	boxName := []byte("nonexistent-box")
+
+	l := &prefetcherAlignmentTestLedger{
+		balances: map[basics.Address]ledgercore.AccountData{
+			rewardsPool(): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
+				},
+			},
+			makeAddress(1): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
+					TotalAppParams:      1,
+					TotalAppLocalStates: 1,
+				},
+			},
+			makeAddress(2): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
+					TotalAppLocalStates: 1,
+				},
+			},
+		},
+		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
+			makeAddress(1): {
+				appID: {
+					AppParams: &basics.AppParams{
+						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+					},
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+			makeAddress(2): {
+				appID: {
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+		},
+		creators: map[basics.CreatableIndex]basics.Address{
+			basics.CreatableIndex(appID): makeAddress(1),
+		},
+		kvs: map[string][]byte{
+			// No box data - testing non-existent box
+		},
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(2),
+			GenesisHash: genesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: appID,
+			Boxes: []transactions.BoxRef{
+				{
+					Index: 0,
+					Name:  boxName,
+				},
+			},
+		},
+	}
+
+	requested, prefetched := run(t, l, txn)
+
+	prefetched.pretend(rewardsPool())
+	require.Equal(t, requested, prefetched)
+}
+
+func TestEvaluatorPrefetcherAlignmentApplicationCallWithForeignAppBox(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	appID := basics.AppIndex(5)
+	foreignAppID := basics.AppIndex(10)
+	boxName := []byte("foreign-app-box")
+	boxKey := apps.MakeBoxKey(uint64(foreignAppID), string(boxName))
+	boxValue := []byte("foreign-value")
+
+	l := &prefetcherAlignmentTestLedger{
+		balances: map[basics.Address]ledgercore.AccountData{
+			rewardsPool(): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
+				},
+			},
+			makeAddress(1): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000001},
+					TotalAppParams:      1,
+					TotalAppLocalStates: 1,
+				},
+			},
+			makeAddress(2): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000002},
+					TotalAppLocalStates: 1,
+				},
+			},
+			makeAddress(3): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1000003},
+					TotalAppParams:      1,
+					TotalAppLocalStates: 1,
+				},
+			},
+		},
+		apps: map[basics.Address]map[basics.AppIndex]ledgercore.AppResource{
+			makeAddress(1): {
+				appID: {
+					AppParams: &basics.AppParams{
+						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+					},
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+			makeAddress(2): {
+				appID: {
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+			makeAddress(3): {
+				foreignAppID: {
+					AppParams: &basics.AppParams{
+						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+					},
+					AppLocalState: &basics.AppLocalState{},
+				},
+			},
+		},
+		creators: map[basics.CreatableIndex]basics.Address{
+			basics.CreatableIndex(appID):        makeAddress(1),
+			basics.CreatableIndex(foreignAppID): makeAddress(3),
+		},
+		kvs: map[string][]byte{
+			boxKey: boxValue,
+		},
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(2),
+			GenesisHash: genesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: appID,
+			ForeignApps:   []basics.AppIndex{foreignAppID},
+			Boxes: []transactions.BoxRef{
+				{
+					Index: 1, // refers to ForeignApps[0]
+					Name:  boxName,
+				},
+			},
 		},
 	}
 

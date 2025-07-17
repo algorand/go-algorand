@@ -63,8 +63,8 @@ type LoadedResourceEntry struct {
 // LoadedKVEntry describes a loaded kv.
 type LoadedKVEntry struct {
 	// KV is the loaded kv entry.
-	key   string
-	value []byte
+	Key   string
+	Value []byte
 }
 
 // LoadedTransactionGroup is a helper struct to allow asynchronous loading of the account data needed by the transaction groups
@@ -565,8 +565,8 @@ func (p *resourcePrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, tas
 				continue
 			}
 			br := LoadedKVEntry{
-				key:   task.key,
-				value: value,
+				Key:   task.key,
+				Value: value,
 			}
 			task.groupTask.markCompletionKv(task.groupTaskIndex, br, groupDoneCh)
 			continue
