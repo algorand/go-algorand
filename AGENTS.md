@@ -30,6 +30,36 @@ make vet            # Run go vet
 make tidy           # Clean up go.mod files
 ```
 
+### Code Gen Verification
+
+Some code must be re-generated after changes. To verify that this wasn't missed, we run verification steps, which can be found in `scripts/travis/codegen_verification.sh`. If code is not clean, it will fail CI checks.
+
+The following commands from that file can be run manually, and source control checked for uncommitted changes. To regenerate code:
+
+```
+touch gen/generate.go                          # Force re-evaluation of genesis files
+make gen SHORT_PART_PERIOD=1                   # Regenerate genesis files
+make rebuild_kmd_swagger                       # Rebuild swagger.json files
+make generate                                  # Regenerate for stringer et al.
+GOPATH=$(go env GOPATH).                       # Set GOPATH for next command
+"$GOPATH"/bin/algofix -error */                # Run fixcheck
+make expectlint                                # Run expect linter
+touch data/transactions/logic/fields_string.go # Ensure rebuild of teal specs
+make -C data/transactions/logic                # Update TEAL Specs
+touch daemon/algod/api/algod.oas2.json         # Ensure rebuild of API spec
+make -C daemon/algod/api generate              # Regenerate REST server
+make msgp                                      # Regenerate msgp files
+make tidy                                      # Check for tidiness
+```
+
+Once this is done, check for changes:
+
+```
+git status --porcelain
+```
+
+This should return cleanly if all code was generated and committed properly.
+
 ### Development Setup
 ```bash
 ./scripts/configure_dev.sh                    # Initial environment setup
