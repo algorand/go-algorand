@@ -275,7 +275,7 @@ func (hr HoldingRef) Empty() bool {
 
 // Resolve looks up the referenced address and asset in the access list
 func (hr HoldingRef) Resolve(access []ResourceRef, sender basics.Address) (basics.Address, basics.AssetIndex, error) {
-	address := sender
+	address := sender // Returned when hr.Address == 0
 	if hr.Address != 0 {
 		if hr.Address > uint64(len(access)) { // recall that Access is 1-based
 			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d outside tx.Access", hr.Address)
