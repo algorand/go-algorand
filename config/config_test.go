@@ -31,7 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config/bounds"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -51,7 +50,7 @@ func TestLocal_SaveThenLoad(t *testing.T) {
 
 	c1, err := loadWithoutDefaults(defaultConfig)
 	require.NoError(t, err)
-	c1, err = migrate(c1)
+	c1, _, err = migrate(c1)
 	require.NoError(t, err)
 	var b1 bytes.Buffer
 	ser1 := json.NewEncoder(&b1)
@@ -249,7 +248,7 @@ func loadWithoutDefaults(cfg Local) (Local, error) {
 	if err != nil {
 		return Local{}, err
 	}
-	cfg, err = loadConfigFromFile(name)
+	cfg, _, err = loadConfigFromFile(name)
 	return cfg, err
 }
 
@@ -260,22 +259,22 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	c0, err := loadWithoutDefaults(GetVersionedDefaultLocalConfig(0))
 	a.NoError(err)
-	c0, err = migrate(c0)
+	c0, _, err = migrate(c0)
 	a.NoError(err)
-	cLatest, err := migrate(defaultLocal)
+	cLatest, _, err := migrate(defaultLocal)
 	a.NoError(err)
 
 	a.Equal(defaultLocal, c0)
 	a.Equal(defaultLocal, cLatest)
 
 	cLatest.Version = getLatestConfigVersion() + 1
-	_, err = migrate(cLatest)
+	_, _, err = migrate(cLatest)
 	a.Error(err)
 
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
 	c0Modified.BaseLoggerDebugLevel = GetVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
-	c0Modified, err = migrate(c0Modified)
+	c0Modified, _, err = migrate(c0Modified)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
 }
@@ -285,37 +284,29 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 
 	a := require.New(t)
 
-	// Set up logging to capture migration messages
-	var logBuffer bytes.Buffer
-	originalLevel := logging.Base().GetLevel()
-	defer func() {
-		logging.Base().SetOutput(os.Stderr)
-		logging.Base().SetLevel(originalLevel)
-	}()
-
-	logging.Base().SetOutput(&logBuffer)
-	logging.Base().SetLevel(logging.Info)
-
 	ourPath, err := os.Getwd()
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
 	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
-		c, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
+		c, migrations, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
 		a.NoError(err)
-		modified, err := migrate(c)
+		modified, _, err := migrate(c)
 		a.NoError(err)
 		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 
-		// Log migration messages for this version if any were captured
-		if logBuffer.Len() > 0 {
-			t.Logf("Migration messages for config-v%d.json:\n%s", configVersion, logBuffer.String())
-			logBuffer.Reset()
+		// Log migration messages for this version if any occurred
+		if len(migrations) > 0 {
+			t.Logf("Migration messages for config-v%d.json:", configVersion)
+			for _, m := range migrations {
+				t.Logf("  Automatically upgraded default value for %s from %v (version %d) to %v (version %d)",
+					m.FieldName, m.OldValue, m.OldVersion, m.NewValue, m.NewVersion)
+			}
 		}
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
-	_, err = migrate(cNext)
+	_, _, err = migrate(cNext)
 	a.Error(err)
 }
 

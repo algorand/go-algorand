@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-
-	"github.com/algorand/go-algorand/logging"
 )
 
 //go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example -t ../test/testdata/configs/config-v%d.json
@@ -31,15 +29,25 @@ import (
 // it's implemented in ./config/defaults_gen.go, and should be the only "consumer" of this exported variable
 var AutogenLocal = GetVersionedDefaultLocalConfig(getLatestConfigVersion())
 
-func migrate(cfg Local) (newCfg Local, err error) {
+// MigrationResult represents a single field migration from one version to another
+type MigrationResult struct {
+	FieldName              string
+	OldVersion, NewVersion uint32
+	OldValue, NewValue     any
+}
+
+func migrate(cfg Local) (newCfg Local, migrations []MigrationResult, err error) {
 	newCfg = cfg
-	currentVersion := cfg.Version // Store the original version we're migrating from
+	originalVersion := cfg.Version
 	latestConfigVersion := getLatestConfigVersion()
 
 	if cfg.Version > latestConfigVersion {
 		err = fmt.Errorf("unexpected config version: %d", cfg.Version)
 		return
 	}
+
+	// Track which fields were migrated during this entire process
+	migratedFields := make(map[string]MigrationResult)
 
 	for {
 		if newCfg.Version == latestConfigVersion {
@@ -80,7 +88,14 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					boolVal, _ := strconv.ParseBool(nextVersionDefaultValue)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetBool(boolVal)
-					logging.Base().Infof("Upgrading default configuration value for %s from version %d to %d", field.Name, currentVersion, nextVersion)
+					if existingMigration, exists := migratedFields[field.Name]; exists {
+						existingMigration.NewValue = boolVal
+						existingMigration.NewVersion = nextVersion
+						migratedFields[field.Name] = existingMigration
+					} else {
+						oldValue := reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Bool()
+						migratedFields[field.Name] = MigrationResult{FieldName: field.Name, OldVersion: originalVersion, NewVersion: nextVersion, OldValue: oldValue, NewValue: boolVal}
+					}
 				}
 			case reflect.Int32:
 				fallthrough
@@ -91,7 +106,15 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					intVal, _ := strconv.ParseInt(nextVersionDefaultValue, 10, 64)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetInt(intVal)
-					logging.Base().Infof("Upgrading default configuration value for %s from version %d to %d", field.Name, currentVersion, nextVersion)
+
+					if existingMigration, exists := migratedFields[field.Name]; exists {
+						existingMigration.NewValue = intVal
+						existingMigration.NewVersion = nextVersion
+						migratedFields[field.Name] = existingMigration
+					} else {
+						oldValue := reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Int()
+						migratedFields[field.Name] = MigrationResult{FieldName: field.Name, OldVersion: originalVersion, NewVersion: nextVersion, OldValue: oldValue, NewValue: intVal}
+					}
 				}
 			case reflect.Uint32:
 				fallthrough
@@ -103,14 +126,28 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					uintVal, _ := strconv.ParseUint(nextVersionDefaultValue, 10, 64)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetUint(uintVal)
 					if field.Name != "Version" {
-						logging.Base().Infof("Upgrading default configuration value for %s from version %d to %d", field.Name, currentVersion, nextVersion)
+						if existingMigration, exists := migratedFields[field.Name]; exists {
+							existingMigration.NewValue = uintVal
+							existingMigration.NewVersion = nextVersion
+							migratedFields[field.Name] = existingMigration
+						} else {
+							oldValue := reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Uint()
+							migratedFields[field.Name] = MigrationResult{FieldName: field.Name, OldVersion: originalVersion, NewVersion: nextVersion, OldValue: oldValue, NewValue: uintVal}
+						}
 					}
 				}
 			case reflect.String:
 				if reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).String() == reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).String() {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetString(nextVersionDefaultValue)
-					logging.Base().Infof("Upgrading default configuration value for %s from version %d to %d", field.Name, currentVersion, nextVersion)
+					if existingMigration, exists := migratedFields[field.Name]; exists {
+						existingMigration.NewValue = nextVersionDefaultValue
+						existingMigration.NewVersion = nextVersion
+						migratedFields[field.Name] = existingMigration
+					} else {
+						oldValue := reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).String()
+						migratedFields[field.Name] = MigrationResult{FieldName: field.Name, OldVersion: originalVersion, NewVersion: nextVersion, OldValue: oldValue, NewValue: nextVersionDefaultValue}
+					}
 				}
 			default:
 				panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Kind(), field.Name))
@@ -118,6 +155,11 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		}
 		newCfg.Version = nextVersion
 	}
+
+	for _, migration := range migratedFields {
+		migrations = append(migrations, migration)
+	}
+
 	return
 }
 
