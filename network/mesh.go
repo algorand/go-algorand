@@ -188,20 +188,19 @@ type MeshCreator interface {
 	create(opts ...meshOption) (mesher, error)
 }
 
-// BaseMeshCreator is a creator for the base mesh strategy used in our standard WS or P2P implementations:
+// baseMeshCreator is a creator for the base mesh strategy used in our standard WS or P2P implementations:
 // run a mesh thread that periodically checks for new peers.
-type BaseMeshCreator struct {
-}
+type baseMeshCreator struct{}
 
-func (c *BaseMeshCreator) create(opts ...meshOption) (mesher, error) {
+func (c *baseMeshCreator) create(opts ...meshOption) (mesher, error) {
 	return newBaseMesher(opts...)
 }
 
-// HybridRelayMeshCreator is a creator for the hybrid relay mesh strategy used in hybrid relays:
+// hybridRelayMeshCreator is a creator for the hybrid relay mesh strategy used in hybrid relays:
 // always use wsnet nodes
-type HybridRelayMeshCreator struct{}
+type hybridRelayMeshCreator struct{}
 
-func (c *HybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
+func (c *hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 	var cfg meshConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -214,9 +213,8 @@ func (c *HybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 	out := make(chan meshRequest, 5)
 	var wg sync.WaitGroup
 
-	creator := BaseMeshCreator{}
 	ctx := cfg.wsnet.ctx
-	mesh, err := creator.create(
+	mesh, err := newBaseMesher(
 		withContext(ctx),
 		withMeshNetMeshFn(cfg.wsnet.meshThreadInner),
 		withMeshPeerStatReporter(func() {
@@ -266,7 +264,5 @@ func (c *noopMeshCreator) create(opts ...meshOption) (mesher, error) {
 
 type noopMesh struct{}
 
-func (m *noopMesh) start() {
-}
-func (m *noopMesh) stop() {
-}
+func (m *noopMesh) start() {}
+func (m *noopMesh) stop()  {}

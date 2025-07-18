@@ -352,7 +352,7 @@ func (n *P2PNetwork) setup() error {
 	n.meshUpdateRequests = make(chan meshRequest, 5)
 	meshCreator := n.meshCreator
 	if meshCreator == nil {
-		meshCreator = &BaseMeshCreator{}
+		meshCreator = &baseMeshCreator{}
 	}
 	var err error
 	n.mesher, err = meshCreator.create(
