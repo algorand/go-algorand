@@ -156,8 +156,11 @@ func migrate(cfg Local) (newCfg Local, migrations []MigrationResult, err error) 
 		newCfg.Version = nextVersion
 	}
 
+	// Only return migrations where the value actually changed
 	for _, migration := range migratedFields {
-		migrations = append(migrations, migration)
+		if migration.OldValue != migration.NewValue {
+			migrations = append(migrations, migration)
+		}
 	}
 
 	return
