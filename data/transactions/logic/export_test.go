@@ -41,6 +41,7 @@ func (l *Ledger) DelBoxes(app basics.AppIndex, names ...string) {
 	}
 }
 
+var ConvertEPToAccess = convertEPToAccess
 var DefaultSigParams = defaultSigParams
 var DefaultAppParams = defaultAppParams
 var Exp = exp
@@ -53,6 +54,7 @@ var NoTrack = notrack
 var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes
+var TestAppFull = testAppFull
 var TestLogicRange = testLogicRange
 var TestProg = testProg
 var WithPanicOpcode = withPanicOpcode
@@ -61,6 +63,7 @@ var WithPanicOpcode = withPanicOpcode
 // can't export call this "TestApps" because it looks like a Test function with
 // the wrong signature. But we can get that effect with the alias below.
 func TryApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, ver uint64, ledger *Ledger, expected ...expect) (*EvalParams, error) {
+	t.Helper()
 	return testApps(t, programs, txgroup, protoVer(ver), ledger, expected...)
 }
 
