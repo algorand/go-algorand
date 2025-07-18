@@ -18,7 +18,7 @@ package network
 
 import (
 	"context"
-	"math/rand"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -40,7 +40,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
@@ -56,8 +55,7 @@ type P2PNetwork struct {
 	service     p2p.Service
 	log         logging.Logger
 	config      config.Local
-	genesisID   string
-	networkID   protocol.NetworkID
+	genesisInfo GenesisInfo
 	ctx         context.Context
 	ctxCancel   context.CancelFunc
 	peerStats   map[peer.ID]*p2pPeerStats
@@ -77,6 +75,10 @@ type P2PNetwork struct {
 	wsPeersChangeCounter           atomic.Int32
 	wsPeersConnectivityCheckTicker *time.Ticker
 	peerStater                     peerConnectionStater
+
+	meshUpdateRequests chan meshRequest
+	mesher             mesher
+	meshCreator        MeshCreator // save parameter to use in setup()
 
 	relayMessages bool // True if we should relay messages from other nodes (nominally true for relays, false otherwise)
 	wantTXGossip  atomic.Bool
@@ -213,7 +215,7 @@ var gossipSubTags = map[protocol.Tag]string{
 }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
-func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo, identityOpts *identityOpts) (*P2PNetwork, error) {
+func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, node NodeInfo, identityOpts *identityOpts, meshCreator MeshCreator) (*P2PNetwork, error) {
 	const readBufferLen = 2048
 
 	// create Peerstore and add phonebook addresses
@@ -221,7 +223,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	for malAddr, malErr := range malformedAddrs {
 		log.Infof("Ignoring malformed phonebook address %s: %s", malAddr, malErr)
 	}
-	pstore, err := peerstore.NewPeerStore(addrInfo, string(networkID))
+	pstore, err := peerstore.NewPeerStore(addrInfo, string(genesisInfo.NetworkID))
 	if err != nil {
 		return nil, err
 	}
@@ -230,8 +232,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	net := &P2PNetwork{
 		log:           log,
 		config:        cfg,
-		genesisID:     genesisID,
-		networkID:     networkID,
+		genesisInfo:   genesisInfo,
 		topicTags:     gossipSubTags,
 		wsPeers:       make(map[peer.ID]*wsPeer),
 		wsPeersToIDs:  make(map[*wsPeer]peer.ID),
@@ -239,6 +240,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		nodeInfo:      node,
 		pstore:        pstore,
 		relayMessages: relayMessages,
+		meshCreator:   meshCreator,
 		peerStater: peerConnectionStater{
 			log:                           log,
 			peerConnectionsUpdateInterval: time.Duration(cfg.PeerConnectionsUpdateInterval) * time.Second,
@@ -317,7 +319,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 	bootstrapper := &bootstrapper{
 		cfg:               cfg,
-		networkID:         networkID,
+		networkID:         net.genesisInfo.NetworkID,
 		phonebookPeers:    addrInfos,
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
@@ -326,7 +328,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	net.bootstrapperStop = bootstrapper.stop
 
 	if cfg.EnableDHTProviders {
-		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, networkID, net.log, bootstrapper.BootstrapFunc)
+		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, net.genesisInfo.NetworkID, net.log, bootstrapper.BootstrapFunc)
 		if err0 != nil {
 			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
 			return nil, err
@@ -336,8 +338,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 
 	net.httpServer = p2p.MakeHTTPServer(h)
 
-	err = net.setup()
-	if err != nil {
+	if err = net.setup(); err != nil {
 		return nil, err
 	}
 
@@ -348,6 +349,26 @@ func (n *P2PNetwork) setup() error {
 	if n.broadcaster.slowWritingPeerMonitorInterval == 0 {
 		n.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
+	n.meshUpdateRequests = make(chan meshRequest, 5)
+	meshCreator := n.meshCreator
+	if meshCreator == nil {
+		meshCreator = baseMeshCreator{}
+	}
+	var err error
+	n.mesher, err = meshCreator.create(
+		withContext(n.ctx),
+		withMeshExpJitterBackoff(),
+		withMeshNetMeshFn(n.meshThreadInner),
+		withMeshPeerStatReporter(func() {
+			n.peerStater.sendPeerConnectionsTelemetryStatus(n)
+		}),
+		withMeshUpdateRequest(n.meshUpdateRequests),
+		withMeshUpdateInterval(meshThreadInterval),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create mesh: %w", err)
+	}
+
 	return nil
 }
 
@@ -395,8 +416,8 @@ func (n *P2PNetwork) Start() error {
 	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n, "network", "P2PNetwork")
 
-	n.wg.Add(1)
-	go n.meshThread()
+	n.meshUpdateRequests <- meshRequest{}
+	n.mesher.start()
 
 	if n.capabilitiesDiscovery != nil {
 		n.capabilitiesDiscovery.AdvertiseCapabilities(n.nodeInfo.Capabilities()...)
@@ -433,6 +454,7 @@ func (n *P2PNetwork) Stop() {
 	n.service.Close()
 	n.bootstrapperStop()
 	n.httpServer.Close()
+	n.mesher.stop()
 	n.wg.Wait()
 }
 
@@ -457,12 +479,12 @@ func (n *P2PNetwork) innerStop() {
 }
 
 // meshThreadInner fetches nodes from DHT and attempts to connect to them
-func (n *P2PNetwork) meshThreadInner() int {
+func (n *P2PNetwork) meshThreadInner() bool {
 	defer n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 
 	// fetch peers from DNS
 	var dnsPeers, dhtPeers []peer.AddrInfo
-	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.networkID, dnsaddr.NewMultiaddrDNSResolveController(n.config.DNSSecurityTXTEnforced(), ""))
+	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.genesisInfo.NetworkID, dnsaddr.NewMultiaddrDNSResolveController(n.config.DNSSecurityTXTEnforced(), ""))
 
 	// discover peers from DHT
 	if n.capabilitiesDiscovery != nil {
@@ -486,7 +508,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 			for i := range dhtArchivalPeers {
 				replace[i] = &dhtArchivalPeers[i]
 			}
-			n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.ArchivalRole)
+			n.pstore.ReplacePeerList(replace, string(n.genesisInfo.NetworkID), phonebook.ArchivalRole)
 		}
 	}
 
@@ -496,45 +518,9 @@ func (n *P2PNetwork) meshThreadInner() int {
 		replace[i] = &peers[i]
 	}
 	if len(peers) > 0 {
-		n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.RelayRole)
+		n.pstore.ReplacePeerList(replace, string(n.genesisInfo.NetworkID), phonebook.RelayRole)
 	}
-	return len(peers)
-}
-
-func (n *P2PNetwork) meshThread() {
-	defer n.wg.Done()
-
-	timer := time.NewTicker(1) // start immediately and reset after
-
-	// Add exponential backoff with jitter to the mesh thread to handle new networks startup
-	// when no DNS or DHT peers are available.
-	// The parameters produce approximate the following delays (although they are random but the sequence give the idea):
-	// 2 2.4 4.6 9 20 19.5 28 24 14 14 35 60 60
-	ebf := backoff.NewExponentialDecorrelatedJitter(2*time.Second, meshThreadInterval, 3.0, rand.NewSource(rand.Int63()))
-	eb := ebf()
-
-	defer timer.Stop()
-	for {
-		select {
-		case <-timer.C:
-			numPeers := n.meshThreadInner()
-			if numPeers > 0 {
-				// found something, reset timer to the default value
-				timer.Reset(meshThreadInterval)
-				eb.Reset()
-			} else {
-				// no peers found, backoff
-				timer.Reset(eb.Delay())
-			}
-		case <-n.ctx.Done():
-			return
-		}
-
-		// send the currently connected peers information to the
-		// telemetry server; that would allow the telemetry server
-		// to construct a cross-node map of all the nodes interconnections.
-		n.peerStater.sendPeerConnectionsTelemetryStatus(n)
-	}
+	return len(peers) > 0
 }
 
 func (n *P2PNetwork) httpdThread() {
@@ -549,7 +535,7 @@ func (n *P2PNetwork) httpdThread() {
 
 // GetGenesisID implements GossipNode
 func (n *P2PNetwork) GetGenesisID() string {
-	return n.genesisID
+	return n.genesisInfo.GenesisID
 }
 
 // Address returns a string and whether that is a 'final' address or guessed.
@@ -651,7 +637,21 @@ func (n *P2PNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.Resp
 // `replace` optionally drops existing connections before making new ones.
 // `quit` chan allows cancellation.
 func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
-	n.meshThreadInner()
+	request := meshRequest{}
+	if quit != nil {
+		request.done = make(chan struct{})
+	}
+	select {
+	case n.meshUpdateRequests <- request:
+	case <-quit:
+		return
+	}
+	if request.done != nil {
+		select {
+		case <-request.done:
+		case <-quit:
+		}
+	}
 }
 
 func addrInfoToWsPeerCore(n *P2PNetwork, addrInfo *peer.AddrInfo) (wsPeerCore, bool) {
@@ -797,11 +797,6 @@ func (n *P2PNetwork) TelemetryGUID() string {
 // InstanceName returns the instance name of this node.
 func (n *P2PNetwork) InstanceName() string {
 	return ""
-}
-
-// GenesisID returns the genesis ID of this node.
-func (n *P2PNetwork) GenesisID() string {
-	return n.genesisID
 }
 
 // SupportedProtoVersions returns the supported protocol versions of this node.
