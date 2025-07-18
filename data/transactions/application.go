@@ -145,8 +145,8 @@ type ApplicationCallTxnFields struct {
 
 	// Boxes are the boxes that can be accessed by this transaction (and others
 	// in the same group). The Index in the BoxRef is the slot of ForeignApps
-	// that the name is associated with (shifted by 1, so 0 indicates "current
-	// app") If Access is used, the indexes refer to it.
+	// that the name is associated with (shifted by 1. 0 indicates "current
+	// app")
 	Boxes []BoxRef `codec:"apbx,allocbound=encodedMaxBoxes"`
 
 	// LocalStateSchema specifies the maximum number of each type that may
