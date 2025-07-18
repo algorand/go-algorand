@@ -599,7 +599,7 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
 	meshCreator := wn.meshCreator
 	if meshCreator == nil {
-		meshCreator = &baseMeshCreator{}
+		meshCreator = baseMeshCreator{}
 	}
 	var err error
 	wn.mesher, err = meshCreator.create(

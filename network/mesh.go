@@ -192,7 +192,7 @@ type MeshCreator interface {
 // run a mesh thread that periodically checks for new peers.
 type baseMeshCreator struct{}
 
-func (c *baseMeshCreator) create(opts ...meshOption) (mesher, error) {
+func (c baseMeshCreator) create(opts ...meshOption) (mesher, error) {
 	return newBaseMesher(opts...)
 }
 
@@ -200,7 +200,7 @@ func (c *baseMeshCreator) create(opts ...meshOption) (mesher, error) {
 // always use wsnet nodes
 type hybridRelayMeshCreator struct{}
 
-func (c *hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
+func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 	var cfg meshConfig
 	for _, opt := range opts {
 		opt(&cfg)
