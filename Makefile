@@ -195,7 +195,7 @@ ifeq ($(OS_TYPE),darwin)
 	mkdir -p $(GOBIN)
 	for binary in $$(ls $(GOBIN)-darwin-arm64); do \
 		skip=false; \
-		for nongo_file in $(NONGO_BIN_FILES) $(GOBIN)/update.sh ; do \
+		for nongo_file in $(NONGO_BIN_FILES) $(GOBIN)/node_exporter; do \
 			if [ "$(GOBIN)/$$binary" = "$$nongo_file" ]; then \
 				echo "Skipping non-binary file: $$binary"; \
 				skip=true; \
@@ -213,8 +213,17 @@ ifeq ($(OS_TYPE),darwin)
 			echo "Warning: Binary $$binary exists in arm64 but not in amd64"; \
 		fi; \
 	done
-		# for node_exporter cross-compilation is using universal binary already
-		cp -f $(GOBIN)-darwin-arm64/node_exporter $(GOBIN)/node_exporter
+	# copy NONGO_BIN files
+	for nongo_file in $(NONGO_BIN_FILES); do \
+		short_name=$$(basename $$nongo_file); \
+		if [ -f $(GOBIN)-darwin-arm64/$$short_name ]; then \
+			cp -f $(GOBIN)-darwin-arm64/$$short_name $$nongo_file; \
+		else \
+			echo "Warning: NONGO_BIN file $$short_name does not exist in arm64"; \
+		fi; \
+	done
+	# for node_exporter cross-compilation is using universal binary already
+	cp -f $(GOBIN)-darwin-arm64/node_exporter $(GOBIN)/node_exporter
 else
 	echo "OS_TYPE must be darwin for universal builds, skipping"
 endif
@@ -336,6 +345,7 @@ clean:
 	rm -rf crypto/libs
 	rm -rf crypto/copies
 	rm -rf ./gen/devnet ./gen/mainnetnet ./gen/testnet
+	rm -rf $(GOBIN)-darwin-amd64 $(GOBIN)-darwin-arm64
 
 # clean without crypto
 cleango:
