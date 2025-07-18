@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
 //go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example -t ../test/testdata/configs/config-v%d.json
@@ -31,6 +33,7 @@ var AutogenLocal = GetVersionedDefaultLocalConfig(getLatestConfigVersion())
 
 func migrate(cfg Local) (newCfg Local, err error) {
 	newCfg = cfg
+	currentVersion := cfg.Version // Store the original version we're migrating from
 	latestConfigVersion := getLatestConfigVersion()
 
 	if cfg.Version > latestConfigVersion {
@@ -77,6 +80,7 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					boolVal, _ := strconv.ParseBool(nextVersionDefaultValue)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetBool(boolVal)
+					logging.Base().Infof("Upgrading default configuration value for %s from version %d to %d", field.Name, currentVersion, nextVersion)
 				}
 			case reflect.Int32:
 				fallthrough
@@ -87,6 +91,7 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					intVal, _ := strconv.ParseInt(nextVersionDefaultValue, 10, 64)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetInt(intVal)
+					logging.Base().Infof("Upgrading default configuration value for %s from version %d to %d", field.Name, currentVersion, nextVersion)
 				}
 			case reflect.Uint32:
 				fallthrough
@@ -97,16 +102,21 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					uintVal, _ := strconv.ParseUint(nextVersionDefaultValue, 10, 64)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetUint(uintVal)
+					if field.Name != "Version" {
+						logging.Base().Infof("Upgrading default configuration value for %s from version %d to %d", field.Name, currentVersion, nextVersion)
+					}
 				}
 			case reflect.String:
 				if reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).String() == reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).String() {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetString(nextVersionDefaultValue)
+					logging.Base().Infof("Upgrading default configuration value for %s from version %d to %d", field.Name, currentVersion, nextVersion)
 				}
 			default:
 				panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Kind(), field.Name))
 			}
 		}
+		newCfg.Version = nextVersion
 	}
 	return
 }

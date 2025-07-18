@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -284,6 +285,17 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 
 	a := require.New(t)
 
+	// Set up logging to capture migration messages
+	var logBuffer bytes.Buffer
+	originalLevel := logging.Base().GetLevel()
+	defer func() {
+		logging.Base().SetOutput(os.Stderr)
+		logging.Base().SetLevel(originalLevel)
+	}()
+
+	logging.Base().SetOutput(&logBuffer)
+	logging.Base().SetLevel(logging.Info)
+
 	ourPath, err := os.Getwd()
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
@@ -294,6 +306,12 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 		modified, err := migrate(c)
 		a.NoError(err)
 		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
+
+		// Log migration messages for this version if any were captured
+		if logBuffer.Len() > 0 {
+			t.Logf("Migration messages for config-v%d.json:\n%s", configVersion, logBuffer.String())
+			logBuffer.Reset()
+		}
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
