@@ -302,6 +302,8 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 		err := s.dialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {
 			s.log.Warnf("failed to connect to peer %s: %v", peerInfo.ID, err)
+		} else {
+			numOutgoingConns++
 		}
 	}
 }

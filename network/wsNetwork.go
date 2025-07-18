@@ -604,6 +604,7 @@ func (wn *WebsocketNetwork) setup() error {
 	var err error
 	wn.mesher, err = meshCreator.create(
 		withContext(wn.ctx),
+		withTargetConnCount(wn.config.GossipFanout),
 		withMeshNetMeshFn(wn.meshThreadInner),
 		withMeshPeerStatReporter(func() {
 			wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
@@ -1560,22 +1561,25 @@ type meshRequest struct {
 	done chan struct{}
 }
 
-func (wn *WebsocketNetwork) meshThreadInner() bool {
+func (wn *WebsocketNetwork) meshThreadInner(targetConnCount int) int {
 	wn.refreshRelayArchivePhonebookAddresses()
 
 	// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
 	// kick off the creation of new connections.
 	for {
-		if wn.checkNewConnectionsNeeded() {
+		if wn.checkNewConnectionsNeeded(targetConnCount) {
 			// new connections were created.
 			break
 		}
-		if !wn.checkExistingConnectionsNeedDisconnecting() {
+		if !wn.checkExistingConnectionsNeedDisconnecting(targetConnCount) {
 			// no connection were removed.
 			break
 		}
 	}
-	return true
+
+	// Return true if we created new connections OR if we already have enough connections
+	currentConnections := wn.numOutgoingPeers() + wn.numOutgoingPending()
+	return currentConnections
 }
 
 func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
@@ -1617,15 +1621,14 @@ func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiv
 // it returns false if no connections are needed, and true otherwise.
 // note that the determination of needed connection could be inaccurate, and it might return false while
 // more connection should be created.
-func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
-	desired := wn.config.GossipFanout
+func (wn *WebsocketNetwork) checkNewConnectionsNeeded(targetConnCount int) bool {
 	numOutgoingTotal := wn.numOutgoingPeers() + wn.numOutgoingPending()
-	need := desired - numOutgoingTotal
+	need := targetConnCount - numOutgoingTotal
 	if need <= 0 {
 		return false
 	}
 	// get more than we need so that we can ignore duplicates
-	newAddrs := wn.phonebook.GetAddresses(desired+numOutgoingTotal, phonebook.RelayRole)
+	newAddrs := wn.phonebook.GetAddresses(targetConnCount+numOutgoingTotal, phonebook.RelayRole)
 	for _, na := range newAddrs {
 		if na == wn.config.PublicAddress {
 			// filter out self-public address, so we won't try to connect to ourselves.
@@ -1646,11 +1649,11 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 
 // checkExistingConnectionsNeedDisconnecting check to see if existing connection need to be dropped due to
 // performance issues and/or network being stalled.
-func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
+func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting(targetConnCount int) bool {
 	// we already connected ( or connecting.. ) to  GossipFanout peers.
 	// get the actual peers.
 	outgoingPeers := wn.outgoingPeers()
-	if len(outgoingPeers) < wn.config.GossipFanout {
+	if len(outgoingPeers) < targetConnCount {
 		// reset the performance monitor.
 		wn.connPerfMonitor.Reset([]Peer{})
 		return wn.checkNetworkAdvanceDisconnect()
