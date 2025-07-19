@@ -17,6 +17,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/algorand/go-algorand/logging"
@@ -113,7 +115,8 @@ func LoadConfigFromDisk(custom string) (c Local, err error) {
 func loadConfigFromFile(configFile string) (c Local, err error) {
 	c = defaultLocal
 	c.Version = 0 // Reset to 0 so we get the version from the loaded file.
-	c, err = mergeConfigFromFile(configFile, c)
+	var explicitFields map[string]interface{}
+	c, explicitFields, err = mergeConfigFromFile(configFile, c)
 	if err != nil {
 		return
 	}
@@ -121,7 +124,7 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	// Migrate in case defaults were changed
 	// If a config file does not have version, it is assumed to be zero.
 	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
-	c, err = migrate(c)
+	c, err = migrate(c, explicitFields)
 	return
 }
 
@@ -131,22 +134,70 @@ func GetDefaultLocal() Local {
 }
 
 func mergeConfigFromDir(root string, source Local) (Local, error) {
-	return mergeConfigFromFile(filepath.Join(root, ConfigFilename), source)
+	c, _, err := mergeConfigFromFile(filepath.Join(root, ConfigFilename), source)
+	return c, err
 }
 
-func mergeConfigFromFile(configpath string, source Local) (Local, error) {
+var versionedDefaultLocal = map[uint32]reflect.Value{}
+
+func mergeConfigFromFile(configpath string, source Local) (Local, map[string]interface{}, error) {
 	f, err := os.Open(configpath)
 	if err != nil {
-		return source, err
+		return source, nil, err
 	}
-	defer f.Close()
-
-	err = loadConfig(f, &source)
+	data, err := io.ReadAll(f)
+	_ = f.Close()
 	if err != nil {
-		return source, err
+		return source, nil, err
 	}
+
+	reader := bytes.NewReader(data)
+	err = loadConfig(reader, &source)
+	if err != nil {
+		return source, nil, err
+	}
+
+	_, err = reader.Seek(0, 0)
+	if err != nil {
+		return source, nil, err
+	}
+	explicitFields, err := loadConfigAsMap(reader)
+	if err != nil {
+		return source, nil, err
+	}
+	// it is possible that the config file is just a full dump of default values at some version
+	// in this case ignore the explicit fields all together
+	if len(explicitFields) > 0 {
+		latestVersion := getLatestConfigVersion()
+		currentVersion := uint32(0)
+		if version, ok := explicitFields["Version"]; ok {
+			currentVersion = uint32(version.(float64))
+		}
+		if currentVersion > latestVersion {
+			return source, nil, errors.New("config file version is greater than the latest supported version")
+		}
+
+		if currentVersion != 0 {
+			// if version is set we'll compare only two versioned defaults
+			latestVersion = currentVersion
+		}
+		// try to find any config default that matches to explicitFields
+		var vcfg reflect.Value
+		var ok bool
+		for v := currentVersion; v <= latestVersion; v++ {
+			if vcfg, ok = versionedDefaultLocal[v]; !ok {
+				vcfg = getVersionedLocalInstance(v)
+				versionedDefaultLocal[v] = vcfg
+			}
+			if matchDefaultVsMap(vcfg, explicitFields, currentVersion) {
+				explicitFields = nil
+				break
+			}
+		}
+	}
+
 	source, err = enrichNetworkingConfig(source)
-	return source, err
+	return source, explicitFields, err
 }
 
 // enrichNetworkingConfig makes the following tweaks to the config:
@@ -175,6 +226,13 @@ func enrichNetworkingConfig(source Local) (Local, error) {
 func loadConfig(reader io.Reader, config *Local) error {
 	dec := json.NewDecoder(reader)
 	return dec.Decode(config)
+}
+
+func loadConfigAsMap(reader io.Reader) (map[string]interface{}, error) {
+	explicitFields := make(map[string]interface{})
+	dec := json.NewDecoder(reader)
+	err := dec.Decode(&explicitFields)
+	return explicitFields, err
 }
 
 type phonebookBlackWhiteList struct {
