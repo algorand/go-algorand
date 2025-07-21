@@ -313,7 +313,6 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		Handler: net.wsStreamHandlerV1,
 	})
 	// END TODO
-	// net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, hm, p2p.SetPubSubMetricsTracer(pubsubMetricsTracer{}), p2p.DisablePubSubPeerExchange())
 	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, hm, opts...)
 	if err != nil {
 		return nil, err
