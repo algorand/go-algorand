@@ -213,8 +213,8 @@ _available_. These resources are:
    the as the asset's URL, Name, or privileged addresses.
  * Holdings, which must be available to access a particular address's
    balance or frozen status for a particular asset.
- * Apps, which must be available to read an application's programs, or
-   global state.
+ * Applications, which must be available to read an application's
+   programs, parameters, or global state.
  * Locals, which must be available to read a particular address's local
    state for a particular application.
  * Boxes, which must be available to read or write a box, designated
@@ -246,7 +246,7 @@ in the same group.
    contract present in the `txn.ForeignApplications` field is
    _available_.
 
- * in v4 and above applications, Holdings and Locals are _available_
+ * In v4 and above applications, Holdings and Locals are _available_
    if, both components of the resource are available according to the
    above rules.
 

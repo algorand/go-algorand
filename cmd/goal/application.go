@@ -78,8 +78,8 @@ var (
 	appStrAccounts []string
 
 	// for these, an omitted addr is the sender. an omitted app is the called app.
-	appStrHoldings []string // format: asset,addr OR asset ->  5245,XQJEJECPWUOXSKMIC5TCSARPVGHQJIIOKHO7WTKEPPLJMKG3D7VWWID66E
-	appStrLocals   []string // format: app,addr OR app OR addr OR
+	appStrHoldings []string // format: asset+addr OR asset ex: 5245+XQJEJECPWUOXSKMIC5TCSARPVGHQJIIOKHO7WTKEPPLJMKG3D7VWWID66E
+	appStrLocals   []string // format: app+addr OR app OR addr
 
 	// controls whether all these refs put into the old-style "foreign arrays" or the new-style tx.Access
 	appUseAccess bool
@@ -282,7 +282,7 @@ func parseBoxRef(arg string) boxRef {
 }
 
 // parseHoldingRef parses a command-line box ref, which is an assetId and an
-// optional address, separated by a comma. No address means Sender.
+// optional address, separated by a plus sign. No address means Sender.
 func parseHoldingRef(arg string) holdingRef {
 	assetStr, address, _ := strings.Cut(arg, "+")
 	assetID := parseUInt64(assetStr, "asset id", "holding ref")
@@ -294,7 +294,7 @@ func parseHoldingRef(arg string) holdingRef {
 }
 
 // parseLocalRef parses a command-line local state ref, which is an optional appId
-// and an optional address, separated by a comma. No appId means the called app,
+// and an optional address, separated by a plus sign. No appId means the called app,
 // No address means Sender. They can not _both_ be omitted, as that is a
 // non-sensical LocalRef - it would make the local state of the sender for the
 // current app available. That is implicitly available already.
