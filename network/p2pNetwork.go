@@ -292,6 +292,13 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 	log.Infof("P2P host created: peer ID %s addrs %s", h.ID(), h.Addrs())
 
+	var extraOpts networkConfig
+	if meshCreator != nil {
+		extraOpts = meshCreator.makeConfig(nil, net)
+	}
+
+	opts := append([]p2p.PubSubOption{p2p.SetPubSubMetricsTracer(pubsubMetricsTracer{})}, extraOpts.pubsubOpts...)
+
 	// TODO: remove after consensus v41 takes effect.
 	// ordered list of supported protocol versions
 	hm := p2p.StreamHandlers{}
@@ -306,7 +313,8 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		Handler: net.wsStreamHandlerV1,
 	})
 	// END TODO
-	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, hm, pubsubMetricsTracer{})
+	// net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, hm, p2p.SetPubSubMetricsTracer(pubsubMetricsTracer{}), p2p.DisablePubSubPeerExchange())
+	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, hm, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -370,6 +378,10 @@ func (n *P2PNetwork) setup() error {
 	}
 
 	return nil
+}
+
+func (n *P2PNetwork) p2pRelayPeerFilter(checker peerstore.RoleChecker, pid peer.ID) bool {
+	return !checker.HasRole(pid, phonebook.RelayRole)
 }
 
 // PeerID returns this node's peer ID.
