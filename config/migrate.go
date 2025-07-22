@@ -153,7 +153,6 @@ func migrate(cfg Local) (newCfg Local, migrations []MigrationResult, err error) 
 				panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Kind(), field.Name))
 			}
 		}
-		newCfg.Version = nextVersion
 	}
 
 	// Only return migrations where the value actually changed
