@@ -259,10 +259,12 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	c0, err := loadWithoutDefaults(GetVersionedDefaultLocalConfig(0))
 	a.NoError(err)
-	c0, _, err = migrate(c0)
+	c0, migrations0, err := migrate(c0)
 	a.NoError(err)
-	cLatest, _, err := migrate(defaultLocal)
+	a.Empty(migrations0)
+	cLatest, migrationsLatest, err := migrate(defaultLocal)
 	a.NoError(err)
+	a.Empty(migrationsLatest)
 
 	a.Equal(defaultLocal, c0)
 	a.Equal(defaultLocal, cLatest)
@@ -274,9 +276,29 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
 	c0Modified.BaseLoggerDebugLevel = GetVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
-	c0Modified, _, err = migrate(c0Modified)
+	c0Modified, migrationsModified, err := migrate(c0Modified)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
+
+	// Assert specific important migrations covering different data types
+	a.NotEmpty(migrationsModified)
+	migrationMap := make(map[string]MigrationResult)
+	for _, m := range migrationsModified {
+		a.NotEqual("Version", m.FieldName)
+		a.NotContains(migrationMap, m.FieldName)
+		migrationMap[m.FieldName] = m
+	}
+	for _, expected := range []MigrationResult{
+		{FieldName: "IncomingConnectionsLimit", OldValue: int64(-1), NewValue: int64(2400), OldVersion: 0, NewVersion: 27},
+		{FieldName: "TxPoolSize", OldValue: int64(50000), NewValue: int64(75000), OldVersion: 0, NewVersion: 23},
+		{FieldName: "ProposalAssemblyTime", OldValue: int64(0), NewValue: int64(500000000), OldVersion: 0, NewVersion: 23},
+		{FieldName: "AgreementIncomingVotesQueueLength", OldValue: uint64(0), NewValue: uint64(20000), OldVersion: 0, NewVersion: 27},
+		{FieldName: "EnableTxBacklogRateLimiting", OldValue: false, NewValue: true, OldVersion: 0, NewVersion: 30},
+		{FieldName: "DNSBootstrapID", OldValue: "<network>.algorand.network", NewValue: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)", OldVersion: 0, NewVersion: 28},
+	} {
+		a.Contains(migrationMap, expected.FieldName)
+		a.Equal(expected, migrationMap[expected.FieldName])
+	}
 }
 
 func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
@@ -295,13 +317,39 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 		a.NoError(err)
 		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 
-		// Log migration messages for this version if any occurred
 		if len(migrations) > 0 {
-			t.Logf("Migration messages for config-v%d.json:", configVersion)
+			t.Logf("Migration results for config-v%d.json:", configVersion)
 			for _, m := range migrations {
 				t.Logf("  Automatically upgraded default value for %s from %v (version %d) to %v (version %d)",
 					m.FieldName, m.OldValue, m.OldVersion, m.NewValue, m.NewVersion)
 			}
+		}
+
+		// Spot-check specific migrations
+		expectedMigrations := map[uint32]MigrationResult{
+			1:  {FieldName: "TxPoolSize", OldValue: 50000, NewValue: 75000, OldVersion: 1, NewVersion: 23},
+			3:  {FieldName: "MaxConnectionsPerIP", OldValue: 30, NewValue: 8, OldVersion: 3, NewVersion: 35},
+			5:  {FieldName: "TxPoolSize", OldValue: 15000, NewValue: 75000, OldVersion: 5, NewVersion: 23},
+			17: {FieldName: "IncomingConnectionsLimit", OldValue: 800, NewValue: 2400, OldVersion: 17, NewVersion: 27},
+			19: {FieldName: "ProposalAssemblyTime", OldValue: 250000000, NewValue: 500000000, OldVersion: 19, NewVersion: 23},
+			21: {FieldName: "AgreementIncomingVotesQueueLength", OldValue: 10000, NewValue: 20000, OldVersion: 21, NewVersion: 27},
+			23: {FieldName: "CadaverSizeTarget", OldValue: 1073741824, NewValue: 0, OldVersion: 23, NewVersion: 24},
+			27: {FieldName: "EnableTxBacklogRateLimiting", OldValue: false, NewValue: true, OldVersion: 27, NewVersion: 30},
+			30: {FieldName: "DNSSecurityFlags", OldValue: 1, NewValue: 9, OldVersion: 30, NewVersion: 34},
+		}
+		if expected, ok := expectedMigrations[configVersion]; ok {
+			found := false
+			for _, m := range migrations {
+				if m.FieldName == expected.FieldName {
+					found = true
+					a.EqualValues(expected.OldValue, m.OldValue)
+					a.EqualValues(expected.NewValue, m.NewValue)
+					a.EqualValues(expected.OldVersion, m.OldVersion)
+					a.EqualValues(expected.NewVersion, m.NewVersion)
+					break
+				}
+			}
+			a.True(found, "v%d should have %s migration", configVersion, expected.FieldName)
 		}
 	}
 
