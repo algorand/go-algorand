@@ -49,18 +49,20 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	p2pcfg.IncomingConnectionsLimit = cfg.P2PHybridIncomingConnectionsLimit
 	identityTracker := NewIdentityTracker()
 
-	var childNetMeshCreator MeshCreator = meshCreator
-	var hybridMeshCreator MeshCreator = &noopMeshCreator{}
+	var childWsNetMeshCreator MeshCreator = meshCreator
+	var childP2PNetMeshCreator MeshCreator = meshCreator
+	var hybridMeshCreator MeshCreator = noopMeshCreator{}
 	_, isHybridMeshCreator := meshCreator.(hybridRelayMeshCreator)
 	if meshCreator == nil && cfg.IsHybridServer() || isHybridMeshCreator {
 		// no mesh creator provided and this node is a listening/relaying node
 		// then override and use hybrid relay meshing
 		// or, if a hybrid relay meshing requested explicitly, do the same
-		childNetMeshCreator = &noopMeshCreator{}
+		childWsNetMeshCreator = noopMeshCreator{}
+		childP2PNetMeshCreator = noopMeshPubSubFilteredCreator{}
 		hybridMeshCreator = hybridRelayMeshCreator{}
 	}
 
-	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisInfo, nodeInfo, &identityOpts{tracker: identityTracker}, childNetMeshCreator)
+	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisInfo, nodeInfo, &identityOpts{tracker: identityTracker}, childP2PNetMeshCreator)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +71,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 		tracker: identityTracker,
 		scheme:  NewIdentityChallengeScheme(NetIdentityDedupNames(cfg.PublicAddress, p2pnet.PeerID().String()), NetIdentitySigner(p2pnet.PeerIDSigner())),
 	}
-	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisInfo, nodeInfo, &identOpts, childNetMeshCreator)
+	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisInfo, nodeInfo, &identOpts, childWsNetMeshCreator)
 	if err != nil {
 		return nil, err
 	}

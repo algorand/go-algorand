@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 )
 
@@ -183,9 +184,14 @@ func (m *baseMesher) stop() {
 	}
 }
 
+type networkConfig struct {
+	pubsubOpts []p2p.PubSubOption // at the moment only pubsub configuration options only
+}
+
 // MeshCreator is an interface for creating mesh strategies.
 type MeshCreator interface {
 	create(opts ...meshOption) (mesher, error)
+	makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig
 }
 
 // baseMeshCreator is a creator for the base mesh strategy used in our standard WS or P2P implementations:
@@ -194,6 +200,10 @@ type baseMeshCreator struct{}
 
 func (c baseMeshCreator) create(opts ...meshOption) (mesher, error) {
 	return newBaseMesher(opts...)
+}
+
+func (c baseMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{}
 }
 
 // hybridRelayMeshCreator is a creator for the hybrid relay mesh strategy used in hybrid relays:
@@ -256,13 +266,34 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 	return mesh, nil
 }
 
+func (c hybridRelayMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{}
+}
+
 type noopMeshCreator struct{}
 
-func (c *noopMeshCreator) create(opts ...meshOption) (mesher, error) {
+func (c noopMeshCreator) create(opts ...meshOption) (mesher, error) {
 	return &noopMesh{}, nil
+}
+func (c noopMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{}
 }
 
 type noopMesh struct{}
 
 func (m *noopMesh) start() {}
 func (m *noopMesh) stop()  {}
+
+type noopMeshPubSubFilteredCreator struct{}
+
+func (c noopMeshPubSubFilteredCreator) create(opts ...meshOption) (mesher, error) {
+	return &noopMesh{}, nil
+}
+func (c noopMeshPubSubFilteredCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{
+		pubsubOpts: []p2p.PubSubOption{
+			p2p.DisablePubSubPeerExchange(),
+			p2p.SetPubSubPeerFilter(p2pnet.p2pRelayPeerFilter, p2pnet.pstore),
+		},
+	}
+}

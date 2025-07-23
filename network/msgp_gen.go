@@ -1261,22 +1261,22 @@ func (z peerMetaHeaders) MarshalMsg(b []byte) (o []byte) {
 	} else {
 		o = msgp.AppendMapHeader(o, uint32(len(z)))
 	}
-	za0005_keys := make([]string, 0, len(z))
-	for za0005 := range z {
-		za0005_keys = append(za0005_keys, za0005)
+	za0006_keys := make([]string, 0, len(z))
+	for za0006 := range z {
+		za0006_keys = append(za0006_keys, za0006)
 	}
-	sort.Sort(SortString(za0005_keys))
-	for _, za0005 := range za0005_keys {
-		za0006 := z[za0005]
-		_ = za0006
-		o = msgp.AppendString(o, za0005)
-		if za0006 == nil {
+	sort.Sort(SortString(za0006_keys))
+	for _, za0006 := range za0006_keys {
+		za0007 := z[za0006]
+		_ = za0007
+		o = msgp.AppendString(o, za0006)
+		if za0007 == nil {
 			o = msgp.AppendNil(o)
 		} else {
-			o = msgp.AppendArrayHeader(o, uint32(len(za0006)))
+			o = msgp.AppendArrayHeader(o, uint32(len(za0007)))
 		}
-		for za0007 := range za0006 {
-			o = msgp.AppendString(o, za0006[za0007])
+		for za0008 := range za0007 {
+			o = msgp.AppendString(o, za0007[za0008])
 		}
 	}
 	return
@@ -1367,12 +1367,12 @@ func (_ *peerMetaHeaders) CanUnmarshalMsg(z interface{}) bool {
 func (z peerMetaHeaders) Msgsize() (s int) {
 	s = msgp.MapHeaderSize
 	if z != nil {
-		for za0005, za0006 := range z {
-			_ = za0005
+		for za0006, za0007 := range z {
 			_ = za0006
-			s += 0 + msgp.StringPrefixSize + len(za0005) + msgp.ArrayHeaderSize
-			for za0007 := range za0006 {
-				s += msgp.StringPrefixSize + len(za0006[za0007])
+			_ = za0007
+			s += 0 + msgp.StringPrefixSize + len(za0006) + msgp.ArrayHeaderSize
+			for za0008 := range za0007 {
+				s += msgp.StringPrefixSize + len(za0007[za0008])
 			}
 		}
 	}
@@ -1389,12 +1389,12 @@ func PeerMetaHeadersMaxSize() (s int) {
 	s += msgp.MapHeaderSize
 	// Adding size of map keys for z
 	s += maxHeaderKeys
-	panic("Unable to determine max size: String type za0005 is unbounded")
+	panic("Unable to determine max size: String type za0006 is unbounded")
 	// Adding size of map values for z
 	s += maxHeaderKeys
-	// Calculating size of slice: za0006
+	// Calculating size of slice: za0007
 	s += msgp.ArrayHeaderSize
-	panic("Unable to determine max size: String type is unbounded for za0006[za0007]")
+	panic("Unable to determine max size: String type is unbounded for za0007[za0008]")
 	return
 }
 

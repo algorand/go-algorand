@@ -175,7 +175,7 @@ func run() int {
 	checkAndDeleteIndexerFile("indexer.sqlite-shm")
 	checkAndDeleteIndexerFile("indexer.sqlite-wal")
 
-	cfg, err := config.LoadConfigFromDisk(absolutePath)
+	cfg, migrationResults, err := config.LoadConfigFromDiskWithMigrations(absolutePath)
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Cannot load config: %v", err)
@@ -371,7 +371,7 @@ func run() int {
 		cfg.LogSizeLimit = 0
 	}
 
-	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
+	err = s.Initialize(cfg, phonebookAddresses, string(genesisText), migrationResults)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)
