@@ -78,7 +78,7 @@ type Server struct {
 }
 
 // Initialize creates a Node instance with applicable network services
-func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genesisText string) error {
+func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genesisText string, migrationResults []config.MigrationResult) error {
 	// set up node
 	s.log = logging.Base()
 
@@ -233,6 +233,11 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		s.log.Infoln("Telemetry Disabled")
 	}
 	s.log.Infoln("++++++++++++++++++++++++++++++++++++++++")
+
+	for _, m := range migrationResults {
+		s.log.Infof("Upgraded default config value for %s from %v (version %d) to %v (version %d)",
+			m.FieldName, m.OldValue, m.OldVersion, m.NewValue, m.NewVersion)
+	}
 
 	metricLabels := map[string]string{}
 	if s.log.GetTelemetryEnabled() {
