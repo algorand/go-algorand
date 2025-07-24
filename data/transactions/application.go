@@ -271,10 +271,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 			return fmt.Errorf("tx.ExtraProgramPages is immutable")
 		}
 
-		if proto.EnableExtraPagesOnAppUpdate {
-			effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
-		}
-
+		effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
 	}
 
 	// Limit total number of arguments
@@ -320,17 +317,8 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
 	}
 
-	lap := len(ac.ApprovalProgram)
-	lcs := len(ac.ClearStateProgram)
-	pages := int(1 + effectiveEPP)
-	if lap > pages*proto.MaxAppProgramLen {
-		return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-	}
-	if lcs > pages*proto.MaxAppProgramLen {
-		return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-	}
-	if lap+lcs > pages*proto.MaxAppTotalProgramLen {
-		return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+	if err := ac.WellSizedPrograms(effectiveEPP, proto); err != nil {
+		return err
 	}
 
 	for i, br := range ac.Boxes {
@@ -351,6 +339,24 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
 	}
 
+	return nil
+}
+
+// WellSizedPrograms checks the sizes of the programs in ac, based on the
+// parameters of proto and returns an error if they are too big.
+func (ac ApplicationCallTxnFields) WellSizedPrograms(extraPages uint32, proto config.ConsensusParams) error {
+	lap := len(ac.ApprovalProgram)
+	lcs := len(ac.ClearStateProgram)
+	pages := int(1 + extraPages)
+	if lap > pages*proto.MaxAppProgramLen {
+		return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+	}
+	if lcs > pages*proto.MaxAppProgramLen {
+		return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+	}
+	if lap+lcs > pages*proto.MaxAppTotalProgramLen {
+		return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+	}
 	return nil
 }
 
