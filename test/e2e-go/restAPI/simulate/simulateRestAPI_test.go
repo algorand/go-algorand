@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/simulation"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -263,8 +264,7 @@ int 1`
 	clearState := ops.Program
 
 	txn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
 		approval, clearState, basics.StateSchema{}, basics.StateSchema{}, 0, 0,
 	)
 	a.NoError(err)
@@ -471,8 +471,7 @@ int 1`
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
 		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
@@ -501,8 +500,7 @@ int 1`
 
 	// construct app call
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		createdAppID, [][]byte{[]byte("first-arg")},
-		nil, nil, nil, nil, 0,
+		createdAppID, [][]byte{[]byte("first-arg")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCallTxn)
@@ -599,8 +597,7 @@ int 1`
 
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
-		0, nil, nil, nil,
-		nil, nil, transactions.NoOpOC,
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
 		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
@@ -629,7 +626,7 @@ int 1`
 
 	// construct app call
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		createdAppID, nil, nil, nil, nil, nil, 0,
+		createdAppID, nil, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCallTxn)
@@ -868,7 +865,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
 		transactions.NoOpOC, approval, clearState, gl,
-		lc, nil, nil, nil, nil, nil, 0)
+		lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -894,7 +891,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	// construct app calls
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		futureAppID, [][]byte{uint64ToBytes(uint64(MaxDepth))}, nil, nil, nil, nil, 0,
+		futureAppID, [][]byte{uint64ToBytes(uint64(MaxDepth))}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee*uint64(3*MaxDepth+2), appCallTxn)
@@ -1716,7 +1713,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
 		transactions.NoOpOC, approval, clearState, gl,
-		lc, nil, nil, nil, nil, nil, 0)
+		lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -1736,7 +1733,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	// construct app calls
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		futureAppID, [][]byte{}, nil, nil, nil, nil, 0,
+		futureAppID, [][]byte{}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallTxn)
@@ -1910,7 +1907,7 @@ end:
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
 		transactions.NoOpOC, approval, clearState, gl,
-		lc, nil, nil, nil, nil, nil, 0)
+		lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -1930,18 +1927,18 @@ end:
 
 	// construct app call "global"
 	appCallGlobalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		futureAppID, [][]byte{[]byte("global")}, nil, nil, nil, nil, 0,
+		futureAppID, [][]byte{[]byte("global")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallGlobalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallGlobalTxn)
 	a.NoError(err)
 	// construct app optin
-	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(futureAppID, nil, nil, nil, nil, nil, 0)
+	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(futureAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
 	// construct app call "global"
 	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		futureAppID, [][]byte{[]byte("local")}, nil, nil, nil, nil, 0,
+		futureAppID, [][]byte{[]byte("local")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallLocalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallLocalTxn)
@@ -2192,7 +2189,7 @@ end:
 	// create app and get the application ID
 	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
 		transactions.NoOpOC, approval, clearState, gl,
-		lc, nil, nil, nil, nil, nil, 0)
+		lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -2212,18 +2209,18 @@ end:
 
 	// construct app call "global"
 	appCallGlobalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		futureAppID, [][]byte{[]byte("global")}, nil, nil, nil, nil, 0,
+		futureAppID, [][]byte{[]byte("global")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallGlobalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallGlobalTxn)
 	a.NoError(err)
 	// construct app optin
-	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(futureAppID, nil, nil, nil, nil, nil, 0)
+	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(futureAppID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
 	// construct app call "local"
 	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		futureAppID, [][]byte{[]byte("local")}, nil, nil, nil, nil, 0,
+		futureAppID, [][]byte{[]byte("local")}, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallLocalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallLocalTxn)
@@ -2520,7 +2517,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	lc := basics.StateSchema{}
 
 	// create app
-	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.OptInOC, alwaysApprove, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.OptInOC, alwaysApprove, alwaysApprove, gl, lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(otherAddress, 0, 0, 0, txn)
 	a.NoError(err)
@@ -2585,7 +2582,7 @@ assert
 
 // Box access
 byte "A"
-int 1025
+int 2049						// need three refs with old quota, two after the bump (we only test latest)
 box_create
 assert
 
@@ -2598,7 +2595,7 @@ int 1
 	approval := ops.Program
 
 	// create app
-	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.NoOpOC, approval, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.NoOpOC, approval, alwaysApprove, gl, lc, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
 	a.NoError(err)
@@ -2624,7 +2621,7 @@ int 1
 
 	// construct app call
 	txn, err = testClient.MakeUnsignedAppNoOpTx(
-		testAppID, nil, nil, nil, nil, nil, 0,
+		testAppID, nil, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
@@ -2642,7 +2639,7 @@ int 1
 		AllowUnnamedResources: false,
 	})
 	a.NoError(err)
-	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: invalid Account reference "+otherAddress)
+	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: unavailable Account "+otherAddress)
 	a.Equal([]int{0}, *resp.TxnGroups[0].FailedAt)
 
 	// It should work with AllowUnnamedResources=true
