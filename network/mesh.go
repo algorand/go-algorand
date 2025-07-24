@@ -240,11 +240,27 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 	out := make(chan meshRequest, 5)
 	var wg sync.WaitGroup
 
+	meshFn := func(targetConnCount int) int {
+		wsConnections := cfg.wsnet.meshThreadInner(targetConnCount)
+
+		var p2pConnections int
+		if wsConnections < targetConnCount {
+			p2pTarget := targetConnCount - wsConnections
+			p2pConnections = cfg.p2pnet.meshThreadInner(p2pTarget)
+
+			if cfg.wsnet.log.GetLevel() >= logging.Info {
+				cfg.wsnet.log.Infof("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d, target=%d",
+					wsConnections, p2pConnections, targetConnCount)
+			}
+		}
+		return wsConnections + p2pConnections
+	}
+
 	ctx := cfg.wsnet.ctx
 	mesh, err := newBaseMesher(
 		withContext(ctx),
 		withTargetConnCount(cfg.wsnet.config.GossipFanout),
-		withMeshNetMeshFn(cfg.wsnet.meshThreadInner),
+		withMeshNetMeshFn(meshFn),
 		withMeshPeerStatReporter(func() {
 			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.wsnet)
 			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.p2pnet)
@@ -286,97 +302,6 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 
 func (c hybridRelayMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
 	return networkConfig{}
-}
-
-// hybridWSPriorityMeshCreator is a creator for hybrid mesh strategy that prioritizes WS connections
-// and uses P2P as backup to reach GossipFanout target
-type hybridWSPriorityMeshCreator struct{}
-
-func (c hybridWSPriorityMeshCreator) create(opts ...meshOption) (mesher, error) {
-	var cfg meshConfig
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-
-	if cfg.wsnet == nil || cfg.p2pnet == nil {
-		return nil, errors.New("both websocket and p2p networks must be provided")
-	}
-
-	return &hybridWSPriorityMesh{
-		wsnet:           cfg.wsnet,
-		p2pnet:          cfg.p2pnet,
-		ctx:             cfg.ctx,
-		targetConnCount: cfg.targetConnCount,
-	}, nil
-}
-
-func (c hybridWSPriorityMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
-	return networkConfig{
-		pubsubOpts: []p2p.PubSubOption{
-			p2p.DisablePubSubPeerExchange(),
-			p2p.SetPubSubPeerFilter(p2pnet.p2pRelayPeerFilter, p2pnet.pstore),
-		},
-	}
-}
-
-type hybridWSPriorityMesh struct {
-	ctx             context.Context
-	targetConnCount int
-	wsnet           *WebsocketNetwork
-	p2pnet          *P2PNetwork
-	wg              sync.WaitGroup
-	timer           *time.Ticker
-}
-
-func (m *hybridWSPriorityMesh) start() {
-	m.wg.Add(1)
-	go m.meshThread()
-}
-
-func (m *hybridWSPriorityMesh) stop() {
-	if m.timer != nil {
-		m.timer.Stop()
-	}
-	m.wg.Wait()
-}
-
-func (m *hybridWSPriorityMesh) meshThread() {
-	defer m.wg.Done()
-
-	m.timer = time.NewTicker(meshThreadInterval)
-	defer m.timer.Stop()
-
-	for {
-		select {
-		case <-m.timer.C:
-			m.meshWSPriority()
-		case <-m.ctx.Done():
-			return
-		}
-	}
-}
-
-func (m *hybridWSPriorityMesh) meshWSPriority() {
-	gossipFanout := m.wsnet.config.GossipFanout
-
-	// First, try to establish WS connections
-	wsConnections := m.wsnet.meshThreadInner(m.targetConnCount)
-
-	// If WS mesh didn't succeed in reaching GossipFanout, use P2P as backup
-	if wsConnections < gossipFanout {
-		// Run P2P mesh to fill the remaining slots
-		p2pConnections := m.p2pnet.meshThreadInner(m.targetConnCount)
-
-		// Log the connection distribution for debugging
-		if m.wsnet.log.GetLevel() >= logging.Debug {
-			m.wsnet.log.Debugf("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d, target=%d",
-				wsConnections, p2pConnections, gossipFanout)
-		}
-	}
-
-	// Send peer connection telemetry for both networks
-	m.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(m.wsnet)
-	m.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(m.p2pnet)
 }
 
 type noopMeshCreator struct{}
