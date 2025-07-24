@@ -1092,6 +1092,25 @@ func asmItxnField(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	return nil
 }
 
+func asmAppParamsSet(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
+	}
+	fs, ok := appParamsFieldSpecByName[args[0].str]
+	if !ok {
+		return args[0].errorf("%s unknown field: %#v", spec.Name, args[0].str)
+	}
+	if fs.setVersion == 0 {
+		return args[0].errorf("%s %#v is not settable.", spec.Name, args[0].str)
+	}
+	if fs.setVersion > ops.Version {
+		return args[0].errorf("%s %s field was introduced in v%d. Missed #pragma version?", spec.Name, args[0].str, fs.setVersion)
+	}
+	ops.pending.WriteByte(spec.Opcode)
+	ops.pending.WriteByte(fs.Field())
+	return nil
+}
+
 type asmFunc func(*OpStream, *OpSpec, token, []token) *sourceError
 
 func (ops *OpStream) checkArgCount(name string, mnemonic token, args []token, expected int) *sourceError {
@@ -1120,6 +1139,9 @@ func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sour
 		return err
 	}
 	ops.pending.WriteByte(spec.Opcode)
+	if spec.SubOpcode != 0 {
+		ops.pending.WriteByte(spec.SubOpcode)
+	}
 	for i, imm := range spec.OpDetails.Immediates {
 		var correctImmediates []string
 		var numImmediatesWithField []int
@@ -2801,6 +2823,9 @@ func (dis *disassembleState) outputLabelIfNeeded() (err error) {
 func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 	out := spec.Name
 	pc := dis.pc + 1
+	if spec.SubOpcode != 0 {
+		pc++ // skip the sub-opcode byte; immediates follow
+	}
 	for _, imm := range spec.OpDetails.Immediates {
 		out += " "
 		switch imm.kind {
@@ -3109,6 +3134,12 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			return
 		}
 		op := opsByOpcode[version][program[dis.pc]]
+		if op.SubOps != nil && dis.pc+1 < len(program) {
+			sub := program[dis.pc+1]
+			if int(sub) < len(op.SubOps) {
+				op = op.SubOps[sub]
+			}
+		}
 		if op.Modes == ModeApp {
 			ds.hasStatefulOps = true
 		}

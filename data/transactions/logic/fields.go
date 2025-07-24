@@ -1378,16 +1378,22 @@ const (
 	// AppSizeSponsor is responsible for extra pages and global state balance requirement.
 	AppSizeSponsor
 
+	// AppForeignBoxReads AppParams.ForeignBoxReads
+	AppForeignBoxReads
+	// AppFamilyBoxAccess AppParams.FamilyBoxAccess
+	AppFamilyBoxAccess
+
 	invalidAppParamsField // compile-time constant for number of fields
 )
 
 var appParamsFieldNames [invalidAppParamsField]string
 
 type appParamsFieldSpec struct {
-	field   AppParamsField
-	ftype   StackType
-	version uint64
-	doc     string
+	field      AppParamsField
+	ftype      StackType
+	version    uint64 // version when field became available to app_params_get
+	setVersion uint64 // version when field became settable via app_params_set; 0 means not settable
+	doc        string
 }
 
 func (fs appParamsFieldSpec) Field() byte {
@@ -1407,17 +1413,19 @@ func (fs appParamsFieldSpec) Note() string {
 }
 
 var appParamsFieldSpecs = [...]appParamsFieldSpec{
-	{AppApprovalProgram, StackBytes, 5, "Bytecode of Approval Program"},
-	{AppClearStateProgram, StackBytes, 5, "Bytecode of Clear State Program"},
-	{AppGlobalNumUint, StackUint64, 5, "Number of uint64 values allowed in Global State"},
-	{AppGlobalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Global State"},
-	{AppLocalNumUint, StackUint64, 5, "Number of uint64 values allowed in Local State"},
-	{AppLocalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Local State"},
-	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
-	{AppCreator, StackAddress, 5, "Creator address"},
-	{AppAddress, StackAddress, 5, "Address for which this application has authority"},
-	{AppVersion, StackUint64, 12, "Version of the app, incremented each time the approval or clear program changes"},
-	{AppSizeSponsor, StackAddress, 13, "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"},
+	{AppApprovalProgram, StackBytes, 5, 0, "Bytecode of Approval Program"},
+	{AppClearStateProgram, StackBytes, 5, 0, "Bytecode of Clear State Program"},
+	{AppGlobalNumUint, StackUint64, 5, 0, "Number of uint64 values allowed in Global State"},
+	{AppGlobalNumByteSlice, StackUint64, 5, 0, "Number of byte array values allowed in Global State"},
+	{AppLocalNumUint, StackUint64, 5, 0, "Number of uint64 values allowed in Local State"},
+	{AppLocalNumByteSlice, StackUint64, 5, 0, "Number of byte array values allowed in Local State"},
+	{AppExtraProgramPages, StackUint64, 5, 0, "Number of Extra Program Pages of code space"},
+	{AppCreator, StackAddress, 5, 0, "Creator address"},
+	{AppAddress, StackAddress, 5, 0, "Address for which this application has authority"},
+	{AppVersion, StackUint64, 12, 0, "Version of the app, incremented each time the approval or clear program changes"},
+	{AppSizeSponsor, StackAddress, 13, 0, "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"},
+	{AppForeignBoxReads, StackUint64, foreignBoxVersion, foreignBoxVersion, "1 if any available app may read this app's boxes, else 0"},
+	{AppFamilyBoxAccess, StackUint64, foreignBoxVersion, foreignBoxVersion, "1 if apps with the same creator may read and write this app's boxes, else 0"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {
