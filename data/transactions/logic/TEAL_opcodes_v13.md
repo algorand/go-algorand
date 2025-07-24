@@ -1047,6 +1047,8 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 | 8 | AppAddress | address |      | Address for which this application has authority |
 | 9 | AppVersion | uint64 | v12  | Version of the app, incremented each time the approval or clear program changes |
 | 10 | AppSizeSponsor | address | v13  | If non-zero, this account is responsible for the app's extra pages and global state balance requirement |
+| 11 | AppForeignBoxReads | bool | v13  | This app's boxes may be read by any app |
+| 12 | AppFamilyBoxAccess | bool | v13  | This app's boxes may be read and written by any app with the same creator |
 
 params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
 
@@ -1101,6 +1103,15 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 - Stack: ... &rarr; ..., uint64
 - the total online stake in the agreement round
 - Availability: v11
+- Mode: Application
+
+## app_params_set
+
+- Syntax: `app_params_set F` where F: [app_params Fields](#app_params-fields)
+- Bytecode: 0x76 {uint8}
+- Stack: ..., A: uint64 &rarr; ...
+- set field F of the current app to A
+- Availability: v13
 - Mode: Application
 
 ## min_balance
@@ -1709,6 +1720,14 @@ Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed
 - Stack: ..., A: boxName, B: uint64 &rarr; ...
 - change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.
 - Availability: v10
+- Mode: Application
+
+## app_box_resize
+
+- Bytecode: 0xd4
+- Stack: ..., A: boxName, B: uint64, C: uint64 &rarr; ...
+- change the size of box named A of app C to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.
+- Availability: v13
 - Mode: Application
 
 ## ec_add

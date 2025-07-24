@@ -1626,6 +1626,69 @@ func TestAppParams(t *testing.T) {
 	})
 }
 
+// TestAppParamsSet verifies that app_params_set correctly updates the
+// ForeignBoxReads and FamilyBoxAccess flags on the current app, and that
+// app_params_get reflects the updated values.
+func TestAppParamsSet(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testLogicRange(t, foreignBoxVersion, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		// Pin the app ID in the transaction so testApp doesn't re-create the app
+		// with blank params on each call.
+		tx.ApplicationID = 888
+		ledger.NewApp(tx.Sender, 888, basics.AppParams{})
+
+		// ForeignBoxReads and FamilyBoxAccess default to false (0)
+		testApp(t, "int 888; app_params_get AppForeignBoxReads; assert; int 0; ==", ep)
+		testApp(t, "int 888; app_params_get AppFamilyBoxAccess; assert; int 0; ==", ep)
+
+		// Set and verify ForeignBoxReads; app_params_set leaves an empty stack so push 1
+		testApp(t, "int 1; app_params_set AppForeignBoxReads; int 1", ep)
+		testApp(t, "int 888; app_params_get AppForeignBoxReads; assert; int 1; ==", ep)
+		testApp(t, "int 0; app_params_set AppForeignBoxReads; int 1", ep)
+		testApp(t, "int 888; app_params_get AppForeignBoxReads; assert; int 0; ==", ep)
+		testApp(t, "int 100; app_params_set AppForeignBoxReads; int 1", ep) // Non-zero just becomes 1
+		testApp(t, "int 888; app_params_get AppForeignBoxReads; assert; int 1; ==", ep)
+
+		// Set and verify FamilyBoxAccess
+		testApp(t, "int 1; app_params_set AppFamilyBoxAccess; int 1", ep)
+		testApp(t, "int 888; app_params_get AppFamilyBoxAccess; assert; int 1; ==", ep)
+		testApp(t, "int 0; app_params_set AppFamilyBoxAccess; int 1", ep)
+		testApp(t, "int 888; app_params_get AppFamilyBoxAccess; assert; int 0; ==", ep)
+		testApp(t, "int 111; app_params_set AppFamilyBoxAccess; int 1", ep) // non-zero just becomes 1
+		testApp(t, "int 888; app_params_get AppFamilyBoxAccess; assert; int 1; ==", ep)
+	})
+}
+
+// TestAppParamsSetImmutable confirms that all fields without a setVersion
+// are rejected at runtime when app_params_set is attempted on them. To bypass
+// the assembler's own rejection, we assemble a valid program and patch the
+// field byte before execution.
+func TestAppParamsSetImmutable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := makeSampleEnvWithVersion(foreignBoxVersion)
+	tx.ApplicationID = 888
+	ledger.NewApp(tx.Sender, 888, basics.AppParams{})
+
+	// Assemble a valid program as a template; field byte is the last byte.
+	ops := testProg(t, "int 1; app_params_set AppForeignBoxReads", foreignBoxVersion)
+
+	immutableFields := []AppParamsField{
+		AppApprovalProgram, AppClearStateProgram,
+		AppGlobalNumUint, AppGlobalNumByteSlice,
+		AppLocalNumUint, AppLocalNumByteSlice,
+		AppExtraProgramPages,
+		AppCreator, AppAddress, AppVersion,
+	}
+	for _, field := range immutableFields {
+		ops.Program[len(ops.Program)-1] = byte(field)
+		testAppBytes(t, ops.Program, ep, "immutable app_params_set field")
+	}
+}
+
 func TestAcctParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -3313,6 +3376,7 @@ func TestReturnTypes(t *testing.T) {
 		"asset_params_get":  ": int 400; asset_params_get AssetUnitName",
 		"asset_holding_get": ": txn Sender; int 400; asset_holding_get AssetBalance",
 		"app_params_get":    "app_params_get AppGlobalNumUint",
+		"app_params_set":    "app_params_set AppForeignBoxReads",
 
 		"itxn_field":  "itxn_begin; itxn_field TypeEnum",
 		"itxn_next":   "itxn_begin; int pay; itxn_field TypeEnum; itxn_next",
@@ -3331,6 +3395,17 @@ func TestReturnTypes(t *testing.T) {
 
 		"box_create": "int 9; +; box_create",                 // make the size match the 10 in CreateBox
 		"box_put":    "byte 0x010203040506; concat; box_put", // make the 4 byte arg into a 10
+
+		// app_box_* need explicit app ID (300 = current app) and matching box name/size; appID is last
+		"app_box_create":  ": byte 0x33; int 10; int 300; app_box_create",
+		"app_box_extract": ": byte 0x33; int 0; int 4; int 300; app_box_extract",
+		"app_box_replace": ": byte 0x33; int 0; byte 0x01020304; int 300; app_box_replace",
+		"app_box_del":     ": byte 0x33; int 300; app_box_del",
+		"app_box_len":     ": byte 0x33; int 300; app_box_len",
+		"app_box_get":     ": byte 0x33; int 300; app_box_get",
+		"app_box_put":     ": byte 0x33; byte 0x01020304050607080910; int 300; app_box_put",
+		"app_box_splice":  ": byte 0x33; int 0; int 4; byte 0x01020304; int 300; app_box_splice",
+		"app_box_resize":  ": byte 0x33; int 5; int 300; app_box_resize",
 
 		// mimc requires an input size multiple of 32 bytes.
 		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254Mp110",

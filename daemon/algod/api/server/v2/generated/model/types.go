@@ -400,6 +400,12 @@ type ApplicationParams struct {
 	// ExtraProgramPages \[epp\] the amount of extra program pages available to this app.
 	ExtraProgramPages *uint64 `json:"extra-program-pages,omitempty"`
 
+	// FamilyBoxAccess \[fba\] if true, apps with the same creator may read and write this app's boxes
+	FamilyBoxAccess *bool `json:"family-box-access,omitempty"`
+
+	// ForeignBoxReads \[fbr\] if true, any app may read this app's boxes
+	ForeignBoxReads *bool `json:"foreign-box-reads,omitempty"`
+
 	// GlobalState Represents a key-value store for use in an application.
 	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
 

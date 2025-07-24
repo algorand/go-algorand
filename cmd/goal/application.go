@@ -1117,6 +1117,13 @@ var infoAppCmd = &cobra.Command{
 			fmt.Printf("Extra program pages:   %d\n", *epp)
 		}
 
+		if params.ForeignBoxReads != nil && *params.ForeignBoxReads {
+			fmt.Printf("Foreign box reads:     enabled\n")
+		}
+		if params.FamilyBoxAccess != nil && *params.FamilyBoxAccess {
+			fmt.Printf("Family box access:     enabled\n")
+		}
+
 		gsch := params.GlobalStateSchema
 		if gsch != nil {
 			fmt.Printf("Max global byteslices: %d\n", gsch.NumByteSlice)
