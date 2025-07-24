@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 )
@@ -41,10 +42,11 @@ type baseMesher struct {
 
 type meshConfig struct {
 	ctx                context.Context
+	targetConnCount    int
 	meshUpdateRequests chan meshRequest
 	meshThreadInterval time.Duration
 	backoff            backoff.BackoffStrategy
-	netMeshFn          func() bool
+	netMeshFn          func(int) int
 	peerStatReporter   func()
 	closer             func()
 
@@ -66,7 +68,7 @@ func withMeshExpJitterBackoff() meshOption {
 		cfg.backoff = eb
 	}
 }
-func withMeshNetMeshFn(netMeshFn func() bool) meshOption {
+func withMeshNetMeshFn(netMeshFn func(int) int) meshOption {
 	return func(cfg *meshConfig) {
 		cfg.netMeshFn = netMeshFn
 	}
@@ -100,6 +102,12 @@ func withContext(ctx context.Context) meshOption {
 	}
 }
 
+func withTargetConnCount(targetConnCount int) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.targetConnCount = targetConnCount
+	}
+}
+
 func withWebsocketNetwork(wsnet *WebsocketNetwork) meshOption {
 	return func(cfg *meshConfig) {
 		cfg.wsnet = wsnet
@@ -126,6 +134,9 @@ func newBaseMesher(opts ...meshOption) (*baseMesher, error) {
 	if cfg.meshUpdateRequests == nil {
 		return nil, errors.New("mesh update requests channel is not set")
 	}
+	if cfg.targetConnCount == 0 {
+		logging.Base().Warn("target connection count not set, not connecting to any peers")
+	}
 	if cfg.meshThreadInterval == 0 {
 		cfg.meshThreadInterval = meshThreadInterval
 	}
@@ -150,9 +161,9 @@ func (m *baseMesher) meshThread() {
 			return
 		}
 
-		hasPeers := m.netMeshFn()
+		numOutgoing := m.netMeshFn(m.targetConnCount)
 		if m.backoff != nil {
-			if hasPeers {
+			if numOutgoing > 0 {
 				// found something, reset timer to the configured value
 				timer.Reset(m.meshThreadInterval)
 				m.backoff.Reset()
@@ -223,10 +234,27 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 	out := make(chan meshRequest, 5)
 	var wg sync.WaitGroup
 
+	meshFn := func(targetConnCount int) int {
+		wsConnections := cfg.wsnet.meshThreadInner(targetConnCount)
+
+		var p2pConnections int
+		if wsConnections < targetConnCount {
+			p2pTarget := targetConnCount - wsConnections
+			p2pConnections = cfg.p2pnet.meshThreadInner(p2pTarget)
+
+			if cfg.wsnet.log.GetLevel() >= logging.Info {
+				cfg.wsnet.log.Infof("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d, target=%d",
+					wsConnections, p2pConnections, targetConnCount)
+			}
+		}
+		return wsConnections + p2pConnections
+	}
+
 	ctx := cfg.wsnet.ctx
 	mesh, err := newBaseMesher(
 		withContext(ctx),
-		withMeshNetMeshFn(cfg.wsnet.meshThreadInner),
+		withTargetConnCount(cfg.wsnet.config.GossipFanout),
+		withMeshNetMeshFn(meshFn),
 		withMeshPeerStatReporter(func() {
 			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.wsnet)
 			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.p2pnet)
