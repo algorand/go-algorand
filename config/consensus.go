@@ -448,9 +448,9 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
-	// Allow app updates to specify the extra pages they use.  This allows the
-	// update to pass WellFormed(), but they cannot _change_ the extra pages.
-	EnableExtraPagesOnAppUpdate bool
+	// When extra pages were introduced, a bug prevented the extra pages of an
+	// app from being properly removed from the creator upon deletion.
+	EnableProperExtraPageAccounting bool
 
 	// Autoincrements an app's version when the app is updated, careful callers
 	// may avoid making inner calls to apps that have changed.
@@ -1179,8 +1179,8 @@ func initConsensusProtocols() {
 	v29 := v28
 	v29.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// Enable ExtraProgramPages for application update
-	v29.EnableExtraPagesOnAppUpdate = true
+	// Fix the accounting bug
+	v29.EnableProperExtraPageAccounting = true
 
 	Consensus[protocol.ConsensusV29] = v29
 
