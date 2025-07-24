@@ -43,6 +43,7 @@ const (
 	Sha512_256 HashType = iota
 	Sumhash
 	Sha256
+	Sha512
 	MaxHashType
 )
 
@@ -55,7 +56,11 @@ const (
 	Sha512_256Size    = sha512.Size256
 	SumhashDigestSize = sumhash.Sumhash512DigestSize
 	Sha256Size        = sha256.Size
+	Sha512Size        = sha512.Size
 )
+
+// Sha512Digest is a 64-byte digest produced by the SHA-512 hash function.
+type Sha512Digest [Sha512Size]byte
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
 //
@@ -76,6 +81,8 @@ func (h HashType) String() string {
 		return "sumhash"
 	case Sha256:
 		return "sha256"
+	case Sha512:
+		return "sha512"
 	default:
 		return ""
 	}
@@ -90,6 +97,8 @@ func UnmarshalHashType(s string) (HashType, error) {
 		return Sumhash, nil
 	case "sha256":
 		return Sha256, nil
+	case "sha512":
+		return Sha512, nil
 	default:
 		return 0, fmt.Errorf("HashType not supported: %s", s)
 	}
@@ -105,6 +114,8 @@ func (z HashFactory) NewHash() hash.Hash {
 		return sumhash.New512(nil)
 	case Sha256:
 		return sha256.New()
+	case Sha512:
+		return sha512.New()
 	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
 	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:

@@ -202,7 +202,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	delta := &EvalDelta{}
-	max := 256 // Hardcodes config.MaxEvalDeltaAccounts
+	max := 256 // Hardcodes bounds.MaxEvalDeltaAccounts
 	for i := 0; i < max; i++ {
 		delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
 		msg := delta.MarshalMsg(nil)
@@ -215,7 +215,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	require.Error(t, err)
 
 	delta = &EvalDelta{}
-	max = 2048 // Hardcodes config.MaxLogCalls, currently MaxAppProgramLen
+	max = 2048 // Hardcodes bounds.MaxLogCalls, currently MaxAppProgramLen
 	for i := 0; i < max; i++ {
 		delta.Logs = append(delta.Logs, "junk")
 		msg := delta.MarshalMsg(nil)
@@ -228,7 +228,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	require.Error(t, err)
 
 	delta = &EvalDelta{}
-	max = 256 // Hardcodes config.MaxInnerTransactionsPerDelta
+	max = 256 // Hardcodes bounds.MaxInnerTransactionsPerDelta
 	for i := 0; i < max; i++ {
 		delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
 		msg := delta.MarshalMsg(nil)
@@ -244,7 +244,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	// MaxAppTxnAccounts (4) + 1, since the key must be an index in the static
 	// array of touchable accounts.
 	delta = &EvalDelta{LocalDeltas: make(map[uint64]basics.StateDelta)}
-	max = 2048 // Hardcodes config.MaxEvalDeltaAccounts
+	max = 2048 // Hardcodes bounds.MaxEvalDeltaAccounts
 	for i := 0; i < max; i++ {
 		delta.LocalDeltas[uint64(i)] = basics.StateDelta{}
 		msg := delta.MarshalMsg(nil)
@@ -260,7 +260,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	// globals, but I don't know what happens if you set and delete 65 (or way
 	// more) keys in a single transaction.
 	delta = &EvalDelta{GlobalDelta: make(basics.StateDelta)}
-	max = 2048 // Hardcodes config.MaxStateDeltaKeys
+	max = 2048 // Hardcodes bounds.MaxStateDeltaKeys
 	for i := 0; i < max; i++ {
 		delta.GlobalDelta[fmt.Sprintf("%d", i)] = basics.ValueDelta{}
 		msg := delta.MarshalMsg(nil)

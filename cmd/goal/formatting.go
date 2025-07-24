@@ -207,3 +207,11 @@ func encodeBytesAsAppCallBytes(value []byte) string {
 
 	return "b64:" + base64.StdEncoding.EncodeToString(value)
 }
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
+}

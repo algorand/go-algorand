@@ -18,6 +18,7 @@ package libgoal
 
 import (
 	"fmt"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -33,14 +34,14 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 	}
 
 	// Loop through each of the participation keys; pick the one that expires farthest in the future.
-	var expiry uint64 = 0
+	expiry := basics.Round(0)
 	for _, info := range parts {
 		// Choose the Participation valid for this round that relates to the passed address
 		// that expires farthest in the future.
 		// Note that algod will sign votes with all possible Participations. so any should work
 		// in the short-term.
 		// In the future we should allow the user to specify exactly which partkeys to register.
-		if info.Key.VoteFirstValid <= uint64(round) && uint64(round) <= info.Key.VoteLastValid && info.Address == address.String() && info.Key.VoteLastValid > expiry {
+		if info.Key.VoteFirstValid <= round && round <= info.Key.VoteLastValid && info.Address == address.String() && info.Key.VoteLastValid > expiry {
 			part = info
 			expiry = part.Key.VoteLastValid
 		}
@@ -56,7 +57,7 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 
 // GenParticipationKeys creates a .partkey database for a given address, fills
 // it with keys, and installs it in the right place
-func (c *Client) GenParticipationKeys(address string, firstValid, lastValid, keyDilution uint64) (part account.Participation, filePath string, err error) {
+func (c *Client) GenParticipationKeys(address string, firstValid, lastValid basics.Round, keyDilution uint64) (part account.Participation, filePath string, err error) {
 	installFunc := func(keyPath string) error {
 		_, err := c.AddParticipationKey(keyPath)
 		return err

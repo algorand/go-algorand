@@ -78,9 +78,9 @@ func main() {
 	}
 	defer func() {
 		log.Infof("closing service connection: %s", serverWs.RemoteAddr())
-		err := serverWs.Close()
-		if err != nil {
-			log.Fatalf("error closing service websocket %v", err)
+		err1 := serverWs.Close()
+		if err1 != nil {
+			log.Fatalf("error closing service websocket %v", err1)
 		}
 	}()
 	serverWs.Unsafe = true

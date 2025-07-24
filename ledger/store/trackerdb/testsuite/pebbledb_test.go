@@ -27,6 +27,7 @@ import (
 )
 
 func TestPebbleDB(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partitioning inside subtest
 	dbFactory := func(proto config.ConsensusParams) dbForTests {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		dir := fmt.Sprintf("%s/db", t.TempDir())

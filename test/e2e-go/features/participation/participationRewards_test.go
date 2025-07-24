@@ -41,7 +41,7 @@ func getFirstAccountFromNamedNode(fixture *fixtures.RestClientFixture, r *requir
 	return
 }
 
-func waitUntilRewards(t *testing.T, fixture *fixtures.RestClientFixture, round uint64) (uint64, error) {
+func waitUntilRewards(t *testing.T, fixture *fixtures.RestClientFixture, round basics.Round) (basics.Round, error) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	block, err := fixture.LibGoalClient.BookkeepingBlock(round)
@@ -66,14 +66,14 @@ func waitUntilRewards(t *testing.T, fixture *fixtures.RestClientFixture, round u
 	}
 }
 
-func spendToNonParticipating(t *testing.T, fixture *fixtures.RestClientFixture, lastRound uint64, account string, balance uint64, minFee uint64) uint64 {
+func spendToNonParticipating(t *testing.T, fixture *fixtures.RestClientFixture, lastRound basics.Round, account string, balance uint64, minFee uint64) uint64 {
 	a := require.New(fixtures.SynchronizedTest(t))
 	// move a lot of Algos to a non participating account -- the incentive pool
 	poolAddr := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff} // hardcoded; change if the pool address changes
 	pd := poolAddr
 	drainTx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(account, pd.String(), minFee, balance-balance/100-minFee, nil)
 	a.NoError(err)
-	fixture.WaitForAllTxnsToConfirm(lastRound+uint64(10), map[string]string{drainTx.ID().String(): account})
+	fixture.WaitForAllTxnsToConfirm(lastRound+10, map[string]string{drainTx.ID().String(): account})
 	return balance / 100
 }
 
@@ -95,7 +95,7 @@ func TestOnlineOfflineRewards(t *testing.T) {
 	offlineClient := fixture.GetLibGoalClientForNamedNode("Offline")
 
 	// learn initial balances
-	initialRound := uint64(11)
+	const initialRound = 11
 	r.NoError(fixture.WaitForRoundWithTimeout(initialRound))
 	initialOnlineBalance, _ := onlineClient.GetBalance(onlineAccount)
 	initialOfflineBalance, _ := offlineClient.GetBalance(offlineAccount)
@@ -118,7 +118,7 @@ func TestOnlineOfflineRewards(t *testing.T) {
 	tx2, err := offlineClient.SendPaymentFromUnencryptedWallet(offlineAccount, onlineAccount, minFee, pokeAmount, nil)
 	txidsAndAddresses[tx2.ID().String()] = offlineAccount
 	r.NoError(err)
-	fixture.WaitForAllTxnsToConfirm(rewardRound+uint64(10), txidsAndAddresses)
+	fixture.WaitForAllTxnsToConfirm(rewardRound+10, txidsAndAddresses)
 	// make sure the nodes agree on current round
 	status, err := onlineClient.Status()
 	r.NoError(err)
@@ -167,7 +167,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 	initialBalance, err := client.GetBalance(account.String())
 	r.NoError(err)
 	// accrue rewards by letting time pass
-	arbitraryPostGenesisRound := uint64(316)
+	const arbitraryPostGenesisRound = 316
 	r.NoError(fixture.WaitForRoundWithTimeout(arbitraryPostGenesisRound))
 
 	// move a lot of Algos to a non participating account so we accrue rewards faster
@@ -181,7 +181,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 	// do a balance poke by moving funds b/w accounts. this will cause balances to reflect received rewards
 	tx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, account.String(), minFee, minBalance, nil)
 	r.NoError(err)
-	fixture.WaitForTxnConfirmation(arbitraryPostGenesisRound+uint64(10), tx.ID().String())
+	fixture.WaitForTxnConfirmation(arbitraryPostGenesisRound+10, tx.ID().String())
 	finalBalance, err := client.GetBalance(account.String())
 	r.NoError(err)
 	delta := finalBalance - initialBalance
@@ -236,7 +236,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 
 	tx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, newAccount, txnFee, lessThanRewardUnit, nil)
 	r.NoError(err)
-	fixture.WaitForAllTxnsToConfirm(initialRound+uint64(10), map[string]string{tx.ID().String(): richAccount.Address})
+	fixture.WaitForAllTxnsToConfirm(initialRound+10, map[string]string{tx.ID().String(): richAccount.Address})
 	initialBalanceNewAccount = lessThanRewardUnit
 
 	// wait for the client node to catch up to the same round as the fixture node
@@ -280,7 +280,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	tx2, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, newAccount, txnFee, amountRichAccountPokesWith, nil)
 	r.NoError(err)
 	txidsAndAddresses[tx2.ID().String()] = richAccount.Address
-	fixture.WaitForAllTxnsToConfirm(rewardRound+uint64(10), txidsAndAddresses)
+	fixture.WaitForAllTxnsToConfirm(rewardRound+10, txidsAndAddresses)
 
 	// Now the new account should have enough stake to get rewards.
 	curStatus, _ = fixture.AlgodClient.Status()
@@ -338,7 +338,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(err)
 
 	client := fixture.LibGoalClient
-	r.NoError(fixture.WaitForRoundWithTimeout(uint64(5)))
+	r.NoError(fixture.WaitForRoundWithTimeout(5))
 	richAccount, err := fixture.GetRichestAccount()
 	r.NoError(err)
 	rewardsAccount := defaultPoolAddr.String()
@@ -354,7 +354,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(err)
 	r.Equal(protocol.ConsensusVersion(blk.CurrentProtocol), consensusTestRapidRewardRecalculation)
 	consensusParams := consensus[protocol.ConsensusVersion(blk.CurrentProtocol)]
-	rewardRecalcRound := consensusParams.RewardsRateRefreshInterval
+	rewardRecalcRound := basics.Round(consensusParams.RewardsRateRefreshInterval)
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound - 1))
 	balanceOfRewardsPool, roundQueried := fixture.GetBalanceAndRound(rewardsAccount)
 	if roundQueried != rewardRecalcRound-1 {
@@ -375,7 +375,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(err)
 	fixture.SendMoneyAndWait(curStatus.LastRound, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
-	rewardRecalcRound = rewardRecalcRound + consensusParams.RewardsRateRefreshInterval
+	rewardRecalcRound += basics.Round(consensusParams.RewardsRateRefreshInterval)
 
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound - 1))
 	balanceOfRewardsPool, roundQueried = fixture.GetBalanceAndRound(rewardsAccount)
@@ -394,6 +394,5 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.Equal((balanceOfRewardsPool-minBal-lastRoundBeforeRewardRecals.RewardsResidue)/consensusParams.RewardsRateRefreshInterval, blk.RewardsRate)
 	// if the network keeps progressing without error,
 	// this shows the network is healthy and that we didn't panic
-	finalRound := rewardRecalcRound + uint64(5)
-	r.NoError(fixture.WaitForRoundWithTimeout(finalRound))
+	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound + 5))
 }

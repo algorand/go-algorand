@@ -56,7 +56,7 @@ func TestAccountNew(t *testing.T) {
 	a.True(matched, "Account list should contain the account we just created")
 }
 
-func TestAccountNewDuplicateFails(t *testing.T) {
+func TestAccountNewDuplicateErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	defer fixtures.ShutdownSynchronizedTest(t)

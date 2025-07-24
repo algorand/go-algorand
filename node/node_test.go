@@ -17,6 +17,7 @@
 package node
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	csp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
@@ -822,7 +824,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
 	// the logicsig args can both be up to to MaxLogicSigMaxSize, but that's the max for
 	// them combined, so it double counts and we have to subtract one.
-	maxCombinedTxnSize -= uint64(config.MaxLogicSigMaxSize)
+	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
 
 	// maxCombinedTxnSize is still an overestimate because it assumes all txn
 	// type fields can be in the same txn.  That's not true, but it provides an
@@ -1349,4 +1351,37 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestNodeMakeFullHybrid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ":0"
+
+	node, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
+	err = node.Start()
+	require.NoError(t, err)
+	require.IsType(t, &network.WebsocketNetwork{}, node.net)
+
+	node.Stop()
+	messages := buf.String()
+	require.Contains(t, messages, "could not create hybrid p2p node: P2PHybridMode requires both NetAddress")
+	require.Contains(t, messages, "Falling back to WS network")
 }

@@ -128,11 +128,13 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...te
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
 	wn := &WebsocketNetwork{
-		log:             log,
-		config:          conf,
-		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		genesisID:       genesisID,
-		NetworkID:       config.Devtestnet,
+		log:       log,
+		config:    conf,
+		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
+		genesisInfo: GenesisInfo{
+			GenesisID: genesisID,
+			NetworkID: config.Devtestnet,
+		},
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: NewIdentityTracker(),
 	}
@@ -868,7 +870,7 @@ func TestAddrToGossipAddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	wn := &WebsocketNetwork{}
-	wn.genesisID = "test genesisID"
+	wn.genesisInfo.GenesisID = "test genesisID"
 	wn.log = logging.Base()
 	addrtest(t, wn, "ws://r7.algodev.network.:4166/v1/test%20genesisID/gossip", "r7.algodev.network.:4166")
 	addrtest(t, wn, "ws://r7.algodev.network.:4166/v1/test%20genesisID/gossip", "http://r7.algodev.network.:4166")
@@ -1138,11 +1140,13 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	dc.OutgoingMessageFilterBucketCount = 3
 	dc.OutgoingMessageFilterBucketSize = 128
 	wn := &WebsocketNetwork{
-		log:             logging.TestingLog(t).With("node", nodename),
-		config:          dc,
-		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		genesisID:       genesisID,
-		NetworkID:       config.Devtestnet,
+		log:       logging.TestingLog(t).With("node", nodename),
+		config:    dc,
+		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
+		genesisInfo: GenesisInfo{
+			GenesisID: genesisID,
+			NetworkID: config.Devtestnet,
+		},
 		peerStater:      peerConnectionStater{log: logging.TestingLog(t).With("node", nodename)},
 		identityTracker: noopIdentityTracker{},
 	}
@@ -2548,39 +2552,39 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	wn := makeTestWebsocketNode(t)
-	wn.genesisID = "genesis-id1"
+	wn.genesisInfo.GenesisID = "genesis-id1"
 	wn.randomID = "random-id1"
 	header := http.Header{}
 	header.Set(ProtocolVersionHeader, ProtocolVersion)
 	header.Set(NodeRandomHeader, wn.randomID+"tag")
-	header.Set(GenesisHeader, wn.genesisID)
+	header.Set(GenesisHeader, wn.genesisInfo.GenesisID)
 	responseVariableOk, matchingVersion := wn.checkServerResponseVariables(header, "addressX")
 	require.Equal(t, true, responseVariableOk)
 	require.Equal(t, matchingVersion, ProtocolVersion)
 
 	noVersionHeader := http.Header{}
 	noVersionHeader.Set(NodeRandomHeader, wn.randomID+"tag")
-	noVersionHeader.Set(GenesisHeader, wn.genesisID)
+	noVersionHeader.Set(GenesisHeader, wn.genesisInfo.GenesisID)
 	responseVariableOk, _ = wn.checkServerResponseVariables(noVersionHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 
 	noRandomHeader := http.Header{}
 	noRandomHeader.Set(ProtocolVersionHeader, ProtocolVersion)
-	noRandomHeader.Set(GenesisHeader, wn.genesisID)
+	noRandomHeader.Set(GenesisHeader, wn.genesisInfo.GenesisID)
 	responseVariableOk, _ = wn.checkServerResponseVariables(noRandomHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 
 	sameRandomHeader := http.Header{}
 	sameRandomHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	sameRandomHeader.Set(NodeRandomHeader, wn.randomID)
-	sameRandomHeader.Set(GenesisHeader, wn.genesisID)
+	sameRandomHeader.Set(GenesisHeader, wn.genesisInfo.GenesisID)
 	responseVariableOk, _ = wn.checkServerResponseVariables(sameRandomHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 
 	differentGenesisIDHeader := http.Header{}
 	differentGenesisIDHeader.Set(ProtocolVersionHeader, ProtocolVersion)
 	differentGenesisIDHeader.Set(NodeRandomHeader, wn.randomID+"tag")
-	differentGenesisIDHeader.Set(GenesisHeader, wn.genesisID+"tag")
+	differentGenesisIDHeader.Set(GenesisHeader, wn.genesisInfo.GenesisID+"tag")
 	responseVariableOk, _ = wn.checkServerResponseVariables(differentGenesisIDHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 }
@@ -2646,11 +2650,13 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	wn := &WebsocketNetwork{
-		log:             log,
-		config:          defaultConfig,
-		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		genesisID:       genesisID,
-		NetworkID:       config.Devtestnet,
+		log:       log,
+		config:    defaultConfig,
+		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
+		genesisInfo: GenesisInfo{
+			GenesisID: genesisID,
+			NetworkID: config.Devtestnet,
+		},
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
 	}
@@ -2723,11 +2729,13 @@ func TestForceMessageRelaying(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:             log,
-		config:          defaultConfig,
-		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		genesisID:       genesisID,
-		NetworkID:       config.Devtestnet,
+		log:       log,
+		config:    defaultConfig,
+		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
+		genesisInfo: GenesisInfo{
+			GenesisID: genesisID,
+			NetworkID: config.Devtestnet,
+		},
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
 	}
@@ -2819,11 +2827,13 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:             log,
-		config:          defaultConfig,
-		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
-		genesisID:       genesisID,
-		NetworkID:       config.Devtestnet,
+		log:       log,
+		config:    defaultConfig,
+		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
+		genesisInfo: GenesisInfo{
+			GenesisID: genesisID,
+			NetworkID: config.Devtestnet,
+		},
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
 	}
@@ -3655,7 +3665,7 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	wn := makeTestWebsocketNode(t)
-	wn.genesisID = "genesis-id1"
+	wn.genesisInfo.GenesisID = "genesis-id1"
 	wn.randomID = "random-id1"
 	wn.log = callbackLogger{
 		Logger: wn.log,
@@ -3680,7 +3690,7 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	header1 := http.Header{}
 	header1.Set(ProtocolVersionHeader, ProtocolVersion+"א")
 	header1.Set(NodeRandomHeader, wn.randomID+"tag")
-	header1.Set(GenesisHeader, wn.genesisID)
+	header1.Set(GenesisHeader, wn.genesisInfo.GenesisID)
 	responseVariableOk, matchingVersion := wn.checkServerResponseVariables(header1, "addressX")
 	require.Equal(t, false, responseVariableOk)
 	require.Equal(t, "", matchingVersion)
@@ -3688,7 +3698,7 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	header2 := http.Header{}
 	header2.Set(ProtocolVersionHeader, ProtocolVersion)
 	header2.Set("א", "א")
-	header2.Set(GenesisHeader, wn.genesisID)
+	header2.Set(GenesisHeader, wn.genesisInfo.GenesisID)
 	responseVariableOk, matchingVersion = wn.checkServerResponseVariables(header2, "addressX")
 	require.Equal(t, false, responseVariableOk)
 	require.Equal(t, "", matchingVersion)
@@ -3696,7 +3706,7 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	header3 := http.Header{}
 	header3.Set(ProtocolVersionHeader, ProtocolVersion)
 	header3.Set(NodeRandomHeader, wn.randomID+"tag")
-	header3.Set(GenesisHeader, wn.genesisID+"א")
+	header3.Set(GenesisHeader, wn.genesisInfo.GenesisID+"א")
 	responseVariableOk, matchingVersion = wn.checkServerResponseVariables(header3, "addressX")
 	require.Equal(t, false, responseVariableOk)
 	require.Equal(t, "", matchingVersion)
@@ -4228,10 +4238,10 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 	rapid.Check(t, func(t1 *rapid.T) {
 		refreshTestConf.DNSBootstrapID = refreshRelayDNSBootstrapID
 		netA = makeTestWebsocketNodeWithConfig(t, refreshTestConf)
-		netA.NetworkID = nonHardcodedNetworkIDGen().Draw(t1, "network")
+		netA.genesisInfo.NetworkID = nonHardcodedNetworkIDGen().Draw(t1, "network")
 
-		primarySRVBootstrap := strings.Replace("<network>.algorand.network", "<network>", string(netA.NetworkID), -1)
-		backupSRVBootstrap := strings.Replace("<network>.algorand.net", "<network>", string(netA.NetworkID), -1)
+		primarySRVBootstrap := strings.Replace("<network>.algorand.network", "<network>", string(netA.genesisInfo.NetworkID), -1)
+		backupSRVBootstrap := strings.Replace("<network>.algorand.net", "<network>", string(netA.genesisInfo.NetworkID), -1)
 		var primaryRelayResolvedRecords []string
 		var secondaryRelayResolvedRecords []string
 		var primaryArchiveResolvedRecords []string
@@ -4239,14 +4249,14 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 
 		for _, record := range []string{"r1.algorand-<network>.network",
 			"r2.algorand-<network>.network", "r3.algorand-<network>.network"} {
-			var recordSub = strings.Replace(record, "<network>", string(netA.NetworkID), -1)
+			var recordSub = strings.Replace(record, "<network>", string(netA.genesisInfo.NetworkID), -1)
 			primaryRelayResolvedRecords = append(primaryRelayResolvedRecords, recordSub)
 			secondaryRelayResolvedRecords = append(secondaryRelayResolvedRecords, strings.Replace(recordSub, "network", "net", -1))
 		}
 
 		for _, record := range []string{"r1archive.algorand-<network>.network",
 			"r2archive.algorand-<network>.network", "r3archive.algorand-<network>.network"} {
-			var recordSub = strings.Replace(record, "<network>", string(netA.NetworkID), -1)
+			var recordSub = strings.Replace(record, "<network>", string(netA.genesisInfo.NetworkID), -1)
 			primaryArchiveResolvedRecords = append(primaryArchiveResolvedRecords, recordSub)
 			secondaryArchiveResolvedRecords = append(secondaryArchiveResolvedRecords, strings.Replace(recordSub, "network", "net", -1))
 		}
@@ -4644,8 +4654,11 @@ func TestWsNetworkPhonebookMix(t *testing.T) {
 		logging.TestingLog(t),
 		config.GetDefaultLocal(),
 		[]string{"127.0.0.1:1234", "/ip4/127.0.0.1/tcp/1234", "/ip4/127.0.0.1/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC"},
-		"test",
-		"net",
+		GenesisInfo{
+			"test",
+			"net",
+		},
+		nil,
 		nil,
 		nil,
 	)

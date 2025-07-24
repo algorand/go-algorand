@@ -192,11 +192,11 @@ func (s *Service) triggerSync() {
 
 // SetDisableSyncRound attempts to set the first round we _do_not_ want to fetch from the network
 // Blocks from disableSyncRound or any round after disableSyncRound will not be fetched while this is set
-func (s *Service) SetDisableSyncRound(rnd uint64) error {
-	if basics.Round(rnd) < s.ledger.LastRound() {
+func (s *Service) SetDisableSyncRound(rnd basics.Round) error {
+	if rnd < s.ledger.LastRound() {
 		return ErrSyncRoundInvalid
 	}
-	s.disableSyncRound.Store(rnd)
+	s.disableSyncRound.Store(uint64(rnd))
 	s.triggerSync()
 	return nil
 }
@@ -208,8 +208,8 @@ func (s *Service) UnsetDisableSyncRound() {
 }
 
 // GetDisableSyncRound returns the disabled sync round
-func (s *Service) GetDisableSyncRound() uint64 {
-	return s.disableSyncRound.Load()
+func (s *Service) GetDisableSyncRound() basics.Round {
+	return basics.Round(s.disableSyncRound.Load())
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)

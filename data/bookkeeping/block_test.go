@@ -100,9 +100,9 @@ func TestUpgradeVote(t *testing.T) {
 	s = UpgradeState{
 		CurrentProtocol:        proto1,
 		NextProtocol:           proto2,
-		NextProtocolApprovals:  config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold - 1,
-		NextProtocolVoteBefore: basics.Round(20),
-		NextProtocolSwitchOn:   basics.Round(30),
+		NextProtocolApprovals:  basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold) - 1,
+		NextProtocolVoteBefore: 20,
+		NextProtocolSwitchOn:   30,
 	}
 
 	// Check that applyUpgradeVote rejects concurrent proposal
@@ -122,9 +122,9 @@ func TestUpgradeVote(t *testing.T) {
 	s1, err = s.applyUpgradeVote(basics.Round(20), UpgradeVote{})
 	require.NoError(t, err)
 	require.Equal(t, s1.NextProtocol, protocol.ConsensusVersion(""))
-	require.Equal(t, s1.NextProtocolApprovals, uint64(0))
-	require.Equal(t, s1.NextProtocolVoteBefore, basics.Round(0))
-	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
+	require.Zero(t, s1.NextProtocolApprovals)
+	require.Zero(t, s1.NextProtocolVoteBefore)
+	require.Zero(t, s1.NextProtocolSwitchOn)
 
 	// Check that proposal gets approved with sufficient votes
 	s.NextProtocolApprovals++
@@ -137,9 +137,9 @@ func TestUpgradeVote(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, s1.CurrentProtocol, proto2)
 	require.Equal(t, s1.NextProtocol, protocol.ConsensusVersion(""))
-	require.Equal(t, s1.NextProtocolApprovals, uint64(0))
-	require.Equal(t, s1.NextProtocolVoteBefore, basics.Round(0))
-	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
+	require.Zero(t, s1.NextProtocolApprovals)
+	require.Zero(t, s1.NextProtocolVoteBefore)
+	require.Zero(t, s1.NextProtocolSwitchOn)
 }
 
 func TestUpgradeVariableDelay(t *testing.T) {
@@ -562,7 +562,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 		return true
 	}
 
-	// test expected failuire
+	// test expected failure
 	consensusParams.InitialRewardsRateCalculation = false
 	require.False(t, runTest())
 
@@ -658,7 +658,7 @@ func TestNextRewardsRateWithFix(t *testing.T) {
 	}
 }
 
-func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
+func TestNextRewardsRateErrsWithoutFix(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -842,11 +842,26 @@ func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
 func TestBlock_ContentsMatchHeader(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	a := require.New(t)
+	for _, cv := range []struct {
+		name string
+		ver  protocol.ConsensusVersion
+	}{
+		{"v32", protocol.ConsensusV32},
+		{"v34", protocol.ConsensusV34},
+		{"current", protocol.ConsensusCurrentVersion},
+		{"future", protocol.ConsensusFuture},
+	} {
+		t.Run(cv.name, func(t *testing.T) {
+			testBlockContentsMatchHeader(t, cv.ver)
+		})
+	}
+}
 
+func testBlockContentsMatchHeader(t *testing.T, cv protocol.ConsensusVersion) {
+	a := require.New(t)
 	// Create a block without SHA256 TxnCommitments
 	var block Block
-	block.CurrentProtocol = protocol.ConsensusV32
+	block.CurrentProtocol = cv
 	crypto.RandBytes(block.BlockHeader.GenesisHash[:])
 
 	for i := 0; i < 1024; i++ {
@@ -880,51 +895,93 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 	a.NoError(err)
 	rootSliceSHA256 := tree.Root()
 
+	tree, err = block.TxnMerkleTreeSHA512()
+	a.NoError(err)
+	rootSliceSHA512 := tree.Root()
+
 	badDigestSlice := []byte("(>^-^)>")
 
-	/* Test V32 */
+	// Get consensus parameters for this version
+	params, ok := config.Consensus[cv]
+	a.True(ok)
+
+	// Initially all roots empty, should fail
+	block.BlockHeader.TxnCommitments = TxnCommitments{}
 	a.False(block.ContentsMatchHeader())
 
+	// Copy the appropriate txn roots based on consensus version
 	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	}
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+	}
 	a.True(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
+	// Test with SHA256 set when it shouldn't be
+	if !params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		a.False(block.ContentsMatchHeader())
+		block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+	}
 
+	// Test with SHA512 set when it shouldn't be
+	if !params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		a.False(block.ContentsMatchHeader())
+		block.BlockHeader.TxnCommitments.Sha512Commitment = crypto.Sha512Digest{}
+	}
+
+	// Test with bad NativeSha512_256Commitment (should fail for all protocols)
 	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], badDigestSlice)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 
+	// Test with missing NativeSha512_256Commitment
 	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	}
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+	}
 	a.False(block.ContentsMatchHeader())
 
-	/* Test Consensus Current */
-	// Create a block with SHA256 TxnCommitments
-	block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	// For protocols with SHA256 enabled, test with bad/missing SHA256 commitment
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], badDigestSlice)
+		if params.EnableSha512BlockHash {
+			copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		}
+		a.False(block.ContentsMatchHeader())
 
-	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
-	a.False(block.ContentsMatchHeader())
+		// Test with missing SHA256 commitment
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+		if params.EnableSha512BlockHash {
+			copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		}
+		a.False(block.ContentsMatchHeader())
+	}
 
-	// Now update the SHA256 header to its correct value
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.True(block.ContentsMatchHeader())
+	// For protocols with SHA512 enabled, test with bad/missing SHA512 commitment
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		if params.EnableSHA256TxnCommitmentHeader {
+			copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		}
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], badDigestSlice)
+		a.False(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], badDigestSlice)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
-
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], badDigestSlice)
-	a.False(block.ContentsMatchHeader())
-
-	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
+		// Test with missing SHA512 commitment
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		if params.EnableSHA256TxnCommitmentHeader {
+			copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		}
+		block.BlockHeader.TxnCommitments.Sha512Commitment = crypto.Sha512Digest{}
+		a.False(block.ContentsMatchHeader())
+	}
 }
 
 func TestBlockHeader_Serialization(t *testing.T) {
@@ -943,6 +1000,54 @@ func TestBlockHeader_Serialization(t *testing.T) {
 
 	a.Equal(crypto.Digest{}, blkHdr.TxnCommitments.Sha256Commitment)
 	a.NotEqual(crypto.Digest{}, blkHdr.TxnCommitments.NativeSha512_256Commitment)
+	a.Equal(crypto.Sha512Digest{}, blkHdr.TxnCommitments.Sha512Commitment)
+	a.Equal(crypto.Sha512Digest{}, blkHdr.Branch512)
+}
+
+// TestBlockHeader_PreCheck_Branch512 tests the Branch512 validation in PreCheck
+func TestBlockHeader_PreCheck_Branch512(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	// Test consensus v40 (no EnableSha512BlockHash)
+	cv := protocol.ConsensusV40
+	prevHeader := BlockHeader{Round: 1, GenesisID: "test"}
+	prevHeader.CurrentProtocol = cv
+	crypto.RandBytes(prevHeader.GenesisHash[:])
+	// Make round 2 block that references block 1 as prev
+	currentHeader := BlockHeader{
+		Round: prevHeader.Round + 1, GenesisID: prevHeader.GenesisID, GenesisHash: prevHeader.GenesisHash,
+		Branch: prevHeader.Hash(),
+	}
+	currentHeader.CurrentProtocol = cv
+	// empty Branch512 passes
+	a.NoError(currentHeader.PreCheck(prevHeader))
+	// correct Branch512 fails
+	currentHeader.Branch512 = prevHeader.Hash512()
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 not allowed")
+	// non-empty Branch512 fails
+	crypto.RandBytes(currentHeader.Branch512[:])
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 not allowed")
+
+	// Test consensus future (EnableSha512BlockHash set)
+	cv = protocol.ConsensusFuture
+	prevHeader = BlockHeader{Round: 1, GenesisID: "test"}
+	prevHeader.CurrentProtocol = cv
+	crypto.RandBytes(prevHeader.GenesisHash[:])
+	currentHeader = BlockHeader{
+		Round: prevHeader.Round + 1, GenesisID: prevHeader.GenesisID, GenesisHash: prevHeader.GenesisHash,
+		Branch: prevHeader.Hash(),
+	}
+	currentHeader.CurrentProtocol = cv
+	// empty Branch512 fails
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
+	// correct Branch512 passes
+	currentHeader.Branch512 = prevHeader.Hash512()
+	a.NoError(currentHeader.PreCheck(prevHeader))
+	// incorrect Branch512 fails
+	crypto.RandBytes(currentHeader.Branch512[:])
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
 }
 
 func TestBonusUpgrades(t *testing.T) {

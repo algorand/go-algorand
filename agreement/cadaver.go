@@ -64,7 +64,7 @@ func (c *cadaver) filename() string {
 	baseDir := c.baseDirectory
 	if baseDir == "" {
 		// Put cadaver files in our data directory
-		baseDir = config.GetCurrentVersion().DataDirectory
+		baseDir = config.DataDirectory
 	}
 
 	fmtstr := "%s.cdv"
