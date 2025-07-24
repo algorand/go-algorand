@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
       - master
+      - 'rel/**'
 
 env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
@@ -11,7 +12,7 @@ env:
   BUILD_TYPE: integration
   ALGOTEST: 1
   SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-  
+
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
