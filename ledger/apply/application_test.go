@@ -719,8 +719,7 @@ func TestAppCallOptIn(t *testing.T) {
 		appIdx++
 		err = optInApplication(b, sender, appIdx, aparams)
 		if cparams.MaxAppsOptedIn > 0 {
-			a.Error(err)
-			a.Contains(err.Error(), "max opted-in apps per acct")
+			a.ErrorContains(err, "max opted-in apps per acct")
 		} else {
 			a.NoError(err)
 		}
@@ -1110,8 +1109,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 
 		b.pass = true
 		err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
-		a.Error(err)
-		a.Contains(err.Error(), fmt.Sprintf("updateApplication %s program too long", test.name))
+		a.ErrorContains(err, fmt.Sprintf("%s program too long", test.name))
 	}
 
 	b.ResetWrites()
@@ -1137,7 +1135,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	}
 	b.pass = true
 	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
-	a.ErrorContains(err, "updateApplication app programs too long")
+	a.ErrorContains(err, "app programs too long")
 
 }
 
