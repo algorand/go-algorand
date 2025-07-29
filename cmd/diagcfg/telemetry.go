@@ -120,7 +120,7 @@ var telemetryStatusCmd = &cobra.Command{
 		globalDir, err := config.GetGlobalConfigFileRoot()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, telemetryConfigReadError, err)
-			return
+			os.Exit(1)
 		}
 		cfg, err := logging.ReadTelemetryConfigOrDefault(dataDir, globalDir)
 
