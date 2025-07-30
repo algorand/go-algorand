@@ -17,6 +17,11 @@ jobs:
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+      - name: Cache libsodium
+        uses: actions/cache@v4
+        with:
+          path: crypto/libs
+          key: libsodium-ubuntu-latest-${{ hashFiles('crypto/libsodium-fork/**') }}
       # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
