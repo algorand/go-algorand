@@ -125,7 +125,7 @@ jobs:
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
           export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
           mkdir -p test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}
-          gotestsum --format standard-verbose \
+          gotestsum --format standard-quiet \
             --junitfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
