@@ -167,6 +167,8 @@ logic:
 ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
+libsodium: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
+
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
 	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
@@ -410,7 +412,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOBIN)
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal
+.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule

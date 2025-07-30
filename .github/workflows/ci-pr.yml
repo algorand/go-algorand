@@ -73,7 +73,6 @@ jobs:
           }
 
   test:
-    needs: [build]
     strategy:
       fail-fast: false
       matrix:
@@ -86,18 +85,19 @@ jobs:
       CIRCLECI: true
       SHORTTEST: "-short"
     steps:
-      - name: Download workspace archive
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-          path: /tmp/
-      - name: Extract workspace archive
-        run: |
-          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
-          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
-        shell: bash
+          fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
+      - name: Cache libsodium
+        uses: actions/cache@v4
+        with:
+          path: crypto/libs
+          key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+      - name: Build libsodium
+        run: make libsodium
       - name: Run tests
         run: |
           ./scripts/configure_dev.sh
