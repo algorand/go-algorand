@@ -37,7 +37,6 @@ BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
 CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
-export GOCACHE=$(SRCPATH)/tmp/go-cache
 
 GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
@@ -276,15 +275,7 @@ rebuild_kmd_swagger: deps
 
 build: buildsrc buildsrc-special
 
-# We're making an empty file in the go-cache dir to
-# get around a bug in go build where it will fail
-# to cache binaries from time to time on empty NFS
-# dirs
-${GOCACHE}/file.txt:
-	mkdir -p "${GOCACHE}"
-	touch "${GOCACHE}"/file.txt
-
-buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN ${GOCACHE}/file.txt
+buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special:
