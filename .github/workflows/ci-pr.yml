@@ -32,14 +32,8 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: Get Go version
-      id: go_version
-      run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
     - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+      uses: ./.github/actions/setup-go
     - name: Cache libsodium
       uses: actions/cache@v4
       with:
@@ -102,14 +96,8 @@ jobs:
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
           rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
-      - name: Get Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+        uses: ./.github/actions/setup-go
       - name: Run tests
         run: |
           ./scripts/configure_dev.sh
@@ -193,14 +181,8 @@ jobs:
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
           rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
-      - name: Get Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+        uses: ./.github/actions/setup-go
       - name: Run integration tests
         run: |
           ./scripts/configure_dev.sh
@@ -267,14 +249,8 @@ jobs:
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
           rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
-      - name: Get Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+        uses: ./.github/actions/setup-go
       - name: Run E2E expect tests
         run: |
           scripts/configure_dev.sh
@@ -338,14 +314,8 @@ jobs:
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
           rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
-      - name: Get Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+        uses: ./.github/actions/setup-go
       - name: Run E2E subs tests
         run: |
           scripts/configure_dev.sh
