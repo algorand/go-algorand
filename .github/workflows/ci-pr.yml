@@ -23,56 +23,6 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        platform: ["ubuntu-24.04"]
-    runs-on: ${{ matrix.platform }}
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - name: Set up Go
-      uses: ./.github/actions/setup-go
-    - name: Cache libsodium
-      uses: actions/cache@v4
-      with:
-        path: crypto/libs
-        key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
-    - name: Build
-      run: |
-        scripts/travis/build.sh --make_debug
-    - name: Create workspace archive
-      run: |
-        tar -czf /tmp/workspace-${{ matrix.platform }}.tar.gz .
-      shell: bash
-    - name: Upload workspace archive
-      uses: actions/upload-artifact@v4
-      with:
-        name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-        path: /tmp/workspace-${{ matrix.platform }}.tar.gz
-        retention-days: 1
-    - name: Notify Slack on failure
-      if: failure() && env.SLACK_WEBHOOK != ''
-      uses: slackapi/slack-github-action@v2.1.0
-      with:
-        webhook: ${{ secrets.SLACK_WEBHOOK }}
-        webhook-type: webhook-trigger
-        payload: |
-          {
-            "text": "🚨 Build Failure Alert",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Build Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                }
-              }
-            ]
-          }
-
   test:
     strategy:
       fail-fast: false
@@ -157,7 +107,6 @@ jobs:
           fail_ci_if_error: false
 
   integration:
-    needs: [build]
     strategy:
       fail-fast: false
       matrix:
@@ -172,18 +121,19 @@ jobs:
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
     steps:
-      - name: Download workspace archive
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-          path: /tmp/
-      - name: Extract workspace archive
-        run: |
-          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
-          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
-        shell: bash
+          fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
+      - name: Cache libsodium
+        uses: actions/cache@v4
+        with:
+          path: crypto/libs
+          key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+      - name: Build libsodium
+        run: make libsodium
       - name: Run integration tests
         run: |
           ./scripts/configure_dev.sh
@@ -225,7 +175,6 @@ jobs:
           fail_ci_if_error: false
 
   e2e_expect:
-    needs: [build]
     strategy:
       fail-fast: false
       matrix:
@@ -240,18 +189,19 @@ jobs:
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
     steps:
-      - name: Download workspace archive
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-          path: /tmp/
-      - name: Extract workspace archive
-        run: |
-          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
-          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
-        shell: bash
+          fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
+      - name: Cache libsodium
+        uses: actions/cache@v4
+        with:
+          path: crypto/libs
+          key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+      - name: Build libsodium
+        run: make libsodium
       - name: Run E2E expect tests
         run: |
           scripts/configure_dev.sh
@@ -293,7 +243,6 @@ jobs:
           fail_ci_if_error: false
 
   e2e_subs:
-    needs: [build]
     strategy:
       fail-fast: false
       matrix:
@@ -305,18 +254,19 @@ jobs:
       CI_KEEP_TEMP_PLATFORM: ""
       SHORTTEST: "-short"
     steps:
-      - name: Download workspace archive
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-          path: /tmp/
-      - name: Extract workspace archive
-        run: |
-          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
-          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
-        shell: bash
+          fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
+      - name: Cache libsodium
+        uses: actions/cache@v4
+        with:
+          path: crypto/libs
+          key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+      - name: Build libsodium
+        run: make libsodium
       - name: Run E2E subs tests
         run: |
           scripts/configure_dev.sh
