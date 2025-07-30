@@ -17,6 +17,10 @@
 package transactions
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -74,4 +78,58 @@ type AssetFreezeTxnFields struct {
 
 	// AssetFrozen is the new frozen value.
 	AssetFrozen bool `codec:"afrz"`
+}
+
+var (
+	errAssetIDCannotBeZero                = errors.New("asset ID cannot be zero")
+	errFreezeAccountCannotBeEmpty         = errors.New("freeze account cannot be empty")
+	errConfigAssetNameTooBig              = errors.New("transaction asset name too big")
+	errConfigAssetUnitNameTooBig          = errors.New("transaction asset unit name too big")
+	errConfigAssetURLTooBig               = errors.New("transaction asset url too big")
+	errConfigAssetDecimalsTooHigh         = errors.New("transaction asset decimals is too high")
+	errTransferCannotCloseAssetByClawback = errors.New("cannot close asset by clawback")
+)
+
+func (ac AssetConfigTxnFields) wellFormed(proto config.ConsensusParams) error {
+	if len(ac.AssetParams.AssetName) > proto.MaxAssetNameBytes {
+		return fmt.Errorf("%w: %d > %d", errConfigAssetNameTooBig, len(ac.AssetParams.AssetName), proto.MaxAssetNameBytes)
+	}
+
+	if len(ac.AssetParams.UnitName) > proto.MaxAssetUnitNameBytes {
+		return fmt.Errorf("%w: %d > %d", errConfigAssetUnitNameTooBig, len(ac.AssetParams.UnitName), proto.MaxAssetUnitNameBytes)
+	}
+
+	if len(ac.AssetParams.URL) > proto.MaxAssetURLBytes {
+		return fmt.Errorf("%w: %d > %d", errConfigAssetURLTooBig, len(ac.AssetParams.URL), proto.MaxAssetURLBytes)
+	}
+
+	if ac.AssetParams.Decimals > proto.MaxAssetDecimals {
+		return fmt.Errorf("%w (max is %d)", errConfigAssetDecimalsTooHigh, proto.MaxAssetDecimals)
+	}
+
+	return nil
+}
+
+func (ax AssetTransferTxnFields) wellFormed() error {
+	if ax.XferAsset == basics.AssetIndex(0) {
+		return errAssetIDCannotBeZero
+	}
+
+	if !ax.AssetSender.IsZero() && !ax.AssetCloseTo.IsZero() {
+		return errTransferCannotCloseAssetByClawback
+	}
+
+	return nil
+}
+
+func (af AssetFreezeTxnFields) wellFormed() error {
+	if af.FreezeAsset == basics.AssetIndex(0) {
+		return errAssetIDCannotBeZero
+	}
+
+	if af.FreezeAccount.IsZero() {
+		return errFreezeAccountCannotBeEmpty
+	}
+
+	return nil
 }
