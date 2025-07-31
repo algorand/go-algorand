@@ -194,6 +194,27 @@ func TestWellFormedHeartbeatErrors(t *testing.T) {
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx.RekeyTo is set in free heartbeat"),
 		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					LastValid:  105,
+					FirstValid: 100,
+					Tip:        4,
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Tip is set in free heartbeat"),
+		},
 	}
 	for _, usecase := range usecases {
 		err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
