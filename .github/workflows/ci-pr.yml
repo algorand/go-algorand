@@ -205,6 +205,11 @@ jobs:
         run: make libsodium
       - name: Run E2E expect tests
         run: |
+          # Disable man-db auto-update to speed up APT operations
+          # See: https://github.com/actions/runner-images/issues/10977
+          echo 'set man-db/auto-update false' | sudo debconf-communicate >/dev/null
+          sudo dpkg-reconfigure -f noninteractive man-db
+          sudo apt-get install -y --no-upgrade expect
           scripts/configure_dev.sh
           scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
           make build-e2e

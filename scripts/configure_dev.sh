@@ -72,15 +72,10 @@ function install_windows_shellcheck() {
 }
 
 if [ "${OS}" = "linux" ]; then
-    # for Github Actions VMs, skip if
-    # - sqlite3 CLI is already available, AND
-    # - this is not an e2e_expect job (and expect isn't available)
-    if [ -n "${GITHUB_ACTIONS}" ] && command -v sqlite3 >/dev/null; then
-        if [ "${GITHUB_JOB}" = "e2e_expect" ] && ! command -v expect >/dev/null; then
-            echo "Installing only expect package for e2e_expect job"
-            sudo apt-get install -y --no-upgrade expect
-        fi
-        echo "Required tools already available in GitHub Actions, skipping installation"
+    # for CI environments, skip if sqlite3 CLI is already available and expect is available for expect tests
+    if [ -n "${CI}" ] && command -v sqlite3 >/dev/null && \
+       ( [ "${E2E_TEST_FILTER}" != "EXPECT" ] || command -v expect >/dev/null ); then
+        echo "Required tools already available in CI environment, skipping installation"
         exit 0
     fi
     if ! which sudo >/dev/null; then
