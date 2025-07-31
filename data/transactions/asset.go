@@ -101,7 +101,7 @@ func (ac AssetConfigTxnFields) wellFormed(proto config.ConsensusParams) error {
 }
 
 func (ax AssetTransferTxnFields) wellFormed() error {
-	if ax.XferAsset == basics.AssetIndex(0) && ax.AssetAmount != 0 {
+	if ax.XferAsset == 0 && ax.AssetAmount != 0 {
 		return errors.New("asset ID cannot be zero")
 	}
 
@@ -113,7 +113,7 @@ func (ax AssetTransferTxnFields) wellFormed() error {
 }
 
 func (af AssetFreezeTxnFields) wellFormed() error {
-	if af.FreezeAsset == basics.AssetIndex(0) {
+	if af.FreezeAsset == 0 {
 		return errors.New("asset ID cannot be zero")
 	}
 
