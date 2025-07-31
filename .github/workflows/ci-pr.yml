@@ -254,9 +254,11 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
+        testsuite: ["parallel", "vdir-serial"]
     runs-on: ${{ matrix.platform }}
     env:
       E2E_TEST_FILTER: SCRIPTS
+      E2E_SUBS_TESTSUITE: ${{ matrix.testsuite }}
       CI_PLATFORM: ${{ matrix.platform }}
       CI_KEEP_TEMP_PLATFORM: ""
       SHORTTEST: "-short"
@@ -278,7 +280,7 @@ jobs:
         run: |
           scripts/configure_dev.sh
           scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-          make build
+          make buildsrc
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
           test/scripts/e2e.sh
@@ -304,7 +306,7 @@ jobs:
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
+          name: e2e_subs-results-${{ matrix.platform }}-${{ matrix.testsuite }}-${{ github.run_id }}
           path: ~/test_results
           retention-days: 7
 
