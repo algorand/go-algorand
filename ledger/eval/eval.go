@@ -1401,6 +1401,11 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 			}
 		}
 
+		// Calculate and set the Load field for on-chain congestion measurement
+		if eval.proto.CongestionFees {
+			eval.block.BlockHeader.Load = ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
+		}
+
 		eval.generateKnockOfflineAccountsList(participating)
 
 		if eval.proto.StateProofInterval > 0 {
@@ -1512,6 +1517,13 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 	}
 
 	return nil
+}
+
+// ComputeLoad determines the load for the block based on block utilization.
+func ComputeLoad(blockSize int, maxSize int) uint64 {
+	// Load is expressed as a fixed-point integer with 6 digits of precision
+	// 1,000,000 represents a completely full block
+	return uint64(blockSize * 1_000_000 / maxSize)
 }
 
 func (eval *BlockEvaluator) validateForPayouts() error {
@@ -2202,6 +2214,13 @@ transactionGroupLoop:
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
+		// Validate Load field for on-chain congestion measurement
+		if eval.proto.CongestionFees {
+			expectedLoad := ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
+			if eval.block.BlockHeader.Load != expectedLoad {
+				return ledgercore.StateDelta{}, fmt.Errorf("bad load: %d != %d", eval.block.BlockHeader.Load, expectedLoad)
+			}
+		}
 		// wait for the signature validation to complete.
 		select {
 		case <-ctx.Done():
