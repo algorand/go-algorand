@@ -75,9 +75,11 @@ if [ "${OS}" = "linux" ]; then
     # for Github Actions VMs, skip if
     # - sqlite3 CLI is already available, AND
     # - this is not an e2e_expect job (and expect isn't available)
-    if [ -n "${GITHUB_ACTIONS}" ] && \
-       command -v sqlite3 >/dev/null && \
-       ( [ "${GITHUB_JOB}" != "e2e_expect" ] || command -v expect >/dev/null ); then
+    if [ -n "${GITHUB_ACTIONS}" ] && command -v sqlite3 >/dev/null; then
+        if [ "${GITHUB_JOB}" = "e2e_expect" ] && ! command -v expect >/dev/null; then
+            echo "Installing only expect package for e2e_expect job"
+            sudo apt-get install -y --no-upgrade expect
+        fi
         echo "Required tools already available in GitHub Actions, skipping installation"
         exit 0
     fi
