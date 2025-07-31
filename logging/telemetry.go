@@ -89,7 +89,7 @@ func makeTelemetryStateContext(ctx context.Context, cfg TelemetryConfig, hookFac
 }
 
 // ReadTelemetryConfigOrDefault reads telemetry config from file or defaults if no config file found.
-func ReadTelemetryConfigOrDefault(dataDir string, configDir string) (cfg TelemetryConfig, err error) {
+func ReadTelemetryConfigOrDefault(dataDir string, globalDir string) (cfg TelemetryConfig, err error) {
 	err = nil
 	dataDirProvided := dataDir != ""
 	var configPath string
@@ -106,7 +106,7 @@ func ReadTelemetryConfigOrDefault(dataDir string, configDir string) (cfg Telemet
 	// If the reason is because the directory doesn't exist or we didn't provide a data directory then...
 	if (err != nil && os.IsNotExist(err)) || !dataDirProvided {
 
-		configPath = filepath.Join(configDir, TelemetryConfigFilename)
+		configPath = filepath.Join(globalDir, TelemetryConfigFilename)
 		cfg, err = LoadTelemetryConfig(configPath)
 	}
 
@@ -129,8 +129,8 @@ func ReadTelemetryConfigOrDefault(dataDir string, configDir string) (cfg Telemet
 // EnsureTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint
 // Err will be non-nil if the file doesn't exist, or if error loading.
 // Cfg will always be valid.
-func EnsureTelemetryConfig(dataDir *string, configDir *string) (TelemetryConfig, error) {
-	cfg, _, err := EnsureTelemetryConfigCreated(dataDir, configDir)
+func EnsureTelemetryConfig(dataDir *string, globalDir *string) (TelemetryConfig, error) {
+	cfg, _, err := EnsureTelemetryConfigCreated(dataDir, globalDir)
 	return cfg, err
 }
 
