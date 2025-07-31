@@ -138,9 +138,10 @@ jobs:
         run: |
           ./scripts/configure_dev.sh
           ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          make build-e2e
           mkdir -p ~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID}
-          TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
-          test/scripts/run_integration_tests.sh
+          PATH="$(go env GOPATH)/bin-race:${PATH}" NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
+          test/scripts/e2e.sh
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
@@ -206,9 +207,10 @@ jobs:
         run: |
           scripts/configure_dev.sh
           scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          make build-e2e
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID}
-          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
-          test/scripts/run_integration_tests.sh
+          PATH="$(go env GOPATH)/bin-race:${PATH}" NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
+          test/scripts/e2e.sh
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0
@@ -271,9 +273,10 @@ jobs:
         run: |
           scripts/configure_dev.sh
           scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          make build
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs
-          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
-          test/scripts/run_integration_tests.sh
+          NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
+          test/scripts/e2e.sh
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK != ''
         uses: slackapi/slack-github-action@v2.1.0

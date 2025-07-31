@@ -26,7 +26,7 @@ Options:
     -n        Run tests without building binaries (Binaries are expected in PATH)
     -i        Start an interactive session for running e2e subs.
 "
-NO_BUILD=false
+NO_BUILD=${NO_BUILD:-false}
 while getopts ":c:nhi" opt; do
   case ${opt} in
     c ) CHANNEL=$OPTARG
