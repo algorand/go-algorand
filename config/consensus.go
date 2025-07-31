@@ -583,6 +583,10 @@ type ConsensusParams struct {
 	// legal transactions, this parameter can be removed and assumed true after
 	// the first consensus release in which it is set true.
 	AppSizeUpdates bool
+
+	// CongestionFees enables header values that track Load and a running
+	// BaseFee that grows/shrinks when blocks are more/less than half full
+	CongestionFees bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1466,9 +1470,11 @@ func initConsensusProtocols() {
 	vFuture := v41
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
-
+	vFuture.LogicSigVersion = 13       // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
+	vFuture.EnableSha512BlockHash = true
 	vFuture.AppSizeUpdates = true
+	vFuture.CongestionFees = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
