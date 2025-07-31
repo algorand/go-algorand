@@ -297,9 +297,11 @@ build-race: build
 
 # Build binaries needed for e2e/integration tests
 build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
-	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./cmd/kmd
 	@mkdir -p $(GOBIN)-race
-	GOBIN=$(GOBIN)-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/tealdbg ./cmd/msgpacktool ./cmd/algokey ./tools/teal/algotmpl ./test/e2e-go/cli/tealdbg/cdtmock
+	# Build kmd and race binaries in parallel
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./cmd/kmd & \
+	GOBIN=$(GOBIN)-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/tealdbg ./cmd/msgpacktool ./cmd/algokey ./tools/teal/algotmpl ./test/e2e-go/cli/tealdbg/cdtmock & \
+	wait
 	cp $(GOBIN)/kmd $(GOBIN)-race
 
 NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING $(GOBIN)/ddconfig.sh
