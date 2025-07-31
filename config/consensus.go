@@ -577,6 +577,10 @@ type ConsensusParams struct {
 	// available. This parameters can be removed and assumed true after the
 	// first consensus release in which it is set true.
 	EnableInnerClawbackWithoutSenderHolding bool
+
+	// CongestionFees enables header values that track Load and a running
+	// BaseFee that grows/shrinks when blocks are more/less than half full
+	CongestionFees bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1460,7 +1464,18 @@ func initConsensusProtocols() {
 	vFuture := v41
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
+<<<<<<< HEAD
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
+||||||| parent of 99b26a766 (Add, maintain, and validate new Load and BaseFee header fields)
+	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
+	vFuture.EnableSha512BlockHash = true
+=======
+	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
+	vFuture.EnableSha512BlockHash = true
+	vFuture.CongestionFees = true
+>>>>>>> 99b26a766 (Add, maintain, and validate new Load and BaseFee header fields)
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
