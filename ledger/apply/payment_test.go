@@ -20,7 +20,6 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -112,19 +111,6 @@ func TestPaymentValidation(t *testing.T) {
 		if badWindow.WellFormed(spec, current) == nil {
 			t.Errorf("transaction with bad window %#v verified incorrectly", badWindow)
 		}
-
-		badFee := txn
-		badFee.Fee = basics.MicroAlgos{}
-		if badFee.WellFormed(spec, config.Consensus[protocol.ConsensusV27]) == nil {
-			t.Errorf("transaction with no fee %#v verified incorrectly", badFee)
-		}
-		assert.NoError(t, badFee.WellFormed(spec, current))
-
-		badFee.Fee.Raw = 1
-		if badFee.WellFormed(spec, config.Consensus[protocol.ConsensusV27]) == nil {
-			t.Errorf("transaction with low fee %#v verified incorrectly", badFee)
-		}
-		assert.NoError(t, badFee.WellFormed(spec, current))
 	}
 }
 

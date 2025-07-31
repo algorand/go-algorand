@@ -19,6 +19,7 @@ package txntest
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
@@ -41,10 +42,11 @@ type Txn struct {
 	Type protocol.TxType
 
 	Sender      basics.Address
-	Fee         interface{} // basics.MicroAlgos, uint64, int, or nil
+	Fee         any // basics.MicroAlgos, uint64, int, or nil
+	Tip         basics.Micros
 	FirstValid  basics.Round
 	LastValid   basics.Round
-	Note        []byte
+	Note        any // []byte or string
 	GenesisID   string
 	GenesisHash crypto.Digest
 	Group       crypto.Digest
@@ -60,7 +62,7 @@ type Txn struct {
 	StateProofPK     merklesignature.Commitment
 
 	Receiver         basics.Address
-	Amount           uint64
+	Amount           any // basics.MicroAlgos, uint64, int, or nil
 	CloseRemainderTo basics.Address
 
 	ConfigAsset basics.AssetIndex
@@ -104,32 +106,33 @@ type Txn struct {
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
 // copying all of the slice fields
 func (tx *Txn) internalCopy() {
-	tx.Note = append([]byte(nil), tx.Note...)
-	if tx.ApplicationArgs != nil {
-		tx.ApplicationArgs = append([][]byte(nil), tx.ApplicationArgs...)
-		for i := range tx.ApplicationArgs {
-			tx.ApplicationArgs[i] = append([]byte(nil), tx.ApplicationArgs[i]...)
-		}
+	// if note is a byte slice, clone it
+	if note, ok := tx.Note.([]byte); ok {
+		tx.Note = slices.Clone(note)
 	}
-	tx.Accounts = append([]basics.Address(nil), tx.Accounts...)
-	tx.ForeignApps = append([]basics.AppIndex(nil), tx.ForeignApps...)
-	tx.ForeignAssets = append([]basics.AssetIndex(nil), tx.ForeignAssets...)
-	tx.Boxes = append([]transactions.BoxRef(nil), tx.Boxes...)
-	for i := 0; i < len(tx.Boxes); i++ {
-		tx.Boxes[i].Name = append([]byte(nil), tx.Boxes[i].Name...)
+	tx.ApplicationArgs = slices.Clone(tx.ApplicationArgs)
+	for i := range tx.ApplicationArgs {
+		tx.ApplicationArgs[i] = slices.Clone(tx.ApplicationArgs[i])
 	}
-	tx.Access = append([]transactions.ResourceRef(nil), tx.Access...)
-	for i := 0; i < len(tx.Access); i++ {
-		tx.Access[i].Box.Name = append([]byte(nil), tx.Access[i].Box.Name...)
+	tx.Accounts = slices.Clone(tx.Accounts)
+	tx.ForeignApps = slices.Clone(tx.ForeignApps)
+	tx.ForeignAssets = slices.Clone(tx.ForeignAssets)
+	tx.Boxes = slices.Clone(tx.Boxes)
+	for i := range tx.Boxes {
+		tx.Boxes[i].Name = slices.Clone(tx.Boxes[i].Name)
+	}
+	tx.Access = slices.Clone(tx.Access)
+	for i := range tx.Access {
+		tx.Access[i].Box.Name = slices.Clone(tx.Access[i].Box.Name)
 	}
 
 	// Programs may or may not actually be byte slices.  The other
 	// possibilitiues don't require copies.
 	if program, ok := tx.ApprovalProgram.([]byte); ok {
-		tx.ApprovalProgram = append([]byte(nil), program...)
+		tx.ApprovalProgram = slices.Clone(program)
 	}
 	if program, ok := tx.ClearStateProgram.([]byte); ok {
-		tx.ClearStateProgram = append([]byte(nil), program...)
+		tx.ClearStateProgram = slices.Clone(program)
 	}
 }
 
@@ -201,7 +204,7 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 	}
 }
 
-func assemble(source interface{}) []byte {
+func assemble(source any) []byte {
 	switch program := source.(type) {
 	case string:
 		if program == "" {
@@ -230,9 +233,35 @@ func (tx Txn) Txn() transactions.Transaction {
 	case int:
 		if fee >= 0 {
 			tx.Fee = basics.MicroAlgos{Raw: uint64(fee)}
+		} else {
+			panic("negative fee")
 		}
 	case nil:
 		tx.Fee = basics.MicroAlgos{}
+	}
+
+	switch note := tx.Note.(type) {
+	case []byte:
+		// nothing, already have []byte
+	case string:
+		tx.Note = []byte(note)
+	case nil:
+		tx.Note = []byte(nil)
+	}
+
+	switch amount := tx.Amount.(type) {
+	case basics.MicroAlgos:
+		// nothing, already have MicroAlgos
+	case uint64:
+		tx.Amount = basics.MicroAlgos{Raw: amount}
+	case int:
+		if amount >= 0 {
+			tx.Amount = basics.MicroAlgos{Raw: uint64(amount)}
+		} else {
+			panic("negative amount")
+		}
+	case nil:
+		tx.Amount = basics.MicroAlgos{}
 	}
 
 	hb := &transactions.HeartbeatTxnFields{
@@ -250,9 +279,10 @@ func (tx Txn) Txn() transactions.Transaction {
 		Header: transactions.Header{
 			Sender:      tx.Sender,
 			Fee:         tx.Fee.(basics.MicroAlgos),
+			Tip:         tx.Tip,
 			FirstValid:  tx.FirstValid,
 			LastValid:   tx.LastValid,
-			Note:        tx.Note,
+			Note:        tx.Note.([]byte),
 			GenesisID:   tx.GenesisID,
 			GenesisHash: tx.GenesisHash,
 			Group:       tx.Group,
@@ -270,7 +300,7 @@ func (tx Txn) Txn() transactions.Transaction {
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         tx.Receiver,
-			Amount:           basics.MicroAlgos{Raw: tx.Amount},
+			Amount:           tx.Amount.(basics.MicroAlgos),
 			CloseRemainderTo: tx.CloseRemainderTo,
 		},
 		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
@@ -294,8 +324,8 @@ func (tx Txn) Txn() transactions.Transaction {
 			OnCompletion:      tx.OnCompletion,
 			ApplicationArgs:   tx.ApplicationArgs,
 			Accounts:          tx.Accounts,
-			ForeignApps:       append([]basics.AppIndex(nil), tx.ForeignApps...),
-			ForeignAssets:     append([]basics.AssetIndex(nil), tx.ForeignAssets...),
+			ForeignApps:       slices.Clone(tx.ForeignApps),
+			ForeignAssets:     slices.Clone(tx.ForeignAssets),
 			Boxes:             tx.Boxes,
 			Access:            tx.Access,
 			LocalStateSchema:  tx.LocalStateSchema,

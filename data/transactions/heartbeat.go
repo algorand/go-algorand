@@ -55,7 +55,7 @@ type HeartbeatTxnFields struct {
 // wellFormed performs some stateless checks on the Heartbeat transaction
 func (hb HeartbeatTxnFields) wellFormed(header Header, proto config.ConsensusParams) error {
 	// If this is a free/cheap heartbeat, it must be very simple.
-	if header.Fee.Raw < proto.MinTxnFee && header.Group.IsZero() {
+	if header.Fee.LessThan(proto.MinFee()) && header.Group.IsZero() {
 		kind := "free"
 		if header.Fee.Raw > 0 {
 			kind = "cheap"
@@ -69,6 +69,9 @@ func (hb HeartbeatTxnFields) wellFormed(header Header, proto config.ConsensusPar
 		}
 		if !header.RekeyTo.IsZero() {
 			return fmt.Errorf("tx.RekeyTo is set in %s heartbeat", kind)
+		}
+		if header.Tip > 0 {
+			return fmt.Errorf("tx.Tip is set in %s heartbeat", kind)
 		}
 	}
 

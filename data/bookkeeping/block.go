@@ -144,6 +144,16 @@ type BlockHeader struct {
 	// ParticipationUpdates contains the information needed to mark
 	// certain accounts offline because their participation keys expired
 	ParticipationUpdates
+
+	// Load is the degree to which a block is full. Currently, it is based on
+	// the number of bytes in the final block, compared to the maximum allowed.
+	// It is expressed as a fixed-point integer with 6 digits of precision.  So,
+	// 1,000,000 is a completely full block.
+	Load basics.Micros `codec:"ld"`
+
+	// CongestionTax fee required, beyond the MinFee, for "normal"
+	// transactions in this block.
+	CongestionTax basics.Micros `codec:"ct"`
 }
 
 // TxnCommitments represents the commitments computed from the transactions in the block.
@@ -603,6 +613,37 @@ func computeBonus(current uint64, prevBonus basics.MicroAlgos, curPlan config.Bo
 	return prevBonus
 }
 
+// NextCongestionTax calculates the congestion tax for the next block based on
+// the previous block's load and congestion tax.
+func NextCongestionTax(prevLoad basics.Micros, prevConTax basics.Micros) basics.Micros {
+	const perBlockMaxChange basics.Micros = 100_000 // 10%
+	const half = 500_000                            // 50%
+	// Target load is half full (500,000)
+	// At 0% load: multiply tax by (1-perBlockMaxChange)
+	// At 100% load: multiply tax by (1+perBlockMaxChange)
+	if prevLoad <= half {
+		// Decrease congestion tax (or maintain, if 500_000 exactly)
+
+		// We can't overflow because prevLoad <= half
+		downFactor, _ := basics.Muldiv(perBlockMaxChange, half-prevLoad, half)
+		// downFactor is ensured to be less than 1 because pbmc is 0.1, and p/h < 1
+
+		// For an empty block, downFactor is perBlockMaxChange (10%)
+
+		// overflow impossible in subtraction because df < 1, in Mul because factor < 1
+		taxDecrease, _ := prevConTax.Mul(1e6 - downFactor)
+		return basics.SubSaturate(taxDecrease, downFactor)
+	}
+	// Increase congestion tax
+
+	// We can't overflow because prevLoad-half <= half (since Load < 1)
+	upFactor, _ := basics.Muldiv(perBlockMaxChange, prevLoad-half, half)
+
+	// overflow is _possible_, but Mul saturates, which is what we want
+	taxIncrease, _ := prevConTax.Mul(1e6 + upFactor)
+	return basics.AddSaturate(taxIncrease, upFactor)
+}
+
 // MakeBlock constructs a new valid block with an empty payset and an unset Seed.
 func MakeBlock(prev BlockHeader) Block {
 	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
@@ -624,19 +665,18 @@ func MakeBlock(prev BlockHeader) Block {
 		}
 	}
 
-	bonus := NextBonus(prev, &params)
-
 	// the merkle root of TXs will update when fillpayset is called
 	blk := Block{
 		BlockHeader: BlockHeader{
-			Round:        prev.Round + 1,
-			Branch:       prev.Hash(),
-			TimeStamp:    timestamp,
-			GenesisID:    prev.GenesisID,
-			GenesisHash:  prev.GenesisHash,
-			UpgradeVote:  upgradeVote,
-			UpgradeState: upgradeState,
-			Bonus:        bonus,
+			Round:         prev.Round + 1,
+			Branch:        prev.Hash(),
+			TimeStamp:     timestamp,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			UpgradeVote:   upgradeVote,
+			UpgradeState:  upgradeState,
+			Bonus:         NextBonus(prev, &params),
+			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
 		},
 	}
 	if params.EnableSha512BlockHash {
@@ -785,7 +825,23 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	// check bonus
 	expectedBonus := NextBonus(prev, &params)
 	if bh.Bonus != expectedBonus {
-		return fmt.Errorf("bad bonus: %d != %d ", bh.Bonus, expectedBonus)
+		return fmt.Errorf("bad bonus: %s != %s ", bh.Bonus, expectedBonus)
+	}
+
+	if params.CongestionTracking {
+		expectedConTax := NextCongestionTax(prev.Load, prev.CongestionTax)
+		if bh.CongestionTax != expectedConTax {
+			return fmt.Errorf("bad congestion tax: %s != %s", bh.CongestionTax, expectedConTax)
+		}
+		// bh.Load is checked in endOfBlock after we accumulate the payset byte length
+	} else {
+		// When congestion measurement is disabled, these fields should be empty
+		if bh.CongestionTax != 0 {
+			return fmt.Errorf("congestion tax should be zero when congestion measurement is disabled, got %s", bh.CongestionTax)
+		}
+		if bh.Load != 0 {
+			return fmt.Errorf("load should be zero when congestion measurement is disabled, got %s", bh.Load)
+		}
 	}
 
 	// Check genesis ID value against previous block, if set

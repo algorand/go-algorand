@@ -88,7 +88,7 @@ func collectPaths(typ reflect.Type, prefix []int, pathStack []reflect.Type) [][]
 			if !field.IsExported() {
 				continue
 			}
-			newPath := append(append([]int(nil), prefix...), i)
+			newPath := append(slices.Clone(prefix), i)
 			subPaths := collectPaths(field.Type, newPath, newStack)
 
 			// If recursion yielded deeper paths, use them
