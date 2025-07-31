@@ -80,31 +80,21 @@ type AssetFreezeTxnFields struct {
 	AssetFrozen bool `codec:"afrz"`
 }
 
-var (
-	errAssetIDCannotBeZero                = errors.New("asset ID cannot be zero")
-	errFreezeAccountCannotBeEmpty         = errors.New("freeze account cannot be empty")
-	errConfigAssetNameTooBig              = errors.New("transaction asset name too big")
-	errConfigAssetUnitNameTooBig          = errors.New("transaction asset unit name too big")
-	errConfigAssetURLTooBig               = errors.New("transaction asset url too big")
-	errConfigAssetDecimalsTooHigh         = errors.New("transaction asset decimals is too high")
-	errTransferCannotCloseAssetByClawback = errors.New("cannot close asset by clawback")
-)
-
 func (ac AssetConfigTxnFields) wellFormed(proto config.ConsensusParams) error {
 	if len(ac.AssetParams.AssetName) > proto.MaxAssetNameBytes {
-		return fmt.Errorf("%w: %d > %d", errConfigAssetNameTooBig, len(ac.AssetParams.AssetName), proto.MaxAssetNameBytes)
+		return fmt.Errorf("transaction asset name too big: %d > %d", len(ac.AssetParams.AssetName), proto.MaxAssetNameBytes)
 	}
 
 	if len(ac.AssetParams.UnitName) > proto.MaxAssetUnitNameBytes {
-		return fmt.Errorf("%w: %d > %d", errConfigAssetUnitNameTooBig, len(ac.AssetParams.UnitName), proto.MaxAssetUnitNameBytes)
+		return fmt.Errorf("transaction asset unit name too big: %d > %d", len(ac.AssetParams.UnitName), proto.MaxAssetUnitNameBytes)
 	}
 
 	if len(ac.AssetParams.URL) > proto.MaxAssetURLBytes {
-		return fmt.Errorf("%w: %d > %d", errConfigAssetURLTooBig, len(ac.AssetParams.URL), proto.MaxAssetURLBytes)
+		return fmt.Errorf("transaction asset url too big: %d > %d", len(ac.AssetParams.URL), proto.MaxAssetURLBytes)
 	}
 
 	if ac.AssetParams.Decimals > proto.MaxAssetDecimals {
-		return fmt.Errorf("%w (max is %d)", errConfigAssetDecimalsTooHigh, proto.MaxAssetDecimals)
+		return fmt.Errorf("transaction asset decimals is too high (max is %d)", proto.MaxAssetDecimals)
 	}
 
 	return nil
@@ -112,11 +102,11 @@ func (ac AssetConfigTxnFields) wellFormed(proto config.ConsensusParams) error {
 
 func (ax AssetTransferTxnFields) wellFormed() error {
 	if ax.XferAsset == basics.AssetIndex(0) {
-		return errAssetIDCannotBeZero
+		return errors.New("asset ID cannot be zero")
 	}
 
 	if !ax.AssetSender.IsZero() && !ax.AssetCloseTo.IsZero() {
-		return errTransferCannotCloseAssetByClawback
+		return errors.New("cannot close asset by clawback")
 	}
 
 	return nil
@@ -124,11 +114,11 @@ func (ax AssetTransferTxnFields) wellFormed() error {
 
 func (af AssetFreezeTxnFields) wellFormed() error {
 	if af.FreezeAsset == basics.AssetIndex(0) {
-		return errAssetIDCannotBeZero
+		return errors.New("asset ID cannot be zero")
 	}
 
 	if af.FreezeAccount.IsZero() {
-		return errFreezeAccountCannotBeEmpty
+		return errors.New("freeze account cannot be empty")
 	}
 
 	return nil
