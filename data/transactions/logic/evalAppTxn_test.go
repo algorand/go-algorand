@@ -494,7 +494,7 @@ func TestAppAxfer(t *testing.T) {
 		// is going to fail anyway, but to keep the behavior consistent, v9
 		// allows the zero asset (and zero account) in `requireHolding`.
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100"+noid+"int 1",
-			fmt.Sprintf("Sender (%s) not opted in to 0", appAddr(888)))
+			"asset ID cannot be zero")
 
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100" + axfer + "int 1")
 
