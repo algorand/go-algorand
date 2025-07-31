@@ -72,6 +72,15 @@ function install_windows_shellcheck() {
 }
 
 if [ "${OS}" = "linux" ]; then
+    # for Github Actions VMs, skip if
+    # - sqlite3 CLI is already available, AND
+    # - this is not an e2e_expect job (and expect isn't available)
+    if [ -n "${GITHUB_ACTIONS}" ] && \
+       command -v sqlite3 >/dev/null && \
+       ( [ "${GITHUB_JOB}" != "e2e_expect" ] || command -v expect >/dev/null ); then
+        echo "Required tools already available in GitHub Actions, skipping installation"
+        exit 0
+    fi
     if ! which sudo >/dev/null; then
         DEBIAN_FRONTEND="$DEBIAN_FRONTEND" "$SCRIPTPATH/install_linux_deps.sh"
     else
