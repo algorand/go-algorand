@@ -1,4 +1,6 @@
-#pragma version 2
+#pragma version 9
+// We use version 9 so we can test --access which needs at least sharedResourcesVersion
+
 // Fetch app idx we want to read global state from
 int 1  // ForeignApps index
 // non-utf8 key
@@ -8,20 +10,11 @@ byte 0xfefeffef0000112233
 app_global_get_ex
 
 // Should exist
-bz fail
+assert
 
 // Value should be "bar"
-byte base64 YmFy
+byte "bar"
 ==
-bz fail
+assert
 
-// Test passed
-b succeed
-
-fail:
-int 0
-return
-
-succeed:
 int 1
-return
