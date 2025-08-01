@@ -68,6 +68,7 @@ var (
 	rawOutput          bool
 	requestFilename    string
 	requestOutFilename string
+	inspectTxid        bool
 
 	simulateStartRound            basics.Round
 	simulateAllowEmptySignatures  bool
@@ -97,6 +98,9 @@ func init() {
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+
+	// inspect flags
+	inspectCmd.Flags().BoolVarP(&inspectTxid, "txid", "t", false, "Display the TxID for each transaction")
 
 	// send flags
 	sendCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (If not specified, uses default account)")
@@ -723,7 +727,11 @@ var inspectCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(txDecodeError, txFilename, err)
 				}
-				fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				if inspectTxid {
+					fmt.Printf("%s[%d] - %s\n%s\n\n", txFilename, count, sti.Txn.ID(), string(protocol.EncodeJSON(sti)))
+				} else {
+					fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				}
 				count++
 			}
 		}
