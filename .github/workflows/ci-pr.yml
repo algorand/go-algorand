@@ -266,3 +266,29 @@ jobs:
           job-type: "Verify"
           build-type: "PR Build"
           details: "• Test Type: `${{ matrix.test_type }}`\n• Branch: `${{ github.ref_name }}`"
+
+  summary:
+    needs: [test, integration, e2e_expect, e2e_subs]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*-results-*"
+          path: ~/test_results
+          merge-multiple: true
+      - name: Generate failure summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          for job_type in test integration e2e_expect e2e_subs; do
+            FAILED_TESTS=$(find ~/test_results -path "*_${job_type}/*" -name "testresults.json" -exec jq -r 'select(.Action == "fail") | "\(.Package)/\(.Test)"' {} \; 2>/dev/null | sort -u | grep -v '^$' || true)
+            if [ -n "$FAILED_TESTS" ]; then
+              echo "### ${job_type} failures" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "$FAILED_TESTS" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            else
+              echo "### ${job_type} ✅" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
