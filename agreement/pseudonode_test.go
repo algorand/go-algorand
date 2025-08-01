@@ -458,12 +458,12 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 
 type substrServiceLogger struct {
 	logging.Logger
-	looupStrings   []string
+	lookupStrings  []string
 	instancesFound []int
 }
 
 func (ssl *substrServiceLogger) Infof(s string, args ...interface{}) {
-	for i, str := range ssl.looupStrings {
+	for i, str := range ssl.lookupStrings {
 		if strings.Contains(s, str) {
 			ssl.instancesFound[i]++
 			return
@@ -471,9 +471,9 @@ func (ssl *substrServiceLogger) Infof(s string, args ...interface{}) {
 	}
 }
 
-// TestPseudonodeFailedEnqueuedTasks test to see that in the case where we cannot enqueue the verification task to the backlog, we won't be waiting forever - instead,
+// TestPseudonodeNonEnqueuedTasks test to see that in the case where we cannot enqueue the verification task to the backlog, we won't be waiting forever - instead,
 // we would generate a warning message and keep going.
-func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
+func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
@@ -485,7 +485,7 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 
 	subStrLogger := &substrServiceLogger{
 		Logger:         logging.TestingLog(t),
-		looupStrings:   []string{"pseudonode.makeVotes: failed to enqueue vote verification for", "pseudonode.makeProposals: failed to enqueue vote verification"},
+		lookupStrings:  []string{"pseudonode.makeVotes: failed to enqueue vote verification for", "pseudonode.makeProposals: failed to enqueue vote verification"},
 		instancesFound: []int{0, 0},
 	}
 	sLogger := serviceLogger{

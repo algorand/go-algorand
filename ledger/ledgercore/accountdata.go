@@ -113,9 +113,9 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 }
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
-func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {
+func (u AccountData) WithUpdatedRewards(rewardUnit uint64, rewardsLevel uint64) AccountData {
 	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = basics.WithUpdatedRewards(
-		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
+		rewardUnit, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
 	return u
 }
@@ -149,10 +149,10 @@ func (u AccountData) LastSeen() basics.Round {
 // storage the account is allowed to store on disk.
 func (u AccountData) MinBalance(proto *config.ConsensusParams) basics.MicroAlgos {
 	return basics.MinBalance(
-		proto,
-		uint64(u.TotalAssets),
+		proto.BalanceRequirements(),
+		u.TotalAssets,
 		u.TotalAppSchema,
-		uint64(u.TotalAppParams), uint64(u.TotalAppLocalStates),
+		u.TotalAppParams, u.TotalAppLocalStates,
 		uint64(u.TotalExtraAppPages),
 		u.TotalBoxes, u.TotalBoxBytes,
 	)
@@ -173,20 +173,20 @@ func (u AccountData) IsZero() bool {
 }
 
 // Money is similar to basics account data Money function
-func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (money basics.MicroAlgos, rewards basics.MicroAlgos) {
-	e := u.WithUpdatedRewards(proto, rewardsLevel)
+func (u AccountData) Money(rewardUnit uint64, rewardsLevel uint64) (money basics.MicroAlgos, rewards basics.MicroAlgos) {
+	e := u.WithUpdatedRewards(rewardUnit, rewardsLevel)
 	return e.MicroAlgos, e.RewardedMicroAlgos
 }
 
 // OnlineAccountData calculates the online account data given an AccountData, by adding the rewards.
-func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
+func (u AccountData) OnlineAccountData(rewardUnit uint64, rewardsLevel uint64) basics.OnlineAccountData {
 	if u.Status != basics.Online {
 		// if the account is not Online and agreement requests it for some reason, clear it out
 		return basics.OnlineAccountData{}
 	}
 
 	microAlgos, _, _ := basics.WithUpdatedRewards(
-		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
+		rewardUnit, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
 	return basics.OnlineAccountData{
 		MicroAlgosWithRewards: microAlgos,
@@ -198,6 +198,6 @@ func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLeve
 }
 
 // NormalizedOnlineBalance wraps basics.NormalizedOnlineAccountBalance
-func (u *AccountData) NormalizedOnlineBalance(genesisProto config.ConsensusParams) uint64 {
-	return basics.NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, genesisProto)
+func (u *AccountData) NormalizedOnlineBalance(rewardUnit uint64) uint64 {
+	return basics.NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, rewardUnit)
 }

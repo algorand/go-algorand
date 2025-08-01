@@ -85,7 +85,7 @@ func (f *failureResolver) LookupTXT(context.Context, string) ([]string, error) {
 	return nil, fmt.Errorf("always errors")
 }
 
-func TestMultiaddrsFromResolverDnsFailure(t *testing.T) {
+func TestMultiaddrsFromResolverDnsErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

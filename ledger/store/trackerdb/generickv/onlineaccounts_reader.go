@@ -72,7 +72,7 @@ func (r *accountsReader) LookupOnline(addr basics.Address, rnd basics.Round) (da
 			return
 		}
 
-		normBalance := data.AccountData.NormalizedOnlineBalance(r.proto)
+		normBalance := data.AccountData.NormalizedOnlineBalance(r.proto.RewardUnit)
 		data.Ref = onlineAccountRef{addr, normBalance, rnd}
 
 		// we have the record, we can leave
@@ -122,7 +122,7 @@ func (r *accountsReader) LookupOnlineHistory(addr basics.Address) (result []trac
 		}
 
 		// set the ref
-		pitem.Ref = onlineAccountRef{addr, pitem.AccountData.NormalizedOnlineBalance(r.proto), pitem.UpdRound}
+		pitem.Ref = onlineAccountRef{addr, pitem.AccountData.NormalizedOnlineBalance(r.proto.RewardUnit), pitem.UpdRound}
 
 		// append entry to accum
 		result = append(result, pitem)

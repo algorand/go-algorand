@@ -1,8 +1,12 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 ARG ARCH=amd64
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install aptly awscli binutils build-essential curl gnupg2 -y
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install aptly binutils build-essential curl gnupg2 -y
+RUN apt-get install -y curl unzip
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+RUN unzip awscliv2.zip
+RUN ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
 
 WORKDIR /root
 COPY .aptly.conf .

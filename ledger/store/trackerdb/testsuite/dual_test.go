@@ -24,6 +24,7 @@ import (
 )
 
 func TestDualEngines(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partitioning inside subtest
 	dbFactory := func(proto config.ConsensusParams) dbForTests {
 		db := testdb.OpenForTesting(t, true)
 		seedDb(t, db)

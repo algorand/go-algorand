@@ -20,8 +20,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"maps"
-
-	"github.com/algorand/go-algorand/config"
 )
 
 // DeltaAction is an enum of actions that may be performed when applying a
@@ -44,7 +42,7 @@ type ValueDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Action DeltaAction `codec:"at"`
-	Bytes  string      `codec:"bs,allocbound=config.MaxAppBytesValueLen"`
+	Bytes  string      `codec:"bs,allocbound=bounds.MaxAppBytesValueLen"`
 	Uint   uint64      `codec:"ui"`
 }
 
@@ -71,7 +69,7 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 // StateDelta is a map from key/value store keys to ValueDeltas, indicating
 // what should happen for that key
 //
-//msgp:allocbound StateDelta config.MaxStateDeltaKeys,config.MaxAppBytesKeyLen
+//msgp:allocbound StateDelta bounds.MaxStateDeltaKeys,bounds.MaxAppBytesKeyLen
 type StateDelta map[string]ValueDelta
 
 // Equal checks whether two StateDeltas are equal. We don't check for nilness
@@ -111,25 +109,22 @@ func (sm StateSchema) NumEntries() (tot uint64) {
 }
 
 // MinBalance computes the MinBalance requirements for a StateSchema based on
-// the consensus parameters
-func (sm StateSchema) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
+// the requirements for the state values in the schema.
+func (sm StateSchema) MinBalance(reqs BalanceRequirements) MicroAlgos {
 	// Flat cost for each key/value pair
-	flatCost := MulSaturate(proto.SchemaMinBalancePerEntry, sm.NumEntries())
+	flatCost := MulSaturate(reqs.SchemaMinBalancePerEntry, sm.NumEntries())
 
 	// Cost for uints
-	uintCost := MulSaturate(proto.SchemaUintMinBalance, sm.NumUint)
+	uintCost := MulSaturate(reqs.SchemaUintMinBalance, sm.NumUint)
 
 	// Cost for byte slices
-	bytesCost := MulSaturate(proto.SchemaBytesMinBalance, sm.NumByteSlice)
+	bytesCost := MulSaturate(reqs.SchemaBytesMinBalance, sm.NumByteSlice)
 
 	// Sum the separate costs
-	var min uint64
-	min = AddSaturate(min, flatCost)
-	min = AddSaturate(min, uintCost)
+	min := AddSaturate(flatCost, uintCost)
 	min = AddSaturate(min, bytesCost)
 
-	res.Raw = min
-	return res
+	return MicroAlgos{Raw: min}
 }
 
 // TealType is an enum of the types in a TEAL program: Bytes and Uint
@@ -185,7 +180,7 @@ func (tv *TealValue) String() string {
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
 //
-//msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries,config.MaxAppBytesKeyLen
+//msgp:allocbound TealKeyValue bounds.EncodedMaxKeyValueEntries,bounds.MaxAppBytesKeyLen
 type TealKeyValue map[string]TealValue
 
 // Clone returns a copy of a TealKeyValue that may be modified without

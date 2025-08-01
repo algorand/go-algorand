@@ -21,11 +21,10 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type (
-	// A Payset represents a common, unforgeable, consistent, ordered set of SignedTxn objects.
-	//msgp:allocbound Payset 100000
-	Payset []SignedTxnInBlock
-)
+// Payset represents a common, unforgeable, consistent, ordered set of SignedTxn objects.
+//
+//msgp:allocbound Payset 100000
+type Payset []SignedTxnInBlock
 
 // CommitFlat returns a commitment to the Payset, as a flat array.
 func (payset Payset) CommitFlat() crypto.Digest {

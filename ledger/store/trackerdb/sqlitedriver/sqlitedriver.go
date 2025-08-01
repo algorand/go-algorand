@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -251,8 +250,8 @@ func (w *sqlWriter) Testing() trackerdb.WriterTestExt {
 }
 
 // AccountsInitLightTest implements trackerdb.WriterTestExt
-func (w *sqlWriter) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	return AccountsInitLightTest(tb, w.e, initAccounts, proto)
+func (w *sqlWriter) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error) {
+	return AccountsInitLightTest(tb, w.e, initAccounts, rewardUnit)
 }
 
 // AccountsInitTest implements trackerdb.WriterTestExt

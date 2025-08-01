@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -49,7 +50,7 @@ func TestLocal_SaveThenLoad(t *testing.T) {
 
 	c1, err := loadWithoutDefaults(defaultConfig)
 	require.NoError(t, err)
-	c1, err = migrate(c1)
+	c1, _, err = migrate(c1)
 	require.NoError(t, err)
 	var b1 bytes.Buffer
 	ser1 := json.NewEncoder(&b1)
@@ -144,20 +145,6 @@ func TestLocal_EnrichNetworkingConfig(t *testing.T) {
 	}
 	c2, err = enrichNetworkingConfig(c1)
 	require.NoError(t, err)
-
-	c1 = Local{
-		NetAddress:          "test1",
-		EnableP2PHybridMode: true,
-	}
-	c2, err = enrichNetworkingConfig(c1)
-	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
-
-	c1 = Local{
-		P2PHybridNetAddress: "test1",
-		EnableP2PHybridMode: true,
-	}
-	c2, err = enrichNetworkingConfig(c1)
-	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
 
 	c1 = Local{
 		EnableP2PHybridMode: true,
@@ -261,7 +248,7 @@ func loadWithoutDefaults(cfg Local) (Local, error) {
 	if err != nil {
 		return Local{}, err
 	}
-	cfg, err = loadConfigFromFile(name)
+	cfg, _, err = loadConfigFromFile(name)
 	return cfg, err
 }
 
@@ -272,24 +259,46 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	c0, err := loadWithoutDefaults(GetVersionedDefaultLocalConfig(0))
 	a.NoError(err)
-	c0, err = migrate(c0)
+	c0, migrations0, err := migrate(c0)
 	a.NoError(err)
-	cLatest, err := migrate(defaultLocal)
+	a.Empty(migrations0)
+	cLatest, migrationsLatest, err := migrate(defaultLocal)
 	a.NoError(err)
+	a.Empty(migrationsLatest)
 
 	a.Equal(defaultLocal, c0)
 	a.Equal(defaultLocal, cLatest)
 
 	cLatest.Version = getLatestConfigVersion() + 1
-	_, err = migrate(cLatest)
+	_, _, err = migrate(cLatest)
 	a.Error(err)
 
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
 	c0Modified.BaseLoggerDebugLevel = GetVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
-	c0Modified, err = migrate(c0Modified)
+	c0Modified, migrationsModified, err := migrate(c0Modified)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
+
+	// Assert specific important migrations covering different data types
+	a.NotEmpty(migrationsModified)
+	migrationMap := make(map[string]MigrationResult)
+	for _, m := range migrationsModified {
+		a.NotEqual("Version", m.FieldName)
+		a.NotContains(migrationMap, m.FieldName)
+		migrationMap[m.FieldName] = m
+	}
+	for _, expected := range []MigrationResult{
+		{FieldName: "IncomingConnectionsLimit", OldValue: int64(-1), NewValue: int64(2400), OldVersion: 0, NewVersion: 27},
+		{FieldName: "TxPoolSize", OldValue: int64(50000), NewValue: int64(75000), OldVersion: 0, NewVersion: 23},
+		{FieldName: "ProposalAssemblyTime", OldValue: int64(0), NewValue: int64(500000000), OldVersion: 0, NewVersion: 23},
+		{FieldName: "AgreementIncomingVotesQueueLength", OldValue: uint64(0), NewValue: uint64(20000), OldVersion: 0, NewVersion: 27},
+		{FieldName: "EnableTxBacklogRateLimiting", OldValue: false, NewValue: true, OldVersion: 0, NewVersion: 30},
+		{FieldName: "DNSBootstrapID", OldValue: "<network>.algorand.network", NewValue: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)", OldVersion: 0, NewVersion: 28},
+	} {
+		a.Contains(migrationMap, expected.FieldName)
+		a.Equal(expected, migrationMap[expected.FieldName])
+	}
 }
 
 func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
@@ -302,15 +311,50 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
 	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
-		c, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
+		c, migrations, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
 		a.NoError(err)
-		modified, err := migrate(c)
+		modified, _, err := migrate(c)
 		a.NoError(err)
 		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
+
+		if len(migrations) > 0 {
+			t.Logf("Migration results for config-v%d.json:", configVersion)
+			for _, m := range migrations {
+				t.Logf("  Automatically upgraded default value for %s from %v (version %d) to %v (version %d)",
+					m.FieldName, m.OldValue, m.OldVersion, m.NewValue, m.NewVersion)
+			}
+		}
+
+		// Spot-check specific migrations
+		expectedMigrations := map[uint32]MigrationResult{
+			1:  {FieldName: "TxPoolSize", OldValue: 50000, NewValue: 75000, OldVersion: 1, NewVersion: 23},
+			3:  {FieldName: "MaxConnectionsPerIP", OldValue: 30, NewValue: 8, OldVersion: 3, NewVersion: 35},
+			5:  {FieldName: "TxPoolSize", OldValue: 15000, NewValue: 75000, OldVersion: 5, NewVersion: 23},
+			17: {FieldName: "IncomingConnectionsLimit", OldValue: 800, NewValue: 2400, OldVersion: 17, NewVersion: 27},
+			19: {FieldName: "ProposalAssemblyTime", OldValue: 250000000, NewValue: 500000000, OldVersion: 19, NewVersion: 23},
+			21: {FieldName: "AgreementIncomingVotesQueueLength", OldValue: 10000, NewValue: 20000, OldVersion: 21, NewVersion: 27},
+			23: {FieldName: "CadaverSizeTarget", OldValue: 1073741824, NewValue: 0, OldVersion: 23, NewVersion: 24},
+			27: {FieldName: "EnableTxBacklogRateLimiting", OldValue: false, NewValue: true, OldVersion: 27, NewVersion: 30},
+			30: {FieldName: "DNSSecurityFlags", OldValue: 1, NewValue: 9, OldVersion: 30, NewVersion: 34},
+		}
+		if expected, ok := expectedMigrations[configVersion]; ok {
+			found := false
+			for _, m := range migrations {
+				if m.FieldName == expected.FieldName {
+					found = true
+					a.EqualValues(expected.OldValue, m.OldValue)
+					a.EqualValues(expected.NewValue, m.NewValue)
+					a.EqualValues(expected.OldVersion, m.OldVersion)
+					a.EqualValues(expected.NewVersion, m.NewVersion)
+					break
+				}
+			}
+			a.True(found, "v%d should have %s migration", configVersion, expected.FieldName)
+		}
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
-	_, err = migrate(cNext)
+	_, _, err = migrate(cNext)
 	a.Error(err)
 }
 
@@ -758,16 +802,20 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 		enableP2PHybridMode bool
 		p2pHybridNetAddress string
 		netAddress          string
+		publicAddress       string
 		err                 bool
 	}{
-		{false, "", "", false},
-		{false, ":0", "", false},
-		{false, "", ":0", false},
-		{false, ":0", ":0", false},
-		{true, "", "", false},
-		{true, ":0", "", true},
-		{true, "", ":0", true},
-		{true, ":0", ":0", false},
+		{false, "", "", "", false},
+		{false, ":0", "", "", false},
+		{false, "", ":0", "", false},
+		{false, ":0", ":0", "", false},
+		{true, "", "", "", false},
+		{true, ":0", "", "", true},
+		{true, ":0", "", "pub", true},
+		{true, "", ":0", "", true},
+		{true, "", ":0", "pub", true},
+		{true, ":0", ":0", "", true},
+		{true, ":0", ":0", "pub", false},
 	}
 
 	for i, test := range tests {
@@ -779,9 +827,10 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 				EnableP2PHybridMode: test.enableP2PHybridMode,
 				P2PHybridNetAddress: test.p2pHybridNetAddress,
 				NetAddress:          test.netAddress,
+				PublicAddress:       test.publicAddress,
 			}
 			err := c.ValidateP2PHybridConfig()
-			require.Equal(t, test.err, err != nil, name)
+			require.Equal(t, test.err, err != nil, "%s: %v => %v", name, test, err)
 		})
 	}
 }
@@ -923,7 +972,7 @@ func TestEnsureAndResolveGenesisDirs_migrate(t *testing.T) {
 	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite-wal"))
 }
 
-func TestEnsureAndResolveGenesisDirs_migrateCrashFail(t *testing.T) {
+func TestEnsureAndResolveGenesisDirs_migrateCrashErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := GetDefaultLocal()
@@ -955,7 +1004,7 @@ func TestEnsureAndResolveGenesisDirs_migrateCrashFail(t *testing.T) {
 	require.NoFileExists(t, filepath.Join(hotDir, "crash.sqlite-shm"))
 }
 
-func TestEnsureAndResolveGenesisDirs_migrateSPFail(t *testing.T) {
+func TestEnsureAndResolveGenesisDirs_migrateSPErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := GetDefaultLocal()
@@ -1169,4 +1218,29 @@ func TestTracksCatchpointsWithoutStoring(t *testing.T) {
 	cfg.Archival = false
 	require.Equal(t, true, cfg.TracksCatchpoints())
 	require.Equal(t, false, cfg.StoresCatchpoints())
+}
+
+func TestEncodedAccountAllocationBounds(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// ensure that all the supported protocols have value limits less or
+	// equal to their corresponding codec allocbounds
+	for protoVer, proto := range Consensus {
+		if proto.MaxAssetsPerAccount > 0 && proto.MaxAssetsPerAccount > bounds.EncodedMaxAssetsPerAccount {
+			require.Failf(t, "proto.MaxAssetsPerAccount > EncodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
+		}
+		if proto.MaxAppsCreated > 0 && proto.MaxAppsCreated > bounds.EncodedMaxAppParams {
+			require.Failf(t, "proto.MaxAppsCreated > EncodedMaxAppParams", "protocol version = %s", protoVer)
+		}
+		if proto.MaxAppsOptedIn > 0 && proto.MaxAppsOptedIn > bounds.EncodedMaxAppLocalStates {
+			require.Failf(t, "proto.MaxAppsOptedIn > EncodedMaxAppLocalStates", "protocol version = %s", protoVer)
+		}
+		if proto.MaxLocalSchemaEntries > bounds.EncodedMaxKeyValueEntries {
+			require.Failf(t, "proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries", "protocol version = %s", protoVer)
+		}
+		if proto.MaxGlobalSchemaEntries > bounds.EncodedMaxKeyValueEntries {
+			require.Failf(t, "proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries", "protocol version = %s", protoVer)
+		}
+		// There is no protocol limit to the number of Boxes per account, so that allocbound is not checked.
+	}
 }

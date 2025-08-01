@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -492,8 +493,8 @@ func BenchmarkAppRateLimiter_TxgroupToKeys(b *testing.B) {
 
 	txgroups := make([][]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		txgroup := make([]transactions.SignedTxn, 0, config.MaxTxGroupSize)
-		for j := 0; j < config.MaxTxGroupSize; j++ {
+		txgroup := make([]transactions.SignedTxn, 0, bounds.MaxTxGroupSize)
+		for j := 0; j < bounds.MaxTxGroupSize; j++ {
 			apptxn := transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{

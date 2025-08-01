@@ -20,7 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
@@ -36,7 +35,7 @@ import (
 // WriterTestExt is an interface to extend Writer with test-only methods
 type WriterTestExt interface {
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
-	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
+	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error)
 	AccountsUpdateSchemaTest(ctx context.Context) (err error)
 	ModifyAcctBaseTest() error
 }

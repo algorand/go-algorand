@@ -187,7 +187,7 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 // The acctrounds would get updated to indicate that the balance matches round 0
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, e db.Executable) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
-	tu.newDatabase, err = accountsInit(e, tu.InitAccounts, config.Consensus[tu.InitProto])
+	tu.newDatabase, err = accountsInit(e, tu.InitAccounts, config.Consensus[tu.InitProto].RewardUnit)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema0 unable to initialize schema : %v", err)
 	}
@@ -274,7 +274,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, e db.Executable) (err error) {
-	err = accountsAddNormalizedBalance(e, config.Consensus[tu.InitProto])
+	err = accountsAddNormalizedBalance(e, config.Consensus[tu.InitProto].RewardUnit)
 	if err != nil {
 		return err
 	}

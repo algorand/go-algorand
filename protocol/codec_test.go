@@ -161,7 +161,7 @@ func TestEncodeJSON(t *testing.T) {
 
 	type ar []string
 	type mp struct {
-		Map map[int]ar `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+		Map map[int]ar `codec:"ld,allocbound=bounds.MaxEvalDeltaAccounts"`
 	}
 
 	var v mp

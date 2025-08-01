@@ -72,8 +72,8 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 
 	var addr basics.Address
 	addr[1] = 1
-	first := uint64(1000)
-	last := uint64(2000)
+	const first = 1000
+	const last = 2000
 
 	testcases := []struct {
 		name     string
@@ -83,7 +83,7 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 		{
 			name:     "default",
 			dilution: 0,
-			expected: account.DefaultKeyDilution(basics.Round(first), basics.Round(last)),
+			expected: account.DefaultKeyDilution(first, last),
 		}, {
 			name:     "override",
 			dilution: 5,

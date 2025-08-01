@@ -58,7 +58,7 @@ const TXTopicName = "algotx01"
 
 const incomingThreads = 20 // matches to number wsNetwork workers
 
-func makePubSub(ctx context.Context, cfg config.Local, host host.Host, metricsTracer pubsub.RawTracer) (*pubsub.PubSub, error) {
+func makePubSub(ctx context.Context, cfg config.Local, host host.Host, opts ...pubsub.Option) (*pubsub.PubSub, error) {
 	//defaultParams := pubsub.DefaultGossipSubParams()
 
 	options := []pubsub.Option{
@@ -103,10 +103,7 @@ func makePubSub(ctx context.Context, cfg config.Local, host host.Host, metricsTr
 		pubsub.WithValidateWorkers(incomingThreads),
 	}
 
-	if metricsTracer != nil {
-		options = append(options, pubsub.WithRawTracer(metricsTracer))
-	}
-
+	options = append(options, opts...)
 	return pubsub.NewGossipSub(ctx, host, options...)
 }
 

@@ -932,9 +932,9 @@ func TestTxnHeartbeat(t *testing.T) {
 	verifyGroup(t, txnGroups, &blkHdr, breakHbProofFunc, restoreHbProofFunc, crypto.ErrBatchHasFailedSigs.Error())
 }
 
-// TestTxnGroupCacheUpdateFailLogic test makes sure that a payment transaction contains a logic (and no signature)
+// TestTxnGroupCacheUpdateRejLogic test makes sure that a payment transaction contains a logic (and no signature)
 // is valid (and added to the cache) only if logic passes
-func TestTxnGroupCacheUpdateFailLogic(t *testing.T) {
+func TestTxnGroupCacheUpdateRejLogic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, signedTxn, _, _ := generateTestObjects(100, 20, 0, 50)

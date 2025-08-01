@@ -191,10 +191,10 @@ func TestRemoveStrayStateProofID(t *testing.T) {
 
 		// this is the same seq as AccountsInitTest makes but it stops
 		// before the online accounts table creation to generate a trie and commit it
-		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion])
+		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit)
 		require.NoError(t, err)
 
-		err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
+		err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit)
 		require.NoError(t, err)
 
 		err = accountsCreateResourceTable(context.Background(), tx)

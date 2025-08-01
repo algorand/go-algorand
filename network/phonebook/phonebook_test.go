@@ -17,6 +17,7 @@
 package phonebook
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -27,25 +28,13 @@ import (
 func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
 	actual := ph.GetAddresses(len(set), RelayRole)
 	for _, got := range actual {
-		ok := false
-		for _, known := range set {
-			if got == known {
-				ok = true
-				break
-			}
-		}
+		ok := slices.Contains(set, got)
 		if !ok {
 			t.Errorf("get returned junk %#v", got)
 		}
 	}
 	for _, known := range set {
-		ok := false
-		for _, got := range actual {
-			if got == known {
-				ok = true
-				break
-			}
-		}
+		ok := slices.Contains(actual, known)
 		if !ok {
 			t.Errorf("get missed %#v; actual=%#v; set=%#v", known, actual, set)
 		}

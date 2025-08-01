@@ -55,8 +55,8 @@ var getCmd = &cobra.Command{
 			reportErrorf("Target rootdir '%s' already exists", networkRootDir)
 		}
 
-		if err := doGet(getChannel, getRootDir); err != nil {
-			reportErrorf("Error retrieving configuration: %v", err)
+		if err1 := doGet(getChannel, getRootDir); err1 != nil {
+			reportErrorf("Error retrieving configuration: %v", err1)
 		}
 
 		cfg, err := remote.LoadDeployedNetworkConfigFromDir(getRootDir)

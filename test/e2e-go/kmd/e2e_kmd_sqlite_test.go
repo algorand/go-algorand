@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestNonAbsSQLiteWalletConfigFails(t *testing.T) {
+func TestNonAbsSQLiteWalletConfigErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 

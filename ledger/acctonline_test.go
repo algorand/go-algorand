@@ -1392,7 +1392,7 @@ func compareTopAccounts(a *require.Assertions, testingResult []*ledgercore.Onlin
 			Address:                 expectedAccountsBalances[i].Addr,
 			MicroAlgos:              expectedAccountsBalances[i].MicroAlgos,
 			RewardsBase:             0,
-			NormalizedOnlineBalance: expectedAccountsBalances[i].NormalizedOnlineBalance(config.Consensus[protocol.ConsensusCurrentVersion]),
+			NormalizedOnlineBalance: expectedAccountsBalances[i].AccountData.NormalizedOnlineBalance(config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit),
 			VoteFirstValid:          expectedAccountsBalances[i].VoteFirstValid,
 			VoteLastValid:           expectedAccountsBalances[i].VoteLastValid})
 	}
@@ -2158,7 +2158,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				expiredAccts, err = reader.ExpiredOnlineAccountsForRound(rnd-1, targetVoteRnd, params, 0)
+				expiredAccts, err = reader.ExpiredOnlineAccountsForRound(rnd-1, targetVoteRnd, params.RewardUnit, 0)
 				if err != nil {
 					return err
 				}

@@ -37,7 +37,6 @@ missing_dep() {
 GO_DEPS=(
     "msgp"
     "golangci-lint"
-    "oapi-codegen"
     "swagger"
 )
 

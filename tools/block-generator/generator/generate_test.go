@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func makePrivateGenerator(t *testing.T, round uint64, genesis bookkeeping.Genesis) *generator {
+func makePrivateGenerator(t *testing.T, round basics.Round, genesis bookkeeping.Genesis) *generator {
 	cfg := GenerationConfig{
 		Name:                         "test",
 		NumGenesisAccounts:           10,
@@ -125,17 +125,14 @@ func TestAssetOptinEveryAccountOverride(t *testing.T) {
 	g.finishRound()
 
 	// Opt all the accounts in, this also verifies that no account is opted in twice
-	var txn transactions.Transaction
-	var actual TxTypeID
-	var assetID uint64
-	for i := 2; uint64(i) <= g.numAccounts; i++ {
-		actual, txn, assetID = g.generateAssetTxnInternal(assetOptin, 2, uint64(1+i))
+	for i := uint64(2); i <= g.numAccounts; i++ {
+		actual, txn, assetID := g.generateAssetTxnInternal(assetOptin, 2, 1+i)
 		require.NotEqual(t, 0, assetID)
 		require.Equal(t, assetOptin, actual)
 		require.Equal(t, protocol.AssetTransferTx, txn.Type)
 		require.Len(t, g.assets, 1)
-		require.Len(t, g.assets[0].holdings, i)
-		require.Len(t, g.assets[0].holders, i)
+		require.Len(t, g.assets[0].holdings, int(i))
+		require.Len(t, g.assets[0].holders, int(i))
 	}
 	g.finishRound()
 
@@ -143,7 +140,7 @@ func TestAssetOptinEveryAccountOverride(t *testing.T) {
 	require.Equal(t, g.numAccounts, uint64(len(g.assets[0].holdings)))
 
 	// The next optin closes instead
-	actual, txn, assetID = g.generateAssetTxnInternal(assetOptin, 3, 0)
+	actual, txn, assetID := g.generateAssetTxnInternal(assetOptin, 3, 0)
 	require.Greater(t, assetID, uint64(0))
 	g.finishRound()
 	require.Equal(t, assetClose, actual)
@@ -240,7 +237,7 @@ func TestAppCreate(t *testing.T) {
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	assembled := assembleApps(t)
 
-	round, intra := uint64(1337), uint64(0)
+	round, intra := basics.Round(1337), uint64(0)
 	hint := appData{sender: 7}
 
 	// app call transaction creating appBoxes
@@ -317,7 +314,7 @@ func TestAppBoxesOptin(t *testing.T) {
 	g := makePrivateGenerator(t, 0, bookkeeping.Genesis{})
 	assembled := assembleApps(t)
 
-	round, intra := uint64(1337), uint64(0)
+	round, intra := basics.Round(1337), uint64(0)
 
 	hint := appData{sender: 7}
 
@@ -443,8 +440,8 @@ func TestWriteRoundZero(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var testcases = []struct {
 		name    string
-		dbround uint64
-		round   uint64
+		dbround basics.Round
+		round   basics.Round
 		genesis bookkeeping.Genesis
 	}{
 		{
@@ -486,45 +483,45 @@ func TestWriteRound(t *testing.T) {
 	}
 
 	// Initial conditions of g from makePrivateGenerator:
-	require.Equal(t, uint64(0), g.round)
+	require.Zero(t, g.round)
 
 	// Round 0:
 	blockBuff, block0_1 := prepBuffer()
 	err := g.WriteBlock(blockBuff, 0)
 	require.NoError(t, err)
 
-	require.Equal(t, uint64(1), g.round)
+	require.Equal(t, basics.Round(1), g.round)
 	protocol.Decode(blockBuff.Bytes(), &block0_1)
 	require.Equal(t, "blockgen-test", block0_1.Block.BlockHeader.GenesisID)
-	require.Equal(t, basics.Round(0), block0_1.Block.BlockHeader.Round)
+	require.Zero(t, block0_1.Block.BlockHeader.Round)
 	require.NotNil(t, g.ledger)
-	require.Equal(t, basics.Round(0), g.ledger.Latest())
+	require.Zero(t, g.ledger.Latest())
 
 	// WriteBlocks only advances the _internal_ round
 	// the first time called for a particular _given_ round
 	blockBuff, block0_2 := prepBuffer()
 	err = g.WriteBlock(blockBuff, 0)
 	require.NoError(t, err)
-	require.Equal(t, uint64(1), g.round)
+	require.Equal(t, basics.Round(1), g.round)
 	protocol.Decode(blockBuff.Bytes(), &block0_2)
 	require.Equal(t, block0_1, block0_2)
 	require.NotNil(t, g.ledger)
-	require.Equal(t, basics.Round(0), g.ledger.Latest())
+	require.Zero(t, g.ledger.Latest())
 
 	blockBuff, block0_3 := prepBuffer()
 	err = g.WriteBlock(blockBuff, 0)
 	require.NoError(t, err)
-	require.Equal(t, uint64(1), g.round)
+	require.Equal(t, basics.Round(1), g.round)
 	protocol.Decode(blockBuff.Bytes(), &block0_3)
 	require.Equal(t, block0_1, block0_3)
 	require.NotNil(t, g.ledger)
-	require.Equal(t, basics.Round(0), g.ledger.Latest())
+	require.Zero(t, g.ledger.Latest())
 
 	// Round 1:
 	blockBuff, block1_1 := prepBuffer()
 	err = g.WriteBlock(blockBuff, 1)
 	require.NoError(t, err)
-	require.Equal(t, uint64(2), g.round)
+	require.Equal(t, basics.Round(2), g.round)
 	protocol.Decode(blockBuff.Bytes(), &block1_1)
 	require.Equal(t, "blockgen-test", block1_1.Block.BlockHeader.GenesisID)
 	require.Equal(t, basics.Round(1), block1_1.Block.BlockHeader.Round)
@@ -537,7 +534,7 @@ func TestWriteRound(t *testing.T) {
 	blockBuff, block1_2 := prepBuffer()
 	err = g.WriteBlock(blockBuff, 1)
 	require.NoError(t, err)
-	require.Equal(t, uint64(2), g.round)
+	require.Equal(t, basics.Round(2), g.round)
 	protocol.Decode(blockBuff.Bytes(), &block1_2)
 	require.Equal(t, block1_1, block1_2)
 	require.NotNil(t, g.ledger)
@@ -555,8 +552,8 @@ func TestWriteRoundWithPreloadedDB(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var testcases = []struct {
 		name    string
-		dbround uint64
-		round   uint64
+		dbround basics.Round
+		round   basics.Round
 		genesis bookkeeping.Genesis
 		err     error
 	}{

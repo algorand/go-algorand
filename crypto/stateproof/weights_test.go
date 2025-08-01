@@ -21,7 +21,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -192,7 +192,7 @@ func TestSigPartProofMaxSize(t *testing.T) {
 	// Ensures that the SigPartProofMaxSize constant used for maxtotalbytes for StateProof.(Sig|Part)Proof(s) is
 	// correct. It should be logically bound by the maximum number of StateProofTopVoters. It is scaled by 1/2
 	// see merkelarray.Proof comment for explanation of the size calculation.
-	require.Equal(t, SigPartProofMaxSize, merklearray.ProofMaxSizeByElements(config.StateProofTopVoters/2))
+	require.Equal(t, SigPartProofMaxSize, merklearray.ProofMaxSizeByElements(bounds.StateProofTopVoters/2))
 }
 
 func BenchmarkVerifyWeights(b *testing.B) {

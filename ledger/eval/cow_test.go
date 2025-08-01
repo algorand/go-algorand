@@ -338,20 +338,20 @@ func TestCowStateProof(t *testing.T) {
 	c0.SetStateProofNextRound(firstStateproof)
 	stateproofTxn := transactions.StateProofTxnFields{
 		StateProofType: protocol.StateProofBasic,
-		Message:        stateproofmsg.Message{LastAttestedRound: uint64(firstStateproof) + version.StateProofInterval},
+		Message:        stateproofmsg.Message{LastAttestedRound: firstStateproof + basics.Round(version.StateProofInterval)},
 	}
 
 	// can not apply state proof for 3*version.StateProofInterval when we expect 2*version.StateProofInterval
 	err := apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
 	a.ErrorIs(err, apply.ErrExpectedDifferentStateProofRound)
 
-	stateproofTxn.Message.LastAttestedRound = uint64(firstStateproof)
+	stateproofTxn.Message.LastAttestedRound = firstStateproof
 	err = apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
 	a.NoError(err)
 	a.Equal(3*basics.Round(version.StateProofInterval), c0.GetStateProofNextRound())
 
 	// try to apply the next stateproof 3*version.StateProofInterval
-	stateproofTxn.Message.LastAttestedRound = 3 * version.StateProofInterval
+	stateproofTxn.Message.LastAttestedRound = 3 * basics.Round(version.StateProofInterval)
 	err = apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
 	a.NoError(err)
 	a.Equal(4*basics.Round(version.StateProofInterval), c0.GetStateProofNextRound())

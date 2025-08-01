@@ -163,24 +163,24 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 	}()
 
 	// make participation key
-	lastValid := 3000000
+	lastValid := basics.Round(3000000)
 	keyDilution := 10000
 	if kd, err := strconv.Atoi(os.Getenv("DILUTION")); err == nil { // allow setting key dilution via env var
 		keyDilution = kd
 	}
 	if lv, err := strconv.Atoi(os.Getenv("LASTVALID")); err == nil { // allow setting last valid via env var
-		lastValid = lv
+		lastValid = basics.Round(lv)
 	}
 	b.Log("making part keys for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
-	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, basics.Round(lastValid), uint64(keyDilution))
+	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, lastValid, uint64(keyDilution))
 	a.NoError(err)
 	a.NotNil(part)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	b.Log("starting DeleteOldKeys benchmark up to round", b.N)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		errCh := part.DeleteOldKeys(basics.Round(i), proto)
+	for i := range basics.Round(b.N) {
+		errCh := part.DeleteOldKeys(i, proto)
 		err := <-errCh
 		a.NoError(err)
 	}
@@ -500,7 +500,7 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+	maxValidPeriod := basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod)
 	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
@@ -509,7 +509,7 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	store := createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid := basics.Round(0)
-	lastValid := basics.Round(maxValidPeriod + 1)
+	lastValid := maxValidPeriod + 1
 	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.Error(err)
 }
@@ -546,7 +546,7 @@ func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not paral
 		config.Consensus[protocol.ConsensusCurrentVersion] = version
 	}()
 
-	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+	maxValidPeriod := basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod)
 	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
@@ -554,7 +554,7 @@ func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not paral
 	store := createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid := basics.Round(0)
-	lastValid := basics.Round(maxValidPeriod)
+	lastValid := maxValidPeriod
 	crypto.RandBytes(address[:])
 	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.NoError(err)
@@ -562,7 +562,7 @@ func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not paral
 	store = createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid = basics.Round(0)
-	lastValid = basics.Round(maxValidPeriod + 1)
+	lastValid = maxValidPeriod + 1
 	_, err = FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.Error(err)
 }

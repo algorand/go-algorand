@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,6 +46,7 @@ func getJSONTag(field reflect.StructField) string {
 // TestGenesisTypeCompatibility verifies that model.Genesis matches the field structure
 // of bookkeeping.Genesis, using the codec tags from bookkeeping as the source of truth.
 func TestGenesisTypeCompatibility(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// Test Genesis struct compatibility
 	verifyStructCompatibility(t, reflect.TypeOf(bookkeeping.Genesis{}), reflect.TypeOf(model.Genesis{}))
 
@@ -163,6 +165,16 @@ func verifyTypeCompatibility(t *testing.T, bkType, modelType reflect.Type, tag s
 		case bkType.String() == "basics.MicroAlgos",
 			bkType.String() == "basics.Status",
 			bkType.String() == "basics.Round":
+			return
+		}
+
+	case reflect.Int:
+		// Special case: Simple integer is fine for basics.Status which is a
+		// byte.  You might think that we should also allow bkType to be an int
+		// here, and that makes some sense, but we don't use simple ints in
+		// go-algorand, so it seems more likely to indicate a bug somewhere.
+		switch {
+		case bkType.String() == "basics.Status":
 			return
 		}
 

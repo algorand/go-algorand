@@ -17,7 +17,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -780,10 +779,26 @@ func (cfg Local) IsHybridServer() bool {
 func (cfg Local) ValidateP2PHybridConfig() error {
 	if cfg.EnableP2PHybridMode {
 		if cfg.NetAddress == "" && cfg.P2PHybridNetAddress != "" || cfg.NetAddress != "" && cfg.P2PHybridNetAddress == "" {
-			return errors.New("both NetAddress and P2PHybridNetAddress must be set or unset")
+			return P2PHybridConfigError{
+				msg: "P2PHybridMode requires both NetAddress and P2PHybridNetAddress to be set or unset",
+			}
+		}
+		// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
+		// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
+		if (cfg.NetAddress != "" || cfg.P2PHybridNetAddress != "") && cfg.PublicAddress == "" {
+			return P2PHybridConfigError{msg: "PublicAddress must be specified when EnableP2PHybridMode is set"}
 		}
 	}
 	return nil
+}
+
+// P2PHybridConfigError is an error type for P2PHybrid configuration issues
+type P2PHybridConfigError struct {
+	msg string
+}
+
+func (e P2PHybridConfigError) Error() string {
+	return e.msg
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there

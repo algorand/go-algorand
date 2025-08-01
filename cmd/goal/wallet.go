@@ -101,15 +101,15 @@ var newWalletCmd = &cobra.Command{
 		var mdk crypto.MasterDerivationKey
 		if recoverWallet {
 			fmt.Println(infoRecoveryPrompt)
-			resp, err := reader.ReadString('\n')
+			resp, err1 := reader.ReadString('\n')
 			resp = strings.TrimSpace(resp)
-			if err != nil {
-				reportErrorf(errorFailedToReadResponse, err)
+			if err1 != nil {
+				reportErrorf(errorFailedToReadResponse, err1)
 			}
 			var key []byte
-			key, err = passphrase.MnemonicToKey(resp)
-			if err != nil {
-				reportErrorf(errorBadMnemonic, err)
+			key, err1 = passphrase.MnemonicToKey(resp)
+			if err1 != nil {
+				reportErrorf(errorBadMnemonic, err1)
 			}
 			// Copy the recovered key into the mdk
 			n := copy(mdk[:], key)
@@ -148,32 +148,32 @@ var newWalletCmd = &cobra.Command{
 		if !recoverWallet && !noDisplaySeed {
 			// Offer to print backup seed
 			fmt.Println(infoBackupExplanation)
-			resp, err := reader.ReadString('\n')
+			resp, err1 := reader.ReadString('\n')
 			resp = strings.TrimSpace(resp)
-			if err != nil {
-				reportErrorf(errorFailedToReadResponse, err)
+			if err1 != nil {
+				reportErrorf(errorFailedToReadResponse, err1)
 			}
 
 			if strings.ToLower(resp) != "n" {
 				// Get a wallet handle token
-				token, err := client.GetWalletHandleToken(walletID, walletPassword)
-				if err != nil {
-					reportErrorf(errorCouldntInitializeWallet, err)
+				token, err1 := client.GetWalletHandleToken(walletID, walletPassword)
+				if err1 != nil {
+					reportErrorf(errorCouldntInitializeWallet, err1)
 				}
 
 				// Invalidate the handle when we're done with it
 				defer client.ReleaseWalletHandle(token)
 
 				// Export the master derivation key
-				mdk, err := client.ExportMasterDerivationKey(token, walletPassword)
-				if err != nil {
-					reportErrorf(errorCouldntExportMDK, err)
+				mdk, err1 := client.ExportMasterDerivationKey(token, walletPassword)
+				if err1 != nil {
+					reportErrorf(errorCouldntExportMDK, err1)
 				}
 
 				// Convert the key to a mnemonic
-				mnemonic, err := passphrase.KeyToMnemonic(mdk[:])
-				if err != nil {
-					reportErrorf(errorCouldntMakeMnemonic, err)
+				mnemonic, err1 := passphrase.KeyToMnemonic(mdk[:])
+				if err1 != nil {
+					reportErrorf(errorCouldntMakeMnemonic, err1)
 				}
 
 				// Display the mnemonic to the user

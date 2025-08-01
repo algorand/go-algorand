@@ -608,6 +608,11 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
+		if wp.peerType == peerTypeWs {
+			networkReceivedUncompressedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
+		} else {
+			networkP2PReceivedUncompressedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
+		}
 		msg.Sender = wp
 
 		// for outgoing connections, we want to notify the connection monitor that we've received

@@ -29,14 +29,25 @@ import (
 // it's implemented in ./config/defaults_gen.go, and should be the only "consumer" of this exported variable
 var AutogenLocal = GetVersionedDefaultLocalConfig(getLatestConfigVersion())
 
-func migrate(cfg Local) (newCfg Local, err error) {
+// MigrationResult represents a single field migration from one version to another
+type MigrationResult struct {
+	FieldName              string
+	OldVersion, NewVersion uint32
+	OldValue, NewValue     any
+}
+
+func migrate(cfg Local) (newCfg Local, migrations []MigrationResult, err error) {
 	newCfg = cfg
+	originalVersion := cfg.Version
 	latestConfigVersion := getLatestConfigVersion()
 
 	if cfg.Version > latestConfigVersion {
 		err = fmt.Errorf("unexpected config version: %d", cfg.Version)
 		return
 	}
+
+	// Track which fields were migrated during this entire process
+	migrationResults := make(map[string]MigrationResult)
 
 	for {
 		if newCfg.Version == latestConfigVersion {
@@ -77,6 +88,14 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					boolVal, _ := strconv.ParseBool(nextVersionDefaultValue)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetBool(boolVal)
+					if m, exists := migrationResults[field.Name]; exists {
+						m.NewValue = boolVal
+						m.NewVersion = nextVersion
+						migrationResults[field.Name] = m
+					} else {
+						oldValue := reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Bool()
+						migrationResults[field.Name] = MigrationResult{FieldName: field.Name, OldVersion: originalVersion, NewVersion: nextVersion, OldValue: oldValue, NewValue: boolVal}
+					}
 				}
 			case reflect.Int32:
 				fallthrough
@@ -87,6 +106,14 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					intVal, _ := strconv.ParseInt(nextVersionDefaultValue, 10, 64)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetInt(intVal)
+					if m, exists := migrationResults[field.Name]; exists {
+						m.NewValue = intVal
+						m.NewVersion = nextVersion
+						migrationResults[field.Name] = m
+					} else {
+						oldValue := reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Int()
+						migrationResults[field.Name] = MigrationResult{FieldName: field.Name, OldVersion: originalVersion, NewVersion: nextVersion, OldValue: oldValue, NewValue: intVal}
+					}
 				}
 			case reflect.Uint32:
 				fallthrough
@@ -97,17 +124,41 @@ func migrate(cfg Local) (newCfg Local, err error) {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					uintVal, _ := strconv.ParseUint(nextVersionDefaultValue, 10, 64)
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetUint(uintVal)
+					if m, exists := migrationResults[field.Name]; exists {
+						m.NewValue = uintVal
+						m.NewVersion = nextVersion
+						migrationResults[field.Name] = m
+					} else {
+						oldValue := reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Uint()
+						migrationResults[field.Name] = MigrationResult{FieldName: field.Name, OldVersion: originalVersion, NewVersion: nextVersion, OldValue: oldValue, NewValue: uintVal}
+					}
 				}
 			case reflect.String:
 				if reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).String() == reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).String() {
 					// we're skipping the error checking here since we already tested that in the unit test.
 					reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).SetString(nextVersionDefaultValue)
+					if m, exists := migrationResults[field.Name]; exists {
+						m.NewValue = nextVersionDefaultValue
+						m.NewVersion = nextVersion
+						migrationResults[field.Name] = m
+					} else {
+						oldValue := reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).String()
+						migrationResults[field.Name] = MigrationResult{FieldName: field.Name, OldVersion: originalVersion, NewVersion: nextVersion, OldValue: oldValue, NewValue: nextVersionDefaultValue}
+					}
 				}
 			default:
 				panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Kind(), field.Name))
 			}
 		}
 	}
+
+	// Only return migrations where the value actually changed
+	for _, m := range migrationResults {
+		if m.FieldName != "Version" && m.OldValue != m.NewValue {
+			migrations = append(migrations, m)
+		}
+	}
+
 	return
 }
 

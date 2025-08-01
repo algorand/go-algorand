@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -112,7 +113,7 @@ type testlistener struct {
 	blockCount uint32
 }
 
-func (l *testlistener) init(block uint64) {
+func (l *testlistener) init(block basics.Round) {
 	atomic.AddUint32(&(l.initCount), 1)
 }
 

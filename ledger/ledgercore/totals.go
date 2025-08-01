@@ -17,7 +17,6 @@
 package ledgercore
 
 import (
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -79,19 +78,19 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 }
 
 // AddAccount adds an account algos from the total money
-func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) AddAccount(rewardUnit uint64, data AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
-	algos, _ := data.Money(proto, at.RewardsLevel)
+	algos, _ := data.Money(rewardUnit, at.RewardsLevel)
 	sum.Money = ot.AddA(sum.Money, algos)
-	sum.RewardUnits = ot.Add(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
+	sum.RewardUnits = ot.Add(sum.RewardUnits, data.MicroAlgos.RewardUnits(rewardUnit))
 }
 
 // DelAccount removes an account algos from the total money
-func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) DelAccount(rewardUnit uint64, data AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
-	algos, _ := data.Money(proto, at.RewardsLevel)
+	algos, _ := data.Money(rewardUnit, at.RewardsLevel)
 	sum.Money = ot.SubA(sum.Money, algos)
-	sum.RewardUnits = ot.Sub(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
+	sum.RewardUnits = ot.Sub(sum.RewardUnits, data.MicroAlgos.RewardUnits(rewardUnit))
 }
 
 // ApplyRewards adds the reward to the account totals based on the new rewards level

@@ -174,11 +174,11 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.Equal(amountToSendInitial, amt, "new account should be funded with the amount the rich account sent")
 
 	// account adds part key
-	partKeyFirstValid := uint64(0)
-	partKeyValidityPeriod := uint64(10000)
+	const partKeyFirstValid basics.Round = 0
+	const partKeyValidityPeriod = 10000
 	partKeyLastValid := partKeyFirstValid + partKeyValidityPeriod
 
-	maxTxnLife := consensus[protocol.ConsensusVersion("shortpartkeysprotocol")].MaxTxnLife
+	maxTxnLife := basics.Round(consensus[protocol.ConsensusVersion("shortpartkeysprotocol")].MaxTxnLife)
 
 	if partKeyLastValid > maxTxnLife {
 		partKeyLastValid = maxTxnLife
@@ -195,7 +195,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.NoError(err, "new account with new partkey should be able to go online")
 
 	fixture.AssertValidTxid(onlineTxID)
-	maxRoundsToWaitForTxnConfirm := uint64(5)
+	const maxRoundsToWaitForTxnConfirm = 5
 	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 	onlineRound := nodeStatus.LastRound
@@ -212,24 +212,24 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	nodeStatus, _ = client.Status()
 	params, err := client.ConsensusParams(nodeStatus.LastRound)
 	a.NoError(err)
-	accountProposesStarting := balanceRoundOf(basics.Round(fundedRound), params)
+	accountProposesStarting := balanceRoundOf(fundedRound, params)
 
 	// Need to wait for funding to take effect on selection, then we can see if we're participating
 	// Stop before the account should become eligible for selection so we can ensure it wasn't
-	err = fixture.WaitForRound(uint64(accountProposesStarting-1),
+	err = fixture.WaitForRound(accountProposesStarting-1,
 		time.Duration(uint64(globals.MaxTimePerRound)*uint64(accountProposesStarting-1)))
 	a.NoError(err)
 
 	// Check if the account did not propose any blocks up to this round
-	blockWasProposed := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting)-1,
-		int(accountProposesStarting)-1)
+	blockWasProposed := fixture.VerifyBlockProposedRange(newAccount, accountProposesStarting-1,
+		accountProposesStarting-1)
 	a.False(blockWasProposed, "account should not be selected until BalLookback (round %d) passes", int(accountProposesStarting-1))
 
 	// Now wait until the round where the funded account will be used.
-	err = fixture.WaitForRound(uint64(accountProposesStarting), 10*globals.MaxTimePerRound)
+	err = fixture.WaitForRound(accountProposesStarting, 10*globals.MaxTimePerRound)
 	a.NoError(err)
 
-	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting), 1)
+	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, accountProposesStarting, 1)
 	a.True(blockWasProposedByNewAccountRecently, "newly online account should be proposing blocks")
 }
 
@@ -287,9 +287,9 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	a.Equal(amountToSendInitial, amt, "new account should be funded with the amount the rich account sent")
 
 	// we try to register online with a period in which we don't have stateproof keys
-	partKeyFirstValid := uint64(1)
+	const partKeyFirstValid = 1
 	// TODO: Change consensus version when state proofs are deployed
-	partKeyLastValid := config.Consensus[protocol.ConsensusFuture].StateProofInterval - 1
+	partKeyLastValid := basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval) - 1
 	partkeyResponse, _, err := client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 1000)
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
@@ -303,7 +303,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	a.NoError(err, "new account with new partkey should be able to go online")
 
 	fixture.AssertValidTxid(onlineTxID)
-	maxRoundsToWaitForTxnConfirm := uint64(5)
+	const maxRoundsToWaitForTxnConfirm = 5
 	nodeStatus, err := client.Status()
 	a.NoError(err)
 	seededRound := nodeStatus.LastRound

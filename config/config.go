@@ -19,12 +19,14 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -82,14 +84,6 @@ const ConfigurableConsensusProtocolsFilename = "consensus.json"
 // do not expose in normal config so it is not in code generated local_defaults.go
 const defaultRelayGossipFanout = 8
 
-// MaxGenesisIDLen is the maximum length of the genesis ID set for purpose of setting
-// allocbounds on structs containing GenesisID and for purposes of calculating MaxSize functions
-// on those types. Current value is larger than the existing network IDs and the ones used in testing
-const MaxGenesisIDLen = 128
-
-// MaxEvalDeltaTotalLogSize is the maximum size of the sum of all log sizes in a single eval delta.
-const MaxEvalDeltaTotalLogSize = 1024
-
 // CatchpointTrackingModeUntracked defines the CatchpointTracking mode that does _not_ track catchpoints
 const CatchpointTrackingModeUntracked = -1
 
@@ -113,10 +107,16 @@ const PlaceholderPublicAddress = "PLEASE_SET_ME"
 // cannot be loaded, the default config is returned (with the error from loading the
 // custom file).
 func LoadConfigFromDisk(custom string) (c Local, err error) {
+	c, _, err = loadConfigFromFile(filepath.Join(custom, ConfigFilename))
+	return
+}
+
+// LoadConfigFromDiskWithMigrations is like LoadConfigFromDisk but also returns migration results
+func LoadConfigFromDiskWithMigrations(custom string) (c Local, migrations []MigrationResult, err error) {
 	return loadConfigFromFile(filepath.Join(custom, ConfigFilename))
 }
 
-func loadConfigFromFile(configFile string) (c Local, err error) {
+func loadConfigFromFile(configFile string) (c Local, migrations []MigrationResult, err error) {
 	c = defaultLocal
 	c.Version = 0 // Reset to 0 so we get the version from the loaded file.
 	c, err = mergeConfigFromFile(configFile, c)
@@ -127,7 +127,7 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	// Migrate in case defaults were changed
 	// If a config file does not have version, it is assumed to be zero.
 	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
-	c, err = migrate(c)
+	c, migrations, err = migrate(c)
 	return
 }
 
@@ -173,11 +173,6 @@ func enrichNetworkingConfig(source Local) (Local, error) {
 		if source.GossipFanout == defaultLocal.GossipFanout {
 			source.GossipFanout = defaultRelayGossipFanout
 		}
-	}
-	// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
-	// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
-	if (source.NetAddress != "" || source.P2PHybridNetAddress != "") && source.EnableP2PHybridMode && source.PublicAddress == "" {
-		return source, errors.New("PublicAddress must be specified when EnableP2PHybridMode is set")
 	}
 	source.PublicAddress = strings.ToLower(source.PublicAddress)
 	return source, nil
@@ -237,7 +232,8 @@ func savePhonebook(entries []string, w io.Writer) error {
 	return enc.Encode(pb)
 }
 
-var globalConfigFileRoot string
+// DataDirectory for the current instance
+var DataDirectory string
 
 // GetConfigFilePath retrieves the full path to a configuration file
 // These are global configurations - not specific to data-directory / network.
@@ -249,12 +245,13 @@ func GetConfigFilePath(file string) (string, error) {
 	return filepath.Join(rootPath, file), nil
 }
 
-// GetGlobalConfigFileRoot returns the current root folder for global configuration files.
-// This will likely only change for tests.
+var globalConfigFileRoot string
+
+// GetGlobalConfigFileRoot returns the root directory for global configuration files.
 func GetGlobalConfigFileRoot() (string, error) {
 	var err error
 	if globalConfigFileRoot == "" {
-		globalConfigFileRoot, err = GetDefaultConfigFilePath()
+		globalConfigFileRoot, err = deriveConfigFilePath()
 		if err == nil {
 			dirErr := os.Mkdir(globalConfigFileRoot, os.ModePerm)
 			if !os.IsExist(dirErr) {
@@ -265,27 +262,31 @@ func GetGlobalConfigFileRoot() (string, error) {
 	return globalConfigFileRoot, err
 }
 
-// SetGlobalConfigFileRoot allows overriding the root folder for global configuration files.
-// It returns the current one so it can be restored, if desired.
-// This will likely only change for tests.
-func SetGlobalConfigFileRoot(rootPath string) string {
-	currentRoot := globalConfigFileRoot
-	globalConfigFileRoot = rootPath
-	return currentRoot
-}
-
-// GetDefaultConfigFilePath retrieves the default directory for global (not per-instance) config files
-// By default we store in ~/.algorand/.
-// This will likely only change for tests.
-func GetDefaultConfigFilePath() (string, error) {
+// deriveConfigFilePath retrieves the directory (~/.algorand) for global (not
+// per-instance) config files.
+func deriveConfigFilePath() (string, error) {
 	currentUser, err := user.Current()
 	if err != nil {
 		return "", err
 	}
 	if currentUser.HomeDir == "" {
-		return "", errors.New("GetDefaultConfigFilePath fail - current user has no home directory")
+		return "", fmt.Errorf("current user %s has no home directory", currentUser.Username)
 	}
 	return filepath.Join(currentUser.HomeDir, ".algorand"), nil
+}
+
+// AnnotateTelemetry adds some extra information to the TelemetryConfig that
+// isn't actually in the config file, but is reported by telemetry.
+func AnnotateTelemetry(cfg *logging.TelemetryConfig, genesisID string) {
+	ver := GetCurrentVersion()
+	ch := ver.Channel
+	// Should not happen, but default to "dev" if channel is unspecified.
+	if ch == "" {
+		ch = "dev"
+	}
+	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	cfg.Version = ver.String()
+	cfg.DataDirectory = DataDirectory
 }
 
 const (

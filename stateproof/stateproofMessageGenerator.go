@@ -59,7 +59,7 @@ func GenerateStateProofMessage(l BlockHeaderFetcher, round basics.Round) (statep
 	}
 
 	proto := config.Consensus[latestRoundHeader.CurrentProtocol]
-	votersRound := uint64(round.SubSaturate(basics.Round(proto.StateProofInterval)))
+	votersRound := round.SubSaturate(basics.Round(proto.StateProofInterval))
 	commitment, err := createHeaderCommitment(l, &proto, &latestRoundHeader)
 	if err != nil {
 		return stateproofmsg.Message{}, err
@@ -75,7 +75,7 @@ func GenerateStateProofMessage(l BlockHeaderFetcher, round basics.Round) (statep
 		VotersCommitment:       latestRoundHeader.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
 		LnProvenWeight:         lnProvenWeight,
 		FirstAttestedRound:     votersRound + 1,
-		LastAttestedRound:      uint64(latestRoundHeader.Round),
+		LastAttestedRound:      latestRoundHeader.Round,
 	}, nil
 }
 
@@ -98,7 +98,7 @@ func calculateLnProvenWeight(latestRoundInInterval *bookkeeping.BlockHeader, pro
 func createHeaderCommitment(l BlockHeaderFetcher, proto *config.ConsensusParams, latestRoundHeader *bookkeeping.BlockHeader) (crypto.GenericDigest, error) {
 	stateProofInterval := proto.StateProofInterval
 
-	if latestRoundHeader.Round < basics.Round(stateProofInterval) {
+	if uint64(latestRoundHeader.Round) < stateProofInterval {
 		return nil, fmt.Errorf("createHeaderCommitment stateProofRound must be >= than stateproofInterval (%w)", errInvalidParams)
 	}
 
@@ -124,9 +124,8 @@ func FetchLightHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRo
 	blkHdrArr := make(lightBlockHeaders, stateProofInterval)
 	firstRound := latestRound - basics.Round(stateProofInterval) + 1
 
-	for i := uint64(0); i < stateProofInterval; i++ {
-		rnd := firstRound + basics.Round(i)
-		hdr, err := l.BlockHdr(rnd)
+	for i := range basics.Round(stateProofInterval) {
+		hdr, err := l.BlockHdr(firstRound + i)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +135,7 @@ func FetchLightHeaders(l BlockHeaderFetcher, stateProofInterval uint64, latestRo
 }
 
 // GenerateProofOfLightBlockHeaders sets up a tree over the blkHdrArr and returns merkle proof over one of the blocks.
-func GenerateProofOfLightBlockHeaders(stateProofInterval uint64, blkHdrArr lightBlockHeaders, blockIndex uint64) (*merklearray.SingleLeafProof, error) {
+func GenerateProofOfLightBlockHeaders(stateProofInterval uint64, blkHdrArr lightBlockHeaders, blockIndex basics.Round) (*merklearray.SingleLeafProof, error) {
 	if blkHdrArr.Length() != stateProofInterval {
 		return nil, fmt.Errorf("received wrong amount of block headers. err: %w - %d != %d", errInvalidParams, blkHdrArr.Length(), stateProofInterval)
 	}
@@ -149,5 +148,5 @@ func GenerateProofOfLightBlockHeaders(stateProofInterval uint64, blkHdrArr light
 		return nil, err
 	}
 
-	return tree.ProveSingleLeaf(blockIndex)
+	return tree.ProveSingleLeaf(uint64(blockIndex))
 }

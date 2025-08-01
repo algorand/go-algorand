@@ -551,7 +551,7 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (ledg
 		return ledgercore.AccountData{}, err
 	}
 	if withPendingRewards {
-		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+		acct = acct.WithUpdatedRewards(cs.proto.RewardUnit, cs.rewardsLevel())
 	}
 	return acct, nil
 }
@@ -588,7 +588,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if err != nil {
 		return err
 	}
-	fromBalNew := fromBal.WithUpdatedRewards(cs.proto, rewardlvl)
+	fromBalNew := fromBal.WithUpdatedRewards(cs.proto.RewardUnit, rewardlvl)
 
 	if fromRewards != nil {
 		var ot basics.OverflowTracker
@@ -600,7 +600,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	// Only write the change if it's meaningful (or required by old code).
-	if !amt.IsZero() || fromBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+	if !amt.IsZero() || fromBal.MicroAlgos.RewardUnits(cs.proto.RewardUnit) > 0 || !cs.proto.UnfundedSenders {
 		var overflowed bool
 		fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
 		if overflowed {
@@ -617,7 +617,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if err != nil {
 		return err
 	}
-	toBalNew := toBal.WithUpdatedRewards(cs.proto, rewardlvl)
+	toBalNew := toBal.WithUpdatedRewards(cs.proto.RewardUnit, rewardlvl)
 
 	if toRewards != nil {
 		var ot basics.OverflowTracker
@@ -629,7 +629,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	// Only write the change if it's meaningful (or required by old code).
-	if !amt.IsZero() || toBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+	if !amt.IsZero() || toBal.MicroAlgos.RewardUnits(cs.proto.RewardUnit) > 0 || !cs.proto.UnfundedSenders {
 		var overflowed bool
 		toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
 		if overflowed {
@@ -810,7 +810,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 
 	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
-	rewardsPoolData = rewardsPoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
+	rewardsPoolData = rewardsPoolData.WithUpdatedRewards(prevProto.RewardUnit, eval.prevHeader.RewardsLevel)
 
 	if evalOpts.Generate {
 		if eval.proto.SupportGenesisHash {
@@ -1151,7 +1151,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 			continue
 		}
 
-		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
+		dataNew := data.WithUpdatedRewards(eval.proto.RewardUnit, rewardlvl)
 		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
@@ -1713,7 +1713,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 			Status:                acctData.Status,
 			LastProposed:          acctData.LastProposed,
 			LastHeartbeat:         acctData.LastHeartbeat,
-			MicroAlgosWithRewards: acctData.WithUpdatedRewards(eval.proto, eval.state.rewardsLevel()).MicroAlgos,
+			MicroAlgosWithRewards: acctData.WithUpdatedRewards(eval.proto.RewardUnit, eval.state.rewardsLevel()).MicroAlgos,
 			IncentiveEligible:     acctData.IncentiveEligible,
 		}
 	}

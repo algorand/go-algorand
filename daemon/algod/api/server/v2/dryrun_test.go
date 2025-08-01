@@ -1155,7 +1155,7 @@ int 1`)
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
+				Id: appIdx,
 				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
@@ -1246,7 +1246,7 @@ return
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
+				Id: appIdx,
 				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
@@ -1255,7 +1255,7 @@ return
 				},
 			},
 			{
-				Id: uint64(appIdx + 1),
+				Id: appIdx + 1,
 				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approv,
@@ -1310,7 +1310,7 @@ func TestDryrunCost(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
 			expectedCosts := make([]int64, 3)
-			expectedBudgetAdded := make([]uint64, 3)
+			expectedBudgetAdded := make([]int, 3)
 
 			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
 			require.NoError(t, err)
@@ -1383,7 +1383,7 @@ int 1`)
 				},
 				Apps: []model.Application{
 					{
-						Id: uint64(appIdx),
+						Id: appIdx,
 						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app1,
@@ -1392,7 +1392,7 @@ int 1`)
 						},
 					},
 					{
-						Id: uint64(appIdx + 1),
+						Id: appIdx + 1,
 						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app2,
@@ -1401,7 +1401,7 @@ int 1`)
 						},
 					},
 					{
-						Id: uint64(appIdx + 2),
+						Id: appIdx + 2,
 						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app3,
@@ -1483,7 +1483,7 @@ int 1`
 			ApplicationID: appIdx,
 		}.SignedTxn()},
 		Apps: []model.Application{{
-			Id: uint64(appIdx),
+			Id: appIdx,
 			Params: model.ApplicationParams{
 				Creator:           sender.String(),
 				ApprovalProgram:   approval,
@@ -1545,7 +1545,7 @@ int 0
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
+				Id: appIdx,
 				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
@@ -1609,7 +1609,7 @@ int 1
 			ApplicationID: appIdx,
 		}.SignedTxn()},
 		Apps: []model.Application{{
-			Id: uint64(appIdx),
+			Id: appIdx,
 			Params: model.ApplicationParams{
 				ApprovalProgram:   paySender.Program,
 				ClearStateProgram: clst,
@@ -1685,7 +1685,7 @@ int 1`)
 			Sender:        sender,
 			ApplicationID: appIdx}.SignedTxn())
 		apps = append(apps, model.Application{
-			Id: uint64(appIdx),
+			Id: appIdx,
 			Params: model.ApplicationParams{
 				ApprovalProgram:   approvalOps.Program,
 				ClearStateProgram: clst,

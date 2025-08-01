@@ -11,7 +11,7 @@
 # Our build task-runner `mule` will refer to this script and will automatically
 # build a new image whenever the version number has been changed.
 
-BUILD=1.23.3
+BUILD=1.23.9
 MIN=$(echo $BUILD | cut -d. -f1-2).0
 
 if [ "$1" = all ]

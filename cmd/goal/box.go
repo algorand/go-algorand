@@ -31,7 +31,7 @@ func init() {
 
 	appBoxCmd.AddCommand(appBoxInfoCmd)
 	appBoxCmd.AddCommand(appBoxListCmd)
-	appBoxCmd.PersistentFlags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	appBoxCmd.PersistentFlags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
 	appBoxCmd.MarkFlagRequired("app-id")
 
 	appBoxInfoCmd.Flags().StringVarP(&boxName, "name", "n", "", "Application box name. Use the same form as app-arg to name the box.")

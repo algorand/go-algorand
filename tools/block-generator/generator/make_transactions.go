@@ -28,15 +28,15 @@ import (
 
 // ---- header / boilerplate ----
 
-func (g *generator) makeTxnHeader(sender basics.Address, round, intra uint64) txn.Header {
+func (g *generator) makeTxnHeader(sender basics.Address, round basics.Round, intra uint64) txn.Header {
 	note := make([]byte, 8)
 	binary.LittleEndian.PutUint64(note, g.txnCounter+intra)
 
 	return txn.Header{
 		Sender:      sender,
 		Fee:         basics.MicroAlgos{Raw: g.params.MinTxnFee},
-		FirstValid:  basics.Round(round),
-		LastValid:   basics.Round(round + 1000),
+		FirstValid:  round,
+		LastValid:   round + 1000,
 		GenesisID:   g.genesisID,
 		GenesisHash: g.genesisHash,
 		Note:        note,
@@ -44,15 +44,15 @@ func (g *generator) makeTxnHeader(sender basics.Address, round, intra uint64) tx
 }
 
 // makeTestTxn creates and populates the flat txntest.Txn structure with the given values.
-func (g *generator) makeTestTxn(sender basics.Address, round, intra uint64) txntest.Txn {
+func (g *generator) makeTestTxn(sender basics.Address, round basics.Round, intra uint64) txntest.Txn {
 	note := make([]byte, 8)
 	binary.LittleEndian.PutUint64(note, g.txnCounter+intra)
 
 	return txntest.Txn{
 		Sender:      sender,
 		Fee:         basics.MicroAlgos{Raw: g.params.MinTxnFee},
-		FirstValid:  basics.Round(round),
-		LastValid:   basics.Round(round + 1000),
+		FirstValid:  round,
+		LastValid:   round + 1000,
 		GenesisID:   g.genesisID,
 		GenesisHash: g.genesisHash,
 		Note:        note,
@@ -93,22 +93,22 @@ func (g *generator) makeAssetCreateTxn(header txn.Header, total uint64, defaultF
 	}
 }
 
-func (g *generator) makeAssetDestroyTxn(header txn.Header, index uint64) txn.Transaction {
+func (g *generator) makeAssetDestroyTxn(header txn.Header, index basics.AssetIndex) txn.Transaction {
 	return txn.Transaction{
 		Type:   protocol.AssetConfigTx,
 		Header: header,
 		AssetConfigTxnFields: txn.AssetConfigTxnFields{
-			ConfigAsset: basics.AssetIndex(index),
+			ConfigAsset: index,
 		},
 	}
 }
 
-func (g *generator) makeAssetTransferTxn(header txn.Header, receiver basics.Address, amount uint64, closeAssetsTo basics.Address, index uint64) txn.Transaction {
+func (g *generator) makeAssetTransferTxn(header txn.Header, receiver basics.Address, amount uint64, closeAssetsTo basics.Address, index basics.AssetIndex) txn.Transaction {
 	return txn.Transaction{
 		Type:   protocol.AssetTransferTx,
 		Header: header,
 		AssetTransferTxnFields: txn.AssetTransferTxnFields{
-			XferAsset:     basics.AssetIndex(index),
+			XferAsset:     index,
 			AssetAmount:   amount,
 			AssetReceiver: receiver,
 			AssetCloseTo:  closeAssetsTo,
@@ -116,13 +116,13 @@ func (g *generator) makeAssetTransferTxn(header txn.Header, receiver basics.Addr
 	}
 }
 
-func (g *generator) makeAssetAcceptanceTxn(header txn.Header, index uint64) txn.Transaction {
+func (g *generator) makeAssetAcceptanceTxn(header txn.Header, index basics.AssetIndex) txn.Transaction {
 	return g.makeAssetTransferTxn(header, header.Sender, 0, basics.Address{}, index)
 }
 
 // ---- application transactions ----
 
-func (g *generator) makeAppCreateTxn(kind appKind, sender basics.Address, round, intra uint64, futureAppId uint64) []txn.SignedTxn {
+func (g *generator) makeAppCreateTxn(kind appKind, sender basics.Address, round basics.Round, intra uint64, futureAppId basics.AppIndex) []txn.SignedTxn {
 	var approval, clear interface{}
 	if kind == appKindSwap {
 		approval, clear = approvalSwapBytes, clearSwapBytes
@@ -162,7 +162,7 @@ func (g *generator) makeAppCreateTxn(kind appKind, sender basics.Address, round,
 
 	paySibTxn := g.makeTestTxn(sender, round, intra)
 	paySibTxn.Type = protocol.PaymentTx
-	paySibTxn.Receiver = basics.AppIndex(futureAppId).Address()
+	paySibTxn.Receiver = futureAppId.Address()
 	paySibTxn.Fee = basics.MicroAlgos{Raw: pstFee}
 	paySibTxn.Amount = uint64(pstAmt)
 
@@ -173,7 +173,7 @@ func (g *generator) makeAppCreateTxn(kind appKind, sender basics.Address, round,
 }
 
 // makeAppOptinTxn currently only works for the boxes app
-func (g *generator) makeAppOptinTxn(sender basics.Address, round, intra uint64, kind appKind, appIndex uint64) []txn.SignedTxn {
+func (g *generator) makeAppOptinTxn(sender basics.Address, round basics.Round, intra uint64, kind appKind, appIndex basics.AppIndex) []txn.SignedTxn {
 	if kind != appKindBoxes {
 		panic("makeAppOptinTxn only works for the boxes app currently")
 	}
@@ -187,7 +187,7 @@ func (g *generator) makeAppOptinTxn(sender basics.Address, round, intra uint64, 
 	*/
 
 	optInTxn.Type = protocol.ApplicationCallTx
-	optInTxn.ApplicationID = basics.AppIndex(appIndex)
+	optInTxn.ApplicationID = appIndex
 	optInTxn.OnCompletion = txn.OptInOC
 	// the first inner sends some algo to the creator:
 	optInTxn.Accounts = []basics.Address{indexToAccount(g.appMap[kind][appIndex].sender)}
@@ -202,7 +202,7 @@ func (g *generator) makeAppOptinTxn(sender basics.Address, round, intra uint64, 
 
 	paySibTxn := g.makeTestTxn(sender, round, intra)
 	paySibTxn.Type = protocol.PaymentTx
-	paySibTxn.Receiver = basics.AppIndex(appIndex).Address()
+	paySibTxn.Receiver = appIndex.Address()
 	paySibTxn.Fee = basics.MicroAlgos{Raw: pstFee}
 	paySibTxn.Amount = uint64(pstAmt)
 
@@ -215,10 +215,10 @@ func (g *generator) makeAppOptinTxn(sender basics.Address, round, intra uint64, 
 }
 
 // makeAppCallTxn currently only works for the boxes app
-func (g *generator) makeAppCallTxn(sender basics.Address, round, intra, appIndex uint64) txn.Transaction {
+func (g *generator) makeAppCallTxn(sender basics.Address, round basics.Round, intra uint64, appIndex basics.AppIndex) txn.Transaction {
 	callTxn := g.makeTestTxn(sender, round, intra)
 	callTxn.Type = protocol.ApplicationCallTx
-	callTxn.ApplicationID = basics.AppIndex(appIndex)
+	callTxn.ApplicationID = appIndex
 	callTxn.OnCompletion = txn.NoOpOC // redundant for clarity
 	callTxn.ApplicationArgs = [][]byte{
 		{0xe1, 0xf9, 0x3f, 0x1d}, // the method selector for getting a box

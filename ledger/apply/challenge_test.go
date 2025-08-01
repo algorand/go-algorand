@@ -51,7 +51,7 @@ func TestBitsMatch(t *testing.T) {
 	require.False(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 00}, 9))
 }
 
-func TestFailsChallenge(t *testing.T) {
+func TestUnsuccessfulChallenge(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	a := assert.New(t)

@@ -36,8 +36,8 @@ type unauthenticatedBundle struct {
 	Step     step          `codec:"step"`
 	Proposal proposalValue `codec:"prop"`
 
-	Votes             []voteAuthenticator             `codec:"vote,allocbound=config.MaxVoteThreshold"`
-	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=config.MaxVoteThreshold"`
+	Votes             []voteAuthenticator             `codec:"vote,allocbound=bounds.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
 // bundle is a set of votes, all from the same round, period, and step, and from distinct senders, that reaches quorum.
@@ -48,8 +48,8 @@ type bundle struct {
 
 	U unauthenticatedBundle `codec:"u"`
 
-	Votes             []vote             `codec:"vote,allocbound=config.MaxVoteThreshold"`
-	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=config.MaxVoteThreshold"`
+	Votes             []vote             `codec:"vote,allocbound=bounds.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
 // voteAuthenticators omit the Round, Period, Step, and Proposal for compression

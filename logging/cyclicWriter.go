@@ -143,23 +143,23 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 		now := time.Now()
 		// we don't have enough space to write the entry, so archive data
 		cyclic.writer.Close()
-		var err error
+
 		globPath := cyclic.getArchiveGlob()
-		oldarchives, err := filepath.Glob(globPath)
-		if err != nil && !os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "%s: glob err: %s\n", globPath, err)
+		oldarchives, err1 := filepath.Glob(globPath)
+		if err1 != nil && !os.IsNotExist(err1) {
+			fmt.Fprintf(os.Stderr, "%s: glob err: %s\n", globPath, err1)
 		} else if cyclic.maxLogAge != 0 {
 			tooOld := now.Add(-cyclic.maxLogAge)
 			for _, path := range oldarchives {
-				finfo, err := os.Stat(path)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "%s: stat: %s\n", path, err)
+				finfo, err2 := os.Stat(path)
+				if err2 != nil {
+					fmt.Fprintf(os.Stderr, "%s: stat: %s\n", path, err2)
 					continue
 				}
 				if finfo.ModTime().Before(tooOld) {
-					err = os.Remove(path)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "%s: rm: %s\n", path, err)
+					err2 = os.Remove(path)
+					if err2 != nil {
+						fmt.Fprintf(os.Stderr, "%s: rm: %s\n", path, err2)
 					}
 				}
 			}
@@ -174,30 +174,30 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 			shouldBz2 = true
 			archivePath = archivePath[:len(archivePath)-4]
 		}
-		if err = util.MoveFile(cyclic.liveLog, archivePath); err != nil {
-			panic(fmt.Sprintf("CyclicFileWriter: cannot archive full log %v", err))
+		if err1 = util.MoveFile(cyclic.liveLog, archivePath); err1 != nil {
+			panic(fmt.Sprintf("CyclicFileWriter: cannot archive full log %v", err1))
 		}
 		if shouldGz {
 			cmd := exec.Command("gzip", archivePath)
-			err = cmd.Start()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: could not gzip: %s", archivePath, err)
+			err1 = cmd.Start()
+			if err1 != nil {
+				fmt.Fprintf(os.Stderr, "%s: could not gzip: %s", archivePath, err1)
 			} else {
 				go procWait(cmd, archivePath)
 			}
 		} else if shouldBz2 {
 			cmd := exec.Command("bzip2", archivePath)
-			err = cmd.Start()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: could not bzip2: %s", archivePath, err)
+			err1 = cmd.Start()
+			if err1 != nil {
+				fmt.Fprintf(os.Stderr, "%s: could not bzip2: %s", archivePath, err1)
 			} else {
 				go procWait(cmd, archivePath)
 			}
 		}
 		cyclic.logStart = now
-		cyclic.writer, err = os.OpenFile(cyclic.liveLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
-		if err != nil {
-			panic(fmt.Sprintf("CyclicFileWriter: cannot open log file %v", err))
+		cyclic.writer, err1 = os.OpenFile(cyclic.liveLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		if err1 != nil {
+			panic(fmt.Sprintf("CyclicFileWriter: cannot open log file %v", err1))
 		}
 		cyclic.nextWrite = 0
 	}

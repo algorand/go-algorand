@@ -34,8 +34,8 @@ func CalculateNewRoundAccountTotals(t *gotesting.T, newRoundDeltas ledgercore.Ac
 	for i := 0; i < newRoundDeltas.Len(); i++ {
 		addr, ad := newRoundDeltas.GetByIdx(i)
 		prevBal := ledgercore.ToAccountData(prevRoundBalances[addr])
-		newTotals.DelAccount(newRoundConsensusParams, prevBal, &ot)
-		newTotals.AddAccount(newRoundConsensusParams, ad, &ot)
+		newTotals.DelAccount(newRoundConsensusParams.RewardUnit, prevBal, &ot)
+		newTotals.AddAccount(newRoundConsensusParams.RewardUnit, ad, &ot)
 	}
 	require.False(t, ot.Overflowed)
 	return

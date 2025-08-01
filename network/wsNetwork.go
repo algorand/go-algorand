@@ -149,6 +149,12 @@ func (nnni *nopeNodeInfo) Capabilities() []p2p.Capability {
 	return nil
 }
 
+// GenesisInfo contains information about the genesis of the network.
+type GenesisInfo struct {
+	GenesisID string
+	NetworkID protocol.NetworkID
+}
+
 // WebsocketNetwork implements GossipNode
 type WebsocketNetwork struct {
 	listener net.Listener
@@ -176,14 +182,15 @@ type WebsocketNetwork struct {
 
 	phonebook phonebook.Phonebook
 
-	genesisID string
-	NetworkID protocol.NetworkID
-	randomID  string
+	genesisInfo GenesisInfo
+	randomID    string
 
 	ready     atomic.Int32
 	readyChan chan struct{}
 
 	meshUpdateRequests chan meshRequest
+	mesher             mesher
+	meshCreator        MeshCreator // save parameter to use in setup()
 
 	// Keep a record of pending outgoing connections so
 	// we don't start duplicates connection attempts.
@@ -478,7 +485,7 @@ func (wn *WebsocketNetwork) RegisterHTTPHandlerFunc(path string, handler func(ht
 // RequestConnectOutgoing tries to actually do the connect to new peers.
 // `replace` drop all connections first and find new peers.
 func (wn *WebsocketNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
-	request := meshRequest{disconnect: false}
+	request := meshRequest{}
 	if quit != nil {
 		request.done = make(chan struct{})
 	}
@@ -539,7 +546,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 	return outPeers
 }
 
-func (wn *WebsocketNetwork) setup() {
+func (wn *WebsocketNetwork) setup() error {
 	var preferredResolver dnssec.ResolverIf
 	if wn.config.DNSSecurityRelayAddrEnforced() {
 		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress, wn.log)
@@ -590,6 +597,24 @@ func (wn *WebsocketNetwork) setup() {
 		wn.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
 	wn.meshUpdateRequests = make(chan meshRequest, 5)
+	meshCreator := wn.meshCreator
+	if meshCreator == nil {
+		meshCreator = baseMeshCreator{}
+	}
+	var err error
+	wn.mesher, err = meshCreator.create(
+		withContext(wn.ctx),
+		withMeshNetMeshFn(wn.meshThreadInner),
+		withMeshPeerStatReporter(func() {
+			wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
+		}),
+		withMeshUpdateRequest(wn.meshUpdateRequests),
+		withMeshUpdateInterval(meshThreadInterval),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create mesh: %w", err)
+	}
+
 	wn.readyChan = make(chan struct{})
 	wn.tryConnectAddrs = make(map[string]int64)
 	wn.eventualReadyDelay = time.Minute
@@ -634,6 +659,7 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.relayMessages {
 		wn.registerMessageInterest(protocol.StateProofSigTag)
 	}
+	return nil
 }
 
 // Start makes network connections and threads
@@ -689,7 +715,7 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.identityScheme = NewIdentityChallengeScheme(NetIdentityDedupNames(wn.config.PublicAddress))
 	}
 
-	wn.meshUpdateRequests <- meshRequest{false, nil}
+	wn.meshUpdateRequests <- meshRequest{}
 	if wn.prioScheme != nil {
 		wn.RegisterHandlers(prioHandlers)
 	}
@@ -697,8 +723,8 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.wg.Add(1)
 		go wn.httpdThread()
 	}
-	wn.wg.Add(1)
-	go wn.meshThread()
+
+	wn.mesher.start()
 
 	// we shouldn't have any ticker here.. but in case we do - just stop it.
 	if wn.peersConnectivityCheckTicker != nil {
@@ -719,7 +745,7 @@ func (wn *WebsocketNetwork) Start() error {
 
 	go wn.postMessagesOfInterestThread()
 
-	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.genesisID, wn.PublicAddress(), wn.randomID)
+	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.genesisInfo.GenesisID, wn.PublicAddress(), wn.randomID)
 
 	return nil
 }
@@ -779,6 +805,7 @@ func (wn *WebsocketNetwork) Stop() {
 	if err != nil {
 		wn.log.Warnf("problem shutting down %s: %v", listenAddr, err)
 	}
+	wn.mesher.stop()
 	wn.wg.Wait()
 	if wn.listener != nil {
 		wn.log.Debugf("closed %s", listenAddr)
@@ -816,7 +843,7 @@ func (wn *WebsocketNetwork) ClearValidatorHandlers() {
 type peerMetadataProvider interface {
 	TelemetryGUID() string
 	InstanceName() string
-	GenesisID() string
+	GetGenesisID() string
 	PublicAddress() string
 	RandomID() string
 	SupportedProtoVersions() []string
@@ -831,11 +858,6 @@ func (wn *WebsocketNetwork) TelemetryGUID() string {
 // InstanceName returns the instance name of this node.
 func (wn *WebsocketNetwork) InstanceName() string {
 	return wn.log.GetInstanceName()
-}
-
-// GenesisID returns the genesis ID of this node.
-func (wn *WebsocketNetwork) GenesisID() string {
-	return wn.genesisID
 }
 
 // RandomID returns the random ID of this node.
@@ -862,7 +884,7 @@ func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvide
 	if rid := meta.RandomID(); rid != "" {
 		header.Set(NodeRandomHeader, rid)
 	}
-	header.Set(GenesisHeader, meta.GenesisID())
+	header.Set(GenesisHeader, meta.GetGenesisID())
 
 	// set the features header (comma-separated list)
 	header.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
@@ -901,11 +923,11 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header
 		return false, ""
 	}
 	otherGenesisID := otherHeader.Get(GenesisHeader)
-	if wn.genesisID != otherGenesisID {
+	if wn.genesisInfo.GenesisID != otherGenesisID {
 		if otherGenesisID != "" {
-			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.genesisID, otherGenesisID, otherHeader)))
+			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.genesisInfo.GenesisID, otherGenesisID, otherHeader)))
 		} else {
-			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.genesisID, otherHeader)
+			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.genesisInfo.GenesisID, otherHeader)
 		}
 		return false, ""
 	}
@@ -985,8 +1007,8 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		return http.StatusNotFound
 	}
 
-	if wn.genesisID != otherGenesisID {
-		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", remoteAddrForLogging, wn.genesisID, otherGenesisID, request.Header)))
+	if wn.genesisInfo.GenesisID != otherGenesisID {
+		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", remoteAddrForLogging, wn.genesisInfo.GenesisID, otherGenesisID, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching genesis-id"})
 		response.WriteHeader(http.StatusPreconditionFailed)
 		n, err := response.Write([]byte("mismatching genesis ID"))
@@ -1532,63 +1554,33 @@ func (wn *WebsocketNetwork) connectedForIP(host string) (totalConnections int) {
 	return
 }
 
-const meshThreadInterval = time.Minute
 const cliqueResolveInterval = 5 * time.Minute
 
 type meshRequest struct {
-	disconnect bool
-	done       chan struct{}
+	done chan struct{}
 }
 
-// meshThread maintains the network, e.g. that we have sufficient connectivity to peers
-func (wn *WebsocketNetwork) meshThread() {
-	defer wn.wg.Done()
-	timer := time.NewTicker(meshThreadInterval)
-	defer timer.Stop()
+func (wn *WebsocketNetwork) meshThreadInner() bool {
+	wn.refreshRelayArchivePhonebookAddresses()
+
+	// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
+	// kick off the creation of new connections.
 	for {
-		var request meshRequest
-		select {
-		case <-timer.C:
-			request.disconnect = false
-			request.done = nil
-		case request = <-wn.meshUpdateRequests:
-		case <-wn.ctx.Done():
-			return
+		if wn.checkNewConnectionsNeeded() {
+			// new connections were created.
+			break
 		}
-
-		if request.disconnect {
-			wn.DisconnectPeers()
+		if !wn.checkExistingConnectionsNeedDisconnecting() {
+			// no connection were removed.
+			break
 		}
-
-		wn.refreshRelayArchivePhonebookAddresses()
-
-		// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
-		// kick off the creation of new connections.
-		for {
-			if wn.checkNewConnectionsNeeded() {
-				// new connections were created.
-				break
-			}
-			if !wn.checkExistingConnectionsNeedDisconnecting() {
-				// no connection were removed.
-				break
-			}
-		}
-
-		if request.done != nil {
-			close(request.done)
-		}
-
-		// send the currently connected peers information to the
-		// telemetry server; that would allow the telemetry server
-		// to construct a cross-node map of all the nodes interconnections.
-		wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
 	}
+	return true
 }
 
 func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 	// TODO: only do DNS fetch every N seconds? Honor DNS TTL? Trust DNS library we're using to handle caching and TTL?
-	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
+	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.genesisInfo.NetworkID)
 
 	for _, dnsBootstrap := range dnsBootstrapArray {
 		primaryRelayAddrs, primaryArchivalAddrs := wn.getDNSAddrs(dnsBootstrap.PrimarySRVBootstrap)
@@ -1609,14 +1601,14 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiveAddrs []string) {
 	if len(relayAddrs) > 0 {
 		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:min(5, len(relayAddrs))])
-		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), phonebook.RelayRole)
+		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.genesisInfo.NetworkID), phonebook.RelayRole)
 	} else {
-		wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
+		wn.log.Infof("got no relay DNS addrs for network %s", wn.genesisInfo.NetworkID)
 	}
 	if len(archiveAddrs) > 0 {
-		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), phonebook.ArchivalRole)
+		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.genesisInfo.NetworkID), phonebook.ArchivalRole)
 	} else {
-		wn.log.Infof("got no archive DNS addrs for network %s", wn.NetworkID)
+		wn.log.Infof("got no archive DNS addrs for network %s", wn.genesisInfo.NetworkID)
 	}
 }
 
@@ -1889,7 +1881,7 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 	relaysAddresses, err = wn.resolveSRVRecords(wn.ctx, "algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
-		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
+		if wn.genesisInfo.NetworkID == config.Devnet || wn.genesisInfo.NetworkID == config.Testnet {
 			wn.log.Warnf("Cannot lookup algobootstrap SRV record for %s: %v", dnsBootstrap, err)
 		}
 		relaysAddresses = nil
@@ -1898,7 +1890,7 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 	archivalAddresses, err = wn.resolveSRVRecords(wn.ctx, "archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
-		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
+		if wn.genesisInfo.NetworkID == config.Devnet || wn.genesisInfo.NetworkID == config.Testnet {
 			wn.log.Warnf("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
 		}
 		archivalAddresses = nil
@@ -2267,26 +2259,26 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo, identityOpts *identityOpts) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo, identityOpts *identityOpts, meshCreator MeshCreator) (wn *WebsocketNetwork, err error) {
 	pb := phonebook.MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 
 	addresses := make([]string, 0, len(phonebookAddresses))
 	for _, a := range phonebookAddresses {
-		_, err := addr.ParseHostOrURL(a)
-		if err == nil {
+		_, err0 := addr.ParseHostOrURL(a)
+		if err0 == nil {
 			addresses = append(addresses, a)
 		}
 	}
-	pb.AddPersistentPeers(addresses, string(networkID), phonebook.RelayRole)
+	pb.AddPersistentPeers(addresses, string(genesisInfo.NetworkID), phonebook.RelayRole)
 	wn = &WebsocketNetwork{
 		log:               log,
 		config:            config,
 		phonebook:         pb,
-		genesisID:         genesisID,
-		NetworkID:         networkID,
+		genesisInfo:       genesisInfo,
 		nodeInfo:          nodeInfo,
 		resolveSRVRecords: tools_network.ReadFromSRV,
+		meshCreator:       meshCreator,
 		peerStater: peerConnectionStater{
 			log:                           log,
 			peerConnectionsUpdateInterval: time.Duration(config.PeerConnectionsUpdateInterval) * time.Second,
@@ -2303,13 +2295,15 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		wn.identityTracker = NewIdentityTracker()
 	}
 
-	wn.setup()
+	if err = wn.setup(); err != nil {
+		return nil, err
+	}
 	return wn, nil
 }
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
 func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil, nil)
+	return NewWebsocketNetwork(log, config, phonebookAddresses, GenesisInfo{genesisID, networkID}, nil, nil, nil)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node
@@ -2531,4 +2525,4 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 }
 
 // GetGenesisID returns the network-specific genesisID.
-func (wn *WebsocketNetwork) GetGenesisID() string { return wn.genesisID }
+func (wn *WebsocketNetwork) GetGenesisID() string { return wn.genesisInfo.GenesisID }

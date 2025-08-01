@@ -4,6 +4,8 @@ package protocol
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/config/bounds"
 )
 
 // The following msgp objects are implemented in this file:
@@ -108,8 +110,8 @@ func (z *ConsensusVersion) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > maxConsensusVersionLen {
-			err = msgp.ErrOverflow(uint64(zb0002), uint64(maxConsensusVersionLen))
+		if zb0002 > bounds.MaxConsensusVersionLen {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(bounds.MaxConsensusVersionLen))
 			return
 		}
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -144,7 +146,7 @@ func (z ConsensusVersion) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func ConsensusVersionMaxSize() (s int) {
-	s = msgp.StringPrefixSize + maxConsensusVersionLen
+	s = msgp.StringPrefixSize + bounds.MaxConsensusVersionLen
 	return
 }
 

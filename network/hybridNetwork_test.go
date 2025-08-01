@@ -43,10 +43,11 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 	const p2pKeyDir = ""
 
 	identDiscValue := networkPeerIdentityDisconnect.GetUint64Value()
+	genesisInfo := GenesisInfo{genesisID, "net"}
 
 	relayCfg := cfg
 	relayCfg.ForceRelayMessages = true
-	netA, err := NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisID, "net", &nopeNodeInfo{})
+	netA, err := NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisInfo, &nopeNodeInfo{}, &baseMeshCreator{})
 	require.NoError(t, err)
 
 	err = netA.Start()
@@ -65,7 +66,7 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 	relayCfg.NetAddress = addr
 	relayCfg.PublicAddress = addr
 	relayCfg.P2PHybridNetAddress = "127.0.0.1:0"
-	netA, err = NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisID, "net", &nopeNodeInfo{})
+	netA, err = NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisInfo, &nopeNodeInfo{}, &baseMeshCreator{})
 	require.NoError(t, err)
 
 	err = netA.Start()
@@ -86,14 +87,14 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 
 	phoneBookAddresses := []string{multiAddrStr, addr}
 
-	netB, err := NewHybridP2PNetwork(log.With("node", "netB"), cfg, "", phoneBookAddresses, genesisID, "net", &nopeNodeInfo{})
+	netB, err := NewHybridP2PNetwork(log.With("node", "netB"), cfg, "", phoneBookAddresses, genesisInfo, &nopeNodeInfo{}, &baseMeshCreator{})
 	require.NoError(t, err)
 	// for netB start the p2p network first
 	err = netB.p2pNetwork.Start()
 	require.NoError(t, err)
 	defer netB.Stop()
 
-	netC, err := NewHybridP2PNetwork(log.With("node", "netC"), cfg, "", phoneBookAddresses, genesisID, "net", &nopeNodeInfo{})
+	netC, err := NewHybridP2PNetwork(log.With("node", "netC"), cfg, "", phoneBookAddresses, genesisInfo, &nopeNodeInfo{}, &baseMeshCreator{})
 	require.NoError(t, err)
 	// for netC start the ws network first
 	err = netC.wsNetwork.Start()
@@ -190,12 +191,93 @@ func TestHybridNetwork_ValidateConfig(t *testing.T) {
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ":0"
 	cfg.P2PHybridNetAddress = ""
+	genesisInfo := GenesisInfo{genesisID, "net"}
 
-	_, err := NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisID, "net", &nopeNodeInfo{})
+	_, err := NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisInfo, &nopeNodeInfo{}, &baseMeshCreator{})
 	require.ErrorContains(t, err, "both NetAddress and P2PHybridNetAddress")
 
 	cfg.NetAddress = ""
 	cfg.P2PHybridNetAddress = ":0"
-	_, err = NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisID, "net", &nopeNodeInfo{})
+	_, err = NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisInfo, &nopeNodeInfo{}, &baseMeshCreator{})
 	require.ErrorContains(t, err, "both NetAddress and P2PHybridNetAddress")
+}
+
+func TestHybridNetwork_HybridRelayStrategy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	log := logging.TestingLog(t)
+
+	genesisInfo := GenesisInfo{genesisID, "net"}
+
+	startNewRelayNode := func(name string, phonebook []string) (*HybridP2PNetwork, []string) {
+		relayCfg := cfg
+		relayCfg.ForceRelayMessages = true
+		// no phonebook addresses since we start and and stop it to collect the ws address
+		net, err := NewHybridP2PNetwork(log.With("node", name), relayCfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil)
+		require.NoError(t, err)
+
+		err = net.Start()
+		require.NoError(t, err)
+
+		// collect ws address
+		addr, portListen := net.wsNetwork.Address()
+		require.True(t, portListen)
+		require.NotZero(t, addr)
+		parsed, err := url.Parse(addr)
+		require.NoError(t, err)
+		addr = parsed.Host
+		net.Stop()
+
+		// make it net address and restart the node
+		relayCfg.NetAddress = addr
+		relayCfg.PublicAddress = addr
+		relayCfg.P2PHybridNetAddress = "127.0.0.1:0"
+		net, err = NewHybridP2PNetwork(log.With("node", name), relayCfg, "", phonebook, genesisInfo, &nopeNodeInfo{}, nil)
+		require.NoError(t, err)
+
+		err = net.Start()
+		require.NoError(t, err)
+
+		// collect relay address and prepare nodes phonebook
+		peerInfo := net.p2pNetwork.service.AddrInfo()
+		addrsP2P, err := peer.AddrInfoToP2pAddrs(&peerInfo)
+		require.NoError(t, err)
+		require.NotZero(t, addrsP2P[0])
+		multiAddrStr := addrsP2P[0].String()
+
+		fullAddr, portListen := net.wsNetwork.Address()
+		require.True(t, portListen)
+		require.NotZero(t, addr)
+		require.Contains(t, fullAddr, addr)
+
+		return net, []string{multiAddrStr, addr}
+	}
+
+	netA, netAddrs := startNewRelayNode("netA", nil)
+	defer netA.Stop()
+
+	phoneBookAddresses := append([]string{}, netAddrs...)
+
+	netB, netAddrs := startNewRelayNode("netB", phoneBookAddresses)
+	defer netB.Stop()
+
+	phoneBookAddresses = append(phoneBookAddresses, netAddrs...)
+
+	netC, _ := startNewRelayNode("netC", phoneBookAddresses)
+	defer netC.Stop()
+
+	// ensure initial connections are done
+	require.Eventually(t, func() bool {
+		return len(netA.GetPeers(PeersConnectedIn, PeersConnectedOut)) == 2 &&
+			len(netB.GetPeers(PeersConnectedIn, PeersConnectedOut)) == 2
+	}, 3*time.Second, 100*time.Millisecond)
+
+	// make sure all are connected via ws net
+	wsPeersA := netA.wsNetwork.GetPeers(PeersConnectedIn, PeersConnectedOut)
+	wsPeersB := netB.wsNetwork.GetPeers(PeersConnectedIn, PeersConnectedOut)
+	require.Len(t, wsPeersA, 2)
+	require.Len(t, wsPeersB, 2)
 }

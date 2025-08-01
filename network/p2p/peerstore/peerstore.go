@@ -289,6 +289,16 @@ func (ps *PeerStore) AddPersistentPeers(addrInfo []*peer.AddrInfo, networkName s
 	}
 }
 
+// HasRole checks if the peer has the given role.
+func (ps *PeerStore) HasRole(peerID peer.ID, role phonebook.Role) bool {
+	data, err := ps.Get(peerID, addressDataKey)
+	if err != nil || data == nil {
+		return false
+	}
+	ad := data.(addressData)
+	return ad.roles.Has(role)
+}
+
 // Length returns the number of addrs in peerstore
 func (ps *PeerStore) Length() int {
 	return len(ps.Peers())
@@ -380,4 +390,9 @@ func shuffleSelect(set []*peer.AddrInfo, n int) []*peer.AddrInfo {
 
 func shuffleAddrInfos(set []*peer.AddrInfo) {
 	rand.Shuffle(len(set), func(i, j int) { set[i], set[j] = set[j], set[i] })
+}
+
+// RoleChecker is an interface that checks if a peer has a specific role.
+type RoleChecker interface {
+	HasRole(peerID peer.ID, role phonebook.Role) bool
 }

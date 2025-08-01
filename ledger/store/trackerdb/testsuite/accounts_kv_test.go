@@ -61,7 +61,7 @@ func CustomTestAccountsCrud(t *customT) {
 	}
 
 	// insert the account
-	normBalanceA := dataA.NormalizedOnlineBalance(t.proto)
+	normBalanceA := dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 	refA, err := aow.InsertAccount(addrA, normBalanceA, dataA)
 	require.NoError(t, err)
 
@@ -80,7 +80,7 @@ func CustomTestAccountsCrud(t *customT) {
 
 	// update the account
 	dataA.RewardsBase = 98287
-	normBalanceA = dataA.NormalizedOnlineBalance(t.proto)
+	normBalanceA = dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 	_, err = aow.UpdateAccount(refA, normBalanceA, dataA)
 	require.NoError(t, err)
 
@@ -126,7 +126,7 @@ func CustomTestResourcesCrud(t *customT) {
 	// account
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 
 	//
@@ -209,7 +209,7 @@ func CustomTestResourcesQueryAll(t *customT) {
 	// account A
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 
 	// resource A-0
@@ -261,13 +261,13 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	// account A - will own creatables
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 
 	// account B - will opt into creatables
 	addrB := RandomAddress()
 	accDataB := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccB, err := aow.InsertAccount(addrB, accDataB.NormalizedOnlineBalance(t.proto), accDataB)
+	refAccB, err := aow.InsertAccount(addrB, accDataB.NormalizedOnlineBalance(t.proto.RewardUnit), accDataB)
 	require.NoError(t, err)
 
 	// asset A-0 for accounts A and B
@@ -450,7 +450,7 @@ func CustomTestAppKVCrud(t *customT) {
 	// account
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 	// resource
 	resDataA0 := trackerdb.ResourcesData{}
@@ -524,7 +524,7 @@ func CustomTestCreatablesCrud(t *customT) {
 	// account A
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 
 	// resource A-0

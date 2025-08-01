@@ -20,7 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
@@ -32,9 +31,9 @@ type writerForTesting struct {
 }
 
 // AccountsInitLightTest implements trackerdb.WriterTestExt
-func (tx *writerForTesting) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabse bool, err error) {
-	newDatabaseP, errP := tx.primary.AccountsInitLightTest(tb, initAccounts, proto)
-	newDatabaseS, errS := tx.secondary.AccountsInitLightTest(tb, initAccounts, proto)
+func (tx *writerForTesting) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabse bool, err error) {
+	newDatabaseP, errP := tx.primary.AccountsInitLightTest(tb, initAccounts, rewardUnit)
+	newDatabaseS, errS := tx.secondary.AccountsInitLightTest(tb, initAccounts, rewardUnit)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {

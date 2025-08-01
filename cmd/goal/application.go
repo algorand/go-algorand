@@ -43,7 +43,7 @@ import (
 )
 
 var (
-	appIdx     uint64
+	appIdx     basics.AppIndex
 	appCreator string
 
 	approvalProgFile string
@@ -141,15 +141,15 @@ func init() {
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
 	// working
-	callAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	optInAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	closeOutAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	clearAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	deleteAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	infoAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	methodAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	callAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	optInAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	closeOutAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	clearAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	deleteAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	readStateAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	updateAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	infoAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	methodAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
 
 	// Add common transaction flags to all txn-generating app commands
 	addTxnFlags(createAppCmd)
@@ -286,7 +286,7 @@ func translateBoxRefs(input []boxRef, foreignApps []uint64) []transactions.BoxRe
 			// put the appIdx in foreignApps, and then used the appIdx here
 			// (rather than 0), then maybe they really want to use it in the
 			// transaction as the full number. Though it's hard to see why.
-			if !found && tbr.appID == appIdx {
+			if !found && tbr.appID == uint64(appIdx) {
 				index = 0
 				found = true
 			}
@@ -495,9 +495,9 @@ var createAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				txn, err := waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				txn, err1 := waitForCommit(client, txid, lv)
+				if err1 != nil {
+					reportErrorln(err1.Error())
 				}
 				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
 					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
@@ -1033,7 +1033,7 @@ var infoAppCmd = &cobra.Command{
 		params := meta.Params
 
 		fmt.Printf("Application ID:        %d\n", appIdx)
-		fmt.Printf("Application account:   %v\n", basics.AppIndex(appIdx).Address())
+		fmt.Printf("Application account:   %v\n", appIdx.Address())
 		fmt.Printf("Creator:               %v\n", params.Creator)
 		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
 		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))
@@ -1103,7 +1103,7 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 // into the appropriate foreign array. Their placement will be as compact as possible, which means
 // values will be deduplicated and any value that is the sender or the current app will not be added
 // to the foreign array.
-func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []string, values []string, accounts *[]string, apps *[]uint64, assets *[]uint64) ([]int, error) {
+func populateMethodCallReferenceArgs(sender string, currentApp basics.AppIndex, types []string, values []string, accounts *[]string, apps *[]uint64, assets *[]uint64) ([]int, error) {
 	resolvedIndexes := make([]int, len(types))
 
 	for i, value := range values {
@@ -1132,7 +1132,7 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 			if err != nil {
 				return nil, fmt.Errorf("Unable to parse application ID '%s': %s", value, err)
 			}
-			if appID == currentApp {
+			if appID == uint64(currentApp) {
 				resolved = 0
 			} else {
 				duplicate := false

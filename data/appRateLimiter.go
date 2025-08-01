@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -214,10 +214,10 @@ func (r *appRateLimiter) len() int {
 var appKeyPool = sync.Pool{
 	New: func() interface{} {
 		return &appKeyBuf{
-			// max config.MaxTxGroupSize apps per txgroup, each app has up to MaxAppTxnForeignApps extra foreign apps
-			// at moment of writing config.MaxTxGroupSize = 16, config.MaxAppTxnForeignApps = 8
-			keys:    make([]keyType, 0, config.MaxTxGroupSize*(1+config.MaxAppTxnForeignApps)),
-			buckets: make([]int, 0, config.MaxTxGroupSize*(1+config.MaxAppTxnForeignApps)),
+			// max bounds.MaxTxGroupSize apps per txgroup, each app has up to MaxAppTxnForeignApps extra foreign apps
+			// at moment of writing bounds.MaxTxGroupSize = 16, bounds.MaxAppTxnForeignApps = 8
+			keys:    make([]keyType, 0, bounds.MaxTxGroupSize*(1+bounds.MaxAppTxnForeignApps)),
+			buckets: make([]int, 0, bounds.MaxTxGroupSize*(1+bounds.MaxAppTxnForeignApps)),
 		}
 	},
 }
@@ -265,7 +265,7 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 	txnToBucket := func(appIdx basics.AppIndex) int {
 		return int(memhash64(uint64(appIdx), seed) % uint64(numBuckets))
 	}
-	seen := make(map[basics.AppIndex]struct{}, len(txgroup)*(1+config.MaxAppTxnForeignApps))
+	seen := make(map[basics.AppIndex]struct{}, len(txgroup)*(1+bounds.MaxAppTxnForeignApps))
 	valid := func(appIdx basics.AppIndex) bool {
 		if appIdx != 0 {
 			_, ok := seen[appIdx]

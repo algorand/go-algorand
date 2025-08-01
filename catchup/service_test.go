@@ -261,7 +261,7 @@ func TestSyncRound(t *testing.T) {
 	}
 	// Assert that the last block is the one we expect--i.e. disableSyncRound - 1
 	rnd := s.GetDisableSyncRound()
-	rr, lr := basics.Round(rnd-1), local.LastRound()
+	rr, lr := rnd-1, local.LastRound()
 	require.Equal(t, rr, lr)
 
 	for r := basics.Round(1); r < rr; r++ {
@@ -361,7 +361,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 	lastRoundAtStart := local.LastRound()
@@ -397,7 +397,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	s.sync()
 
 	// Asserts that the last block is the one we expect
-	require.Equal(t, lastRoundAtStart+basics.Round(numBlocks), local.LastRound())
+	require.Equal(t, lastRoundAtStart+numBlocks, local.LastRound())
 
 	// Get the same block we wrote
 	block, _, _, err := makeUniversalBlockFetcher(logging.Base(),
@@ -418,7 +418,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 func TestAbruptWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	numberOfBlocks := 100
+	numberOfBlocks := basics.Round(100)
 
 	if testing.Short() {
 		numberOfBlocks = 10
@@ -456,7 +456,7 @@ func TestAbruptWrites(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := basics.Round(lastRound + 1); i <= basics.Round(numberOfBlocks); i++ {
+		for i := lastRound + 1; i <= numberOfBlocks; i++ {
 			time.Sleep(time.Duration(rand.Uint32()%5) * time.Millisecond)
 			blk, err := remote.Block(i)
 			require.NoError(t, err)
@@ -493,7 +493,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, int(numberOfBlocks)-1)
+	addBlocks(t, remote, blk, numberOfBlocks-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -536,7 +536,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
@@ -913,7 +913,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 	lastRoundAtStart := local.LastRound()
@@ -1055,7 +1055,7 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	numBlocks := 10
+	const numBlocks = 10
 	addBlocks(t, remote, blk, numBlocks)
 
 	// Create a network and block service
@@ -1101,7 +1101,7 @@ func TestServiceNoBlockForRound(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	numBlocks := 10
+	const numBlocks = 10
 	addBlocks(t, remote, blk, numBlocks)
 
 	// Create a network and block service

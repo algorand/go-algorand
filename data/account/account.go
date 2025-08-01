@@ -57,19 +57,19 @@ func ImportRoot(store db.Accessor, seed [32]byte) (acc Root, err error) {
 	raw := protocol.Encode(s)
 
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		err := rootInstallDatabase(tx)
-		if err != nil {
-			return fmt.Errorf("ImportRoot: failed to install database: %v", err)
+		err1 := rootInstallDatabase(tx)
+		if err1 != nil {
+			return fmt.Errorf("ImportRoot: failed to install database: %v", err1)
 		}
 
-		stmt, err := tx.Prepare("insert into RootAccount values (?)")
-		if err != nil {
-			return fmt.Errorf("ImportRoot: failed to prepare statement: %v", err)
+		stmt, err1 := tx.Prepare("insert into RootAccount values (?)")
+		if err1 != nil {
+			return fmt.Errorf("ImportRoot: failed to prepare statement: %v", err1)
 		}
 
-		_, err = stmt.Exec(raw)
-		if err != nil {
-			return fmt.Errorf("ImportRoot: failed to insert account: %v", err)
+		_, err1 = stmt.Exec(raw)
+		if err1 != nil {
+			return fmt.Errorf("ImportRoot: failed to insert account: %v", err1)
 		}
 
 		return nil
@@ -91,18 +91,18 @@ func RestoreRoot(store db.Accessor) (acc Root, err error) {
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from RootAccount")
-		err := row.Scan(&nrows)
-		if err != nil {
-			return fmt.Errorf("RestoreRoot: could not query storage: %v", err)
+		err1 := row.Scan(&nrows)
+		if err1 != nil {
+			return fmt.Errorf("RestoreRoot: could not query storage: %v", err1)
 		}
 		if nrows != 1 {
 			logging.Base().Infof("RestoreRoot: state not found (n = %v)", nrows)
 		}
 
 		row = tx.QueryRow("select data from RootAccount")
-		err = row.Scan(&raw)
-		if err != nil {
-			return fmt.Errorf("RestoreRoot: could not read account raw data: %v", err)
+		err1 = row.Scan(&raw)
+		if err1 != nil {
+			return fmt.Errorf("RestoreRoot: could not read account raw data: %v", err1)
 		}
 
 		return nil
@@ -146,9 +146,9 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from ParticipationAccount")
-		err := row.Scan(&nrows)
-		if err != nil {
-			return fmt.Errorf("RestoreParticipation: could not query storage: %v", err)
+		err1 := row.Scan(&nrows)
+		if err1 != nil {
+			return fmt.Errorf("RestoreParticipation: could not query storage: %v", err1)
 		}
 		if nrows != 1 {
 			logging.Base().Infof("RestoreParticipation: state not found (n = %v)", nrows)
@@ -156,9 +156,9 @@ func RestoreParticipation(store db.Accessor) (acc PersistedParticipation, err er
 
 		row = tx.QueryRow("select parent, vrf, voting, firstValid, lastValid, keyDilution, stateProof from ParticipationAccount")
 
-		err = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawStateProof)
-		if err != nil {
-			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err)
+		err1 = row.Scan(&rawParent, &rawVRF, &rawVoting, &acc.FirstValid, &acc.LastValid, &acc.KeyDilution, &rawStateProof)
+		if err1 != nil {
+			return fmt.Errorf("RestoreParticipation: could not read account raw data: %v", err1)
 		}
 
 		copy(acc.Parent[:32], rawParent)

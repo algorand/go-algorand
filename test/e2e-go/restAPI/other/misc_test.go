@@ -81,7 +81,7 @@ func TestDisabledAPIConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "Invalid API Token")
 }
 
-func TestSendingNotClosingAccountFails(t *testing.T) {
+func TestSendingNotClosingAccountErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 

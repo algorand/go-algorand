@@ -1,0 +1,425 @@
+name: PR Tests
+on:
+  pull_request:
+    branches:
+      - master
+      - 'rel/**'
+
+env:
+  CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
+  ALGORAND_DEADLOCK: enable
+  KMD_NOUSB: True
+  BUILD_TYPE: integration
+  ALGOTEST: 1
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: ["ubuntu-24.04"]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Get Go version
+      id: go_version
+      run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    - name: Cache libsodium
+      uses: actions/cache@v4
+      with:
+        path: crypto/libs
+        key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+    - name: Build
+      run: |
+        scripts/travis/build.sh --make_debug
+    - name: Create workspace archive
+      run: |
+        tar -czf /tmp/workspace-${{ matrix.platform }}.tar.gz .
+      shell: bash
+    - name: Upload workspace archive
+      uses: actions/upload-artifact@v4
+      with:
+        name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+        path: /tmp/workspace-${{ matrix.platform }}.tar.gz
+        retention-days: 1
+    - name: Notify Slack on failure
+      if: failure() && env.SLACK_WEBHOOK != ''
+      uses: slackapi/slack-github-action@v2.1.0
+      with:
+        webhook: ${{ secrets.SLACK_WEBHOOK }}
+        webhook-type: webhook-trigger
+        payload: |
+          {
+            "text": "🚨 Build Failure Alert",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Build Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            ]
+          }
+
+  test:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04"]
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 4
+      CIRCLECI: true
+      SHORTTEST: "-short"
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Get Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Run tests
+        run: |
+          ./scripts/configure_dev.sh
+          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
+          mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
+          gotestsum --format standard-verbose \
+            --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
+            --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
+            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
+            $PACKAGE_NAMES
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: webhook-trigger
+          payload: |
+            {
+              "text": "🚨 Test Failure Alert",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Test Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+      - name: Upload test artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload coverage
+        # Only upload coverage from ubuntu-24.04 platform
+        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
+        uses: codecov/codecov-action@v4
+        env:
+          GITHUB_ACTIONS: True
+          CIRCLECI: ""
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          file: ./coverage.txt
+          fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  integration:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04"]
+        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 4
+      E2E_TEST_FILTER: GO
+      PARALLEL_FLAG: "-p 4"
+      SHORTTEST: "-short"
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Get Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Run integration tests
+        run: |
+          ./scripts/configure_dev.sh
+          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID}
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
+          test/scripts/run_integration_tests.sh
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: webhook-trigger
+          payload: |
+            {
+              "text": "🚨 Integration Test Failure Alert",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Integration Test Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+      - name: Upload test artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  e2e_expect:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04"]
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 8
+      E2E_TEST_FILTER: EXPECT
+      PARALLEL_FLAG: "-p 4"
+      SHORTTEST: "-short"
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Get Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Run E2E expect tests
+        run: |
+          scripts/configure_dev.sh
+          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID}
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
+          test/scripts/run_integration_tests.sh
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: webhook-trigger
+          payload: |
+            {
+              "text": "🚨 Expect Test Failure Alert",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Expect Test Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+      - name: Upload test artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  e2e_subs:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04"]
+    runs-on: ${{ matrix.platform }}
+    env:
+      E2E_TEST_FILTER: SCRIPTS
+      CI_PLATFORM: ${{ matrix.platform }}
+      CI_KEEP_TEMP_PLATFORM: ""
+      SHORTTEST: "-short"
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Get Go version
+        id: go_version
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Run E2E subs tests
+        run: |
+          scripts/configure_dev.sh
+          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
+          test/scripts/run_integration_tests.sh
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: webhook-trigger
+          payload: |
+            {
+              "text": "🚨 Subs Test Failure Alert",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Subs Test Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+      - name: Upload test artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
+          path: ~/test_results
+          retention-days: 7
+
+  verify:
+    needs: [test, integration, e2e_expect]
+    strategy:
+      fail-fast: false
+      matrix:
+        test_type: ["test", "integration", "e2e_expect"]
+        platform: ["ubuntu-24.04"]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
+          path: ~/test_results
+          merge-multiple: true
+      - name: Check test execution
+        run: |
+          cat ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}/**/testresults.json > ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}/combined_testresults.json
+          python3 scripts/buildtools/check_tests.py \
+            --tests-results-filepath ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}/combined_testresults.json \
+            --ignored-tests \
+              TestAlgodWithExpect \
+              TestAlgohWithExpect \
+              TestGoalWithExpect \
+              TestTealdbgWithExpect
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: webhook-trigger
+          payload: |
+            {
+              "text": "🚨 Verify Failure Alert",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Verify Failure in PR Build*\n\n• Job: `upload`\n• Branch: `${{ github.ref_name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }

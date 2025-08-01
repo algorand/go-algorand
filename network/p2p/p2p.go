@@ -83,7 +83,6 @@ type serviceImpl struct {
 	host       host.Host
 	streams    *streamManager
 	pubsub     *pubsub.PubSub
-	pubsubCtx  context.Context
 	privKey    crypto.PrivKey
 
 	topics   map[string]*pubsub.Topic
@@ -191,8 +190,35 @@ type StreamHandlerPair struct {
 // StreamHandlers is an ordered list of StreamHandlerPair
 type StreamHandlers []StreamHandlerPair
 
+// PubSubOption is a function that modifies the pubsub options
+type PubSubOption func(opts *[]pubsub.Option)
+
+// DisablePubSubPeerExchange disables PX (peer exchange) in pubsub
+func DisablePubSubPeerExchange() PubSubOption {
+	return func(opts *[]pubsub.Option) {
+		*opts = append(*opts, pubsub.WithPeerExchange(false))
+	}
+}
+
+// SetPubSubMetricsTracer sets a pubsub.RawTracer for metrics collection
+func SetPubSubMetricsTracer(metricsTracer pubsub.RawTracer) PubSubOption {
+	return func(opts *[]pubsub.Option) {
+		*opts = append(*opts, pubsub.WithRawTracer(metricsTracer))
+	}
+}
+
+// SetPubSubPeerFilter sets a pubsub.PeerFilter for peers filtering out
+func SetPubSubPeerFilter(filter func(checker pstore.RoleChecker, pid peer.ID) bool, checker pstore.RoleChecker) PubSubOption {
+	return func(opts *[]pubsub.Option) {
+		f := func(pid peer.ID, topic string) bool {
+			return filter(checker, pid)
+		}
+		*opts = append(*opts, pubsub.WithPeerFilter(f))
+	}
+}
+
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
 	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
@@ -201,7 +227,12 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 		h.SetStreamHandler(pair.ProtoID, sm.streamHandler)
 	}
 
-	ps, err := makePubSub(ctx, cfg, h, metricsTracer)
+	pubsubOpts := []pubsub.Option{}
+	for _, opt := range pubsubOptions {
+		opt(&pubsubOpts)
+	}
+
+	ps, err := makePubSub(ctx, cfg, h, pubsubOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +242,6 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 		host:       h,
 		streams:    sm,
 		pubsub:     ps,
-		pubsubCtx:  ctx,
 		privKey:    h.Peerstore().PrivKey(h.ID()),
 		topics:     make(map[string]*pubsub.Topic),
 	}, nil

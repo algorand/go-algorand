@@ -49,12 +49,12 @@ func init() {
 	appInteractCmd.AddCommand(appQueryCmd)
 	appInteractCmd.PersistentFlags().StringVarP(&appHdr, "header", "", "", "Application header")
 
-	appQueryCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	appQueryCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
 	appQueryCmd.Flags().StringVarP(&account, "from", "f", "", "Account to query state for (if omitted, query from global state)")
 	appQueryCmd.Flags().SetInterspersed(false)
 	appQueryCmd.MarkFlagRequired("app-id")
 
-	appExecuteCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID (if omitted, zero, which creates an application)")
+	appExecuteCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID (if omitted, zero, which creates an application)")
 	appExecuteCmd.Flags().StringVarP(&account, "from", "f", "", "Account to execute interaction from")
 	appExecuteCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from \"from\" address due to rekeying")
 	appExecuteCmd.Flags().SetInterspersed(false)
@@ -630,9 +630,9 @@ var appExecuteCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				txn, err := waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				txn, err1 := waitForCommit(client, txid, lv)
+				if err1 != nil {
+					reportErrorln(err1.Error())
 				}
 				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
 					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
@@ -642,7 +642,7 @@ var appExecuteCmd = &cobra.Command{
 			// Broadcast or write transaction to file
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},

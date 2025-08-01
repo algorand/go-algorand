@@ -1341,13 +1341,13 @@ func BenchmarkDeleteExpired(b *testing.B) {
 			}()
 
 			// make participation key
-			lastValid := 3000000
+			lastValid := basics.Round(3000000)
 			keyDilution := 10000
 			if kd, err := strconv.Atoi(os.Getenv("DILUTION")); err == nil { // allow setting key dilution via env var
 				keyDilution = kd
 			}
 			if lv, err := strconv.Atoi(os.Getenv("LASTVALID")); err == nil { // allow setting last valid via env var
-				lastValid = lv
+				lastValid = basics.Round(lv)
 			}
 			var part Participation
 
@@ -1359,7 +1359,7 @@ func BenchmarkDeleteExpired(b *testing.B) {
 				if os.Getenv("SLOWKEYS") == "" {
 					// makeTestParticipation makes small state proof secrets to save time
 					b.Log("making fast part key", i, "for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
-					part = makeTestParticipation(a, i+1, 0, basics.Round(lastValid), uint64(keyDilution))
+					part = makeTestParticipation(a, i+1, 0, lastValid, uint64(keyDilution))
 					a.NotNil(part)
 				} else {
 					// generate key the same way as BenchmarkOldKeysDeletion
@@ -1374,7 +1374,7 @@ func BenchmarkDeleteExpired(b *testing.B) {
 					}()
 
 					b.Log("making part key", i, "for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
-					ppart, err := FillDBWithParticipationKeys(ppartDB, rootAddr, 0, basics.Round(lastValid), uint64(keyDilution))
+					ppart, err := FillDBWithParticipationKeys(ppartDB, rootAddr, 0, lastValid, uint64(keyDilution))
 					ppartDB.Close()
 					a.NoError(err)
 					part = ppart.Participation

@@ -665,10 +665,10 @@ func encodeAppGlobalAppID(key string) string {
 	return appGlobalObjIDPrefix + key
 }
 
-func decodeAppGlobalAppID(objID string) (uint64, bool) {
+func decodeAppGlobalAppID(objID string) (basics.AppIndex, bool) {
 	if strings.HasPrefix(objID, appGlobalObjIDPrefix) {
 		if val, err := strconv.ParseInt(objID[len(appGlobalObjIDPrefix):], 10, 32); err == nil {
-			return uint64(val), true
+			return basics.AppIndex(val), true
 		}
 	}
 	return 0, false
@@ -689,12 +689,12 @@ func encodeAppLocalsAppID(addr string, appID string) string {
 	return fmt.Sprintf("%s%s_%s", appLocalAppIDPrefix, addr, appID)
 }
 
-func decodeAppLocalsAppID(objID string) (string, uint64, bool) {
+func decodeAppLocalsAppID(objID string) (string, basics.AppIndex, bool) {
 	if strings.HasPrefix(objID, appLocalAppIDPrefix) {
 		encoded := objID[len(appLocalAppIDPrefix):]
 		parts := strings.Split(encoded, "_")
 		if val, err := strconv.ParseInt(parts[1], 10, 32); err == nil {
-			return parts[0], uint64(val), true
+			return parts[0], basics.AppIndex(val), true
 		}
 	}
 	return "", 0, false
@@ -967,14 +967,14 @@ func makeAppLocalState(s *cdtState, addr string) (desc []cdt.RuntimePropertyDesc
 	return
 }
 
-func makeAppGlobalKV(s *cdtState, appID uint64) (desc []cdt.RuntimePropertyDescriptor) {
-	if tkv, ok := s.AppState.global[basics.AppIndex(appID)]; ok {
+func makeAppGlobalKV(s *cdtState, appID basics.AppIndex) (desc []cdt.RuntimePropertyDescriptor) {
+	if tkv, ok := s.AppState.global[appID]; ok {
 		return tkvToRpd(tkv)
 	}
 	return
 }
 
-func makeAppLocalsKV(s *cdtState, addr string, appID uint64) (desc []cdt.RuntimePropertyDescriptor) {
+func makeAppLocalsKV(s *cdtState, addr string, appID basics.AppIndex) (desc []cdt.RuntimePropertyDescriptor) {
 	a, err := basics.UnmarshalChecksumAddress(addr)
 	if err != nil {
 		return
@@ -985,7 +985,7 @@ func makeAppLocalsKV(s *cdtState, addr string, appID uint64) (desc []cdt.Runtime
 		return
 	}
 
-	if tkv, ok := state[basics.AppIndex(appID)]; ok {
+	if tkv, ok := state[appID]; ok {
 		return tkvToRpd(tkv)
 	}
 	return

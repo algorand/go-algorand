@@ -78,3 +78,6 @@ tools/x-repo-types/x-repo-types
 
 # python virtual environment
 .venv
+
+# ignore local claude config changes
+CLAUDE.local.md

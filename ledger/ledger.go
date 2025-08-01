@@ -557,7 +557,7 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	// Intentionally apply (pending) rewards up to rnd.
 	data, rnd, withoutRewards, err := l.accts.lookupLatest(addr)
 	if err != nil {
-		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+		return basics.AccountData{}, 0, basics.MicroAlgos{}, err
 	}
 	return data, rnd, withoutRewards, nil
 }
@@ -579,7 +579,7 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
 	withoutRewards = data.MicroAlgos
-	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
+	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion].RewardUnit, rewardsLevel)
 	return data, rnd, withoutRewards, nil
 }
 
