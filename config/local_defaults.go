@@ -158,7 +158,6 @@ var defaultLocal = Local{
 	TxBacklogSize:                              26000,
 	TxIncomingFilterMaxSize:                    500000,
 	TxIncomingFilteringFlags:                   1,
-	TxPoolExponentialIncreaseFactor:            2,
 	TxPoolSize:                                 75000,
 	TxSyncIntervalSeconds:                      60,
 	TxSyncServeResponseSize:                    1000000,
