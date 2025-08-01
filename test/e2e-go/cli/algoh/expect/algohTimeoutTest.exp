@@ -30,6 +30,10 @@ if { [catch {
 
     ::Algoh::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
+    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"PublicAddress": "abc", "P2PHybridNetAddress": ":4190"}} > $TEST_ROOT_DIR/Primary/config.json.new
+    exec rm $TEST_ROOT_DIR/Primary/config.json
+    exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
+
     ::Algoh::StartNode $TEST_PRIMARY_NODE_DIR
 
     puts "Successfully started node"
