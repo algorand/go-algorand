@@ -364,6 +364,7 @@ func (n *P2PNetwork) setup() error {
 	var err error
 	n.mesher, err = meshCreator.create(
 		withContext(n.ctx),
+		withTargetConnCount(n.config.GossipFanout),
 		withMeshExpJitterBackoff(),
 		withMeshNetMeshFn(n.meshThreadInner),
 		withMeshPeerStatReporter(func() {
@@ -490,8 +491,8 @@ func (n *P2PNetwork) innerStop() {
 }
 
 // meshThreadInner fetches nodes from DHT and attempts to connect to them
-func (n *P2PNetwork) meshThreadInner() bool {
-	defer n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
+func (n *P2PNetwork) meshThreadInner(targetConnCount int) int {
+	defer n.service.DialPeersUntilTargetCount(targetConnCount)
 
 	// fetch peers from DNS
 	var dnsPeers, dhtPeers []peer.AddrInfo
@@ -531,7 +532,7 @@ func (n *P2PNetwork) meshThreadInner() bool {
 	if len(peers) > 0 {
 		n.pstore.ReplacePeerList(replace, string(n.genesisInfo.NetworkID), phonebook.RelayRole)
 	}
-	return len(peers) > 0
+	return len(peers)
 }
 
 func (n *P2PNetwork) httpdThread() {
