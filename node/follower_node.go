@@ -297,8 +297,8 @@ func (node *AlgorandFollowerNode) GenesisHash() crypto.Digest {
 	return node.genesisHash
 }
 
-// SuggestedFee no-ops in follower mode
-func (node *AlgorandFollowerNode) SuggestedFee() basics.MicroAlgos {
+// BaseFee return 0 in follower mode (which should be interpetted as MinFee by callers)
+func (node *AlgorandFollowerNode) BaseFee() basics.MicroAlgos {
 	return basics.MicroAlgos{}
 }
 

@@ -228,7 +228,7 @@ type Local struct {
 	// FallbackDNSResolverAddress defines the fallback DNS resolver address that would be used if the system resolver would fail to retrieve SRV records.
 	FallbackDNSResolverAddress string `version[0]:""`
 
-	// TxPoolExponentialIncreaseFactor exponential increase factor of transaction pool's fee threshold, should always be 2 in production.
+	// TxPoolExponentialIncreaseFactor is deprecated and unused.
 	TxPoolExponentialIncreaseFactor uint64 `version[0]:"2"`
 
 	// SuggestedFeeBlockHistory is deprecated and unused.
