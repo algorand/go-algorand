@@ -60,6 +60,7 @@ jobs:
         uses: ./.github/actions/slack-notify
         with:
           job-type: "Test"
+          build-type: "PR Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
@@ -121,6 +122,7 @@ jobs:
         uses: ./.github/actions/slack-notify
         with:
           job-type: "Integration Test"
+          build-type: "PR Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
@@ -173,6 +175,7 @@ jobs:
         uses: ./.github/actions/slack-notify
         with:
           job-type: "Expect Test"
+          build-type: "PR Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
@@ -222,6 +225,7 @@ jobs:
         uses: ./.github/actions/slack-notify
         with:
           job-type: "Subs Test"
+          build-type: "PR Build"
           details: "• Test Suite: `${{ matrix.testsuite }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
@@ -260,4 +264,5 @@ jobs:
         uses: ./.github/actions/slack-notify
         with:
           job-type: "Verify"
+          build-type: "PR Build"
           details: "• Test Type: `${{ matrix.test_type }}`\n• Branch: `${{ github.ref_name }}`"
