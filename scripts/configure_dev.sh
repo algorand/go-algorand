@@ -72,12 +72,6 @@ function install_windows_shellcheck() {
 }
 
 if [ "${OS}" = "linux" ]; then
-    # for CI environments, skip if sqlite3 CLI is already available and expect is available for expect tests
-    if [ -n "${CI}" ] && command -v sqlite3 >/dev/null && \
-       ( [ "${E2E_TEST_FILTER}" != "EXPECT" ] || command -v expect >/dev/null ); then
-        echo "Required tools already available in CI environment, skipping package installation"
-        exit 0
-    fi
     if ! which sudo >/dev/null; then
         DEBIAN_FRONTEND="$DEBIAN_FRONTEND" "$SCRIPTPATH/install_linux_deps.sh"
     else

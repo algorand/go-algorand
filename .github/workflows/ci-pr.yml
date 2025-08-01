@@ -42,17 +42,10 @@ jobs:
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
-      - name: Cache libsodium
-        uses: actions/cache@v4
-        with:
-          path: crypto/libs
-          key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
-      - name: Build libsodium
-        run: make libsodium
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
       - name: Run tests
         run: |
-          ./scripts/configure_dev.sh
-          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
           export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
           mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
@@ -127,18 +120,12 @@ jobs:
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
-      - name: Cache libsodium
-        uses: actions/cache@v4
-        with:
-          path: crypto/libs
-          key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
-      - name: Build libsodium
-        run: make libsodium
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
+      - name: Build e2e binaries
+        run: make build-e2e
       - name: Run integration tests
         run: |
-          ./scripts/configure_dev.sh
-          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-          make build-e2e
           mkdir -p ~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID}
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
           test/scripts/e2e.sh
@@ -196,23 +183,14 @@ jobs:
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
-      - name: Cache libsodium
-        uses: actions/cache@v4
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
         with:
-          path: crypto/libs
-          key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
-      - name: Build libsodium
-        run: make libsodium
+          install-expect: true
+      - name: Build e2e binaries
+        run: make build-e2e
       - name: Run E2E expect tests
         run: |
-          # Disable man-db auto-update to speed up APT operations
-          # See: https://github.com/actions/runner-images/issues/10977
-          echo 'set man-db/auto-update false' | sudo debconf-communicate >/dev/null
-          sudo dpkg-reconfigure -f noninteractive man-db
-          sudo apt-get install -y --no-upgrade expect
-          scripts/configure_dev.sh
-          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-          make build-e2e
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID}
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
           test/scripts/e2e.sh
@@ -269,18 +247,12 @@ jobs:
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
-      - name: Cache libsodium
-        uses: actions/cache@v4
-        with:
-          path: crypto/libs
-          key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
-      - name: Build libsodium
-        run: make libsodium
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
+      - name: Build binaries
+        run: make buildsrc
       - name: Run E2E subs tests
         run: |
-          scripts/configure_dev.sh
-          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-          make buildsrc
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
           test/scripts/e2e.sh
