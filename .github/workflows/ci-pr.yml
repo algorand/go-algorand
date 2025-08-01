@@ -140,7 +140,7 @@ jobs:
           ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
           make build-e2e
           mkdir -p ~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID}
-          PATH="$(go env GOPATH)/bin-race:${PATH}" NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
+          NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
           test/scripts/e2e.sh
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK != ''
@@ -214,7 +214,7 @@ jobs:
           scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
           make build-e2e
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID}
-          PATH="$(go env GOPATH)/bin-race:${PATH}" NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
+          NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
           test/scripts/e2e.sh
       - name: Notify Slack on failure
         if: failure() && env.SLACK_WEBHOOK != ''
