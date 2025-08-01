@@ -187,8 +187,8 @@ func (m *mockNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
 	return txnPoolGolden, m.err
 }
 
-func (m *mockNode) SuggestedFee() basics.MicroAlgos {
-	return basics.MicroAlgos{Raw: 1}
+func (m *mockNode) BaseFee() basics.MicroAlgos {
+	return basics.MicroAlgos{Raw: 1000}
 }
 
 // unused by handlers:
