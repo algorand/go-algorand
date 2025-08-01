@@ -56,24 +56,11 @@ jobs:
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Test Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Test Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Test"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -130,24 +117,11 @@ jobs:
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
           test/scripts/e2e.sh
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Integration Test Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Integration Test Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Integration Test"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -195,24 +169,11 @@ jobs:
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
           test/scripts/e2e.sh
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Expect Test Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Expect Test Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Expect Test"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -257,24 +218,11 @@ jobs:
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
           test/scripts/e2e.sh
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Subs Test Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Subs Test Failure in PR Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Subs Test"
+          details: "• Test Suite: `${{ matrix.testsuite }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -308,21 +256,8 @@ jobs:
               TestGoalWithExpect \
               TestTealdbgWithExpect
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Verify Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Verify Failure in PR Build*\n\n• Job: `upload`\n• Branch: `${{ github.ref_name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Verify"
+          details: "• Test Type: `${{ matrix.test_type }}`\n• Branch: `${{ github.ref_name }}`"
