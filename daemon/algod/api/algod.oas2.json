@@ -4715,7 +4715,7 @@
             "type": "string"
           },
           "fee": {
-            "description": "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol.",
+            "description": "Fee id deprecated. It used to express the per-byte fee escalation.",
             "type": "integer",
             "x-go-type": "uint64"
           },
@@ -4735,6 +4735,11 @@
           },
           "min-fee": {
             "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          },
+          "base-fee": {
+            "description": "The current base transaction fee (not per byte) required for the\ntxn to validate.",
             "type": "integer",
             "x-go-type": "uint64"
           }
