@@ -4,6 +4,9 @@ on:
     branches:
       - master
   pull_request:
+
+env:
+  SKIP_GO_INSTALLATION: True
 jobs:
   codegen_verification:
     runs-on: ubuntu-24.04
@@ -18,8 +21,10 @@ jobs:
         with:
           fetch-depth: 0
           path: go-algorand
-      - name: Uninstall existing go installation
-        run: sudo apt-get -y -q purge golang-go
+      - name: Set up Go
+        uses: ./go-algorand/.github/actions/setup-go
+      - name: Setup test environment
+        uses: ./go-algorand/.github/actions/setup-test
       - name: Run codegen_verification.sh
         env:
           SWAGGER_CONVERTER_API: "http://localhost:8080"
