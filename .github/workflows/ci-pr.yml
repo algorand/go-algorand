@@ -278,23 +278,23 @@ jobs:
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: e2e_subs-results-${{ matrix.platform }}-${{ matrix.testsuite }}-${{ github.run_id }}
+          name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.testsuite }}
           path: ~/test_results
           retention-days: 7
 
   verify:
-    needs: [test, integration, e2e_expect]
+    needs: [test, integration, e2e_expect, e2e_subs]
     strategy:
       fail-fast: false
       matrix:
-        test_type: ["test", "integration", "e2e_expect"]
+        test_type: ["test", "integration", "e2e_expect", "e2e_subs"]
         platform: ["ubuntu-24.04"]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
+          pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-*
           path: ~/test_results
           merge-multiple: true
       - name: Check test execution
