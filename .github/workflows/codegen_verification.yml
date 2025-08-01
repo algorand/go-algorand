@@ -20,17 +20,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          path: go-algorand
       - name: Set up Go
-        uses: ./go-algorand/.github/actions/setup-go
+        uses: ./.github/actions/setup-go
       - name: Setup test environment
-        uses: ./go-algorand/.github/actions/setup-test
+        uses: ./.github/actions/setup-test
       - name: Run codegen_verification.sh
         env:
           SWAGGER_CONVERTER_API: "http://localhost:8080"
         run: |
-          export GOPATH="${GITHUB_WORKSPACE}/go"
-          cd go-algorand
           scripts/travis/codegen_verification.sh
       - name: Slack Notification
         env:
