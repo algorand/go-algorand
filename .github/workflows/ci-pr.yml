@@ -63,6 +63,7 @@ jobs:
           build-type: "PR Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
       - name: Upload test artifacts to GitHub
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -125,6 +126,7 @@ jobs:
           build-type: "PR Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
       - name: Upload test artifacts to GitHub
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -178,6 +180,7 @@ jobs:
           build-type: "PR Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
@@ -228,6 +231,7 @@ jobs:
           build-type: "PR Build"
           details: "• Test Suite: `${{ matrix.testsuite }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.testsuite }}
@@ -267,7 +271,7 @@ jobs:
           build-type: "PR Build"
           details: "• Test Type: `${{ matrix.test_type }}`\n• Branch: `${{ github.ref_name }}`"
 
-  summary:
+  report:
     needs: [test, integration, e2e_expect, e2e_subs]
     if: always()
     runs-on: ubuntu-24.04
@@ -278,7 +282,6 @@ jobs:
           path: ~/test_results
           merge-multiple: true
       - name: Generate failure summary
-        if: always()
         run: |
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
           for job_type in test integration e2e_expect e2e_subs; do
