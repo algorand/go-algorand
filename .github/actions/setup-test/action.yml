@@ -12,7 +12,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: crypto/libs
-        key: libsodium-${{ runner.os }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+        key: libsodium-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crypto/libsodium-fork/**') }}
     - name: Build libsodium
       run: make libsodium
       shell: bash
@@ -33,7 +33,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ~/go/bin/gotestsum
-        key: gotestsum-${{ runner.os }}-${{ hashFiles('scripts/buildtools/versions') }}
+        key: gotestsum-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/buildtools/versions') }}
     - name: Install gotestsum
       if: steps.cache-gotestsum.outputs.cache-hit != 'true'
       run: ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"

@@ -23,22 +23,22 @@ runs:
       uses: actions/cache@v4
       with:
         path: ${{ env.GOMODCACHE }}
-        key: ${{ runner.os }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
         restore-keys: |
-          ${{ runner.os }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-
-          ${{ runner.os }}-go-mod-${{ github.ref_name }}-
-          ${{ runner.os }}-go-mod-master-
-          ${{ runner.os }}-go-mod-
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ github.ref_name }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-master-
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build cache
       uses: actions/cache@v4
       with:
         path: ${{ env.GOCACHE }}
-        key: ${{ runner.os }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
         restore-keys: |
-          ${{ runner.os }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-
-          ${{ runner.os }}-go-build-${{ github.ref_name }}-
-          ${{ runner.os }}-go-build-master-
-          ${{ runner.os }}-go-build-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ github.ref_name }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-master-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: Download Go modules
       shell: bash
       run: go mod download
