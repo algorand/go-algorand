@@ -10,7 +10,6 @@ export ALGOTEST=1
 S3_TESTDATA=${S3_TESTDATA:-algorand-testdata}
 
 SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
-
 SRCROOT="$(pwd -P)"
 
 export CHANNEL=master
@@ -26,7 +25,7 @@ Options:
     -n        Run tests without building binaries (Binaries are expected in PATH)
     -i        Start an interactive session for running e2e subs.
 "
-NO_BUILD=false
+NO_BUILD=${NO_BUILD:-false}
 while getopts ":c:nhi" opt; do
   case ${opt} in
     c ) CHANNEL=$OPTARG
@@ -193,7 +192,10 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         echo "done"
         exit
     else
-        $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+        # Run parallel tests if testsuite is unset or set to "parallel"
+        if [ "${E2E_SUBS_TESTSUITE}" = "" ] || [ "${E2E_SUBS_TESTSUITE}" = "parallel" ]; then
+            $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+        fi
     fi
 
     # If the temporary artifact directory exists, then the test artifact needs to be created
@@ -214,6 +216,9 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     duration "parallel client runner"
 
+    # Run vdir and serial tests if testsuite is unset or set to "vdir-serial"
+    if [ "${E2E_SUBS_TESTSUITE}" = "" ] || [ "${E2E_SUBS_TESTSUITE}" = "vdir-serial" ]; then
+
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
         $clientrunner --version "$(basename "$vdir")" "$vdir"/*.sh
     done
@@ -223,8 +228,10 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         $clientrunner "$script"
     done
 
-    deactivate
     duration "serial client runners"
+    fi # if E2E_SUBS_TESTSUITE == "" or == "vdir-serial"
+    deactivate
+
 fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then

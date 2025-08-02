@@ -15,9 +15,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # required for new-from-rev option in .golangci.yml
+      - name: Cache libsodium
+        uses: actions/cache@v4
+        with:
+          path: crypto/libs
+          key: libsodium-ubuntu-latest-${{ hashFiles('crypto/libsodium-fork/**') }}
         # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
-        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make libsodium && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2.7.0
         with:
@@ -37,20 +42,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # required for new-from-rev option in .golangci.yml
+      - name: Cache libsodium
+        uses: actions/cache@v4
+        with:
+          path: crypto/libs
+          key: libsodium-ubuntu-latest-${{ hashFiles('crypto/libsodium-fork/**') }}
       # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
-        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make libsodium && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: Add bin to PATH
         run: |
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
-      - name: Determine Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
-      - name: Install specific golang
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
       - name: Create folders for golangci-lint
         run: mkdir -p cicdtmp/golangci-lint
       - name: Check if custom golangci-lint is already built

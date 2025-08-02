@@ -483,7 +483,7 @@ def main():
         trdir = os.path.join(trdir, package)
         os.makedirs(trdir, exist_ok=True)
 
-        jsonpath = os.path.join(trdir, "results.json")
+        jsonpath = os.path.join(trdir, "testresults.json")
         rs.jsonfile = open(jsonpath, "w")
         junitpath = os.path.join(trdir, "testresults.xml")
         atexit.register(finish_test_results, rs.jsonfile, jsonpath, junitpath)

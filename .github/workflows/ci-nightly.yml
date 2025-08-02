@@ -19,6 +19,7 @@ env:
   BUILD_TYPE: integration
   ALGOTEST: 1
   SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  SKIP_GO_INSTALLATION: True
 
 concurrency:
   group: nightly-${{ github.ref }}
@@ -41,14 +42,8 @@ jobs:
       with:
         ref: ${{ github.event.inputs.branch || github.ref }}
         fetch-depth: 0
-    - name: Get Go version
-      id: go_version
-      run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
     - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+      uses: ./.github/actions/setup-go
     - name: Cache libsodium
       uses: actions/cache@v4
       with:
@@ -68,24 +63,12 @@ jobs:
         path: /tmp/workspace-${{ matrix.platform }}.tar.gz
         retention-days: 1
     - name: Notify Slack on failure
-      if: failure() && env.SLACK_WEBHOOK != ''
-      uses: slackapi/slack-github-action@v2.1.0
+      if: failure()
+      uses: ./.github/actions/slack-notify
       with:
-        webhook: ${{ secrets.SLACK_WEBHOOK }}
-        webhook-type: webhook-trigger
-        payload: |
-          {
-            "text": "🚨 Build Failure Alert",
-            "blocks": [
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": "*Build Failure in Nightly Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                }
-              }
-            ]
-          }
+        job-type: "Build"
+        build-type: "Nightly Build"
+        details: "• Platform: `${{ matrix.platform }}`"
 
   test_nightly:
     needs: [build]
@@ -110,14 +93,8 @@ jobs:
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
           rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
-      - name: Get Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+        uses: ./.github/actions/setup-go
       - name: Run tests
         run: |
           ./scripts/configure_dev.sh
@@ -125,31 +102,19 @@ jobs:
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
           export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
           mkdir -p test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}
-          gotestsum --format standard-verbose \
+          gotestsum --format standard-quiet \
             --junitfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Test Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Test Failure in Nightly Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Test"
+          build-type: "Nightly Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -200,14 +165,8 @@ jobs:
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
           rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
-      - name: Get Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+        uses: ./.github/actions/setup-go
       - name: Run integration tests
         run: |
           ./scripts/configure_dev.sh
@@ -216,24 +175,12 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Integration Test Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Integration Test Failure in Nightly Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Integration Test"
+          build-type: "Nightly Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -273,14 +220,8 @@ jobs:
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
           rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
-      - name: Get Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+        uses: ./.github/actions/setup-go
       - name: Run E2E expect tests
         run: |
           scripts/configure_dev.sh
@@ -289,24 +230,12 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Expect Test Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Expect Test Failure in Nightly Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Expect Test"
+          build-type: "Nightly Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -344,14 +273,8 @@ jobs:
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
           rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
-      - name: Get Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
+        uses: ./.github/actions/setup-go
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.2.1
         with:
@@ -366,24 +289,12 @@ jobs:
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs_nightly \
           test/scripts/run_integration_tests.sh
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Subs Test Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Subs Test Failure in Nightly Build*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Subs Test"
+          build-type: "Nightly Build"
+          details: "• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -417,24 +328,12 @@ jobs:
               TestGoalWithExpect \
               TestTealdbgWithExpect
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Verify Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Verify Failure in PR Build*\n\n• Job: `upload`\n• Branch: `${{ github.ref_name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Verify"
+          build-type: "Nightly Build"
+          details: "• Test Type: `${{ matrix.test_type }}`\n• Branch: `${{ github.ref_name }}`"
 
   upload:
     needs: [verify_nightly, e2e_subs_nightly]
@@ -474,21 +373,9 @@ jobs:
           scripts/travis/deploy_packages.sh
         shell: bash
       - name: Notify Slack on failure
-        if: failure() && env.SLACK_WEBHOOK != ''
-        uses: slackapi/slack-github-action@v2.1.0
+        if: failure()
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK }}
-          webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 Upload Failure Alert",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Upload Failure in Nightly Build*\n\n• Job: `upload`\n• Branch: `${{ github.ref_name }}`\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
-            }
+          job-type: "Upload"
+          build-type: "Nightly Build"
+          details: "• Branch: `${{ github.ref_name }}`"

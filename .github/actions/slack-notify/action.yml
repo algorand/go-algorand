@@ -1,0 +1,35 @@
+name: 'Slack Failure Notification'
+description: 'Send failure notification to Slack'
+inputs:
+  job-type:
+    description: 'Type of job that failed (e.g., Test, Integration Test, etc.)'
+    required: true
+  build-type:
+    description: 'Type of build (e.g., PR Build, Nightly Build)'
+    required: true
+  details:
+    description: 'Additional job-specific details (formatted string)'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Send Slack notification
+      if: env.SLACK_WEBHOOK != ''
+      uses: slackapi/slack-github-action@v2.1.0
+      with:
+        webhook: ${{ env.SLACK_WEBHOOK }}
+        webhook-type: webhook-trigger
+        payload: |
+          {
+            "text": "🚨 ${{ inputs.job-type }} Failure Alert",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*${{ inputs.job-type }} Failure in ${{ inputs.build-type }}*\n\n• Job Type: `${{ github.job }}`\n• Platform: `${{ matrix.platform }}`${{ inputs.details != '' && format('\n{0}', inputs.details) || '' }}\n• Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            ]
+          }
