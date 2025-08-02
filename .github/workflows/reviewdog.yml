@@ -22,7 +22,7 @@ jobs:
           key: libsodium-ubuntu-latest-${{ hashFiles('crypto/libsodium-fork/**') }}
         # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
-        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make libsodium && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: reviewdog-golangci-lint
         uses: reviewdog/action-golangci-lint@v2.7.0
         with:
@@ -49,7 +49,7 @@ jobs:
           key: libsodium-ubuntu-latest-${{ hashFiles('crypto/libsodium-fork/**') }}
       # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
-        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make libsodium && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: Add bin to PATH
         run: |
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
