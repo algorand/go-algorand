@@ -42,6 +42,8 @@ jobs:
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: test
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
@@ -109,6 +111,8 @@ jobs:
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: build-e2e
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Build e2e binaries
@@ -161,6 +165,8 @@ jobs:
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: build-e2e
       - name: Setup test environment
         uses: ./.github/actions/setup-test
         with:
@@ -214,6 +220,8 @@ jobs:
           fetch-depth: 0
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: buildsrc
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Build binaries
