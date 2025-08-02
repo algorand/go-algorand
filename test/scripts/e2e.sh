@@ -10,7 +10,6 @@ export ALGOTEST=1
 S3_TESTDATA=${S3_TESTDATA:-algorand-testdata}
 
 SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
-
 SRCROOT="$(pwd -P)"
 
 export CHANNEL=master
