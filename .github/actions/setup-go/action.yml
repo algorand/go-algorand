@@ -1,5 +1,5 @@
-name: 'Setup Go with Multi-Module Caching'
-description: 'Set up Go with caching for all go.sum files in the repository'
+name: 'Setup Go with caching'
+description: 'Set up Go with mod and build caching'
 runs:
   using: 'composite'
   steps:
@@ -11,9 +11,34 @@ runs:
       uses: actions/setup-go@v5
       with:
         go-version: ${{ env.GO_VERSION }}
-        cache: true
-        cache-dependency-path: |
-          go.sum
-          cmd/partitiontest_linter/go.sum
-          tools/block-generator/go.sum
-          tools/x-repo-types/go.sum
+        cache: false
+    # following advice from https://danp.net/posts/github-actions-go-cache/
+    - name: Set cache date and paths
+      shell: bash
+      run: |
+        echo "GO_CACHE_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+        echo "GOMODCACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
+        echo "GOCACHE=$(go env GOCACHE)" >> $GITHUB_ENV
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.GOMODCACHE }}
+        key: ${{ runner.os }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
+        restore-keys: |
+          ${{ runner.os }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-
+          ${{ runner.os }}-go-mod-${{ github.ref_name }}-
+          ${{ runner.os }}-go-mod-master-
+          ${{ runner.os }}-go-mod-
+    - name: Cache Go build cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.GOCACHE }}
+        key: ${{ runner.os }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
+        restore-keys: |
+          ${{ runner.os }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-
+          ${{ runner.os }}-go-build-${{ github.ref_name }}-
+          ${{ runner.os }}-go-build-master-
+          ${{ runner.os }}-go-build-
+    - name: Download Go modules
+      shell: bash
+      run: go mod download
