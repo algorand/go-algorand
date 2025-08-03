@@ -293,7 +293,7 @@ jobs:
         run: |
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
           for job_type in test integration e2e_expect e2e_subs; do
-            FAILED_TESTS=$(find ~/test_results -path "*_${job_type}/*" -name "testresults.json" -exec jq -r 'select(.Action == "fail") | "\(.Package)/\(.Test)"' {} \; 2>/dev/null | sort -u | grep -v '^$' || true)
+            FAILED_TESTS=$(find ~/test_results -path "*_${job_type}/*" -name "testresults.json" -exec jq -r 'select(.Action == "fail" and .Test) | "\(.Package)/\(.Test)"' {} \; 2>/dev/null | sort -u | grep -v '^$' || true)
             if [ -n "$FAILED_TESTS" ]; then
               echo "### ${job_type} failures" >> $GITHUB_STEP_SUMMARY
               echo '```' >> $GITHUB_STEP_SUMMARY
