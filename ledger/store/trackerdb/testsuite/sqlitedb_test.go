@@ -27,6 +27,7 @@ import (
 )
 
 func TestSqliteDB(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partitioning inside subtest
 	dbFactory := func(config.ConsensusParams) dbForTests {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		fn := fmt.Sprintf("%s/tracker-db.sqlite", t.TempDir())

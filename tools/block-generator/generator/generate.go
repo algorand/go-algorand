@@ -48,7 +48,7 @@ const (
 // ---- constructors ----
 
 // MakeGenerator initializes the Generator object.
-func MakeGenerator(log logging.Logger, dbround uint64, bkGenesis bookkeeping.Genesis, config GenerationConfig, verbose bool) (Generator, error) {
+func MakeGenerator(log logging.Logger, dbround basics.Round, bkGenesis bookkeeping.Genesis, config GenerationConfig, verbose bool) (Generator, error) {
 	if err := config.validateWithDefaults(false); err != nil {
 		return nil, fmt.Errorf("invalid generator configuration: %w", err)
 	}
@@ -96,13 +96,13 @@ func MakeGenerator(log logging.Logger, dbround uint64, bkGenesis bookkeeping.Gen
 		appKindBoxes: make([]*appData, 0),
 		appKindSwap:  make([]*appData, 0),
 	}
-	gen.appMap = map[appKind]map[uint64]*appData{
-		appKindBoxes: make(map[uint64]*appData),
-		appKindSwap:  make(map[uint64]*appData),
+	gen.appMap = map[appKind]map[basics.AppIndex]*appData{
+		appKindBoxes: make(map[basics.AppIndex]*appData),
+		appKindSwap:  make(map[basics.AppIndex]*appData),
 	}
-	gen.accountAppOptins = map[appKind]map[uint64][]uint64{
-		appKindBoxes: make(map[uint64][]uint64),
-		appKindSwap:  make(map[uint64][]uint64),
+	gen.accountAppOptins = map[appKind]map[uint64][]basics.AppIndex{
+		appKindBoxes: make(map[uint64][]basics.AppIndex),
+		appKindSwap:  make(map[uint64][]basics.AppIndex),
 	}
 
 	gen.initializeAccounting()
@@ -268,7 +268,7 @@ func (g *generator) WriteGenesis(output io.Writer) error {
 //   - requested round < generator's round + offset - 1 ---> error
 //
 // NOTE: nextRound represents the generator's expectations about the next database round.
-func (g *generator) WriteBlock(output io.Writer, round uint64) error {
+func (g *generator) WriteBlock(output io.Writer, round basics.Round) error {
 	if round < g.roundOffset {
 		return fmt.Errorf("cannot generate block for round %d, already in database", round)
 	}
@@ -314,7 +314,7 @@ func (g *generator) WriteBlock(output io.Writer, round uint64) error {
 	var cert rpcs.EncodedBlockCert
 	if g.round == 0 {
 		// we'll write genesis block / offset round for non-empty database
-		cert.Block, _, _ = g.ledger.BlockCert(basics.Round(round - g.roundOffset))
+		cert.Block, _, _ = g.ledger.BlockCert(round - g.roundOffset)
 	} else {
 		start := time.Now()
 		var generated, evaluated, validated time.Time
@@ -453,7 +453,7 @@ func (g *generator) WriteAccount(output io.Writer, accountString string) error {
 }
 
 // WriteDeltas generates returns the deltas for payset.
-func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
+func (g *generator) WriteDeltas(output io.Writer, round basics.Round) error {
 	// the first generated round has no statedelta.
 	if round-g.roundOffset == 0 {
 		data, _ := encode(protocol.CodecHandle, ledgercore.StateDelta{})
@@ -463,7 +463,7 @@ func (g *generator) WriteDeltas(output io.Writer, round uint64) error {
 		}
 		return nil
 	}
-	delta, err := g.ledger.GetStateDeltaForRound(basics.Round(round - g.roundOffset))
+	delta, err := g.ledger.GetStateDeltaForRound(round - g.roundOffset)
 	if err != nil {
 		return fmt.Errorf("err getting state delta for round %d: %w", round, err)
 	}
@@ -514,7 +514,7 @@ func getAppTxOptions() []interface{} {
 
 // ---- Transaction Generation (Pay/Asset/Apps) ----
 
-func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxnWithAD, uint64 /* numTxns */, error) {
+func (g *generator) generateTxGroup(round basics.Round, intra uint64) ([]txn.SignedTxnWithAD, uint64 /* numTxns */, error) {
 	selection, err := weightedSelection(g.transactionWeights, getTransactionOptions(), paymentTx)
 	if err != nil {
 		return nil, 0, err
@@ -530,10 +530,14 @@ func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxn
 		signedTxns = []txn.SignedTxn{signedTxn}
 	case assetTx:
 		var signedTxn txn.SignedTxn
-		signedTxn, numTxns, expectedID, err = g.generateAssetTxn(round, intra)
+		var assetID basics.AssetIndex
+		signedTxn, numTxns, assetID, err = g.generateAssetTxn(round, intra)
+		expectedID = uint64(assetID)
 		signedTxns = []txn.SignedTxn{signedTxn}
 	case applicationTx:
-		signedTxns, numTxns, expectedID, err = g.generateAppTxn(round, intra)
+		var appID basics.AppIndex
+		signedTxns, numTxns, appID, err = g.generateAppTxn(round, intra)
+		expectedID = uint64(appID)
 	default:
 		return nil, 0, fmt.Errorf("no generator available for %s", selection)
 	}
@@ -568,7 +572,7 @@ func (g *generator) generateTxGroup(round uint64, intra uint64) ([]txn.SignedTxn
 
 // generatePaymentTxn creates a new payment transaction. The sender is always a genesis account, the receiver is random,
 // or a new account.
-func (g *generator) generatePaymentTxn(round uint64, intra uint64) (txn.SignedTxn, uint64 /* numTxns */, error) {
+func (g *generator) generatePaymentTxn(round basics.Round, intra uint64) (txn.SignedTxn, uint64 /* numTxns */, error) {
 	selection, err := weightedSelection(g.payTxWeights, getPaymentTxOptions(), paymentPayTx)
 	if err != nil {
 		return txn.SignedTxn{}, 0, err
@@ -576,7 +580,7 @@ func (g *generator) generatePaymentTxn(round uint64, intra uint64) (txn.SignedTx
 	return g.generatePaymentTxnInternal(selection.(TxTypeID), round, intra)
 }
 
-func (g *generator) generatePaymentTxnInternal(selection TxTypeID, round uint64, intra uint64) (txn.SignedTxn, uint64 /* numTxns */, error) {
+func (g *generator) generatePaymentTxnInternal(selection TxTypeID, round basics.Round, intra uint64) (txn.SignedTxn, uint64 /* numTxns */, error) {
 	defer g.recordData(track(selection))
 	minBal := g.params.MinBalance
 
@@ -618,7 +622,7 @@ func (g *generator) generatePaymentTxnInternal(selection TxTypeID, round uint64,
 
 // ---- 2. Asset Transactions ----
 
-func (g *generator) generateAssetTxn(round uint64, intra uint64) (txn.SignedTxn, uint64 /* numTxns */, uint64 /* assetID */, error) {
+func (g *generator) generateAssetTxn(round basics.Round, intra uint64) (txn.SignedTxn, uint64 /* numTxns */, basics.AssetIndex, error) {
 	start := time.Now()
 	selection, err := weightedSelection(g.assetTxWeights, getAssetTxOptions(), assetXfer)
 	if err != nil {
@@ -636,11 +640,11 @@ func (g *generator) generateAssetTxn(round uint64, intra uint64) (txn.SignedTxn,
 	return signTxn(transaction), 1, assetID, nil
 }
 
-func (g *generator) generateAssetTxnInternal(txType TxTypeID, round uint64, intra uint64) (actual TxTypeID, txn txn.Transaction, assetID uint64) {
+func (g *generator) generateAssetTxnInternal(txType TxTypeID, round basics.Round, intra uint64) (actual TxTypeID, txn txn.Transaction, assetID basics.AssetIndex) {
 	return g.generateAssetTxnInternalHint(txType, round, intra, 0, nil)
 }
 
-func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, intra uint64, hintIndex uint64, hint *assetData) (actual TxTypeID, txn txn.Transaction, assetID uint64) {
+func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round basics.Round, intra uint64, hintIndex uint64, hint *assetData) (actual TxTypeID, txn txn.Transaction, assetID basics.AssetIndex) {
 	actual = txType
 	// If there are no assets the next operation needs to be a create.
 	numAssets := uint64(len(g.assets))
@@ -655,7 +659,7 @@ func (g *generator) generateAssetTxnInternalHint(txType TxTypeID, round uint64, 
 		senderAcct := indexToAccount(senderIndex)
 
 		total := assetTotal
-		assetID = g.txnCounter + intra + 1
+		assetID = basics.AssetIndex(g.txnCounter + intra + 1)
 		assetName := fmt.Sprintf("asset #%d", assetID)
 		txn = g.makeAssetCreateTxn(g.makeTxnHeader(senderAcct, round, intra), total, false, assetName)
 		// Compute asset ID and initialize holdings

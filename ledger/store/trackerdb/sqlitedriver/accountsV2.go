@@ -24,7 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -203,7 +202,7 @@ func (r *accountsV2Reader) AccountsHashRound(ctx context.Context) (hashrnd basic
 //
 // Note that this does not check if the accounts have a vote key valid for any
 // particular round (past, present, or future).
-func (r *accountsV2Reader) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error) {
+func (r *accountsV2Reader) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, rewardUnit uint64) (map[basics.Address]*ledgercore.OnlineAccount, error) {
 	// onlineaccounts has historical data ordered by updround for both online and offline accounts.
 	// This means some account A might have norm balance != 0 at round N and norm balance == 0 at some round K > N.
 	// For online top query one needs to find entries not fresher than X with norm balance != 0.
@@ -250,7 +249,7 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 		// The original implementation uses current proto to recalculate norm balance
 		// In the same time, in accountsNewRound genesis protocol is used to fill norm balance value
 		// In order to be consistent with the original implementation recalculate the balance with current proto
-		normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
+		normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, rewardUnit)
 		oa := data.GetOnlineAccount(addr, normBalance)
 		res[addr] = &oa
 	}
@@ -303,7 +302,7 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pe
 }
 
 // ExpiredOnlineAccountsForRound returns all online accounts known at `rnd` that will be expired by `voteRnd`.
-func (r *accountsV2Reader) ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error) {
+func (r *accountsV2Reader) ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, rewardUnit uint64, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error) {
 	// This relies on SQLite's handling of max(updround) and bare columns not in the GROUP BY.
 	// The values of votelastvalid, votefirstvalid, and data will all be from the same row as max(updround)
 	rows, err := r.q.Query(`SELECT address, data, max(updround)
@@ -337,7 +336,7 @@ ORDER BY address`, rnd, voteRnd)
 		if err != nil {
 			return nil, err
 		}
-		oadata := baseData.GetOnlineAccountData(proto, rewardsLevel)
+		oadata := baseData.GetOnlineAccountData(rewardUnit, rewardsLevel)
 		if _, ok := ret[addr]; ok {
 			return nil, fmt.Errorf("duplicate address in expired online accounts: %s", addr.String())
 		}

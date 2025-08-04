@@ -278,7 +278,7 @@ func TestEmptyMapDeserialization(t *testing.T) {
 	require.NotNil(t, v1.Equivocators)
 }
 
-func TestDecodeFailures(t *testing.T) {
+func TestDecodeErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
 	ce := clock.Encode()

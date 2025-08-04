@@ -104,11 +104,11 @@ func (cx *EvalContext) allows(tx *transactions.Transaction, calleeVer uint64) er
 	// if the caller is pre-sharing, it can't prepare transactions with
 	// resources that are not available, so `tx` is surely legal.
 	if cx.version < sharedResourcesVersion {
-		// this is important, not just an optimization, because a pre-sharing
-		// creation txn has access to the app and app account it is currently
-		// creating (and therefore can pass that access down), but cx.available
-		// doesn't track that properly until v9's protocol upgrade. See
-		// TestInnerAppCreateAndOptin for an example.
+		// this is just an optimization, from the perspective of properly
+		// evaluating transactions in "normal" mode.  However, it is an
+		// important short-circuit for simulation.  Simulation does not
+		// understand how to handle missing cross-products in non-sharing
+		// program versions.
 		return nil
 	}
 	switch tx.Type {
@@ -177,11 +177,7 @@ func (cx *EvalContext) allowsHolding(addr basics.Address, ai basics.AssetIndex) 
 			return cx.availableAsset(ai)
 		}
 	}
-	// If the current txn is a creation, the new appID won't be in r.createdApps
-	// yet, but it should get the same special treatment.
-	if cx.txn.Txn.ApplicationID == 0 && cx.GetApplicationAddress(cx.appID) == addr {
-		return cx.availableAsset(ai)
-	}
+
 	if cx.UnnamedResources != nil {
 		// Ensure that the account and asset are available before consulting cx.UnnamedResources.AllowsHolding.
 		// This way cx.UnnamedResources.AllowsHolding only needs to make a decision about the asset holding
@@ -201,9 +197,6 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 	if _, ok := r.createdApps[ai]; ok {
 		return cx.availableAccount(addr)
 	}
-	if cx.txn.Txn.ApplicationID == 0 && cx.appID == ai {
-		return cx.availableAccount(addr)
-	}
 
 	// All locals of created app accounts are available
 	for created := range r.createdApps {
@@ -211,9 +204,7 @@ func (cx *EvalContext) allowsLocals(addr basics.Address, ai basics.AppIndex) boo
 			return cx.availableApp(ai)
 		}
 	}
-	if cx.txn.Txn.ApplicationID == 0 && cx.GetApplicationAddress(cx.appID) == addr {
-		return cx.availableApp(ai)
-	}
+
 	if cx.UnnamedResources != nil {
 		// Ensure that the account and app are available before consulting cx.UnnamedResources.AllowsLocal.
 		// This way cx.UnnamedResources.AllowsLocal only needs to make a decision about the app local

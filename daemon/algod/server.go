@@ -78,7 +78,7 @@ type Server struct {
 }
 
 // Initialize creates a Node instance with applicable network services
-func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genesisText string) error {
+func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genesisText string, migrationResults []config.MigrationResult) error {
 	// set up node
 	s.log = logging.Base()
 
@@ -234,6 +234,11 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	}
 	s.log.Infoln("++++++++++++++++++++++++++++++++++++++++")
 
+	for _, m := range migrationResults {
+		s.log.Infof("Upgraded default config value for %s from %v (version %d) to %v (version %d)",
+			m.FieldName, m.OldValue, m.OldVersion, m.NewValue, m.NewVersion)
+	}
+
 	metricLabels := map[string]string{}
 	if s.log.GetTelemetryEnabled() {
 		metricLabels["telemetry_session"] = s.log.GetTelemetrySession()
@@ -294,7 +299,7 @@ func makeListener(addr string) (net.Listener, error) {
 		preferredAddr := strings.Replace(addr, ":0", ":8080", -1)
 		listener, err = net.Listen("tcp", preferredAddr)
 		if err == nil {
-			return listener, err
+			return listener, nil
 		}
 	}
 	// err was not nil or :0 was not provided, fall back to originally passed addr
@@ -339,9 +344,9 @@ func (s *Server) Start() {
 	}
 
 	if cfg.EnableMetricReporting {
-		if err := s.metricCollector.Start(context.Background()); err != nil {
+		if err1 := s.metricCollector.Start(context.Background()); err1 != nil {
 			// log this error
-			s.log.Infof("Unable to start metric collection service : %v", err)
+			s.log.Infof("Unable to start metric collection service : %v", err1)
 		}
 		s.metricServiceStarted = true
 	}

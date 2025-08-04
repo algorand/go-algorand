@@ -119,7 +119,7 @@ return
 	a.NoError(err)
 
 	// call app, which will issue an ASA create inner txn
-	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, nil, nil, nil, nil, 0)
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(createdAppID, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
 	a.NoError(err)
@@ -280,7 +280,7 @@ end:
 			}
 
 			txns[i], err = testClient.MakeUnsignedAppNoOpTx(
-				uint64(createdAppID), appArgs,
+				createdAppID, appArgs,
 				nil, nil, nil,
 				[]transactions.BoxRef{boxRef}, 0,
 			)
@@ -330,21 +330,21 @@ end:
 	// `assertBoxCount` sanity checks that the REST API respects `expectedCount` through different queries against app ID = `createdAppID`.
 	assertBoxCount := func(expectedCount uint64) {
 		// Query without client-side limit.
-		resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
+		resp, err := testClient.ApplicationBoxes(createdAppID, 0)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 
 		// Query with requested max < expected expectedCount.
-		_, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount-1)
+		_, err = testClient.ApplicationBoxes(createdAppID, expectedCount-1)
 		assertErrorResponse(err, expectedCount, expectedCount-1)
 
 		// Query with requested max == expected expectedCount.
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount)
+		resp, err = testClient.ApplicationBoxes(createdAppID, expectedCount)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 
 		// Query with requested max > expected expectedCount.
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount+1)
+		resp, err = testClient.ApplicationBoxes(createdAppID, expectedCount+1)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 	}
@@ -385,7 +385,7 @@ end:
 		}
 
 		var resp model.BoxesResponse
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+		resp, err = testClient.ApplicationBoxes(createdAppID, 0)
 		a.NoError(err)
 
 		expectedCreatedBoxes := make([]string, 0, createdBoxCount)
@@ -444,7 +444,7 @@ end:
 	}
 
 	// Happy Vanilla paths:
-	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	resp, err := testClient.ApplicationBoxes(createdAppID, 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -454,7 +454,7 @@ end:
 	// querying it for boxes _DOES NOT ERROR_. There is no easy way to tell
 	// the difference between non-existing boxes for an app that once existed
 	// vs. an app the NEVER existed.
-	nonexistantAppIndex := uint64(1337)
+	nonexistantAppIndex := basics.AppIndex(1337)
 	_, err = testClient.ApplicationInformation(nonexistantAppIndex)
 	a.ErrorContains(err, "application does not exist")
 	resp, err = testClient.ApplicationBoxes(nonexistantAppIndex, 0)
@@ -487,7 +487,7 @@ end:
 		operateAndMatchRes("delete", strSliceTest)
 	}
 
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	resp, err = testClient.ApplicationBoxes(createdAppID, 0)
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -515,7 +515,7 @@ end:
 
 		currentRoundBeforeBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
-		boxResponse, err := testClient.GetApplicationBoxByName(uint64(createdAppID), boxTest.encodedName)
+		boxResponse, err := testClient.GetApplicationBoxByName(createdAppID, boxTest.encodedName)
 		a.NoError(err)
 		currentRoundAfterBoxes, err := testClient.CurrentRound()
 		a.NoError(err)
@@ -536,7 +536,7 @@ end:
 	a.Equal(uint64(30), appAccountData.TotalBoxBytes)
 
 	// delete the app
-	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, nil, nil, nil, nil, 0)
+	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(createdAppID, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	appDeleteTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appDeleteTxn)
 	a.NoError(err)
@@ -545,7 +545,7 @@ end:
 	_, err = helper.WaitForTransaction(t, testClient, appDeleteTxID, 30*time.Second)
 	a.NoError(err)
 
-	_, err = testClient.ApplicationInformation(uint64(createdAppID))
+	_, err = testClient.ApplicationInformation(createdAppID)
 	a.ErrorContains(err, "application does not exist")
 
 	assertBoxCount(numberOfBoxesRemaining)
@@ -648,7 +648,7 @@ func TestBlockLogs(t *testing.T) {
 
 	// call app twice
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(createdAppID), nil, nil, nil,
+		createdAppID, nil, nil, nil,
 		nil, nil, 0,
 	)
 	a.NoError(err)
@@ -692,22 +692,22 @@ func TestBlockLogs(t *testing.T) {
 	expected = model.BlockLogsResponse{
 		Logs: []model.AppCallLogs{
 			{
-				ApplicationIndex: uint64(createdAppID),
+				ApplicationIndex: createdAppID,
 				TxId:             stxn0.ID().String(),
 				Logs:             [][]byte{dd0000dd, {}, deadDood},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID + 3),
+				ApplicationIndex: createdAppID + 3,
 				TxId:             stxn0.ID().String(),
 				Logs:             [][]byte{deadBeef},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID),
+				ApplicationIndex: createdAppID,
 				TxId:             stxn1.ID().String(),
 				Logs:             [][]byte{dd0000dd, {}, deadDood},
 			},
 			{
-				ApplicationIndex: uint64(createdAppID + 5),
+				ApplicationIndex: createdAppID + 5,
 				TxId:             stxn1.ID().String(),
 				Logs:             [][]byte{deadBeef},
 			},

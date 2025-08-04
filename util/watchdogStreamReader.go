@@ -110,10 +110,7 @@ func (r *watchdogStreamReader) Read(p []byte) (n int, err error) {
 	}
 	if len(r.stageBuffer) > 0 {
 		// copy the data to the buffer p
-		n = len(p)
-		if n > len(r.stageBuffer) {
-			n = len(r.stageBuffer)
-		}
+		n = min(len(p), len(r.stageBuffer))
 		copy(p, r.stageBuffer)
 		r.stageBuffer = r.stageBuffer[n:]
 	}

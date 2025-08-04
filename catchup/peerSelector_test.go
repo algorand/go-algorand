@@ -325,7 +325,7 @@ func peerSelectorTestRandVal(t *testing.T, seed int) float64 {
 	randVal = randVal + 1
 	return randVal
 }
-func TestPeerSelector_PeersDownloadFailed(t *testing.T) {
+func TestPeerSelector_PeersDownloadError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

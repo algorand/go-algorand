@@ -103,7 +103,7 @@ func TestAccount(t *testing.T) {
 		},
 		AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx1: assetParams1, assetIdx2: assetParams2},
 	}
-	b := a.WithUpdatedRewards(proto, 100)
+	b := a.WithUpdatedRewards(proto.RewardUnit, 100)
 
 	addr := basics.Address{}.String()
 	conv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
@@ -118,7 +118,7 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, uint64(totalAppExtraPages), *conv.AppsTotalExtraPages)
 
 	verifyCreatedApp := func(index int, appIdx basics.AppIndex, params basics.AppParams) {
-		require.Equal(t, uint64(appIdx), (*conv.CreatedApps)[index].Id)
+		require.Equal(t, appIdx, (*conv.CreatedApps)[index].Id)
 		require.Equal(t, params.ApprovalProgram, (*conv.CreatedApps)[index].Params.ApprovalProgram)
 		if params.Version != 0 {
 			require.NotNil(t, (*conv.CreatedApps)[index].Params.Version)
@@ -164,7 +164,7 @@ func TestAccount(t *testing.T) {
 	}
 
 	verifyAppLocalState := func(index int, appIdx basics.AppIndex, numUints, numByteSlices uint64, keyValues model.TealKeyValueStore) {
-		require.Equal(t, uint64(appIdx), (*conv.AppsLocalState)[index].Id)
+		require.Equal(t, appIdx, (*conv.AppsLocalState)[index].Id)
 		require.Equal(t, numUints, (*conv.AppsLocalState)[index].Schema.NumUint)
 		require.Equal(t, numByteSlices, (*conv.AppsLocalState)[index].Schema.NumByteSlice)
 		require.Equal(t, len(keyValues), len(*(*conv.AppsLocalState)[index].KeyValue))
@@ -179,7 +179,7 @@ func TestAccount(t *testing.T) {
 	verifyAppLocalState(1, appIdx2, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value2"), makeTKV("uint", 2)})
 
 	verifyCreatedAsset := func(index int, assetIdx basics.AssetIndex, params basics.AssetParams) {
-		require.Equal(t, uint64(assetIdx), (*conv.CreatedAssets)[index].Index)
+		require.Equal(t, assetIdx, (*conv.CreatedAssets)[index].Index)
 		require.Equal(t, params.Total, (*conv.CreatedAssets)[index].Params.Total)
 		require.NotNil(t, (*conv.CreatedAssets)[index].Params.DefaultFrozen)
 		require.Equal(t, params.DefaultFrozen, *(*conv.CreatedAssets)[index].Params.DefaultFrozen)
