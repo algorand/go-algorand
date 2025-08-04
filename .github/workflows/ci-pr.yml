@@ -299,8 +299,12 @@ jobs:
               echo '```' >> $GITHUB_STEP_SUMMARY
               echo "$FAILED_TESTS" >> $GITHUB_STEP_SUMMARY
               echo '```' >> $GITHUB_STEP_SUMMARY
-              exit 1
+              echo "FAILED=true" >> $GITHUB_ENV
             else
               echo "### ${job_type} ✅" >> $GITHUB_STEP_SUMMARY
             fi
           done
+
+      - name: Fail if there were test failures
+        if: env.FAILED == 'true'
+        run: exit 1
