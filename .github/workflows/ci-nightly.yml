@@ -44,6 +44,8 @@ jobs:
         fetch-depth: 0
     - name: Set up Go
       uses: ./.github/actions/setup-go
+      with:
+        cache-prefix: buildsrc
     - name: Cache libsodium
       uses: actions/cache@v4
       with:
@@ -95,6 +97,8 @@ jobs:
         shell: bash
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: test
       - name: Run tests
         run: |
           ./scripts/configure_dev.sh
@@ -167,6 +171,8 @@ jobs:
         shell: bash
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: build-e2e
       - name: Run integration tests
         run: |
           ./scripts/configure_dev.sh
@@ -222,6 +228,8 @@ jobs:
         shell: bash
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: build-e2e
       - name: Run E2E expect tests
         run: |
           scripts/configure_dev.sh
@@ -275,6 +283,8 @@ jobs:
         shell: bash
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: buildsrc
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.2.1
         with:
