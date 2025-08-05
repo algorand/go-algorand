@@ -24,7 +24,7 @@ import (
 )
 
 // Heartbeat applies a Heartbeat transaction using the Balances interface.
-func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, balances Balances, provider hdrProvider, round basics.Round) error {
+func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, balances Balances, provider hdrProvider, round basics.Round, baseFee basics.MicroAlgos) error {
 	// Get the account's balance entry
 	account, err := balances.Get(hb.HbAddress, false)
 	if err != nil {
@@ -37,7 +37,7 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 	// unless the account is under challenge.
 
 	proto := balances.ConsensusParams()
-	if header.Fee.Raw < proto.MinTxnFee && header.Group.IsZero() {
+	if header.Fee.Raw < baseFee.Raw && header.Group.IsZero() {
 		kind := "free"
 		if header.Fee.Raw > 0 {
 			kind = "cheap"
