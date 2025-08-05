@@ -1464,18 +1464,8 @@ func initConsensusProtocols() {
 	vFuture := v41
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-<<<<<<< HEAD
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
-||||||| parent of 99b26a766 (Add, maintain, and validate new Load and BaseFee header fields)
-	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
-	vFuture.EnableSha512BlockHash = true
-=======
-	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
-	vFuture.EnableSha512BlockHash = true
 	vFuture.CongestionFees = true
->>>>>>> 99b26a766 (Add, maintain, and validate new Load and BaseFee header fields)
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

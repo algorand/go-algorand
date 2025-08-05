@@ -1044,14 +1044,16 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	var txibs []transactions.SignedTxnInBlock
-	var group transactions.TxGroup
-	var groupTxBytes int
+	// Validate group fees against BaseFee from block header (it was previously checked against MinFee)
+	paidTxnCount, feesPaid := transactions.SummarizeFees(txgroup)
+	if err := verify.CheckGroupFees(feesPaid, paidTxnCount, eval.block.BlockHeader.BaseFee.Raw); err != nil {
+		return err
+	}
 
 	cow := eval.state.child(len(txgroup))
 	defer cow.recycle()
 
-	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, eval.block.BlockHeader.BaseFee)
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -1064,7 +1066,9 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	}
 
 	// Evaluate each transaction in the group
-	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	var groupTxBytes int
+	var group transactions.TxGroup
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -1319,7 +1323,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
 	case protocol.HeartbeatTx:
-		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
+		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round(), eval.block.BlockHeader.BaseFee)
 
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
