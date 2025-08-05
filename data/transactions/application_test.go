@@ -56,64 +56,6 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 		fields := nz.(ApplicationCallTxnFields)
 		a.False(fields.Empty(), "Empty is disregarding a non-zero field in %+v", fields)
 	}
-
-	// Everything below here ought to be redundant after the NearZeros loop.
-
-	ac.ApplicationID = 1
-	a.False(ac.Empty())
-
-	ac.ApplicationID = 0
-	ac.OnCompletion = 1
-	a.False(ac.Empty())
-
-	ac.OnCompletion = 0
-	ac.ApplicationArgs = make([][]byte, 1)
-	a.False(ac.Empty())
-
-	ac.ApplicationArgs = nil
-	ac.RejectVersion = 1
-	a.False(ac.Empty())
-
-	ac.RejectVersion = 0
-	ac.Accounts = make([]basics.Address, 1)
-	a.False(ac.Empty())
-
-	ac.Accounts = nil
-	ac.ForeignApps = make([]basics.AppIndex, 1)
-	a.False(ac.Empty())
-
-	ac.ForeignApps = nil
-	ac.ForeignAssets = make([]basics.AssetIndex, 1)
-	a.False(ac.Empty())
-
-	ac.ForeignAssets = nil
-	ac.LocalStateSchema = basics.StateSchema{NumUint: 1}
-	a.False(ac.Empty())
-
-	ac.LocalStateSchema = basics.StateSchema{}
-	ac.Boxes = make([]BoxRef, 1)
-	a.False(ac.Empty())
-
-	ac.Boxes = nil
-	ac.GlobalStateSchema = basics.StateSchema{NumUint: 1}
-	a.False(ac.Empty())
-
-	ac.GlobalStateSchema = basics.StateSchema{}
-	ac.ApprovalProgram = []byte{1}
-	a.False(ac.Empty())
-
-	ac.ApprovalProgram = []byte{}
-	a.False(ac.Empty())
-
-	ac.ApprovalProgram = nil
-	ac.ClearStateProgram = []byte{1}
-	a.False(ac.Empty())
-
-	ac.ClearStateProgram = []byte{}
-	a.False(ac.Empty())
-
-	ac.ClearStateProgram = nil
-	a.True(ac.Empty())
 }
 
 func TestEncodedAppTxnAllocationBounds(t *testing.T) {
