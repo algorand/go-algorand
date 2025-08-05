@@ -1,0 +1,55 @@
+name: 'Setup Go with caching'
+description: 'Set up Go with mod and build caching'
+inputs:
+  cache-prefix:
+    description: 'Cache prefix for advanced caching (e.g., "test", "build-e2e", "buildsrc")'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Get Go version
+      id: go_version
+      run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
+      shell: bash
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: ${{ inputs.cache-prefix == '' }}
+    # branch-aware caching with fallback key prefixes following examples from:
+    # https://github.com/algorand/go-algorand/blob/ab03c94d2008dd349b761ef2b949e17b361996a3/.circleci/config.yml#L407-L439
+    # https://danp.net/posts/github-actions-go-cache/
+    - name: Set cache date and paths
+      if: inputs.cache-prefix != ''
+      shell: bash
+      run: |
+        echo "GO_CACHE_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+        echo "GOMODCACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
+        echo "GOCACHE=$(go env GOCACHE)" >> $GITHUB_ENV
+    - name: Cache Go modules
+      if: inputs.cache-prefix != ''
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.GOMODCACHE }}
+        key: ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
+        restore-keys: |
+          ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-mod-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-
+          ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-mod-${{ github.ref_name }}-
+          ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-mod-master-
+          ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-mod-
+    - name: Cache Go build cache
+      if: inputs.cache-prefix != ''
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.GOCACHE }}
+        key: ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-${{ env.GO_CACHE_DATE }}
+        restore-keys: |
+          ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-build-${{ github.ref_name }}-${{ hashFiles('**/go.sum') }}-
+          ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-build-${{ github.ref_name }}-
+          ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-build-master-
+          ${{ inputs.cache-prefix }}-${{ runner.os }}-${{ runner.arch }}-go-build-
+    - name: Download Go modules
+      if: inputs.cache-prefix != ''
+      shell: bash
+      run: go mod download

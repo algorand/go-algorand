@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
-	"github.com/labstack/gommon/log"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
@@ -407,7 +406,7 @@ func (node *AlgorandFullNode) Start() error {
 					return
 				case <-ticker.C:
 					// continue logging the error periodically
-					log.Errorf(node.hybridError)
+					node.log.Error(node.hybridError)
 				}
 			}
 		}()
