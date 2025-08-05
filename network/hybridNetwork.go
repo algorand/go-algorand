@@ -212,12 +212,13 @@ func (n *HybridP2PNetwork) Start() error {
 
 // Stop implements GossipNode
 func (n *HybridP2PNetwork) Stop() {
+	n.mesher.stop()
+
 	_ = n.runParallel(func(net GossipNode) error {
 		net.Stop()
 		return nil
 	})
 
-	n.mesher.stop()
 }
 
 // RegisterHandlers adds to the set of given message handlers.

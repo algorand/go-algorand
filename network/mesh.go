@@ -35,12 +35,14 @@ type mesher interface {
 }
 
 type baseMesher struct {
-	wg sync.WaitGroup
+	wg     sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
 	meshConfig
 }
 
 type meshConfig struct {
-	ctx                context.Context
+	parentCtx          context.Context
 	meshUpdateRequests chan meshRequest
 	meshThreadInterval time.Duration
 	backoff            backoff.BackoffStrategy
@@ -96,7 +98,7 @@ func withMeshUpdateInterval(d time.Duration) meshOption {
 
 func withContext(ctx context.Context) meshOption {
 	return func(cfg *meshConfig) {
-		cfg.ctx = ctx
+		cfg.parentCtx = ctx
 	}
 }
 
@@ -117,7 +119,7 @@ func newBaseMesher(opts ...meshOption) (*baseMesher, error) {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	if cfg.ctx == nil {
+	if cfg.parentCtx == nil {
 		return nil, errors.New("context is not set")
 	}
 	if cfg.netMeshFn == nil {
@@ -130,7 +132,10 @@ func newBaseMesher(opts ...meshOption) (*baseMesher, error) {
 		cfg.meshThreadInterval = meshThreadInterval
 	}
 
+	ctx, cancel := context.WithCancel(cfg.parentCtx)
 	return &baseMesher{
+		ctx:        ctx,
+		cancel:     cancel,
 		meshConfig: cfg,
 	}, nil
 }
@@ -178,6 +183,7 @@ func (m *baseMesher) start() {
 }
 
 func (m *baseMesher) stop() {
+	m.cancel()
 	m.wg.Wait()
 	if m.closer != nil {
 		m.closer()
