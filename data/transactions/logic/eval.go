@@ -341,6 +341,10 @@ type EvalParams struct {
 
 	Specials *transactions.SpecialAddresses
 
+	// BaseFee is the per-transaction base fee from the block header, used for
+	// fee calculations in application evaluation. Only set for app evaluation, not LogicSig.
+	BaseFee basics.MicroAlgos
+
 	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)
 	PooledApplicationBudget *int
 
@@ -446,7 +450,9 @@ func NewSigEvalParams(txgroup []transactions.SignedTxn, proto *config.ConsensusP
 }
 
 // NewAppEvalParams creates an EvalParams to use while evaluating a top-level txgroup.
-func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses) *EvalParams {
+func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.ConsensusParams, specials *transactions.SpecialAddresses, baseFee basics.MicroAlgos) *EvalParams {
+	// Ensure BaseFee is never below MinTxnFee
+	baseFee.Raw = max(baseFee.Raw, proto.MinTxnFee)
 	apps := 0
 	for _, tx := range txgroup {
 		if tx.Txn.Type == protocol.ApplicationCallTx {
@@ -460,7 +466,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 
 	if apps > 0 { // none of these allocations needed if no apps
 		credit = new(uint64)
-		*credit = feeCredit(txgroup, proto.MinTxnFee)
+		*credit = feeCredit(txgroup, baseFee.Raw)
 
 		if proto.EnableAppCostPooling {
 			pooledApplicationBudget = new(int)
@@ -480,6 +486,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		Specials:                specials,
 		minAvmVersion:           computeMinAvmVersion(txgroup),
 		FeeCredit:               credit,
+		BaseFee:                 baseFee,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
@@ -506,17 +513,10 @@ func (ep *EvalParams) computeAvailability() *resources {
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
 // to required minfee.  It can make assumptions about overflow because the group
 // is known OK according to txnGroupBatchPrep. (The group is "WellFormed")
-func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
-	minFeeCount := uint64(0)
-	feesPaid := uint64(0)
-	for _, stxn := range txgroup {
-		if stxn.Txn.Type != protocol.StateProofTx {
-			minFeeCount++
-		}
-		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
-	}
+func feeCredit(txgroup []transactions.SignedTxnWithAD, baseFee uint64) uint64 {
+	minFeeCount, feesPaid := transactions.SummarizeFees(txgroup)
 	// Overflow is impossible, because txnGroupBatchPrep checked.
-	feeNeeded := minFee * minFeeCount
+	feeNeeded := baseFee * minFeeCount
 	return basics.SubSaturate(feesPaid, feeNeeded)
 }
 
@@ -527,7 +527,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 	// inner callable version is higher than any minimum imposed otherwise.  But is
 	// correct to inherit a stronger restriction from above, in case of future restriction.
 
-	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
+	// Unlike NewAppEvalParams, do not add fee credit here. opTxSubmit has already done so.
 
 	if caller.Proto.EnableAppCostPooling {
 		for _, tx := range txg {
@@ -549,6 +549,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		minAvmVersion:           minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
+		BaseFee:                 caller.BaseFee,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
 		pooledAllowedInners:     caller.pooledAllowedInners,
 		available:               caller.available,
@@ -5158,13 +5159,9 @@ func addInnerTxn(cx *EvalContext) error {
 		return fmt.Errorf("too many inner transactions %d with %d left", len(cx.subtxns), cx.remainingInners())
 	}
 
-	stxn := transactions.SignedTxnWithAD{}
-
-	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)+1))
-	groupPaid := uint64(0)
-	for _, ptxn := range cx.subtxns {
-		groupPaid = basics.AddSaturate(groupPaid, ptxn.Txn.Fee.Raw)
-	}
+	// Check fees in the existing group first. Allows fee pooling in inner groups.
+	count, groupPaid := transactions.SummarizeFees(cx.subtxns)
+	groupFee := basics.MulSaturate(cx.EvalParams.BaseFee.Raw, count+1) // +1 because we're adding a txn
 
 	fee := uint64(0)
 	if groupPaid < groupFee {
@@ -5172,12 +5169,13 @@ func addInnerTxn(cx *EvalContext) error {
 
 		if cx.FeeCredit != nil {
 			// Use credit to shrink the default populated fee, but don't change
-			// FeeCredit here, because they might never itxn_submit, or they
+			// cx.FeeCredit here, because they might never itxn_submit, or they
 			// might change the fee.  Do it in itxn_submit.
 			fee = basics.SubSaturate(fee, *cx.FeeCredit)
 		}
 	}
 
+	stxn := transactions.SignedTxnWithAD{}
 	stxn.Txn.Header = transactions.Header{
 		Sender:     addr,
 		Fee:        basics.MicroAlgos{Raw: fee},
@@ -5574,11 +5572,8 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 	}
 
 	// Check fees across the group first. Allows fee pooling in inner groups.
-	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)))
-	groupPaid := uint64(0)
-	for _, ptxn := range cx.subtxns {
-		groupPaid = basics.AddSaturate(groupPaid, ptxn.Txn.Fee.Raw)
-	}
+	count, groupPaid := transactions.SummarizeFees(cx.subtxns)
+	groupFee := basics.MulSaturate(cx.EvalParams.BaseFee.Raw, count)
 	if groupPaid < groupFee {
 		// See if the FeeCredit is enough to cover the shortfall
 		shortfall := groupFee - groupPaid
