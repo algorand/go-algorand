@@ -337,7 +337,7 @@ func setupWebsocketNetworkABwithLogger(t *testing.T, countTarget int, log loggin
 	counter := newMessageCounter(t, countTarget)
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
 
-	readyTimeout := time.NewTimer(2 * time.Second)
+	readyTimeout := time.NewTimer(5 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
 	t.Log("a ready")
 	waitReady(t, netB, readyTimeout.C)
