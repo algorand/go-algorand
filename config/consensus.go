@@ -1461,9 +1461,7 @@ func initConsensusProtocols() {
 	vFuture := v41
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 13       // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
-	vFuture.EnableSha512BlockHash = true
+	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.CongestionFees = true

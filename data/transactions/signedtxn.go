@@ -142,3 +142,17 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	}
 	return txgroupad
 }
+
+// SummarizeFees takes a group and returns the number of fees required and the
+// total amount paid.
+func SummarizeFees(txgroup []SignedTxnWithAD) (count uint64, paid uint64) {
+	// This is the same logic as in txnBatchPrep, but that logic runs over
+	// SignedTxn, and is interspersed with other work.
+	for _, txad := range txgroup {
+		paid = basics.AddSaturate(paid, txad.SignedTxn.Txn.Fee.Raw)
+		if !txad.SignedTxn.Txn.IsFree() {
+			count++
+		}
+	}
+	return
+}
