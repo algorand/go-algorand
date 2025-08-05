@@ -4590,7 +4590,7 @@ func TestLinearOpcodes(t *testing.T) {
 	}
 }
 
-func TestRekeyFailsOnOldVersion(t *testing.T) {
+func TestRekeyErrsOnOldVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

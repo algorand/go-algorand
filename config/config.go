@@ -107,10 +107,16 @@ const PlaceholderPublicAddress = "PLEASE_SET_ME"
 // cannot be loaded, the default config is returned (with the error from loading the
 // custom file).
 func LoadConfigFromDisk(custom string) (c Local, err error) {
+	c, _, err = loadConfigFromFile(filepath.Join(custom, ConfigFilename))
+	return
+}
+
+// LoadConfigFromDiskWithMigrations is like LoadConfigFromDisk but also returns migration results
+func LoadConfigFromDiskWithMigrations(custom string) (c Local, migrations []MigrationResult, err error) {
 	return loadConfigFromFile(filepath.Join(custom, ConfigFilename))
 }
 
-func loadConfigFromFile(configFile string) (c Local, err error) {
+func loadConfigFromFile(configFile string) (c Local, migrations []MigrationResult, err error) {
 	c = defaultLocal
 	c.Version = 0 // Reset to 0 so we get the version from the loaded file.
 	c, err = mergeConfigFromFile(configFile, c)
@@ -121,7 +127,7 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	// Migrate in case defaults were changed
 	// If a config file does not have version, it is assumed to be zero.
 	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
-	c, err = migrate(c)
+	c, migrations, err = migrate(c)
 	return
 }
 
@@ -167,11 +173,6 @@ func enrichNetworkingConfig(source Local) (Local, error) {
 		if source.GossipFanout == defaultLocal.GossipFanout {
 			source.GossipFanout = defaultRelayGossipFanout
 		}
-	}
-	// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
-	// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
-	if (source.NetAddress != "" || source.P2PHybridNetAddress != "") && source.EnableP2PHybridMode && source.PublicAddress == "" {
-		return source, errors.New("PublicAddress must be specified when EnableP2PHybridMode is set")
 	}
 	source.PublicAddress = strings.ToLower(source.PublicAddress)
 	return source, nil

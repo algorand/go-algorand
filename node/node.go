@@ -152,6 +152,9 @@ type AlgorandFullNode struct {
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
 
+	hybridError                 string // whether the MakeFull switched to non-hybrid mode due to a P2PHybridConfigError and needs to be logged periodically
+	hybridErrorRoutineWaitGroup sync.WaitGroup
+
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
@@ -202,21 +205,40 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
+	var genesisInfo = network.GenesisInfo{
+		GenesisID: genesis.ID(),
+		NetworkID: genesis.Network,
+	}
+recreateNetwork:
 	if cfg.EnableP2PHybridMode {
-		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil)
 		if err != nil {
-			log.Errorf("could not create hybrid p2p node: %v", err)
-			return nil, err
+			if _, ok := err.(config.P2PHybridConfigError); !ok {
+				log.Errorf("could not create hybrid p2p node: %v", err)
+				return nil, err
+			}
+			// it was P2PHybridConfigError error so fallback to non-hybrid mode (either P2P or WS)
+			cfg.EnableP2PHybridMode = false
+
+			// indicate we need to start logging the error into the log periodically
+			fallbackNetName := "WS"
+			if cfg.EnableP2P {
+				fallbackNetName = "P2P"
+			}
+			node.hybridError = fmt.Sprintf("could not create hybrid p2p node: %v. Falling back to %s network", err, fallbackNetName)
+			log.Error(node.hybridError)
+
+			goto recreateNetwork
 		}
 	} else if cfg.EnableP2P {
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil, nil)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
 		}
 	} else {
 		var wsNode *network.WebsocketNetwork
-		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesisInfo, node, nil, nil)
 		if err != nil {
 			log.Errorf("could not create websocket node: %v", err)
 			return nil, err
@@ -372,6 +394,24 @@ func (node *AlgorandFullNode) Start() error {
 		return nil
 	}
 
+	if node.hybridError != "" {
+		node.hybridErrorRoutineWaitGroup.Add(1)
+		go func() {
+			defer node.hybridErrorRoutineWaitGroup.Done()
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-node.ctx.Done():
+					return
+				case <-ticker.C:
+					// continue logging the error periodically
+					node.log.Error(node.hybridError)
+				}
+			}
+		}()
+	}
+
 	if node.catchpointCatchupService != nil {
 		startNetwork()
 		node.catchpointCatchupService.Start(node.ctx)
@@ -447,6 +487,7 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
+		node.hybridErrorRoutineWaitGroup.Wait()
 
 		// oldKeyDeletionThread uses accountManager registry so must be stopped before accountManager is closed
 		node.accountManager.Registry().Close()

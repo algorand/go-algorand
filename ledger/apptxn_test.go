@@ -1718,7 +1718,7 @@ assert
 	})
 }
 
-func TestAbortWhenInnerAppCallFails(t *testing.T) {
+func TestAbortWhenInnerAppCallErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

@@ -445,7 +445,7 @@ func TestClientCanGetGoRoutines(t *testing.T) {
 	a.True(strings.Contains(goRoutines, "goroutine profile:"))
 }
 
-func TestSendingTooMuchFails(t *testing.T) {
+func TestSendingTooMuchErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -487,7 +487,7 @@ func TestSendingTooMuchFails(t *testing.T) {
 	a.Error(err)
 }
 
-func TestSendingFromEmptyAccountFails(t *testing.T) {
+func TestSendingFromEmptyAccountErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -527,7 +527,7 @@ func TestSendingFromEmptyAccountFails(t *testing.T) {
 	a.Error(err)
 }
 
-func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
+func TestSendingTooLittleToEmptyAccountErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -560,7 +560,7 @@ func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 	a.Error(err)
 }
 
-func TestSendingLowFeeFails(t *testing.T) {
+func TestSendingLowFeeErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 

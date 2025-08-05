@@ -142,7 +142,7 @@ var addSigCmd = &cobra.Command{
 }
 
 var signProgramCmd = &cobra.Command{
-	Use:   "signprogram -t [transaction file] -a [address]",
+	Use:   "signprogram -a [address]",
 	Short: "Add a signature to a multisig LogicSig",
 	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program.`,
 	Args:  validateNoPosArgsFn,
