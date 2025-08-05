@@ -1409,15 +1409,14 @@ type TransactionGroupLedgerStateDeltasForRoundResponse struct {
 // TransactionParametersResponse TransactionParams contains the parameters that help a client construct
 // a new transaction.
 type TransactionParametersResponse struct {
-	// BaseFee The current base transaction fee (not per byte) required for the
-	// txn to validate.
+	// BaseFee The current base transaction fee (not per byte) required for the txn to validate with the current congestion conditions.
 	BaseFee *uint64 `json:"base-fee,omitempty"`
 
 	// ConsensusVersion ConsensusVersion indicates the consensus protocol version
 	// as of LastRound.
 	ConsensusVersion string `json:"consensus-version"`
 
-	// Fee Fee id deprecated. It used to express the per-byte fee escalation.
+	// Fee Fee is deprecated. It used to express the per-byte fee escalation.
 	Fee uint64 `json:"fee"`
 
 	// GenesisHash GenesisHash is the hash of the genesis block.
@@ -1429,8 +1428,7 @@ type TransactionParametersResponse struct {
 	// LastRound LastRound indicates the last round seen
 	LastRound basics.Round `json:"last-round"`
 
-	// MinFee The minimum transaction fee (not per byte) required for the
-	// txn to validate for the current network protocol.
+	// MinFee The minimum transaction fee (not per byte) required for the txn to validate for the current network protocol.
 	MinFee uint64 `json:"min-fee"`
 }
 

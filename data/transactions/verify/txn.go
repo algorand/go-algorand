@@ -211,7 +211,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		return nil, err
 	}
 
-	minFeeCount := uint64(0)
+	paidTxnCount := uint64(0)
 	feesPaid := uint64(0)
 	lSigPooledSize := 0
 	for i, stxn := range stxs {
@@ -223,17 +223,9 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
 		lSigPooledSize += stxn.Lsig.Len()
-		if stxn.Txn.Type == protocol.StateProofTx {
-			// State proofs are free, bail before incrementing
-			continue
+		if !stxn.Txn.IsFree() {
+			paidTxnCount++
 		}
-		if stxn.Txn.Type == protocol.HeartbeatTx && stxn.Txn.Group.IsZero() {
-			// In apply.Heartbeat, we further confirm that the heartbeat is for
-			// a challenged account. Such heartbeats are free, bail before
-			// incrementing
-			continue
-		}
-		minFeeCount++
 	}
 	if groupCtx.consensusParams.EnableLogicSigSizePooling {
 		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
@@ -245,26 +237,37 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
 		}
 	}
-	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
-	if overflow {
-		err = &TxGroupError{err: errTxGroupInvalidFee, GroupIndex: -1, Reason: TxGroupErrorReasonInvalidFee}
+
+	// This is just a first pass check, since it uses MinTxnFee. It can't use
+	// BaseFee, because we don't even know what block the group will end up in.
+	if err := CheckGroupFees(feesPaid, paidTxnCount, groupCtx.consensusParams.MinTxnFee); err != nil {
 		return nil, err
+	}
+
+	return groupCtx, nil
+}
+
+// CheckGroupFees validates that a transaction group has paid sufficient fees.
+// feesPaid is the total fees paid by the group, paidTxnCount is the number of
+// transactions that require fees, and minFeePerTxn is the minimum fee per transaction.
+func CheckGroupFees(feesPaid, paidTxnCount, minFeePerTxn uint64) *TxGroupError {
+	feeNeeded, overflow := basics.OMul(minFeePerTxn, paidTxnCount)
+	if overflow {
+		return &TxGroupError{err: errTxGroupInvalidFee, GroupIndex: -1, Reason: TxGroupErrorReasonInvalidFee}
 	}
 	// feesPaid may have saturated. That's ok. Since we know
 	// feeNeeded did not overflow, simple comparison tells us
 	// feesPaid was enough.
 	if feesPaid < feeNeeded {
-		err = &TxGroupError{
+		return &TxGroupError{
 			err: fmt.Errorf(
 				"txgroup had %d in fees, which is less than the minimum %d * %d",
-				feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee),
+				feesPaid, paidTxnCount, minFeePerTxn),
 			GroupIndex: -1,
 			Reason:     TxGroupErrorReasonInvalidFee,
 		}
-		return nil, err
 	}
-
-	return groupCtx, nil
+	return nil
 }
 
 type sigOrTxnType int
