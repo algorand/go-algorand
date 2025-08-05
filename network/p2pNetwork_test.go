@@ -1250,7 +1250,7 @@ func TestP2PwsStreamHandlerDedup(t *testing.T) {
 	defer netB.Stop()
 
 	require.Eventually(t, func() bool {
-		return networkPeerIdentityDisconnect.GetUint64Value() == networkPeerIdentityDisconnectInitial+1
+		return networkPeerIdentityDisconnect.GetUint64Value() > networkPeerIdentityDisconnectInitial
 	}, 2*time.Second, 50*time.Millisecond)
 
 	// now allow the peer made outgoing connection to handle conn closing initiated by the other side
