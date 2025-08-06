@@ -952,10 +952,18 @@ func TestNodeHybridTopology(t *testing.T) {
 	startAndConnectNodes(nodes, 10*time.Second)
 
 	// ensure the initial connectivity topology
+	repeatCounter := 0
 	require.Eventually(t, func() bool {
+		repeatCounter++
 		node0Conn := len(nodes[0].net.GetPeers(network.PeersConnectedIn)) > 0                             // has connection from 1
 		node1Conn := len(nodes[1].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) == 2 // connected to 0 and 2
 		node2Conn := len(nodes[2].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) >= 1 // connected to 1
+		if repeatCounter > 100 && !(node0Conn && node1Conn && node2Conn) {
+			t.Logf("IN/OUT connection stats:\nNode0 %d/%d, Node1 %d/%d, Node2 %d/%d",
+				len(nodes[0].net.GetPeers(network.PeersConnectedIn)), len(nodes[0].net.GetPeers(network.PeersConnectedOut)),
+				len(nodes[1].net.GetPeers(network.PeersConnectedIn)), len(nodes[1].net.GetPeers(network.PeersConnectedOut)),
+				len(nodes[2].net.GetPeers(network.PeersConnectedIn)), len(nodes[2].net.GetPeers(network.PeersConnectedOut)))
+		}
 		return node0Conn && node1Conn && node2Conn
 	}, 60*time.Second, 500*time.Millisecond)
 
