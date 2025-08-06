@@ -251,7 +251,7 @@ func (cx *EvalContext) allowsAssetTransfer(hdr *transactions.Header, tx *transac
 	// After EnableInnerClawbackWithoutSenderHolding appears in a consensus
 	// update, we should remove it from consensus params and assume it's true in
 	// the next release. It only needs to be in there so that it gates the
-	// beahvior change in the release it first appears.
+	// behavior change in the release it first appears.
 	if !cx.Proto.EnableInnerClawbackWithoutSenderHolding || tx.AssetSender.IsZero() {
 		err := cx.requireHolding(hdr.Sender, tx.XferAsset)
 		if err != nil {
