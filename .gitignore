@@ -81,3 +81,4 @@ tools/x-repo-types/x-repo-types
 
 # ignore local claude config changes
 CLAUDE.local.md
+.claude
