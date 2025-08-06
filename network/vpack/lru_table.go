@@ -18,6 +18,7 @@ package vpack
 
 import (
 	"encoding/binary"
+	"errors"
 )
 
 // lruTable is a fixed-size, 2-way set-associative hash table with 512 buckets.
@@ -30,15 +31,29 @@ import (
 // Reference IDs are encoded as (bucket << 1) | slot, where bucket is the index
 // of the bucket and slot is the index of the slot within the bucket (0 or 1).
 type lruTable[K comparable] struct {
-	bkt [lruTableSize]twoSlotBucket[K]
-	mru [lruTableSize / 8]byte // 1 bit per bucket
+	numBuckets uint32
+	buckets    []twoSlotBucket[K]
+	mru        []byte // 1 bit per bucket
 }
 
-const lruTableSize = 512
-const lruTableBucketMask = lruTableSize - 1
+// newLRUTable creates a new LRU table with the given size N.
+// The size N is the total number of entries in the table.
+// The number of buckets is N/2, and each bucket contains 2 slots.
+func newLRUTable[K comparable](N uint32) (*lruTable[K], error) {
+	// enforce size is a power of 2 and at least 16
+	if N < 16 || N&(N-1) != 0 {
+		return nil, errors.New("lruTable size must be a power of 2 and at least 16")
+	}
+	numBuckets := N / 2
+	return &lruTable[K]{
+		numBuckets: numBuckets,
+		buckets:    make([]twoSlotBucket[K], numBuckets),
+		mru:        make([]byte, numBuckets/8),
+	}, nil
+}
 
-// twoSlotBucket is a 2-way set-associative bucket that contains two keys.
-type twoSlotBucket[K comparable] struct{ key [2]K }
+// twoSlotBucket is a 2-way set-associative bucket that contains two slots.
+type twoSlotBucket[K comparable] struct{ slots [2]K }
 
 // lruBucketIndex is the index of a bucket in the LRU table.
 type lruBucketIndex uint32
@@ -101,17 +116,22 @@ func (t *lruTable[K]) setMRUSlot(b lruBucketIndex, slot lruSlotIndex) {
 	}
 }
 
+func (t *lruTable[K]) hashToBucketIndex(h uint64) lruBucketIndex {
+	// Use the lower bits of the hash to determine the bucket index.
+	return lruBucketIndex(h & uint64(t.numBuckets-1))
+}
+
 // lookup returns the reference ID of the given key, if it exists. The hash is
 // used to determine the bucket, and the key is used to determine the slot.
 // A lookup marks the found key as MRU.
 func (t *lruTable[K]) lookup(k K, h uint64) (id lruTableReferenceID, ok bool) {
-	b := lruBucketIndex(h & lruTableBucketMask)
-	bk := &t.bkt[b]
-	if bk.key[0] == k {
+	b := t.hashToBucketIndex(h)
+	bk := &t.buckets[b]
+	if bk.slots[0] == k {
 		t.setMRUSlot(b, 0)
 		return lruTableReferenceID(b << 1), true
 	}
-	if bk.key[1] == k {
+	if bk.slots[1] == k {
 		t.setMRUSlot(b, 1)
 		return lruTableReferenceID(b<<1 | 1), true
 	}
@@ -122,9 +142,9 @@ func (t *lruTable[K]) lookup(k K, h uint64) (id lruTableReferenceID, ok bool) {
 // The hash is used to determine the bucket, and the LRU slot is used to
 // determine the slot. The inserted key is marked as MRU.
 func (t *lruTable[K]) insert(k K, h uint64) lruTableReferenceID {
-	b := lruBucketIndex(h & lruTableBucketMask)
+	b := t.hashToBucketIndex(h)
 	evict := t.getLRUSlot(b) // LRU slot
-	t.bkt[b].key[evict] = k
+	t.buckets[b].slots[evict] = k
 	t.setMRUSlot(b, evict) // new key -> MRU
 	return lruTableReferenceID((lruTableReferenceID(b) << 1) | lruTableReferenceID(evict))
 }
@@ -134,11 +154,11 @@ func (t *lruTable[K]) insert(k K, h uint64) lruTableReferenceID {
 func (t *lruTable[K]) fetch(id lruTableReferenceID) (K, bool) {
 	b := lruBucketIndex(id >> 1)
 	slot := lruSlotIndex(id & 1)
-	if b >= lruTableSize { // invalid id
+	if b >= lruBucketIndex(t.numBuckets) { // invalid id
 		var zero K
 		return zero, false
 	}
 	// touch MRU bit
 	t.setMRUSlot(b, slot)
-	return t.bkt[b].key[slot], true
+	return t.buckets[b].slots[slot], true
 }

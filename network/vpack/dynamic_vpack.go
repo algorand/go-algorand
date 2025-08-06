@@ -69,19 +69,52 @@ type StatefulEncoder struct{ dynamicTableState }
 // from earlier votes.
 type StatefulDecoder struct{ dynamicTableState }
 
+// NewStatefulEncoder creates a new StatefulEncoder with initialized LRU tables of the specified size
+func NewStatefulEncoder(tableSize uint32) (*StatefulEncoder, error) {
+	e := &StatefulEncoder{}
+	if err := e.initTables(tableSize); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+// NewStatefulDecoder creates a new StatefulDecoder with initialized LRU tables of the specified size
+func NewStatefulDecoder(tableSize uint32) (*StatefulDecoder, error) {
+	d := &StatefulDecoder{}
+	if err := d.initTables(tableSize); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
 // dynamicTableState is shared by StatefulEncoder and StatefulDecoder. It contains
 // the necessary state for tracking references to previously seen values.
 type dynamicTableState struct {
 	// LRU hash tables for snd, p+p1s, and p2+p2s
-	sndTable lruTable[addressValue] // 512 * 2 * 32 = 32KB
-	pkTable  lruTable[pkSigPair]    // 512 * 2 * 96 = 96KB
-	pk2Table lruTable[pkSigPair]    // 512 * 2 * 96 = 96KB
+	sndTable *lruTable[addressValue] // 512 * 2 * 32 = 32KB
+	pkTable  *lruTable[pkSigPair]    // 512 * 2 * 96 = 96KB
+	pk2Table *lruTable[pkSigPair]    // 512 * 2 * 96 = 96KB
 
 	// 8-slot window of recent proposal values
 	proposalWindow propWindow
 
 	// last round number seen in previous vote
 	lastRnd uint64
+}
+
+// initTables initializes the LRU tables with the specified size for all tables
+func (s *dynamicTableState) initTables(tableSize uint32) error {
+	var err error
+	if s.sndTable, err = newLRUTable[addressValue](tableSize); err != nil {
+		return err
+	}
+	if s.pkTable, err = newLRUTable[pkSigPair](tableSize); err != nil {
+		return err
+	}
+	if s.pk2Table, err = newLRUTable[pkSigPair](tableSize); err != nil {
+		return err
+	}
+	return nil
 }
 
 // statefulReader helps StatefulEncoder and StatefulDecoder to read from a
