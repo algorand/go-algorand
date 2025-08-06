@@ -921,7 +921,7 @@ func TestInnerRekey(t *testing.T) {
 // the outer app could have opted-in.  But this technique tests something
 // interesting, that the inner app can perform an opt-in on the outer app, which
 // tests that the newly created app's holdings are available. In practice, the
-// helper shold rekey it back, but we don't bother here.
+// helper should rekey it back, but we don't bother here.
 func TestInnerAppCreateAndOptin(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -3163,7 +3163,7 @@ app_local_put
 		var problem string
 		switch {
 		case ver < 34: // before v7, app accounts not available at all
-			problem = "invalid Account reference " + id0.Address().String()
+			problem = "unavailable Account " + id0.Address().String()
 		case ver < 38: // as of v7, it's the mutation that's the problem
 			problem = "invalid Account reference for mutation"
 		}

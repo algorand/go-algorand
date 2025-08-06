@@ -280,8 +280,9 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
-	// maximum number of "foreign references" (accounts, asa, app, boxes)
-	// that can be attached to a single app call.
+	// maximum number of "foreign references" (accounts, asa, app, boxes) that
+	// can be attached to a single app call.  Modern transactions can use
+	// MaxAppAccess references in txn.Access to access more.
 	MaxAppTotalTxnReferences int
 
 	// maximum cost of application approval program or clear state program
@@ -352,6 +353,9 @@ type ConsensusParams struct {
 
 	// Number of box references allowed
 	MaxAppBoxReferences int
+
+	// Number of references allowed in txn.Access
+	MaxAppAccess int
 
 	// Amount added to a txgroup's box I/O budget per box ref supplied.
 	// For reads: the sum of the sizes of all boxes in the group must be less than I/O budget
@@ -558,6 +562,12 @@ type ConsensusParams struct {
 
 	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
 	EnableSha512BlockHash bool
+
+	// EnableInnerClawbackWithoutSenderHolding allows an inner clawback (axfer
+	// w/ AssetSender) even if the Sender holding of the asset is not
+	// available. This parameters can be removed and assumed true after the
+	// first consensus release in which it is set true.
+	EnableInnerClawbackWithoutSenderHolding bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1424,6 +1434,12 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
 	vFuture.EnableSha512BlockHash = true
+
+	// txn.Access work
+	vFuture.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
+	vFuture.MaxAppAccess = 16           // Twice as many, though cross products are explicit
+	vFuture.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
+	vFuture.EnableInnerClawbackWithoutSenderHolding = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
