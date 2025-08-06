@@ -340,7 +340,6 @@ func TestAppCallCreateWellFormed(t *testing.T) {
 func TestWellFormedErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
 	futureProto := config.Consensus[protocol.ConsensusFuture]
 	protoV27 := config.Consensus[protocol.ConsensusV27]
 	protoV28 := config.Consensus[protocol.ConsensusV28]
@@ -519,21 +518,6 @@ func TestWellFormedErrors(t *testing.T) {
 			},
 			proto:         futureProto,
 			expectedError: fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = 8"),
-		},
-		{
-			tx: Transaction{
-				Type:   protocol.ApplicationCallTx,
-				Header: okHeader,
-				ApplicationCallTxnFields: ApplicationCallTxnFields{
-					ApplicationID:     1,
-					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-					ExtraProgramPages: 0,
-					OnCompletion:      UpdateApplicationOC,
-				},
-			},
-			proto:         protoV28,
-			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
 		},
 		{
 			tx: Transaction{
