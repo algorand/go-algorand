@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -66,7 +67,7 @@ func TestClerkSendNoteEncoding(t *testing.T) {
 	var foundTx1, foundTx2 bool
 	const maxRetry = 10
 
-	for i := uint64(0); i < maxRetry && (!foundTx1 || !foundTx2); i++ {
+	for i := basics.Round(0); i < maxRetry && (!foundTx1 || !foundTx2); i++ {
 		if !foundTx1 {
 			tx1, err := fixture.WaitForConfirmedTxn(status.LastRound+i, txID)
 			if err == nil {

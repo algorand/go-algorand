@@ -31,8 +31,8 @@ import (
 )
 
 var partKeyfile string
-var partFirstRound uint64
-var partLastRound uint64
+var partFirstRound basics.Round
+var partLastRound basics.Round
 var partKeyDilution uint64
 var partParent string
 
@@ -57,7 +57,7 @@ var partGenerateCmd = &cobra.Command{
 		}
 
 		if partKeyDilution == 0 {
-			partKeyDilution = account.DefaultKeyDilution(basics.Round(partFirstRound), basics.Round(partLastRound))
+			partKeyDilution = account.DefaultKeyDilution(partFirstRound, partLastRound)
 		}
 
 		var err error
@@ -81,7 +81,7 @@ var partGenerateCmd = &cobra.Command{
 
 		var partkey account.PersistedParticipation
 		participationGen := func() {
-			partkey, err = account.FillDBWithParticipationKeys(partdb, parent, basics.Round(partFirstRound), basics.Round(partLastRound), partKeyDilution)
+			partkey, err = account.FillDBWithParticipationKeys(partdb, parent, partFirstRound, partLastRound, partKeyDilution)
 		}
 
 		util.RunFuncWithSpinningCursor(participationGen)
@@ -185,8 +185,8 @@ func init() {
 	partCmd.AddCommand(keyregCmd)
 
 	partGenerateCmd.Flags().StringVar(&partKeyfile, "keyfile", "", "Participation key filename")
-	partGenerateCmd.Flags().Uint64Var(&partFirstRound, "first", 0, "First round for participation key")
-	partGenerateCmd.Flags().Uint64Var(&partLastRound, "last", 0, "Last round for participation key")
+	partGenerateCmd.Flags().Uint64Var((*uint64)(&partFirstRound), "first", 0, "First round for participation key")
+	partGenerateCmd.Flags().Uint64Var((*uint64)(&partLastRound), "last", 0, "Last round for participation key")
 	partGenerateCmd.Flags().Uint64Var(&partKeyDilution, "dilution", 0, "Key dilution for two-level participation keys (defaults to sqrt of validity window)")
 	partGenerateCmd.Flags().StringVar(&partParent, "parent", "", "Address of parent account")
 	partGenerateCmd.MarkFlagRequired("first")

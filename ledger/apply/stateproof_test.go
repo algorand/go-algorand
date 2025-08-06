@@ -106,7 +106,7 @@ func TestApplyStateProofV34(t *testing.T) {
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
 	validate = true
-	stateProofTx.Message.LastAttestedRound = uint64(16)
+	stateProofTx.Message.LastAttestedRound = 16
 	applier.SetStateProofNextRound(8)
 	err = StateProof(stateProofTx, atRound, applier, validate)
 	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)
@@ -114,7 +114,7 @@ func TestApplyStateProofV34(t *testing.T) {
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
 	validate = true
-	stateProofTx.Message.LastAttestedRound = uint64(16)
+	stateProofTx.Message.LastAttestedRound = 16
 	applier.SetStateProofNextRound(32)
 	err = StateProof(stateProofTx, atRound, applier, validate)
 	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)
@@ -152,7 +152,7 @@ func TestApplyStateProofV34(t *testing.T) {
 
 	spHdr.Round = 15
 	blocks[spHdr.Round] = spHdr
-	stateProofTx.Message.LastAttestedRound = uint64(spHdr.Round)
+	stateProofTx.Message.LastAttestedRound = spHdr.Round
 	applier.SetStateProofNextRound(15)
 	blockErr[13] = noBlockErr
 	err = StateProof(stateProofTx, atRound, applier, validate)
@@ -179,7 +179,7 @@ func TestApplyStateProofV34(t *testing.T) {
 	atRoundBlock.CurrentProtocol = version
 	blocks[atRound] = atRoundBlock
 
-	stateProofTx.Message.LastAttestedRound = 2 * config.Consensus[version].StateProofInterval
+	stateProofTx.Message.LastAttestedRound = 2 * basics.Round(config.Consensus[version].StateProofInterval)
 	stateProofTx.StateProof.SignedWeight = 100
 	applier.SetStateProofNextRound(basics.Round(2 * config.Consensus[version].StateProofInterval))
 
@@ -220,7 +220,7 @@ func TestApplyStateProof(t *testing.T) {
 	stateProofTx.StateProofType = protocol.StateProofBasic
 	// stateproof txn doesn't confirm the next state proof round. expected is in the past
 	validate = true
-	stateProofTx.Message.LastAttestedRound = uint64(16)
+	stateProofTx.Message.LastAttestedRound = 16
 	applier.SetStateProofNextRound(8)
 	err = StateProof(stateProofTx, atRound, applier, validate)
 	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)
@@ -228,7 +228,7 @@ func TestApplyStateProof(t *testing.T) {
 
 	// stateproof txn doesn't confirm the next state proof round. expected is in the future
 	validate = true
-	stateProofTx.Message.LastAttestedRound = uint64(16)
+	stateProofTx.Message.LastAttestedRound = 16
 	applier.SetStateProofNextRound(32)
 	err = StateProof(stateProofTx, atRound, applier, validate)
 	a.ErrorIs(err, ErrExpectedDifferentStateProofRound)

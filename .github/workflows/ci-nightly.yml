@@ -1,0 +1,381 @@
+name: Nightly Tests
+on:
+  push:
+    branches: 
+      - master
+      - 'rel/**'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to run tests on'
+        required: true
+        default: 'master'
+        type: string
+
+env:
+  CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
+  ALGORAND_DEADLOCK: enable
+  KMD_NOUSB: True
+  BUILD_TYPE: integration
+  ALGOTEST: 1
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  SKIP_GO_INSTALLATION: True
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+  
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch || github.ref }}
+        fetch-depth: 0
+    - name: Set up Go
+      uses: ./.github/actions/setup-go
+    - name: Cache libsodium
+      uses: actions/cache@v4
+      with:
+        path: crypto/libs
+        key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+    - name: Build
+      run: |
+        scripts/travis/build.sh --make_debug
+    - name: Create workspace archive
+      run: |
+        tar -czf /tmp/workspace-${{ matrix.platform }}.tar.gz .
+      shell: bash
+    - name: Upload workspace archive
+      uses: actions/upload-artifact@v4
+      with:
+        name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+        path: /tmp/workspace-${{ matrix.platform }}.tar.gz
+        retention-days: 1
+    - name: Notify Slack on failure
+      if: failure()
+      uses: ./.github/actions/slack-notify
+      with:
+        job-type: "Build"
+        build-type: "Nightly Build"
+        details: "• Platform: `${{ matrix.platform }}`"
+
+  test_nightly:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        partition_id: [0, 1] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 2
+      CIRCLECI: true
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Run tests
+        run: |
+          ./scripts/configure_dev.sh
+          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
+          mkdir -p test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}
+          gotestsum --format standard-quiet \
+            --junitfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
+            --jsonfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
+            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
+            $PACKAGE_NAMES
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Test"
+          build-type: "Nightly Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
+      - name: Upload test artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload coverage
+        # Only upload coverage from ubuntu-24.04 platform
+        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
+        uses: codecov/codecov-action@v4
+        env:
+          GITHUB_ACTIONS: True
+          CIRCLECI: ""
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          file: ./coverage.txt
+          fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test_nightly/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  integration_nightly:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        partition_id: [0, 1] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 2
+      E2E_TEST_FILTER: GO
+      PARALLEL_FLAG: "-p 4"
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Run integration tests
+        run: |
+          ./scripts/configure_dev.sh
+          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
+          test/scripts/run_integration_tests.sh
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Integration Test"
+          build-type: "Nightly Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
+      - name: Upload test artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration_nightly/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  e2e_expect_nightly:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        partition_id: [0, 1]
+    runs-on: ${{ matrix.platform }}
+    env:
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 2
+      E2E_TEST_FILTER: EXPECT
+      PARALLEL_FLAG: "-p 4"
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Run E2E expect tests
+        run: |
+          scripts/configure_dev.sh
+          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID}
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID} \
+          test/scripts/run_integration_tests.sh
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Expect Test"
+          build-type: "Nightly Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
+      - name: Upload test artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect_nightly/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  e2e_subs_nightly:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+    runs-on: ${{ matrix.platform }}
+    env:
+      E2E_TEST_FILTER: SCRIPTS
+      CI_PLATFORM: ${{ matrix.platform }}
+      CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
+      S3_TESTDATA: ${{ secrets.S3_TESTDATA }}
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: github-actions
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Run E2E subs tests
+        run: |
+          scripts/configure_dev.sh
+          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs_nightly
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs_nightly \
+          test/scripts/run_integration_tests.sh
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Subs Test"
+          build-type: "Nightly Build"
+          details: "• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
+      - name: Upload test artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}
+          path: ~/test_results
+          retention-days: 7
+
+  verify_nightly:
+    needs: [test_nightly, integration_nightly, e2e_expect_nightly]
+    strategy:
+      fail-fast: false
+      matrix:
+        test_type: ["test", "integration", "e2e_expect"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-${{ github.run_id }}-*
+          path: ~/test_results
+          merge-multiple: true
+      - name: Check test execution
+        run: |
+          cat ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/**/testresults.json > ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json
+          python3 scripts/buildtools/check_tests.py \
+            --tests-results-filepath ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}_nightly/combined_testresults.json \
+            --ignored-tests \
+              TestAlgodWithExpect \
+              TestAlgohWithExpect \
+              TestGoalWithExpect \
+              TestTealdbgWithExpect
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Verify"
+          build-type: "Nightly Build"
+          details: "• Test Type: `${{ matrix.test_type }}`\n• Branch: `${{ github.ref_name }}`"
+
+  upload:
+    needs: [verify_nightly, e2e_subs_nightly]
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/rel/')
+    strategy:
+      matrix:
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Download workspace archive
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+          path: /tmp/
+      - name: Extract workspace archive
+        run: |
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: github-actions
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Upload Binaries
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          S3_REGION: ${{ secrets.AWS_REGION }}
+          S3_RELEASE_BUCKET: ${{ secrets.S3_RELEASE_BUCKET }}
+        timeout-minutes: 20
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/rel/nightly" ]]; then
+            export NIGHTLY_BUILD="true"
+          fi
+          export TRAVIS_BRANCH="${{ github.ref_name }}"
+          scripts/travis/deploy_packages.sh
+        shell: bash
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Upload"
+          build-type: "Nightly Build"
+          details: "• Branch: `${{ github.ref_name }}`"

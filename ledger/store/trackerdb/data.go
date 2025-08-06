@@ -19,7 +19,6 @@ package trackerdb
 import (
 	"context"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
@@ -112,8 +111,8 @@ type ResourcesData struct {
 	KeyValue           basics.TealKeyValue `codec:"p"`
 
 	// application global params ( basics.AppParams )
-	ApprovalProgram               []byte              `codec:"q,allocbound=config.MaxAvailableAppProgramLen"`
-	ClearStateProgram             []byte              `codec:"r,allocbound=config.MaxAvailableAppProgramLen"`
+	ApprovalProgram               []byte              `codec:"q,allocbound=bounds.MaxAvailableAppProgramLen"`
+	ClearStateProgram             []byte              `codec:"r,allocbound=bounds.MaxAvailableAppProgramLen"`
 	GlobalState                   basics.TealKeyValue `codec:"s"`
 	LocalStateSchemaNumUint       uint64              `codec:"t"`
 	LocalStateSchemaNumByteSlice  uint64              `codec:"u"`
@@ -282,8 +281,8 @@ func (prd *PersistedResourcesData) AccountResource() ledgercore.AccountResource 
 }
 
 // NormalizedOnlineBalance getter for normalized online balance.
-func (ba *BaseAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
-	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, proto)
+func (ba *BaseAccountData) NormalizedOnlineBalance(rewardUnit uint64) uint64 {
+	return basics.NormalizedOnlineAccountBalance(ba.Status, ba.RewardsBase, ba.MicroAlgos, rewardUnit)
 }
 
 // SetCoreAccountData setter for core account data.
@@ -482,9 +481,9 @@ func (bo *BaseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalan
 
 // GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
-func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
+func (bo *BaseOnlineAccountData) GetOnlineAccountData(rewardUnit uint64, rewardsLevel uint64) basics.OnlineAccountData {
 	microAlgos, _, _ := basics.WithUpdatedRewards(
-		proto, basics.Online, bo.MicroAlgos, basics.MicroAlgos{}, bo.RewardsBase, rewardsLevel,
+		rewardUnit, basics.Online, bo.MicroAlgos, basics.MicroAlgos{}, bo.RewardsBase, rewardsLevel,
 	)
 
 	return basics.OnlineAccountData{
@@ -504,8 +503,8 @@ func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusPara
 }
 
 // NormalizedOnlineBalance getter for normalized online balance.
-func (bo *BaseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
-	return basics.NormalizedOnlineAccountBalance(basics.Online, bo.RewardsBase, bo.MicroAlgos, proto)
+func (bo *BaseOnlineAccountData) NormalizedOnlineBalance(rewardUnit uint64) uint64 {
+	return basics.NormalizedOnlineAccountBalance(basics.Online, bo.RewardsBase, bo.MicroAlgos, rewardUnit)
 }
 
 // SetCoreAccountData setter for core account data.

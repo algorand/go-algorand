@@ -1,7 +1,7 @@
-FROM quay.io/centos/centos:stream9
+FROM quay.io/centos/centos:stream10
 
 WORKDIR /root
-RUN dnf install -y epel-release epel-next-release && dnf config-manager --set-enabled crb && \
+RUN dnf install -y epel-release && dnf config-manager --set-enabled crb && \
     dnf update -y && \
     dnf install -y autoconf awscli curl git gnupg2 nfs-utils python36 expect jq libtool gcc-c++ libstdc++-devel rpmdevtools createrepo rpm-sign bzip2 which && \
     dnf -y --enablerepo=powertools install libstdc++-static

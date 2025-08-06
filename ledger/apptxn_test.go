@@ -984,21 +984,22 @@ func TestInnerAppCreateAndOptin(t *testing.T) {
 // TestParentGlobals tests that a newly created app can call an inner app, and
 // the inner app will have access to the parent globals, even if the originally
 // created app ID isn't passed down, because the rule is that "pending" created
-// apps are available, starting from v38
+// apps are available. We added this rule in v38, but because it is more
+// lenient, not more restrictive, we removed the consensus gated code. So it now
+// works from v31 on.
 func TestParentGlobals(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 
-	// v38 allows parent access, but we start with v31 to make sure we don't mistakenly change it
 	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		// helper app, is called during the creation of an app.  this app tries
-		// to access its parent's globals, by using `global CallerApplicationID`
-		helper := dl.fundedApp(addrs[0], 1_000_000,
+		// checkParent is called during the creation of an app.  It tries to
+		// access its parent's globals, by using `global CallerApplicationID`
+		checkParent := dl.fundedApp(addrs[0], 1_000_000,
 			main(`
   global CallerApplicationID
   byte "X"
@@ -1009,7 +1010,7 @@ func TestParentGlobals(t *testing.T) {
 		createProgram := `
   itxn_begin
    int appl;      itxn_field TypeEnum
-   int ` + strconv.Itoa(int(helper)) + `; itxn_field ApplicationID
+   int ` + strconv.Itoa(int(checkParent)) + `; itxn_field ApplicationID
   itxn_submit
   int 1
 `
@@ -1018,15 +1019,11 @@ func TestParentGlobals(t *testing.T) {
 			Sender:          addrs[0],
 			Fee:             2 * 1000, // to pay for self and call to helper
 			ApprovalProgram: createProgram,
-			ForeignApps:     []basics.AppIndex{helper},
+			ForeignApps:     []basics.AppIndex{checkParent},
 		}
 		var creator basics.AppIndex
-		if ver >= 38 {
-			creator = dl.txn(&createapp).ApplyData.ApplicationID
-			require.NotZero(t, creator)
-		} else {
-			dl.txn(&createapp, "unavailable App")
-		}
+		creator = dl.txn(&createapp).ApplyData.ApplicationID
+		require.NotZero(t, creator)
 
 		// Now, test the same pattern, but do it all inside of yet another outer
 		// app, to show that the parent is available even if it was, itself
@@ -1041,12 +1038,13 @@ func TestParentGlobals(t *testing.T) {
 			ApprovalProgram: `
   itxn_begin
    int appl;      itxn_field TypeEnum
+   txna Applications 1; itxn_field Applications; // We are checking some versions from before resource sharing
    byte 0x` + hex.EncodeToString(createapp.SignedTxn().Txn.ApprovalProgram) + `; itxn_field ApprovalProgram
    byte 0x` + hex.EncodeToString(createapp.SignedTxn().Txn.ClearStateProgram) + `; itxn_field ClearStateProgram
   itxn_submit
   int 1
 `,
-			ForeignApps: []basics.AppIndex{creator, helper},
+			ForeignApps: []basics.AppIndex{checkParent, creator},
 		}
 		fund := txntest.Txn{
 			Type:     "pay",
@@ -1054,12 +1052,7 @@ func TestParentGlobals(t *testing.T) {
 			Sender:   addrs[0],
 			Receiver: outerAppAddress,
 		}
-		if ver >= 38 {
-			dl.txgroup("", &fund, &outer)
-		} else {
-			dl.txn(&createapp, "unavailable App")
-		}
-
+		dl.txgroup("", &fund, &outer)
 	})
 }
 
@@ -1725,7 +1718,7 @@ assert
 	})
 }
 
-func TestAbortWhenInnerAppCallFails(t *testing.T) {
+func TestAbortWhenInnerAppCallErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

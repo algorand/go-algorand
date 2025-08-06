@@ -91,7 +91,7 @@ func TestBasicMultisig(t *testing.T) {
 	txid, err := client.BroadcastTransaction(signedTransactionWithTwo)
 	r.NoError(err, "Trying to broadcast 2-of-3 multisig with 2 sig should not cause error")
 	curStatus, _ = client.Status()
-	r.True(fixture.WaitForTxnConfirmation(curStatus.LastRound+uint64(5), txid))
+	r.True(fixture.WaitForTxnConfirmation(curStatus.LastRound+5, txid))
 
 	// Need a new txid to avoid dup detection
 	unsignedTransaction, err = client.ConstructPayment(multisigAddr, addrs[0], minTxnFee, amountToSend, []byte("foobar"), "", [32]byte{}, 0, 0)

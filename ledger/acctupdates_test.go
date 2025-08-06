@@ -87,7 +87,7 @@ func accumulateTotals(t testing.TB, consensusVersion protocol.ConsensusVersion, 
 	totals.RewardsLevel = rewardLevel
 	for _, ar := range accts {
 		for _, data := range ar {
-			totals.AddAccount(proto, data, &ot)
+			totals.AddAccount(proto.RewardUnit, data, &ot)
 		}
 	}
 	require.False(t, ot.Overflowed)
@@ -109,7 +109,7 @@ func setupAccts(niter int) []map[basics.Address]basics.AccountData {
 	return accts
 }
 
-func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
+func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBlocksCount basics.Round, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData, l logging.Logger) *mockLedgerForTracker {
 	dbs, fileName := sqlitedriver.OpenForTesting(t, inMemory)
 
 	blocks := randomInitChain(consensusVersion, initialBlocksCount)
@@ -145,7 +145,7 @@ func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBloc
 
 }
 
-func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
+func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount basics.Round, consensusVersion protocol.ConsensusVersion, accts []map[basics.Address]basics.AccountData) *mockLedgerForTracker {
 	dblogger := logging.TestingLog(t)
 	dblogger.SetLevel(logging.Info)
 
@@ -356,7 +356,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	var validThrough basics.Round
 	_, validThrough, err = au.LookupWithoutRewards(latest+1, ledgertesting.RandomAddress())
 	require.Error(t, err)
-	require.Equal(t, basics.Round(0), validThrough)
+	require.Zero(t, validThrough)
 
 	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
 		rnd := base - basics.Round(ao.maxBalLookback())
@@ -365,7 +365,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
 		require.Error(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 	}
 
 	roundsRanges := []struct {
@@ -548,7 +548,7 @@ func testAcctUpdates(t *testing.T, conf config.Local) {
 
 			accts := setupAccts(20)
 			rewardsLevels := []uint64{0}
-			initialBlocksCount := int(lookback)
+			initialBlocksCount := basics.Round(lookback)
 			ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusCurrentVersion, accts)
 			defer ml.Close()
 
@@ -557,12 +557,12 @@ func testAcctUpdates(t *testing.T, conf config.Local) {
 
 			// cover 10 genesis blocks
 			rewardLevel := uint64(0)
-			for i := 1; i < initialBlocksCount; i++ {
+			for i := 1; i < int(initialBlocksCount); i++ {
 				accts = append(accts, accts[0])
 				rewardsLevels = append(rewardsLevels, rewardLevel)
 			}
 
-			checkAcctUpdates(t, au, ao, 0, basics.Round(initialBlocksCount-1), accts, rewardsLevels, proto)
+			checkAcctUpdates(t, au, ao, 0, initialBlocksCount-1, accts, rewardsLevels, proto)
 
 			// lastCreatableID stores asset or app max used index to get rid of conflicts
 			lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
@@ -672,16 +672,16 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	}
 	protocolVersion := protocol.ConsensusCurrentVersion
 
-	initialRounds := uint64(1)
+	const initialRounds basics.Round = 1
 	accountsCount := 5000
 	accts := setupAccts(accountsCount)
 	rewardsLevels := []uint64{0}
 
-	ml := makeMockLedgerForTracker(b, true, int(initialRounds), protocolVersion, accts)
+	ml := makeMockLedgerForTracker(b, true, initialRounds, protocolVersion, accts)
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
-	maxAcctLookback := conf.MaxAcctLookback
+	maxAcctLookback := basics.Round(conf.MaxAcctLookback)
 	au, _ := newAcctUpdates(b, ml, conf)
 	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 
@@ -692,12 +692,12 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	for i := basics.Round(initialRounds); i < basics.Round(maxAcctLookback+uint64(b.N)); i++ {
+	for i := initialRounds; i < maxAcctLookback+basics.Round(b.N); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 0
-		if i <= basics.Round(initialRounds)+basics.Round(b.N) {
-			accountChanges = accountsCount - 2 - int(basics.Round(maxAcctLookback+uint64(b.N))+i)
+		if i <= initialRounds+basics.Round(b.N) {
+			accountChanges = accountsCount - 2 - int(maxAcctLookback+basics.Round(b.N)+i)
 		}
 
 		updates, totals := ledgertesting.RandomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
@@ -733,10 +733,10 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	ml.trackers.waitAccountsWriting()
 	b.ResetTimer()
 	startTime := time.Now()
-	for i := maxAcctLookback + initialRounds; i < maxAcctLookback+uint64(b.N); i++ {
+	for i := maxAcctLookback + initialRounds; i < maxAcctLookback+basics.Round(b.N); i++ {
 		// Clear the timer to ensure a flush
 		ml.trackers.lastFlushTime = time.Time{}
-		ml.trackers.committedUpTo(basics.Round(i))
+		ml.trackers.committedUpTo(i)
 	}
 	ml.trackers.waitAccountsWriting()
 	deltaTime := time.Since(startTime)
@@ -744,7 +744,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		return
 	}
 	// we want to fake the N to reflect the time it took us, if we were to wait an entire second.
-	singleIterationTime := deltaTime / time.Duration(uint64(b.N)-initialRounds)
+	singleIterationTime := deltaTime / time.Duration(uint64(basics.Round(b.N)-initialRounds))
 	b.N = int(time.Second / singleIterationTime)
 	// and now, wait for the reminder of the second.
 	time.Sleep(time.Second - deltaTime)
@@ -877,7 +877,7 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
 					roundOffsetError := &RoundOffsetError{}
 					if errors.As(err, &roundOffsetError) {
-						require.Equal(t, basics.Round(0), validThrough)
+						require.Zero(t, validThrough)
 						// verify it's the expected error and not anything else.
 						require.Less(t, int64(roundOffsetError.round), int64(roundOffsetError.dbRound))
 						if testback > 1 {
@@ -936,7 +936,7 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	initialBlocksCount := 1
+	const initialBlocksCount = 1
 	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -990,25 +990,19 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		`他们丢失了四季，惶惑之行开始`,
 		`这颗行星所有的酒馆，无法听到远方的呼喊`,
 		`野心勃勃的灯火，瞬间吞没黑暗的脸庞`,
-
-		// useful for testing prefix
-		"xxABC",
-		"xxBBB",
-		"xxBBC",
-		"xxCBA",
 	}
 
-	appIDset := make(map[uint64]struct{}, len(testingBoxNames))
-	boxNameToAppID := make(map[string]uint64, len(testingBoxNames))
-	const allBoxesAppID = 777
+	appIDset := make(map[basics.AppIndex]struct{}, len(testingBoxNames))
+	boxNameToAppID := make(map[string]basics.AppIndex, len(testingBoxNames))
+	var currentRound basics.Round
 
 	// keep adding one box key and one random appID (non-duplicated)
 	for i, boxName := range testingBoxNames {
-		currentRound := au.latest() + 1
+		currentRound = basics.Round(i + 1)
 
-		var appID uint64
+		var appID basics.AppIndex
 		for {
-			appID = crypto.RandUint64()
+			appID = basics.AppIndex(crypto.RandUint64())
 			_, preExisting := appIDset[appID]
 			if !preExisting {
 				break
@@ -1018,122 +1012,45 @@ func TestBoxNamesByAppIDs(t *testing.T) {
 		appIDset[appID] = struct{}{}
 		boxNameToAppID[boxName] = appID
 
+		boxChange := ledgercore.KvValueDelta{Data: []byte(boxName)}
 		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
-			apps.MakeBoxKey(appID, boxName):         {Data: []byte(boxName)},
-			apps.MakeBoxKey(allBoxesAppID, boxName): {Data: []byte(boxName)},
+			apps.MakeBoxKey(uint64(appID), boxName): boxChange,
 		})
 		auCommitSync(t, currentRound, au, ml)
 
-		// Advance conf.MaxAcctLookback rounds because LookupKeysByPrefix only
-		// sees kvs that make it to the DB. The deltas are not examined.  It
-		// might be nice to do so, but it's complicated.  If we decide to do so,
-		// we can stop advancing here
-
-		target := basics.Round(uint64(currentRound) + conf.MaxAcctLookback)
-		for au.latest() < target {
-			auNewBlock(t, au.latest()+1, au, accts, opts, nil)
-			auCommitSync(t, au.latest()+1, au, ml)
+		// ensure rounds
+		rnd := au.latest()
+		require.Equal(t, currentRound, rnd)
+		if uint64(currentRound) > conf.MaxAcctLookback {
+			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
+		} else {
+			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
 
-		// check that each box ended up in its unique app
+		// check input, see all present keys are all still there
 		for _, storedBoxName := range testingBoxNames[:i+1] {
-			_, res, _, err := au.LookupKeysByPrefix(apps.MakeBoxKey(boxNameToAppID[storedBoxName], ""), "", 10000, 100_000, false)
-
+			res, err := au.LookupKeysByPrefix(currentRound, apps.MakeBoxKey(uint64(boxNameToAppID[storedBoxName]), ""), 10000)
 			require.NoError(t, err)
 			require.Len(t, res, 1)
-			require.Contains(t, res, apps.MakeBoxKey(boxNameToAppID[storedBoxName], storedBoxName))
-		}
-
-		// check that the allBoxesAppID has all of them
-		_, res, next, err := au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), "", 10000, 100_000, false)
-		require.NoError(t, err)
-		require.Len(t, res, i+1)
-		require.Empty(t, next)
-		for _, storedBoxName := range testingBoxNames[:i+1] {
-			require.Contains(t, res, apps.MakeBoxKey(allBoxesAppID, storedBoxName))
+			require.Equal(t, apps.MakeBoxKey(uint64(boxNameToAppID[storedBoxName]), storedBoxName), res[0])
 		}
 	}
-
-	// all boxes have been created.
-
-	// show that when row limit is too low, paging kicks in
-	_, res, next, err := au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), "", 10, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 10)
-	require.NotEmpty(t, next)
-
-	// get the rest
-	_, res, next, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), next, 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, len(testingBoxNames)-10)
-	require.Empty(t, next)
-
-	// show that when byte limit is too low, paging kicks in
-	_, res, next, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), "", 10000, 1_000, false)
-	require.NoError(t, err)
-	boxCount := len(res)
-	require.Less(t, boxCount, len(testingBoxNames))
-	count := 0
-	for key, val := range res {
-		count += len(key) + len(val)
-	}
-	require.Less(t, count, 1_001)
-	require.Greater(t, count, 950) // got close though, right?
-	require.NotEmpty(t, next)
-
-	// get the rest
-	_, res, next, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, ""), next, 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, len(testingBoxNames)-boxCount)
-	require.Empty(t, next)
-
-	// check that prefix works properly
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "x"), "", 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 4)
-
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "xx"), "", 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 4)
-
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "xxB"), "", 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 2) // xxBBB, xxBBC
-
-	// check that "next" works.
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "xx"), apps.MakeBoxKey(allBoxesAppID, "xxB"), 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 3) // xxBBB, xxBBC, XXCBA
-
-	// check that "next" works precisely
-	_, res, _, err = au.LookupKeysByPrefix(apps.MakeBoxKey(allBoxesAppID, "xx"), apps.MakeBoxKey(allBoxesAppID, "xxBBB"), 10000, 100_000, false)
-	require.NoError(t, err)
-	require.Len(t, res, 3) // xxBBB, xxBBC, XXCBA
 
 	// removing inserted boxes
 	for _, boxName := range testingBoxNames {
-		currentRound := au.latest() + 1
+		currentRound++
 
 		// remove inserted box
 		appID := boxNameToAppID[boxName]
 		auNewBlock(t, currentRound, au, accts, opts, map[string]ledgercore.KvValueDelta{
-			// to make a delete actually hit the DB, OldData must not be nil.
-			apps.MakeBoxKey(uint64(appID), boxName): {OldData: []byte{0x01}},
+			apps.MakeBoxKey(uint64(appID), boxName): {},
 		})
 		auCommitSync(t, currentRound, au, ml)
 
-		// as we did during inserts, advance until the deletion is "visible" in the DB
-		target := basics.Round(uint64(currentRound) + conf.MaxAcctLookback)
-		for au.latest() < target {
-			auNewBlock(t, au.latest()+1, au, accts, opts, nil)
-			auCommitSync(t, au.latest()+1, au, ml)
-		}
-
-		// ensure recently removed key is not present, and it is not part of the
-		// result. We are grabbing all boxes under this (unique) appID.
-		_, res, _, err := au.LookupKeysByPrefix(apps.MakeBoxKey(uint64(appID), ""), "", 10000, 100_000, false)
+		// ensure recently removed key is not present, and it is not part of the result
+		res, err := au.LookupKeysByPrefix(currentRound, apps.MakeBoxKey(uint64(boxNameToAppID[boxName]), ""), 10000)
 		require.NoError(t, err)
-		require.Empty(t, res)
+		require.Len(t, res, 0)
 	}
 }
 
@@ -1141,7 +1058,7 @@ func TestKVCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	initialBlocksCount := 1
+	const initialBlocksCount = 1
 	accts := make(map[basics.Address]basics.AccountData)
 
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1410,7 +1327,7 @@ func TestCompactDeltas(t *testing.T) {
 	stateDeltas[0].Creatables[100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true}
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
-	outAccountDeltas := makeCompactAccountDeltas(stateDeltas, basics.Round(1), true, baseAccounts)
+	outAccountDeltas := makeCompactAccountDeltas(stateDeltas, 1, true, baseAccounts)
 	outCreatableDeltas := compactCreatableDeltas(stateDeltas)
 
 	require.Equal(t, stateDeltas[0].Accts.Len(), outAccountDeltas.len())
@@ -1443,7 +1360,7 @@ func TestCompactDeltas(t *testing.T) {
 
 	baseAccounts.write(trackerdb.PersistedAccountData{Addr: addrs[0], AccountData: trackerdb.BaseAccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
 	baseAccounts.write(trackerdb.PersistedAccountData{Addr: addrs[3], AccountData: trackerdb.BaseAccountData{}})
-	outAccountDeltas = makeCompactAccountDeltas(stateDeltas, basics.Round(1), true, baseAccounts)
+	outAccountDeltas = makeCompactAccountDeltas(stateDeltas, 1, true, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(stateDeltas)
 
 	require.Equal(t, 2, outAccountDeltas.len())
@@ -1532,7 +1449,7 @@ func TestCompactDeltasResources(t *testing.T) {
 
 	baseResources.init(nil, 100, 80)
 
-	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, 1, true, baseAccounts, baseResources)
 	// 6 entries are missing: same app (asset) params and local state are combined into a single entry
 	require.Equal(t, 6, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
@@ -1592,7 +1509,7 @@ func TestCompactDeltasResources(t *testing.T) {
 		}
 	}
 
-	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, basics.Round(1), true, baseAccounts, baseResources)
+	outResourcesDeltas = makeCompactResourceDeltas(stateDeltas, 1, true, baseAccounts, baseResources)
 	require.Equal(t, 0, len(outResourcesDeltas.misses))
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
 
@@ -1647,12 +1564,12 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 
 	protocolVersion := protocol.ConsensusCurrentVersion
 
-	initialRounds := uint64(1)
+	const initialRounds = 1
 	accountsCount := 5
 	rewardsLevels := []uint64{0}
 	accts := setupAccts(accountsCount)
 
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialRounds, protocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
@@ -1694,7 +1611,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 		delta.Accts.MergeAccounts(updates)
 		delta.Totals = accumulateTotals(t, protocol.ConsensusCurrentVersion, []map[basics.Address]ledgercore.AccountData{totals}, rewardLevel)
 		ml.addBlock(blockEntry{block: blk}, delta)
-		ml.trackers.committedUpTo(basics.Round(i))
+		ml.trackers.committedUpTo(i)
 		ml.trackers.waitAccountsWriting()
 		accts = append(accts, newAccts)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -1705,7 +1622,7 @@ func TestAcctUpdatesCachesInitialization(t *testing.T) {
 	accts = []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(accountsCount, true)}
 
 	// create another mocked ledger, but this time with a fresh new tracker database.
-	ml2 := makeMockLedgerForTracker(t, true, int(initialRounds), protocolVersion, accts)
+	ml2 := makeMockLedgerForTracker(t, true, initialRounds, protocolVersion, accts)
 	ml2.log.SetLevel(logging.Warn)
 	defer ml2.Close()
 
@@ -1731,13 +1648,13 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 	initProtocolVersion := protocol.ConsensusV20
 
-	initialRounds := uint64(1)
+	const initialRounds = 1
 
 	accountsCount := 5
 	rewardsLevels := []uint64{0}
 	accts := setupAccts(accountsCount)
 
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialRounds, initProtocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
@@ -1752,7 +1669,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	extraRounds := uint64(39)
+	extraRounds := basics.Round(39)
 
 	// write the extraRounds rounds so that we will fill up the queue.
 	for i := basics.Round(initialRounds); i < basics.Round(initialRounds+extraRounds); i++ {
@@ -1773,7 +1690,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1787,12 +1704,12 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	newVersionBlocksCount := uint64(47)
+	newVersionBlocksCount := basics.Round(47)
 	newVersion := protocol.ConsensusV21
-	maxAcctLookback := conf.MaxAcctLookback
+	maxAcctLookback := basics.Round(conf.MaxAcctLookback)
 	// add 47 more rounds that contains blocks using a newer consensus version, and stuff it with maxAcctLookback
-	lastRoundToWrite := basics.Round(initialRounds + maxAcctLookback + extraRounds + newVersionBlocksCount)
-	for i := basics.Round(initialRounds + extraRounds); i < lastRoundToWrite; i++ {
+	lastRoundToWrite := initialRounds + maxAcctLookback + extraRounds + newVersionBlocksCount
+	for i := initialRounds + extraRounds; i < lastRoundToWrite; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1810,7 +1727,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommits(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1837,12 +1754,12 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 
 	initProtocolVersion := protocol.ConsensusV20
 
-	initialRounds := uint64(1)
+	const initialRounds basics.Round = 1
 	accountsCount := 5
 	rewardsLevels := []uint64{0}
 	accts := setupAccts(accountsCount)
 
-	ml := makeMockLedgerForTracker(t, true, int(initialRounds), initProtocolVersion, accts)
+	ml := makeMockLedgerForTracker(t, true, initialRounds, initProtocolVersion, accts)
 	ml.log.SetLevel(logging.Warn)
 	defer ml.Close()
 
@@ -1857,10 +1774,10 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
-	extraRounds := uint64(39)
+	const extraRounds basics.Round = 39
 
 	// write extraRounds rounds so that we will fill up the queue.
-	for i := basics.Round(initialRounds); i < basics.Round(initialRounds+extraRounds); i++ {
+	for i := initialRounds; i < initialRounds+extraRounds; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1893,10 +1810,10 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	}
 
 	newVersion := protocol.ConsensusV21
-	maxAcctLockback := conf.MaxAcctLookback
+	maxAcctLockback := basics.Round(conf.MaxAcctLookback)
 	// add maxAcctLockback-extraRounds more rounds that contains blocks using a newer consensus version.
-	endOfFirstNewProtocolSegment := basics.Round(initialRounds + extraRounds + maxAcctLockback)
-	for i := basics.Round(initialRounds + extraRounds); i <= endOfFirstNewProtocolSegment; i++ {
+	endOfFirstNewProtocolSegment := initialRounds + extraRounds + maxAcctLockback
+	for i := initialRounds + extraRounds; i <= endOfFirstNewProtocolSegment; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1914,7 +1831,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1933,7 +1850,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	require.Equal(t, basics.Round(initialRounds+extraRounds)-1, au.cachedDBRound)
 
 	// write additional extraRounds elements and verify these can be flushed.
-	for i := endOfFirstNewProtocolSegment + 1; i <= basics.Round(initialRounds+2*extraRounds+maxAcctLockback); i++ {
+	for i := endOfFirstNewProtocolSegment + 1; i <= initialRounds+2*extraRounds+maxAcctLockback; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		accountChanges := 2
@@ -1951,7 +1868,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1966,7 +1883,7 @@ func TestAcctUpdatesSplittingConsensusVersionCommitsBoundary(t *testing.T) {
 	}
 	ml.trackers.committedUpTo(endOfFirstNewProtocolSegment + basics.Round(extraRounds))
 	ml.trackers.waitAccountsWriting()
-	require.Equal(t, basics.Round(initialRounds+2*extraRounds), au.cachedDBRound)
+	require.Equal(t, initialRounds+2*extraRounds, au.cachedDBRound)
 }
 
 // TestAcctUpdatesResources checks that created, deleted, and created resource keep
@@ -2079,7 +1996,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -2220,7 +2137,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	rewardsLevels := []uint64{0}
 
 	conf := config.GetDefaultLocal()
-	initialBlocksCount := int(conf.MaxAcctLookback)
+	initialBlocksCount := basics.Round(conf.MaxAcctLookback)
 	ml := makeMockLedgerForTracker(t, false, initialBlocksCount, testProtocolVersion, accts)
 	defer ml.Close()
 
@@ -2229,7 +2146,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
-	for i := 1; i < initialBlocksCount; i++ {
+	for i := basics.Round(1); i < initialBlocksCount; i++ {
 		accts = append(accts, accts[0])
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -2240,7 +2157,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
-	for i := basics.Round(initialBlocksCount); i < basics.Round(conf.MaxAcctLookback+15); i++ {
+	for i := initialBlocksCount; i < basics.Round(conf.MaxAcctLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates ledgercore.AccountDeltas
@@ -2260,7 +2177,7 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -2286,8 +2203,8 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 	}
 
 	// flush a couple of rounds (indirectly schedules commitSyncer)
-	flushRound(basics.Round(0))
-	flushRound(basics.Round(1))
+	flushRound(0)
+	flushRound(1)
 
 	// add stallingTracker to list of trackers
 	stallingTracker := &blockingTracker{
@@ -2346,7 +2263,7 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
 			d, validThrough, withoutRewards, err := au.lookupLatest(addr)
 			require.NoError(t, err)
-			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto, rewardsLevels[validThrough]), d)
+			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto.RewardUnit, rewardsLevels[validThrough]), d)
 			require.Equal(t, accts[validThrough][addr].MicroAlgos, withoutRewards)
 			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), "validThrough: %v rnd :%v", validThrough, rnd)
 		})
@@ -2657,7 +2574,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	initialBlocksCount := 1
+	const initialBlocksCount = 1
 	accts := setupAccts(1)
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesLookupStateDelta")
@@ -2753,21 +2670,21 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 		rnd := au.latest()
 		require.Equal(t, currentRound, rnd)
 		if uint64(currentRound) > conf.MaxAcctLookback {
-			require.Equal(t, basics.Round(uint64(currentRound)-conf.MaxAcctLookback), au.cachedDBRound)
+			require.Equal(t, currentRound-basics.Round(conf.MaxAcctLookback), au.cachedDBRound)
 		} else {
 			require.Equal(t, basics.Round(0), au.cachedDBRound)
 		}
 
 		// Iterate backwards through deltas, ensuring proper data exists in StateDelta
-		for j := uint64(rnd); j > uint64(au.cachedDBRound); j-- {
+		for j := rnd; j > au.cachedDBRound; j-- {
 			// fetch StateDelta
-			actualDelta, err := au.lookupStateDelta(basics.Round(j))
+			actualDelta, err := au.lookupStateDelta(j)
 			require.NoError(t, err)
 			actualAccountDeltas := actualDelta.Accts
 			actualKvDeltas := actualDelta.KvMods
 
 			// Make sure we know about the expected changes for the delta's round
-			expectedAccountDeltas, has := updatesI[basics.Round(j)]
+			expectedAccountDeltas, has := updatesI[j]
 			require.True(t, has)
 			// Do basic checking on the size and existence of accounts in deltas
 			require.Equal(t, expectedAccountDeltas.Len(), actualAccountDeltas.Len())
@@ -2785,8 +2702,8 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 			require.Equal(t, len(expectedAccountDeltas.AppResources), len(actualAccountDeltas.AppResources))
 
 			// Validate KvDeltas contains updates w/ new/old values.
-			startKV := (j - 1) * uint64(kvsPerBlock)
-			expectedKvDeltas, has := roundMods[basics.Round(j)]
+			startKV := (uint64(j) - 1) * uint64(kvsPerBlock)
+			expectedKvDeltas, has := roundMods[j]
 			require.True(t, has)
 			for kv := 0; kv < kvsPerBlock; kv++ {
 				name := fmt.Sprintf("%d", startKV+uint64(kv))

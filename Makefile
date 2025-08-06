@@ -8,13 +8,14 @@ else
 export GOPATH := $(shell go env GOPATH)
 GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
 endif
+GOBIN := $(if $(shell go env GOBIN),$(shell go env GOBIN),$(GOPATH1)/bin)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
 # overrides for cross-compiling platform-specific binaries
 ifdef CROSS_COMPILE_ARCH
   ARCH := $(CROSS_COMPILE_ARCH)
-  GO_INSTALL := CGO_ENABLED=1 GOOS=$(OS_TYPE) GOARCH=$(ARCH) go build -o $(GOPATH1)/bin-$(OS_TYPE)-$(ARCH)
+  GO_INSTALL := CGO_ENABLED=1 GOOS=$(OS_TYPE) GOARCH=$(ARCH) go build -o $(GOBIN)
 else
   GO_INSTALL := go install
 endif
@@ -36,7 +37,6 @@ BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
 CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
-export GOCACHE=$(SRCPATH)/tmp/go-cache
 
 GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
@@ -105,10 +105,10 @@ fmt:
 	./scripts/check_license.sh -i
 
 fix: build
-	$(GOPATH1)/bin/algofix */
+	$(GOBIN)/algofix */
 
 lint: deps
-	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
+	$(GOBIN)/golangci-lint run -c .golangci.yml
 
 expectlint:
 	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
@@ -139,7 +139,7 @@ prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
 
 generate: deps
-	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
+	PATH=$(GOBIN):$$PATH go generate ./...
 
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
@@ -153,9 +153,9 @@ logic:
 %/msgp_gen.go: deps ALWAYS
 		@set +e; \
 		printf "msgp: $(@D)..."; \
-		$(GOPATH1)/bin/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
+		$(GOBIN)/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
 		if [ "$$?" != "0" ]; then \
-			printf "failed:\n$(GOPATH1)/bin/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
+			printf "failed:\n$(GOBIN)/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
 			cat ./$@.out; \
 			rm ./$@.out; \
 			exit 1; \
@@ -166,6 +166,8 @@ logic:
 ALWAYS:
 
 # build our fork of libsodium, placing artifacts into crypto/lib/ and crypto/include/
+libsodium: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
+
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
 	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
@@ -178,29 +180,51 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 universal:
 ifeq ($(OS_TYPE),darwin)
 	# build amd64 Mac binaries
-	mkdir -p $(GOPATH1)/bin-darwin-amd64
-	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
+	mkdir -p $(GOBIN)-darwin-amd64
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
 
 	# build arm64 Mac binaries
-	mkdir -p $(GOPATH1)/bin-darwin-arm64
-	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
+	mkdir -p $(GOBIN)-darwin-arm64
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
 
 	# same for buildsrc-special
 	cd tools/block-generator && \
-	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
-	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOBIN)-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOBIN)-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
 
 	# lipo together
-	mkdir -p $(GOPATH1)/bin
-	for binary in $$(ls $(GOPATH1)/bin-darwin-arm64); do \
-		if [ -f $(GOPATH1)/bin-darwin-amd64/$$binary ]; then \
-			lipo -create -output $(GOPATH1)/bin/$$binary \
-			$(GOPATH1)/bin-darwin-arm64/$$binary \
-			$(GOPATH1)/bin-darwin-amd64/$$binary; \
+	mkdir -p $(GOBIN)
+	for binary in $$(ls $(GOBIN)-darwin-arm64); do \
+		skip=false; \
+		for nongo_file in $(NONGO_BIN_FILES) $(GOBIN)/node_exporter; do \
+			if [ "$(GOBIN)/$$binary" = "$$nongo_file" ]; then \
+				echo "Skipping non-binary file: $$binary"; \
+				skip=true; \
+				break; \
+			fi; \
+		done; \
+		if [ "$$skip" = "true" ]; then \
+			continue; \
+		fi; \
+		if [ -f $(GOBIN)-darwin-amd64/$$binary ]; then \
+			lipo -create -output $(GOBIN)/$$binary \
+			$(GOBIN)-darwin-arm64/$$binary \
+			$(GOBIN)-darwin-amd64/$$binary; \
 		else \
 			echo "Warning: Binary $$binary exists in arm64 but not in amd64"; \
-		fi \
+		fi; \
 	done
+	# copy NONGO_BIN files
+	for nongo_file in $(NONGO_BIN_FILES); do \
+		short_name=$$(basename $$nongo_file); \
+		if [ -f $(GOBIN)-darwin-arm64/$$short_name ]; then \
+			cp -f $(GOBIN)-darwin-arm64/$$short_name $$nongo_file; \
+		else \
+			echo "Warning: NONGO_BIN file $$short_name does not exist in arm64"; \
+		fi; \
+	done
+	# for node_exporter cross-compilation is using universal binary already
+	cp -f $(GOBIN)-darwin-arm64/node_exporter $(GOBIN)/node_exporter
 else
 	echo "OS_TYPE must be darwin for universal builds, skipping"
 endif
@@ -220,7 +244,7 @@ $(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/lib
 	cd daemon/kmd/lib/kmdapi && \
 		python3 genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
 	cd daemon/kmd && \
-		PATH=$(GOPATH1)/bin:$$PATH \
+		PATH=$(GOBIN):$$PATH \
 		go generate ./...
 	rm daemon/kmd/lib/kmdapi/$(KMD_API_SWAGGER_WRAPPER)
 
@@ -251,15 +275,8 @@ rebuild_kmd_swagger: deps
 
 build: buildsrc buildsrc-special
 
-# We're making an empty file in the go-cache dir to
-# get around a bug in go build where it will fail
-# to cache binaries from time to time on empty NFS
-# dirs
-${GOCACHE}/file.txt:
-	mkdir -p "${GOCACHE}"
-	touch "${GOCACHE}"/file.txt
 
-buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN ${GOCACHE}/file.txt
+buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special:
@@ -274,23 +291,32 @@ check-go-version:
 ## We overwrite bin-race/kmd with a non -race version due to
 ## the incredible performance impact of -race on Scrypt.
 build-race: build
-	@mkdir -p $(GOPATH1)/bin-race
-	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
-	cp $(GOPATH1)/bin/kmd $(GOPATH1)/bin-race
+	@mkdir -p $(GOBIN)-race
+	GOBIN=$(GOBIN)-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
+	cp $(GOBIN)/kmd $(GOBIN)-race
 
-NONGO_BIN_FILES=$(GOPATH1)/bin/find-nodes.sh $(GOPATH1)/bin/update.sh $(GOPATH1)/bin/COPYING $(GOPATH1)/bin/ddconfig.sh
+# Build binaries needed for e2e/integration tests
+build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
+	@mkdir -p $(GOBIN)-race
+	# Build regular binaries (kmd, algod, goal) and race binaries in parallel
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./cmd/kmd ./cmd/algod ./cmd/goal & \
+	GOBIN=$(GOBIN)-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/tealdbg ./cmd/msgpacktool ./cmd/algokey ./tools/teal/algotmpl ./test/e2e-go/cli/tealdbg/cdtmock & \
+	wait
+	cp $(GOBIN)/kmd $(GOBIN)-race
+
+NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING $(GOBIN)/ddconfig.sh
 
 NONGO_BIN: $(NONGO_BIN_FILES)
 
-$(GOPATH1)/bin/find-nodes.sh: scripts/find-nodes.sh
+$(GOBIN)/find-nodes.sh: scripts/find-nodes.sh
 
-$(GOPATH1)/bin/update.sh: cmd/updater/update.sh
+$(GOBIN)/update.sh: cmd/updater/update.sh
 
-$(GOPATH1)/bin/COPYING: COPYING
+$(GOBIN)/COPYING: COPYING
 
-$(GOPATH1)/bin/ddconfig.sh: scripts/ddconfig.sh
+$(GOBIN)/ddconfig.sh: scripts/ddconfig.sh
 
-$(GOPATH1)/bin/%:
+$(GOBIN)/%:
 	cp -f $< $@
 
 test: build
@@ -315,28 +341,29 @@ testall: fulltest integration
 
 clean:
 	go clean -i ./...
-	rm -f $(GOPATH1)/bin/node_exporter
+	rm -f $(GOBIN)/node_exporter
 	cd crypto/libsodium-fork && \
 		test ! -e Makefile || make clean
 	rm -rf crypto/lib
 	rm -rf crypto/libs
 	rm -rf crypto/copies
 	rm -rf ./gen/devnet ./gen/mainnetnet ./gen/testnet
+	rm -rf $(GOBIN)-darwin-amd64 $(GOBIN)-darwin-arm64
 
 # clean without crypto
 cleango:
 	go clean -i ./...
-	rm -f $(GOPATH1)/bin/node_exporter
+	rm -f $(GOBIN)/node_exporter
 
 # assign the phony target node_exporter the dependency of the actual executable.
-node_exporter: $(GOPATH1)/bin/node_exporter
+node_exporter: $(GOBIN)/node_exporter
 
 # The recipe for making the node_exporter is by extracting it from the gzipped&tar file.
 # The file is was taken from the S3 cloud and it traditionally stored at
 # /travis-build-artifacts-us-ea-1.algorand.network/algorand/node_exporter/latest/node_exporter-stable-linux-x86_64.tar.gz
-$(GOPATH1)/bin/node_exporter:
-	mkdir -p $(GOPATH1)/bin && \
-	cd $(GOPATH1)/bin && \
+$(GOBIN)/node_exporter:
+	mkdir -p $(GOBIN) && \
+	cd $(GOBIN) && \
 	if [ -z "$(CROSS_COMPILE_ARCH)" ]; then \
 		tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz; \
 	else \
@@ -358,7 +385,7 @@ gen/%/genesis.dump: gen/%/genesis.json
 	./scripts/dump_genesis.sh $< > $@
 
 gen/%/genesis.json: gen/%.json gen/generate.go buildsrc
-	$(GOPATH1)/bin/genesis -q $(SHORT_PART_PERIOD_FLAG) -n $(shell basename $(shell dirname $@)) -c $< -d $(subst .json,,$<)
+	$(GOBIN)/genesis -q $(SHORT_PART_PERIOD_FLAG) -n $(shell basename $(shell dirname $@)) -c $< -d $(subst .json,,$<)
 
 gen: $(addsuffix gen, $(NETWORKS)) mainnetgen
 
@@ -376,17 +403,17 @@ mainnetgen: gen/mainnet/genesis.dump
 # This target is preserved as part of the history on how mainnet genesis.json was generated from the CSV file.
 gen/mainnet/genesis.json: gen/pregen/mainnet/genesis.csv buildsrc
 	mkdir -p gen/mainnet
-	cat gen/pregen/mainnet/genesis.csv | $(GOPATH1)/bin/incorporate -m gen/pregen/mainnet/metadata.json > gen/mainnet/genesis.json
+	cat gen/pregen/mainnet/genesis.csv | $(GOBIN)/incorporate -m gen/pregen/mainnet/metadata.json > gen/mainnet/genesis.json
 
 capabilities: build
-	sudo setcap cap_ipc_lock+ep $(GOPATH1)/bin/kmd
+	sudo setcap cap_ipc_lock+ep $(GOBIN)/kmd
 
 dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 
 install: build
-	scripts/dev_install.sh -p $(GOPATH1)/bin
+	scripts/dev_install.sh -p $(GOBIN)
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal
+.PHONY: default fmt lint check_shell sanity cover prof deps build build-race build-e2e test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule

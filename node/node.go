@@ -95,9 +95,9 @@ type StatusReport struct {
 	CatchpointCatchupAcquiredBlocks    uint64
 	UpgradePropose                     protocol.ConsensusVersion
 	UpgradeApprove                     bool
-	UpgradeDelay                       uint64
+	UpgradeDelay                       basics.Round
 	NextProtocolVoteBefore             basics.Round
-	NextProtocolApprovals              uint64
+	NextProtocolApprovals              basics.Round
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -152,6 +152,9 @@ type AlgorandFullNode struct {
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
 
+	hybridError                 string // whether the MakeFull switched to non-hybrid mode due to a P2PHybridConfigError and needs to be logged periodically
+	hybridErrorRoutineWaitGroup sync.WaitGroup
+
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
@@ -202,21 +205,40 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
+	var genesisInfo = network.GenesisInfo{
+		GenesisID: genesis.ID(),
+		NetworkID: genesis.Network,
+	}
+recreateNetwork:
 	if cfg.EnableP2PHybridMode {
-		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil)
 		if err != nil {
-			log.Errorf("could not create hybrid p2p node: %v", err)
-			return nil, err
+			if _, ok := err.(config.P2PHybridConfigError); !ok {
+				log.Errorf("could not create hybrid p2p node: %v", err)
+				return nil, err
+			}
+			// it was P2PHybridConfigError error so fallback to non-hybrid mode (either P2P or WS)
+			cfg.EnableP2PHybridMode = false
+
+			// indicate we need to start logging the error into the log periodically
+			fallbackNetName := "WS"
+			if cfg.EnableP2P {
+				fallbackNetName = "P2P"
+			}
+			node.hybridError = fmt.Sprintf("could not create hybrid p2p node: %v. Falling back to %s network", err, fallbackNetName)
+			log.Error(node.hybridError)
+
+			goto recreateNetwork
 		}
 	} else if cfg.EnableP2P {
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil, nil)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
 		}
 	} else {
 		var wsNode *network.WebsocketNetwork
-		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesisInfo, node, nil, nil)
 		if err != nil {
 			log.Errorf("could not create websocket node: %v", err)
 			return nil, err
@@ -372,6 +394,24 @@ func (node *AlgorandFullNode) Start() error {
 		return nil
 	}
 
+	if node.hybridError != "" {
+		node.hybridErrorRoutineWaitGroup.Add(1)
+		go func() {
+			defer node.hybridErrorRoutineWaitGroup.Done()
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-node.ctx.Done():
+					return
+				case <-ticker.C:
+					// continue logging the error periodically
+					node.log.Error(node.hybridError)
+				}
+			}
+		}()
+	}
+
 	if node.catchpointCatchupService != nil {
 		startNetwork()
 		node.catchpointCatchupService.Start(node.ctx)
@@ -447,6 +487,7 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
+		node.hybridErrorRoutineWaitGroup.Wait()
 
 		// oldKeyDeletionThread uses accountManager registry so must be stopped before accountManager is closed
 		node.accountManager.Registry().Close()
@@ -788,7 +829,7 @@ func latestBlockStatus(ledger *data.Ledger, catchupService *catchup.Service) (s 
 
 	s.UpgradePropose = b.UpgradeVote.UpgradePropose
 	s.UpgradeApprove = b.UpgradeApprove
-	s.UpgradeDelay = uint64(b.UpgradeVote.UpgradeDelay)
+	s.UpgradeDelay = b.UpgradeVote.UpgradeDelay
 	s.NextProtocolVoteBefore = b.NextProtocolVoteBefore
 	s.NextProtocolApprovals = b.UpgradeState.NextProtocolApprovals
 
@@ -1448,12 +1489,12 @@ func (node *AlgorandFullNode) IsParticipating() bool {
 }
 
 // SetSyncRound no-ops
-func (node *AlgorandFullNode) SetSyncRound(_ uint64) error {
+func (node *AlgorandFullNode) SetSyncRound(_ basics.Round) error {
 	return nil
 }
 
 // GetSyncRound returns 0 (not set) in the base node implementation
-func (node *AlgorandFullNode) GetSyncRound() uint64 {
+func (node *AlgorandFullNode) GetSyncRound() basics.Round {
 	return 0
 }
 

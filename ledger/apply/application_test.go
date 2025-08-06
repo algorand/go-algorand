@@ -441,7 +441,7 @@ func TestAppCallCreate(t *testing.T) {
 	// no balance record
 	appIdx, err := createApplication(&ac, b, creator, txnCounter)
 	a.Error(err)
-	a.Equal(basics.AppIndex(0), appIdx)
+	a.Zero(appIdx)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}

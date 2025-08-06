@@ -225,9 +225,9 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	requestedCompressedResponse := strings.Contains(request.Header.Get("Accept-Encoding"), "gzip")
 	if requestedCompressedResponse {
 		response.Header().Set("Content-Encoding", "gzip")
-		written, err := io.Copy(response, cs)
-		if err != nil {
-			logging.Base().Infof("LedgerService.ServeHTTP : unable to write compressed catchpoint file for round %d, written bytes %d : %v", round, written, err)
+		written, err1 := io.Copy(response, cs)
+		if err1 != nil {
+			logging.Base().Infof("LedgerService.ServeHTTP : unable to write compressed catchpoint file for round %d, written bytes %d : %v", round, written, err1)
 		}
 		elapsed := time.Since(start)
 		logging.Base().Infof("LedgerService.ServeHTTP: served catchpoint round %d in %d sec", round, int(elapsed.Seconds()))

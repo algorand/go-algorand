@@ -7,8 +7,9 @@ set -e
 # Suppress telemetry reporting for tests
 export ALGOTEST=1
 
-SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
+S3_TESTDATA=${S3_TESTDATA:-algorand-testdata}
 
+SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCROOT="$(pwd -P)"
 
 export CHANNEL=master
@@ -24,7 +25,7 @@ Options:
     -n        Run tests without building binaries (Binaries are expected in PATH)
     -i        Start an interactive session for running e2e subs.
 "
-NO_BUILD=false
+NO_BUILD=${NO_BUILD:-false}
 while getopts ":c:nhi" opt; do
   case ${opt} in
     c ) CHANNEL=$OPTARG
@@ -170,8 +171,10 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     KEEP_TEMPS_CMD_STR=""
 
-    # If the platform is arm64, we want to pass "--keep-temps" into e2e_client_runner.py
+    # For one platform, we want to pass "--keep-temps" into e2e_client_runner.py
     # so that we can keep the temporary test artifact for use in the indexer e2e tests.
+    # This is done in the CI environment, where the CI_KEEP_TEMP_PLATFORM variable is set to the platform
+    # that should keep the temporary test artifact.
     # The file is located at ${TEMPDIR}/net_done.tar.bz2
     if [ -n "$CI_KEEP_TEMP_PLATFORM" ] && [ "$CI_KEEP_TEMP_PLATFORM" == "$CI_PLATFORM" ]; then
       echo "Setting --keep-temps so that an e2e artifact can be saved."
@@ -189,7 +192,10 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         echo "done"
         exit
     else
-        $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+        # Run parallel tests if testsuite is unset or set to "parallel"
+        if [ "${E2E_SUBS_TESTSUITE}" = "" ] || [ "${E2E_SUBS_TESTSUITE}" = "parallel" ]; then
+            $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+        fi
     fi
 
     # If the temporary artifact directory exists, then the test artifact needs to be created
@@ -203,12 +209,15 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         tar -j -c -f "${CI_E2E_FILENAME}.tar.bz2" --exclude node.log --exclude agreement.cdv net
         rm -rf "${TEMPDIR}/net"
         RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
-        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
-        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://${S3_TESTDATA}/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
+        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://${S3_TESTDATA}/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
         popd
     fi
 
     duration "parallel client runner"
+
+    # Run vdir and serial tests if testsuite is unset or set to "vdir-serial"
+    if [ "${E2E_SUBS_TESTSUITE}" = "" ] || [ "${E2E_SUBS_TESTSUITE}" = "vdir-serial" ]; then
 
     for vdir in "$SRCROOT"/test/scripts/e2e_subs/v??; do
         $clientrunner --version "$(basename "$vdir")" "$vdir"/*.sh
@@ -219,8 +228,10 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         $clientrunner "$script"
     done
 
-    deactivate
     duration "serial client runners"
+    fi # if E2E_SUBS_TESTSUITE == "" or == "vdir-serial"
+    deactivate
+
 fi # if E2E_TEST_FILTER == "" or == "SCRIPTS"
 
 if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "GO" ]; then

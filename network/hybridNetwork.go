@@ -32,14 +32,14 @@ import (
 type HybridP2PNetwork struct {
 	p2pNetwork *P2PNetwork
 	wsNetwork  *WebsocketNetwork
-	genesisID  string
 
 	useP2PAddress bool
+	mesher        mesher
 }
 
 // NewHybridP2PNetwork constructs a GossipNode that combines P2PNetwork and WebsocketNetwork
 // Hybrid mode requires both P2P and WS to be running in server (NetAddress set) or client (NetAddress empty) mode.
-func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (*HybridP2PNetwork, error) {
+func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, nodeInfo NodeInfo, meshCreator MeshCreator) (*HybridP2PNetwork, error) {
 	if err := cfg.ValidateP2PHybridConfig(); err != nil {
 		return nil, err
 	}
@@ -48,7 +48,21 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	p2pcfg.NetAddress = cfg.P2PHybridNetAddress
 	p2pcfg.IncomingConnectionsLimit = cfg.P2PHybridIncomingConnectionsLimit
 	identityTracker := NewIdentityTracker()
-	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID, nodeInfo, &identityOpts{tracker: identityTracker})
+
+	var childWsNetMeshCreator MeshCreator = meshCreator
+	var childP2PNetMeshCreator MeshCreator = meshCreator
+	var hybridMeshCreator MeshCreator = noopMeshCreator{}
+	_, isHybridMeshCreator := meshCreator.(hybridRelayMeshCreator)
+	if meshCreator == nil && cfg.IsHybridServer() || isHybridMeshCreator {
+		// no mesh creator provided and this node is a listening/relaying node
+		// then override and use hybrid relay meshing
+		// or, if a hybrid relay meshing requested explicitly, do the same
+		childWsNetMeshCreator = noopMeshCreator{}
+		childP2PNetMeshCreator = noopMeshPubSubFilteredCreator{}
+		hybridMeshCreator = hybridRelayMeshCreator{}
+	}
+
+	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisInfo, nodeInfo, &identityOpts{tracker: identityTracker}, childP2PNetMeshCreator)
 	if err != nil {
 		return nil, err
 	}
@@ -57,15 +71,25 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 		tracker: identityTracker,
 		scheme:  NewIdentityChallengeScheme(NetIdentityDedupNames(cfg.PublicAddress, p2pnet.PeerID().String()), NetIdentitySigner(p2pnet.PeerIDSigner())),
 	}
-	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisID, networkID, nodeInfo, &identOpts)
+	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisInfo, nodeInfo, &identOpts, childWsNetMeshCreator)
 	if err != nil {
 		return nil, err
 	}
-	return &HybridP2PNetwork{
+
+	hybridMesh, err := hybridMeshCreator.create(
+		withWebsocketNetwork(wsnet),
+		withP2PNetwork(p2pnet))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create hybrid mesh: %w", err)
+	}
+
+	hn := &HybridP2PNetwork{
 		p2pNetwork: p2pnet,
 		wsNetwork:  wsnet,
-		genesisID:  genesisID,
-	}, nil
+		mesher:     hybridMesh,
+	}
+
+	return hn, nil
 }
 
 // Address implements GossipNode
@@ -179,15 +203,22 @@ func (n *HybridP2PNetwork) Start() error {
 	err := n.runParallel(func(net GossipNode) error {
 		return net.Start()
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	n.mesher.start()
+	return nil
 }
 
 // Stop implements GossipNode
 func (n *HybridP2PNetwork) Stop() {
+	n.mesher.stop()
+
 	_ = n.runParallel(func(net GossipNode) error {
 		net.Stop()
 		return nil
 	})
+
 }
 
 // RegisterHandlers adds to the set of given message handlers.
@@ -236,7 +267,7 @@ func (n *HybridP2PNetwork) OnNetworkAdvance() {
 
 // GetGenesisID returns the network-specific genesisID.
 func (n *HybridP2PNetwork) GetGenesisID() string {
-	return n.genesisID
+	return n.wsNetwork.GetGenesisID()
 }
 
 // called from wsPeer to report that it has closed
