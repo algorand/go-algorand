@@ -156,15 +156,9 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	record.TotalAppSchema = totalSchema
 	record.TotalAppParams = basics.SubSaturate(record.TotalAppParams, 1)
 
-	// Delete app's extra program pages
-	totalExtraPages := record.TotalExtraAppPages
-	if totalExtraPages > 0 {
-		proto := balances.ConsensusParams()
-		if proto.EnableExtraPagesOnAppUpdate {
-			extraPages := params.ExtraProgramPages
-			totalExtraPages = basics.SubSaturate(totalExtraPages, extraPages)
-		}
-		record.TotalExtraAppPages = totalExtraPages
+	// There was a short-lived bug so in one version, pages were not deallocated.
+	if balances.ConsensusParams().EnableProperExtraPageAccounting {
+		record.TotalExtraAppPages = basics.SubSaturate(record.TotalExtraAppPages, params.ExtraProgramPages)
 	}
 
 	err = balances.Put(creator, record)
@@ -194,22 +188,13 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 		return err
 	}
 
-	// Fill in the new programs
 	proto := balances.ConsensusParams()
-	// when proto.EnableExtraPageOnAppUpdate is false, WellFormed rejects all updates with a multiple-page program
-	if proto.EnableExtraPagesOnAppUpdate {
-		lap := len(ac.ApprovalProgram)
-		lcs := len(ac.ClearStateProgram)
-		pages := int(1 + params.ExtraProgramPages)
-		if lap > pages*proto.MaxAppProgramLen {
-			return fmt.Errorf("updateApplication approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-		}
-		if lcs > pages*proto.MaxAppProgramLen {
-			return fmt.Errorf("updateApplication clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-		}
-		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
-			return fmt.Errorf("updateApplication app programs too long, %d. max total len %d bytes", lap+lcs, pages*proto.MaxAppTotalProgramLen)
-		}
+
+	// The pre-application well-formedness check rejects big programs
+	// conservatively, it doesn't know the actual params.ExtraProgramPages, so
+	// it allows any programs that fit under the absolute max.
+	if err = ac.WellSizedPrograms(params.ExtraProgramPages, proto); err != nil {
+		return err
 	}
 
 	params.ApprovalProgram = ac.ApprovalProgram

@@ -610,6 +610,17 @@ func TestWellFormedErrors(t *testing.T) {
 				ExtraProgramPages: 4,
 			},
 			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 3",
+			cv:            cv28,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				ExtraProgramPages: 0,
+				OnCompletion:      UpdateApplicationOC,
+			},
+			cv: protocol.ConsensusFuture,
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -695,17 +706,6 @@ func TestWellFormedErrors(t *testing.T) {
 				ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
 			},
 			expectedError: "tx references exceed MaxAppTotalTxnReferences = 8",
-		},
-		{
-			ac: ApplicationCallTxnFields{
-				ApplicationID:     1,
-				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
-				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
-				ExtraProgramPages: 0,
-				OnCompletion:      UpdateApplicationOC,
-			},
-			cv:            cv28,
-			expectedError: "app programs too long. max total len 2048 bytes",
 		},
 		{
 			ac: ApplicationCallTxnFields{
