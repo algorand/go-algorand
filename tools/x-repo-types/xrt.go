@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -171,17 +170,17 @@ func tearDown(fileBackups map[string]string) error {
 }
 
 func backupFile(src string) (string, error) {
-	content, err := ioutil.ReadFile(src)
+	content, err := os.ReadFile(src)
 	if err != nil {
 		return "", err
 	}
 
-	tmpFile, err := ioutil.TempFile("", "backup-*")
+	tmpFile, err := os.CreateTemp("", "backup-*")
 	if err != nil {
 		return "", err
 	}
 
-	err = ioutil.WriteFile(tmpFile.Name(), content, 0644)
+	err = os.WriteFile(tmpFile.Name(), content, 0644)
 	if err != nil {
 		return "", err
 	}
@@ -210,12 +209,12 @@ func restoreFile(src, dst string) error {
 		return err
 	}
 
-	content, err := ioutil.ReadFile(src)
+	content, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(dst, content, dstFileInfo.Mode())
+	err = os.WriteFile(dst, content, dstFileInfo.Mode())
 	if err != nil {
 		return err
 	}

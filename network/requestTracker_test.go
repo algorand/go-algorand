@@ -87,11 +87,13 @@ func TestRateLimiting(t *testing.T) {
 	// This test is conducted locally, so we want to treat all hosts the same for counting incoming requests.
 	testConfig.DisableLocalhostConnectionRateLimit = false
 	wn := &WebsocketNetwork{
-		log:             log,
-		config:          testConfig,
-		phonebook:       phonebook.MakePhonebook(1, 1),
-		GenesisID:       "go-test-network-genesis",
-		NetworkID:       config.Devtestnet,
+		log:       log,
+		config:    testConfig,
+		phonebook: phonebook.MakePhonebook(1, 1),
+		genesisInfo: GenesisInfo{
+			GenesisID: "go-test-network-genesis",
+			NetworkID: config.Devtestnet,
+		},
 		peerStater:      peerConnectionStater{log: log},
 		identityTracker: noopIdentityTracker{},
 	}

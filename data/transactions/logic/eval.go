@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -52,7 +53,7 @@ const maxStringSize = 4096
 const maxByteMathSize = 64
 
 // maxLogSize is the limit of total log size from n log calls in a program
-const maxLogSize = config.MaxEvalDeltaTotalLogSize
+const maxLogSize = bounds.MaxEvalDeltaTotalLogSize
 
 // maxLogCalls is the limit of total log calls during a program execution
 const maxLogCalls = 32
@@ -66,7 +67,7 @@ var maxAppCallDepth = 8
 // maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
 
-// maxTxGroupSize is the same as config.MaxTxGroupSize, but is a constant so
+// maxTxGroupSize is the same as bounds.MaxTxGroupSize, but is a constant so
 // that we can declare an array of this size. A unit test confirms that they
 // match.
 const maxTxGroupSize = 16
@@ -295,10 +296,10 @@ type UnnamedResourcePolicy interface {
 // EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
 type EvalConstants struct {
 	// MaxLogSize is the limit of total log size from n log calls in a program
-	MaxLogSize uint64
+	MaxLogSize int
 
 	// MaxLogCalls is the limit of total log calls during a program execution
-	MaxLogCalls uint64
+	MaxLogCalls int
 
 	// UnnamedResources, if provided, allows resources to be used without being named according to
 	// this policy.
@@ -308,8 +309,8 @@ type EvalConstants struct {
 // RuntimeEvalConstants gives a set of const params used in normal runtime of opcodes
 func RuntimeEvalConstants() EvalConstants {
 	return EvalConstants{
-		MaxLogSize:  uint64(maxLogSize),
-		MaxLogCalls: uint64(maxLogCalls),
+		MaxLogSize:  maxLogSize,
+		MaxLogCalls: maxLogCalls,
 	}
 }
 
@@ -631,15 +632,9 @@ func (ep *EvalParams) RecordAD(gi int, ad transactions.ApplyData) {
 		}
 		ep.available.createdAsas[aid] = struct{}{}
 	}
-	if aid := ad.ApplicationID; aid != 0 {
-		if ep.available == nil {
-			ep.available = ep.computeAvailability()
-		}
-		if ep.available.createdApps == nil {
-			ep.available.createdApps = make(map[basics.AppIndex]struct{})
-		}
-		ep.available.createdApps[aid] = struct{}{}
-	}
+	// we don't need to add ad.ApplicationID to createdApps, because that is
+	// done at the beginning of app execution now, so that newly created apps
+	// will already have their appID present.
 }
 
 type frame struct {
@@ -1155,12 +1150,10 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 		}
 		// and add the appID to `createdApps`
-		if cx.EvalParams.Proto.LogicSigVersion >= sharedResourcesVersion {
-			if cx.EvalParams.available.createdApps == nil {
-				cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
-			}
-			cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
+		if cx.EvalParams.available.createdApps == nil {
+			cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
 		}
+		cx.EvalParams.available.createdApps[cx.appID] = struct{}{}
 	}
 
 	// Check the I/O budget for reading if this is the first top-level app call
@@ -1452,9 +1445,6 @@ func (cx *EvalContext) begin(program []byte) error {
 	}
 	if version > cx.Proto.LogicSigVersion {
 		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
-	}
-	if err != nil {
-		return err
 	}
 
 	cx.version = version
@@ -2976,6 +2966,8 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = params.LocalStateSchema.NumByteSlice
 	case AppExtraProgramPages:
 		sv.Uint = uint64(params.ExtraProgramPages)
+	case AppVersion:
+		sv.Uint = params.Version
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
@@ -3100,11 +3092,10 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	if inner {
 		// Before we had inner apps, we did not allow these, since we had no inner groups.
 		if cx.version < innerAppsEnabledVersion && (fs.field == GroupIndex || fs.field == TxID) {
-			err = fmt.Errorf("illegal field for inner transaction %s", fs.field)
-			return
+			return sv, fmt.Errorf("illegal field for inner transaction %s", fs.field)
 		}
 	}
-	err = nil
+
 	txn := &stxn.SignedTxn.Txn
 	switch fs.field {
 	case Sender:
@@ -3175,6 +3166,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Uint = uint64(txn.ApplicationID)
 	case OnCompletion:
 		sv.Uint = uint64(txn.OnCompletion)
+	case RejectVersion:
+		sv.Uint = uint64(txn.RejectVersion)
 
 	case ApplicationArgs:
 		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
@@ -4298,8 +4291,7 @@ func (cx *EvalContext) availableAccount(addr basics.Address) bool {
 	// Allow an address for an app that was created in group
 	if cx.version >= createdResourcesVersion {
 		for appID := range cx.available.createdApps {
-			createdAddress := cx.GetApplicationAddress(appID)
-			if addr == createdAddress {
+			if addr == cx.GetApplicationAddress(appID) {
 				return true
 			}
 		}
@@ -5122,12 +5114,12 @@ func opOnlineStake(cx *EvalContext) error {
 func opLog(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 
-	if uint64(len(cx.txn.EvalDelta.Logs)) >= cx.MaxLogCalls {
+	if len(cx.txn.EvalDelta.Logs) >= cx.MaxLogCalls {
 		return fmt.Errorf("too many log calls in program. up to %d is allowed", cx.MaxLogCalls)
 	}
 	log := cx.Stack[last]
 	cx.logSize += len(log.Bytes)
-	if uint64(cx.logSize) > cx.MaxLogSize {
+	if cx.logSize > cx.MaxLogSize {
 		return fmt.Errorf("program logs too large. %d bytes >  %d bytes limit", cx.logSize, cx.MaxLogSize)
 	}
 	cx.txn.EvalDelta.Logs = append(cx.txn.EvalDelta.Logs, string(log.Bytes))
@@ -5445,6 +5437,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		var onc uint64
 		onc, err = sv.uintMaxed(uint64(transactions.DeleteApplicationOC))
 		txn.OnCompletion = transactions.OnCompletion(onc)
+	case RejectVersion:
+		txn.RejectVersion, err = sv.uint()
 	case ApplicationArgs:
 		if sv.Bytes == nil {
 			return fmt.Errorf("ApplicationArg is not a byte array")

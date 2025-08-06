@@ -1,0 +1,40 @@
+name: 'Set up Test Environment'
+description: 'Set up testing environment for all platforms'
+inputs:
+  install-expect:
+    description: 'Whether to install expect package'
+    required: false
+    default: 'false'
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache libsodium
+      uses: actions/cache@v4
+      with:
+        path: crypto/libs
+        key: libsodium-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+    - name: Build libsodium
+      run: make libsodium
+      shell: bash
+    - name: Configure development environment
+      if: runner.os != 'Linux'
+      run: ./scripts/configure_dev.sh
+      shell: bash
+      # GHA Linux VMs provide all needed apt packages, except expect
+    - name: Install expect package
+      if: inputs.install-expect == 'true' && runner.os == 'Linux'
+      run: |
+        echo 'set man-db/auto-update false' | sudo debconf-communicate >/dev/null
+        sudo dpkg-reconfigure -f noninteractive man-db
+        sudo apt-get install -y --no-upgrade expect
+      shell: bash
+    - name: Cache gotestsum
+      id: cache-gotestsum
+      uses: actions/cache@v4
+      with:
+        path: ~/go/bin/gotestsum
+        key: gotestsum-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/buildtools/versions') }}
+    - name: Install gotestsum
+      if: steps.cache-gotestsum.outputs.cache-hit != 'true'
+      run: ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+      shell: bash

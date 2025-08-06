@@ -28,7 +28,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -293,13 +292,9 @@ func runLogLevelsTest(t *testing.T, minLevel logrus.Level, expected int) {
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	// See if we got the expected number of entries
 	a.Equal(expected, len(f.hookEntries()))
@@ -321,13 +316,9 @@ func TestLogHistoryLevels(t *testing.T) {
 	f.l.Error("error")
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	data := f.hookData()
 	a.Nil(data[0]["log"]) // Debug
@@ -349,12 +340,9 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	tempDir := os.TempDir()
-	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()
-	config.SetGlobalConfigFileRoot(tempDir)
 
-	cfg, err := ReadTelemetryConfigOrDefault("", "")
+	cfg, err := ReadTelemetryConfigOrDefault("", tempDir)
 	defaultCfgSettings := createTelemetryConfig()
-	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
 
 	a.Nil(err)
 	a.NotNil(cfg)

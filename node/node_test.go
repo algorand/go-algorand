@@ -17,6 +17,7 @@
 package node
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	csp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
@@ -822,7 +824,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
 	// the logicsig args can both be up to to MaxLogicSigMaxSize, but that's the max for
 	// them combined, so it double counts and we have to subtract one.
-	maxCombinedTxnSize -= uint64(config.MaxLogicSigMaxSize)
+	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
 
 	// maxCombinedTxnSize is still an overestimate because it assumes all txn
 	// type fields can be in the same txn.  That's not true, but it provides an
@@ -950,10 +952,18 @@ func TestNodeHybridTopology(t *testing.T) {
 	startAndConnectNodes(nodes, 10*time.Second)
 
 	// ensure the initial connectivity topology
+	repeatCounter := 0
 	require.Eventually(t, func() bool {
+		repeatCounter++
 		node0Conn := len(nodes[0].net.GetPeers(network.PeersConnectedIn)) > 0                             // has connection from 1
 		node1Conn := len(nodes[1].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) == 2 // connected to 0 and 2
 		node2Conn := len(nodes[2].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) >= 1 // connected to 1
+		if repeatCounter > 100 && !(node0Conn && node1Conn && node2Conn) {
+			t.Logf("IN/OUT connection stats:\nNode0 %d/%d, Node1 %d/%d, Node2 %d/%d",
+				len(nodes[0].net.GetPeers(network.PeersConnectedIn)), len(nodes[0].net.GetPeers(network.PeersConnectedOut)),
+				len(nodes[1].net.GetPeers(network.PeersConnectedIn)), len(nodes[1].net.GetPeers(network.PeersConnectedOut)),
+				len(nodes[2].net.GetPeers(network.PeersConnectedIn)), len(nodes[2].net.GetPeers(network.PeersConnectedOut)))
+		}
 		return node0Conn && node1Conn && node2Conn
 	}, 60*time.Second, 500*time.Millisecond)
 
@@ -1022,15 +1032,15 @@ func TestNodeP2PRelays(t *testing.T) {
 		switch i {
 		case 0:
 			// node R1 connects to R2
-			t.Logf("Node%d phonebook: %s", i, ni[1].p2pMultiAddr())
+			t.Logf("Node%d %s phonebook: %s", i, ni[0].p2pID, ni[1].p2pMultiAddr())
 			return []string{ni[1].p2pMultiAddr()}
 		case 1:
 			// node R2 connects to none one
-			t.Logf("Node%d phonebook: empty", i)
+			t.Logf("Node%d %s phonebook: empty", i, ni[1].p2pID)
 			return []string{}
 		case 2:
-			// node N only connects to R1
-			t.Logf("Node%d phonebook: %s", i, ni[1].p2pMultiAddr())
+			// node N only connects to R2
+			t.Logf("Node%d %s phonebook: %s", i, ni[2].p2pID, ni[1].p2pMultiAddr())
 			return []string{ni[1].p2pMultiAddr()}
 		default:
 			t.Errorf("not expected number of nodes: %d", i)
@@ -1261,4 +1271,125 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 	case <-time.After(1 * time.Minute):
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
+}
+
+// TestNodeP2P_NetProtoVersions makes sure two p2p nodes with different network protocol versions
+// can communicate and produce blocks.
+func TestNodeP2P_NetProtoVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const consensusTest0 = protocol.ConsensusVersion("test0")
+
+	configurableConsensus := make(config.ConsensusProtocols)
+
+	testParams0 := config.Consensus[protocol.ConsensusCurrentVersion]
+	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
+	configurableConsensus[consensusTest0] = testParams0
+
+	maxMoneyAtStart := 100_000_000_000
+
+	const numAccounts = 2
+	acctStake := make([]basics.MicroAlgos, numAccounts)
+	acctStake[0] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
+	acctStake[1] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
+
+	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
+		cfg = config.GetDefaultLocal()
+		cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
+		cfg.EnableP2P = true
+		cfg.NetAddress = ""
+
+		cfg.P2PPersistPeerID = true
+		privKey, err := p2p.GetPrivKey(cfg, ni.rootDir)
+		require.NoError(t, err)
+		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
+		require.NoError(t, err)
+
+		switch ni.idx {
+		case 0:
+			cfg.NetAddress = ni.p2pNetAddr()
+			cfg.EnableVoteCompression = true
+		case 1:
+			cfg.EnableVoteCompression = false
+		default:
+		}
+		return ni, cfg
+	}
+
+	phonebookHook := func(nodes []nodeInfo, nodeIdx int) []string {
+		phonebook := make([]string, 0, len(nodes)-1)
+		for i := range nodes {
+			if i != nodeIdx {
+				phonebook = append(phonebook, nodes[i].p2pMultiAddr())
+			}
+		}
+		return phonebook
+	}
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	require.Len(t, nodes, numAccounts)
+	require.Len(t, wallets, numAccounts)
+	for i := 0; i < len(nodes); i++ {
+		defer os.Remove(wallets[i])
+		defer nodes[i].Stop()
+	}
+
+	startAndConnectNodes(nodes, nodelayFirstNodeStartDelay)
+
+	require.Eventually(t, func() bool {
+		connectPeers(nodes)
+		return len(nodes[0].net.GetPeers(network.PeersConnectedIn, network.PeersConnectedOut)) >= 1 &&
+			len(nodes[1].net.GetPeers(network.PeersConnectedIn, network.PeersConnectedOut)) >= 1
+	}, 60*time.Second, 1*time.Second)
+
+	const initialRound = 1
+	const maxRounds = 3
+	for tests := basics.Round(0); tests < maxRounds; tests++ {
+		blocks := make([]bookkeeping.Block, len(wallets))
+		for i := range wallets {
+			select {
+			case <-nodes[i].ledger.Wait(initialRound + tests):
+				blk, err := nodes[i].ledger.Block(initialRound + tests)
+				if err != nil {
+					panic(err)
+				}
+				blocks[i] = blk
+			case <-time.After(60 * time.Second):
+				require.Fail(t, fmt.Sprintf("no block notification for account: %v. Iteration: %v", wallets[i], tests))
+				return
+			}
+		}
+	}
+}
+
+func TestNodeMakeFullHybrid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&buf)
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ":0"
+
+	node, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
+	err = node.Start()
+	require.NoError(t, err)
+	require.IsType(t, &network.WebsocketNetwork{}, node.net)
+
+	node.Stop()
+	messages := buf.String()
+	require.Contains(t, messages, "could not create hybrid p2p node: P2PHybridMode requires both NetAddress")
+	require.Contains(t, messages, "Falling back to WS network")
 }

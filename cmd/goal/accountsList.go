@@ -20,10 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
@@ -63,11 +63,11 @@ func (accountList *AccountsList) accountListFileName() string {
 	if libgoal.AlgorandDataIsPrivate(dataDir) {
 		return filepath.Join(dataDir, gid, "accountList.json")
 	}
-	cu, err := user.Current()
+	cfgRoot, err := config.GetGlobalConfigFileRoot()
 	if err != nil {
-		reportErrorln("could not get current user info")
+		reportErrorf("unable to find config root: %v", err)
 	}
-	return filepath.Join(cu.HomeDir, ".algorand", gid, "accountList.json")
+	return filepath.Join(cfgRoot, gid, "accountList.json")
 }
 
 // isDefault returns true, if the account is marked is default, false otherwise. If account doesn't exist isDefault

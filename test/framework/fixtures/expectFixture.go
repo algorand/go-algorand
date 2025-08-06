@@ -191,7 +191,7 @@ func (ef *ExpectFixture) Run() {
 					if ferr != nil {
 						stderr = ferr.Error()
 					}
-					syncTest.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, string(outBuf.Bytes()), stderr)
+					syncTest.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, outBuf, stderr)
 					syncTest.Fail()
 				} else {
 					// t.Logf("stdout: %s", string(outBuf.Bytes()))

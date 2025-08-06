@@ -1,0 +1,310 @@
+name: PR Tests
+on:
+  pull_request:
+    branches:
+      - master
+      - 'rel/**'
+
+env:
+  CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
+  ALGORAND_DEADLOCK: enable
+  KMD_NOUSB: True
+  BUILD_TYPE: integration
+  ALGOTEST: 1
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  SKIP_GO_INSTALLATION: True
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04"]
+        partition_id: [0, 1, 2, 3, 4, 5] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 6
+      CIRCLECI: true
+      SHORTTEST: "-short"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: test
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
+      - name: Run tests
+        run: |
+          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
+          mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
+          gotestsum --format standard-quiet \
+            --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
+            --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
+            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
+            $PACKAGE_NAMES
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Test"
+          build-type: "PR Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
+      - name: Upload test artifacts to GitHub
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload coverage
+        # Only upload coverage from ubuntu-24.04 platform
+        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
+        uses: codecov/codecov-action@v4
+        env:
+          GITHUB_ACTIONS: True
+          CIRCLECI: ""
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          file: ./coverage.txt
+          fail_ci_if_error: false
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_test/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04"]
+        partition_id: [0, 1, 2, 3, 4] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 5
+      E2E_TEST_FILTER: GO
+      PARALLEL_FLAG: "-p 4"
+      SHORTTEST: "-short"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: build-e2e
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
+      - name: Build e2e binaries
+        run: make build-e2e
+      - name: Run integration tests
+        run: |
+          mkdir -p ~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID}
+          NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
+          test/scripts/e2e.sh
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Integration Test"
+          build-type: "PR Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_integration_tests.name }}`"
+      - name: Upload test artifacts to GitHub
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_integration/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  e2e_expect:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04"]
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # set PARTITION_TOTAL below to match
+    runs-on: ${{ matrix.platform }}
+    env:
+      CIRCLECI: true
+      PARTITION_ID: ${{ matrix.partition_id }}
+      PARTITION_TOTAL: 10
+      E2E_TEST_FILTER: EXPECT
+      PARALLEL_FLAG: "-p 4"
+      SHORTTEST: "-short"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: build-e2e
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
+        with:
+          install-expect: true
+      - name: Build e2e binaries
+        run: make build-e2e
+      - name: Run E2E expect tests
+        run: |
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID}
+          NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
+          test/scripts/e2e.sh
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Expect Test"
+          build-type: "PR Build"
+          details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
+      - name: Upload test artifacts to GitHub
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e_expect-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: ~/test_results
+          retention-days: 7
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          file: ${{ matrix.platform == 'macos-14' && '/Users/runner' || '/home/runner' }}/test_results/${{ matrix.platform }}_e2e_expect/${{ matrix.partition_id }}/results.xml
+          token: ${{ env.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  e2e_subs:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ["ubuntu-24.04"]
+        testsuite: ["parallel", "vdir-serial"]
+    runs-on: ${{ matrix.platform }}
+    env:
+      E2E_TEST_FILTER: SCRIPTS
+      E2E_SUBS_TESTSUITE: ${{ matrix.testsuite }}
+      CI_PLATFORM: ${{ matrix.platform }}
+      CI_KEEP_TEMP_PLATFORM: ""
+      SHORTTEST: "-short"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: buildsrc
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
+      - name: Build binaries
+        run: make buildsrc
+      - name: Run E2E subs tests
+        run: |
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs
+          NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
+          test/scripts/e2e.sh
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Subs Test"
+          build-type: "PR Build"
+          details: "• Test Suite: `${{ matrix.testsuite }}`\n• Failed Step: `${{ steps.run_e2e_expect_tests.name }}`"
+      - name: Upload test artifacts to GitHub
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e_subs-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.testsuite }}
+          path: ~/test_results
+          retention-days: 7
+
+  verify:
+    needs: [test, integration, e2e_expect, e2e_subs]
+    strategy:
+      fail-fast: false
+      matrix:
+        test_type: ["test", "integration", "e2e_expect", "e2e_subs"]
+        platform: ["ubuntu-24.04"]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ matrix.test_type }}-results-${{ matrix.platform }}-*
+          path: ~/test_results
+          merge-multiple: true
+      - name: Check test execution
+        run: |
+          cat ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}/**/testresults.json > ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}/combined_testresults.json
+          python3 scripts/buildtools/check_tests.py \
+            --tests-results-filepath ~/test_results/${{ matrix.platform }}_${{ matrix.test_type }}/combined_testresults.json \
+            --ignored-tests \
+              TestAlgodWithExpect \
+              TestAlgohWithExpect \
+              TestGoalWithExpect \
+              TestTealdbgWithExpect
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.github/actions/slack-notify
+        with:
+          job-type: "Verify"
+          build-type: "PR Build"
+          details: "• Test Type: `${{ matrix.test_type }}`\n• Branch: `${{ github.ref_name }}`"
+
+  report:
+    needs: [test, integration, e2e_expect, e2e_subs]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*-results-*"
+          path: ~/test_results
+          merge-multiple: true
+      - name: Generate failure summary
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          for job_type in test integration e2e_expect e2e_subs; do
+            FAILED_TESTS=$(find ~/test_results -path "*_${job_type}/*" -name "testresults.json" -exec jq -r 'select(.Action == "fail" and .Test) | "\(.Package)/\(.Test)"' {} \; 2>/dev/null | sort -u | grep -v '^$' || true)
+            if [ -n "$FAILED_TESTS" ]; then
+              echo "### ${job_type} failures" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "$FAILED_TESTS" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "FAILED=true" >> $GITHUB_ENV
+            else
+              echo "### ${job_type} ✅" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: Fail if there were test failures
+        if: env.FAILED == 'true'
+        run: exit 1

@@ -20,7 +20,6 @@ package gossip
 
 import (
 	"context"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -178,13 +177,4 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	}
 
 	i.net.Disconnect(metadata.raw.Sender)
-}
-
-// broadcastTimeout is currently only used by test code.
-// In test code we want to queue up a bunch of outbound packets and then see that they got through, so we need to wait at least a little bit for them to all go out.
-// Normal agreement state machine code uses GossipNode.Broadcast non-blocking and may drop outbound packets.
-func (i *networkImpl) broadcastTimeout(t protocol.Tag, data []byte, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	return i.net.Broadcast(ctx, t, data, true, nil)
 }

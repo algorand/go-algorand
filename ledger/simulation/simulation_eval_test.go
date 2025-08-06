@@ -136,7 +136,7 @@ func validateSimulationResult(t *testing.T, result simulation.Result) {
 	}
 }
 
-const ignoreAppBudgetConsumed = math.MaxUint64
+const ignoreAppBudgetConsumed = math.MaxInt
 
 func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simulationTestCase) {
 	t.Helper()
@@ -182,7 +182,7 @@ func runSimulationTestCase(t *testing.T, env simulationtesting.Environment, test
 		if testcase.expected.TxnGroups[i].AppBudgetConsumed == ignoreAppBudgetConsumed {
 			// This test does not care about the app budget consumed. Replace it with the actual value.
 			// But let's still ensure it's the sum of budgets consumed in this group.
-			var sum uint64
+			var sum int
 			for _, txn := range actual.TxnGroups[i].Txns {
 				sum += txn.AppBudgetConsumed
 			}
@@ -574,7 +574,7 @@ btoi`)
 		name          string
 		arguments     [][]byte
 		expectedError string
-		cost          uint64
+		cost          int
 	}{
 		{
 			name:          "approval",
@@ -631,7 +631,7 @@ int 1`,
 				expectedSuccess := len(testCase.expectedError) == 0
 				var expectedAppCallAD transactions.ApplyData
 				expectedFailedAt := simulation.TxnPath{1}
-				var AppBudgetConsumed, AppBudgetAdded uint64
+				var AppBudgetConsumed, AppBudgetAdded int
 				if expectedSuccess {
 					expectedAppCallAD = transactions.ApplyData{
 						ApplicationID: 1002,
@@ -1227,7 +1227,7 @@ func TestAppCallWithExtraBudget(t *testing.T) {
 
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
-		extraOpcodeBudget := uint64(100)
+		extraOpcodeBudget := 100
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -1301,7 +1301,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
-		extraOpcodeBudget := uint64(100)
+		extraOpcodeBudget := 100
 
 		commonLeadingSteps := []simulation.OpcodeTraceUnit{
 			{PC: 1}, {PC: 4}, {PC: 6},
@@ -1316,7 +1316,7 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 		secondTrace := make([]simulation.OpcodeTraceUnit, len(commonLeadingSteps))
 		copy(secondTrace, commonLeadingSteps[:])
 		for i := 9; i <= 1409; i++ {
-			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: uint64(i)})
+			secondTrace = append(secondTrace, simulation.OpcodeTraceUnit{PC: i})
 		}
 
 		return simulationTestCase{
@@ -1404,7 +1404,7 @@ func TestAppCallWithExtraBudgetOverBudget(t *testing.T) {
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedExpensiveTxn := expensiveTxn.Txn().Sign(sender.Sk)
 		// Add a small bit of extra budget, but not enough
-		extraBudget := uint64(5)
+		extraBudget := 5
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -1840,7 +1840,7 @@ int 1`
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedCallsABunchLogs := callsABunchLogs.Txn().Sign(sender.Sk)
 
-		expectedMaxLogCalls, expectedMaxLogSize := uint64(2048), uint64(65536)
+		expectedMaxLogCalls, expectedMaxLogSize := 2048, 65536
 		expectedLog := make([]string, LogTimes)
 		for i := 0; i < LogTimes; i++ {
 			expectedLog[i] = LogLongLine
@@ -1932,7 +1932,7 @@ int 1`
 		signedCreateTxn := createTxn.Txn().Sign(sender.Sk)
 		signedCallsABunchLogs := callsABunchLogs.Txn().Sign(sender.Sk)
 
-		expectedMaxLogCalls, expectedMaxLogSize := uint64(2048), uint64(65536)
+		expectedMaxLogCalls, expectedMaxLogSize := 2048, 65536
 		actualLogTimes := 65536 / len(LogLongLine)
 		expectedLog := make([]string, actualLogTimes)
 		for i := 0; i < actualLogTimes; i++ {
@@ -2655,7 +2655,7 @@ byte "hello"; log; int 1`,
 	})
 }
 
-func TestFailingLogicSigPCandStack(t *testing.T) {
+func TestInvalidLogicSigPCandStack(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2776,7 +2776,7 @@ byte "hello"; log; int 1`,
 	})
 }
 
-func TestFailingApp(t *testing.T) {
+func TestInvalidApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -4456,7 +4456,7 @@ app_local_put
 	}
 }
 
-func TestGlobalStateTypeChangeFailure(t *testing.T) {
+func TestGlobalStateTypeChangeErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -4835,7 +4835,7 @@ int 1`,
 		for i, boxOp := range testcase.boxOpsForSimulate {
 			txnResults[i] = boxOpToSimResult(boxOp)
 		}
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -4879,7 +4879,7 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
 					},
 				},
@@ -5182,7 +5182,7 @@ int 1
 		for i, boxOp := range testcase.boxOpsForSimulate {
 			txnResults[i] = boxOpToSimResult(boxOp)
 		}
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -5226,7 +5226,7 @@ int 1
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
 					},
 				},
@@ -5480,7 +5480,7 @@ int 1`,
 			newlyCreatedGlobalKeySet.Add(string(txnArgs[1]))
 		}
 
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -5506,7 +5506,7 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
 					},
 				},
@@ -5847,7 +5847,7 @@ int 1`,
 			newlyCreatedLocalStates[acctAddress].Add(string(instruction.appArgs[1]))
 		}
 
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -5878,7 +5878,7 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
 					},
 				},
@@ -6159,7 +6159,7 @@ int 1`,
 			},
 		}
 
-		totalConsumed := uint64(0)
+		totalConsumed := 0
 		for _, txnResult := range txnResults {
 			totalConsumed += txnResult.AppBudgetConsumed
 		}
@@ -6185,7 +6185,7 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns:              txnResults,
-						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetAdded:    700 * len(txnResults),
 						AppBudgetConsumed: totalConsumed,
 					},
 				},
@@ -6569,7 +6569,7 @@ func makeProgramToCallInner(t *testing.T, program string) string {
 	return wrapCodeWithVersionAndReturn(itxnSubmitCode)
 }
 
-func TestAppCallInnerTxnApplyDataOnFail(t *testing.T) {
+func TestAppCallInnerTxnApplyDataOnErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6679,7 +6679,7 @@ byte "finished asset create"
 log
 `
 
-func TestNonAppCallInnerTxnApplyDataOnFail(t *testing.T) {
+func TestNonAppCallInnerTxnApplyDataOnErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6777,7 +6777,7 @@ byte "finished asset config"
 log
 `
 
-func TestInnerTxnNonAppCallFailure(t *testing.T) {
+func TestInnerTxnNonAppCallErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -7178,7 +7178,7 @@ func TestUnnamedResources(t *testing.T) {
 										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
 									},
 								},
-								AppBudgetAdded:           700 + 700*uint64(innerCount),
+								AppBudgetAdded:           700 + 700*innerCount,
 								AppBudgetConsumed:        ignoreAppBudgetConsumed,
 								UnnamedResourcesAccessed: expectedUnnamedResourceGroupAssignment,
 							},
@@ -7693,7 +7693,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 
 	var failedAt simulation.TxnPath
 	if expected.FailureMessage != "" {
-		failedAt = simulation.TxnPath{uint64(expected.FailingIndex)}
+		failedAt = simulation.TxnPath{expected.FailingIndex}
 	}
 
 	proto := env.TxnInfo.CurrentProtocolParams()
@@ -7731,7 +7731,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 			TxnGroups: []simulation.TxnGroupResult{
 				{
 					Txns:                     expectedTxnResults,
-					AppBudgetAdded:           uint64(700 * len(boxOps)),
+					AppBudgetAdded:           700 * len(boxOps),
 					AppBudgetConsumed:        ignoreAppBudgetConsumed,
 					UnnamedResourcesAccessed: expectedUnnamedResources,
 					FailedAt:                 failedAt,
@@ -8534,7 +8534,7 @@ func boxNamesToRefs(app basics.AppIndex, names []string) []logic.BoxRef {
 	return refs
 }
 
-func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, appVersion int, app basics.AppIndex, resources unnamedResourceArguments, otherTxns []txntest.Txn, extraBudget uint64, expectedError string) {
+func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, appVersion int, app basics.AppIndex, resources unnamedResourceArguments, otherTxns []txntest.Txn, extraBudget int, expectedError string) {
 	t.Helper()
 	maxGroupSize := env.TxnInfo.CurrentProtocolParams().MaxTxGroupSize
 	txns := make([]*txntest.Txn, maxGroupSize)
@@ -8653,7 +8653,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 			TxnGroups: []simulation.TxnGroupResult{
 				{
 					Txns:                     expectedTxnResults,
-					AppBudgetAdded:           uint64(700) + extraBudget,
+					AppBudgetAdded:           700 + extraBudget,
 					AppBudgetConsumed:        ignoreAppBudgetConsumed,
 					UnnamedResourcesAccessed: expectedGroupResources,
 					FailedAt:                 failedAt,
@@ -9031,7 +9031,7 @@ func TestFixSigners(t *testing.T) {
 		innerProgram := fmt.Sprintf(`#pragma version 9
 		txn ApplicationID
 		bz end
-		
+
 		// Rekey to the the innerRekeyAddr
 		itxn_begin
 		int pay
@@ -9041,7 +9041,7 @@ func TestFixSigners(t *testing.T) {
 		addr %s
 		itxn_field RekeyTo
 		itxn_submit
-		
+
 		end:
 		int 1
 		`, innerRekeyAddr)

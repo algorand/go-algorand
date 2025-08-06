@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -1805,7 +1806,8 @@ int 1
 
 const testTxnProgramTextV12 = testTxnProgramTextV11 + `
 assert
-int 1
+txn RejectVersion
+!
 `
 
 func makeSampleTxn() transactions.SignedTxn {
@@ -4588,7 +4590,7 @@ func TestLinearOpcodes(t *testing.T) {
 	}
 }
 
-func TestRekeyFailsOnOldVersion(t *testing.T) {
+func TestRekeyErrsOnOldVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6225,5 +6227,5 @@ func TestMaxTxGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, config.MaxTxGroupSize, maxTxGroupSize)
+	require.Equal(t, bounds.MaxTxGroupSize, maxTxGroupSize)
 }

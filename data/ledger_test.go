@@ -722,6 +722,10 @@ func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string, 
 		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(genesisID))
 	}
 
+	if proto.EnableSha512BlockHash {
+		blk.BlockHeader.Branch512 = lastBlock.Hash512()
+	}
+
 	blk.RewardsPool = testPoolAddr
 	blk.FeeSink = testSinkAddr
 	blk.CurrentProtocol = lastBlock.CurrentProtocol

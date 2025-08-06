@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -456,13 +457,132 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 	}
 }
 
-func (au *accountUpdates) LookupKeysByPrefix(prefix, next string, maxKeyNum, maxBytes int, values bool) (basics.Round, map[string]string, string, error) {
-	// We only use the DB, not deltas. That means our answer is a bit out of
-	// date, but it is otherwise extremely difficult to integrate answers from
-	// the deltas and from the DB, while respecting the limits and the prefix.
-	// This seems reasonable for it's purpose - just a REST API.
+func (au *accountUpdates) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+	return au.lookupKeysByPrefix(round, keyPrefix, maxKeyNum, true /* take lock */)
+}
 
-	return au.accountsq.LookupKeysByPrefix(prefix, next, maxKeyNum, maxBytes, values)
+func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64, synchronized bool) (resultKeys []string, err error) {
+	var results map[string]bool
+	// keep track of the number of result key with value
+	var resultCount uint64
+
+	needUnlock := false
+	if synchronized {
+		au.accountsMu.RLock()
+		needUnlock = true
+	}
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+		// preparation of result happens in deferring function
+		// prepare result only when err != nil
+		if err == nil {
+			resultKeys = make([]string, 0, resultCount)
+			for resKey, present := range results {
+				if present {
+					resultKeys = append(resultKeys, resKey)
+				}
+			}
+		}
+	}()
+
+	// TODO: This loop and round handling is copied from other routines like
+	// lookupResource. I believe that it is overly cautious, as it always reruns
+	// the lookup if the DB round does not match the expected round. However, as
+	// long as the db round has not advanced too far (greater than `rnd`), I
+	// believe it would be valid to use. In the interest of minimizing changes,
+	// I'm not doing that now.
+
+	for {
+		currentDBRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, rndErr := au.roundOffset(round)
+		if rndErr != nil {
+			return nil, rndErr
+		}
+
+		// reset `results` to be empty each iteration
+		// if db round does not match the round number returned from DB query, start over again
+		// NOTE: `results` is maintained as we walk backwards from the latest round, to DB
+		// IT IS NOT SIMPLY A SET STORING KEY NAMES!
+		// - if the boolean for the key is true: we consider the key is still valid in later round
+		// - otherwise, we consider that the key is deleted in later round, and we will not return it as part of result
+		// Thus: `resultCount` keeps track of how many VALID keys in the `results`
+		// DO NOT TRY `len(results)` TO SEE NUMBER OF VALID KEYS!
+		results = map[string]bool{}
+		resultCount = 0
+
+		for offset > 0 {
+			offset--
+			for keyInRound, mv := range au.deltas[offset].KvMods {
+				if !strings.HasPrefix(keyInRound, keyPrefix) {
+					continue
+				}
+				// whether it is set or deleted in later round, if such modification exists in later round
+				// we just ignore the earlier insert
+				if _, ok := results[keyInRound]; ok {
+					continue
+				}
+				if mv.Data == nil {
+					results[keyInRound] = false
+				} else {
+					// set such key to be valid with value
+					results[keyInRound] = true
+					resultCount++
+					// check if the size of `results` reaches `maxKeyNum`
+					// if so just return the list of keys
+					if resultCount == maxKeyNum {
+						return
+					}
+				}
+			}
+		}
+
+		round = currentDBRound + basics.Round(currentDeltaLen)
+
+		// after this line, we should dig into DB I guess
+		// OTHER LOOKUPS USE "base" caches here.
+		if synchronized {
+			au.accountsMu.RUnlock()
+			needUnlock = false
+		}
+
+		// NOTE: the kv cache isn't used here because the data structure doesn't support range
+		// queries. It may be preferable to increase the SQLite cache size if these reads become
+		// too slow.
+
+		// Finishing searching updates of this account in kvDeltas, keep going: use on-disk DB
+		// to find the rest matching keys in DB.
+		dbRound, dbErr := au.accountsq.LookupKeysByPrefix(keyPrefix, maxKeyNum, results, resultCount)
+		if dbErr != nil {
+			return nil, dbErr
+		}
+		if dbRound == currentDBRound {
+			return
+		}
+
+		// The DB round is unexpected... '_>'?
+		if synchronized {
+			if dbRound < currentDBRound {
+				// does not make sense if DB round is earlier than it should be
+				au.log.Errorf("accountUpdates.lookupKvPair: database round %d is behind in-memory round %d", dbRound, currentDBRound)
+				err = &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
+				return
+			}
+			// The DB round is higher than expected, so a write-into-DB must have happened. Start over again.
+			au.accountsMu.RLock()
+			needUnlock = true
+			// WHY BOTH - seems the goal is just to wait until the au is aware of progress. au.cachedDBRound should be enough?
+			for currentDBRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+				au.accountsReadCond.Wait()
+			}
+		} else {
+			au.log.Errorf("accountUpdates.lookupKvPair: database round %d mismatching in-memory round %d", dbRound, currentDBRound)
+			err = &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
+			return
+		}
+	}
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
@@ -869,7 +989,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				if err == nil {
 					ledgercore.AssignAccountData(&data, ad)
 					withoutRewards = data.MicroAlgos // record balance before updating rewards
-					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+					data = data.WithUpdatedRewards(rewardsProto.RewardUnit, rewardsLevel)
 				}
 			}()
 			withRewards = false

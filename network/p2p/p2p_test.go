@@ -17,13 +17,11 @@
 package p2p
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"testing"
 
-	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/network"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
@@ -32,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -84,95 +83,6 @@ func TestNetAddressToListenAddress(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestP2PGetPeerTelemetryInfo tests the GetPeerTelemetryInfo function
-func TestP2PGetPeerTelemetryInfo(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testCases := []struct {
-		name                      string
-		peerProtocols             []protocol.ID
-		expectedTelemetryID       string
-		expectedTelemetryInstance string
-	}{
-		{
-			name:                      "Valid Telemetry Info",
-			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetryID", "telemetryInstance"))},
-			expectedTelemetryID:       "telemetryID",
-			expectedTelemetryInstance: "telemetryInstance",
-		},
-		{
-			name:                      "Partial Telemetry Info 1",
-			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetryID", ""))},
-			expectedTelemetryID:       "telemetryID",
-			expectedTelemetryInstance: "",
-		},
-		{
-			name:                      "Partial Telemetry Info 2",
-			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("", "telemetryInstance"))},
-			expectedTelemetryID:       "",
-			expectedTelemetryInstance: "telemetryInstance",
-		},
-		{
-			name:                      "No Telemetry Info",
-			peerProtocols:             []protocol.ID{protocol.ID("/some-other-protocol/1.0.0/otherID/otherInstance")},
-			expectedTelemetryID:       "",
-			expectedTelemetryInstance: "",
-		},
-		{
-			name:                      "Invalid Telemetry Info Format",
-			peerProtocols:             []protocol.ID{protocol.ID("/algorand-telemetry/1.0.0/invalidFormat")},
-			expectedTelemetryID:       "",
-			expectedTelemetryInstance: "",
-		},
-		{
-			name:                      "Special Characters Telemetry Info Format",
-			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetry/ID", "123-//11-33"))},
-			expectedTelemetryID:       "telemetry/ID",
-			expectedTelemetryInstance: "123-//11-33",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			telemetryID, telemetryInstance := GetPeerTelemetryInfo(tc.peerProtocols)
-			if telemetryID != tc.expectedTelemetryID || telemetryInstance != tc.expectedTelemetryInstance {
-				t.Errorf("Expected telemetry ID: %s, telemetry instance: %s, but got telemetry ID: %s, telemetry instance: %s",
-					tc.expectedTelemetryID, tc.expectedTelemetryInstance, telemetryID, telemetryInstance)
-			}
-		})
-	}
-}
-
-func TestP2PProtocolAsMeta(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	h1, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
-	require.NoError(t, err)
-	defer h1.Close()
-
-	h1TID := "telemetryID1"
-	h1Inst := "telemetryInstance2"
-	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(h1TID, h1Inst)
-	h1.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
-
-	h2, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
-	require.NoError(t, err)
-	defer h2.Close()
-
-	err = h2.Connect(ctx, peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()})
-	require.NoError(t, err)
-
-	protos, err := h2.Peerstore().GetProtocols(h1.ID())
-	require.NoError(t, err)
-
-	tid, inst := GetPeerTelemetryInfo(protos)
-	require.Equal(t, h1TID, tid)
-	require.Equal(t, h1Inst, inst)
 }
 
 func TestP2PPrivateAddresses(t *testing.T) {
@@ -334,4 +244,51 @@ func TestP2PMakeHostAddressFilter(t *testing.T) {
 		require.NotEmpty(t, host.Addrs())
 		host.Close()
 	}
+}
+
+func TestP2PPubSubOptions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var opts []pubsub.Option
+	option := DisablePubSubPeerExchange()
+	option(&opts)
+	require.Len(t, opts, 1)
+
+	tracer := &mockRawTracer{}
+	option = SetPubSubMetricsTracer(tracer)
+	option(&opts)
+	require.Len(t, opts, 2)
+
+	filterFunc := func(roleChecker peerstore.RoleChecker, pid peer.ID) bool {
+		return roleChecker.HasRole(pid, phonebook.RelayRole)
+	}
+	checker := &mockRoleChecker{}
+	option = SetPubSubPeerFilter(filterFunc, checker)
+	option(&opts)
+	require.Len(t, opts, 3)
+}
+
+type mockRawTracer struct{}
+
+func (m *mockRawTracer) AddPeer(p peer.ID, proto protocol.ID)             {}
+func (m *mockRawTracer) RemovePeer(p peer.ID)                             {}
+func (m *mockRawTracer) Join(topic string)                                {}
+func (m *mockRawTracer) Leave(topic string)                               {}
+func (m *mockRawTracer) Graft(p peer.ID, topic string)                    {}
+func (m *mockRawTracer) Prune(p peer.ID, topic string)                    {}
+func (m *mockRawTracer) ValidateMessage(msg *pubsub.Message)              {}
+func (m *mockRawTracer) DeliverMessage(msg *pubsub.Message)               {}
+func (m *mockRawTracer) RejectMessage(msg *pubsub.Message, reason string) {}
+func (m *mockRawTracer) DuplicateMessage(msg *pubsub.Message)             {}
+func (m *mockRawTracer) ThrottlePeer(p peer.ID)                           {}
+func (m *mockRawTracer) RecvRPC(rpc *pubsub.RPC)                          {}
+func (m *mockRawTracer) SendRPC(rpc *pubsub.RPC, p peer.ID)               {}
+func (m *mockRawTracer) DropRPC(rpc *pubsub.RPC, p peer.ID)               {}
+func (m *mockRawTracer) UndeliverableMessage(msg *pubsub.Message)         {}
+
+type mockRoleChecker struct{}
+
+func (m *mockRoleChecker) HasRole(pid peer.ID, role phonebook.Role) bool {
+	return true
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -849,8 +850,8 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 		for addr, ad := range genBalances.Balances {
 			if ad.Status == basics.Online {
 				onlineCnt++
-				genesisOnlineAccts[addr] = ad.OnlineAccountData()
-				afterPayTxnOnlineAccts[addr] = ad.OnlineAccountData()
+				genesisOnlineAccts[addr] = basics_testing.OnlineAccountData(ad)
+				afterPayTxnOnlineAccts[addr] = basics_testing.OnlineAccountData(ad)
 			}
 		}
 
@@ -1408,10 +1409,11 @@ func TestMinBalanceChanges(t *testing.T) {
 
 	proto := l.GenesisProto()
 	// Check balance and min balance requirement changes
-	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000)                   // fee
-	require.Equal(t, ad0init.MinBalance(&proto).Raw, ad0new.MinBalance(&proto).Raw-100000) // create
-	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+1000)                   // fee
-	require.Equal(t, ad5init.MinBalance(&proto).Raw, ad5new.MinBalance(&proto).Raw-100000) // optin
+	require.Equal(t, ad0init.MicroAlgos.Raw, ad0new.MicroAlgos.Raw+1000) // fee
+	reqs := proto.BalanceRequirements()
+	require.Equal(t, ad0init.MinBalance(reqs).Raw, ad0new.MinBalance(reqs).Raw-100000) // create
+	require.Equal(t, ad5init.MicroAlgos.Raw, ad5new.MicroAlgos.Raw+1000)               // fee
+	require.Equal(t, ad5init.MinBalance(reqs).Raw, ad5new.MinBalance(reqs).Raw-100000) // optin
 
 	optOutTxn := txntest.Txn{
 		Type:          "axfer",
@@ -1436,8 +1438,8 @@ func TestMinBalanceChanges(t *testing.T) {
 	ad5final, _, _, err := l.LookupLatest(addrs[5])
 	require.NoError(t, err)
 	// Check we got our balance "back"
-	require.Equal(t, ad0final.MinBalance(&proto), ad0init.MinBalance(&proto))
-	require.Equal(t, ad5final.MinBalance(&proto), ad5init.MinBalance(&proto))
+	require.Equal(t, ad0final.MinBalance(reqs), ad0init.MinBalance(reqs))
+	require.Equal(t, ad5final.MinBalance(reqs), ad5init.MinBalance(reqs))
 }
 
 // TestAppInsMinBalance checks that accounts with MaxAppsOptedIn are accepted by block evaluator

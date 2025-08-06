@@ -109,7 +109,7 @@ type ApplicationCallTxnFields struct {
 
 	// ApplicationArgs are arguments accessible to the executing
 	// ApprovalProgram or ClearStateProgram.
-	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs,maxtotalbytes=config.MaxAppTotalArgLen"`
+	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs,maxtotalbytes=bounds.MaxAppTotalArgLen"`
 
 	// Accounts are accounts whose balance records are accessible
 	// by the executing ApprovalProgram or ClearStateProgram. To
@@ -152,19 +152,23 @@ type ApplicationCallTxnFields struct {
 	// except for those where OnCompletion is equal to ClearStateOC. If
 	// this program fails, the transaction is rejected. This program may
 	// read and write local and global state for this application.
-	ApprovalProgram []byte `codec:"apap,allocbound=config.MaxAvailableAppProgramLen"`
+	ApprovalProgram []byte `codec:"apap,allocbound=bounds.MaxAvailableAppProgramLen"`
 
 	// ClearStateProgram is the stateful TEAL bytecode that executes on
 	// ApplicationCall transactions associated with this application when
 	// OnCompletion is equal to ClearStateOC. This program will not cause
 	// the transaction to be rejected, even if it fails. This program may
 	// read and write local and global state for this application.
-	ClearStateProgram []byte `codec:"apsu,allocbound=config.MaxAvailableAppProgramLen"`
+	ClearStateProgram []byte `codec:"apsu,allocbound=bounds.MaxAvailableAppProgramLen"`
 
 	// ExtraProgramPages specifies the additional app program len requested in pages.
 	// A page is MaxAppProgramLen bytes. This field enables execution of app programs
 	// larger than the default config, MaxAppProgramLen.
-	ExtraProgramPages uint32 `codec:"apep,omitempty"`
+	ExtraProgramPages uint32 `codec:"apep"`
+
+	// RejectVersion is the lowest application version for which this
+	// transaction should immediately fail. 0 indicates that no version check should be performed.
+	RejectVersion uint64 `codec:"aprv"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
@@ -175,7 +179,7 @@ type BoxRef struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Index uint64 `codec:"i"`
-	Name  []byte `codec:"n,allocbound=config.MaxBytesKeyValueLen"`
+	Name  []byte `codec:"n,allocbound=bounds.MaxBytesKeyValueLen"`
 }
 
 // Empty indicates whether or not all the fields in the
@@ -217,6 +221,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.ExtraProgramPages != 0 {
 		return false
 	}
+	if ac.RejectVersion != 0 {
+		return false
+	}
 	return true
 }
 
@@ -229,6 +236,14 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		/* ok */
 	default:
 		return fmt.Errorf("invalid application OnCompletion")
+	}
+
+	if !proto.EnableAppVersioning && ac.RejectVersion > 0 {
+		return fmt.Errorf("tx.RejectVersion is not supported")
+	}
+
+	if ac.RejectVersion > 0 && ac.ApplicationID == 0 {
+		return fmt.Errorf("tx.RejectVersion cannot be set during creation")
 	}
 
 	// Programs may only be set for creation or update
@@ -256,10 +271,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 			return fmt.Errorf("tx.ExtraProgramPages is immutable")
 		}
 
-		if proto.EnableExtraPagesOnAppUpdate {
-			effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
-		}
-
+		effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
 	}
 
 	// Limit total number of arguments
@@ -305,17 +317,8 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
 	}
 
-	lap := len(ac.ApprovalProgram)
-	lcs := len(ac.ClearStateProgram)
-	pages := int(1 + effectiveEPP)
-	if lap > pages*proto.MaxAppProgramLen {
-		return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-	}
-	if lcs > pages*proto.MaxAppProgramLen {
-		return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-	}
-	if lap+lcs > pages*proto.MaxAppTotalProgramLen {
-		return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+	if err := ac.WellSizedPrograms(effectiveEPP, proto); err != nil {
+		return err
 	}
 
 	for i, br := range ac.Boxes {
@@ -336,6 +339,24 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
 	}
 
+	return nil
+}
+
+// WellSizedPrograms checks the sizes of the programs in ac, based on the
+// parameters of proto and returns an error if they are too big.
+func (ac ApplicationCallTxnFields) WellSizedPrograms(extraPages uint32, proto config.ConsensusParams) error {
+	lap := len(ac.ApprovalProgram)
+	lcs := len(ac.ClearStateProgram)
+	pages := int(1 + extraPages)
+	if lap > pages*proto.MaxAppProgramLen {
+		return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+	}
+	if lcs > pages*proto.MaxAppProgramLen {
+		return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+	}
+	if lap+lcs > pages*proto.MaxAppTotalProgramLen {
+		return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+	}
 	return nil
 }
 

@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -1391,7 +1392,7 @@ func compareTopAccounts(a *require.Assertions, testingResult []*ledgercore.Onlin
 			Address:                 expectedAccountsBalances[i].Addr,
 			MicroAlgos:              expectedAccountsBalances[i].MicroAlgos,
 			RewardsBase:             0,
-			NormalizedOnlineBalance: expectedAccountsBalances[i].NormalizedOnlineBalance(config.Consensus[protocol.ConsensusCurrentVersion]),
+			NormalizedOnlineBalance: expectedAccountsBalances[i].AccountData.NormalizedOnlineBalance(config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit),
 			VoteFirstValid:          expectedAccountsBalances[i].VoteFirstValid,
 			VoteLastValid:           expectedAccountsBalances[i].VoteLastValid})
 	}
@@ -2021,12 +2022,12 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	stakeA := allAccts[0].MicroAlgos
 	statesA := map[acctState]ledgercore.AccountData{
 		acctStateOffline: {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: stakeA}, VotingData: basics.VotingData{}},
-		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeA}, VotingData: basics.VotingData(allAccts[0].OnlineAccountData().VotingData)},
+		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeA}, VotingData: basics.VotingData(basics_testing.OnlineAccountData(allAccts[0].AccountData).VotingData)},
 	}
 
 	addrB := allAccts[1].Addr
 	stakeB := allAccts[1].MicroAlgos
-	votingDataB := allAccts[1].OnlineAccountData().VotingData
+	votingDataB := basics_testing.OnlineAccountData(allAccts[1].AccountData).VotingData
 	statesB := map[acctState]ledgercore.AccountData{
 		acctStateOffline: {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: stakeB}, VotingData: basics.VotingData{}},
 		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeB}, VotingData: basics.VotingData(votingDataB)},
@@ -2157,7 +2158,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				expiredAccts, err = reader.ExpiredOnlineAccountsForRound(rnd-1, targetVoteRnd, params, 0)
+				expiredAccts, err = reader.ExpiredOnlineAccountsForRound(rnd-1, targetVoteRnd, params.RewardUnit, 0)
 				if err != nil {
 					return err
 				}

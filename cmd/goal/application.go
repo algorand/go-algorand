@@ -43,7 +43,7 @@ import (
 )
 
 var (
-	appIdx     uint64
+	appIdx     basics.AppIndex
 	appCreator string
 
 	approvalProgFile string
@@ -58,7 +58,8 @@ var (
 
 	extraPages uint32
 
-	onCompletion string
+	onCompletion  string
+	rejectVersion uint64
 
 	localSchemaUints      uint64
 	localSchemaByteSlices uint64
@@ -95,6 +96,7 @@ func init() {
 	appCmd.AddCommand(methodAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+	appCmd.PersistentFlags().Uint64Var(&rejectVersion, "reject-version", 0, "If set non-zero, reject for this app version or higher")
 	appCmd.PersistentFlags().StringArrayVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
@@ -128,6 +130,7 @@ func init() {
 	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
+	methodAppCmd.Flags().Uint64Var(&rejectVersion, "reject-version", 0, "RejectVersion for application transaction")
 	methodAppCmd.Flags().BoolVar(&methodCreatesApp, "create", false, "Create an application in this method call")
 	methodAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
 	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
@@ -138,15 +141,15 @@ func init() {
 	// Can't use PersistentFlags on the root because for some reason marking
 	// a root command as required with MarkPersistentFlagRequired isn't
 	// working
-	callAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	optInAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	closeOutAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	clearAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	deleteAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	infoAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
-	methodAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	callAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	optInAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	closeOutAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	clearAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	deleteAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	readStateAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	updateAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	infoAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
+	methodAppCmd.Flags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
 
 	// Add common transaction flags to all txn-generating app commands
 	addTxnFlags(createAppCmd)
@@ -283,7 +286,7 @@ func translateBoxRefs(input []boxRef, foreignApps []uint64) []transactions.BoxRe
 			// put the appIdx in foreignApps, and then used the appIdx here
 			// (rather than 0), then maybe they really want to use it in the
 			// transaction as the full number. Though it's hard to see why.
-			if !found && tbr.appID == appIdx {
+			if !found && tbr.appID == uint64(appIdx) {
 				index = 0
 				found = true
 			}
@@ -492,9 +495,9 @@ var createAppCmd = &cobra.Command{
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				txn, err := waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				txn, err1 := waitForCommit(client, txid, lv)
+				if err1 != nil {
+					reportErrorln(err1.Error())
 				}
 				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
 					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
@@ -526,7 +529,7 @@ var updateAppCmd = &cobra.Command{
 		approvalProg, clearProg := mustParseProgArgs()
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, approvalProg, clearProg)
+		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, approvalProg, clearProg, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -596,7 +599,7 @@ var optInAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -666,7 +669,7 @@ var closeOutAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -736,7 +739,7 @@ var clearAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -806,7 +809,7 @@ var callAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -876,7 +879,7 @@ var deleteAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -1012,7 +1015,6 @@ var readStateAppCmd = &cobra.Command{
 		}
 
 		// Should be unreachable
-		return
 	},
 }
 
@@ -1030,25 +1032,29 @@ var infoAppCmd = &cobra.Command{
 		}
 		params := meta.Params
 
-		gsch := params.GlobalStateSchema
-		lsch := params.LocalStateSchema
-		epp := params.ExtraProgramPages
-
 		fmt.Printf("Application ID:        %d\n", appIdx)
-		fmt.Printf("Application account:   %v\n", basics.AppIndex(appIdx).Address())
+		fmt.Printf("Application account:   %v\n", appIdx.Address())
 		fmt.Printf("Creator:               %v\n", params.Creator)
 		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
 		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))
 
+		ver := params.Version
+		if ver != nil {
+			fmt.Printf("Program version:       %d\n", *ver)
+		}
+
+		epp := params.ExtraProgramPages
 		if epp != nil {
 			fmt.Printf("Extra program pages:   %d\n", *epp)
 		}
 
+		gsch := params.GlobalStateSchema
 		if gsch != nil {
 			fmt.Printf("Max global byteslices: %d\n", gsch.NumByteSlice)
 			fmt.Printf("Max global integers:   %d\n", gsch.NumUint)
 		}
 
+		lsch := params.LocalStateSchema
 		if lsch != nil {
 			fmt.Printf("Max local byteslices:  %d\n", lsch.NumByteSlice)
 			fmt.Printf("Max local integers:    %d\n", lsch.NumUint)
@@ -1097,7 +1103,7 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 // into the appropriate foreign array. Their placement will be as compact as possible, which means
 // values will be deduplicated and any value that is the sender or the current app will not be added
 // to the foreign array.
-func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []string, values []string, accounts *[]string, apps *[]uint64, assets *[]uint64) ([]int, error) {
+func populateMethodCallReferenceArgs(sender string, currentApp basics.AppIndex, types []string, values []string, accounts *[]string, apps *[]uint64, assets *[]uint64) ([]int, error) {
 	resolvedIndexes := make([]int, len(types))
 
 	for i, value := range values {
@@ -1126,7 +1132,7 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 			if err != nil {
 				return nil, fmt.Errorf("Unable to parse application ID '%s': %s", value, err)
 			}
-			if appID == currentApp {
+			if appID == uint64(currentApp) {
 				resolved = 0
 			} else {
 				duplicate := false
@@ -1275,6 +1281,10 @@ var methodAppCmd = &cobra.Command{
 			case transactions.CloseOutOC, transactions.ClearStateOC:
 				reportWarnf("'--on-completion %s' may be ill-formed for use with --create", onCompletion)
 			}
+
+			if rejectVersion != 0 {
+				reportErrorf("--reject-version should not be provided with --create")
+			}
 		} else {
 			if appIdx == 0 {
 				reportErrorf("one of --app-id or --create must be provided")
@@ -1366,7 +1376,7 @@ var methodAppCmd = &cobra.Command{
 
 		appCallTxn, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets, boxes,
-			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages)
+			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages, rejectVersion)
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)

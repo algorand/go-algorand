@@ -892,9 +892,8 @@ func init() {
 	for v := uint64(2); v <= LogicVersion; v++ {
 		// Copy opcodes from lower version
 		OpsByName[v] = maps.Clone(OpsByName[v-1])
-		for op, oi := range opsByOpcode[v-1] {
-			opsByOpcode[v][op] = oi
-		}
+		// Copy array with direct assignment instead of a loop
+		opsByOpcode[v] = opsByOpcode[v-1]
 
 		// Update tables with opcodes from the current version
 		for _, oi := range OpSpecs {

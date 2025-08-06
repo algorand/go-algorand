@@ -557,7 +557,7 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	// Intentionally apply (pending) rewards up to rnd.
 	data, rnd, withoutRewards, err := l.accts.lookupLatest(addr)
 	if err != nil {
-		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
+		return basics.AccountData{}, 0, basics.MicroAlgos{}, err
 	}
 	return data, rnd, withoutRewards, nil
 }
@@ -579,7 +579,7 @@ func (l *Ledger) LookupAccount(round basics.Round, addr basics.Address) (data le
 
 	// Intentionally apply (pending) rewards up to rnd, remembering the old value
 	withoutRewards = data.MicroAlgos
-	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion], rewardsLevel)
+	data = data.WithUpdatedRewards(config.Consensus[rewardsVersion].RewardUnit, rewardsLevel)
 	return data, rnd, withoutRewards, nil
 }
 
@@ -625,11 +625,11 @@ func (l *Ledger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 
 // LookupKeysByPrefix searches keys with specific prefix, up to `maxKeyNum`
 // if `maxKeyNum` == 0, then it loads all keys with such prefix
-func (l *Ledger) LookupKeysByPrefix(prefix, next string, boxLimit, byteLimit int, values bool) (basics.Round, map[string]string, string, error) {
+func (l *Ledger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	return l.accts.LookupKeysByPrefix(prefix, next, boxLimit, byteLimit, values)
+	return l.accts.LookupKeysByPrefix(round, keyPrefix, maxKeyNum)
 }
 
 // LookupAgreement returns account data used by agreement.

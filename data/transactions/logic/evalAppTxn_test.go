@@ -1336,9 +1336,30 @@ int 5000; app_params_get AppLocalNumByteSlice;  assert; int 2; ==; assert
 int 5000; app_params_get AppLocalNumUint;       assert; int 3; ==; assert
 int 1
 `)
+		if v >= 12 {
+			// Version starts at 0
+			test(`int 5000; app_params_get AppVersion; assert; !`)
+		}
 
 		// Call it (default OnComplete is NoOp)
 		test(call)
+
+		update := `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 5000;    itxn_field ApplicationID
+` + approve + `; itxn_field ApprovalProgram
+` + approve + `; itxn_field ClearStateProgram
+int UpdateApplication; itxn_field OnCompletion
+itxn_submit
+int 1
+`
+		test(update)
+
+		if v >= 12 {
+			// Version starts at 0
+			test(`int 5000; app_params_get AppVersion; assert; int 1; ==`)
+		}
 
 		test(`
 itxn_begin
@@ -1358,7 +1379,7 @@ int 1
 	})
 }
 
-func TestCreateOldAppFails(t *testing.T) {
+func TestCreateOldAppErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2579,7 +2600,7 @@ func TestGtixn(t *testing.T) {
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333), basics.AppIndex(444)}
+	tx.ForeignApps = []basics.AppIndex{222, 333, 444}
 
 	TestApp(t, `
 itxn_begin
@@ -2662,7 +2683,7 @@ func TestGtxnLog(t *testing.T) {
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333)}
+	tx.ForeignApps = []basics.AppIndex{222, 333}
 
 	TestApp(t, `itxn_begin
 int appl;    itxn_field TypeEnum

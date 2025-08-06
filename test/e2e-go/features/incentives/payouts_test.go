@@ -89,7 +89,7 @@ func TestBasicPayouts(t *testing.T) {
 	txn, err := c01.SendPaymentFromUnencryptedWallet(account01.Address, basics.Address{}.String(),
 		1000, 60_000_000_000_000, nil)
 	a.NoError(err)
-	burn, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	burn, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	a.NoError(err)
 	burnRound := *burn.ConfirmedRound
 	t.Logf("burn round is %d", burnRound)
@@ -139,7 +139,7 @@ func TestBasicPayouts(t *testing.T) {
 		a.LessOrEqual(int(status.LastRound), int(next.LastProposed))
 		switch block.Proposer().String() {
 		case account01.Address:
-			if uint64(block.Round()) < burnRound+lookback {
+			if block.Round() < burnRound+lookback {
 				// until the burn is lookback rounds old, account01 can't earn
 				a.Zero(block.ProposerPayout())
 				a.Equal(data01.MicroAlgos, next.MicroAlgos)
@@ -178,7 +178,7 @@ func TestBasicPayouts(t *testing.T) {
 	a.NoError(err)
 	offlineTxID, err := c15.SignAndBroadcastTransaction(wh, nil, offline)
 	a.NoError(err)
-	offTxn, err := fixture.WaitForConfirmedTxn(uint64(offline.LastValid), offlineTxID)
+	offTxn, err := fixture.WaitForConfirmedTxn(offline.LastValid, offlineTxID)
 	a.NoError(err)
 
 	t.Logf(" c15 (%s) will be truly offline (not proposing) after round %d\n",
@@ -235,7 +235,7 @@ func TestBasicPayouts(t *testing.T) {
 	// put 50 algos back into the feesink, show it pays out again
 	txn, err = c01.SendPaymentFromUnencryptedWallet(account01.Address, feesink.String(), 1000, 50_000_000, nil)
 	a.NoError(err)
-	refill, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	refill, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	fmt.Printf("refilled fee sink in %d\n", *refill.ConfirmedRound)
 	a.NoError(err)
 	block, err := client.BookkeepingBlock(*refill.ConfirmedRound)
@@ -256,7 +256,7 @@ func TestBasicPayouts(t *testing.T) {
 	junk := basics.Address{0x01, 0x01}.String()
 	txn, err = c01.SendPaymentFromWallet(wh, nil, account01.Address, junk, 1000, 0, nil, junk /* close to */, 0, 0)
 	a.NoError(err)
-	close, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	close, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	a.NoError(err)
 	fmt.Printf("closed c01 in %d\n", *close.ConfirmedRound)
 	block, err = client.BookkeepingBlock(*close.ConfirmedRound)
@@ -289,7 +289,7 @@ func TestBasicPayouts(t *testing.T) {
 
 // getblock waits for the given block because we use when we might be talking to
 // a client that is behind the network (since it has low stake)
-func getblock(client libgoal.Client, round uint64) (bookkeeping.Block, error) {
+func getblock(client libgoal.Client, round basics.Round) (bookkeeping.Block, error) {
 	if _, err := client.WaitForRound(round); err != nil {
 		return bookkeeping.Block{}, err
 	}
@@ -329,7 +329,7 @@ func rekeyreg(a *require.Assertions, client libgoal.Client, address string, beco
 	a.NoError(err)
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
 	a.NoError(err)
-	txn, err := client.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
+	txn, err := client.WaitForConfirmedTxn(reReg.LastValid, onlineTxID)
 	a.NoError(err)
 	// sync up with the network
 	_, err = client.WaitForRound(*txn.ConfirmedRound)

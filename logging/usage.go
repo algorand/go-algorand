@@ -43,7 +43,7 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 	ticker := time.NewTicker(period)
 	hasPrev := false
 
-	for true {
+	for {
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():

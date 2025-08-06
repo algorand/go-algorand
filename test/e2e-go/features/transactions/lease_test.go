@@ -410,10 +410,10 @@ func TestOverlappingLeases(t *testing.T) {
 
 	// construct transactions for sending money to account1 and account2
 	// from same sender with identical lease, but different, overlapping ranges
-	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", lease, basics.Round(leaseStart), basics.Round(leaseStart+firstTxLeaseLife))
+	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", lease, leaseStart, leaseStart+firstTxLeaseLife)
 	a.NoError(err)
 
-	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, basics.Round(leaseStart), basics.Round(leaseStart+secondTxLeaseLife))
+	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, leaseStart, leaseStart+secondTxLeaseLife)
 	a.NoError(err)
 
 	stx1, err := client.SignTransactionWithWallet(wh, nil, tx1)

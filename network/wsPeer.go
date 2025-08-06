@@ -238,6 +238,9 @@ type wsPeer struct {
 	// peer features derived from the peer version
 	features peerFeatureFlag
 
+	// enableCompression specifies whether this node can compress or decompress votes (and whether it has advertised this)
+	enableVoteCompression bool
+
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
 
@@ -522,7 +525,7 @@ func (wp *wsPeer) readLoop() {
 	}()
 	wp.conn.SetReadLimit(MaxMessageLength)
 	slurper := MakeLimitedReaderSlurper(averageMessageLength, MaxMessageLength)
-	dataConverter := makeWsPeerMsgDataConverter(wp)
+	dataConverter := makeWsPeerMsgDataDecoder(wp)
 
 	for {
 		msg := IncomingMessage{}
@@ -587,11 +590,6 @@ func (wp *wsPeer) readLoop() {
 		msg.processing = wp.processed
 		msg.Received = time.Now().UnixNano()
 		msg.Data = slurper.Bytes()
-		msg.Data, err = dataConverter.convert(msg.Tag, msg.Data)
-		if err != nil {
-			wp.reportReadErr(err)
-			return
-		}
 		msg.Net = wp.net
 		wp.lastPacketTime.Store(msg.Received)
 		if wp.peerType == peerTypeWs {
@@ -604,6 +602,16 @@ func (wp *wsPeer) readLoop() {
 			networkP2PMessageReceivedTotal.AddUint64(1, nil)
 			networkP2PReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
 			networkP2PMessageReceivedByTag.Add(string(tag[:]), 1)
+		}
+		msg.Data, err = dataConverter.convert(msg.Tag, msg.Data)
+		if err != nil {
+			wp.reportReadErr(err)
+			return
+		}
+		if wp.peerType == peerTypeWs {
+			networkReceivedUncompressedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
+		} else {
+			networkP2PReceivedUncompressedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
 		}
 		msg.Sender = wp
 
@@ -1086,11 +1094,16 @@ func (wp *wsPeer) OnClose(f func()) {
 	wp.closers = append(wp.closers, f)
 }
 
+func (wp *wsPeer) vpackVoteCompressionSupported() bool {
+	return wp.features&pfCompressedVoteVpack != 0
+}
+
 //msgp:ignore peerFeatureFlag
 type peerFeatureFlag int
 
 const (
 	pfCompressedProposal peerFeatureFlag = 1 << iota
+	pfCompressedVoteVpack
 )
 
 // versionPeerFeatures defines protocol version when peer features were introduced
@@ -1134,6 +1147,9 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 		part = strings.TrimSpace(part)
 		if part == PeerFeatureProposalCompression {
 			features |= pfCompressedProposal
+		}
+		if part == PeerFeatureVoteVpackCompression {
+			features |= pfCompressedVoteVpack
 		}
 	}
 	return features

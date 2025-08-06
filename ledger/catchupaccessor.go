@@ -531,7 +531,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			return fmt.Errorf("processStagingBalances received a chunk with no accounts")
 		}
 
-		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto())
+		normalizedAccountBalances, err = prepareNormalizedBalancesV5(balances.Balances, c.ledger.GenesisProto().RewardUnit)
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
@@ -978,8 +978,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	wg.Wait()
 
 	select {
-	case err := <-errChan:
-		return err
+	case err1 := <-errChan:
+		return err1
 	default:
 	}
 

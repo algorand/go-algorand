@@ -23,6 +23,7 @@ import (
 )
 
 func TestMockDB(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partitioning inside subtest
 	dbFactory := func(proto config.ConsensusParams) dbForTests {
 		db := makeMockDB(proto)
 

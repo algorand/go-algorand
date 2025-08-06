@@ -100,7 +100,7 @@ const MaxEncodedBaseAccountDataSize = 350
 const MaxEncodedBaseResourceDataSize = 20000
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
+func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, rewardUnit uint64) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]trackerdb.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].Address = balance.Address
@@ -110,7 +110,7 @@ func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.Co
 			return nil, err
 		}
 		normalizedAccountBalances[i].AccountData.SetAccountData(&accountDataV5)
-		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
+		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(rewardUnit)
 		type resourcesRow struct {
 			aidx basics.CreatableIndex
 			trackerdb.ResourcesData
@@ -151,7 +151,7 @@ func prepareNormalizedBalancesV6(bals []encoded.BalanceRecordV6, proto config.Co
 			normalizedAccountBalances[i].AccountData.Status,
 			normalizedAccountBalances[i].AccountData.RewardsBase,
 			normalizedAccountBalances[i].AccountData.MicroAlgos,
-			proto)
+			proto.RewardUnit)
 		normalizedAccountBalances[i].EncodedAccountData = balance.AccountData
 		curHashIdx := 0
 		if balance.ExpectingMoreEntries {
@@ -687,7 +687,7 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 		Address:                 address,
 		MicroAlgos:              ad.MicroAlgos,
 		RewardsBase:             ad.RewardsBase,
-		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
+		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto.RewardUnit),
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
 		StateProofID:            ad.StateProofID,
@@ -752,7 +752,7 @@ func accountsNewRoundImpl(
 			} else {
 				// create a new entry.
 				var ref trackerdb.AccountRef
-				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+				normBalance := data.newAcct.NormalizedOnlineBalance(proto.RewardUnit)
 				ref, err = writer.InsertAccount(data.address, normBalance, data.newAcct)
 				if err != nil {
 					return nil, nil, nil, err
@@ -779,7 +779,7 @@ func accountsNewRoundImpl(
 				}
 			} else {
 				var rowsAffected int64
-				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+				normBalance := data.newAcct.NormalizedOnlineBalance(proto.RewardUnit)
 				rowsAffected, err = writer.UpdateAccount(data.oldAcct.Ref, normBalance, data.newAcct)
 				if err != nil {
 					return nil, nil, nil, err
@@ -996,7 +996,7 @@ func onlineAccountsNewRoundImpl(
 
 				// create a new entry.
 				var ref trackerdb.OnlineAccountRef
-				normBalance := newAcct.NormalizedOnlineBalance(proto)
+				normBalance := newAcct.NormalizedOnlineBalance(proto.RewardUnit)
 				ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 				if err != nil {
 					return nil, err
@@ -1015,7 +1015,7 @@ func onlineAccountsNewRoundImpl(
 					// was already online, so create an update only if something changed
 					if prevAcct.AccountData != newAcct {
 						var ref trackerdb.OnlineAccountRef
-						normBalance := newAcct.NormalizedOnlineBalance(proto)
+						normBalance := newAcct.NormalizedOnlineBalance(proto.RewardUnit)
 						ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 						if err != nil {
 							return nil, err
@@ -1032,7 +1032,12 @@ func onlineAccountsNewRoundImpl(
 						prevAcct = updated
 					}
 				} else {
-					if prevAcct.AccountData.IsVotingEmpty() && newAcct.IsVotingEmpty() {
+					if prevAcct.AccountData.IsVotingEmpty() && newStatus != basics.Online {
+						// we are not using newAcct.IsVotingEmpty because new account comes from deltas,
+						// and deltas are base (full) accounts, so that it can have status=offline and non-empty voting data
+						// for suspended accounts.
+						// it is not the same for online accounts where empty all offline accounts are stored with empty voting data.
+
 						// if both old and new are offline, ignore
 						// otherwise the following could happen:
 						// 1. there are multiple offline account deltas so all of them could be inserted

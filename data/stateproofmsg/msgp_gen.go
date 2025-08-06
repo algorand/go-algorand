@@ -6,6 +6,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -34,11 +35,11 @@ func (z *Message) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).FirstAttestedRound == 0 {
+	if (*z).FirstAttestedRound.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).LastAttestedRound == 0 {
+	if (*z).LastAttestedRound.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
@@ -62,12 +63,12 @@ func (z *Message) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "f"
 			o = append(o, 0xa1, 0x66)
-			o = msgp.AppendUint64(o, (*z).FirstAttestedRound)
+			o = (*z).FirstAttestedRound.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "l"
 			o = append(o, 0xa1, 0x6c)
-			o = msgp.AppendUint64(o, (*z).LastAttestedRound)
+			o = (*z).LastAttestedRound.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "v"
@@ -147,7 +148,7 @@ func (z *Message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o [
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).FirstAttestedRound, bts, err = msgp.ReadUint64Bytes(bts)
+			bts, err = (*z).FirstAttestedRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FirstAttestedRound")
 				return
@@ -155,7 +156,7 @@ func (z *Message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o [
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).LastAttestedRound, bts, err = msgp.ReadUint64Bytes(bts)
+			bts, err = (*z).LastAttestedRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LastAttestedRound")
 				return
@@ -223,13 +224,13 @@ func (z *Message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o [
 					return
 				}
 			case "f":
-				(*z).FirstAttestedRound, bts, err = msgp.ReadUint64Bytes(bts)
+				bts, err = (*z).FirstAttestedRound.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstAttestedRound")
 					return
 				}
 			case "l":
-				(*z).LastAttestedRound, bts, err = msgp.ReadUint64Bytes(bts)
+				bts, err = (*z).LastAttestedRound.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "LastAttestedRound")
 					return
@@ -257,17 +258,17 @@ func (_ *Message) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Message) Msgsize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).BlockHeadersCommitment) + 2 + msgp.BytesPrefixSize + len((*z).VotersCommitment) + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).BlockHeadersCommitment) + 2 + msgp.BytesPrefixSize + len((*z).VotersCommitment) + 2 + msgp.Uint64Size + 2 + (*z).FirstAttestedRound.Msgsize() + 2 + (*z).LastAttestedRound.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Message) MsgIsZero() bool {
-	return (len((*z).BlockHeadersCommitment) == 0) && (len((*z).VotersCommitment) == 0) && ((*z).LnProvenWeight == 0) && ((*z).FirstAttestedRound == 0) && ((*z).LastAttestedRound == 0)
+	return (len((*z).BlockHeadersCommitment) == 0) && (len((*z).VotersCommitment) == 0) && ((*z).LnProvenWeight == 0) && ((*z).FirstAttestedRound.MsgIsZero()) && ((*z).LastAttestedRound.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
 func MessageMaxSize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + crypto.Sha256Size + 2 + msgp.BytesPrefixSize + crypto.SumhashDigestSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.BytesPrefixSize + crypto.Sha256Size + 2 + msgp.BytesPrefixSize + crypto.SumhashDigestSize + 2 + msgp.Uint64Size + 2 + basics.RoundMaxSize() + 2 + basics.RoundMaxSize()
 	return
 }

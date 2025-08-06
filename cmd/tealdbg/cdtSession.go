@@ -74,14 +74,12 @@ func (s *cdtSession) sourceMapHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(sm)
-	return
 }
 
 func (s *cdtSession) sourceHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, source := s.debugger.GetSource()
 	w.Write(source)
-	return
 }
 
 func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
@@ -267,11 +265,8 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		s.debugger.SetBreakpointsActive(false)
 		s.debugger.Resume()
 		defer func() {
-			for {
-				select {
-				case <-notifications:
-					return
-				}
+			for range notifications {
+				return
 			}
 		}()
 	}
