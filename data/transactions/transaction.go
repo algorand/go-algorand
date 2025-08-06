@@ -462,6 +462,20 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	return nil
 }
 
+// IsFree returns true if the transaction is free, i.e., no required fee.
+func (tx Transaction) IsFree() bool {
+	// If the transaction is a state proof transaction, it is free
+	if tx.Type == protocol.StateProofTx {
+		return true
+	}
+
+	if tx.Type == protocol.HeartbeatTx && tx.Group.IsZero() {
+		return true
+	}
+
+	return false
+}
+
 // TxAmount returns the amount paid to the recipient in this payment
 func (tx Transaction) TxAmount() basics.MicroAlgos {
 	switch tx.Type {
