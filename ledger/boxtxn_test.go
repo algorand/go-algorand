@@ -713,7 +713,11 @@ func TestNewAppBoxCreate(t *testing.T) {
 		// We're going to create an app that will, during its own creation,
 		// create a box.  That requires two tricks.
 
-		// 1) Figure out the appID it will have and prefund it.
+		// 1) Figure out the appID it will have and prefund it.  This _could_ be
+		// done within the group itself - an early transaction deduces the
+		// transaction counter, so it can know what the later create will be,
+		// and compute it's app address.
+
 		// 2) a) Use the the predicted appID to name the box ref.
 		// or b) Use 0 as the app in the box ref, meaning "this app"
 		// or c) EnableUnnamedBoxCreate will allow such a creation if there are empty box refs.

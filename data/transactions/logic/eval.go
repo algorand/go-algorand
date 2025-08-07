@@ -1144,6 +1144,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	// If this is a creation...
 	if cx.txn.Txn.ApplicationID == 0 {
 		// make any "0 index" box refs available now that we have an appID.
+		// This allows case 2b in TestNewAppBoxCreate of boxtxn_test.go
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
 				cx.EvalParams.available.boxes[BoxRef{cx.appID, string(br.Name)}] = false
@@ -1201,7 +1202,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 		}
 
-		// If we ran an I/O deficit, ask the resource policy to address it.
+		// If we ran an I/O deficit, ask the resource policy if we should continue anyway.
 		if cx.UnnamedResources != nil && !cx.UnnamedResources.IOSurplus(surplus) {
 			return false, nil, fmt.Errorf("box read budget (%d) exceeded despite policy", cx.ioBudget)
 		}

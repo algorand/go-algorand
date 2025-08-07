@@ -49,8 +49,8 @@ type ResourceTracker struct {
 	// already listed.
 	MaxApps int
 
-	// The map value is the size of the box loaded from the ledger prior to any writes. This is used
-	// to track the box read budget.
+	// The map value contains details of the box loaded from the ledger prior
+	// to any writes. This is used to track budget requirements.
 	Boxes    map[logic.BoxRef]BoxStat
 	MaxBoxes int
 
@@ -421,10 +421,10 @@ func (a *ResourceTracker) addLocal(addr basics.Address, aid basics.AppIndex) boo
 	return true
 }
 
-// Simplify makes the ResourceTracker easier to consume for callers.  It removes
-// avoids returning boxes "named" by a newly created app.  Those app IDs would
-// not be usable in a later submission. An empty ref can stand in. Once
-// Simplified, the tracker should not be used to for further tracking.
+// Simplify makes the ResourceTracker easier to consume for callers.  It avoids
+// returning boxes "named" by a newly created app.  Those app IDs would not be
+// usable in a later submission. An empty ref can stand in. Once Simplified, the
+// tracker should not be used to for further tracking.
 func (a *ResourceTracker) Simplify() {
 	for name, stat := range a.Boxes {
 		if stat.NewApp {

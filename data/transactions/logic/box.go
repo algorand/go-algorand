@@ -94,8 +94,9 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 			}
 			// Since it exists, we have no dirty work to do. The weird case of
 			// box_put, which seems like a combination of create and write, is
-			// properly handled because already used boxWrite to declare the
-			// intent to write (and track dirtiness).
+			// properly handled because opBoxPut uses BoxWriteOperation to
+			// declare the intent to write (and track dirtiness). opBoxPut
+			// performs the length match check itself.
 			return content, exists, nil
 		}
 		fallthrough // If it doesn't exist, a create is like write
