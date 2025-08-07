@@ -74,9 +74,7 @@ func TestCurrentInnerTypes(t *testing.T) {
 	TestApp(t, "itxn_begin; int axfer; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 
 	TestApp(t, "itxn_begin; byte \"acfg\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
-	TestApp(t, "itxn_begin; byte \"afrz\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
 	TestApp(t, "itxn_begin; int acfg; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
-	TestApp(t, "itxn_begin; int afrz; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 
 	// allowed since v6
 	TestApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
@@ -431,6 +429,13 @@ func TestAppAxfer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	closeWithClawback := `
+  itxn_begin
+  int axfer        ; itxn_field TypeEnum
+  txn Sender       ; itxn_field AssetSender
+  txn Sender       ; itxn_field AssetCloseTo
+  itxn_submit
+`
 	axfer := `
   itxn_begin
   int 77
@@ -450,6 +455,8 @@ func TestAppAxfer(t *testing.T) {
 			TestApp(t, source, ep, problem...)
 		}
 
+		test(closeWithClawback, "cannot close asset by clawback")
+
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAsset(tx.Receiver, 777, basics.AssetParams{}) // not in foreign-assets of sample
 		ledger.NewAsset(tx.Receiver, 77, basics.AssetParams{})  // in foreign-assets of sample
@@ -461,6 +468,14 @@ func TestAppAxfer(t *testing.T) {
 			"assert failed") // app account not opted in
 
 		ledger.NewAccount(appAddr(888), 10000) // plenty for fees
+
+		// It should be possible to send 0 amount of an asset (existing
+		// or not) to any account but ourself. Regardless of being opted in
+		test("global CurrentApplicationAddress; txn Accounts 1; int 0" + axfer + "int 1")
+		holding, err := ledger.AssetHolding(appAddr(888), 77)
+		require.ErrorContains(t, err, "no asset 77 for account")
+		require.Equal(t, uint64(0), holding.Amount)
+
 		ledger.NewHolding(appAddr(888), 77, 3000, false)
 		test("global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 3000; ==;")
 
@@ -494,7 +509,7 @@ func TestAppAxfer(t *testing.T) {
 		// is going to fail anyway, but to keep the behavior consistent, v9
 		// allows the zero asset (and zero account) in `requireHolding`.
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100"+noid+"int 1",
-			fmt.Sprintf("Sender (%s) not opted in to 0", appAddr(888)))
+			"asset ID cannot be zero")
 
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100" + axfer + "int 1")
 
@@ -775,14 +790,7 @@ func TestAssetFreeze(t *testing.T) {
   int 5000
   ==
 `
-	// v5 added inners
-	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-		// Give it enough for fees.  Recall that we don't check min balance at this level.
-		ledger.NewAccount(appAddr(888), 12*MakeTestProto().MinTxnFee)
-		TestApp(t, create, ep)
-
-		freeze := `
+	freeze := `
   itxn_begin
   int afrz                    ; itxn_field TypeEnum
   int 5000                    ; itxn_field FreezeAsset
@@ -791,6 +799,24 @@ func TestAssetFreeze(t *testing.T) {
   itxn_submit
   int 1
 `
+	missingFreezeAccount := `
+  itxn_begin
+  int afrz       ; itxn_field TypeEnum
+  int 5000       ; itxn_field FreezeAsset
+  itxn_submit
+`
+	missingAssetID := `
+  itxn_begin
+  int afrz       ; itxn_field TypeEnum
+  itxn_submit
+`
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		// Give it enough for fees.  Recall that we don't check min balance at this level.
+		ledger.NewAccount(appAddr(888), 12*MakeTestProto().MinTxnFee)
+		TestApp(t, create, ep)
+
 		TestApp(t, freeze, ep, "unavailable Asset 5000")
 		tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(5000)}
 		tx.ApplicationArgs = [][]byte{{0x01}}
@@ -805,6 +831,10 @@ func TestAssetFreeze(t *testing.T) {
 		holding, err = ledger.AssetHolding(tx.Receiver, 5000)
 		require.NoError(t, err)
 		require.Equal(t, false, holding.Frozen)
+
+		// Malformed
+		TestApp(t, missingFreezeAccount, ep, "freeze account cannot be empty")
+		TestApp(t, missingAssetID, ep, "asset ID cannot be zero")
 	})
 }
 

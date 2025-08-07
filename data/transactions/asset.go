@@ -17,6 +17,10 @@
 package transactions
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -74,4 +78,48 @@ type AssetFreezeTxnFields struct {
 
 	// AssetFrozen is the new frozen value.
 	AssetFrozen bool `codec:"afrz"`
+}
+
+func (ac AssetConfigTxnFields) wellFormed(proto config.ConsensusParams) error {
+	if len(ac.AssetParams.AssetName) > proto.MaxAssetNameBytes {
+		return fmt.Errorf("transaction asset name too big: %d > %d", len(ac.AssetParams.AssetName), proto.MaxAssetNameBytes)
+	}
+
+	if len(ac.AssetParams.UnitName) > proto.MaxAssetUnitNameBytes {
+		return fmt.Errorf("transaction asset unit name too big: %d > %d", len(ac.AssetParams.UnitName), proto.MaxAssetUnitNameBytes)
+	}
+
+	if len(ac.AssetParams.URL) > proto.MaxAssetURLBytes {
+		return fmt.Errorf("transaction asset url too big: %d > %d", len(ac.AssetParams.URL), proto.MaxAssetURLBytes)
+	}
+
+	if ac.AssetParams.Decimals > proto.MaxAssetDecimals {
+		return fmt.Errorf("transaction asset decimals is too high (max is %d)", proto.MaxAssetDecimals)
+	}
+
+	return nil
+}
+
+func (ax AssetTransferTxnFields) wellFormed() error {
+	if ax.XferAsset == 0 && ax.AssetAmount != 0 {
+		return errors.New("asset ID cannot be zero")
+	}
+
+	if !ax.AssetSender.IsZero() && !ax.AssetCloseTo.IsZero() {
+		return errors.New("cannot close asset by clawback")
+	}
+
+	return nil
+}
+
+func (af AssetFreezeTxnFields) wellFormed() error {
+	if af.FreezeAsset == 0 {
+		return errors.New("asset ID cannot be zero")
+	}
+
+	if af.FreezeAccount.IsZero() {
+		return errors.New("freeze account cannot be empty")
+	}
+
+	return nil
 }
