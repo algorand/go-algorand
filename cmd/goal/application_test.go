@@ -21,6 +21,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -134,5 +135,33 @@ func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, test.expectedAppArgs, applicationArgs)
 		})
+	}
+}
+
+func TestCliAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	type testCase struct {
+		address string
+		valid   bool
+		value   basics.Address
+	}
+	tests := []testCase{
+		{"", true, basics.Address{}},
+		{"invalid", false, basics.Address{}},
+		{"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ", true, basics.Address{}},
+		{"app(10)", true, basics.AppIndex(10).Address()},
+		{basics.Address{0x07}.String(), true, basics.Address{0x07}},
+	}
+
+	for _, tc := range tests {
+		if tc.valid {
+			value := cliAddress(tc.address)
+			a.Equal(tc.value, value)
+		} else {
+			a.Panics(func() { cliAddress(tc.address) })
+		}
 	}
 }

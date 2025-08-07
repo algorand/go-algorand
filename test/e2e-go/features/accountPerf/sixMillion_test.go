@@ -1154,7 +1154,7 @@ int 1
 
 	// create the app
 	appTx, err = client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	note := make([]byte, 8)
@@ -1181,7 +1181,7 @@ func makeOptInAppTransaction(
 	tLife basics.Round,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppOptInTx(appIdx, nil, nil, nil, nil, nil, 0)
+	appTx, err := client.MakeUnsignedAppOptInTx(appIdx, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
@@ -1287,7 +1287,7 @@ func callAppTransaction(
 	tLife basics.Round,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppNoOpTx(appIdx, nil, nil, nil, nil, nil, 0)
+	appTx, err := client.MakeUnsignedAppNoOpTx(appIdx, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
