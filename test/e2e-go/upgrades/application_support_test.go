@@ -242,10 +242,10 @@ int 1
 	a.NoError(err)
 	round, err = client.CurrentRound()
 	a.NoError(err)
-	_, err = client.BroadcastTransaction(signedTxn)
+	txid, err := client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
 
-	client.WaitForRound(round + 2)
+	client.WaitForConfirmedTxn(round+10, txid)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
