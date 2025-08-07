@@ -468,6 +468,14 @@ func TestAppAxfer(t *testing.T) {
 			"assert failed") // app account not opted in
 
 		ledger.NewAccount(appAddr(888), 10000) // plenty for fees
+
+		// It should be possible to send 0 amount of an asset (existing
+		// or not) to any account but ourself. Regardless of being opted in
+		test("global CurrentApplicationAddress; txn Accounts 1; int 0" + axfer + "int 1")
+		holding, err := ledger.AssetHolding(appAddr(888), 77)
+		require.ErrorContains(t, err, "no asset 77 for account")
+		require.Equal(t, uint64(0), holding.Amount)
+
 		ledger.NewHolding(appAddr(888), 77, 3000, false)
 		test("global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 3000; ==;")
 
