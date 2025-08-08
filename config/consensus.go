@@ -535,6 +535,11 @@ type ConsensusParams struct {
 	// EnableBoxRefNameError specifies that box ref names should be validated early
 	EnableBoxRefNameError bool
 
+	// EnableUnnamedBoxAccessInNewApps allows newly created (in this group) apps to
+	// create boxes that were not named in a box ref. Each empty box ref in the
+	// group allows one such creation.
+	EnableUnnamedBoxAccessInNewApps bool
+
 	// ExcludeExpiredCirculation excludes expired stake from the total online stake
 	// used by agreement for Circulation, and updates the calculation of StateProofOnlineTotalWeight used
 	// by state proofs to use the same method (rather than excluding stake from the top N stakeholders as before).
@@ -1434,6 +1439,8 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
 	vFuture.EnableSha512BlockHash = true
+
+	vFuture.EnableUnnamedBoxAccessInNewApps = true
 
 	// txn.Access work
 	vFuture.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
