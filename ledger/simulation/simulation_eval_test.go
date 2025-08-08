@@ -7075,7 +7075,7 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 8 { // boxes introduced
 					program += `byte "A"; int 64; box_create; assert;`
 					program += `byte "B"; box_len; !; assert; !; assert;`
-					expectedUnnamedResourceGroupAssignment.Boxes = map[logic.BoxRef]simulation.BoxStat{
+					expectedUnnamedResourceGroupAssignment.Boxes = map[basics.BoxRef]simulation.BoxStat{
 						{App: 0, Name: "A"}: {},
 						{App: 0, Name: "B"}: {},
 					}
@@ -7624,7 +7624,7 @@ func (o boxOperation) boxRefs() []transactions.BoxRef {
 }
 
 type boxTestResult struct {
-	Boxes           map[logic.BoxRef]uint64 // maps observed boxes to their size when read
+	Boxes           map[basics.BoxRef]uint64 // maps observed boxes to their size when read
 	NumEmptyBoxRefs int
 
 	FailureMessage string
@@ -7709,7 +7709,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 		MaxCrossProductReferences: len(boxOps) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 	}
 	if expected.Boxes != nil {
-		expectedUnnamedResources.Boxes = make(map[logic.BoxRef]simulation.BoxStat, len(expected.Boxes))
+		expectedUnnamedResources.Boxes = make(map[basics.BoxRef]simulation.BoxStat, len(expected.Boxes))
 		for key, size := range expected.Boxes {
 			expectedUnnamedResources.Boxes[key] = simulation.BoxStat{ReadSize: size}
 		}
@@ -7773,7 +7773,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			// MBR is needed for boxes.
 			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - 2*proto.MinTxnFee
 			env.TransferAlgos(env.Accounts[1].Addr, appID.Address(), transferable/2)
-			// we're also going to make new boxes in a new app, which we know will be app 1006.
+			// we're also going to make new boxes in a new app, which we know will be app 1007.
 			env.TransferAlgos(env.Accounts[1].Addr, basics.AppIndex(1007).Address(), transferable/2)
 
 			// Set up boxes A, B, C for testing.

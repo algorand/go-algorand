@@ -329,6 +329,11 @@ func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.
 			// ApplicationCallTxnFields.wellFormed ensures no error here.
 			app, name, _ := rr.Box.Resolve(tx.Access)
 			r.shareBox(basics.BoxRef{App: app, Name: name}, tx.ApplicationID)
+		default:
+			// all empty equals an "empty boxref" which allows unnamed access
+			if ep.Proto.EnableUnnamedBoxAccessInNewApps {
+				r.unnamedAccess++
+			}
 		}
 	}
 }
@@ -369,18 +374,11 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 	}
 
 	for _, br := range tx.Boxes {
-		if ep.Proto.EnableUnnamedBoxAccessInNewApps && (br.Index == 0 && br.Name == nil) { // TODO: Use br.Empty() when #6286 merges
+		if ep.Proto.EnableUnnamedBoxAccessInNewApps && br.Empty() {
 			r.unnamedAccess++
 		}
 		var app basics.AppIndex
-		if br.Index == 0 {
-			// "current app": Ignore if this is a create, else use ApplicationID
-			if tx.ApplicationID == 0 {
-				// When the app creation actually happens, and we learn the appID, we'll add it.
-				continue
-			}
-			app = tx.ApplicationID
-		} else {
+		if br.Index > 0 {
 			// Bounds check will already have been done by
 			// WellFormed. For testing purposes, it's better to panic
 			// now than after returning a nil.

@@ -44,7 +44,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 		return nil, false, fmt.Errorf("boxes may not be accessed from ClearState program")
 	}
 
-	dirty, ok := cx.available.boxes[BoxRef{cx.appID, name}]
+	dirty, ok := cx.available.boxes[basics.BoxRef{App: cx.appID, Name: name}]
 
 	newAppAccess := false
 	// maybe allow it (and account for it) if a newly created app is accessing a
@@ -67,7 +67,6 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 		}
 	}
 
-	dirty, ok := cx.available.boxes[basics.BoxRef{App: cx.appID, Name: name}]
 	if !ok && cx.UnnamedResources != nil {
 		ok = cx.UnnamedResources.AvailableBox(cx.appID, name, newAppAccess, createSize)
 	}

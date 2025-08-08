@@ -130,6 +130,7 @@ var passThruSource = main(`
 
 const (
 	boxVersion          = 36
+	accessVersion       = 38
 	boxQuotaBumpVersion = 41
 	newAppCreateVersion = 41
 )
@@ -778,15 +779,26 @@ func TestNewAppBoxCreate(t *testing.T) {
 				Boxes:       []transactions.BoxRef{{Index: 1, Name: []byte{0x01}}}})
 
 			// 2a. Create it with a box ref of the predicted appID (Access list)
-			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
-				ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
-				ForeignApps: []basics.AppIndex{passID + testTxns + 2},
-				Access:      []transactions.ResourceRef{{Box: {Index: 1, Name: []byte{0x01}}}})
+			if ver >= accessVersion {
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{
+						{App: passID + testTxns + 3},
+						{Box: transactions.BoxRef{Index: 1, Name: []byte{0x01}}}}})
+			}
 
 			// 2b. Create it with a box ref of 0, which means "this app"
 			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
 				ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
 				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}})
+
+			// 2b. Create it with a box ref of 0, which means "this app" (Access List)
+			if ver >= accessVersion {
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{
+						{Box: transactions.BoxRef{Index: 0, Name: []byte{0x01}}}}})
+			}
 
 			// you can manipulate it twice if you want (this tries to create it twice)
 			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
@@ -812,6 +824,11 @@ func TestNewAppBoxCreate(t *testing.T) {
 				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
 					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
 					Boxes: []transactions.BoxRef{{}}})
+
+				// 2c. Create it with an empty box ref
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{{Box: transactions.BoxRef{}}}})
 
 				// but you can't do a second create
 				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],

@@ -51,10 +51,8 @@ type ResourceTracker struct {
 
 	// The map value is the size of the box loaded from the ledger prior to any writes. This is used
 	// to track the box read budget.
-	Boxes           map[basics.BoxRef]BoxStat
-	MaxBoxes        int
-	NumEmptyBoxRefs int
-	maxWriteBudget  uint64
+	Boxes    map[basics.BoxRef]BoxStat
+	MaxBoxes int
 
 	// NumEmptyBoxRefs tracks the number of additional BoxRefs that will be
 	// required to handle the boxes this tracker has observed (for i/o budget,

@@ -1132,6 +1132,11 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(br.Name)}] = false
 			}
 		}
+		for _, rr := range cx.txn.Txn.Access {
+			if len(rr.Box.Name) > 0 && rr.Box.Index == 0 { // len check ensures we have a box ref
+				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(rr.Box.Name)}] = false
+			}
+		}
 		// and add the appID to `createdApps`
 		if cx.EvalParams.available.createdApps == nil {
 			cx.EvalParams.available.createdApps = make(map[basics.AppIndex]struct{})
