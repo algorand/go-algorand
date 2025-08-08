@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -89,7 +90,7 @@ return
 
 	// create app 1 with 1 extra page
 	app1ExtraPages := uint32(1)
-	tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, smallProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, nil, app1ExtraPages)
+	tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, smallProgram, smallProgram, globalSchema, localSchema, nil, libgoal.RefBundle{}, app1ExtraPages)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -110,7 +111,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
 
 	// update app 1 and ensure the extra page still works
-	tx, err = client.MakeUnsignedAppUpdateTx(app1ID, nil, nil, nil, nil, nil, bigProgram, smallProgram, 0)
+	tx, err = client.MakeUnsignedAppUpdateTx(app1ID, nil, bigProgram, smallProgram, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -130,7 +131,7 @@ return
 
 	// create app 2 with 2 extra pages
 	app2ExtraPages := uint32(2)
-	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, bigProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, nil, app2ExtraPages)
+	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, bigProgram, smallProgram, globalSchema, localSchema, nil, libgoal.RefBundle{}, app2ExtraPages)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -151,7 +152,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages+app2ExtraPages))
 
 	// delete app 1
-	tx, err = client.MakeUnsignedAppDeleteTx(app1ID, nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppDeleteTx(app1ID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -170,7 +171,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app2ExtraPages))
 
 	// delete app 2
-	tx, err = client.MakeUnsignedAppDeleteTx(app2ID, nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppDeleteTx(app2ID, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)

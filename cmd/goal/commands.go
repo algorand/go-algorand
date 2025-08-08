@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 var log = logging.Base()
@@ -524,13 +525,10 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 // writeDryrunReqToFile creates dryrun request object and writes to a file
 func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
 	proto, _ := getProto(protoVersion)
-	accts, err := unmarshalSlice(dumpForDryrunAccts)
-	if err != nil {
-		reportErrorln(err.Error())
-	}
+	accts := util.Map(dumpForDryrunAccts, cliAddress)
 	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
 	if err != nil {
-		reportErrorln(err.Error())
+		reportErrorln(err)
 	}
 	err = writeFile(outFilename, data, 0600)
 	return

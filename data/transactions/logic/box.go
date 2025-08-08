@@ -67,6 +67,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 		}
 	}
 
+	dirty, ok := cx.available.boxes[basics.BoxRef{App: cx.appID, Name: name}]
 	if !ok && cx.UnnamedResources != nil {
 		ok = cx.UnnamedResources.AvailableBox(cx.appID, name, newAppAccess, createSize)
 	}
@@ -124,7 +125,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	case BoxReadOperation:
 		/* nothing to do */
 	}
-	cx.available.boxes[BoxRef{cx.appID, name}] = dirty
+	cx.available.boxes[basics.BoxRef{App: cx.appID, Name: name}] = dirty
 
 	if cx.available.dirtyBytes > cx.ioBudget {
 		return nil, false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)

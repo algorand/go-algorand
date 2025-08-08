@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,54 +59,62 @@ func TestNewAppCallBytes(t *testing.T) {
 	require.Panics(t, func() { newAppCallBytes("hello") })
 }
 
-func TestNewBoxRef(t *testing.T) {
+func TestParseBoxRef(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	br := newBoxRef("str:hello")
+	br := parseBoxRef("str:hello")
 	require.EqualValues(t, 0, br.appID)
 	require.Equal(t, "str", br.name.Encoding)
 	require.Equal(t, "hello", br.name.Value)
 
-	require.Panics(t, func() { newBoxRef("1,hello") })
-	require.Panics(t, func() { newBoxRef("hello") })
+	require.Panics(t, func() { parseBoxRef("1,hello") })
+	require.Panics(t, func() { parseBoxRef("hello") })
 
-	br = newBoxRef("2,str:hello")
+	br = parseBoxRef("2,str:hello")
 	require.EqualValues(t, 2, br.appID)
 	require.Equal(t, "str", br.name.Encoding)
 	require.Equal(t, "hello", br.name.Value)
 }
 
-func TestStringsToBoxRefs(t *testing.T) {
+func TestParseHoldingRef(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	brs := stringsToBoxRefs([]string{"77,str:hello", "55,int:6", "int:88"})
-	require.EqualValues(t, 77, brs[0].appID)
-	require.EqualValues(t, 55, brs[1].appID)
-	require.EqualValues(t, 0, brs[2].appID)
+	hr := parseHoldingRef("12")
+	require.EqualValues(t, 12, hr.assetID)
+	require.Zero(t, hr.address)
 
-	tbrs := translateBoxRefs(brs, []uint64{55, 77})
-	require.EqualValues(t, 2, tbrs[0].Index)
-	require.EqualValues(t, 1, tbrs[1].Index)
-	require.EqualValues(t, 0, tbrs[2].Index)
+	hr = parseHoldingRef("1232+JUNK")
+	require.EqualValues(t, 1232, hr.assetID)
+	require.Equal(t, "JUNK", hr.address)
+}
 
-	require.Panics(t, func() { translateBoxRefs(stringsToBoxRefs([]string{"addr:88"}), nil) })
-	translateBoxRefs(stringsToBoxRefs([]string{"addr:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"}), nil)
-	// if we're here, that didn't panic/exit
+func TestParseLocalRef(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	tbrs = translateBoxRefs(brs, []uint64{77, 55})
-	require.EqualValues(t, 1, tbrs[0].Index)
-	require.EqualValues(t, 2, tbrs[1].Index)
-	require.EqualValues(t, 0, tbrs[2].Index)
+	lr := parseLocalRef("12")
+	assert.EqualValues(t, 12, lr.appID)
+	assert.Zero(t, lr.address)
 
-	require.Panics(t, func() { translateBoxRefs(brs, []uint64{55, 78}) })
-	require.Panics(t, func() { translateBoxRefs(brs, []uint64{51, 77}) })
+	lr = parseLocalRef("1232+JUNK")
+	assert.EqualValues(t, 1232, lr.appID)
+	assert.Equal(t, "JUNK", lr.address)
+
+	lr = parseLocalRef("0+JUNK")
+	assert.Zero(t, lr.appID)
+	assert.Equal(t, "JUNK", lr.address)
+
+	lr = parseLocalRef("STUFF")
+	assert.Zero(t, lr.appID)
+	assert.Equal(t, "STUFF", lr.address)
 }
 
 func TestBytesToAppCallBytes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
 	testCases := []struct {
 		input    []byte
 		expected string

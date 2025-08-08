@@ -49,10 +49,12 @@ type ResourceTracker struct {
 	// already listed.
 	MaxApps int
 
-	// The map value contains details of the box loaded from the ledger prior
-	// to any writes. This is used to track budget requirements.
-	Boxes    map[logic.BoxRef]BoxStat
-	MaxBoxes int
+	// The map value is the size of the box loaded from the ledger prior to any writes. This is used
+	// to track the box read budget.
+	Boxes           map[basics.BoxRef]BoxStat
+	MaxBoxes        int
+	NumEmptyBoxRefs int
+	maxWriteBudget  uint64
 
 	// NumEmptyBoxRefs tracks the number of additional BoxRefs that will be
 	// required to handle the boxes this tracker has observed (for i/o budget,
@@ -276,7 +278,7 @@ func (a *ResourceTracker) removeAppSlot() bool {
 
 func (a ResourceTracker) hasBox(app basics.AppIndex, name string) bool {
 	// nil map lookup is ok
-	_, ok := a.Boxes[logic.BoxRef{App: app, Name: name}]
+	_, ok := a.Boxes[basics.BoxRef{App: app, Name: name}]
 	return ok
 }
 
@@ -314,9 +316,9 @@ func (a *ResourceTracker) addBox(app basics.AppIndex, name string, newApp bool, 
 		return false
 	}
 	if a.Boxes == nil {
-		a.Boxes = make(map[logic.BoxRef]BoxStat)
+		a.Boxes = make(map[basics.BoxRef]BoxStat)
 	}
-	a.Boxes[logic.BoxRef{App: app, Name: name}] = BoxStat{readSize, newApp}
+	a.Boxes[basics.BoxRef{App: app, Name: name}] = BoxStat{readSize, newApp}
 	a.NumEmptyBoxRefs += emptyRefs
 	return true
 }
