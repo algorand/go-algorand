@@ -248,8 +248,8 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 			p2pTarget := targetConnCount - wsConnections
 			p2pConnections = cfg.p2pnet.meshThreadInner(p2pTarget)
 
-			if cfg.wsnet.log.GetLevel() >= logging.Info {
-				cfg.wsnet.log.Infof("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d, target=%d",
+			if cfg.wsnet.log.GetLevel() >= logging.Debug {
+				cfg.wsnet.log.Debugf("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d, target=%d",
 					wsConnections, p2pConnections, targetConnCount)
 			}
 		}
