@@ -1195,7 +1195,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 		}
 
-		// If we ran an I/O deficit, ask the resource policy if we should continue anyway.
+		// Report the surplus/deficit to the policy, and find out if we should continue
 		if cx.UnnamedResources != nil && !cx.UnnamedResources.IOSurplus(surplus) {
 			return false, nil, fmt.Errorf("box read budget (%d) exceeded despite policy", cx.ioBudget)
 		}

@@ -330,7 +330,7 @@ func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.
 			app, name, _ := rr.Box.Resolve(tx.Access)
 			r.shareBox(basics.BoxRef{App: app, Name: name}, tx.ApplicationID)
 		default:
-			// all empty equals an "empty boxref" which allows unnamed access
+			// all empty equals an "empty boxref" which allows one unnamed access
 			if ep.Proto.EnableUnnamedBoxAccessInNewApps {
 				r.unnamedAccess++
 			}

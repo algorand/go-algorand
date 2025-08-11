@@ -7684,9 +7684,8 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 	for i := range expectedTxnResults {
 		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
 		if i < len(boxOps) && boxOps[i].duringCreate {
-			// 1007 here is a hack, we just know that's the txcounter.  We ought
-			// to actually dig it out of the env if possible, or perhaps
-			// implement a ignoreAppIDCreated like ignoreAppBudgetConsumed
+			// 1007 here is because of the number of transactions we used to
+			// setup the env.  See explanation in: TestUnnamedResourcesBoxIOBudget
 			expectedTxnResults[i].Txn.ApplyData.ApplicationID = 1007 + basics.AppIndex(i)
 		}
 	}
@@ -7773,8 +7772,10 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			// MBR is needed for boxes.
 			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - 2*proto.MinTxnFee
 			env.TransferAlgos(env.Accounts[1].Addr, appID.Address(), transferable/2)
-			// we're also going to make new boxes in a new app, which we know will be app 1007.
-			env.TransferAlgos(env.Accounts[1].Addr, basics.AppIndex(1007).Address(), transferable/2)
+			// we're also going to make new boxes in a new app, which will be
+			// the sixth txns after the appID creation (because of two
+			// TrsnaferAlgos and 3 env.Txn, below)
+			env.TransferAlgos(env.Accounts[1].Addr, (appID + 6).Address(), transferable/2)
 
 			// Set up boxes A, B, C for testing.
 			// A is a box with a size of exactly BytesPerBoxReference
