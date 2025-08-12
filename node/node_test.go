@@ -114,7 +114,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, customConsens
 		}
 		return phonebook
 	}
-	nodes, wallets := setupFullNodesEx(t, proto, customConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, proto, customConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, numAccounts)
 	require.Len(t, wallets, numAccounts)
 	return nodes, wallets
@@ -123,15 +123,14 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, customConsens
 func setupFullNodesEx(
 	t *testing.T, proto protocol.ConsensusVersion, customConsensus config.ConsensusProtocols,
 	acctStake []basics.MicroAlgos, configHook configHook, phonebookHook phonebookHook,
+	lp fullNodeLoggerProvider,
 ) ([]*AlgorandFullNode, []string) {
 
 	util.SetFdSoftLimit(1000)
 
-	f, _ := os.Create(t.Name() + ".log")
-	logging.Base().SetJSONFormatter()
-	logging.Base().SetOutput(f)
-	logging.Base().SetLevel(logging.Debug)
-	t.Logf("Logging to %s\n", t.Name()+".log")
+	if lp == nil {
+		lp = &singleFileFullNodeLoggerProvider{t: t}
+	}
 
 	firstRound := basics.Round(0)
 	lastRound := basics.Round(200)
@@ -243,12 +242,59 @@ func setupFullNodesEx(
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		phonebook := phonebookHook(nodeInfos, i)
 		require.NoError(t, err)
-		node, err := MakeFull(logging.Base().With("net", fmt.Sprintf("node%d", i)), rootDirectory, cfg, phonebook, g)
+		node, err := MakeFull(lp.getLogger(i), rootDirectory, cfg, phonebook, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
 
 	return nodes, wallets
+}
+
+// fullNodeLoggerProvider is an interface for providing loggers for full nodes.
+type fullNodeLoggerProvider interface {
+	getLogger(i int) logging.Logger
+	cleanup()
+}
+
+// singleFileFullNodeLoggerProvider is a logger provider that creates a single log file for all nodes.
+type singleFileFullNodeLoggerProvider struct {
+	t *testing.T
+	h *os.File
+	l logging.Logger
+}
+
+func (p *singleFileFullNodeLoggerProvider) getLogger(i int) logging.Logger {
+	if p.l == nil {
+		var err error
+		p.h, err = os.Create(p.t.Name() + ".log")
+		require.NoError(p.t, err, "Failed to create log file for node %d", i)
+		p.l = logging.NewLogger()
+		p.l.SetJSONFormatter()
+		p.l.SetOutput(p.h)
+		p.l.SetLevel(logging.Debug)
+	}
+	return p.l.With("net", fmt.Sprintf("node%d", i))
+}
+
+func (p *singleFileFullNodeLoggerProvider) cleanup() {
+	if p.h != nil {
+		p.h.Close()
+		p.h = nil
+		p.l = nil
+	}
+}
+
+// mixedLogFullNodeLoggerProvider allows some nodes to log to the testing logger and others to a file.
+type mixedLogFullNodeLoggerProvider struct {
+	singleFileFullNodeLoggerProvider
+	stdoutNodes map[int]struct{}
+}
+
+func (p *mixedLogFullNodeLoggerProvider) getLogger(i int) logging.Logger {
+	if _, ok := p.stdoutNodes[i]; ok {
+		return logging.TestingLog(p.t).With("net", fmt.Sprintf("node%d", i))
+	}
+	return p.singleFileFullNodeLoggerProvider.getLogger(i)
 }
 
 func TestSyncingFullNode(t *testing.T) {
@@ -941,7 +987,14 @@ func TestNodeHybridTopology(t *testing.T) {
 		return nil
 	}
 
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(
+		t, consensusTest0, configurableConsensus,
+		acctStake, configHook, phonebookHook,
+		// log Node 0 to stdout/testing log for debugging - in order to preserve the log after failure
+		&mixedLogFullNodeLoggerProvider{
+			singleFileFullNodeLoggerProvider: singleFileFullNodeLoggerProvider{t: t},
+			stdoutNodes:                      map[int]struct{}{0: {}},
+		})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
 	for i := 0; i < len(nodes); i++ {
@@ -1049,7 +1102,7 @@ func TestNodeP2PRelays(t *testing.T) {
 		return nil
 	}
 
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
 	for i := 0; i < len(nodes); i++ {
@@ -1203,7 +1256,7 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 		return nil
 	}
 
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
 	for i := 0; i < len(nodes); i++ {
@@ -1325,7 +1378,7 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 		}
 		return phonebook
 	}
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, numAccounts)
 	require.Len(t, wallets, numAccounts)
 	for i := 0; i < len(nodes); i++ {
