@@ -859,7 +859,7 @@ func TestNewAppBoxCreate(t *testing.T) {
 					Boxes:           []transactions.BoxRef{{}},
 				})
 			} else {
-				// 2c. Doesn't work yet until v40
+				// 2c. Doesn't work yet until `newAppCreateVersion`
 				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
 					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
 					Boxes: []transactions.BoxRef{{}}},
