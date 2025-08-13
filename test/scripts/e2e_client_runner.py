@@ -451,12 +451,14 @@ def main():
     primaryDataDir = os.path.join(netdir, 'Primary')
 
     # Set EnableDeveloperAPI to true for both nodes
+    # and disable the hybrid mode since it is irrelevant for the tests
     for dataDir in (nodeDataDir, primaryDataDir):
         configFile = os.path.join(dataDir, 'config.json')
         with open(configFile, 'r') as f:
             configOptions = json.load(f)
 
         configOptions['EnableDeveloperAPI'] = True
+        configOptions['EnableP2PHybridMode'] = False
 
         with open(configFile, 'w') as f:
             json.dump(configOptions, f)
