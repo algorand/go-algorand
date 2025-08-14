@@ -302,10 +302,10 @@ func (a *ResourceTracker) addBox(app basics.AppIndex, name string, newApp bool, 
 		}
 		emptyRefs = int(emptyRefsU64)
 	} else if a.NumEmptyBoxRefs > 0 { // If there are empties added for quota, we may not need as many.
-		surplusReadBudget := ioBudget - usedReadBudget
-		surplusWriteBudget := ioBudget - a.maxWriteBudget
+		surplusReadBudget := basics.SubSaturate(ioBudget, usedReadBudget)
+		surplusWriteBudget := basics.SubSaturate(ioBudget, a.maxWriteBudget)
 		if surplusReadBudget >= bytesPerBoxRef && surplusWriteBudget >= bytesPerBoxRef {
-			// By adding this box, we may no longer need an empty ref we added for quota.
+			// By adding this box, we may no longer need an empty ref we previously added for quota.
 			emptyRefs = -1
 		}
 	}
