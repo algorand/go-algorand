@@ -695,7 +695,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 					// it appears there are artificial peers because of listening on localhost and on a real network interface
 					// so filter out and save only unique peers by their IDs
 					net := nets[idx]
-					net.meshThreadInner() // update peerstore with DHT peers
+					net.meshThreadInner(cfg.GossipFanout) // update peerstore with DHT peers
 					peers := net.GetPeers(PeersPhonebookArchivalNodes)
 					uniquePeerIDs := make(map[peer.ID]struct{})
 					for _, p := range peers {

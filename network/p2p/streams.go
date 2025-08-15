@@ -134,6 +134,19 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		return
 	}
 
+	// check if this is outgoing connection but made not by us (serviceImpl.dialNode)
+	// then it was made by some sub component like pubsub, ignore
+	if conn.Stat().Direction == network.DirOutbound {
+		val, err := n.host.Peerstore().Get(remotePeer, psmdkDialed)
+		if err != nil {
+			n.log.Warnf("%s: failed to get dialed status for %s: %v", localPeer.String(), remotePeer.String(), err)
+		}
+		if val == nil || !val.(bool) {
+			n.log.Debugf("%s: ignoring non-dialed outgoing peer ID %s", localPeer.String(), remotePeer.String())
+			return
+		}
+	}
+
 	n.streamsLock.Lock()
 	_, ok := n.streams[remotePeer]
 	if ok {

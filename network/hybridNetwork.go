@@ -77,6 +77,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	}
 
 	hybridMesh, err := hybridMeshCreator.create(
+		withTargetConnCount(cfg.GossipFanout),
 		withWebsocketNetwork(wsnet),
 		withP2PNetwork(p2pnet))
 	if err != nil {
