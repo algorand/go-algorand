@@ -337,9 +337,34 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return err
 		}
 
-	case protocol.AssetConfigTx, protocol.AssetTransferTx, protocol.AssetFreezeTx:
+	case protocol.AssetConfigTx:
 		if !proto.Asset {
 			return fmt.Errorf("asset transaction not supported")
+		}
+
+		err := tx.AssetConfigTxnFields.wellFormed(proto)
+		if err != nil {
+			return err
+		}
+
+	case protocol.AssetTransferTx:
+		if !proto.Asset {
+			return fmt.Errorf("asset transaction not supported")
+		}
+
+		err := tx.AssetTransferTxnFields.wellFormed()
+		if err != nil {
+			return err
+		}
+
+	case protocol.AssetFreezeTx:
+		if !proto.Asset {
+			return fmt.Errorf("asset transaction not supported")
+		}
+
+		err := tx.AssetFreezeTxnFields.wellFormed()
+		if err != nil {
+			return err
 		}
 
 	case protocol.ApplicationCallTx:
@@ -430,18 +455,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	}
 	if len(tx.Note) > proto.MaxTxnNoteBytes {
 		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxTxnNoteBytes)
-	}
-	if len(tx.AssetConfigTxnFields.AssetParams.AssetName) > proto.MaxAssetNameBytes {
-		return fmt.Errorf("transaction asset name too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.AssetName), proto.MaxAssetNameBytes)
-	}
-	if len(tx.AssetConfigTxnFields.AssetParams.UnitName) > proto.MaxAssetUnitNameBytes {
-		return fmt.Errorf("transaction asset unit name too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.UnitName), proto.MaxAssetUnitNameBytes)
-	}
-	if len(tx.AssetConfigTxnFields.AssetParams.URL) > proto.MaxAssetURLBytes {
-		return fmt.Errorf("transaction asset url too big: %d > %d", len(tx.AssetConfigTxnFields.AssetParams.URL), proto.MaxAssetURLBytes)
-	}
-	if tx.AssetConfigTxnFields.AssetParams.Decimals > proto.MaxAssetDecimals {
-		return fmt.Errorf("transaction asset decimals is too high (max is %d)", proto.MaxAssetDecimals)
 	}
 	if tx.Sender == spec.RewardsPool {
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
