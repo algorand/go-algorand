@@ -284,7 +284,8 @@ type UnnamedResourcePolicy interface {
 	AvailableApp(app basics.AppIndex) bool
 	AllowsHolding(addr basics.Address, asset basics.AssetIndex) bool
 	AllowsLocal(addr basics.Address, app basics.AppIndex) bool
-	AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool
+	AvailableBox(app basics.AppIndex, name string, newAppAccess bool, createSize uint64) bool
+	IOSurplus(surplus int64) bool
 }
 
 // EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
@@ -363,10 +364,13 @@ type EvalParams struct {
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
 
-	// SurplusReadBudget is the number of bytes from the IO budget that were not used for reading
-	// in boxes before evaluation began. In other words, the txn group could have read in
-	// SurplusReadBudget more box bytes, but did not.
-	SurplusReadBudget uint64
+	// SurplusReadBudget is the number of bytes from the IO budget that were not
+	// used for reading in boxes before evaluation began. In other words, the
+	// txn group could have read in SurplusReadBudget more box bytes, but did
+	// not.  It is signed because `simulate` evaluates groups even if they come
+	// in with insufficient io budget, and reports the need, when invoked with
+	// AllowUnnamedResources.
+	SurplusReadBudget int64
 
 	EvalConstants
 
@@ -1122,9 +1126,15 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	// If this is a creation...
 	if cx.txn.Txn.ApplicationID == 0 {
 		// make any "0 index" box refs available now that we have an appID.
+		// This allows case 2b in TestNewAppBoxCreate of boxtxn_test.go
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
 				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(br.Name)}] = false
+			}
+		}
+		for _, rr := range cx.txn.Txn.Access {
+			if len(rr.Box.Name) > 0 && rr.Box.Index == 0 { // len check ensures we have a box ref
+				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(rr.Box.Name)}] = false
 			}
 		}
 		// and add the appID to `createdApps`
@@ -1146,9 +1156,11 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 				}
 			}
 		}
-		cx.ioBudget = bumps * cx.Proto.BytesPerBoxReference
+		cx.ioBudget = basics.MulSaturate(bumps, cx.Proto.BytesPerBoxReference)
 
 		used := uint64(0)
+		var surplus int64
+		var overflow bool
 		for br := range cx.available.boxes {
 			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
@@ -1166,7 +1178,9 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			cx.available.boxes[br] = false
 
 			used = basics.AddSaturate(used, size)
-			if used > cx.ioBudget {
+			surplus, overflow = basics.ODiff(cx.ioBudget, used)
+			// we defer the check if we have cx.UnnamedResources, so we can ask for the entire surplus at the end.
+			if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
 				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
 				if !cx.Proto.EnableBareBudgetError {
 					// We return an EvalError here because we used to do
@@ -1180,8 +1194,14 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 				return false, nil, err
 			}
 		}
+
+		// Report the surplus/deficit to the policy, and find out if we should continue
+		if cx.UnnamedResources != nil && !cx.UnnamedResources.IOSurplus(surplus) {
+			return false, nil, fmt.Errorf("box read budget (%d) exceeded despite policy", cx.ioBudget)
+		}
+
 		cx.readBudgetChecked = true
-		cx.SurplusReadBudget = cx.ioBudget - used
+		cx.SurplusReadBudget = surplus // Can be negative, but only in `simulate`
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
