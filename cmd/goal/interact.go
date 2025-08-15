@@ -80,7 +80,7 @@ type appInteractDatum interface {
 	pseudo() bool
 }
 
-func helpList(help map[string]appInteractDatum) string {
+func helpList[V appInteractDatum](help map[string]V) string {
 	largestName := 0
 	largestKind := 0
 	for k, v := range help {
@@ -286,11 +286,7 @@ func (sch appInteractSchema) validate() (err error) {
 }
 
 func (sch appInteractSchema) EntryList() string {
-	help := make(map[string]appInteractDatum)
-	for k, v := range sch {
-		help[k] = v
-	}
-	return helpList(help)
+	return helpList(sch)
 }
 
 func (sch appInteractSchema) EntryNames() (names []string) {
@@ -434,11 +430,7 @@ func (hdr appInteractHeader) validate() (err error) {
 }
 
 func (hdr appInteractHeader) ProcList() string {
-	help := make(map[string]appInteractDatum)
-	for k, v := range hdr.Execute {
-		help[k] = v
-	}
-	return helpList(help)
+	return helpList(hdr.Execute)
 }
 
 func (hdr appInteractHeader) ProcNames() (names []string) {
