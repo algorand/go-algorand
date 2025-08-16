@@ -2875,10 +2875,10 @@ func allowsLocalEvent(addr basics.Address, aid basics.AppIndex) unnamedResourceP
 	}
 }
 
-func availableBoxEvent(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) unnamedResourcePolicyEvent {
+func availableBoxEvent(app basics.AppIndex, name string, newApp bool, createSize uint64) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableBox",
-		args:      []interface{}{app, name, operation, createSize},
+		args:      []interface{}{app, name, newApp, createSize},
 	}
 }
 
@@ -2919,9 +2919,15 @@ func (p *mockUnnamedResourcePolicy) AllowsLocal(addr basics.Address, aid basics.
 	return p.allowEverything
 }
 
-func (p *mockUnnamedResourcePolicy) AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool {
-	p.events = append(p.events, availableBoxEvent(app, name, operation, createSize))
+func (p *mockUnnamedResourcePolicy) AvailableBox(app basics.AppIndex, name string, newApp bool, createSize uint64) bool {
+	p.events = append(p.events, availableBoxEvent(app, name, newApp, createSize))
 	return p.allowEverything
+}
+
+// If IOSurplus fails, then everything would fail before the "real" issue being
+// tested. So we just pass this in the mock.
+func (p *mockUnnamedResourcePolicy) IOSurplus(size int64) bool {
+	return true
 }
 
 func TestUnnamedResourceAccess(t *testing.T) {
@@ -3125,7 +3131,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
 						if tc.policy != nil {
-							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "box key", BoxReadOperation, 0)}
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "box key", false, 0)}
 							assert.Equal(t, expectedEvents, tc.policy.events)
 							tc.policy.events = nil
 						}
@@ -3136,7 +3142,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
 						if tc.policy != nil {
-							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box", BoxCreateOperation, 1)}
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box", false, 1)}
 							assert.Equal(t, expectedEvents, tc.policy.events)
 							tc.policy.events = nil
 						}

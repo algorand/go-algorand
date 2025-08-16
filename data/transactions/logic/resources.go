@@ -55,6 +55,10 @@ type resources struct {
 	// operation.
 	boxes map[basics.BoxRef]bool
 
+	// unnamedAccess is the number of times that a newly created app may access
+	// a box that was not named.  It is decremented for each box accessed this way.
+	unnamedAccess int
+
 	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
 	dirtyBytes uint64
 }
@@ -325,6 +329,11 @@ func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.
 			// ApplicationCallTxnFields.wellFormed ensures no error here.
 			app, name, _ := rr.Box.Resolve(tx.Access)
 			r.shareBox(basics.BoxRef{App: app, Name: name}, tx.ApplicationID)
+		default:
+			// all empty equals an "empty boxref" which allows one unnamed access
+			if ep.Proto.EnableUnnamedBoxAccessInNewApps {
+				r.unnamedAccess++
+			}
 		}
 	}
 }
@@ -365,9 +374,12 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 	}
 
 	for _, br := range tx.Boxes {
-		app := basics.AppIndex(0) // 0 can be handled by shareBox as current
-		if br.Index != 0 {
-			// Upper bounds check will already have been done by
+		if ep.Proto.EnableUnnamedBoxAccessInNewApps && br.Empty() {
+			r.unnamedAccess++
+		}
+		var app basics.AppIndex
+		if br.Index > 0 {
+			// Bounds check will already have been done by
 			// WellFormed. For testing purposes, it's better to panic
 			// now than after returning a nil.
 			app = tx.ForeignApps[br.Index-1] // shift for the 0=current convention

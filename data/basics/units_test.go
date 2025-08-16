@@ -22,8 +22,44 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestODiff(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cases := []struct {
+		a, b uint64
+		diff int64
+		o    bool
+	}{
+		{10, 8, 2, false},
+		{10, 0, 10, false},
+		{10, 80, -70, false},
+		{0, 20, -20, false},
+
+		{math.MaxInt64 + 1, 0, 0, true},
+		{math.MaxInt64, 0, math.MaxInt64, false},
+
+		{uint64(math.MaxInt64) + 2, 1, 0, true},
+		{uint64(math.MaxInt64) + 2, 2, math.MaxInt64, false},
+
+		// Since minint has higher absolute value than maxint, no overflow here
+		{1, uint64(math.MaxInt64) + 2, math.MinInt64, false},
+		{2, uint64(math.MaxInt64) + 2, math.MinInt64 + 1, false},
+
+		{math.MaxInt64 + 200, math.MaxInt64, 200, false},
+	}
+
+	for i, c := range cases {
+		diff, o := ODiff(c.a, c.b)
+		assert.Equal(t, c.diff, diff,
+			"#%d) %v - %v was %v, not %v", i, c.a, c.b, diff, c.diff)
+		assert.Equal(t, c.o, o, i)
+	}
+}
 
 func TestSubSaturate(t *testing.T) {
 	partitiontest.PartitionTest(t)
