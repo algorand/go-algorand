@@ -157,7 +157,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 2
       E2E_TEST_FILTER: GO
-      PARALLEL_FLAG: "-p 4"
+      PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -214,7 +214,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 2
       E2E_TEST_FILTER: EXPECT
-      PARALLEL_FLAG: "-p 4"
+      PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
