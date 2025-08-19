@@ -55,7 +55,7 @@ jobs:
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
-            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure()
@@ -102,7 +102,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 5
       E2E_TEST_FILTER: GO
-      PARALLEL_FLAG: "-p 1"
+      PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
     steps:
       - name: Checkout code
@@ -156,7 +156,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 10
       E2E_TEST_FILTER: EXPECT
-      PARALLEL_FLAG: "-p 1"
+      PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
     steps:
       - name: Checkout code
