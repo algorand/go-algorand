@@ -326,7 +326,7 @@ func (c noopMeshPubSubFilteredCreator) create(opts ...meshOption) (mesher, error
 func (c noopMeshPubSubFilteredCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
 	return networkConfig{
 		pubsubOpts: []p2p.PubSubOption{
-			p2p.DisablePubSubPeerExchange(),
+			// p2p.DisablePubSubPeerExchange(),
 			p2p.SetPubSubPeerFilter(p2pnet.p2pRelayPeerFilter, p2pnet.pstore),
 		},
 	}
