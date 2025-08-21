@@ -1297,7 +1297,7 @@ func TestAllGlobals(t *testing.T) {
 		10: {GenesisHash, globalV10TestProgram},
 		11: {PayoutsMaxBalance, globalV11TestProgram},
 		12: {PayoutsMaxBalance, globalV12TestProgram},
-		13: {PayoutsMaxBalance, globalV12TestProgram},
+        13: {PayoutsMaxBalance, globalV13TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
