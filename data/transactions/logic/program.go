@@ -29,6 +29,17 @@ func (lsl Program) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Program, []byte(lsl)
 }
 
+// MultisigProgram is a wrapper for signing programs with multisig addresses.
+type MultisigProgram struct {
+	Addr    crypto.Digest
+	Program []byte
+}
+
+// ToBeHashed implements crypto.Hashable for MultisigProgram
+func (mp MultisigProgram) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.MultisigProgram, append(mp.Addr[:], mp.Program...)
+}
+
 // HashProgram takes program bytes and returns the Digest
 // This Digest can be used as an Address for a logic controlled account.
 func HashProgram(program []byte) crypto.Digest {

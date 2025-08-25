@@ -1185,8 +1185,8 @@ func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Sign the transaction
-	msig, err := wallet.MultisigSignProgram(req.Program, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword))
+	// Sign the program
+	msig, err := wallet.MultisigSignProgram(req.Program, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword), req.UseLegacyMsig)
 	if err != nil {
 		errorResponse(w, http.StatusBadRequest, err)
 		return
