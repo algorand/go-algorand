@@ -39,6 +39,7 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableP2PHybridMode = true
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	const p2pKeyDir = ""
 
@@ -208,6 +209,7 @@ func TestHybridNetwork_HybridRelayStrategy(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableP2PHybridMode = true
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 
 	genesisInfo := GenesisInfo{genesisID, "net"}

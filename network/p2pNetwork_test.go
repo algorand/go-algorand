@@ -72,6 +72,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -162,6 +163,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -256,6 +258,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -595,6 +598,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = "127.0.0.1:0"
 	cfg.EnableDHTProviders = true
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 
