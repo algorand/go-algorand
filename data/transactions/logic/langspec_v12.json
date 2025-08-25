@@ -3093,7 +3093,7 @@
       ],
       "Size": 1,
       "DocCost": "1700",
-      "Doc": "for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey",
+      "Doc": "for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey =\u003e {0 or 1}",
       "IntroducedVersion": 12,
       "Groups": [
         "Cryptography"
