@@ -77,6 +77,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	}
 
 	hybridMesh, err := hybridMeshCreator.create(
+		withTargetConnCount(cfg.GossipFanout),
 		withWebsocketNetwork(wsnet),
 		withP2PNetwork(p2pnet))
 	if err != nil {
@@ -187,7 +188,12 @@ func (n *HybridP2PNetwork) RegisterHTTPHandlerFunc(path string, handlerFunc func
 }
 
 // RequestConnectOutgoing implements GossipNode
-func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
+func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
+	_ = n.runParallel(func(net GossipNode) error {
+		net.RequestConnectOutgoing(replace, quit)
+		return nil
+	})
+}
 
 // GetPeers implements GossipNode
 func (n *HybridP2PNetwork) GetPeers(options ...PeerOption) []Peer {
