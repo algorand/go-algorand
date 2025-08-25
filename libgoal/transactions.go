@@ -140,7 +140,7 @@ func (c *Client) MultisigSignTransactionWithWalletAndSigner(walletHandle, pw []b
 }
 
 // MultisigSignProgramWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
-func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
+func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial crypto.MultisigSig, useLegacyMsig bool) (msig crypto.MultisigSig, err error) {
 	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
 	if err != nil {
 		return
@@ -153,7 +153,7 @@ func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte,
 	if err != nil {
 		return
 	}
-	resp, err := kmd.MultisigSignProgram(walletHandle, pw, basics.Address(msigAddr).String(), program, crypto.PublicKey(addr), partial)
+	resp, err := kmd.MultisigSignProgram(walletHandle, pw, basics.Address(msigAddr).String(), program, crypto.PublicKey(addr), partial, useLegacyMsig)
 	if err != nil {
 		return
 	}
