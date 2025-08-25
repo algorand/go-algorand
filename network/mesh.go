@@ -244,7 +244,9 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 		wsConnections := cfg.wsnet.meshThreadInner(targetConnCount)
 
 		var p2pConnections int
-		if wsConnections < targetConnCount {
+		if wsConnections <= targetConnCount {
+			// note "less or equal". Even if p2pTarget is zero it makes sense to call
+			// p2p meshThreadInner to fetch DHT peers
 			p2pTarget := targetConnCount - wsConnections
 			p2pConnections = cfg.p2pnet.meshThreadInner(p2pTarget)
 
@@ -325,9 +327,6 @@ func (c noopMeshPubSubFilteredCreator) create(opts ...meshOption) (mesher, error
 }
 func (c noopMeshPubSubFilteredCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
 	return networkConfig{
-		pubsubOpts: []p2p.PubSubOption{
-			// p2p.DisablePubSubPeerExchange(),
-			p2p.SetPubSubPeerFilter(p2pnet.p2pRelayPeerFilter, p2pnet.pstore),
-		},
+		pubsubOpts: []p2p.PubSubOption{},
 	}
 }

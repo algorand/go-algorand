@@ -188,7 +188,12 @@ func (n *HybridP2PNetwork) RegisterHTTPHandlerFunc(path string, handlerFunc func
 }
 
 // RequestConnectOutgoing implements GossipNode
-func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
+func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
+	_ = n.runParallel(func(net GossipNode) error {
+		net.RequestConnectOutgoing(replace, quit)
+		return nil
+	})
+}
 
 // GetPeers implements GossipNode
 func (n *HybridP2PNetwork) GetPeers(options ...PeerOption) []Peer {
