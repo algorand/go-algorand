@@ -820,7 +820,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig")
+	require.Contains(t, err.Error(), "only have one of Sig, Msig, or LMsig")
 
 }
 
