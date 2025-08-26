@@ -62,6 +62,7 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV38, // AVM v9, ECDSA pre-check, stateproofs recoverability
 	protocol.ConsensusV39, // AVM v10, logicsig opcode budget pooling, elliptic curve ops, dynamic round times
 	protocol.ConsensusV40, // Consensus incentives, AVM v11, mimc
+	protocol.ConsensusV41, // AVM v12, txn access, Sha512BlockHash, AppVersioning
 	protocol.ConsensusFuture,
 }
 

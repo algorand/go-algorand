@@ -1435,24 +1435,37 @@ func initConsensusProtocols() {
 	// our current max is 250000
 	v39.ApprovedUpgrades[protocol.ConsensusV40] = 208000
 
-	// ConsensusFuture is used to test features that are implemented
-	// but not yet released in a production protocol version.
-	vFuture := v40
-	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v41 := v40
+	v41.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
-	vFuture.EnableSha512BlockHash = true
+	v41.LogicSigVersion = 12
 
-	vFuture.EnableUnnamedBoxAccessInNewApps = true
+	v41.EnableAppVersioning = true
+	v41.EnableSha512BlockHash = true
+
+	v41.EnableUnnamedBoxAccessInNewApps = true
 
 	// txn.Access work
-	vFuture.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
-	vFuture.MaxAppAccess = 16           // Twice as many, though cross products are explicit
-	vFuture.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
-	vFuture.EnableInnerClawbackWithoutSenderHolding = true
-	vFuture.LogicSigMsig = false
-	vFuture.LogicSigLMsig = true
+	v41.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
+	v41.MaxAppAccess = 16           // Twice as many, though cross products are explicit
+	v41.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
+	v41.EnableInnerClawbackWithoutSenderHolding = true
+	v41.LogicSigMsig = false
+	v41.LogicSigLMsig = true
+
+	Consensus[protocol.ConsensusV41] = v41
+
+	// v40 can be upgraded to v41, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v40.ApprovedUpgrades[protocol.ConsensusV41] = 208000
+
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v41
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
