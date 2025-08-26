@@ -53,12 +53,12 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	var childP2PNetMeshCreator MeshCreator = meshCreator
 	var hybridMeshCreator MeshCreator = noopMeshCreator{}
 	_, isHybridMeshCreator := meshCreator.(hybridRelayMeshCreator)
-	if meshCreator == nil && cfg.IsHybridServer() || isHybridMeshCreator {
+	if (meshCreator == nil && cfg.IsHybridServer()) || isHybridMeshCreator {
 		// no mesh creator provided and this node is a listening/relaying node
 		// then override and use hybrid relay meshing
 		// or, if a hybrid relay meshing requested explicitly, do the same
 		childWsNetMeshCreator = noopMeshCreator{}
-		childP2PNetMeshCreator = noopMeshPubSubFilteredCreator{}
+		childP2PNetMeshCreator = noopMeshCreator{}
 		hybridMeshCreator = hybridRelayMeshCreator{}
 	}
 

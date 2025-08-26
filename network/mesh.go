@@ -319,14 +319,3 @@ type noopMesh struct{}
 
 func (m *noopMesh) start() {}
 func (m *noopMesh) stop()  {}
-
-type noopMeshPubSubFilteredCreator struct{}
-
-func (c noopMeshPubSubFilteredCreator) create(opts ...meshOption) (mesher, error) {
-	return &noopMesh{}, nil
-}
-func (c noopMeshPubSubFilteredCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
-	return networkConfig{
-		pubsubOpts: []p2p.PubSubOption{},
-	}
-}
