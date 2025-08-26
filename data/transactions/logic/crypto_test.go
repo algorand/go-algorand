@@ -793,7 +793,7 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 }
 
 func BenchmarkHashes(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111"} {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "sha512"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
 			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111") {
 				continue
