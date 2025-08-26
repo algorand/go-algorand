@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -33,9 +34,10 @@ import (
 )
 
 var (
-	addr     string
-	msigAddr string
-	noSig    bool
+	addr          string
+	msigAddr      string
+	noSig         bool
+	useLegacyMsig bool
 )
 
 func init() {
@@ -55,6 +57,7 @@ func init() {
 	signProgramCmd.Flags().StringVarP(&addr, "address", "a", "", "Address of the key to sign with")
 	signProgramCmd.Flags().StringVarP(&msigAddr, "msig-address", "A", "", "Multi-Sig Address that signing address is part of")
 	signProgramCmd.Flags().StringVarP(&outFilename, "lsig-out", "o", "", "File to write partial Lsig to")
+	signProgramCmd.Flags().BoolVar(&useLegacyMsig, "legacy-msig", false, "Use legacy multisig (if not specified, auto-detect consensus params from algod)")
 	signProgramCmd.MarkFlagRequired("address")
 
 	mergeSigCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Output file for merged transactions")
@@ -142,7 +145,7 @@ var addSigCmd = &cobra.Command{
 }
 
 var signProgramCmd = &cobra.Command{
-	Use:   "signprogram -t [transaction file] -a [address]",
+	Use:   "signprogram -a [address]",
 	Short: "Add a signature to a multisig LogicSig",
 	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program.`,
 	Args:  validateNoPosArgsFn,
@@ -202,7 +205,31 @@ var signProgramCmd = &cobra.Command{
 			}
 			lsig.Logic = program
 		}
-		if !gotPartial {
+
+		if !cmd.Flags().Changed("legacy-msig") { // if not specified, auto-detect from consensus params
+			params, err := client.SuggestedParams()
+			if err == nil {
+				if cparams, ok := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]; ok {
+					useLegacyMsig = !cparams.LogicSigLMsig
+				}
+			}
+		}
+
+		// Get or create partial multisig from appropriate field
+		var partial crypto.MultisigSig
+		if gotPartial {
+			if useLegacyMsig {
+				if !lsig.LMsig.Blank() {
+					reportErrorf("LogicSig file contains LMsig field, but --legacy-msig=true is set, which uses Msig. Specify --legacy-msig=false to use LMsig, or provide a LogicSig file with Msig field")
+				}
+				partial = lsig.Msig
+			} else {
+				if !lsig.Msig.Blank() {
+					reportErrorf("LogicSig file contains Msig field, but --legacy-msig=false is set, which uses LMsig. Specify --legacy-msig=true to use Msig, or provide a LogicSig file with LMsig field")
+				}
+				partial = lsig.LMsig
+			}
+		} else {
 			if msigAddr == "" {
 				reportErrorf("--msig-address/-A required when partial LogicSig not available")
 			}
@@ -210,17 +237,24 @@ var signProgramCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(msigLookupError, err)
 			}
-			msig, err := msigInfoToMsig(multisigInfo)
+			partial, err = msigInfoToMsig(multisigInfo)
 			if err != nil {
 				reportErrorf(msigParseError, err)
 			}
-			lsig.Msig = msig
 		}
-		msig, err := client.MultisigSignProgramWithWallet(wh, pw, program, addr, lsig.Msig)
+
+		msig, err := client.MultisigSignProgramWithWallet(wh, pw, program, addr, partial, useLegacyMsig)
 		if err != nil {
 			reportErrorf(errorSigningTX, err)
 		}
-		lsig.Msig = msig
+
+		if useLegacyMsig {
+			lsig.Msig = msig
+			lsig.LMsig = crypto.MultisigSig{}
+		} else {
+			lsig.Msig = crypto.MultisigSig{}
+			lsig.LMsig = msig
+		}
 		lsigblob := protocol.Encode(&lsig)
 		err = writeFile(outname, lsigblob, 0600)
 		if err != nil {

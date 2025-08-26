@@ -67,7 +67,7 @@ In order to maintain existing semantics for previously written
 programs, AVM code is versioned.  When new opcodes are introduced, or
 behavior is changed, a new version is introduced.  Programs carrying
 old versions are executed with their original semantics. In the AVM
-bytecode, the version is an incrementing integer, currently 6, and
+bytecode, the version is an incrementing integer, currently 12, and
 denoted vX throughout this document.
 
 ## Execution Modes
@@ -188,10 +188,27 @@ ClearStateProgram fails, and the app's state _is cleared_.
 
 ### Resource availability
 
-Smart contracts have limits on the amount of blockchain state they
-may examine.  Opcodes may only access blockchain resources such as
-Accounts, Assets, Boxes, and contract state if the given resource is
-_available_.
+Smart contracts have limits on the amount of blockchain state they may
+examine.  These limits are enforced by failing any opcode that
+attempts to access a resource unless the resource is
+_available_. These resources are:
+
+ * Accounts, which must be available to access their balance, or other
+ account parameters such as voting details.
+ * Assets, which must be available to access global asset parameters, such
+   the as the asset's URL, Name, or privileged addresses.
+ * Holdings, which must be available to access a particular address's
+   balance or frozen status for a particular asset.
+ * Applications, which must be available to read an application's
+   programs, parameters, or global state.
+ * Locals, which must be available to read a particular address's local
+   state for a particular application.
+ * Boxes, which must be available to read or write a box, designated
+   by an application and name for the box.
+
+Resources are _available_ based on the contents of the executing
+transaction and, in later versions, the contents of other transactions
+in the same group.
 
  * A resource in the "foreign array" fields of the ApplicationCall
    transaction (`txn.Accounts`, `txn.ForeignAssets`, and
@@ -200,32 +217,47 @@ _available_.
  * The `txn.Sender`, `global CurrentApplicationID`, and `global
    CurrentApplicationAddress` are _available_.
 
- * Prior to v4, all assets were considered _available_ to the
-   `asset_holding_get` opcode, and all applications were _available_
-   to the `app_local_get_ex` opcode.
+ * In pre-v4 applications, all holdings are _available_ to the
+   `asset_holding_get` opcode, and all locals are _available_ to the
+   `app_local_get_ex` opcode if the *account* of the resource is
+   _available_.
 
- * Since v6, any asset or contract that was created earlier in the
-   same transaction group (whether by a top-level or inner
-   transaction) is _available_. In addition, any account that is the
-   associated account of a contract that was created earlier in the
-   group is _available_.
+ * In v6 and later applications, any asset or application that was
+   created earlier in the same transaction group (whether by a
+   top-level or inner transaction) is _available_. In addition, any
+   account that is the associated account of a contract that was
+   created earlier in the group is _available_.
 
- * Since v7, the account associated with any contract present in the
-   `txn.ForeignApplications` field is _available_.
-   
- * Since v9, there is group-level resource sharing. Any resource that
-   is available in _some_ top-level transaction in a transaction group
-   is available in _all_ v9 or later application calls in the group,
-   whether those application calls are top-level or inner.
-   
+ * In v7 and later applications, the account associated with any
+   contract present in the `txn.ForeignApplications` field is
+   _available_.
+
+ * In v4 and above applications, Holdings and Locals are _available_
+   if, both components of the resource are available according to the
+   above rules.
+
+ * In v9 and later applications, there is group-level resource
+   sharing. Any resource that is available in _some_ top-level
+   transaction in a transaction group is available in _all_ v9 or
+   later application calls in the group, whether those application
+   calls are top-level or inner.
+
+ * v9 and later applications may use the `txn.Access` list instead of
+   the foreign arrays. When using `txn.Access` Holdings and Locals are
+   no longer made available automatically because their components
+   are. Application accounts are also not made available because of
+   the availability of their corresponding app. Each resource must be
+   listed explicitly. However, `txn.Access` allows for the listing of
+   more resources than the foreign arrays.  Listed resources become
+   available to other (post-v8) applications through group sharing.
+
  * When considering whether an asset holding or application local
-   state is available by group-level resource sharing, the holding or
-   local state must be available in a top-level transaction without
-   considering group sharing. For example, if account A is made
-   available in one transaction, and asset X is made available in
-   another, group resource sharing does _not_ make A's X holding
-   available.
-     
+   state is available for group-level resource sharing, the holding or
+   local state must be available in a top-level transaction based on
+   pre-v9 rules. For example, if account A is made available in one
+   transaction, and asset X is made available in another, group
+   resource sharing does _not_ make A's X holding available.
+
  * Top-level transactions that are not application calls also make
    resources available to group-level resource sharing. The following
    resources are made available by other transaction types.
@@ -249,10 +281,11 @@ _available_.
 
 
  * A Box is _available_ to an Approval Program if _any_ transaction in
-   the same group contains a box reference (`txn.Boxes`) that denotes
-   the box. A box reference contains an index `i`, and name `n`. The
-   index refers to the `ith` application in the transaction's
-   ForeignApplications array, with the usual convention that 0
+   the same group contains a box reference (in `txn.Boxes` or
+   `txn.Access`) that denotes the box. A box reference contains an
+   index `i`, and name `n`. The index refers to the `ith` application
+   in the transaction's `ForeignApplications` or `Access` array (only
+   one of which can be used), with the usual convention that 0
    indicates the application ID of the app called by that
    transaction. No box is ever _available_ to a ClearStateProgram.
 

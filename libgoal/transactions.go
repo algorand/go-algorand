@@ -19,6 +19,7 @@ package libgoal
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -139,7 +140,7 @@ func (c *Client) MultisigSignTransactionWithWalletAndSigner(walletHandle, pw []b
 }
 
 // MultisigSignProgramWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
-func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
+func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte, signerAddr string, partial crypto.MultisigSig, useLegacyMsig bool) (msig crypto.MultisigSig, err error) {
 	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
 	if err != nil {
 		return
@@ -152,7 +153,7 @@ func (c *Client) MultisigSignProgramWithWallet(walletHandle, pw, program []byte,
 	if err != nil {
 		return
 	}
-	resp, err := kmd.MultisigSignProgram(walletHandle, pw, basics.Address(msigAddr).String(), program, crypto.PublicKey(addr), partial)
+	resp, err := kmd.MultisigSignProgram(walletHandle, pw, basics.Address(msigAddr).String(), program, crypto.PublicKey(addr), partial, useLegacyMsig)
 	if err != nil {
 		return
 	}
@@ -517,65 +518,74 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid bas
 	return tx, nil
 }
 
+// RefBundle holds all of the "foreign" references an app call needs, and
+// handles converting to the proper form in the transaction.  Depending on
+// UseAccess, it can pack the references in the tx.Access list, or use the older
+// foreign arrays.
+type RefBundle struct {
+	UseAccess bool
+
+	Accounts []basics.Address
+	Assets   []basics.AssetIndex
+	Holdings []basics.HoldingRef
+	Apps     []basics.AppIndex
+	Locals   []basics.LocalRef
+	Boxes    []basics.BoxRef
+}
+
 // MakeUnsignedAppCreateTx makes a transaction for creating an application
-func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, extrapages uint32) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(0, appArgs, accounts, foreignApps, foreignAssets, boxes, onComplete, approvalProg, clearProg, globalSchema, localSchema, extrapages, 0)
+func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs [][]byte, refs RefBundle, extrapages uint32) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(0, appArgs, refs, onComplete, approvalProg, clearProg, globalSchema, localSchema, extrapages, 0)
 }
 
 // MakeUnsignedAppUpdateTx makes a transaction for updating an application's programs
-func (c *Client) MakeUnsignedAppUpdateTx(appIdx basics.AppIndex, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, approvalProg []byte, clearProg []byte, rejectVersion uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema, 0, rejectVersion)
+func (c *Client) MakeUnsignedAppUpdateTx(appIdx basics.AppIndex, appArgs [][]byte, approvalProg []byte, clearProg []byte, refs RefBundle, rejectVersion uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, refs, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema, 0, rejectVersion)
 }
 
 // MakeUnsignedAppDeleteTx makes a transaction for deleting an application
-func (c *Client) MakeUnsignedAppDeleteTx(appIdx basics.AppIndex, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, rejectVersion uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.DeleteApplicationOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
+func (c *Client) MakeUnsignedAppDeleteTx(appIdx basics.AppIndex, appArgs [][]byte, refs RefBundle, rejectVersion uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, refs, transactions.DeleteApplicationOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
 }
 
 // MakeUnsignedAppOptInTx makes a transaction for opting in to (allocating
 // some account-specific state for) an application
-func (c *Client) MakeUnsignedAppOptInTx(appIdx basics.AppIndex, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, rejectVersion uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.OptInOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
+func (c *Client) MakeUnsignedAppOptInTx(appIdx basics.AppIndex, appArgs [][]byte, refs RefBundle, rejectVersion uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, refs, transactions.OptInOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
 }
 
 // MakeUnsignedAppCloseOutTx makes a transaction for closing out of
 // (deallocating all account-specific state for) an application
-func (c *Client) MakeUnsignedAppCloseOutTx(appIdx basics.AppIndex, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, rejectVersion uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.CloseOutOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
+func (c *Client) MakeUnsignedAppCloseOutTx(appIdx basics.AppIndex, appArgs [][]byte, refs RefBundle, rejectVersion uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, refs, transactions.CloseOutOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
 }
 
 // MakeUnsignedAppClearStateTx makes a transaction for clearing out all
 // account-specific state for an application. It may not be rejected by the
 // application's logic.
-func (c *Client) MakeUnsignedAppClearStateTx(appIdx basics.AppIndex, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, rejectVersion uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.ClearStateOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
+func (c *Client) MakeUnsignedAppClearStateTx(appIdx basics.AppIndex, appArgs [][]byte, refs RefBundle, rejectVersion uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, refs, transactions.ClearStateOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
 }
 
 // MakeUnsignedAppNoOpTx makes a transaction for interacting with an existing
 // application, potentially updating any account-specific local state and
 // global state associated with it.
-func (c *Client) MakeUnsignedAppNoOpTx(appIdx basics.AppIndex, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, rejectVersion uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.NoOpOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
+func (c *Client) MakeUnsignedAppNoOpTx(appIdx basics.AppIndex, appArgs [][]byte, refs RefBundle, rejectVersion uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, refs, transactions.NoOpOC, nil, nil, emptySchema, emptySchema, 0, rejectVersion)
 }
 
 // MakeUnsignedApplicationCallTx is a helper for the above ApplicationCall
 // transaction constructors. A fully custom ApplicationCall transaction may
 // be constructed using this method.
-func (c *Client) MakeUnsignedApplicationCallTx(appIdx basics.AppIndex, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, extrapages uint32, rejectVersion uint64) (tx transactions.Transaction, err error) {
+func (c *Client) MakeUnsignedApplicationCallTx(callee basics.AppIndex, appArgs [][]byte, refs RefBundle, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, extrapages uint32, rejectVersion uint64) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
-	tx.ApplicationID = appIdx
+	tx.ApplicationID = callee
 	tx.OnCompletion = onCompletion
 	tx.RejectVersion = rejectVersion
 
 	tx.ApplicationArgs = appArgs
-	tx.Accounts, err = parseTxnAccounts(accounts)
-	if err != nil {
-		return tx, err
-	}
 
-	tx.ForeignApps = parseTxnForeignApps(foreignApps)
-	tx.ForeignAssets = parseTxnForeignAssets(foreignAssets)
-	tx.Boxes = boxes
+	attachReferences(&tx, refs)
 	tx.ApprovalProgram = approvalProg
 	tx.ClearStateProgram = clearProg
 	tx.LocalStateSchema = localSchema
@@ -585,29 +595,134 @@ func (c *Client) MakeUnsignedApplicationCallTx(appIdx basics.AppIndex, appArgs [
 	return tx, nil
 }
 
-func parseTxnAccounts(accounts []string) (parsed []basics.Address, err error) {
-	for _, acct := range accounts {
-		addr, err := basics.UnmarshalChecksumAddress(acct)
-		if err != nil {
-			return nil, err
+// attachReferences adds the foreign arrays or access list required to access
+// the resources in the RefBundle.
+func attachReferences(tx *transactions.Transaction, refs RefBundle) {
+	if refs.UseAccess {
+		attachAccessList(tx, refs)
+	} else {
+		attachForeignRefs(tx, refs)
+	}
+}
+
+// attachAccessList populates the transaction with the new style access list.
+func attachAccessList(tx *transactions.Transaction, refs RefBundle) {
+	// ensure looks for a "simple" resource ref that is needed by a cross-product
+	// ref. If found, return the 1-based index. If not found, insert and return
+	// its (new) index.
+	ensure := func(target transactions.ResourceRef) uint64 {
+		// We always check all three, though calls will only have one set.  Less code duplication.
+		idx := slices.IndexFunc(tx.Access, func(present transactions.ResourceRef) bool {
+			return present.Address == target.Address &&
+				present.Asset == target.Asset &&
+				present.App == target.App
+		})
+		if idx != -1 {
+			return uint64(idx) + 1
 		}
-		parsed = append(parsed, addr)
+		tx.Access = append(tx.Access, target)
+		return uint64(len(tx.Access))
 	}
-	return
+
+	for _, addr := range refs.Accounts {
+		ensure(transactions.ResourceRef{Address: addr})
+	}
+	for _, asset := range refs.Assets {
+		ensure(transactions.ResourceRef{Asset: asset})
+	}
+	for _, app := range refs.Apps {
+		ensure(transactions.ResourceRef{App: app})
+	}
+
+	for _, hr := range refs.Holdings {
+		addrIdx := uint64(0)
+		if !hr.Address.IsZero() {
+			addrIdx = ensure(transactions.ResourceRef{Address: hr.Address})
+		}
+		tx.Access = append(tx.Access, transactions.ResourceRef{Holding: transactions.HoldingRef{
+			Asset:   ensure(transactions.ResourceRef{Asset: hr.Asset}),
+			Address: addrIdx,
+		}})
+	}
+
+	for _, lr := range refs.Locals {
+		appIdx := uint64(0)
+		if lr.App != 0 && lr.App != tx.ApplicationID {
+			appIdx = ensure(transactions.ResourceRef{App: lr.App})
+		}
+		addrIdx := uint64(0)
+		if !lr.Address.IsZero() {
+			addrIdx = ensure(transactions.ResourceRef{Address: lr.Address})
+		}
+		tx.Access = append(tx.Access, transactions.ResourceRef{Locals: transactions.LocalsRef{
+			App:     appIdx,
+			Address: addrIdx,
+		}})
+	}
+
+	for _, br := range refs.Boxes {
+		appIdx := uint64(0)
+		if br.App != 0 && br.App != tx.ApplicationID {
+			appIdx = ensure(transactions.ResourceRef{App: br.App})
+		}
+		tx.Access = append(tx.Access, transactions.ResourceRef{Box: transactions.BoxRef{
+			Index: appIdx,
+			Name:  []byte(br.Name),
+		}})
+	}
 }
 
-func parseTxnForeignApps(foreignApps []uint64) (parsed []basics.AppIndex) {
-	for _, aidx := range foreignApps {
-		parsed = append(parsed, basics.AppIndex(aidx))
+// maybeAppend looks for something in a slice. If found, it returns its index. If
+// not found, append and return the (new) index.
+func maybeAppend[S ~[]E, E comparable](slice S, target E) (S, int) {
+	idx := slices.Index(slice, target)
+	if idx != -1 {
+		return slice, idx
 	}
-	return
+	slice = append(slice, target)
+	return slice, len(slice) - 1
 }
 
-func parseTxnForeignAssets(foreignAssets []uint64) (parsed []basics.AssetIndex) {
-	for _, aidx := range foreignAssets {
-		parsed = append(parsed, basics.AssetIndex(aidx))
+func attachForeignRefs(tx *transactions.Transaction, refs RefBundle) {
+	// We must add these as given, (not dedupe)
+	tx.Accounts = append(tx.Accounts, refs.Accounts...)
+	tx.ForeignAssets = append(tx.ForeignAssets, refs.Assets...)
+	tx.ForeignApps = append(tx.ForeignApps, refs.Apps...)
+
+	// add assets, addresses if Holdings need them
+	for _, hr := range refs.Holdings {
+		tx.ForeignAssets, _ = maybeAppend(tx.ForeignAssets, hr.Asset)
+		if !hr.Address.IsZero() && // Zero address used to convey "Sender"
+			!slices.ContainsFunc(tx.ForeignApps, func(id basics.AppIndex) bool {
+				return id.Address() == hr.Address
+			}) {
+			tx.Accounts, _ = maybeAppend(tx.Accounts, hr.Address)
+		}
 	}
-	return
+	// add apps, addresses if Locals need them
+	for _, lr := range refs.Locals {
+		if lr.App != 0 && lr.App != tx.ApplicationID {
+			tx.ForeignApps, _ = maybeAppend(tx.ForeignApps, lr.App)
+		}
+		if !lr.Address.IsZero() && // Zero address used to convey "Sender"
+			!slices.ContainsFunc(tx.ForeignApps, func(id basics.AppIndex) bool {
+				return id.Address() == lr.Address
+			}) {
+			tx.Accounts, _ = maybeAppend(tx.Accounts, lr.Address)
+		}
+	}
+	// add boxes (and their app, if needed)
+	for _, br := range refs.Boxes {
+		index := 0
+		if br.App != 0 && br.App != tx.ApplicationID {
+			tx.ForeignApps, index = maybeAppend(tx.ForeignApps, br.App)
+			index++ // 1-based index
+		}
+		tx.Boxes = append(tx.Boxes, transactions.BoxRef{
+			Index: uint64(index),
+			Name:  []byte(br.Name),
+		})
+	}
 }
 
 // MakeUnsignedAssetCreateTx creates a tx template for creating

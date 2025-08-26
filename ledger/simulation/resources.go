@@ -31,27 +31,58 @@ import (
 // ResourceTracker calculates the additional resources that a transaction or group could use, and
 // it tracks any referenced unnamed resources that fit within those limits.
 type ResourceTracker struct {
-	Accounts    map[basics.Address]struct{}
+	Accounts map[basics.Address]struct{}
+	// MaxAccounts is the largest number of new accounts that could possibly be
+	// referenced by the thing being tracked (txn or group) beyond what is
+	// already listed.
 	MaxAccounts int
 
-	Assets    map[basics.AssetIndex]struct{}
+	Assets map[basics.AssetIndex]struct{}
+	// MaxAssets is the largest number of new assets that could possibly be
+	// referenced by the thing being tracked (txn or group) beyond what is
+	// already listed.
 	MaxAssets int
 
-	Apps    map[basics.AppIndex]struct{}
+	Apps map[basics.AppIndex]struct{}
+	// MaxApps is the largest number of new apps that could possibly be
+	// referenced by the thing being tracked (txn or group) beyond what is
+	// already listed.
 	MaxApps int
 
 	// The map value is the size of the box loaded from the ledger prior to any writes. This is used
 	// to track the box read budget.
-	Boxes           map[logic.BoxRef]uint64
-	MaxBoxes        int
-	NumEmptyBoxRefs int
-	maxWriteBudget  uint64
+	Boxes    map[basics.BoxRef]BoxStat
+	MaxBoxes int
 
+	// NumEmptyBoxRefs tracks the number of additional BoxRefs that will be
+	// required to handle the boxes this tracker has observed (for i/o budget,
+	// or to allow access to boxes in new apps).
+	NumEmptyBoxRefs int
+
+	// maxWriteBudget is the "high-water mark" for dirty box writes. A group
+	// must have enough write budget during its entire execution to accommodate
+	// writing its dirty boxes. This is maintained after each opcode.
+	maxWriteBudget uint64
+
+	// initialReadSurplus is the I/O surplus available based on the submitted
+	// group, so it takes into account the number of box refs supplied, and the
+	// size of the boxes named. It can be negative!
+	initialReadSurplus int64
+
+	// MaxTotalRefs is the largest number of new refs of any kind that could
+	// possibly be added tp the thing being tracked (txn or group) beyond what
+	// it began with.
 	MaxTotalRefs int
 
 	AssetHoldings             map[ledgercore.AccountAsset]struct{}
 	AppLocals                 map[ledgercore.AccountApp]struct{}
 	MaxCrossProductReferences int
+}
+
+// BoxStat is what needs to be tracked in order to figure out need resources (especially empty refs)
+type BoxStat struct {
+	ReadSize uint64 // how much read quota did this access consume?
+	NewApp   bool   // was the box accessed by an app created in this group?
 }
 
 func makeTxnResourceTracker(txn *transactions.Transaction, proto *config.ConsensusParams) ResourceTracker {
@@ -70,6 +101,9 @@ func makeTxnResourceTracker(txn *transactions.Transaction, proto *config.Consens
 	}
 }
 
+// makeGlobalResourceTracker populates a tracker so that it knows what are the
+// bounds on how many new references of various types that could potentially be
+// allowed for the group.
 func makeGlobalResourceTracker(perTxnResources []ResourceTracker, nonAppCalls int, proto *config.ConsensusParams) ResourceTracker {
 	// Calculate the maximum number of cross-product resources that can be accessed by one app call
 	// under normal circumstances. This is calculated using the case of an app call with a full set
@@ -107,17 +141,27 @@ func makeGlobalResourceTracker(perTxnResources []ResourceTracker, nonAppCalls in
 
 func (a *ResourceTracker) removePrivateFields() {
 	a.maxWriteBudget = 0
+	a.initialReadSurplus = 0
 }
 
 // HasResources returns true if the tracker has any resources.
-func (a *ResourceTracker) HasResources() bool {
-	return len(a.Accounts) != 0 || len(a.Assets) != 0 || len(a.Apps) != 0 || len(a.Boxes) != 0 || len(a.AssetHoldings) != 0 || len(a.AppLocals) != 0
+func (a ResourceTracker) HasResources() bool {
+	return len(a.Accounts) != 0 || len(a.Assets) != 0 || len(a.Apps) != 0 || len(a.Boxes) != 0 || len(a.AssetHoldings) != 0 || len(a.AppLocals) != 0 || a.NumEmptyBoxRefs != 0
+}
+
+// refCount returns the number of references this tracker has.
+func (a ResourceTracker) refCount() int {
+	return len(a.Accounts) + len(a.Assets) + len(a.Apps) + a.boxCount()
+}
+
+// boxCount returns the number of box references this tracker has.
+func (a ResourceTracker) boxCount() int {
+	return len(a.Boxes) + a.NumEmptyBoxRefs
 }
 
 func (a *ResourceTracker) hasAccount(addr basics.Address, ep *logic.EvalParams, programVersion uint64) bool {
 	// nil map lookup is ok
-	_, ok := a.Accounts[addr]
-	if ok {
+	if _, ok := a.Accounts[addr]; ok {
 		return true
 	}
 	if programVersion >= 7 { // appAddressAvailableVersion
@@ -131,7 +175,7 @@ func (a *ResourceTracker) hasAccount(addr basics.Address, ep *logic.EvalParams, 
 }
 
 func (a *ResourceTracker) addAccount(addr basics.Address) bool {
-	if len(a.Accounts) >= a.MaxAccounts || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+	if len(a.Accounts) >= a.MaxAccounts || a.refCount() >= a.MaxTotalRefs {
 		return false
 	}
 	if a.Accounts == nil {
@@ -141,8 +185,11 @@ func (a *ResourceTracker) addAccount(addr basics.Address) bool {
 	return true
 }
 
+// removeAccountSlot notes that there is one less account slot available for
+// referencing new assets. It's used to tell the global tracker that a local
+// slot is used.
 func (a *ResourceTracker) removeAccountSlot() bool {
-	if len(a.Accounts) >= a.MaxAccounts || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+	if len(a.Accounts) >= a.MaxAccounts || a.refCount() >= a.MaxTotalRefs {
 		return false
 	}
 	a.MaxAccounts--
@@ -150,14 +197,16 @@ func (a *ResourceTracker) removeAccountSlot() bool {
 	return true
 }
 
-func (a *ResourceTracker) hasAsset(aid basics.AssetIndex) bool {
+func (a ResourceTracker) hasAsset(aid basics.AssetIndex) bool {
 	// nil map lookup is ok
 	_, ok := a.Assets[aid]
 	return ok
 }
 
+// addAsset records that an asset reference must be added. It return false if
+// that is known to be impossible.
 func (a *ResourceTracker) addAsset(aid basics.AssetIndex) bool {
-	if len(a.Assets) >= a.MaxAssets || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+	if len(a.Assets) >= a.MaxAssets || a.refCount() >= a.MaxTotalRefs {
 		return false
 	}
 	if a.Assets == nil {
@@ -167,8 +216,11 @@ func (a *ResourceTracker) addAsset(aid basics.AssetIndex) bool {
 	return true
 }
 
+// removeAssetSlot notes that there is one less asset slot available for
+// referencing new assets. It's used to tell the global tracker that a local
+// slot is used.
 func (a *ResourceTracker) removeAssetSlot() bool {
-	if len(a.Assets) >= a.MaxAssets || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+	if len(a.Assets) >= a.MaxAssets || a.refCount() >= a.MaxTotalRefs {
 		return false
 	}
 	a.MaxAssets--
@@ -176,7 +228,7 @@ func (a *ResourceTracker) removeAssetSlot() bool {
 	return true
 }
 
-func (a *ResourceTracker) hasApp(aid basics.AppIndex) bool {
+func (a ResourceTracker) hasApp(aid basics.AppIndex) bool {
 	// nil map lookup is ok
 	_, ok := a.Apps[aid]
 	return ok
@@ -200,7 +252,7 @@ func (a *ResourceTracker) addApp(aid basics.AppIndex, ep *logic.EvalParams, prog
 		}
 	}
 
-	if len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+	if a.refCount() >= a.MaxTotalRefs {
 		return false
 	}
 	if a.Apps == nil {
@@ -211,7 +263,7 @@ func (a *ResourceTracker) addApp(aid basics.AppIndex, ep *logic.EvalParams, prog
 }
 
 func (a *ResourceTracker) removeAppSlot() bool {
-	if len(a.Apps) >= a.MaxApps || len(a.Accounts)+len(a.Assets)+len(a.Apps)+len(a.Boxes)+a.NumEmptyBoxRefs >= a.MaxTotalRefs {
+	if len(a.Apps) >= a.MaxApps || a.refCount() >= a.MaxTotalRefs {
 		return false
 	}
 	a.MaxApps--
@@ -222,21 +274,26 @@ func (a *ResourceTracker) removeAppSlot() bool {
 	return true
 }
 
-func (a *ResourceTracker) hasBox(app basics.AppIndex, name string) bool {
+func (a ResourceTracker) hasBox(app basics.AppIndex, name string) bool {
 	// nil map lookup is ok
-	_, ok := a.Boxes[logic.BoxRef{App: app, Name: name}]
+	_, ok := a.Boxes[basics.BoxRef{App: app, Name: name}]
 	return ok
 }
 
-func (a *ResourceTracker) addBox(app basics.AppIndex, name string, readSize, additionalReadBudget, bytesPerBoxRef uint64) bool {
+func (a *ResourceTracker) addBox(app basics.AppIndex, name string, newApp bool, readSize uint64, bytesPerBoxRef uint64) bool {
 	usedReadBudget := basics.AddSaturate(a.usedBoxReadBudget(), readSize)
 	// Adding bytesPerBoxRef to account for the new IO budget from adding an additional box ref
-	readBudget := additionalReadBudget + a.boxIOBudget(bytesPerBoxRef) + bytesPerBoxRef
+	ioBudget := a.boxIOBudget(bytesPerBoxRef) + bytesPerBoxRef
+	if a.initialReadSurplus > 0 {
+		ioBudget += uint64(a.initialReadSurplus)
+	} else {
+		ioBudget -= uint64(-a.initialReadSurplus)
+	}
 
 	var emptyRefs int
-	if usedReadBudget > readBudget {
+	if usedReadBudget > ioBudget {
 		// We need to allocate more empty box refs to increase the read budget
-		neededBudget := usedReadBudget - readBudget
+		neededBudget := usedReadBudget - ioBudget
 		emptyRefsU64 := basics.DivCeil(neededBudget, bytesPerBoxRef)
 		if emptyRefsU64 > math.MaxInt {
 			// This should never happen, but if we overflow an int with the number of extra pages
@@ -244,22 +301,45 @@ func (a *ResourceTracker) addBox(app basics.AppIndex, name string, readSize, add
 			return false
 		}
 		emptyRefs = int(emptyRefsU64)
-	} else if a.NumEmptyBoxRefs != 0 {
-		surplusBudget := readBudget - usedReadBudget
-		if surplusBudget >= bytesPerBoxRef && readBudget-bytesPerBoxRef >= a.maxWriteBudget {
-			// If we already have enough read budget, remove one empty ref to be replaced by the new
-			// named box ref.
+	} else if a.NumEmptyBoxRefs > 0 { // If there are empties added for quota, we may not need as many.
+		surplusReadBudget := basics.SubSaturate(ioBudget, usedReadBudget)
+		surplusWriteBudget := basics.SubSaturate(ioBudget, a.maxWriteBudget)
+		if surplusReadBudget >= bytesPerBoxRef && surplusWriteBudget >= bytesPerBoxRef {
+			// By adding this box, we may no longer need an empty ref we previously added for quota.
 			emptyRefs = -1
 		}
 	}
 
-	if emptyRefs >= a.MaxBoxes-len(a.Boxes)-a.NumEmptyBoxRefs || emptyRefs >= a.MaxTotalRefs-len(a.Accounts)-len(a.Assets)-len(a.Apps)-len(a.Boxes)-a.NumEmptyBoxRefs {
+	if emptyRefs >= a.MaxBoxes-a.boxCount() || emptyRefs >= a.MaxTotalRefs-a.refCount() {
 		return false
 	}
 	if a.Boxes == nil {
-		a.Boxes = make(map[logic.BoxRef]uint64)
+		a.Boxes = make(map[basics.BoxRef]BoxStat)
 	}
-	a.Boxes[logic.BoxRef{App: app, Name: name}] = readSize
+	a.Boxes[basics.BoxRef{App: app, Name: name}] = BoxStat{readSize, newApp}
+	a.NumEmptyBoxRefs += emptyRefs
+	return true
+}
+
+// ioSurplus notes whether extra bytes can be read because of the initially
+// supplied box refs.  If not, it ensures that empty box refs can be added to
+// account for the deficit.
+func (a *ResourceTracker) ioSurplus(amount int64, bytesPerBoxRef uint64) bool {
+	a.initialReadSurplus = amount
+	if amount > 0 {
+		return true
+	}
+	neededBudget := uint64(-amount)
+	emptyRefsU64 := basics.DivCeil(neededBudget, bytesPerBoxRef)
+	if emptyRefsU64 > math.MaxInt {
+		// This should never happen, but if we overflow an int with the number of extra pages
+		// needed, we can't support this request.
+		return false
+	}
+	emptyRefs := int(emptyRefsU64)
+	if emptyRefs >= a.MaxBoxes-a.boxCount() || emptyRefs >= a.MaxTotalRefs-a.refCount() {
+		return false
+	}
 	a.NumEmptyBoxRefs += emptyRefs
 	return true
 }
@@ -276,7 +356,7 @@ func (a *ResourceTracker) addEmptyBoxRefsForWriteBudget(usedWriteBudget, additio
 			return false
 		}
 		extraRefs := int(extraRefsU64)
-		if extraRefs > a.MaxBoxes-len(a.Boxes)-a.NumEmptyBoxRefs || extraRefs > a.MaxTotalRefs-len(a.Accounts)-len(a.Assets)-len(a.Apps)-len(a.Boxes)-a.NumEmptyBoxRefs {
+		if extraRefs > a.MaxBoxes-a.boxCount() || extraRefs > a.MaxTotalRefs-a.refCount() {
 			return false
 		}
 		a.NumEmptyBoxRefs += extraRefs
@@ -287,24 +367,20 @@ func (a *ResourceTracker) addEmptyBoxRefsForWriteBudget(usedWriteBudget, additio
 	return true
 }
 
-func (a *ResourceTracker) boxIOBudget(bytesPerBoxRef uint64) uint64 {
-	return uint64(len(a.Boxes)+a.NumEmptyBoxRefs) * bytesPerBoxRef
+func (a ResourceTracker) boxIOBudget(bytesPerBoxRef uint64) uint64 {
+	return uint64(a.boxCount()) * bytesPerBoxRef
 }
 
 func (a *ResourceTracker) usedBoxReadBudget() uint64 {
 	var budget uint64
-	for _, readSize := range a.Boxes {
-		budget += readSize
+	for _, bs := range a.Boxes {
+		budget += bs.ReadSize
 	}
 	return budget
 }
 
 func (a *ResourceTracker) maxPossibleUnnamedBoxes() int {
-	numBoxes := a.MaxTotalRefs - len(a.Accounts) - len(a.Assets) - len(a.Apps)
-	if a.MaxBoxes < numBoxes {
-		numBoxes = a.MaxBoxes
-	}
-	return numBoxes
+	return min(a.MaxBoxes, a.MaxTotalRefs-len(a.Accounts)-len(a.Assets)-len(a.Apps))
 }
 
 func (a *ResourceTracker) hasHolding(addr basics.Address, aid basics.AssetIndex) bool {
@@ -345,6 +421,22 @@ func (a *ResourceTracker) addLocal(addr basics.Address, aid basics.AppIndex) boo
 	return true
 }
 
+// Simplify makes the ResourceTracker easier to consume for callers.  It avoids
+// returning boxes "named" by a newly created app.  Those app IDs would not be
+// usable in a later submission. An empty ref can stand in. Once Simplified, the
+// tracker should not be used to for further tracking.
+func (a *ResourceTracker) Simplify() {
+	for name, stat := range a.Boxes {
+		if stat.NewApp {
+			a.NumEmptyBoxRefs++
+			delete(a.Boxes, name)
+		}
+	}
+	if len(a.Boxes) == 0 {
+		a.Boxes = nil
+	}
+}
+
 // groupResourceTracker calculates the additional resources that a transaction group could use,
 // and it tracks any referenced unnamed resources that fit within those limits.
 type groupResourceTracker struct {
@@ -356,6 +448,7 @@ type groupResourceTracker struct {
 	// sharing was added).
 	localTxnResources []ResourceTracker
 
+	// startingBoxes is the total number of box references in the group, as submitted
 	startingBoxes int
 }
 
@@ -490,9 +583,14 @@ func (a *groupResourceTracker) hasBox(app basics.AppIndex, name string) bool {
 	return a.globalResources.hasBox(app, name)
 }
 
-func (a *groupResourceTracker) addBox(app basics.AppIndex, name string, readSize, additionalReadBudget, bytesPerBoxRef uint64) bool {
+func (a *groupResourceTracker) addBox(app basics.AppIndex, name string, newApp bool, readSize uint64, bytesPerBoxRef uint64) bool {
 	// All boxes are global, never consult localTxnResources
-	return a.globalResources.addBox(app, name, readSize, additionalReadBudget, bytesPerBoxRef)
+	return a.globalResources.addBox(app, name, newApp, readSize, bytesPerBoxRef)
+}
+
+func (a *groupResourceTracker) ioSurplus(readSize int64, bytesPerBoxRef uint64) bool {
+	// All boxes are global, never consult localTxnResources
+	return a.globalResources.ioSurplus(readSize, bytesPerBoxRef)
 }
 
 func (a *groupResourceTracker) reconcileBoxWriteBudget(used uint64, bytesPerBoxRef uint64) error {
@@ -532,7 +630,7 @@ func (a *groupResourceTracker) addLocal(addr basics.Address, aid basics.AppIndex
 type resourcePolicy struct {
 	tracker                     groupResourceTracker
 	ep                          *logic.EvalParams
-	initialBoxSurplusReadBudget *uint64
+	initialBoxSurplusReadBudget *int64
 
 	txnRootIndex   int
 	programVersion uint64
@@ -588,13 +686,14 @@ func (p *resourcePolicy) AllowsLocal(addr basics.Address, aid basics.AppIndex) b
 	return p.tracker.addLocal(addr, aid)
 }
 
-func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operation logic.BoxOperation, createSize uint64) bool {
+func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, newApp bool, createSize uint64) bool {
 	if p.tracker.hasBox(app, name) {
-		// We actually never expect this to happen, since the EvalContext remembers each box in
-		// order to track their dirty bytes, and it won't invoke this method if it's already seen
-		// the box.
+		// We never expect this to happen. The EvalContext remembers each box in
+		// order to track their dirty bytes, and it won't invoke this method if
+		// it's already seen the box.
 		return true
 	}
+
 	box, ok, err := p.ep.Ledger.GetBox(app, name)
 	if err != nil {
 		panic(err.Error())
@@ -603,5 +702,10 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 	if ok {
 		readSize = uint64(len(box))
 	}
-	return p.tracker.addBox(app, name, readSize, *p.initialBoxSurplusReadBudget, p.ep.Proto.BytesPerBoxReference)
+
+	return p.tracker.addBox(app, name, newApp, readSize, p.ep.Proto.BytesPerBoxReference)
+}
+
+func (p *resourcePolicy) IOSurplus(size int64) bool {
+	return p.tracker.ioSurplus(size, p.ep.Proto.BytesPerBoxReference)
 }

@@ -847,7 +847,7 @@ func TestTotalWeightChanges(t *testing.T) {
 		if testing.Short() {
 			a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
 		} else {
-			a.NoError(fixture.WaitForRound(rnd, 60*time.Second))
+			a.NoError(fixture.WaitForRound(rnd, 120*time.Second))
 		}
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)

@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -54,6 +55,12 @@ const (
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	encodedMaxBoxes = 32
+
+	// encodedMaxAccess sets the allocation bound for the maximum number of
+	// references in Access that a transaction decoded off of the wire can
+	// contain. Its value is verified against consensus parameters in
+	// TestEncodedAppTxnAllocationBounds
+	encodedMaxAccess = 64
 )
 
 // OnCompletion is an enum representing some layer 1 side effect that an
@@ -119,21 +126,28 @@ type ApplicationCallTxnFields struct {
 	// the app or asset id).
 	Accounts []basics.Address `codec:"apat,allocbound=encodedMaxAccounts"`
 
+	// ForeignAssets are asset IDs for assets whose AssetParams
+	// (and since v4, Holdings) may be read by the executing
+	// ApprovalProgram or ClearStateProgram.
+	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=encodedMaxForeignAssets"`
+
 	// ForeignApps are application IDs for applications besides
 	// this one whose GlobalState (or Local, since v4) may be read
 	// by the executing ApprovalProgram or ClearStateProgram.
 	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
 
+	// Access unifies `Accounts`, `ForeignApps`, `ForeignAssets`, and `Boxes`
+	// under a single list. It removes all implicitly available resources, so
+	// "cross-product" resources (holdings and locals) must be explicitly
+	// listed, as well as app accounts, even the app account of the called app!
+	// Transactions using Access may not use the other lists.
+	Access []ResourceRef `codec:"al,allocbound=encodedMaxAccess"`
+
 	// Boxes are the boxes that can be accessed by this transaction (and others
 	// in the same group). The Index in the BoxRef is the slot of ForeignApps
-	// that the name is associated with (shifted by 1, so 0 indicates "current
+	// that the name is associated with (shifted by 1. 0 indicates "current
 	// app")
 	Boxes []BoxRef `codec:"apbx,allocbound=encodedMaxBoxes"`
-
-	// ForeignAssets are asset IDs for assets whose AssetParams
-	// (and since v4, Holdings) may be read by the executing
-	// ApprovalProgram or ClearStateProgram.
-	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=encodedMaxForeignAssets"`
 
 	// LocalStateSchema specifies the maximum number of each type that may
 	// appear in the local key/value store of users who opt in to this
@@ -174,12 +188,181 @@ type ApplicationCallTxnFields struct {
 	// method below!
 }
 
-// BoxRef names a box by the slot
-type BoxRef struct {
+// ResourceRef names a single resource
+type ResourceRef struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Index uint64 `codec:"i"`
-	Name  []byte `codec:"n,allocbound=bounds.MaxBytesKeyValueLen"`
+	// Only one of these may be set
+	Address basics.Address    `codec:"d"`
+	Asset   basics.AssetIndex `codec:"s"`
+	App     basics.AppIndex   `codec:"p"`
+	Holding HoldingRef        `codec:"h"`
+	Locals  LocalsRef         `codec:"l"`
+	Box     BoxRef            `codec:"b"`
+}
+
+// Empty ResourceRefs are allowed, as they ask for a box quota bump.
+func (rr ResourceRef) Empty() bool {
+	return rr.Address.IsZero() && rr.Asset == 0 && rr.App == 0 &&
+		rr.Holding.Empty() && rr.Locals.Empty() && rr.Box.Empty()
+}
+
+// wellFormed checks that a ResourceRef is a proper member of `access. `rr` is
+// either empty a single kind of resource. Any internal indices point to proper
+// locations inside `access`.
+func (rr ResourceRef) wellFormed(access []ResourceRef, proto config.ConsensusParams) error {
+	// Count the number of non-empty fields
+	count := 0
+	// The "basic" resources are inherently wellFormed
+	if !rr.Address.IsZero() {
+		count++
+	}
+	if rr.Asset != 0 {
+		count++
+	}
+	if rr.App != 0 {
+		count++
+	}
+	// The references that have indices need to be checked
+	if !rr.Holding.Empty() {
+		if _, _, err := rr.Holding.Resolve(access, basics.Address{}); err != nil {
+			return err
+		}
+		count++
+	}
+	if !rr.Locals.Empty() {
+		if _, _, err := rr.Locals.Resolve(access, basics.Address{}); err != nil {
+			return err
+		}
+		count++
+	}
+	if !rr.Box.Empty() {
+		if proto.EnableBoxRefNameError && len(rr.Box.Name) > proto.MaxAppKeyLen {
+			return fmt.Errorf("tx.Access box Name too long, max len %d bytes", proto.MaxAppKeyLen)
+		}
+		if _, _, err := rr.Box.Resolve(access); err != nil {
+			return err
+		}
+		count++
+	}
+	switch count {
+	case 0:
+		if !rr.Empty() { // If it's not one of those, it has to be empty
+			return fmt.Errorf("tx.Access with unknown content")
+		}
+		return nil
+	case 1:
+		return nil
+	default:
+		return fmt.Errorf("tx.Access element has fields from multiple types")
+	}
+}
+
+// HoldingRef names a holding by referring to an Address and Asset that appear
+// earlier in the Access list (0 is special cased)
+type HoldingRef struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Address uint64   `codec:"d"` // 0=Sender,n-1=index into the Access list, which must be an Address
+	Asset   uint64   `codec:"s"` // n-1=index into the Access list, which must be an Asset
+}
+
+// Empty does the obvious. An empty HoldingRef has no meaning, since we define
+// hr.Asset to be a 1-based index for consistency with LocalRef (which does it
+// because 0 means "this app")
+func (hr HoldingRef) Empty() bool {
+	return hr == HoldingRef{}
+}
+
+// Resolve looks up the referenced address and asset in the access list
+func (hr HoldingRef) Resolve(access []ResourceRef, sender basics.Address) (basics.Address, basics.AssetIndex, error) {
+	address := sender // Returned when hr.Address == 0
+	if hr.Address != 0 {
+		if hr.Address > uint64(len(access)) { // recall that Access is 1-based
+			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d outside tx.Access", hr.Address)
+		}
+		address = access[hr.Address-1].Address
+		if address.IsZero() {
+			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d is not an Address", hr.Address)
+		}
+	}
+	if hr.Asset == 0 || hr.Asset > uint64(len(access)) { // 1-based
+		return basics.Address{}, 0, fmt.Errorf("holding Asset reference %d outside tx.Access", hr.Asset)
+	}
+	asset := access[hr.Asset-1].Asset
+	if asset == 0 {
+		return basics.Address{}, 0, fmt.Errorf("holding Asset reference %d is not an Asset", hr.Asset)
+	}
+	return address, asset, nil
+}
+
+// LocalsRef names a local state by referring to an Address and App that appear
+// earlier in the Access list (0 is special cased)
+type LocalsRef struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Address uint64   `codec:"d"` // 0=Sender,n-1=index into the Access list, which must be an Address
+	App     uint64   `codec:"p"` // 0=ApplicationID,n-1=index into the Access list, which must be an App
+}
+
+// Empty does the obvious. An empty LocalsRef makes no sense, because it would
+// mean "give access to the sender's locals for this app", which is implicit.
+func (lr LocalsRef) Empty() bool {
+	return lr == LocalsRef{}
+}
+
+// Resolve looks up the referenced address and app in the access list. 0 is
+// returned if the App index is 0, meaning "current app".
+func (lr LocalsRef) Resolve(access []ResourceRef, sender basics.Address) (basics.Address, basics.AppIndex, error) {
+	address := sender // Returned when lr.Address == 0
+	if lr.Address != 0 {
+		if lr.Address > uint64(len(access)) { // recall that Access is 1-based
+			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d outside tx.Access", lr.Address)
+		}
+		address = access[lr.Address-1].Address
+		if address.IsZero() {
+			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d is not an Address", lr.Address)
+		}
+	}
+	if lr.App == 0 || lr.App > uint64(len(access)) { // 1-based
+		return basics.Address{}, 0, fmt.Errorf("locals App reference %d outside tx.Access", lr.App)
+	}
+	app := access[lr.App-1].App
+	if app == 0 {
+		return basics.Address{}, 0, fmt.Errorf("locals App reference %d is not an App", lr.App)
+	}
+	return address, app, nil
+}
+
+// BoxRef names a box by the slot. In the Boxes field, `i` is an index into
+// ForeignApps. As an entry in Access, `i` is a index into Access itself.
+type BoxRef struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Index   uint64   `codec:"i"`
+	Name    []byte   `codec:"n,allocbound=bounds.MaxBytesKeyValueLen"`
+}
+
+// Empty does the obvious. But the meaning is not obvious. An empty BoxRef just
+// adds to the read/write quota of the transaction. In tx.Access, _any_ empty
+// ResourceRef bumps the read/write quota. (We cannot distinguish the type when
+// all are empty.)
+func (br BoxRef) Empty() bool {
+	return br.Index == 0 && br.Name == nil
+}
+
+// Resolve looks up the referenced app and returns it with the name. 0 is
+// returned if the App index is 0, meaning "current app".
+func (br BoxRef) Resolve(access []ResourceRef) (basics.AppIndex, string, error) {
+	switch {
+	case br.Index == 0:
+		return 0, string(br.Name), nil
+	case br.Index <= uint64(len(access)): // 1-based
+		rr := access[br.Index-1]
+		if app := rr.App; app != 0 {
+			return app, string(br.Name), nil
+		}
+		return 0, "", fmt.Errorf("box Index reference %d is not an App", br.Index)
+	default:
+		return 0, "", fmt.Errorf("box Index %d outside tx.Access", br.Index)
+	}
 }
 
 // Empty indicates whether or not all the fields in the
@@ -204,6 +387,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 		return false
 	}
 	if ac.Boxes != nil {
+		return false
+	}
+	if ac.Access != nil {
 		return false
 	}
 	if ac.LocalStateSchema != (basics.StateSchema{}) {
@@ -235,7 +421,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	case NoOpOC, OptInOC, CloseOutOC, ClearStateOC, UpdateApplicationOC, DeleteApplicationOC:
 		/* ok */
 	default:
-		return fmt.Errorf("invalid application OnCompletion")
+		return fmt.Errorf("invalid application OnCompletion (%d)", ac.OnCompletion)
 	}
 
 	if !proto.EnableAppVersioning && ac.RejectVersion > 0 {
@@ -263,23 +449,23 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	effectiveEPP := ac.ExtraProgramPages
 	// Schemas and ExtraProgramPages may only be set during application creation
 	if ac.ApplicationID != 0 {
-		if ac.LocalStateSchema != (basics.StateSchema{}) ||
-			ac.GlobalStateSchema != (basics.StateSchema{}) {
-			return fmt.Errorf("local and global state schemas are immutable")
+		if ac.GlobalStateSchema != (basics.StateSchema{}) {
+			return fmt.Errorf("tx.GlobalStateSchema is immutable")
+		}
+		if ac.LocalStateSchema != (basics.StateSchema{}) {
+			return fmt.Errorf("tx.LocalStateSchema is immutable")
 		}
 		if ac.ExtraProgramPages != 0 {
 			return fmt.Errorf("tx.ExtraProgramPages is immutable")
 		}
 
-		if proto.EnableExtraPagesOnAppUpdate {
-			effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
-		}
-
+		effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
 	}
 
 	// Limit total number of arguments
 	if len(ac.ApplicationArgs) > proto.MaxAppArgs {
-		return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
+		return fmt.Errorf("tx.ApplicationArgs has too many arguments. %d > %d",
+			len(ac.ApplicationArgs), proto.MaxAppArgs)
 	}
 
 	// Sum up argument lengths
@@ -290,47 +476,59 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 
 	// Limit total length of all arguments
 	if argSum > uint64(proto.MaxAppTotalArgLen) {
-		return fmt.Errorf("application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen)
+		return fmt.Errorf("tx.ApplicationArgs total length is too long. %d > %d",
+			argSum, proto.MaxAppTotalArgLen)
 	}
 
-	// Limit number of accounts referred to in a single ApplicationCall
-	if len(ac.Accounts) > proto.MaxAppTxnAccounts {
-		return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
-	}
+	if len(ac.Access) > 0 {
+		if len(ac.Access) > proto.MaxAppAccess {
+			return fmt.Errorf("tx.Access too long, max number of references is %d", proto.MaxAppAccess)
+		}
+		// When ac.Access is used, no other references are allowed
+		if len(ac.Accounts) > 0 {
+			return errors.New("tx.Accounts can't be used when tx.Access is used")
+		}
+		if len(ac.ForeignApps) > 0 {
+			return errors.New("tx.ForeignApps can't be used when tx.Access is used")
+		}
+		if len(ac.ForeignAssets) > 0 {
+			return errors.New("tx.ForeignAssets can't be used when tx.Access is used")
+		}
+		if len(ac.Boxes) > 0 {
+			return errors.New("tx.Boxes can't be used when tx.Access is used")
+		}
 
-	// Limit number of other app global states referred to
-	if len(ac.ForeignApps) > proto.MaxAppTxnForeignApps {
-		return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
-	}
+		for _, rr := range ac.Access {
+			if err := rr.wellFormed(ac.Access, proto); err != nil {
+				return err
+			}
+		}
+	} else {
+		if len(ac.Accounts) > proto.MaxAppTxnAccounts {
+			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+		}
+		if len(ac.ForeignApps) > proto.MaxAppTxnForeignApps {
+			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
+		}
+		if len(ac.ForeignAssets) > proto.MaxAppTxnForeignAssets {
+			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
+		}
+		if len(ac.Boxes) > proto.MaxAppBoxReferences {
+			return fmt.Errorf("tx.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
+		}
 
-	if len(ac.ForeignAssets) > proto.MaxAppTxnForeignAssets {
-		return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
-	}
-
-	if len(ac.Boxes) > proto.MaxAppBoxReferences {
-		return fmt.Errorf("tx.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
-	}
-
-	// Limit the sum of all types of references that bring in account records
-	if len(ac.Accounts)+len(ac.ForeignApps)+len(ac.ForeignAssets)+len(ac.Boxes) > proto.MaxAppTotalTxnReferences {
-		return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
+		// Limit the sum of all types of references that bring in resource records
+		if len(ac.Accounts)+len(ac.ForeignApps)+len(ac.ForeignAssets)+len(ac.Boxes) > proto.MaxAppTotalTxnReferences {
+			return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
+		}
 	}
 
 	if ac.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
 		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
 	}
 
-	lap := len(ac.ApprovalProgram)
-	lcs := len(ac.ClearStateProgram)
-	pages := int(1 + effectiveEPP)
-	if lap > pages*proto.MaxAppProgramLen {
-		return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-	}
-	if lcs > pages*proto.MaxAppProgramLen {
-		return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-	}
-	if lap+lcs > pages*proto.MaxAppTotalProgramLen {
-		return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+	if err := ac.WellSizedPrograms(effectiveEPP, proto); err != nil {
+		return err
 	}
 
 	for i, br := range ac.Boxes {
@@ -344,19 +542,39 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	}
 
 	if ac.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
-		return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxLocalSchemaEntries)
+		return fmt.Errorf("tx.LocalStateSchema is too large. %d > %d",
+			ac.LocalStateSchema.NumEntries(), proto.MaxLocalSchemaEntries)
 	}
 
 	if ac.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
-		return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
+		return fmt.Errorf("tx.GlobalStateSchema is too large. %d > %d",
+			ac.GlobalStateSchema.NumEntries(), proto.MaxGlobalSchemaEntries)
 	}
 
 	return nil
 }
 
+// WellSizedPrograms checks the sizes of the programs in ac, based on the
+// parameters of proto and returns an error if they are too big.
+func (ac ApplicationCallTxnFields) WellSizedPrograms(extraPages uint32, proto config.ConsensusParams) error {
+	lap := len(ac.ApprovalProgram)
+	lcs := len(ac.ClearStateProgram)
+	pages := int(1 + extraPages)
+	if lap > pages*proto.MaxAppProgramLen {
+		return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+	}
+	if lcs > pages*proto.MaxAppProgramLen {
+		return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
+	}
+	if lap+lcs > pages*proto.MaxAppTotalProgramLen {
+		return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
+	}
+	return nil
+}
+
 // AddressByIndex converts an integer index into an address associated with the
 // transaction. Index 0 corresponds to the transaction sender, and an index > 0
-// corresponds to an offset into txn.Accounts. Returns an error if the index is
+// corresponds to an offset into txn.Accounts or txn.Access. Returns an error if the index is
 // not valid.
 func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender basics.Address) (basics.Address, error) {
 	// Index 0 always corresponds to the sender
@@ -364,10 +582,24 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 		return sender, nil
 	}
 
+	if ac.Access != nil {
+		// An index > 0 corresponds to an offset into txn.Access. Check to
+		// make sure the index is valid.
+		if accountIdx > uint64(len(ac.Access)) {
+			return basics.Address{}, fmt.Errorf("invalid Account reference %d exceeds length of tx.Access %d", accountIdx, len(ac.Access))
+		}
+		// And now check that the index refers to an Address
+		rr := ac.Access[accountIdx-1]
+		if rr.Address.IsZero() {
+			return basics.Address{}, fmt.Errorf("address reference %d is not an Address in tx.Access", accountIdx)
+		}
+		return rr.Address, nil
+	}
+
 	// An index > 0 corresponds to an offset into txn.Accounts. Check to
 	// make sure the index is valid.
 	if accountIdx > uint64(len(ac.Accounts)) {
-		return basics.Address{}, fmt.Errorf("invalid Account reference %d", accountIdx)
+		return basics.Address{}, fmt.Errorf("invalid Account reference %d exceeds length of tx.Accounts %d", accountIdx, len(ac.Accounts))
 	}
 
 	// accountIdx must be in [1, len(ac.Accounts)]
@@ -375,12 +607,17 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 }
 
 // IndexByAddress converts an address into an integer offset into [txn.Sender,
-// txn.Accounts[0], ...], returning the index at the first match. It returns
-// an error if there is no such match.
+// tx.<list>[0], ...], returning the index at the first match. <list> is
+// tx.Access or tx.Accounts. It returns an error if there is no such match.
 func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender basics.Address) (uint64, error) {
 	// Index 0 always corresponds to the sender
 	if target == sender {
 		return 0, nil
+	}
+
+	// Try ac.Access first. Remember only one of Access or Accounts can be set.
+	if idx := slices.IndexFunc(ac.Access, func(rr ResourceRef) bool { return rr.Address == target }); idx != -1 {
+		return uint64(idx) + 1, nil
 	}
 
 	// Otherwise we index into ac.Accounts
@@ -388,5 +625,5 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 		return uint64(idx) + 1, nil
 	}
 
-	return 0, fmt.Errorf("invalid Account reference %s", target)
+	return 0, fmt.Errorf("invalid Account reference %s does not appear in resource array", target)
 }

@@ -26,6 +26,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -36,6 +37,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/util"
 )
 
 var (
@@ -77,7 +80,7 @@ type appInteractDatum interface {
 	pseudo() bool
 }
 
-func helpList(help map[string]appInteractDatum) string {
+func helpList[V appInteractDatum](help map[string]V) string {
 	largestName := 0
 	largestKind := 0
 	for k, v := range help {
@@ -283,11 +286,7 @@ func (sch appInteractSchema) validate() (err error) {
 }
 
 func (sch appInteractSchema) EntryList() string {
-	help := make(map[string]appInteractDatum)
-	for k, v := range sch {
-		help[k] = v
-	}
-	return helpList(help)
+	return helpList(sch)
 }
 
 func (sch appInteractSchema) EntryNames() (names []string) {
@@ -431,11 +430,7 @@ func (hdr appInteractHeader) validate() (err error) {
 }
 
 func (hdr appInteractHeader) ProcList() string {
-	help := make(map[string]appInteractDatum)
-	for k, v := range hdr.Execute {
-		help[k] = v
-	}
-	return helpList(help)
+	return helpList(hdr.Execute)
 }
 
 func (hdr appInteractHeader) ProcNames() (names []string) {
@@ -454,6 +449,7 @@ func parseAppHeader() (header appInteractHeader) {
 	if err != nil {
 		reportErrorf("Could not open app header file %s: %v", appHdr, err)
 	}
+	defer f.Close()
 
 	dec := json.NewDecoder(f)
 	err = dec.Decode(&header)
@@ -477,6 +473,9 @@ var appExecuteCmd = &cobra.Command{
 	Short: "Execute a procedure on an application",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("app interact is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
+
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
@@ -559,9 +558,12 @@ var appExecuteCmd = &cobra.Command{
 			proc.OnCompletion = "NoOp"
 		}
 		onCompletion := mustParseOnCompletion(proc.OnCompletion)
-		appAccounts := inputs.Accounts
-		foreignApps := inputs.ForeignApps
-		foreignAssets := inputs.ForeignAssets
+		refs := libgoal.RefBundle{
+			Accounts: util.Map(inputs.Accounts, cliAddress),
+			Apps:     util.Map(inputs.ForeignApps, func(idx uint64) basics.AppIndex { return basics.AppIndex(idx) }),
+			Assets:   util.Map(inputs.ForeignAssets, func(idx uint64) basics.AssetIndex { return basics.AssetIndex(idx) }),
+			// goal app interact is old and doesn't know about holdings, locals, boxes.
+		}
 
 		appArgs := make([][]byte, len(inputs.Args))
 		for i, arg := range inputs.Args {
@@ -586,7 +588,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, nil, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0, rejectVersion)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, refs, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -632,7 +634,7 @@ var appExecuteCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				txn, err1 := waitForCommit(client, txid, lv)
 				if err1 != nil {
-					reportErrorln(err1.Error())
+					reportErrorln(err1)
 				}
 				if txn.ApplicationIndex != nil && *txn.ApplicationIndex != 0 {
 					reportInfof("Created app with app index %d", *txn.ApplicationIndex)
@@ -642,7 +644,7 @@ var appExecuteCmd = &cobra.Command{
 			// Broadcast or write transaction to file
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorln(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -653,6 +655,9 @@ var appQueryCmd = &cobra.Command{
 	Short: "Query local or global state from an application",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("app interact is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(5 * time.Second)
+
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
