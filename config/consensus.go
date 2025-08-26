@@ -237,6 +237,9 @@ type ConsensusParams struct {
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
 
+	LogicSigMsig  bool
+	LogicSigLMsig bool
+
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
 
@@ -985,6 +988,7 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.LogicSigMaxCost = 20000
+	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
 	v18.SupportTxGroups = true
 	v18.MaxTxGroupSize = 16
@@ -1447,6 +1451,8 @@ func initConsensusProtocols() {
 	vFuture.MaxAppAccess = 16           // Twice as many, though cross products are explicit
 	vFuture.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
 	vFuture.EnableInnerClawbackWithoutSenderHolding = true
+	vFuture.LogicSigMsig = false
+	vFuture.LogicSigLMsig = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

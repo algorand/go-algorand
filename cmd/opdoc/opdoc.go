@@ -443,7 +443,7 @@ func create(file string) *os.File {
 }
 
 func main() {
-	const docVersion = uint64(11)
+	const docVersion = uint64(12)
 
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {

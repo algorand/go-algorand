@@ -398,7 +398,7 @@ func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 }
 
 // MultisigSignProgram implements the Wallet interface.
-func (lw *LedgerWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
+func (lw *LedgerWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, useLegacyMsig bool) (crypto.MultisigSig, error) {
 	isValidKey := false
 	for i := 0; i < len(partial.Subsigs); i++ {
 		subsig := &partial.Subsigs[i]

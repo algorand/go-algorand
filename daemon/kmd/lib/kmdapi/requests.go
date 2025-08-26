@@ -261,4 +261,5 @@ type APIV1POSTMultisigProgramSignRequest struct {
 	PublicKey      crypto.PublicKey   `json:"public_key"`
 	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
 	WalletPassword string             `json:"wallet_password"`
+	UseLegacyMsig  bool               `json:"use_legacy_msig"`
 }
