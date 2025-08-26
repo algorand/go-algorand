@@ -1459,6 +1459,9 @@ func TestStateProofLogging(t *testing.T) {
 	phdr, err := mockLedger.BlockHdr(0)
 	require.NoError(t, err)
 	b.BlockHeader.Branch = phdr.Hash()
+	if proto.EnableSha512BlockHash {
+		b.BlockHeader.Branch512 = phdr.Hash512()
+	}
 
 	_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000, nil)
 	require.NoError(t, err)
@@ -1479,6 +1482,9 @@ func TestStateProofLogging(t *testing.T) {
 		phdr, err := mockLedger.BlockHdr(basics.Round(i))
 		require.NoError(t, err)
 		b.BlockHeader.Branch = phdr.Hash()
+		if proto.EnableSha512BlockHash {
+			b.BlockHeader.Branch512 = phdr.Hash512()
+		}
 		b.BlockHeader.TimeStamp = phdr.TimeStamp + 10
 
 		if i == 513 {
