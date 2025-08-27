@@ -405,7 +405,6 @@ func TestIncentiveEligible(t *testing.T) {
 // properly.
 func TestAbsentTracking(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
 		cfg.OnlineCount = 2 // So we know proposer should propose every 2 rounds, on average
