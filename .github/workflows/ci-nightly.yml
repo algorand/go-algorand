@@ -271,11 +271,12 @@ jobs:
       CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
       S3_TESTDATA: ${{ secrets.S3_TESTDATA }}
     steps:
-      - run: |
+      - name: Set CI_E2E_FILENAME for e2e test data publishing
+        run: |
           # Set CI_E2E_FILENAME based on branch name, replacing '/' with '-' - used when publishing e2e test data to S3 (e2e.sh) for indexer tests
           BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
           MODIFIED_BRANCH_NAME="${BRANCH_NAME//\//-}"
-          echo "$CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> $GITHUB_ENV
+          echo "CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> $GITHUB_ENV
       - name: Download workspace archive
         uses: actions/download-artifact@v4
         with:
