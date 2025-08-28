@@ -1422,8 +1422,14 @@ proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DI
 
         eval spawn $pingpong_command
         expect {
-            timeout { puts "pingpong test interrupted by timeout, terminating after $timeout seconds" }
+            timeout { ::AlgorandGoal::Abort "pingpong test interrupted by timeout after $timeout seconds" }
             "no acct" {::AlgorandGoal::Abort "pingpong failed with 'no acct' error - likely sender not set in constructAppTxn"}
+            -re {(?i)error[ :]} {
+                ::AlgorandGoal::Abort "pingpong encountered error: $expect_out(0,string)"
+            }
+            -re {(?i)panic} {
+                ::AlgorandGoal::Abort "pingpong panicked: $expect_out(0,string)"
+            }
             "Calling app" {
                 if {$expecting_apps} {
                     set saw_app_calls 1
