@@ -424,7 +424,7 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	}
 
 	if debugCodecTester {
-		err = os.WriteFile("/tmp/v0", []byte(fmt.Sprintf("%#v", v0)), 0666)
+		err = os.WriteFile("/tmp/v0", fmt.Appendf(nil, "%#v", v0), 0666)
 		if err != nil {
 			return err
 		}
@@ -464,11 +464,11 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 	}
 
 	if debugCodecTester {
-		err = os.WriteFile("/tmp/v1", []byte(fmt.Sprintf("%#v", v1)), 0666)
+		err = os.WriteFile("/tmp/v1", fmt.Appendf(nil, "%#v", v1), 0666)
 		if err != nil {
 			return err
 		}
-		err = os.WriteFile("/tmp/v2", []byte(fmt.Sprintf("%#v", v2)), 0666)
+		err = os.WriteFile("/tmp/v2", fmt.Appendf(nil, "%#v", v2), 0666)
 		if err != nil {
 			return err
 		}
