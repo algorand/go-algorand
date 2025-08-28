@@ -1,0 +1,5 @@
+#!/usr/bin/expect -f
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+source pingpongCommon.exp
+pingpongTestMain "SmallOpsSmallHash" "smallops_smallhash" "--appprogops 2 --appproghashes 2 --appproghashsize sha512_256 --numapp 10 --tps 200 --refresh 10 --numaccounts 5 --minaccount 100000000"
