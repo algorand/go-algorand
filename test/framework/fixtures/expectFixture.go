@@ -193,7 +193,7 @@ func (ef *ExpectFixture) Run() {
 					syncTest.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, outBuf, stderr)
 					syncTest.Fail()
 				} else {
-					syncTest.Logf("stdout: %s", string(outBuf.Bytes()))
+					syncTest.Logf("stdout: %s", outBuf.String())
 					ef.removeTestDir(workingDir)
 				}
 			})
