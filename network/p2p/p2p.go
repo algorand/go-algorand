@@ -99,6 +99,8 @@ const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 const dialTimeout = 30 * time.Second
 
+const psmdkDialed = "dialed"
+
 // MakeHost creates a libp2p host but does not start listening.
 // Use host.Network().Listen() on the returned address to start listening.
 func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.Host, string, error) {
@@ -302,6 +304,8 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 		err := s.dialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {
 			s.log.Warnf("failed to connect to peer %s: %v", peerInfo.ID, err)
+		} else {
+			numOutgoingConns++
 		}
 	}
 }
@@ -314,6 +318,9 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
+	if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
+		return err
+	}
 	return s.host.Connect(ctx, *peer)
 }
 
