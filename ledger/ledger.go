@@ -17,12 +17,18 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -381,7 +387,15 @@ func initBlocksDB(tx *sql.Tx, log logging.Logger, initBlocks []bookkeeping.Block
 		return err
 	}
 
-	// in archival mode check if DB contains all blocks up to the latest
+	// In archival mode check if DB contains all blocks up to the latest.
+	//
+	// When running in external archival mode, this check is not needed
+	// (since those blocks will be available in external storage).
+	_, externalArchivalEnabled := externalArchivalSettings()
+	if externalArchivalEnabled {
+		log.Info("skipping block init check in external archival mode")
+		return nil
+	}
 	if isArchival {
 		earliest, err := blockdb.BlockEarliest(tx)
 		if err != nil {
@@ -755,11 +769,26 @@ func (l *Ledger) LatestCommitted() (basics.Round, basics.Round) {
 
 // Block returns the block for round rnd.
 func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
-	return l.blockQ.getBlock(rnd)
+
+	// Try to obtain the block from local storage.
+	url, externalArchivalEnabled := externalArchivalSettings()
+	blk, err = l.blockQ.getBlock(rnd)
+	if err == nil || !externalArchivalEnabled {
+		return blk, err
+	}
+
+	// Fall back to external storage.
+	switch err.(type) {
+	case ledgercore.ErrNoEntry:
+		tmp, err := downloadEncodedBlockCertFromArchive(rnd, url)
+		return tmp.Block, err
+	default:
+		return blk, err
+	}
 }
 
 // BlockHdr returns the BlockHeader of the block for round rnd.
-func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
+func (l *Ledger) BlockHdr(rnd basics.Round) (hdr bookkeeping.BlockHeader, err error) {
 
 	// Expected availability range in txTail.blockHeader is [Latest - MaxTxnLife, Latest]
 	// allowing (MaxTxnLife + 1) = 1001 rounds lookback.
@@ -772,20 +801,64 @@ func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err er
 	// the deepest lookup happens when txn.LastValid == current => txn.LastValid == Latest + 1
 	// that gives Latest + 1 - (MaxTxnLife + 1) = Latest - MaxTxnLife as the first round to be accessible.
 	hdr, ok := l.txTail.blockHeader(rnd)
-	if !ok {
-		hdr, err = l.blockQ.getBlockHdr(rnd)
+	if ok {
+		return hdr, nil
 	}
-	return hdr, err
+
+	// Try to obtain the block header from local storage.
+	url, externalArchivalEnabled := externalArchivalSettings()
+	hdr, err = l.blockQ.getBlockHdr(rnd)
+	if err == nil || !externalArchivalEnabled {
+		return hdr, err
+	}
+
+	// Fall back to external storage.
+	switch err.(type) {
+	case ledgercore.ErrNoEntry:
+		tmp, err := downloadEncodedBlockCertFromArchive(rnd, url)
+		return tmp.Block.BlockHeader, err
+	default:
+		return hdr, err
+	}
 }
 
 // EncodedBlockCert returns the encoded block and the corresponding encoded certificate of the block for round rnd.
 func (l *Ledger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error) {
-	return l.blockQ.getEncodedBlockCert(rnd)
+
+	// Try to obtain the block from local storage.
+	url, externalArchivalEnabled := externalArchivalSettings()
+	blk, cert, err = l.blockQ.getEncodedBlockCert(rnd)
+	if err == nil || !externalArchivalEnabled {
+		return blk, cert, err
+	}
+
+	// Fall back to external storage.
+	switch err.(type) {
+	case ledgercore.ErrNoEntry:
+		return downloadEncodedBlockCertFromExternalArchive(rnd, url)
+	default:
+		return blk, cert, err
+	}
 }
 
 // BlockCert returns the block and the certificate of the block for round rnd.
 func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
-	return l.blockQ.getBlockCert(rnd)
+
+	// Try to obtain the block from local storage.
+	url, externalArchivalEnabled := externalArchivalSettings()
+	blk, cert, err = l.blockQ.getBlockCert(rnd)
+	if err == nil || !externalArchivalEnabled {
+		return blk, cert, err
+	}
+
+	// Fall back to external storage.
+	switch err.(type) {
+	case ledgercore.ErrNoEntry:
+		tmp, err := downloadEncodedBlockCertFromArchive(rnd, url)
+		return tmp.Block, tmp.Certificate, err
+	default:
+		return blk, cert, err
+	}
 }
 
 // AddBlock adds a new block to the ledger.  The block is stored in an
@@ -1010,3 +1083,116 @@ var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", 
 var ledgerVerifygenhashMicros = metrics.NewCounter("ledger_verifygenhash_micros", "µs spent")
 var ledgerTrackerMuLockCount = metrics.NewCounter("ledger_lock_trackermu_count", "calls")
 var ledgerTrackerMuLockMicros = metrics.NewCounter("ledger_lock_trackermu_micros", "µs spent")
+
+// externalArchivalSettings indicates whether archive mode is enabled.
+//
+// In case of being enabled, the URL of the external archive is returned.
+// When disabled, this URL is set to "".
+func externalArchivalSettings() (url string, enabled bool) {
+	url = os.Getenv("EXTERNAL_ARCHIVE_URL")
+	return url, url != ""
+}
+
+func downloadEncodedBlockCertFromExternalArchive(rnd basics.Round, baseUrl string) (blk []byte, cert []byte, err error) {
+
+	encodedBlockCert, err := downloadEncodedBlockCertFromArchive(rnd, baseUrl)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Encode block bytes to msgpack
+	{
+		codecHandle := new(codec.MsgpackHandle)
+		codecHandle.ErrorIfNoField = true
+		codecHandle.ErrorIfNoArrayExpand = true
+		codecHandle.Canonical = true
+		codecHandle.RecursiveEmptyCheck = true
+		codecHandle.WriteExt = true
+		codecHandle.PositiveIntUnsigned = true
+
+		var buf bytes.Buffer
+		enc := codec.NewEncoder(&buf, codecHandle)
+		err = enc.Encode(encodedBlockCert.Block)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to encode EncodedBlockCert.Block to msgpack: %w", err)
+		}
+		blk = buf.Bytes()
+	}
+
+	// Encode certificate bytes to msgpack
+	{
+		codecHandle := new(codec.MsgpackHandle)
+		codecHandle.ErrorIfNoField = true
+		codecHandle.ErrorIfNoArrayExpand = true
+		codecHandle.Canonical = true
+		codecHandle.RecursiveEmptyCheck = true
+		codecHandle.WriteExt = true
+		codecHandle.PositiveIntUnsigned = true
+
+		var buf bytes.Buffer
+		enc := codec.NewEncoder(&buf, codecHandle)
+		err = enc.Encode(encodedBlockCert.Certificate)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to encode EncodedBlockCert.Certificate to msgpack: %w", err)
+		}
+		cert = buf.Bytes()
+	}
+
+	return blk, cert, nil
+}
+
+// EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
+type EncodedBlockCert struct {
+	_struct struct{} `codec:""`
+
+	Block       bookkeeping.Block     `codec:"block"`
+	Certificate agreement.Certificate `codec:"cert"`
+}
+
+func downloadEncodedBlockCertFromArchive(rnd basics.Round, baseUrl string) (blk EncodedBlockCert, err error) {
+
+	// Set up the HTTP client
+	const ExternalArchiveTimeout = 10 * time.Second
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: ExternalArchiveTimeout, // Connection timeout
+			}).DialContext,
+			ResponseHeaderTimeout: ExternalArchiveTimeout, // Read timeout for headers
+		},
+		Timeout: ExternalArchiveTimeout, // Overall request timeout
+	}
+
+	// Get block bytes
+	url := baseUrl + fmt.Sprint(rnd)
+	resp, err := client.Get(url)
+	if err != nil {
+		return EncodedBlockCert{}, fmt.Errorf("failed to download block from external archive: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	encodedBlockCertBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return EncodedBlockCert{}, fmt.Errorf("failed to read HTTP response body from external archive: %w", err)
+	}
+
+	// Decode block bytes from msgpack
+	{
+		codecHandle := new(codec.MsgpackHandle)
+		codecHandle.ErrorIfNoField = true
+		codecHandle.ErrorIfNoArrayExpand = true
+		codecHandle.Canonical = true
+		codecHandle.RecursiveEmptyCheck = true
+		codecHandle.WriteExt = true
+		codecHandle.PositiveIntUnsigned = true
+
+		dec := codec.NewDecoderBytes(encodedBlockCertBytes, codecHandle)
+		err = dec.Decode(&blk)
+		if err != nil {
+			return EncodedBlockCert{}, fmt.Errorf("failed to decode EncodedBlockCert from msgpack: %w", err)
+		}
+	}
+
+	return blk, nil
+}
