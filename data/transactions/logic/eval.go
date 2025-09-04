@@ -524,7 +524,7 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
 	minAvmVersion := max(computeMinAvmVersion(txg), caller.minAvmVersion)
 	// caller.AvmVersion can't exceed the computed value currently, since earliest
-	// inner callable version is higher than any minimum imposed otherwise.  But is 
+	// inner callable version is higher than any minimum imposed otherwise.  But is
 	// correct to inherit a stronger restriction from above, in case of future restriction.
 
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
