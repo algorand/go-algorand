@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -2469,9 +2470,7 @@ func (wn *WebsocketNetwork) registerMessageInterest(t protocol.Tag) {
 
 	if wn.messagesOfInterest == nil {
 		wn.messagesOfInterest = make(map[protocol.Tag]bool)
-		for tag, flag := range defaultSendMessageTags {
-			wn.messagesOfInterest[tag] = flag
-		}
+		maps.Copy(wn.messagesOfInterest, defaultSendMessageTags)
 	}
 
 	wn.messagesOfInterest[t] = true
@@ -2485,9 +2484,7 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
 
 	if wn.messagesOfInterest == nil {
 		wn.messagesOfInterest = make(map[protocol.Tag]bool)
-		for tag, flag := range defaultSendMessageTags {
-			wn.messagesOfInterest[tag] = flag
-		}
+		maps.Copy(wn.messagesOfInterest, defaultSendMessageTags)
 	}
 
 	delete(wn.messagesOfInterest, t)

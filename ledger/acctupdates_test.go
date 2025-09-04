@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"runtime"
 	"strings"
@@ -173,9 +174,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 		consensusVersion: ml.consensusVersion,
 		trackers:         trackerRegistry{log: dblogger},
 	}
-	for k, v := range ml.accts {
-		newLedgerTracker.accts[k] = v
-	}
+	maps.Copy(newLedgerTracker.accts, ml.accts)
 	copy(newLedgerTracker.blocks, ml.blocks)
 	copy(newLedgerTracker.deltas, ml.deltas)
 

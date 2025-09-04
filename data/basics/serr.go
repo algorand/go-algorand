@@ -18,6 +18,7 @@ package basics
 
 import (
 	"errors"
+	"maps"
 	"strings"
 
 	"golang.org/x/exp/slog"
@@ -108,9 +109,7 @@ func Wrap(err error, msg string, field string, pairs ...any) error {
 	var inner *SError
 	if ok := errors.As(err, &inner); ok {
 		attributes := make(map[string]any, len(inner.Attrs))
-		for key, val := range inner.Attrs {
-			attributes[key] = val
-		}
+		maps.Copy(attributes, inner.Attrs)
 		serr.Attrs[field+"-attrs"] = attributes
 	}
 

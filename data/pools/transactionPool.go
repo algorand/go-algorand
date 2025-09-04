@@ -19,6 +19,7 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -268,9 +269,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 	} else {
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
 
-		for txid, txn := range pool.rememberedTxids {
-			pool.pendingTxids[txid] = txn
-		}
+		maps.Copy(pool.pendingTxids, pool.rememberedTxids)
 	}
 
 	pool.rememberedTxGroups = nil

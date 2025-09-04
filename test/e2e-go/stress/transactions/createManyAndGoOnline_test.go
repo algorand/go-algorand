@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"maps"
 	"path/filepath"
 	"testing"
 
@@ -82,17 +83,13 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 	txidsToAccountsWaveTwo := make(map[string]string)
 	for _, account := range txidsToAccountsWaveOne {
 		txidsToChildAccounts := cascadeCreateAndFundAccounts(amountToSend, transactionFee, account, client, a)
-		for txid, account := range txidsToChildAccounts {
-			txidsToAccountsWaveTwo[txid] = account
-		}
+		maps.Copy(txidsToAccountsWaveTwo, txidsToChildAccounts)
 	}
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(fundingTimeoutRound, txidsToAccountsWaveTwo)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 	for _, account := range txidsToAccountsWaveOne {
 		txidsToChildAccounts := cascadeCreateAndFundAccounts(amountToSend, transactionFee, account, client, a)
-		for txid, account := range txidsToChildAccounts {
-			txidsToAccountsWaveTwo[txid] = account
-		}
+		maps.Copy(txidsToAccountsWaveTwo, txidsToChildAccounts)
 	}
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(fundingTimeoutRound, txidsToAccountsWaveTwo)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
@@ -103,18 +100,14 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 	txidsToAccountsWaveThree := make(map[string]string)
 	for _, account := range txidsToAccountsWaveTwo {
 		txidsToChildAccounts := cascadeCreateAndFundAccounts(amountToSend, transactionFee, account, client, a)
-		for txid, account := range txidsToChildAccounts {
-			txidsToAccountsWaveThree[txid] = account
-		}
+		maps.Copy(txidsToAccountsWaveThree, txidsToChildAccounts)
 	}
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(fundingTimeoutRound, txidsToAccountsWaveThree)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 
 	for _, account := range txidsToAccountsWaveTwo {
 		txidsToChildAccounts := cascadeCreateAndFundAccounts(amountToSend, transactionFee, account, client, a)
-		for txid, account := range txidsToChildAccounts {
-			txidsToAccountsWaveThree[txid] = account
-		}
+		maps.Copy(txidsToAccountsWaveThree, txidsToChildAccounts)
 	}
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(fundingTimeoutRound, txidsToAccountsWaveThree)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")

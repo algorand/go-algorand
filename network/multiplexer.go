@@ -18,6 +18,7 @@ package network
 
 import (
 	"fmt"
+	"maps"
 	"sync/atomic"
 )
 
@@ -84,9 +85,7 @@ func (m *Multiplexer) ValidateHandle(msg IncomingMessage) OutgoingMessage {
 func registerMultiplexer[T any](target *atomic.Value, dispatch []taggedMessageDispatcher[T]) {
 	mp := make(map[Tag]T)
 	if existingMap := getMap[T](target); existingMap != nil {
-		for k, v := range existingMap {
-			mp[k] = v
-		}
+		maps.Copy(mp, existingMap)
 	}
 	for _, v := range dispatch {
 		if _, has := mp[v.Tag]; has {

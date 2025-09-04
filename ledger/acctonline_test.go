@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"strconv"
 	"testing"
@@ -871,9 +872,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 	copyGenesisAccts := func() []map[basics.Address]basics.AccountData {
 		accounts := []map[basics.Address]basics.AccountData{{}}
 		accounts[0] = make(map[basics.Address]basics.AccountData, numAccts)
-		for addr, ad := range genesisAccts[0] {
-			accounts[0][addr] = ad
-		}
+		maps.Copy(accounts[0], genesisAccts[0])
 		return accounts
 	}
 
