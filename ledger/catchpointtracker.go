@@ -183,10 +183,7 @@ func (ct *catchpointTracker) initialize(cfg config.Local, paths DirsAndPrefix) {
 		ct.enableGeneratingCatchpointFiles = true
 	}
 
-	ct.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
-	if cfg.CatchpointFileHistoryLength < -1 {
-		ct.catchpointFileHistoryLength = -1
-	}
+	ct.catchpointFileHistoryLength = max(cfg.CatchpointFileHistoryLength, -1)
 }
 
 // GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.

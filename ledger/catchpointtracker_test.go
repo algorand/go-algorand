@@ -2030,10 +2030,7 @@ func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
 	}
 
 	start := basics.Round(initialBlocksCount)
-	min := conf.CatchpointInterval
-	if min < protoParams.CatchpointLookback {
-		min = protoParams.CatchpointLookback
-	}
+	min := max(conf.CatchpointInterval, protoParams.CatchpointLookback)
 	end := basics.Round(min + conf.MaxAcctLookback + 3) // few more rounds to commit and generate the second stage
 	for i := start; i < end; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5

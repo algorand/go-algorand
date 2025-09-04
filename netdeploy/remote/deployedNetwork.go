@@ -421,11 +421,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 
 	minAccounts := accountsNeeded(fileCfgs.GeneratedApplicationCount, fileCfgs.GeneratedAssetsCount, params)
 	nAccounts := fileCfgs.GeneratedAccountsCount
-	if minAccounts > nAccounts {
-		bootstrappedNet.nAccounts = minAccounts
-	} else {
-		bootstrappedNet.nAccounts = nAccounts
-	}
+	bootstrappedNet.nAccounts = max(minAccounts, nAccounts)
 
 	//fund src account with enough funding
 	rand.Seed(time.Now().UnixNano())

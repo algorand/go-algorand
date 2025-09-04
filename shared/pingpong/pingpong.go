@@ -1208,10 +1208,7 @@ func (pps *WorkerState) constructAppTxn(from string, fee uint64, client *libgoal
 	sender = from
 	if len(appOptIns) > 0 {
 		indices := rand.Perm(len(appOptIns))
-		limit := 5
-		if len(indices) < limit {
-			limit = len(indices)
-		}
+		limit := min(len(indices), 5)
 		for i := 0; i < limit; i++ {
 			idx := indices[i]
 			accounts = append(accounts, appOptIns[idx])

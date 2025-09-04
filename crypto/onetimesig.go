@@ -423,10 +423,7 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 	// subkeys.
 	if current.Batch+1 == s.FirstBatch {
 		if current.Offset > s.FirstOffset {
-			jump := current.Offset - s.FirstOffset
-			if jump > uint64(len(s.Offsets)) {
-				jump = uint64(len(s.Offsets))
-			}
+			jump := min(current.Offset-s.FirstOffset, uint64(len(s.Offsets)))
 
 			s.FirstOffset += jump
 			s.Offsets = s.Offsets[jump:]

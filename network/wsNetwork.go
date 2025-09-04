@@ -620,10 +620,7 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.eventualReadyDelay = time.Minute
 	wn.prioTracker = newPrioTracker(wn)
 
-	readBufferLen := wn.config.IncomingConnectionsLimit + wn.config.GossipFanout
-	if readBufferLen < 100 {
-		readBufferLen = 100
-	}
+	readBufferLen := max(wn.config.IncomingConnectionsLimit+wn.config.GossipFanout, 100)
 	if readBufferLen > 10000 {
 		readBufferLen = 10000
 	}

@@ -331,10 +331,7 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	dynamicTimeout := p.lowestCredentialArrivals.orderStatistics(dynamicFilterTimeoutCredentialArrivalHistoryIdx) + dynamicFilterTimeoutGraceInterval
 
 	// Make sure the dynamic filter timeout is not too small nor too large
-	clampedTimeout := dynamicTimeout
-	if clampedTimeout < dynamicFilterTimeoutLowerBound {
-		clampedTimeout = dynamicFilterTimeoutLowerBound
-	}
+	clampedTimeout := max(dynamicTimeout, dynamicFilterTimeoutLowerBound)
 	if clampedTimeout > defaultTimeout {
 		clampedTimeout = defaultTimeout
 	}
