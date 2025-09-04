@@ -385,6 +385,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 		return
 	}
 	assetsNeeded := int(pps.cfg.NumAsset) - len(pps.cinfo.AssetParams)
+	assetsToCreate := assetsNeeded // Save original count for later use
 	newAssetAddrs := make(map[string]*pingPongAccount, assetsNeeded)
 	for addr, acct := range pps.accounts {
 		if assetsNeeded <= 0 {
@@ -418,9 +419,9 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 		newAssetAddrs[addr] = acct
 	}
 	// wait for new assets to be created, fetch account data for them
-	newAssets := make(map[basics.AssetIndex]model.AssetParams, assetsNeeded)
+	newAssets := make(map[basics.AssetIndex]model.AssetParams, assetsToCreate)
 	timeout := time.Now().Add(10 * time.Second)
-	for len(newAssets) < assetsNeeded {
+	for len(newAssets) < assetsToCreate {
 		for addr, acct := range newAssetAddrs {
 			ai, err := client.AccountInformation(addr, true)
 			if err != nil {
