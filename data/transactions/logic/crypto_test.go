@@ -117,6 +117,18 @@ byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 	testAccepts(t, progText, 1)
 }
 
+func TestSHA512(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// echo -n "hello" | sha512sum
+	progText := `
+byte "hello"; sha512
+byte 0x9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043
+==`
+	testAccepts(t, progText, 13)
+}
+
 func TestMimc(t *testing.T) {
 	// We created test vectors for the MiMC hash function by defining a set of preimages for different
 	// input sizes and calling gnark-crypto's MiMC implementation to compute the expected hash values.
