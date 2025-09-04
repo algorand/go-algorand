@@ -2392,11 +2392,9 @@ func (wn *WebsocketNetwork) addPeer(peer *wsPeer) {
 	}
 	// simple duplicate *pointer* check. should never trigger given the callers to addPeer
 	// TODO: remove this after making sure it is safe to do so
-	for _, p := range wn.peers {
-		if p == peer {
-			wn.log.Errorf("dup peer added %#v", peer)
-			return
-		}
+	if slices.Contains(wn.peers, peer) {
+		wn.log.Errorf("dup peer added %#v", peer)
+		return
 	}
 	heap.Push(peersHeap{wn}, peer)
 	wn.prioTracker.setPriority(peer, peer.prioAddress, peer.prioWeight)
