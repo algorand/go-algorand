@@ -75,7 +75,7 @@ type Event struct {
 }
 
 func componentFromString(s string) (Component, bool) {
-	for i := 0; i < int(numComponents); i++ {
+	for i := range int(numComponents) {
 		c := Component(i)
 		if c.String() == s {
 			return c, true

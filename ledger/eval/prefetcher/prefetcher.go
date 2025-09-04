@@ -401,7 +401,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	taskIdx.Store(-1)
 	defer taskIdx.Store(tasksCount)
 	// create few go-routines to load asyncroniously the account data.
-	for i := 0; i < asyncAccountLoadingThreadCount; i++ {
+	for range asyncAccountLoadingThreadCount {
 		go p.asyncPrefetchRoutine(&tasksQueue, &taskIdx, groupDoneCh)
 	}
 

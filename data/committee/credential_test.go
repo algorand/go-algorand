@@ -34,7 +34,7 @@ func TestAccountSelected(t *testing.T) {
 
 	seedGen := rand.New(rand.NewSource(1))
 	N := 1
-	for i := 0; i < N; i++ {
+	for i := range N {
 		selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 
@@ -158,7 +158,7 @@ func TestPoorAccountSelectedLeaders(t *testing.T) {
 	N := 2
 	failsLeaders := 0
 	leaders := make([]uint64, N)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 		for j := range addresses {
@@ -206,7 +206,7 @@ func TestPoorAccountSelectedCommittee(t *testing.T) {
 	seedGen := rand.New(rand.NewSource(1))
 	N := 1
 	committee := uint64(0)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 
@@ -249,7 +249,7 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 
 	seedGen := rand.New(rand.NewSource(1))
 	N := 1
-	for i := 0; i < N; i++ {
+	for i := range N {
 		selParams, _, round, addresses, _, _ := testingenv(t, 10, 2000, seedGen)
 		gen := rand.New(rand.NewSource(2))
 		_, _, zeroVRFSecret := newAccount(t, gen)

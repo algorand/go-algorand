@@ -167,7 +167,7 @@ func TestPseudonode(t *testing.T) {
 	channels := make([]<-chan externalEvent, 0)
 	var ch <-chan externalEvent
 	var err error
-	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
+	for i := range pseudonodeVerificationBacklog * 2 {
 		ch, err = pb.MakeProposals(context.Background(), startRound, period(i))
 		if err != nil {
 			assert.Subset(t, []int{pseudonodeVerificationBacklog, pseudonodeVerificationBacklog + 1}, []int{i})
@@ -179,7 +179,7 @@ func TestPseudonode(t *testing.T) {
 
 	persist := make(chan error)
 	close(persist)
-	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
+	for i := range pseudonodeVerificationBacklog * 2 {
 		ch, err = pb.MakeVotes(context.Background(), startRound, period(i), step(i%5), makeProposalValue(period(i), accounts[0].Address()), persist)
 		if err != nil {
 			assert.Subset(t, []int{pseudonodeVerificationBacklog, pseudonodeVerificationBacklog + 1}, []int{i})
@@ -233,8 +233,8 @@ func TestPseudonode(t *testing.T) {
 	assert.Equal(t, 0, len(events[payloadVerified]))
 
 	// compare the output of the serialized pseudo node to the queued version.
-	for p := 0; p < 3; p++ {
-		for ch1src := 0; ch1src < 2; ch1src++ {
+	for p := range 3 {
+		for ch1src := range 2 {
 			var err1 error
 			var ch1 <-chan externalEvent
 			if ch1src == 0 {
@@ -252,10 +252,10 @@ func TestPseudonode(t *testing.T) {
 		}
 	}
 
-	for a := 0; a < 2; a++ {
-		for s := 0; s < 3; s++ {
-			for p := 0; p < 3; p++ {
-				for ch1src := 0; ch1src < 2; ch1src++ {
+	for a := range 2 {
+		for s := range 3 {
+			for p := range 3 {
+				for ch1src := range 2 {
 					var err1 error
 					var ch1 <-chan externalEvent
 					if ch1src == 0 {
@@ -329,13 +329,13 @@ func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p peri
 		}
 	}
 
-	for i := 0; i < len(verifiedVotes); i++ {
+	for i := range verifiedVotes {
 		if verifiedVotes[i].err == nil {
 			out <- messageEvent{T: voteVerified, Input: verifiedVotes[i].message}
 		}
 	}
 
-	for i := 0; i < len(verifiedProposals); i++ {
+	for i := range verifiedProposals {
 		if verifiedVotes[i].err == nil {
 			out <- messageEvent{T: payloadVerified, Input: verifiedProposals[i].message}
 		}
@@ -374,7 +374,7 @@ func (n serializedPseudonode) MakeVotes(ctx context.Context, r round, p period, 
 
 	<-persistStateDone
 
-	for i := 0; i < len(verifiedVotes); i++ {
+	for i := range verifiedVotes {
 		if verifiedVotes[i].err == nil {
 			out <- messageEvent{T: voteVerified, Input: verifiedVotes[i].message}
 		}
@@ -517,7 +517,7 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 	channels := make([]<-chan externalEvent, 0)
 	var ch <-chan externalEvent
 	var err error
-	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
+	for i := range pseudonodeVerificationBacklog * 2 {
 		ch, err = pb.MakeProposals(context.Background(), startRound, period(i))
 		if err != nil {
 			require.ErrorAs(t, errPseudonodeBacklogFull, &err)
@@ -531,7 +531,7 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 
 	persist := make(chan error)
 	close(persist)
-	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
+	for i := range pseudonodeVerificationBacklog * 2 {
 		ch, err = pb.MakeVotes(context.Background(), startRound, period(i), step(i%5), makeProposalValue(period(i), accounts[0].Address()), persist)
 		if err != nil {
 			require.ErrorAs(t, errPseudonodeBacklogFull, &err)

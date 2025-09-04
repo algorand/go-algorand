@@ -49,7 +49,7 @@ func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numThreads)
 
-	for i := 0; i < numThreads; i++ {
+	for i := range numThreads {
 		go func(idx int) {
 			defer wg.Done()
 			wallet := filepath.Join(tempDir, fmt.Sprintf("wallet%d", idx+1))
@@ -63,10 +63,10 @@ func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 
 	wg.Wait()
 
-	for r := 0; r < 1000; r++ {
+	for range 1000 {
 		var wg sync.WaitGroup
 		wg.Add(numThreads)
-		for i := 0; i < numThreads; i++ {
+		for i := range numThreads {
 			go func(idx int) {
 				defer wg.Done()
 				wallet := filepath.Join(tempDir, fmt.Sprintf("wallet%d", idx+1))
@@ -95,7 +95,7 @@ func TestLoadSingleRootKeyConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numThreads)
 
-	for i := 0; i < numThreads; i++ {
+	for i := range numThreads {
 		go func(idx int) {
 			defer wg.Done()
 			wallet := filepath.Join(tempDir, "wallet1")

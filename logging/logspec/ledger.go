@@ -51,7 +51,7 @@ type LedgerEvent struct {
 }
 
 func ledgerTypeFromString(s string) (LedgerType, bool) {
-	for i := 0; i < int(numLedgerTypes); i++ {
+	for i := range int(numLedgerTypes) {
 		t := LedgerType(i)
 		if t.String() == s {
 			return t, true

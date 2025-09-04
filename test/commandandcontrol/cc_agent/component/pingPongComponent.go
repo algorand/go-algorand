@@ -121,7 +121,7 @@ func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.
 	pps := pingpong.NewPingpong(*cfg)
 
 	// Initialize accounts if necessary, this may take several attempts while previous transactions to settle
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		err = pps.PrepareAccounts(&ac)
 		if err == nil {
 			break

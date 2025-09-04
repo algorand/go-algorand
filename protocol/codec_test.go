@@ -221,13 +221,13 @@ func TestMsgpDecode(t *testing.T) {
 	limit := rand.Intn(30)
 	tags := make([]Tag, limit)
 	buf := make([]byte, 0, limit*10)
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		tags[i] = Tag(fmt.Sprintf("tag_%d", i))
 		buf = append(buf, EncodeMsgp(tags[i])...)
 	}
 
 	dec = NewMsgpDecoderBytes(buf)
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		err = dec.Decode(&tag2)
 		require.NoError(t, err)
 		require.Equal(t, tags[i], tag2)
@@ -251,7 +251,7 @@ func TestRandomizeObjectWithPtrField(t *testing.T) {
 	// run a few and fail if all ints are zero
 	sawNonZeroU16 := false
 	sawNonZeroU64 := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		obj, err := RandomizeObject(&testObjB{})
 		require.NoError(t, err)
 		objB, ok := obj.(*testObjB)

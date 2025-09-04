@@ -629,7 +629,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	acctXRes2 := make(map[uint64]msgp.Raw, acctXNumRes/2)
 	emptyRes := trackerdb.ResourcesData{ResourceFlags: trackerdb.ResourceFlagsEmptyAsset}
 	emptyResEnc := protocol.Encode(&emptyRes)
-	for i := 0; i < acctXNumRes; i++ {
+	for i := range acctXNumRes {
 		if i <= acctXNumRes/2 {
 			acctXRes1[rand.Uint64()] = emptyResEnc
 		} else {

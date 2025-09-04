@@ -310,7 +310,7 @@ func TestSyncingFullNode(t *testing.T) {
 	}
 
 	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, nil)
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
 	}
@@ -320,7 +320,7 @@ func TestSyncingFullNode(t *testing.T) {
 	startAndConnectNodes(nodes, defaultFirstNodeStartDelay)
 
 	counter := 0
-	for tests := uint64(0); tests < 16; tests++ {
+	for tests := range uint64(16) {
 		timer := time.NewTimer(30*time.Second + 2*expectedAgreementTime)
 		for i := range wallets {
 			select {
@@ -344,7 +344,7 @@ func TestSyncingFullNode(t *testing.T) {
 	}
 
 	roundsCompleted := nodes[0].ledger.LastRound()
-	for i := basics.Round(0); i < roundsCompleted; i++ {
+	for i := range roundsCompleted {
 		for wallet := range wallets {
 			e0, err := nodes[0].ledger.Block(i)
 			if err != nil {
@@ -372,7 +372,7 @@ func TestInitialSync(t *testing.T) {
 	}
 
 	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, nil)
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
 	}
@@ -446,7 +446,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	configurableConsensus[consensusTest1] = testParams1
 
 	nodes, wallets := setupFullNodes(t, consensusTest0, configurableConsensus)
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
 	}
@@ -458,7 +458,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	maxRounds := basics.Round(16)
 	roundsCheckedForUpgrade := 0
 
-	for tests := basics.Round(0); tests < maxRounds; tests++ {
+	for tests := range maxRounds {
 		blocks := make([]bookkeeping.Block, len(wallets))
 		for i := range wallets {
 			select {
@@ -997,7 +997,7 @@ func TestNodeHybridTopology(t *testing.T) {
 		})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
 	}
@@ -1105,7 +1105,7 @@ func TestNodeP2PRelays(t *testing.T) {
 	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
 	}
@@ -1259,7 +1259,7 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
 	}
@@ -1381,7 +1381,7 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, numAccounts)
 	require.Len(t, wallets, numAccounts)
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
 	}
@@ -1396,7 +1396,7 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 
 	const initialRound = 1
 	const maxRounds = 3
-	for tests := basics.Round(0); tests < maxRounds; tests++ {
+	for tests := range github.com/algorand/go-algorand/data/basics.Round(maxRounds) {
 		blocks := make([]bookkeeping.Block, len(wallets))
 		for i := range wallets {
 			select {

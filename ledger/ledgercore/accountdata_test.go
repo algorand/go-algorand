@@ -35,7 +35,7 @@ func TestBasicsAccountDataRoundtripConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		randObj, _ := protocol.RandomizeObject(&basics.AccountData{})
 		basicsAccount := *randObj.(*basics.AccountData)
 
@@ -68,7 +68,7 @@ func TestLedgercoreAccountDataRoundtripConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		randObj, _ := protocol.RandomizeObject(&AccountData{})
 		ledgercoreAccount := *randObj.(*AccountData)
 

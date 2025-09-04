@@ -162,7 +162,7 @@ func makeHistoricStatus(windowSize int, class peerClass) *historicStats {
 		requestGaps: make([]uint64, 0, windowSize),
 		rankSum:     uint64(class.initialRank) * uint64(windowSize),
 		gapSum:      0.0}
-	for i := 0; i < windowSize; i++ {
+	for range windowSize {
 		hs.rankSamples.PushBack(class.initialRank)
 	}
 	return &hs

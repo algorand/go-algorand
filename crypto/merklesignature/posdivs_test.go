@@ -83,7 +83,7 @@ func TestErrors(t *testing.T) {
 }
 
 func checkIndexToRoundToIndex(count, firstValid, keyLifetime uint64, t *testing.T) {
-	for pos := uint64(0); pos < count; pos++ {
+	for pos := range count {
 		round := indexToRound(firstValid, keyLifetime, uint64(pos))
 		index := roundToIndex(firstValid, round, keyLifetime)
 		require.Equal(t, uint64(pos), index)

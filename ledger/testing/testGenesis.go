@@ -66,7 +66,7 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 	// 10 billion microalgos, across N accounts and pool and sink
 	amount := 10 * 1000000000 * 1000000 / uint64(count+2)
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		// Create deterministic addresses, so that output stays the same, run to run.
 		var seed crypto.Seed
 		seed[0] = byte(i)
@@ -129,7 +129,7 @@ func GenesisWithProto(naccts int, proto protocol.ConsensusVersion) (ledgercore.I
 
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
-	for i := 0; i < naccts; i++ {
+	for i := range naccts {
 		seed[0] = byte(i)
 		seed[1] = byte(i >> 8)
 		seed[2] = byte(i >> 16)

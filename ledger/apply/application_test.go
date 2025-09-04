@@ -1218,7 +1218,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	ep.Proto = &proto
 
 	// check deletion
-	for initTotalExtraPages := uint32(0); initTotalExtraPages < 3; initTotalExtraPages++ {
+	for initTotalExtraPages := range uint32(3) {
 		cbr = basics.AccountData{
 			AppParams:          map[basics.AppIndex]basics.AppParams{appIdx: params},
 			TotalExtraAppPages: initTotalExtraPages,

@@ -154,7 +154,7 @@ func printDownloadProgressLine(progress int, barLength int, url string, dld int6
 
 	outString := "["
 	if start < end {
-		for i := 0; i < barLength; i++ {
+		for i := range barLength {
 			if i < start || i > end {
 				outString += escapeSquare
 			} else {
@@ -162,7 +162,7 @@ func printDownloadProgressLine(progress int, barLength int, url string, dld int6
 			}
 		}
 	} else {
-		for i := 0; i < barLength; i++ {
+		for i := range barLength {
 			if i > start || i < end {
 				outString += escapeDot
 			} else {

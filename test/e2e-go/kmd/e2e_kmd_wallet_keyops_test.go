@@ -617,7 +617,7 @@ func TestMasterKeyGeneratePastImportedKeys(t *testing.T) {
 
 	// Generate some keys in the first wallet
 	var addrs []string
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		req := kmdapi.APIV1POSTKeyRequest{
 			WalletHandleToken: walletHandleToken,
 		}

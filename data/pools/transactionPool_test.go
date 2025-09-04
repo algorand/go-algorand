@@ -156,7 +156,7 @@ func TestMinBalanceOK(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -199,7 +199,7 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -242,7 +242,7 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -314,7 +314,7 @@ func TestCloseAccount(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -377,7 +377,7 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -440,7 +440,7 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -485,7 +485,7 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -528,7 +528,7 @@ func TestRememberForget(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -596,7 +596,7 @@ func TestCleanUp(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -677,7 +677,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -774,7 +774,7 @@ func TestOverspender(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -837,7 +837,7 @@ func TestRemove(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -887,7 +887,7 @@ func TestLogicSigOK(t *testing.T) {
 	numOfAccounts := 5
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		addresses[i] = addr
@@ -940,7 +940,7 @@ func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -991,7 +991,7 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -1048,7 +1048,7 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -1128,7 +1128,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -1145,7 +1145,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 
 		// make some transactions
 		var signedTransactions []transactions.SignedTxn
-		for i := 0; i < numTransactions; i++ {
+		for i := range numTransactions {
 			tx := transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{
@@ -1169,7 +1169,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 		// make args for recomputeBlockEvaluator() like OnNewBlock() would
 		var knownCommitted uint
 		committedTxIDs := make(map[transactions.Txid]ledgercore.IncludedTransactions)
-		for i := 0; i < blockTxnCount; i++ {
+		for i := range blockTxnCount {
 			knownCommitted++
 			// OK to use empty IncludedTransactions: recomputeBlockEvaluator is only checking map membership
 			committedTxIDs[signedTransactions[i].ID()] = ledgercore.IncludedTransactions{}
@@ -1221,7 +1221,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -1316,7 +1316,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
 
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -1408,7 +1408,7 @@ func TestStateProofLogging(t *testing.T) {
 	// Generate accounts
 	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
 	addresses := make([]basics.Address, numOfAccounts)
-	for i := 0; i < numOfAccounts; i++ {
+	for i := range numOfAccounts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret

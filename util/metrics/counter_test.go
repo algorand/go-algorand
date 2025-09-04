@@ -51,7 +51,7 @@ func TestMetricCounter(t *testing.T) {
 
 	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		counter.Inc(map[string]string{"pid": "123", "data_host": fmt.Sprintf("host%d", i%5)})
 		// wait half-a cycle
 		time.Sleep(test.sampleRate / 2)
@@ -97,7 +97,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 
 	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		counter.Inc(nil)
 		// wait half-a cycle
 		time.Sleep(test.sampleRate / 2)
@@ -146,7 +146,7 @@ func TestMetricCounterMixed(t *testing.T) {
 
 	counter.AddUint64(5, nil)
 	counter.AddUint64(8, map[string]string{})
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		counter.Inc(nil)
 		// wait half-a cycle
 		time.Sleep(test.sampleRate / 2)

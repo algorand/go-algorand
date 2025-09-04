@@ -597,7 +597,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, regger.IncentiveEligible)
 		require.EqualValues(t, 14+320, regger.LastHeartbeat)
 
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			printAbsent(dl.fullBlock()) // #15-19
 			require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
 			require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
@@ -981,7 +981,7 @@ func TestVoterAccess(t *testing.T) {
 		for _, addr := range []basics.Address{one, two, three} {
 			checkState(addr, false, 0, 833_333_333_333_333)
 		}
-		for i := 0; i < 320; i++ {
+		for range 320 {
 			dl.fullBlock()
 		}
 		// addr[1] is now visibly online. the total is across all five that are now online, minus various fees paid
@@ -1037,7 +1037,7 @@ bad: err
 `
 
 		// Advance the ledger so that there's ambiguity of asset index or foreign array index
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			dl.fullBlock(&txntest.Txn{Type: "pay", Sender: addrs[2], Receiver: addrs[2]})
 		}
 
@@ -1136,7 +1136,7 @@ bad: err
 `
 
 		// Advance the ledger so that there's no ambiguity of app ID or foreign array slot
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			dl.fullBlock(&txntest.Txn{Type: "pay", Sender: addrs[2], Receiver: addrs[2]})
 		}
 
@@ -1466,7 +1466,7 @@ func TestAppInsMinBalance(t *testing.T) {
 	appsCreated := make(map[basics.Address]int, len(addrs)-1)
 
 	acctIdx := 0
-	for i := 0; i < maxAppsOptedIn; i++ {
+	for i := range maxAppsOptedIn {
 		creator := addrs[acctIdx]
 		createTxn := txntest.Txn{
 			Type:             protocol.ApplicationCallTx,

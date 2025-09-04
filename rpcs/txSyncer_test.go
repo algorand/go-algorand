@@ -74,7 +74,7 @@ func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 		txns: make([]transactions.SignedTxn, txCount),
 	}
 
-	for i := 0; i < txCount; i++ {
+	for i := range txCount {
 		var note [16]byte
 		testRandBytes(note[:])
 		tx := transactions.Transaction{
@@ -332,7 +332,7 @@ func TestStartAndStop(t *testing.T) {
 
 	// signal that syncing can start
 	close(canStart)
-	for x := 0; x < 20; x++ {
+	for range 20 {
 		time.Sleep(100 * time.Millisecond)
 		if handler.messageCounter.Load() != 0 {
 			break

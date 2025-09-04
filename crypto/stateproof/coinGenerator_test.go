@@ -77,7 +77,7 @@ func TestHashCoin(t *testing.T) {
 	}
 	coinHash := makeCoinGenerator(&choice)
 
-	for j := uint64(0); j < 1000; j++ {
+	for range uint64(1000) {
 		coin := coinHash.getNextCoin()
 		if coin >= uint64(len(slots)) {
 			t.Errorf("hashCoin out of bounds")
@@ -171,7 +171,7 @@ func TestGenerateCoinHashKATs(t *testing.T) {
 
 	coinHash := makeCoinGenerator(&choice)
 
-	for j := uint64(0); j < numReveals; j++ {
+	for j := range uint64(numReveals) {
 		coinslots[j] = coinHash.getNextCoin()
 
 	}

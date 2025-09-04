@@ -123,12 +123,12 @@ func (v *verifiedTransactionCache) GetUnverifiedTransactionGroups(txnGroups [][]
 	}
 	unverifiedGroups = make([][]transactions.SignedTxn, 0, len(txnGroups))
 
-	for txnGroupIndex := 0; txnGroupIndex < len(txnGroups); txnGroupIndex++ {
+	for txnGroupIndex := range txnGroups {
 		signedTxnGroup := txnGroups[txnGroupIndex]
 		verifiedTxn := 0
 
 		baseBucket := v.base
-		for txnIdx := 0; txnIdx < len(signedTxnGroup); txnIdx++ {
+		for txnIdx := range signedTxnGroup {
 			txn := &signedTxnGroup[txnIdx]
 			id := txn.Txn.ID()
 			// check pinned first

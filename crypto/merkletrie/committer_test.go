@@ -48,7 +48,7 @@ func TestInMemoryCommitter(t *testing.T) {
 	// create 50000 hashes.
 	leafsCount := 50000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
@@ -111,10 +111,10 @@ func TestNoRedundentPages(t *testing.T) {
 	testSize := 20000
 	// create 20000 hashes.
 	hashes := make([]crypto.Digest, testSize)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		mt1.Add(hashes[i][:])
 	}
 	mt1.Commit()
@@ -162,13 +162,13 @@ func TestMultipleCommits(t *testing.T) {
 	commitsCount := 5
 
 	hashes := make([]crypto.Digest, testSize)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
 	var memoryCommitter1 InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter1, defaultTestMemoryConfig)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 
 		mt1.Add(hashes[i][:])
 		if i%(len(hashes)/commitsCount) == 0 {
@@ -179,7 +179,7 @@ func TestMultipleCommits(t *testing.T) {
 
 	var memoryCommitter2 InMemoryCommitter
 	mt2, _ := MakeTrie(&memoryCommitter2, defaultTestMemoryConfig)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		mt2.Add(hashes[i][:])
 	}
 	mt2.Commit()
@@ -213,14 +213,14 @@ func TestIterativeCommits(t *testing.T) {
 	}
 
 	hashes := make([]crypto.Digest, testSize)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i), byte(i >> 8), byte(i >> 16), byte(i >> 24), byte(0), byte(0)})
 	}
 
 	// initialize memory container.
 	mc := &InMemoryCommitter{}
 	mt, _ := MakeTrie(mc, memConfig)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		added, err := mt.Add(hashes[i][:])
 		require.True(t, added)
 		require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestIterativeCommits(t *testing.T) {
 	_, err := mt.Commit()
 	require.NoError(t, err)
 
-	for r := 0; r < 100; r++ {
+	for r := range 100 {
 		newMC := mc.Duplicate(true)
 		mt, _ = MakeTrie(newMC, memConfig)
 		mc = newMC

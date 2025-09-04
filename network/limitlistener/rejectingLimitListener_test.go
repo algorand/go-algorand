@@ -43,9 +43,9 @@ func TestRejectingLimitListenerBasic(t *testing.T) {
 	go server.Serve(l)
 	defer server.Close()
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		queryCh := make(chan error)
-		for j := 0; j < attempts; j++ {
+		for range attempts {
 			go func() {
 				c := http.Client{}
 				r, err := c.Get("http://" + l.Addr().String())
@@ -68,7 +68,7 @@ func TestRejectingLimitListenerBasic(t *testing.T) {
 			}
 		}
 
-		for j := 0; j < limit; j++ {
+		for range limit {
 			handlerCh <- struct{}{}
 			err := <-queryCh
 			if err != nil {
@@ -99,7 +99,7 @@ func TestRejectingLimitListenerBaseListenerError(t *testing.T) {
 		defer close(errCh)
 		const n = 2
 		ll := limitlistener.RejectingLimitListener(errorListener{}, n, nil)
-		for i := 0; i < n+1; i++ {
+		for range n + 1 {
 			_, err := ll.Accept()
 			if !errors.Is(err, errFake) {
 				errCh <- fmt.Errorf("Accept error %v doesn't contain errFake", err)

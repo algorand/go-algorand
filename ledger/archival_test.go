@@ -147,7 +147,7 @@ func TestArchival(t *testing.T) {
 	nonZeroMinSaves := 0
 	blk := genesisInitState.Block
 
-	for i := 0; i < 2000; i++ {
+	for range 2000 {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		wl.l.AddBlock(blk, agreement.Certificate{})
@@ -196,7 +196,7 @@ func TestArchivalRestart(t *testing.T) {
 	blk := genesisInitState.Block
 
 	const maxBlocks = 2000
-	for i := 0; i < maxBlocks; i++ {
+	for range maxBlocks {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		l.AddBlock(blk, agreement.Certificate{})
@@ -350,7 +350,7 @@ func TestArchivalCreatables(t *testing.T) {
 	// give creators money for min balance
 	const maxBlocks = 2000
 	var creators []basics.Address
-	for i := 0; i < maxBlocks; i++ {
+	for range maxBlocks {
 		creator := basics.Address{}
 		_, err := rand.Read(creator[:])
 		require.NoError(t, err)
@@ -370,7 +370,7 @@ func TestArchivalCreatables(t *testing.T) {
 	var maxCreated uint64
 
 	// create apps and assets
-	for i := 0; i < maxBlocks; i++ {
+	for i := range maxBlocks {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 
@@ -599,7 +599,7 @@ func TestArchivalCreatables(t *testing.T) {
 	require.Equal(t, len(creatableIdxs), existing+deleted)
 
 	// Mine another maxBlocks blocks
-	for i := 0; i < maxBlocks; i++ {
+	for range maxBlocks {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.Payset = nil
@@ -681,7 +681,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	balanceRecords := []basics.BalanceRecord{}
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		addr := basics.Address{}
 		_, err := rand.Read(addr[:])
 		require.NoError(t, err)
@@ -705,12 +705,12 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	runtime.GC()
 
 	const maxBlocks = 2000
-	for i := 0; i < maxBlocks; i++ {
+	for i := range maxBlocks {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.Payset = transactions.Payset{}
 
-		for j := 0; j < 5; j++ {
+		for j := range 5 {
 			x := (j + i) % len(balanceRecords)
 			creatorEncoded := balanceRecords[x].Addr.String()
 			tx, err := makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)

@@ -139,7 +139,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 			var sigWg sync.WaitGroup
 			txnChan := make(chan *transactions.Transaction, 100)
 			sigTxnChan := make(chan *transactions.SignedTxn, 100)
-			for nthread := 0; nthread < 10; nthread++ {
+			for range 10 {
 				sigWg.Add(1)
 				go signer(b, &sigWg, c, wh, txnChan, sigTxnChan)
 			}
@@ -155,7 +155,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 				a.NoError(err)
 				proto := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 
-				for txi := 0; txi < numTransactions; txi++ {
+				for range numTransactions {
 					var dst basics.Address
 					crypto.RandBytes(dst[:])
 
@@ -205,7 +205,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 
 			var queueWg sync.WaitGroup
 			queueTxns := make(chan *transactions.SignedTxn, 100)
-			for nthread := 0; nthread < 10; nthread++ {
+			for range 10 {
 				queueWg.Add(1)
 				go queuePayments(b, &queueWg, c, queueTxns)
 			}

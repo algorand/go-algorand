@@ -63,7 +63,7 @@ func testDevMode(t *testing.T, version protocol.ConsensusVersion) {
 	require.Equal(t, blkOffset, resp.Offset)
 
 	// 2 transactions should be sent within one normal confirmation time.
-	for i := basics.Round(0); i < 2; i++ {
+	for i := range github.com/algorand/go-algorand/data/basics.Round(2) {
 		round := firstRound + i
 		txn = fixture.SendMoneyAndWait(round, 100001, 1000, sender.Address, receiver.String(), "")
 		// SendMoneyAndWait subtracts 1 from firstValid

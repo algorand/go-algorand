@@ -101,7 +101,7 @@ func TestPendingSigDB(t *testing.T) {
 	err := makeStateProofDB(dbs.Wdb)
 	require.NoError(t, err)
 
-	for r := basics.Round(0); r < basics.Round(100); r++ {
+	for r := range basics.Round(100) {
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			var psig pendingSig
 			crypto.RandBytes(psig.signer[:])
@@ -120,7 +120,7 @@ func TestPendingSigDB(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	for deletedBefore := basics.Round(0); deletedBefore < basics.Round(200); deletedBefore++ {
+	for deletedBefore := range basics.Round(200) {
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			return deletePendingSigsBeforeRound(tx, deletedBefore)
 		})
@@ -227,7 +227,7 @@ func TestProversDB(t *testing.T) {
 	a.NoError(err)
 
 	provers := make([]spProver, 100)
-	for i := uint64(0); i < 100; i++ {
+	for i := range uint64(100) {
 		var prover spProver
 		prover.Prover = &stateproof.Prover{}
 		prover.Round = i
@@ -289,7 +289,7 @@ func TestDbProverAlreadyExists(t *testing.T) {
 	prover.Round = 2
 	prover.Data[3] = 5
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			return persistProver(tx, basics.Round(2), &prover)
 		})

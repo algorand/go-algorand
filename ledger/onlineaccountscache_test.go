@@ -42,7 +42,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	addr := basics.Address(crypto.Hash([]byte{byte(0)}))
 
 	roundsNum := 50
-	for i := 0; i < roundsNum; i++ {
+	for i := range roundsNum {
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
 			BaseOnlineAccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, BaseVotingData: trackerdb.BaseVotingData{VoteLastValid: 1000}},
@@ -52,7 +52,7 @@ func TestOnlineAccountsCacheBasic(t *testing.T) {
 	}
 
 	// verify that all these onlineaccounts are truly there.
-	for i := 0; i < roundsNum; i++ {
+	for i := range roundsNum {
 		acct, has := oac.read(addr, basics.Round(i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), acct.updRound)
@@ -107,7 +107,7 @@ func TestOnlineAccountsCachePruneOffline(t *testing.T) {
 	addr := basics.Address(crypto.Hash([]byte{byte(0)}))
 
 	roundsNum := 50
-	for i := 0; i < roundsNum; i++ {
+	for i := range roundsNum {
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
 			BaseOnlineAccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}, BaseVotingData: trackerdb.BaseVotingData{VoteLastValid: 1000}},
@@ -136,7 +136,7 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	const maxCacheSize = 10
 	oac.init(nil, maxCacheSize)
 	var lastAddr basics.Address
-	for i := 0; i < maxCacheSize; i++ {
+	for i := range maxCacheSize {
 		lastAddr = ledgertesting.RandomAddress()
 		acct := cachedOnlineAccount{
 			updRound:              basics.Round(i),
@@ -216,7 +216,7 @@ func benchmarkOnlineAccountsCacheRead(b *testing.B, historyLength int) {
 	// This has large (negative) impact on lookup performance since an account's
 	// linked list nodes will not reside in memory consecutively.
 	for i := 1; i <= historyLength; i++ {
-		for j := 0; j < numAccounts; j++ {
+		for j := range numAccounts {
 			cache.writeFront(makeAddress(j), cachedOnlineAccount{updRound: basics.Round(i)})
 		}
 	}
@@ -230,7 +230,7 @@ func benchmarkOnlineAccountsCacheRead(b *testing.B, historyLength int) {
 
 	var r cachedOnlineAccount
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < numAccounts; j++ {
+		for j := range numAccounts {
 			r, _ = cache.read(makeAddress(j), basics.Round(historyLength))
 		}
 	}

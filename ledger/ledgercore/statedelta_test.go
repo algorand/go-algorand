@@ -164,7 +164,7 @@ func TestAccountDeltasMergeAccountsOrder(t *testing.T) {
 	ad2.UpsertAppResource(addr4, app4, app4Params, AppLocalStateDelta{})
 
 	// Iterate to ensure deterministic order
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var merged AccountDeltas
 		merged.MergeAccounts(ad1)
 		merged.MergeAccounts(ad2)

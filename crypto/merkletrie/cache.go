@@ -676,7 +676,7 @@ func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err erro
 	}
 	nodesMap = make(map[storedNodeIdentifier]*node)
 	walk := nodesCountLength + versionLength
-	for i := int64(0); i < nodesCount; i++ {
+	for range nodesCount {
 		nodeID, nodesIDLength := binary.Uvarint(bytes[walk:])
 		if nodesIDLength <= 0 {
 			return nil, ErrPageDecodingFailure

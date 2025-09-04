@@ -57,7 +57,7 @@ func randomBlock(r basics.Round) testBlockEntry {
 
 func randomInitChain(proto protocol.ConsensusVersion, nblock int) []testBlockEntry {
 	res := make([]testBlockEntry, 0)
-	for i := 0; i < nblock; i++ {
+	for i := range nblock {
 		blkent := randomBlock(basics.Round(i))
 		blkent.cert = agreement.Certificate{}
 		blkent.block.CurrentProtocol = proto
@@ -165,7 +165,7 @@ func TestBlockDBAppend(t *testing.T) {
 	require.NoError(t, err)
 	checkBlockDB(t, tx, blocks)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		blkent := randomBlock(basics.Round(len(blocks)))
 		err = BlockPut(tx, blkent.block, blkent.cert)
 		require.NoError(t, err)

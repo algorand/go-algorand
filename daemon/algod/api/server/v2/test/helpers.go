@@ -258,7 +258,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 	gen := rand.New(rand.NewSource(2))
 	roots := make([]account.Root, P)
 	parts := make([]account.Participation, P)
-	for i := 0; i < P; i++ {
+	for i := range P {
 		access, err := db.MakeAccessor(t.Name()+"_root_testingenv"+strconv.Itoa(i), false, true)
 		if err != nil {
 			panic(err)
@@ -325,7 +325,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 	}
 	bal := genesis // the current balance record is the same as the genesis balance record
 
-	for i := 0; i < TXs; i++ {
+	for i := range TXs {
 		send := gen.Int() % P
 		recv := gen.Int() % P
 

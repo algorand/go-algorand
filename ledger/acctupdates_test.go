@@ -321,7 +321,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	for offset := uint64(0); offset < offsetLimit; offset++ {
+	for offset := range offsetLimit {
 		deltas := au.deltas[offset]
 		bals = ledgercore.AccumulateDeltas(bals, deltas.Accts)
 	}
@@ -612,7 +612,7 @@ func testAcctUpdates(t *testing.T, conf config.Local) {
 					checkAcctUpdates(t, au, ao, 0, i, accts, rewardsLevels, proto)
 				}
 			}
-			for i := basics.Round(0); i < 15; i++ {
+			for i := range github.com/algorand/go-algorand/data/basics.Round(15) {
 				// Clear the timer to ensure a flush
 				ml.trackers.lastFlushTime = time.Time{}
 
@@ -825,7 +825,7 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 			accts = append(accts, accts[0])
 
 		}
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			for j := range moneyAccounts {
 				moneyAccountsExpectedAmounts[i][j] = 100 * 1000000
@@ -1081,7 +1081,7 @@ func TestKVCache(t *testing.T) {
 	currentDBRound := basics.Round(1)
 
 	kvMap := make(map[string][]byte)
-	for i := 0; i < kvCnt; i++ {
+	for i := range kvCnt {
 		kvMap[fmt.Sprintf("%d", i)] = []byte(fmt.Sprintf("value%d", i))
 	}
 
@@ -1093,7 +1093,7 @@ func TestKVCache(t *testing.T) {
 		currentRound = currentRound + 1
 		kvMods := make(map[string]ledgercore.KvValueDelta)
 		if i < kvCnt/kvsPerBlock {
-			for j := 0; j < kvsPerBlock; j++ {
+			for range kvsPerBlock {
 				name := fmt.Sprintf("%d", curKV)
 				curKV++
 				val := kvMap[name]
@@ -1122,7 +1122,7 @@ func TestKVCache(t *testing.T) {
 		// verify commited kvs appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
 			startKV := (currentDBRound - 1) * basics.Round(kvsPerBlock)
-			for j := 0; j < kvsPerBlock; j++ {
+			for j := range kvsPerBlock {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
@@ -1138,7 +1138,7 @@ func TestKVCache(t *testing.T) {
 
 		kvMods := make(map[string]ledgercore.KvValueDelta)
 		if i < kvCnt/kvsPerBlock {
-			for j := 0; j < kvsPerBlock; j++ {
+			for range kvsPerBlock {
 				name := fmt.Sprintf("%d", curKV)
 				val := fmt.Sprintf("modified value%d", curKV)
 				kvMods[name] = ledgercore.KvValueDelta{Data: []byte(val)}
@@ -1171,7 +1171,7 @@ func TestKVCache(t *testing.T) {
 			}
 
 			startKV := (currentDBRound - lookback) * basics.Round(kvsPerBlock)
-			for j := 0; j < kvsPerBlock; j++ {
+			for j := range kvsPerBlock {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
@@ -1188,7 +1188,7 @@ func TestKVCache(t *testing.T) {
 
 		kvMods := make(map[string]ledgercore.KvValueDelta)
 		if i < kvCnt/kvsPerBlock {
-			for j := 0; j < kvsPerBlock; j++ {
+			for range kvsPerBlock {
 				name := fmt.Sprintf("%d", curKV)
 				// needs an old data, else optimized away.
 				// if oldData = "" there is the best chance of a bug, so we use that
@@ -1223,7 +1223,7 @@ func TestKVCache(t *testing.T) {
 			}
 
 			startKV := (currentDBRound - lookback) * basics.Round(kvsPerBlock)
-			for j := 0; j < kvsPerBlock; j++ {
+			for j := range kvsPerBlock {
 				name := fmt.Sprintf("%d", uint64(startKV)+uint64(j))
 				persistedValue, has := au.baseKVs.read(name)
 				require.True(t, has)
@@ -1291,7 +1291,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 		window := 5000
 		stateDeltas := make([]ledgercore.StateDelta, b.N)
 		addrs := make([]basics.Address, b.N*window)
-		for i := 0; i < len(addrs); i++ {
+		for i := range addrs {
 			addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 		}
 		for rnd := 0; rnd < b.N; rnd++ {
@@ -1317,7 +1317,7 @@ func TestCompactDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	addrs := make([]basics.Address, 10)
-	for i := 0; i < len(addrs); i++ {
+	for i := range addrs {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
 
@@ -1387,7 +1387,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	addrs := make([]basics.Address, 10)
-	for i := 0; i < len(addrs); i++ {
+	for i := range addrs {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
 
@@ -1490,7 +1490,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	}
 
 	checkNewDeltas(outResourcesDeltas)
-	for i := int64(0); i < 4; i++ {
+	for i := range int64(4) {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
 		require.Equal(t, trackerdb.PersistedResourcesData{Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
@@ -1502,7 +1502,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	}
 
 	// check deltas without missing accounts
-	for i := int64(0); i < 4; i++ {
+	for i := range int64(4) {
 		baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(100 + i)}, addrs[i])
 		if i%2 == 0 {
 			baseResources.write(trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(200 + i)}, addrs[i])
@@ -1514,7 +1514,7 @@ func TestCompactDeltasResources(t *testing.T) {
 	require.Equal(t, 6, len(outResourcesDeltas.deltas))
 
 	checkNewDeltas(outResourcesDeltas)
-	for i := int64(0); i < 4; i++ {
+	for i := range int64(4) {
 		delta, idx := outResourcesDeltas.get(addrs[i], basics.CreatableIndex(100+i))
 		require.NotEqual(t, -1, idx)
 		require.Equal(t, trackerdb.PersistedResourcesData{AcctRef: mockEntryRef{i + 1}, Aidx: basics.CreatableIndex(100 + i)}, delta.oldResource)
@@ -2619,7 +2619,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	curKV := 0
 	var currentRound basics.Round
 	kvMap := make(map[string][]byte)
-	for i := 0; i < kvCnt; i++ {
+	for i := range kvCnt {
 		kvMap[fmt.Sprintf("%d", i)] = []byte(fmt.Sprintf("value%d", i))
 	}
 
@@ -2630,7 +2630,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 		// Construct KvMods for round
 		kvMods := make(map[string]ledgercore.KvValueDelta)
 		if i < kvCnt/kvsPerBlock {
-			for j := 0; j < kvsPerBlock; j++ {
+			for range kvsPerBlock {
 				name := fmt.Sprintf("%d", curKV)
 				curKV++
 				val := kvMap[name]
@@ -2705,7 +2705,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 			startKV := (uint64(j) - 1) * uint64(kvsPerBlock)
 			expectedKvDeltas, has := roundMods[j]
 			require.True(t, has)
-			for kv := 0; kv < kvsPerBlock; kv++ {
+			for kv := range kvsPerBlock {
 				name := fmt.Sprintf("%d", startKV+uint64(kv))
 				delta, has := actualKvDeltas[name]
 				require.True(t, has)

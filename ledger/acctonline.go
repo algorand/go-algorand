@@ -499,7 +499,7 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// see the comment in acctupdates.go
 	const deltasClearThreshold = 500
 	if offset > deltasClearThreshold {
-		for i := uint64(0); i < offset; i++ {
+		for i := range offset {
 			ao.deltas[i] = ledgercore.AccountDeltas{}
 		}
 	}
@@ -828,7 +828,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 			// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
 			// representation of the most recent state of the account, and it
 			// is online and can vote in voteRnd.
-			for o := uint64(0); o < offset; o++ {
+			for o := range offset {
 				for i := 0; i < ao.deltas[o].Len(); i++ {
 					addr, d := ao.deltas[o].GetByIdx(i)
 					if d.Status != basics.Online {
@@ -1057,7 +1057,7 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 
 		// Step 2: Apply pending changes for each block in deltas
 		// Iterate through per-round deltas up to offset: target round `rnd` is ao.deltas[offset-1].
-		for o := uint64(0); o < offset; o++ {
+		for o := range offset {
 			for i := 0; i < ao.deltas[o].Len(); i++ {
 				addr, d := ao.deltas[o].GetByIdx(i)
 				// Each round's deltas can insert, update, or delete values in the onlineAccts map.

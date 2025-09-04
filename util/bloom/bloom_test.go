@@ -23,7 +23,7 @@ func TestBitset(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	f := New(1024, 4, 1234)
-	for i := uint32(0); i < 1024; i++ {
+	for i := range uint32(1024) {
 		if f.test(i) {
 			t.Fatalf("bit %d should not be set: %#v", i, f.data)
 		}
@@ -101,7 +101,7 @@ func closeEnough(a, b, maxerr float64) (bool, float64) {
 // based on "github.com/willf/bloom"
 func (f *Filter) estimateFalsePositiveRate(numAdded uint32, numFP int) float64 {
 	x := make([]byte, 4)
-	for i := uint32(0); i < numAdded; i++ {
+	for i := range numAdded {
 		binary.BigEndian.PutUint32(x, i)
 		f.Set(x)
 	}
@@ -241,7 +241,7 @@ func TestEmptyFilter(t *testing.T) {
 
 	blm := New(200, 16, 1234)
 	marshaled, _ := blm.MarshalBinary()
-	for i := 0; i < len(marshaled); i++ {
+	for i := range marshaled {
 		f, err := UnmarshalBinary(marshaled[0:i])
 		if err != nil {
 			continue
@@ -279,7 +279,7 @@ func TestBloomFilterMemoryConsumption(t *testing.T) {
 		bf := New(sizeBits, numHashes, prefix)
 
 		dataset := make([][]byte, N)
-		for n := 0; n < N; n++ {
+		for n := range N {
 			hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
 			dataset[n] = hash[:]
 		}
@@ -307,7 +307,7 @@ func TestBloomFilterMemoryConsumption(t *testing.T) {
 		bf := New(sizeBits, numHashes, prefix)
 
 		dataset := make([][]byte, N)
-		for n := 0; n < N; n++ {
+		for n := range N {
 			hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
 			dataset[n] = hash[:]
 		}
@@ -340,7 +340,7 @@ func BenchmarkBloomFilterSet(b *testing.B) {
 	prefix := uint32(0)
 	bf := New(sizeBits, numHashes, prefix)
 	dataset := make([][]byte, bfElements)
-	for n := 0; n < bfElements; n++ {
+	for n := range bfElements {
 		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
 		dataset[n] = hash[:]
 	}
@@ -357,7 +357,7 @@ func BenchmarkBloomFilterTest(b *testing.B) {
 	prefix := uint32(0)
 	bf := New(sizeBits, numHashes, prefix)
 	dataset := make([][]byte, bfElements)
-	for n := 0; n < bfElements; n++ {
+	for n := range bfElements {
 		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
 		dataset[n] = hash[:]
 	}
@@ -382,7 +382,7 @@ func TestBloomFilterReferenceHash(t *testing.T) {
 	prefix := uint32(0x11223344)
 	bf := New(sizeBits, numHashes, prefix)
 
-	for n := 0; n < N; n++ {
+	for n := range N {
 		hash := crypto.Hash([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
 		bf.Set(hash[:])
 	}

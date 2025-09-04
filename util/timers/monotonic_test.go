@@ -143,7 +143,7 @@ func TestMonotonicEncodeDecode(t *testing.T) {
 	singleTest(c, "Zero()'ed")
 
 	now := time.Now()
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		r := time.Duration(rand.Int63())
 		c = Clock[int](
 			&Monotonic[int]{

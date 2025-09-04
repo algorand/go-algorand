@@ -731,7 +731,7 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.peersConnectivityCheckTicker.Stop()
 	}
 	wn.peersConnectivityCheckTicker = time.NewTicker(connectionActivityMonitorInterval)
-	for i := 0; i < incomingThreads; i++ {
+	for range incomingThreads {
 		wn.wg.Add(1)
 		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
 		go wn.handler.messageHandlerThread(&wn.wg, wn.peersConnectivityCheckTicker.C, wn, "network", "WebsocketNetwork")

@@ -378,7 +378,7 @@ func (w *ioAutomataConcrete) transition(inputTraceEvent event) (err error, panic
 }
 
 func (w *ioAutomataConcrete) transitionAll(inputs []event) (error, error) {
-	for i := 0; i < len(inputs); i++ {
+	for i := range inputs {
 		err, panicErr := w.transition(inputs[i]) // a nil event is interpreted as no input
 		if err != nil || panicErr != nil {
 			return err, panicErr
@@ -632,7 +632,7 @@ func (w *ioAutomataConcretePlayer) transition(inputTraceEvent event) (err error,
 }
 
 func (w *ioAutomataConcretePlayer) transitionAll(inputs []event) (error, error) {
-	for i := 0; i < len(inputs); i++ {
+	for i := range inputs {
 		err, panicErr := w.transition(inputs[i]) // a nil event is interpreted as no input
 		if err != nil || panicErr != nil {
 			return err, panicErr

@@ -41,7 +41,7 @@ func TestStateProofMessage(t *testing.T) {
 	a := require.New(t)
 
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -58,7 +58,7 @@ func TestStateProofMessage(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceRoundsWithoutStateProof(t, 1)
 	var lastMessage stateproofmsg.Message
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval-1)
 
 		var tx transactions.SignedTxn
@@ -105,7 +105,7 @@ func TestGenerateStateProofMessageForSmallRound(t *testing.T) {
 	a := require.New(t)
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -126,7 +126,7 @@ func TestMessageLnApproxError(t *testing.T) {
 	a := require.New(t)
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -155,7 +155,7 @@ func TestMessageMissingHeaderOnInterval(t *testing.T) {
 	a := require.New(t)
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -181,7 +181,7 @@ func TestGenerateBlockProof(t *testing.T) {
 	a := require.New(t)
 
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -198,7 +198,7 @@ func TestGenerateBlockProof(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceRoundsWithoutStateProof(t, 1)
 	var lastAttestedRound basics.Round
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval-1)
 
 		var tx transactions.SignedTxn
@@ -246,7 +246,7 @@ func TestGenerateBlockProofOnSmallArray(t *testing.T) {
 	a := require.New(t)
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)

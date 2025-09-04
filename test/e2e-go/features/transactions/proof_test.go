@@ -79,7 +79,7 @@ func TestTxnMerkleProof(t *testing.T) {
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
 	// we do not want to have a full tree in order the catch an empty element edge case
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
@@ -163,7 +163,7 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
 	// we do not want to have a full tree in order the catch an empty element edge case
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 

@@ -1077,7 +1077,7 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 	t.Parallel()
 
 	addresses := make([]basics.Address, 3)
-	for i := 0; i < len(addresses); i++ {
+	for i := range addresses {
 		_, err := rand.Read(addresses[i][:])
 		require.NoError(t, err)
 	}
@@ -1104,7 +1104,7 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 		basics.AppCreatable,
 		basics.AppCreatable,
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		for j, expected := range creators {
 			address, exists, err := base.getCreator(cindex[j], ctype[j])
 			require.NoError(t, err)
@@ -1324,7 +1324,7 @@ func TestAbsenteeChecks(t *testing.T) {
 	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	// add 32 more addresses, we can get a suspension by challenge
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		addrs = append(addrs, basics.Address{byte(i << 3), 0xaa})
 	}
 
@@ -1388,7 +1388,7 @@ func TestAbsenteeChecks(t *testing.T) {
 
 	// Advance the evaluator, watching for suspensions as they appear
 	challenge := byte(0)
-	for i := uint64(0); i < uint64(1200); i++ { // Just before first suspension at 1171
+	for range uint64(1200) { // Just before first suspension at 1171
 		vb := l.endBlock(t, blkEval, proposers...)
 		blkEval = l.nextBlock(t)
 
@@ -1428,7 +1428,7 @@ func TestAbsenteeChecks(t *testing.T) {
 	require.NoError(t, blkEval.Transaction(selfpay(0), transactions.ApplyData{}))
 	require.NoError(t, blkEval.Transaction(selfpay(1), transactions.ApplyData{}))
 	require.NoError(t, blkEval.Transaction(selfpay(2), transactions.ApplyData{}))
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		require.NoError(t, blkEval.Transaction(pay(0, basics.Address{byte(i << 3), 0xaa}).Sign(keys[0]),
 			transactions.ApplyData{}))
 	}
@@ -1449,7 +1449,7 @@ func TestAbsenteeChecks(t *testing.T) {
 	require.Len(t, validatedBlock.Block().AbsentParticipationAccounts, 1)
 	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, challenged, challenged.String())
 	foundChallenged := false
-	for i := byte(0); i < 32; i++ {
+	for i := range byte(32) {
 		if i == challenge>>3 {
 			rnd := validatedBlock.Block().Round()
 			ad := basics.Address{i << 3, 0xaa}

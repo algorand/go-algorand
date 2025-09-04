@@ -473,7 +473,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	txn.Txn.RekeyTo = basics.Address{}
 	ep := defaultAppParams(txn)
 
-	for v := uint64(0); v < appsEnabledVersion; v++ {
+	for v := range uint64(appsEnabledVersion) {
 		ops := testProg(t, source, v)
 		e := fmt.Sprintf("program version must be >= %d", appsEnabledVersion)
 		testAppBytes(t, ops.Program, ep, e, e)

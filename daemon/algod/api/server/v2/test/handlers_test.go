@@ -2025,7 +2025,7 @@ func insertRounds(a *require.Assertions, h v2.Handlers, numRounds int) {
 	}
 
 	lastBlk := genBlk
-	for i := 0; i < numRounds; i++ {
+	for range numRounds {
 		blk := newEmptyBlock(a, lastBlk, genBlk, ledger)
 		round := uint64(blk.Round())
 		// Add a StateProof transaction after half of the interval has passed (128 rounds) and add another 18 round for good measure

@@ -484,7 +484,7 @@ func genBigNoOp(numOps int) []byte {
 func genBigHashes(numHashes int, numPad int) []byte {
 	var progParts []string
 	progParts = append(progParts, `byte base64 AA==`)
-	for i := 0; i < numHashes; i++ {
+	for range numHashes {
 		progParts = append(progParts, `sha256`)
 	}
 	for i := 0; i < numPad/2; i++ {
@@ -625,12 +625,12 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	progParts := []string{"#pragma version 2"}
 	progParts = append(progParts, deleteBranch)
 	progParts = append(progParts, writePrefix)
-	for i := 0; i < numKeys; i++ {
+	for range numKeys {
 		progParts = append(progParts, writeBlock)
 	}
 	progParts = append(progParts, writeSuffix)
 	progParts = append(progParts, deletePrefix)
-	for i := 0; i < numKeys; i++ {
+	for range numKeys {
 		progParts = append(progParts, deleteBlock)
 	}
 	progParts = append(progParts, deleteSuffix)
@@ -704,7 +704,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 	progParts := []string{"#pragma version 2"}
 	progParts = append(progParts, flipBranch)
 	progParts = append(progParts, writePrefix)
-	for i := 0; i < numKeys; i++ {
+	for range numKeys {
 		progParts = append(progParts, writeBlock)
 	}
 	progParts = append(progParts, writeSuffix)

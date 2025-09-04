@@ -43,7 +43,7 @@ func TestTxHandlerDigestCache(t *testing.T) {
 
 	// add some unique random
 	var ds [size]crypto.Digest
-	for i := 0; i < size; i++ {
+	for i := range size {
 		crypto.RandBytes([]byte(ds[i][:]))
 		exist := cache.CheckAndPut(ds[i])
 		require.False(t, exist)
@@ -55,7 +55,7 @@ func TestTxHandlerDigestCache(t *testing.T) {
 	require.Equal(t, size, cache.Len())
 
 	// try to re-add, ensure not added
-	for i := 0; i < size; i++ {
+	for i := range size {
 		exist := cache.CheckAndPut(ds[i])
 		require.True(t, exist)
 	}
@@ -64,7 +64,7 @@ func TestTxHandlerDigestCache(t *testing.T) {
 
 	// add some more and ensure capacity switch
 	var ds2 [size]crypto.Digest
-	for i := 0; i < size; i++ {
+	for i := range size {
 		crypto.RandBytes(ds2[i][:])
 		exist := cache.CheckAndPut(ds2[i])
 		require.False(t, exist)
@@ -85,19 +85,19 @@ func TestTxHandlerDigestCache(t *testing.T) {
 	require.Equal(t, size+1, cache.Len())
 
 	// ensure hashes from the prev batch are still there
-	for i := 0; i < size; i++ {
+	for i := range size {
 		exist := cache.check(ds2[i])
 		require.True(t, exist)
 	}
 
 	// ensure hashes from the first batch are gone
-	for i := 0; i < size; i++ {
+	for i := range size {
 		exist := cache.check(ds[i])
 		require.False(t, exist)
 	}
 
 	// check deletion works
-	for i := 0; i < size; i++ {
+	for i := range size {
 		cache.Delete(ds[i])
 		cache.Delete(ds2[i])
 	}
@@ -127,7 +127,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	var ds [size][8]byte
 	var ks [size]crypto.Digest
 	var exist bool
-	for i := 0; i < size; i++ {
+	for i := range size {
 		crypto.RandBytes([]byte(ds[i][:]))
 		ks[i], exist = cache.CheckAndPut(ds[i][:])
 		require.False(t, exist)
@@ -140,7 +140,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	require.Equal(t, size, cache.Len())
 
 	// try to re-add, ensure not added
-	for i := 0; i < size; i++ {
+	for i := range size {
 		k, exist := cache.CheckAndPut(ds[i][:])
 		require.True(t, exist)
 		require.Empty(t, k)
@@ -151,7 +151,7 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	// add some more and ensure capacity switch
 	var ds2 [size][8]byte
 	var ks2 [size]crypto.Digest
-	for i := 0; i < size; i++ {
+	for i := range size {
 		crypto.RandBytes(ds2[i][:])
 		ks2[i], exist = cache.CheckAndPut(ds2[i][:])
 		require.False(t, exist)
@@ -174,19 +174,19 @@ func TestTxHandlerSaltedCacheBasic(t *testing.T) {
 	require.Equal(t, size+1, cache.Len())
 
 	// ensure hashes from the prev batch are still there
-	for i := 0; i < size; i++ {
+	for i := range size {
 		exist := cache.check(ds2[i][:])
 		require.True(t, exist)
 	}
 
 	// ensure hashes from the first batch are gone
-	for i := 0; i < size; i++ {
+	for i := range size {
 		exist := cache.check(ds[i][:])
 		require.False(t, exist)
 	}
 
 	// check deletion works
-	for i := 0; i < size; i++ {
+	for i := range size {
 		cache.DeleteByKey(ks[i])
 		cache.DeleteByKey(ks2[i])
 	}
@@ -209,7 +209,7 @@ func TestTxHandlerSaltedCacheScheduled(t *testing.T) {
 
 	// add some unique random
 	var ds [size][8]byte
-	for i := 0; i < size; i++ {
+	for i := range size {
 		crypto.RandBytes([]byte(ds[i][:]))
 		k, exist := cache.CheckAndPut(ds[i][:])
 		require.False(t, exist)
@@ -234,7 +234,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 
 	// add some unique random
 	var ds [size][8]byte
-	for i := 0; i < size; i++ {
+	for i := range size {
 		crypto.RandBytes([]byte(ds[i][:]))
 		k, exist := cache.CheckAndPut(ds[i][:])
 		require.False(t, exist)
@@ -249,7 +249,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	cache.Remix()
 
 	var ds2 [size][8]byte
-	for i := 0; i < size; i++ {
+	for i := range size {
 		crypto.RandBytes([]byte(ds2[i][:]))
 		k, exist := cache.CheckAndPut(ds2[i][:])
 		require.False(t, exist)
@@ -260,7 +260,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	require.Equal(t, 2*size, cache.Len())
 
 	// ensure the old data still in
-	for i := 0; i < size; i++ {
+	for i := range size {
 		exist := cache.check(ds[i][:])
 		require.True(t, exist)
 	}
@@ -269,7 +269,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 	cache.Remix()
 
 	require.Equal(t, size, cache.Len())
-	for i := 0; i < size; i++ {
+	for i := range size {
 		exist := cache.check(ds[i][:])
 		require.False(t, exist)
 		exist = cache.check(ds2[i][:])
@@ -362,10 +362,10 @@ func benchmarkDigestCache(b *testing.B, m cacheMaker, numThreads int) {
 	// b.Logf("inserting %d (%d) values in %d threads into cache of size %d", b.N, numHashes, numThreads, calcCacheSize(b.N))
 	var wg sync.WaitGroup
 	wg.Add(numThreads)
-	for i := 0; i < numThreads; i++ {
+	for range numThreads {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < numHashes; j++ {
+			for range numHashes {
 				p.push()
 			}
 		}()

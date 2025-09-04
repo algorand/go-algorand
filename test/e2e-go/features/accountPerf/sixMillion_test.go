@@ -117,7 +117,7 @@ func getAccountInformation(
 	context string,
 	log logging.Logger) (info model.Account, err error) {
 
-	for x := 0; x < 5; x++ { // retry only 5 times
+	for range 5 { // retry only 5 times
 		info, err = fixture.AlgodClient.AccountInformation(address, true)
 		if err != nil {
 			return
@@ -261,7 +261,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	errChan := make(chan error, channelDepth)
 	stopChan := make(chan struct{}, 1)
 
-	for ngoroutine := 0; ngoroutine < numberOfGoRoutines; ngoroutine++ {
+	for range numberOfGoRoutines {
 		sigWg.Add(1)
 		if groupTransactions {
 			go signerGrpTxn(&sigWg, fixture.LibGoalClient, txnGrpChan, sigTxnGrpChan, errChan)
@@ -270,7 +270,7 @@ func test5MAssets(t *testing.T, scenario int) {
 		}
 	}
 
-	for ngoroutine := 0; ngoroutine < numberOfGoRoutines; ngoroutine++ {
+	for range numberOfGoRoutines {
 		queueWg.Add(1)
 		if groupTransactions {
 			go broadcastTransactionGroups(&queueWg, &fixture, sigTxnGrpChan, errChan)
@@ -327,7 +327,7 @@ func generateKeys(numAccounts int) (keys []psKey) {
 	keys = make([]psKey, 0, numAccounts)
 	var seed crypto.Seed
 	seed[len(seed)-1] = 1
-	for a := 0; a < numAccounts; a++ {
+	for a := range numAccounts {
 		seed[0], seed[1], seed[2], seed[3] = byte(a), byte(a>>8), byte(a>>16), byte(a>>24)
 		privateKey := crypto.GenerateSignatureSecrets(seed)
 		publicKey := basics.Address(privateKey.SignatureVerifier)
@@ -494,7 +494,7 @@ func scenarioA(
 		}
 		printStdOut(nai, numberOfAccounts, "ScenarioA: create assets for acct")
 
-		for asi := uint64(0); asi < assetsPerAccount; asi++ {
+		for asi := range assetsPerAccount {
 			select {
 			case <-stopChan:
 				require.Fail(t, "Test errored")
@@ -652,7 +652,7 @@ func scenarioB(
 	// create 6M unique assets by a single account
 	assetAmount := uint64(100)
 
-	for asi := uint64(0); asi < numberOfAssets; asi++ {
+	for asi := range uint64(numberOfAssets) {
 		select {
 		case <-stopChan:
 			require.Fail(t, "Test errored")
@@ -772,7 +772,7 @@ func scenarioC(
 		}
 
 		printStdOut(nai, numberOfAccounts, "scenario3: create apps for account")
-		for appi := uint64(0); appi < appsPerAccount; appi++ {
+		for appi := range appsPerAccount {
 			select {
 			case <-stopChan:
 				require.Fail(t, "Test errored")
@@ -918,7 +918,7 @@ func scenarioD(
 	log.Infof("Creating applications ...")
 
 	// create 6M apps
-	for asi := uint64(0); asi < numberOfApps; asi++ {
+	for asi := range uint64(numberOfApps) {
 		select {
 		case <-stopChan:
 			require.Fail(t, "Test errored")
@@ -947,7 +947,7 @@ func scenarioD(
 
 	log.Infof("Completed. Verifying apps...")
 
-	for p := 0; p < parallelCheckers; p++ {
+	for range parallelCheckers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

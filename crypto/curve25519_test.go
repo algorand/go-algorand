@@ -42,7 +42,7 @@ func TestVerifyZeros(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var pk SignatureVerifier
 	var sig Signature
-	for x := byte(0); x < 255; x++ {
+	for x := range byte(255) {
 		if pk.VerifyBytes([]byte{x}, sig) {
 			t.Errorf("Zero sig with zero pk successfully verified message %x", x)
 		}
@@ -54,7 +54,7 @@ func TestGenerateSignatureSecrets(t *testing.T) {
 	var s Seed
 	RandBytes(s[:])
 	ref := GenerateSignatureSecrets(s)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		secrets := GenerateSignatureSecrets(s)
 		if bytes.Compare(ref.SignatureVerifier[:], secrets.SignatureVerifier[:]) != 0 {
 			t.Errorf("SignatureSecrets.SignatureVerifier is inconsistent; different results generated for the same seed")

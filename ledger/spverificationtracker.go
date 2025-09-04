@@ -142,7 +142,7 @@ func (spt *spVerificationTracker) commitRound(ctx context.Context, tx trackerdb.
 
 func commitSPContexts(ctx context.Context, tx trackerdb.TransactionScope, commitData []verificationCommitContext) error {
 	ptrToCtxs := make([]*ledgercore.StateProofVerificationContext, len(commitData))
-	for i := 0; i < len(commitData); i++ {
+	for i := range commitData {
 		ptrToCtxs[i] = &commitData[i].verificationContext
 	}
 

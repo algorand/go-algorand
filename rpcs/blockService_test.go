@@ -341,7 +341,7 @@ forloop:
 
 		wg.Wait()
 		responses := [4]*http.Response{responses1, responses2, responses3, responses4}
-		for p := 0; p < 4; p++ {
+		for p := range 4 {
 			if responses[p] == nil {
 				continue
 			}

@@ -70,7 +70,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, seedGen io.Reader
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	lookback := basics.Round(2*proto.SeedRefreshInterval + proto.SeedLookback + 1)
 	var total basics.MicroAlgos
-	for i := 0; i < P; i++ {
+	for i := range P {
 		addr, sigSec, vrfSec := newAccount(t, gen)
 		addrs[i] = addr
 		secrets[i] = sigSec
@@ -89,7 +89,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, seedGen io.Reader
 	var seed Seed
 	seedGen.Read(seed[:])
 
-	for i := 0; i < numTxs; i++ {
+	for range numTxs {
 		seedGen.Read(make([]byte, 4)) // to match output from previous versions, which shared global RNG for seed & note
 	}
 

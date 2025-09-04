@@ -132,7 +132,7 @@ func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecor
 		keys := make([][]byte, len(kvrs))
 		values := make([][]byte, len(kvrs))
 		hashes := make([][]byte, len(kvrs))
-		for i := 0; i < len(kvrs); i++ {
+		for i := range kvrs {
 			keys[i] = kvrs[i].Key
 
 			// Since `encoded.KVRecordV6` is `omitempty` and `omitemptyarray`,

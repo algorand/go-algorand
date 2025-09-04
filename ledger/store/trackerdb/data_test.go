@@ -82,7 +82,7 @@ func TestResourcesDataApp(t *testing.T) {
 
 	// Since some steps use randomly generated input, the test is run N times
 	// to cover a larger search space of inputs.
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		// check empty states + non-empty params
 		appParams := ledgertesting.RandomAppParams()
 		rd = ResourcesData{}
@@ -912,7 +912,7 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 
 	t.Run("basics.AppLocalState", func(t *testing.T) {
 		t.Parallel()
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			randObj, _ := protocol.RandomizeObject(&basics.AppLocalState{})
 			basicsAppLocalState := *randObj.(*basics.AppLocalState)
 
@@ -926,7 +926,7 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 
 	t.Run("basics.AppParams", func(t *testing.T) {
 		t.Parallel()
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			randObj, _ := protocol.RandomizeObject(&basics.AppParams{})
 			basicsAppParams := *randObj.(*basics.AppParams)
 
@@ -942,7 +942,7 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 
 	t.Run("basics.AssetHolding", func(t *testing.T) {
 		t.Parallel()
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			randObj, _ := protocol.RandomizeObject(&basics.AssetHolding{})
 			basicsAssetHolding := *randObj.(*basics.AssetHolding)
 
@@ -956,7 +956,7 @@ func TestResourceDataRoundtripConversion(t *testing.T) {
 
 	t.Run("basics.AssetParams", func(t *testing.T) {
 		t.Parallel()
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			randObj, _ := protocol.RandomizeObject(&basics.AssetParams{})
 			basicsAssetParams := *randObj.(*basics.AssetParams)
 
@@ -984,7 +984,7 @@ func TestBaseAccountDataRoundtripConversion(t *testing.T) {
 
 	t.Run("ledgercore.AccountData", func(t *testing.T) {
 		t.Parallel()
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			randObj, _ := protocol.RandomizeObject(&BaseAccountData{})
 			baseAccount := *randObj.(*BaseAccountData)
 
@@ -1001,7 +1001,7 @@ func TestBaseAccountDataRoundtripConversion(t *testing.T) {
 
 	t.Run("basics.AccountData", func(t *testing.T) {
 		t.Parallel()
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			randObj, _ := protocol.RandomizeObject(&BaseAccountData{})
 			baseAccount := *randObj.(*BaseAccountData)
 
@@ -1033,7 +1033,7 @@ func TestBasicsAccountDataRoundtripConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		randObj, _ := protocol.RandomizeObject(&basics.AccountData{})
 		basicsAccount := *randObj.(*basics.AccountData)
 
@@ -1065,7 +1065,7 @@ func TestLedgercoreAccountDataRoundtripConversion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		randObj, _ := protocol.RandomizeObject(&ledgercore.AccountData{})
 		ledgercoreAccount := *randObj.(*ledgercore.AccountData)
 
@@ -1084,7 +1084,7 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	positiveTesting := func(t *testing.T) {
 		var ba BaseAccountData
 		require.True(t, ba.IsEmpty())
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			h := crypto.Hash([]byte{byte(i)})
 			rnd := binary.BigEndian.Uint64(h[:])
 			ba.UpdateRound = rnd
@@ -1093,7 +1093,7 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	}
 	var empty BaseAccountData
 	negativeTesting := func(t *testing.T) {
-		for i := 0; i < 10000; i++ {
+		for range 10000 {
 			randObj, _ := protocol.RandomizeObjectField(&BaseAccountData{})
 			ba := randObj.(*BaseAccountData)
 			if *ba == empty || ba.UpdateRound != 0 {
@@ -1129,7 +1129,7 @@ func TestBaseOnlineAccountDataIsEmpty(t *testing.T) {
 	}
 	var empty BaseOnlineAccountData
 	negativeTesting := func(t *testing.T) {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			randObj, _ := protocol.RandomizeObjectField(&BaseOnlineAccountData{})
 			ba := randObj.(*BaseOnlineAccountData)
 			if *ba == empty {

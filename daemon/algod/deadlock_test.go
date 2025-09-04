@@ -83,7 +83,7 @@ func TestDeadlockOnPotentialDeadlock(t *testing.T) {
 		}
 	}()
 
-	for linenum := 0; linenum < 10; linenum++ {
+	for linenum := range 10 {
 		fmt.Fprintf(logger, "line %d", linenum)
 	}
 	logger.onPotentialDeadlock()

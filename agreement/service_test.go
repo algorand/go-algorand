@@ -178,7 +178,7 @@ func makeTestingNetwork(nodes int, bufferCapacity int, validator BlockValidator)
 	n.source = make(map[MessageHandle]nodeID)
 	n.monitors = make(map[nodeID]*coserviceMonitor)
 
-	for i := 0; i < nodes; i++ {
+	for i := range nodes {
 		n.voteMessages[i] = make(chan Message, bufferCapacity)
 		n.payloadMessages[i] = make(chan Message, bufferCapacity)
 		n.bundleMessages[i] = make(chan Message, bufferCapacity)
@@ -189,9 +189,9 @@ func makeTestingNetwork(nodes int, bufferCapacity int, validator BlockValidator)
 	}
 
 	n.connected = make([][]bool, nodes)
-	for i := 0; i < nodes; i++ {
+	for i := range nodes {
 		n.connected[i] = make([]bool, nodes)
-		for j := 0; j < nodes; j++ {
+		for j := range nodes {
 			n.connected[i][j] = true
 		}
 	}
@@ -402,7 +402,7 @@ func (n *testingNetwork) partition(part ...nodeID) {
 	defer n.mu.Unlock()
 	// different mechanism than n.connected map
 	n.partitionedNodes = make(map[nodeID]bool)
-	for i := 0; i < len(part); i++ {
+	for i := range part {
 		n.partitionedNodes[part[i]] = true
 	}
 }
@@ -412,7 +412,7 @@ func (n *testingNetwork) crown(prophets ...nodeID) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.crownedNodes = make(map[nodeID]bool)
-	for i := 0; i < len(prophets); i++ {
+	for i := range prophets {
 		n.crownedNodes[prophets[i]] = true
 	}
 }
@@ -422,7 +422,7 @@ func (n *testingNetwork) makeRelays(relays ...nodeID) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.relayNodes = make(map[nodeID]bool)
-	for i := 0; i < len(relays); i++ {
+	for i := range relays {
 		n.relayNodes[relays[i]] = true
 	}
 }
@@ -645,7 +645,7 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 	var seed crypto.Seed
 	copy(seed[:], rootSeed)
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		var rootAddress basics.Address
 		// add new account rootAddress to db
 		{
@@ -736,7 +736,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 	baseNetwork := makeTestingNetwork(numNodes, bufCap, validator)
 	am := makeActivityMonitor()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		accessor, err := db.MakeAccessor(t.Name()+"_"+strconv.Itoa(i)+"_crash.db", false, true)
 		require.NoError(t, err)
 		dbAccessors[i] = accessor
@@ -777,7 +777,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 	}
 
 	cleanupFn := func() {
-		for idx := 0; idx < len(dbAccessors); idx++ {
+		for idx := range dbAccessors {
 			dbAccessors[idx].Close()
 		}
 
@@ -873,7 +873,7 @@ func sanityCheck(startRound round, numRounds round, ledgers []Ledger) {
 		}
 	}
 
-	for j := round(0); j < numRounds; j++ {
+	for j := range numRounds {
 		reference := ledgers[0].(*testLedger).entries[startRound+j].Digest()
 		for i := range ledgers {
 			if ledgers[i].(*testLedger).entries[startRound+j].Digest() != reference {
@@ -899,7 +899,7 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -919,7 +919,7 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 		zeroes = runRoundTriggerFilter(t, clocks, activityMonitor, zeroes)
 	}
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -929,7 +929,7 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	}
 
 	// check that historical clocks map didn't get too large
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		require.LessOrEqual(t, len(services[i].historicalClocks), int(credentialRoundLag)+1, "too many historical clocks kept")
 		for round := firstHistoricalClocksRound + 1; round <= startRound+basics.Round(numRounds); round++ {
 			_, has := services[i].historicalClocks[round]
@@ -937,7 +937,7 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 		}
 	}
 	if numRounds >= int(credentialRoundLag) {
-		for i := 0; i < numNodes; i++ {
+		for i := range numNodes {
 			require.Equal(t, len(services[i].historicalClocks), int(credentialRoundLag)+1, "not enough historical clocks kept")
 		}
 	}
@@ -1110,7 +1110,7 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1245,7 +1245,7 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(startRound)
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1253,7 +1253,7 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -1283,11 +1283,11 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -1303,7 +1303,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1311,7 +1311,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -1364,11 +1364,11 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -1384,7 +1384,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1392,7 +1392,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -1467,11 +1467,11 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -1487,7 +1487,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1495,7 +1495,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -1611,11 +1611,11 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -1631,7 +1631,7 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1639,7 +1639,7 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -1670,11 +1670,11 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -1690,7 +1690,7 @@ func TestAgreementLateCertBug(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1698,7 +1698,7 @@ func TestAgreementLateCertBug(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -1728,11 +1728,11 @@ func TestAgreementLateCertBug(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -1748,7 +1748,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1756,7 +1756,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -1818,10 +1818,10 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -1837,7 +1837,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1845,7 +1845,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -1910,10 +1910,10 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -1929,7 +1929,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -1937,7 +1937,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -2022,10 +2022,10 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -2041,7 +2041,7 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -2049,7 +2049,7 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -2080,10 +2080,10 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -2099,7 +2099,7 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -2107,7 +2107,7 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -2145,10 +2145,10 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
@@ -2163,7 +2163,7 @@ func TestAgreementLargePeriods(t *testing.T) {
 	startRound := baseLedger.NextRound()
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 
@@ -2172,12 +2172,12 @@ func TestAgreementLargePeriods(t *testing.T) {
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// partition the network, run until period 60
-	for p := 0; p < 60; p++ {
+	for p := range 60 {
 		{
 			baseNetwork.partition(0, 1, 2)
 			triggerGlobalTimeout(FilterTimeout(period(p), version), TimeoutFilter, clocks, activityMonitor)
@@ -2197,23 +2197,23 @@ func TestAgreementLargePeriods(t *testing.T) {
 	}
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
 	const expectNumRounds = 5
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		require.Equal(t, startRound+round(expectNumRounds), ledgers[i].NextRound(),
 			"did not progress 5 rounds")
 	}
 
-	for j := 0; j < expectNumRounds; j++ {
+	for j := range expectNumRounds {
 		ledger := ledgers[0].(*testLedger)
 		reference := ledger.entries[startRound+round(j)].Digest()
-		for i := 0; i < numNodes; i++ {
+		for i := range numNodes {
 			ledger := ledgers[i].(*testLedger)
 			require.Equal(t, reference, ledger.entries[startRound+round(j)].Digest(), "wrong block confirmed")
 		}
@@ -2259,7 +2259,7 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -2267,7 +2267,7 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	zeroes := expectNewPeriod(t, clocks, 0)
 
 	// run two rounds
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
@@ -2380,20 +2380,20 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(1, version))
 	zeroes = runRound(t, clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 
 	const expectNumRounds = 5
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		require.Equal(t, startRound+round(expectNumRounds), ledgers[i].NextRound(),
 			"did not progress 5 rounds")
 	}
 
-	for j := 0; j < expectNumRounds; j++ {
+	for j := range expectNumRounds {
 		ledger := ledgers[0].(*testLedger)
 		reference := ledger.entries[startRound+round(j)].Digest()
-		for i := 0; i < numNodes; i++ {
+		for i := range numNodes {
 			ledger := ledgers[i].(*testLedger)
 			require.Equal(t, reference, ledger.entries[startRound+round(j)].Digest(), "wrong block confirmed")
 		}
@@ -2413,7 +2413,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	startRound := baseLedger.NextRound()
 	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Start()
 	}
 	activityMonitor.waitForActivity()
@@ -2491,7 +2491,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 	zeroes = expectNewPeriod(t, clocks[1:], zeroes)
 	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		services[i].Shutdown()
 	}
 	const expectNumRounds = 4
@@ -2499,7 +2499,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 		require.Equal(t, startRound+round(expectNumRounds), ledgers[i].NextRound(),
 			"did not progress 4 rounds")
 	}
-	for j := 0; j < expectNumRounds; j++ {
+	for j := range expectNumRounds {
 		ledger := ledgers[1].(*testLedger)
 		reference := ledger.entries[startRound+round(j)].Digest()
 		for i := 1; i < numNodes; i++ {

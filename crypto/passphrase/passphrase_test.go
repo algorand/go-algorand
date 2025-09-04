@@ -31,7 +31,7 @@ func TestGenerateAndRecovery(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	key := make([]byte, 32)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		// Generate a key
 		_, err := rand.Read(key)
 		require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestUint11Array(t *testing.T) {
 
 	N := 11*8*32 + 1
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a := make([]byte, i, i)
 		b := toUint11Array(a)
 		c := toByteArray(b)
@@ -112,7 +112,7 @@ func TestUint11Array(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a := make([]byte, i, i)
 		crypto.RandBytes(a)
 		b := toUint11Array(a)
@@ -125,7 +125,7 @@ func TestUint11Array(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a := make([]uint32, i, i)
 		b := toByteArray(a)
 		c := toUint11Array(b)
@@ -137,7 +137,7 @@ func TestUint11Array(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a := make([]uint32, i, i)
 		for j := 0; j < i; j++ {
 			a[j] = uint32(crypto.RandUint64() % ((1 << 11) - 1))
@@ -152,7 +152,7 @@ func TestUint11Array(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a := make([]uint32, i, i)
 		b := toByteArray(a)
 		require.True(t, len(b)*8 >= len(a)*11)

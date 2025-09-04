@@ -43,7 +43,7 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	var bootstrapPeers []peer.AddrInfo
 	var dhts []*dht.IpfsDHT
 	cfg := config.GetDefaultLocal()
-	for i := 0; i < numHosts; i++ {
+	for range numHosts {
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
 		require.NoError(t, err)
@@ -94,7 +94,7 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 	var bootstrapPeers []peer.AddrInfo
 	var capsDisc []*CapabilitiesDiscovery
 	cfg := config.GetDefaultLocal()
-	for i := 0; i < numHosts; i++ {
+	for range numHosts {
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
 		require.NoError(t, err)

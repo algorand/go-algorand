@@ -299,7 +299,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 		require.NoError(t, errw)
 	}()
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		go func() {
 			defer func() {
 				testRoutineComplete <- struct{}{}
@@ -333,7 +333,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 	}
 
 	testTimeout := time.After(3 * time.Minute)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		select {
 		case <-testRoutineComplete:
 			// good. keep going.
@@ -538,7 +538,7 @@ func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 		a.NoError(err)
 		defer readAcc.Close()
 
-		for i := 0; i < 40; i++ {
+		for i := range 40 {
 			time.Sleep(time.Second / 2)
 			fmt.Printf("Reading bar - %d\n", i)
 
@@ -563,7 +563,7 @@ func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 		}
 	}()
 
-	for i := 0; i < 20; i++ { // Update the huge blobs with changing sizes (hold the write-lock for longer than 1 second)
+	for i := range 20 { // Update the huge blobs with changing sizes (hold the write-lock for longer than 1 second)
 		fmt.Printf("Updating foo - %d\n", i)
 		rands = rands[1:]
 		err = writeAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {

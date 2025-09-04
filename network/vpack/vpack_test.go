@@ -314,7 +314,7 @@ func TestEncoderReuse(t *testing.T) {
 	voteGen := generateRandomVote()
 
 	// Generate random votes and encode them
-	for i := 0; i < numVotes; i++ {
+	for i := range numVotes {
 		msgpBufs = append(msgpBufs, protocol.EncodeMsgp(voteGen.Example(i)))
 		require.LessOrEqual(t, len(msgpBufs[i]), MaxMsgpackVoteSize)
 	}

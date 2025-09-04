@@ -128,7 +128,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 
 		// Generate gs accounts
 		var accts []string
-		for i := 0; i < gs; i++ {
+		for range gs {
 			acct, err := client.GenerateAddress(wh)
 			a.NoError(err)
 			accts = append(accts, acct)
@@ -179,7 +179,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 
 		// Generate gs accounts
 		var accts []string
-		for i := 0; i < badGroupSize; i++ {
+		for range badGroupSize {
 			acct, err := client.GenerateAddress(wh)
 			a.NoError(err)
 			accts = append(accts, acct)
@@ -241,7 +241,7 @@ func TestGroupTransactionsSubmission(t *testing.T) {
 	for _, gs := range goodGroupSizes {
 		// Generate gs accounts
 		var accts []string
-		for i := 0; i < gs; i++ {
+		for range gs {
 			acct, err := client.GenerateAddress(wh)
 			a.NoError(err)
 			accts = append(accts, acct)

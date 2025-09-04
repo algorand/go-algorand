@@ -116,7 +116,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 
 	waitForTransaction := false
 
-	for i := 0; i < numberOfSends; i++ {
+	for i := range numberOfSends {
 		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
 		pongTxidsToAddresses[pongTx.ID().String()] = pongAccount
 		a.NoError(err, "fixture should be able to send money (pong -> ping), error on send number %v", i)

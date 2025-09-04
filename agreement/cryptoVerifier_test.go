@@ -194,7 +194,7 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 	const lotsOfMessages = 12000
 	msgCounters := []int32{0, 0, 0}
 	writeTotals := int32(0)
-	for writerIdx := 0; writerIdx < 64; writerIdx++ {
+	for writerIdx := range 64 {
 		go func(i int) {
 			rand.Seed(int64(i))
 			for {
@@ -237,7 +237,7 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 
 	readTotals := int32(lotsOfMessages)
 	// create multiple readers.
-	for readerIdx := 0; readerIdx < 8; readerIdx++ {
+	for range 8 {
 		go func() {
 			idx := 0
 			// read from the channel, until all messages reach

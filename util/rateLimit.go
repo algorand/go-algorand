@@ -131,7 +131,7 @@ func NewElasticRateLimiter(
 		maxCapacity)
 	ret.cm = congestionManager
 	// fill the sharedCapacity
-	for i := 0; i < maxCapacity; i++ {
+	for range maxCapacity {
 		ret.sharedCapacity.blockingRelease()
 	}
 	return &ret

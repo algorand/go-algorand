@@ -118,7 +118,7 @@ func TestCatchpointGetCatchpointStream(t *testing.T) {
 	ct.tmpDir = temporaryDirectory
 
 	// Create the catchpoint files with dummy data
-	for i := 0; i < filesToCreate; i++ {
+	for i := range filesToCreate {
 		fileName := filepath.Join(trackerdb.CatchpointDirName, fmt.Sprintf("%d.catchpoint", i))
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		err = os.WriteFile(filepath.Join(temporaryDirectory, fileName), data, 0666)
@@ -190,7 +190,7 @@ func TestCatchpointsDeleteStored(t *testing.T) {
 	dummyCatchpointFilesToCreate := 42
 
 	dummyCatchpointFiles := make([]string, dummyCatchpointFilesToCreate)
-	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+	for i := range dummyCatchpointFilesToCreate {
 		file := fmt.Sprintf("%s%c%d%c%d%cdummy_catchpoint_file-%d",
 			trackerdb.CatchpointDirName, os.PathSeparator,
 			i/10, os.PathSeparator,
@@ -532,7 +532,7 @@ func writeDummySpVerification(t *testing.T, nextIndexForContext uint64, numberOf
 	err := ml.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 
 		contexts := make([]*ledgercore.StateProofVerificationContext, numberOfContexts)
-		for i := uint64(0); i < numberOfContexts; i++ {
+		for i := range numberOfContexts {
 			e := ledgercore.StateProofVerificationContext{}
 			e.LastAttestedRound = basics.Round(nextIndexForContext + i)
 			contexts[i] = &e
@@ -1872,7 +1872,7 @@ func TestHashContract(t *testing.T) {
 	}
 
 	require.True(t, strings.HasPrefix(trackerdb.HashKind(255).String(), "HashKind("))
-	for i := byte(0); i < 255; i++ {
+	for i := range byte(255) {
 		if !strings.HasPrefix(trackerdb.HashKind(i).String(), "HashKind(") {
 			require.True(t, hasTestCoverageForKind(trackerdb.HashKind(i)), fmt.Sprintf("Missing test coverage for HashKind ordinal value = %d", i))
 		}

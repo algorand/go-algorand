@@ -39,7 +39,7 @@ func TestLRUBasicResources(t *testing.T) {
 
 	resourcesNum := 50
 	// write 50 resources
-	for i := 0; i < resourcesNum; i++ {
+	for i := range resourcesNum {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res := trackerdb.PersistedResourcesData{
 			AcctRef: mockEntryRef{int64(i)},
@@ -51,7 +51,7 @@ func TestLRUBasicResources(t *testing.T) {
 	}
 
 	// verify that all these resources are truly there.
-	for i := 0; i < resourcesNum; i++ {
+	for i := range resourcesNum {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.True(t, has)
@@ -118,7 +118,7 @@ func TestLRUResourcesDisable(t *testing.T) {
 	require.Empty(t, baseRes.resources)
 	require.Empty(t, baseRes.notFound)
 
-	for i := 0; i < resourceNum; i++ {
+	for i := range resourceNum {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res := trackerdb.PersistedResourcesData{
 			AcctRef: mockEntryRef{int64(i)},
@@ -139,7 +139,7 @@ func TestLRUResourcesPendingWrites(t *testing.T) {
 	resourcesNum := 250
 	baseRes.init(logging.TestingLog(t), resourcesNum*2, resourcesNum)
 
-	for i := 0; i < resourcesNum; i++ {
+	for i := range resourcesNum {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
@@ -157,7 +157,7 @@ func TestLRUResourcesPendingWrites(t *testing.T) {
 		baseRes.flushPendingWrites()
 		// check if all resources were loaded into "main" cache.
 		allResourcesLoaded := true
-		for i := 0; i < resourcesNum; i++ {
+		for i := range resourcesNum {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 			_, has := baseRes.read(addr, basics.CreatableIndex(i))
 			if !has {
@@ -195,7 +195,7 @@ func TestLRUResourcesPendingWritesWarning(t *testing.T) {
 	pendingWritesThreshold := 40
 	log := &lruResourcesTestLogger{Logger: logging.TestingLog(t)}
 	baseRes.init(log, pendingWritesBuffer, pendingWritesThreshold)
-	for j := 0; j < 50; j++ {
+	for j := range 50 {
 		for i := 0; i < j; i++ {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 			res := trackerdb.PersistedResourcesData{
@@ -237,7 +237,7 @@ func TestLRUResourcesOmittedPendingWrites(t *testing.T) {
 	baseRes.flushPendingWrites()
 
 	// verify that all these accounts are truly there.
-	for i := 0; i < pendingWritesBuffer; i++ {
+	for i := range pendingWritesBuffer {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		res, has := baseRes.read(addr, basics.CreatableIndex(i))
 		require.True(t, has)

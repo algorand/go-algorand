@@ -200,7 +200,7 @@ func randomizeDiskState() (rr rootRouter, p player) {
 
 func TestRandomizedEncodingFullDiskState(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	for i := 0; i < 5000; i++ {
+	for range 5000 {
 		router, player := randomizeDiskState()
 		a := []action{}
 		clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))

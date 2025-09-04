@@ -1389,7 +1389,7 @@ return
 	a.NoError(err)
 
 	// few empty blocks to reset deltas and flush
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		blk := makeNewEmptyBlock(t, l1, genesisID, genesisInitState.Accounts)
 		l1.AddBlock(blk, agreement.Certificate{})
 	}

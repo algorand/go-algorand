@@ -136,7 +136,7 @@ func setupEnv(b *testing.B, numAccts int) (bc *benchConfig) {
 	}
 
 	// start the ledger with a pool of accounts
-	for i := 0; i < numAccts; i++ {
+	for range numAccts {
 		acct := addNewAccount(bc)
 		payTo(bc, bc.creator, acct, 1234567890000)
 	}

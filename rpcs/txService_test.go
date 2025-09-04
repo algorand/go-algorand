@@ -233,7 +233,7 @@ func BenchmarkTxSync(b *testing.B) {
 	b.ResetTimer()
 	wg := sync.WaitGroup{}
 	wg.Add(30)
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < b.N/30; j++ {

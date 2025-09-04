@@ -57,7 +57,7 @@ func TestRowidsToChunkedArgs(t *testing.T) {
 	require.Equal(t, 999, len(res[0]))
 	require.Equal(t, 2, cap(res[1]))
 	require.Equal(t, 2, len(res[1]))
-	for i := 0; i < 999; i++ {
+	for i := range 999 {
 		require.Equal(t, interface{}(int64(i)), res[0][i])
 	}
 	j := 0
@@ -77,7 +77,7 @@ func TestRowidsToChunkedArgs(t *testing.T) {
 	require.Equal(t, 999, len(res[0]))
 	require.Equal(t, 999, cap(res[1]))
 	require.Equal(t, 999, len(res[1]))
-	for i := 0; i < 999; i++ {
+	for i := range 999 {
 		require.Equal(t, interface{}(int64(i)), res[0][i])
 	}
 	j = 0

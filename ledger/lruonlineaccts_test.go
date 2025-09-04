@@ -37,7 +37,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 
 	accountsNum := 50
 	// write 50 accounts
-	for i := 0; i < accountsNum; i++ {
+	for i := range accountsNum {
 		acct := trackerdb.PersistedOnlineAccountData{
 			Addr:  basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round: basics.Round(i),
@@ -51,7 +51,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 	}
 
 	// verify that all these accounts are truly there.
-	for i := 0; i < accountsNum; i++ {
+	for i := range accountsNum {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.read(addr)
 		require.True(t, has)
@@ -100,7 +100,7 @@ func TestLRUOnlineAccountsDisable(t *testing.T) {
 
 	accountsNum := 5
 
-	for i := 0; i < accountsNum; i++ {
+	for i := range accountsNum {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			acct := trackerdb.PersistedOnlineAccountData{
@@ -116,7 +116,7 @@ func TestLRUOnlineAccountsDisable(t *testing.T) {
 	baseOnlineAcct.flushPendingWrites()
 	require.Empty(t, baseOnlineAcct.accounts)
 
-	for i := 0; i < accountsNum; i++ {
+	for i := range accountsNum {
 		acct := trackerdb.PersistedOnlineAccountData{
 			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			Round:       basics.Round(i),
@@ -135,7 +135,7 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 	accountsNum := 250
 	baseOnlineAcct.init(logging.TestingLog(t), accountsNum*2, accountsNum)
 
-	for i := 0; i < accountsNum; i++ {
+	for i := range accountsNum {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			acct := trackerdb.PersistedOnlineAccountData{
@@ -152,7 +152,7 @@ func TestLRUOnlineAccountsPendingWrites(t *testing.T) {
 		baseOnlineAcct.flushPendingWrites()
 		// check if all accounts were loaded into "main" cache.
 		allAccountsLoaded := true
-		for i := 0; i < accountsNum; i++ {
+		for i := range accountsNum {
 			addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 			_, has := baseOnlineAcct.read(addr)
 			if !has {
@@ -178,7 +178,7 @@ func TestLRUOnlineAccountsPendingWritesWarning(t *testing.T) {
 	pendingWritesThreshold := 40
 	log := &lruAccountsTestLogger{Logger: logging.TestingLog(t)}
 	baseOnlineAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
-	for j := 0; j < 50; j++ {
+	for j := range 50 {
 		for i := 0; i < j; i++ {
 			acct := trackerdb.PersistedOnlineAccountData{
 				Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
@@ -218,7 +218,7 @@ func TestLRUOnlineAccountsOmittedPendingWrites(t *testing.T) {
 	baseOnlineAcct.flushPendingWrites()
 
 	// verify that all these accounts are truly there.
-	for i := 0; i < pendingWritesBuffer; i++ {
+	for i := range pendingWritesBuffer {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseOnlineAcct.read(addr)
 		require.True(t, has)

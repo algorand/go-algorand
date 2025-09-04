@@ -31,14 +31,14 @@ func generateSignedTxns(numTxs, numAccs int) []SignedTxn {
 	secrets := make([]*crypto.SignatureSecrets, numAccs)
 	addresses := make([]basics.Address, numAccs)
 
-	for i := 0; i < numAccs; i++ {
+	for i := range numAccs {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
 		addresses[i] = addr
 	}
 
-	for i := 0; i < numTxs; i++ {
+	for i := range numTxs {
 		s := rand.Intn(numAccs)
 		r := rand.Intn(numAccs)
 		a := rand.Intn(1000)

@@ -787,7 +787,7 @@ func TestProposalStoreRegressionBlockRedeliveryBug_b29ea57(t *testing.T) {
 
 	// due to map iteration order, the test may succeed despite a logic bug,
 	// so we repeat until we are reasonably confident the bug is not present.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		player := player{Round: curRound}
 
 		var router router

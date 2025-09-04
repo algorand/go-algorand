@@ -87,7 +87,7 @@ func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 
 	expectedUnverifiedGroups := make([][]transactions.SignedTxn, 0, len(txnGroups)/2)
 	// add every even transaction to the cache.
-	for i := 0; i < len(txnGroups); i++ {
+	for i := range txnGroups {
 
 		if i%2 == 0 {
 			expectedUnverifiedGroups = append(expectedUnverifiedGroups, txnGroups[i])
@@ -112,7 +112,7 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 
 	queryTxnGroups := make([][]transactions.SignedTxn, 0, b.N)
 	// add every even transaction to the cache.
-	for i := 0; i < len(txnGroups); i++ {
+	for i := range txnGroups {
 		if i%2 == 1 {
 			queryTxnGroups = append(queryTxnGroups, txnGroups[i])
 		} else {
@@ -124,7 +124,7 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	b.ResetTimer()
 	startTime := time.Now()
 	measuringMultipler := 1000
-	for i := 0; i < measuringMultipler; i++ {
+	for range measuringMultipler {
 		impl.GetUnverifiedTransactionGroups(queryTxnGroups, spec, protocol.ConsensusCurrentVersion)
 	}
 	duration := time.Since(startTime)
@@ -144,7 +144,7 @@ func TestUpdatePinned(t *testing.T) {
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert some entries.
-	for i := 0; i < len(txnGroups); i++ {
+	for i := range txnGroups {
 		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 		impl.Add(txnGroups[i], groupCtx)
 	}

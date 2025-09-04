@@ -818,8 +818,8 @@ func playerPermutationCheck(t *testing.T, enableDynamicFilterTimeout bool) {
 	dynamicFilterOverriddenProtocol, _, configCleanup := overrideConfigWithDynamicFilterParam(enableDynamicFilterTimeout)
 	defer configCleanup()
 
-	for i := 0; i < 7; i++ {
-		for j := 0; j < 14; j++ {
+	for i := range 7 {
+		for j := range 14 {
 			_, pMachine, helper := getPlayerPermutation(t, i)
 			inMsg := getMessageEventPermutation(t, j, helper)
 			inMsg.Proto = ConsensusVersionView{Version: dynamicFilterOverriddenProtocol}

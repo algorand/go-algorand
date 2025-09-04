@@ -452,7 +452,7 @@ int 0
 ==
 bnz final
 `
-	for i := 0; i < 17; i++ {
+	for range 17 {
 		prog += `byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 log
 `
@@ -519,7 +519,7 @@ int 1`
 	a.NoError(err)
 
 	var logs [][]byte
-	for i := 0; i < 17; i++ {
+	for range 17 {
 		logs = append(logs, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	}
 
@@ -1988,7 +1988,7 @@ end:
 	a.Nil(resp.TxnGroups[0].FailureMessage)
 	a.Len(resp.TxnGroups[0].Txns, 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		a.NotNil(resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
 		a.Equal(approvalHash.ToSlice(), *resp.TxnGroups[0].Txns[i].TransactionTrace.ApprovalProgramHash)
 	}

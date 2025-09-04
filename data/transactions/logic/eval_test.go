@@ -431,7 +431,7 @@ func TestBlankStackSufficient(t *testing.T) {
 	t.Parallel()
 	for v := 0; v <= LogicVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			for i := 0; i < 256; i++ {
+			for i := range 256 {
 				spec := opsByOpcode[v][i]
 				argLen := len(spec.Arg.Types)
 				blankStackLen := len(blankStack)
@@ -1389,7 +1389,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	// ensure all the OnCompetion values are in OnCompletionValues list
 	var max int = 100
 	var last int = max
-	for i := 0; i < max; i++ {
+	for i := range max {
 		oc := transactions.OnCompletion(i)
 		unknownStringer := "OnCompletion(" + strconv.FormatInt(int64(i), 10) + ")"
 		if oc.String() == unknownStringer {
@@ -1401,7 +1401,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	require.Equal(t, int(invalidOnCompletionConst), last)
 	require.Equal(t, len(onCompletionMap), len(onCompletionDescriptions))
 	require.Equal(t, len(OnCompletionNames), last)
-	for v := NoOp; v < invalidOnCompletionConst; v++ {
+	for v := range invalidOnCompletionConst {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
 	}
 
@@ -3860,7 +3860,7 @@ func evalLoop(b *testing.B, runs int, programs ...[]byte) {
 	final := programs[len(programs)-1]
 	b.Helper()
 	b.ResetTimer()
-	for i := 0; i < runs; i++ {
+	for i := range runs {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = program
 		if i == runs-1 {
@@ -4210,7 +4210,7 @@ func BenchmarkJsonRef(b *testing.B) {
 	// many keys
 	sb := &strings.Builder{}
 	sb.WriteString(`{`)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		sb.WriteString(fmt.Sprintf(`\"key%d\":\"value%d\",`, i, i))
 	}
 	sb.WriteString(`\"key100\":\"value100\"}`) // so there is no trailing comma
@@ -4603,7 +4603,7 @@ func TestRekeyErrsOnOldVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
+	for v := range uint64(rekeyingEnabledVersion) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, "int 1", v)
 			var txn transactions.SignedTxn

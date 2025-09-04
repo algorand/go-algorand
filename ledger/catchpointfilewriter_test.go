@@ -211,7 +211,7 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	resources := make(map[uint64]msgp.Raw, numResources/10)
 	rdApp := randomAppResourceData()
 	encodedResourceData := rdApp.MarshalMsg(nil)
-	for i := uint64(0); i < numResources; i++ {
+	for i := range uint64(numResources) {
 		resources[i] = encodedResourceData
 	}
 	balance := encoded.BalanceRecordV6{
@@ -228,7 +228,7 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	crypto.RandBytes(kv.Value[:])
 	kvs := make([]encoded.KVRecordV6, numChunkEntries)
 
-	for i := 0; i < numChunkEntries; i++ {
+	for i := range numChunkEntries {
 		balances[i] = balance
 		kvs[i] = kv
 	}
@@ -436,7 +436,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
 			accts[addr] = acct
 		}
-		for i := uint64(0); i < 20; i++ {
+		for range uint64(20) {
 			ap := ledgertesting.RandomAssetParams()
 			acct.AssetParams[assetIndex] = ap
 			assetIndex++
@@ -532,7 +532,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
 			accts[addr] = acct
 		}
-		for i := uint64(0); i < 20; i++ {
+		for range uint64(20) {
 			ap := ledgertesting.RandomAssetParams()
 			acct.AssetParams[assetIndex] = ap
 			assetIndex++
@@ -891,14 +891,14 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 	// There are 12 accounts in the NewTestGenesis, so we create more so that we
 	// have exactly one chunk's worth, to make sure that works without an empty
 	// chunk between accounts and kvstore.
-	for i := 0; i < (BalancesPerCatchpointFileChunk - 12); i++ {
+	for range BalancesPerCatchpointFileChunk - 12 {
 		newacctpay := pay
 		newacctpay.Receiver = ledgertesting.RandomAddress()
 		dl.fullBlock(&newacctpay)
 	}
 
 	// Add more blocks so that we catchpoint after the accounts exist
-	for i := 0; i < extraBlocks; i++ {
+	for range extraBlocks {
 		selfpay := pay
 		selfpay.Receiver = payFrom
 		selfpay.Note = ledgertesting.RandomNote()
@@ -1021,12 +1021,12 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	// There are 12 accounts in the NewTestGenesis, plus 1 app account, so we
 	// create more so that we have exactly one chunk's worth, to make sure that
 	// works without an empty chunk between accounts and kvstore.
-	for i := 0; i < (BalancesPerCatchpointFileChunk - 13); i++ {
+	for range BalancesPerCatchpointFileChunk - 13 {
 		newacctpay := pay
 		newacctpay.Receiver = ledgertesting.RandomAddress()
 		dl.fullBlock(&newacctpay)
 	}
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
@@ -1063,7 +1063,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		require.Equal(t, basics.MicroAlgos{}, algos)
 	}
 
-	for i := 0; i < 40; i++ { // Advance so catchpoint sees the txns
+	for i := range 40 { // Advance so catchpoint sees the txns
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
@@ -1354,12 +1354,12 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	// There are 12 accounts in the NewTestGenesis, plus 1 app account, so we
 	// create more so that we have exactly one chunk's worth, to make sure that
 	// works without an empty chunk between accounts and kvstore.
-	for i := 0; i < (BalancesPerCatchpointFileChunk - 13); i++ {
+	for range BalancesPerCatchpointFileChunk - 13 {
 		newacctpay := pay
 		newacctpay.Receiver = ledgertesting.RandomAddress()
 		dl.fullBlock(&newacctpay)
 	}
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
@@ -1367,12 +1367,12 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	resetBox.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("xxx")}}
 	dl.fullBlock(resetBox)
 
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
 	dl.fullBlock(setBox.Noted("reset back to f's"))
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
@@ -1418,7 +1418,7 @@ func TestCatchpointOnlineAccountUpdateRound(t *testing.T) {
 	}
 
 	// Add blocks until round 400 (well past MaxBalLookback of 320)
-	for i := 0; i < 450; i++ {
+	for i := range 450 {
 		eval := nextBlock(t, l)
 		pay.Note = []byte(strconv.Itoa(i))
 		txn(t, l, eval, &pay)

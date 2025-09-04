@@ -118,12 +118,12 @@ func TestOrderStatistics(t *testing.T) {
 	buffer := makeCredentialArrivalHistory(size)
 	require.False(t, buffer.isFull())
 
-	for i := 0; i < size; i++ {
+	for i := range size {
 		buffer.store(time.Duration(size - i))
 	}
 	require.True(t, buffer.isFull())
 
-	for i := 0; i < size; i++ {
+	for i := range size {
 		require.Equal(t, time.Duration(i+1), buffer.orderStatistics(i))
 	}
 }

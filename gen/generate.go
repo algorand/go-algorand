@@ -317,7 +317,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 
 	createStart := time.Now()
 	creatingWalletsWaitGroup.Add(concurrentWalletGenerators)
-	for routinesCounter := 0; routinesCounter < concurrentWalletGenerators; routinesCounter++ {
+	for range concurrentWalletGenerators {
 		go createWallet()
 	}
 

@@ -197,7 +197,7 @@ func randomAccountWithResources(N int) basics.AccountData {
 	a.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
 	a.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 	a.AppParams = make(map[basics.AppIndex]basics.AppParams)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		switch i % 4 {
 		case 0:
 			a.Assets[basics.AssetIndex(i)] = ledgertesting.RandomAssetHolding(false)
@@ -215,7 +215,7 @@ func randomAccountWithResources(N int) basics.AccountData {
 func randomAccountWithAssets(N int) basics.AccountData {
 	a := ledgertesting.RandomAccountData(0)
 	a.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a.Assets[basics.AssetIndex(i*4)] = ledgertesting.RandomAssetHolding(false)
 	}
 	return a
@@ -224,7 +224,7 @@ func randomAccountWithAssets(N int) basics.AccountData {
 func randomAccountWithAssetParams(N int) basics.AccountData {
 	a := ledgertesting.RandomAccountData(0)
 	a.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a.AssetParams[basics.AssetIndex(i*4+1)] = ledgertesting.RandomAssetParams()
 	}
 	return a
@@ -250,7 +250,7 @@ func randomAccountWithSomeAssetHoldingsAndOverlappingAssetParams(overlapN int, n
 func randomAccountWithAppLocalState(N int) basics.AccountData {
 	a := ledgertesting.RandomAccountData(0)
 	a.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a.AppLocalStates[basics.AppIndex(i*4+2)] = ledgertesting.RandomAppLocalState()
 	}
 	return a
@@ -259,7 +259,7 @@ func randomAccountWithAppLocalState(N int) basics.AccountData {
 func randomAccountWithAppParams(N int) basics.AccountData {
 	a := ledgertesting.RandomAccountData(0)
 	a.AppParams = make(map[basics.AppIndex]basics.AppParams)
-	for i := 0; i < N; i++ {
+	for i := range N {
 		a.AppParams[basics.AppIndex(i*4+3)] = ledgertesting.RandomAppParams()
 	}
 	return a

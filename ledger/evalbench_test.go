@@ -152,7 +152,7 @@ func (g *benchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Addre
 	optInTxns := make([]transactions.SignedTxn, 0, optedInAccts*maxAppsOptedIn/2)
 	require.True(tb, g.NumApps > maxAppsOptedIn)
 	optedInAddrIdx := rand.Perm(len(addrs))
-	for i := 0; i < optedInAccts; i++ {
+	for i := range optedInAccts {
 		senderIdx := optedInAddrIdx[i]
 		sender := addrs[senderIdx]
 
@@ -562,7 +562,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 
 	setupDone := time.Now()
 
-	for i := 0; i < numTxns; i++ {
+	for range numTxns {
 		stxn := txnSource.Txn(b, addrs, keys, newBlock.Round(), genHash)
 		err = bev.Transaction(stxn, transactions.ApplyData{})
 		require.NoError(b, err)

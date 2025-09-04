@@ -388,7 +388,7 @@ func (s *testWorkerStubs) advanceRoundsBeforeFirstStateProof(proto *config.Conse
 }
 
 func (s *testWorkerStubs) advanceRoundsWithoutStateProof(t *testing.T, delta uint64) {
-	for r := uint64(0); r < delta; r++ {
+	for range delta {
 		s.addBlock(s.blocks[s.latest].StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 		s.waitForSignerAndBuilder(t)
 	}
@@ -396,7 +396,7 @@ func (s *testWorkerStubs) advanceRoundsWithoutStateProof(t *testing.T, delta uin
 
 // used to simulate to workers that rounds have advanced, and stateproofs were created.
 func (s *testWorkerStubs) advanceRoundsAndCreateStateProofs(t *testing.T, delta uint64) {
-	for r := uint64(0); r < delta; r++ {
+	for range delta {
 		s.mu.Lock()
 		interval := basics.Round(config.Consensus[s.blocks[s.latest].CurrentProtocol].StateProofInterval)
 		blk := s.blocks[s.latest]
@@ -531,7 +531,7 @@ func expectedNumberOfProvers(stateproofInterval uint64, atRound basics.Round, ne
 
 func createWorkerAndParticipants(t *testing.T, version protocol.ConsensusVersion, proto config.ConsensusParams) ([]account.Participation, *testWorkerStubs, *Worker) {
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKeyWithVersion(t, proto, parent)
@@ -564,7 +564,7 @@ func TestWorkerAllSigs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -583,7 +583,7 @@ func TestWorkerAllSigs(t *testing.T) {
 	s.advanceRoundsWithoutStateProof(t, 2)
 	// Go through several iterations, making sure that we get
 	// the signatures and certs broadcast at each round.
-	for iter := 0; iter < 5; iter++ {
+	for iter := range 5 {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval-1)
 		for i := 0; i < 2*len(keys); i++ {
 			// Expect all signatures to be broadcast.
@@ -628,7 +628,7 @@ func TestWorkerPartialSigs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var keys []account.Participation
-	for i := 0; i < 7; i++ {
+	for range 7 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -690,7 +690,7 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -726,7 +726,7 @@ func TestWorkerRestart(t *testing.T) {
 	const expectedStateProofs = 5
 
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -743,7 +743,7 @@ func TestWorkerRestart(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	s.advanceRoundsWithoutStateProof(t, 1)
 	lastRound := basics.Round(0)
-	for i := 0; i < expectedStateProofs; i++ {
+	for range expectedStateProofs {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2-1)
 		w.Stop()
 		w.Start()
@@ -773,7 +773,7 @@ func TestWorkerHandleSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -809,7 +809,7 @@ func TestWorkerIgnoresSignatureForNonCacheProvers(t *testing.T) {
 	a := require.New(t)
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -991,7 +991,7 @@ func TestWorkersProversCacheAndSignatures(t *testing.T) {
 
 	const expectedStateProofs = proversCacheLength + 2
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -1007,7 +1007,7 @@ func TestWorkersProversCacheAndSignatures(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
-	for iter := 0; iter < expectedStateProofs-1; iter++ {
+	for range expectedStateProofs - 1 {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
@@ -1050,7 +1050,7 @@ func TestWorkersProversCacheAndSignatures(t *testing.T) {
 }
 
 func verifyProverCache(proto config.ConsensusParams, w *Worker, a *require.Assertions, expectedStateProofs uint64) {
-	for i := uint64(0); i < proversCacheLength-1; i++ {
+	for i := range uint64(proversCacheLength - 1) {
 		rnd := proto.StateProofInterval*2 + proto.StateProofInterval*i
 		_, exists := w.provers[basics.Round(rnd)]
 		a.True(exists)
@@ -1068,7 +1068,7 @@ func TestSignatureBroadcastPolicy(t *testing.T) {
 	const numberOfParticipants = 5
 	const expectedStateProofs = proversCacheLength + 2
 	var keys []account.Participation
-	for i := 0; i < numberOfParticipants; i++ {
+	for range numberOfParticipants {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -1083,7 +1083,7 @@ func TestSignatureBroadcastPolicy(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	for iter := 0; iter < expectedStateProofs-1; iter++ {
+	for range expectedStateProofs - 1 {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
 	}
 	// set the latest block to be at round r, where r % 256 == 0
@@ -1127,7 +1127,7 @@ func TestWorkerDoesNotLimitProversAndSignaturesOnDisk(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -1195,7 +1195,7 @@ func getSignaturesInDatabase(t *testing.T, numAddresses int, sigFrom sigOrigin) 
 	signatureBcasted = make(map[basics.Address]int)
 	fromThisNode = make(map[basics.Address]bool)
 	var keys []account.Participation
-	for i := 0; i < numAddresses; i++ {
+	for i := range numAddresses {
 		var parent basics.Address
 		binary.LittleEndian.PutUint64(parent[:], uint64(i))
 		p := newPartKey(t, parent)
@@ -1313,7 +1313,7 @@ func TestProverGeneratesValidStateProofTXN(t *testing.T) {
 	a := require.New(t)
 
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -1487,7 +1487,7 @@ func TestWorkerHandleSigAddrsNotInTopN(t *testing.T) {
 
 	addresses := make([]basics.Address, 0)
 	var keys []account.Participation
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		addresses = append(addresses, parent)
@@ -1728,7 +1728,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 
 	const expectedStateProofs = proversCacheLength + 1
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -1744,7 +1744,7 @@ func TestWorkerCacheAndDiskAfterRestart(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
-	for iter := 0; iter < expectedStateProofs-1; iter++ {
+	for range expectedStateProofs - 1 {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
@@ -1786,7 +1786,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 
 	const expectedStateProofs = proversCacheLength + 1
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -1802,7 +1802,7 @@ func TestWorkerInitOnlySignaturesInDatabase(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
-	for iter := 0; iter < expectedStateProofs-1; iter++ {
+	for range expectedStateProofs - 1 {
 		s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval)
 	}
 	s.advanceRoundsWithoutStateProof(t, proto.StateProofInterval/2)
@@ -1955,7 +1955,7 @@ func TestSignerUsesPersistedProverLatestProto(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	var keys []account.Participation
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -2001,7 +2001,7 @@ func TestRegisterCommitListener(t *testing.T) {
 
 	const expectedStateProofs = 3
 	var keys []account.Participation
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		var parent basics.Address
 		crypto.RandBytes(parent[:])
 		p := newPartKey(t, parent)
@@ -2019,7 +2019,7 @@ func TestRegisterCommitListener(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
 	// we break the loop into two part since we don't want to add a state proof round (Round % 256 == 0)
-	for iter := 0; iter < expectedStateProofs-1; iter++ {
+	for range expectedStateProofs - 1 {
 		s.advanceRoundsAndCreateStateProofs(t, proto.StateProofInterval)
 	}
 	s.advanceRoundsAndCreateStateProofs(t, proto.StateProofInterval/2)

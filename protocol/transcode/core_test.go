@@ -117,7 +117,7 @@ func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
 		return base32.StdEncoding.EncodeToString(buf[:])
 	case objectArray:
 		var arr [2]interface{}
-		for i := 0; i < len(arr); i++ {
+		for i := range len(arr) {
 			t := crypto.RandUint64()
 			if t%uint64(objectTypeMax) == uint64(objectBytes) {
 				// We cannot cleanly pass through an array of
@@ -154,7 +154,7 @@ func randomObject(width int, depth int) interface{} {
 func randomMap(width int, depth int) interface{} {
 	r := make(map[string]interface{})
 
-	for i := 0; i < width; i++ {
+	for range width {
 		var k [8]byte
 		crypto.RandBytes(k[:])
 		r[base32.StdEncoding.EncodeToString(k[:])] = randomObject(width, depth)
@@ -233,7 +233,7 @@ func TestIdempotenceStruct(t *testing.T) {
 		p.C.U = crypto.RandUint64()
 		p.C.I = int64(crypto.RandUint64())
 		p.D = make([]childStruct, 2)
-		for j := 0; j < 2; j++ {
+		for j := range 2 {
 			p.D[j].U = crypto.RandUint64()
 			p.D[j].I = int64(crypto.RandUint64())
 		}

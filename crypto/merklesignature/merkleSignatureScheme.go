@@ -209,7 +209,7 @@ func (s *Signer) SignBytes(msg []byte) (Signature, error) {
 func (s *Secrets) GetAllKeys() []KeyRoundPair {
 	NumOfKeys := uint64(len(s.ephemeralKeys))
 	keys := make([]KeyRoundPair, NumOfKeys)
-	for i := uint64(0); i < NumOfKeys; i++ {
+	for i := range NumOfKeys {
 		keyRound := KeyRoundPair{
 			Round: indexToRound(s.FirstValid, s.KeyLifetime, i),
 			Key:   &s.ephemeralKeys[i],

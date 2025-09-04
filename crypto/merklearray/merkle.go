@@ -276,7 +276,7 @@ func (tree *Tree) createProof(idxs []uint64) (*Proof, error) {
 
 func (tree *Tree) convertLeavesIndexes(idxs []uint64) ([]uint64, error) {
 	vcIdxs := make([]uint64, len(idxs))
-	for i := 0; i < len(idxs); i++ {
+	for i := range idxs {
 		idx, err := merkleTreeToVectorCommitmentIndex(idxs[i], uint8(len(tree.Levels)-1))
 		if err != nil {
 			return nil, err

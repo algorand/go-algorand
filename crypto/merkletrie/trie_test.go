@@ -36,12 +36,12 @@ func TestAddingAndRemoving(t *testing.T) {
 	mt, _ := MakeTrie(nil, defaultTestMemoryConfig)
 	// create 10000 hashes.
 	hashes := make([]crypto.Digest, 10000)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte(i / 256)})
 	}
 
 	rootsWhileAdding := make([]crypto.Digest, len(hashes))
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		addResult, _ := mt.Add(hashes[i][:])
 		require.Equal(t, true, addResult)
 		rootsWhileAdding[i], _ = mt.RootHash()
@@ -75,7 +75,7 @@ func TestAddingAndRemoving(t *testing.T) {
 
 	// add the items in a different order.
 	hashesOrder := rand.New(rand.NewSource(1234567)).Perm(len(hashes))
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		addResult, _ := mt.Add(hashes[hashesOrder[i]][:])
 		require.Equal(t, true, addResult)
 	}
@@ -99,7 +99,7 @@ func TestRandomAddingAndRemoving(t *testing.T) {
 	toRemoveHashes := make([][]byte, 0, 10000)
 
 	nextOperation := 0 // 0 is for adding, 1 is for removing.
-	for i := 0; i < 100000; i++ {
+	for i := range 100000 {
 		if nextOperation == 0 && len(toAddHashes) == 0 {
 			nextOperation = 1
 		}

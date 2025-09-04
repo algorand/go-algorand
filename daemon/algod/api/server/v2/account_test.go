@@ -205,7 +205,7 @@ func TestAccount(t *testing.T) {
 	t.Run("IsDeterministic", func(t *testing.T) {
 		// convert the same account a few more times to make sure we always
 		// produce the same model.Account
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			anotherConv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
 			require.NoError(t, err)
 

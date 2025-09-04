@@ -451,7 +451,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingKVs(ctx context.Context, keys 
 	}
 	defer insertHash.Close()
 
-	for i := 0; i < len(keys); i++ {
+	for i := range keys {
 		_, err := insertKV.ExecContext(ctx, keys[i], values[i])
 		if err != nil {
 			return err
@@ -474,7 +474,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingOnlineAccounts(ctx context.Con
 	}
 	defer insertStmt.Close()
 
-	for i := 0; i < len(oas); i++ {
+	for i := range oas {
 		_, err := insertStmt.ExecContext(ctx, oas[i].Address[:], oas[i].UpdateRound, oas[i].NormalizedOnlineBalance, oas[i].VoteLastValid, oas[i].Data)
 		if err != nil {
 			return err
@@ -492,7 +492,7 @@ func (cw *catchpointWriter) WriteCatchpointStagingOnlineRoundParams(ctx context.
 	}
 	defer insertStmt.Close()
 
-	for i := 0; i < len(orps); i++ {
+	for i := range orps {
 		_, err := insertStmt.ExecContext(ctx, orps[i].Round, orps[i].Data)
 		if err != nil {
 			return err

@@ -507,19 +507,19 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 
 		// note: only one of numBoxUpdate or numBoxRead should be nonzero
 		if numBoxUpdate != 0 {
-			for i := uint32(0); i < numBoxUpdate; i++ {
+			for i := range numBoxUpdate {
 				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
 			}
 
-			for i := uint32(0); i < numBoxUpdate; i++ {
+			for i := range numBoxUpdate {
 				progParts = append(progParts, fmt.Sprintf(updateBoxes, i))
 			}
 		} else {
-			for i := uint32(0); i < numBoxRead; i++ {
+			for i := range numBoxRead {
 				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
 			}
 
-			for i := uint32(0); i < numBoxRead; i++ {
+			for i := range numBoxRead {
 				progParts = append(progParts, fmt.Sprintf(getBoxes, i))
 			}
 		}
@@ -633,16 +633,16 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 	progParts := append([]string{}, prologue)
 	progParts = append(progParts, flipBranch)
 	progParts = append(progParts, writePrefix)
-	for i := uint32(0); i < numGlobalKeys; i++ {
+	for range numGlobalKeys {
 		progParts = append(progParts, writeBlock)
 	}
 	progParts = append(progParts, writeLocBlockPrefix)
-	for i := uint32(0); i < numLocalKeys; i++ {
+	for range numLocalKeys {
 		progParts = append(progParts, writeLocBlock)
 	}
 	if numHashes > 0 {
 		progParts = append(progParts, `byte base64 AA==`)
-		for i := uint32(0); i < numHashes; i++ {
+		for range numHashes {
 			progParts = append(progParts, hashSize)
 		}
 	}

@@ -123,7 +123,7 @@ func TestCircularNetworkTopology(t *testing.T) {
 				topologyConfig := TopologyFilterConfig{
 					NodesConnection: make(map[int][]int),
 				}
-				for i := 0; i < nodes; i++ {
+				for i := range nodes {
 					topologyConfig.NodesConnection[i] = []int{(i + nodes - 1) % nodes, (i + 1) % nodes}
 				}
 				netConfig := &FuzzerConfig{
@@ -508,7 +508,7 @@ func TestNetworkBandwidth(t *testing.T) {
 				topologyConfig := TopologyFilterConfig{
 					NodesConnection: make(map[int][]int),
 				}
-				for j := 0; j < relayCounts; j++ {
+				for j := range relayCounts {
 					r := rnd.Perm(relayCounts)
 					topologyConfig.NodesConnection[j] = append(topologyConfig.NodesConnection[j], r[:k]...)
 					for _, d := range r[:k] {
@@ -577,7 +577,7 @@ func TestUnstakedNetworkLinearGrowth(t *testing.T) {
 		topologyConfig := TopologyFilterConfig{
 			NodesConnection: make(map[int][]int),
 		}
-		for j := 0; j < relayCount; j++ {
+		for j := range relayCount {
 			r := rnd.Perm(relayCount)
 			topologyConfig.NodesConnection[j] = append(topologyConfig.NodesConnection[j], r[:k]...)
 			for _, d := range r[:k] {
@@ -624,7 +624,7 @@ func TestUnstakedNetworkLinearGrowth(t *testing.T) {
 
 		// we want to figure out what is the highest outgoing data rate on any of the relays.
 		highestBytesRate := 0
-		for relayIdx := 0; relayIdx < relayCount; relayIdx++ {
+		for relayIdx := range relayCount {
 			statFilter := statFilterFactory.nodes[relayIdx]
 			for _, metrics := range statFilter.tickOutgoingTraffic {
 				if metrics.Bytes > highestBytesRate {
@@ -688,7 +688,7 @@ func TestStakedNetworkQuadricGrowth(t *testing.T) {
 		topologyConfig := TopologyFilterConfig{
 			NodesConnection: make(map[int][]int),
 		}
-		for j := 0; j < relayCount; j++ {
+		for j := range relayCount {
 			r := rnd.Perm(relayCount)
 			topologyConfig.NodesConnection[j] = append(topologyConfig.NodesConnection[j], r[:k]...)
 			for _, d := range r[:k] {
@@ -705,7 +705,7 @@ func TestStakedNetworkQuadricGrowth(t *testing.T) {
 		}
 
 		onlineNodes := make([]bool, relayCount+nodes)
-		for i := 0; i < relayCount; i++ {
+		for i := range relayCount {
 			onlineNodes[i] = false
 		}
 		for i := relayCount; i < relayCount+nodeCount; i++ {
@@ -796,7 +796,7 @@ func TestRegossipinngElimination(t *testing.T) {
 	topologyConfig := TopologyFilterConfig{
 		NodesConnection: make(map[int][]int),
 	}
-	for j := 0; j < relayCounts; j++ {
+	for j := range relayCounts {
 		r := pickNodes(relayCounts, j, k, rnd)
 		topologyConfig.NodesConnection[j] = append(topologyConfig.NodesConnection[j], r...)
 		for _, d := range r {
@@ -816,7 +816,7 @@ func TestRegossipinngElimination(t *testing.T) {
 	for i := 0; i < relayCounts+nodes; i++ {
 		onlineNodes[i] = (i >= relayCounts)
 	}
-	for i := 0; i < nodes; i++ {
+	for i := range nodes {
 		nodesIndices[i] = relayCounts + i
 	}
 
@@ -894,7 +894,7 @@ func BenchmarkNetworkPerformance(b *testing.B) {
 		topologyConfig := TopologyFilterConfig{
 			NodesConnection: make(map[int][]int),
 		}
-		for j := 0; j < relayCount; j++ {
+		for j := range relayCount {
 			r := rnd.Perm(relayCount)
 			topologyConfig.NodesConnection[j] = append(topologyConfig.NodesConnection[j], r[:k]...)
 			for _, d := range r[:k] {
@@ -942,7 +942,7 @@ func BenchmarkNetworkPerformance(b *testing.B) {
 
 		// we want to figure out what is the highest outgoing data rate on any of the relays.
 		highestBytesRate := 0
-		for relayIdx := 0; relayIdx < relayCount; relayIdx++ {
+		for relayIdx := range relayCount {
 			statFilter := statFilterFactory.nodes[relayIdx]
 			for _, metrics := range statFilter.tickOutgoingTraffic {
 				if metrics.Bytes > highestBytesRate {

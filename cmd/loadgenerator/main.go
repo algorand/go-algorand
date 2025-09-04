@@ -269,7 +269,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	var sendWaitGroup sync.WaitGroup
 	sendWaitGroup.Add(nroutines)
 	sent := make([]int, nroutines)
-	for i := 0; i < nroutines; i++ {
+	for i := range nroutines {
 		go func(base int) {
 			defer sendWaitGroup.Done()
 			for x := base; x < sendSize; x += nroutines {
@@ -287,7 +287,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	}
 	sendWaitGroup.Wait()
 	totalSent := 0
-	for i := 0; i < nroutines; i++ {
+	for i := range nroutines {
 		totalSent += sent[i]
 	}
 	dt := time.Since(start)

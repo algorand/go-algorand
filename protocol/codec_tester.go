@@ -514,7 +514,7 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 // consistency testing of object type specified by template.
 func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 	partitiontest.PartitionTest(t)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		err := EncodingTest(template)
 		if err == errSkipRawMsgpTesting {
 			// we want to skip the serilization test in this case.

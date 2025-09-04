@@ -52,7 +52,7 @@ func TestBasicMultisig(t *testing.T) {
 	r.NotEmpty(walletHandle, "Wallet handle should not be empty")
 	const numAccounts = uint8(3)
 	var addrs []string
-	for i := uint8(0); i < numAccounts; i++ {
+	for range numAccounts {
 		account, err := client.GenerateAddress(walletHandle)
 		r.NoError(err, "Generating address should not return error")
 		r.NotEmpty(account, "Address generation should not return empty string")
@@ -126,7 +126,7 @@ func TestZeroThreshold(t *testing.T) {
 	r.NotEmpty(walletHandle, "Wallet handle should not be empty")
 	const numAccounts = uint8(3)
 	var addrs []string
-	for i := uint8(0); i < numAccounts; i++ {
+	for range numAccounts {
 		account, err := client.GenerateAddress(walletHandle)
 		r.NoError(err, "Generating address should not return error")
 		r.NotEmpty(account, "Address generation should not return empty string")
@@ -189,7 +189,7 @@ func TestDuplicateKeys(t *testing.T) {
 	account, err := client.GenerateAddress(walletHandle)
 	r.NoError(err, "Generating address should not return error")
 	r.NotEmpty(account, "Address generation should not return empty string")
-	for i := uint8(0); i < numAccounts; i++ {
+	for range numAccounts {
 		addrs = append(addrs, account)
 	}
 	const threshold = numAccounts - 1
