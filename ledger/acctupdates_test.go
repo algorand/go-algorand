@@ -612,7 +612,7 @@ func testAcctUpdates(t *testing.T, conf config.Local) {
 					checkAcctUpdates(t, au, ao, 0, i, accts, rewardsLevels, proto)
 				}
 			}
-			for i := range github.com/algorand/go-algorand/data/basics.Round(15) {
+			for i := range basics.Round(15) {
 				// Clear the timer to ensure a flush
 				ml.trackers.lastFlushTime = time.Time{}
 

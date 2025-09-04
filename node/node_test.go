@@ -1396,7 +1396,7 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 
 	const initialRound = 1
 	const maxRounds = 3
-	for tests := range github.com/algorand/go-algorand/data/basics.Round(maxRounds) {
+	for tests := range basics.Round(maxRounds) {
 		blocks := make([]bookkeeping.Block, len(wallets))
 		for i := range wallets {
 			select {
