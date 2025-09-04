@@ -24,7 +24,7 @@ import (
 // DataDirs contains the list of data directories
 var DataDirs []string
 
-// ResolveDataDir determines the data directory to to use.
+// ResolveDataDir determines the data directory to use.
 // If not specified on cmdline with '-d', look for default in environment.
 func ResolveDataDir() string {
 	var dir string
