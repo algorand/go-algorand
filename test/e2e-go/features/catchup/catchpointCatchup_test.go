@@ -90,7 +90,7 @@ func denyRoundRequestsWebProxy(a *require.Assertions, listeningAddress string, r
 		// prevent requests for the given block to go through.
 		if request.URL.String() == fmt.Sprintf("/v1/test-v1/block/%d", round) {
 			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(fmt.Sprintf("webProxy prevents block %d from serving", round)))
+			response.Write(fmt.Appendf(nil, "webProxy prevents block %d from serving", round))
 			return
 		}
 		next(response, request)

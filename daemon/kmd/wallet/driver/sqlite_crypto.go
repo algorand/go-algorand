@@ -233,7 +233,7 @@ func decryptBlobWithPassword(blob []byte, ptType plaintextType, password []byte)
 // specifies the key to be derived
 func extractKeyWithIndex(derivationKey []byte, index uint64) (pk crypto.PublicKey, sk crypto.PrivateKey, err error) {
 	// The info tag is just the the utf-8 string representation of the index
-	info := []byte(fmt.Sprintf(hkdfInfoFormat, index))
+	info := fmt.Appendf(nil, hkdfInfoFormat, index)
 
 	// We can skip hkdf.Extract since our key is long and uniformly random
 	// Use the master derivation key and the index to generate a keystream

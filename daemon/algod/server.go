@@ -399,12 +399,12 @@ func (s *Server) Start() {
 	// quit earlier than these service files get created
 	s.pidFile = filepath.Join(s.RootPath, "algod.pid")
 	s.netFile = filepath.Join(s.RootPath, "algod.net")
-	err = os.WriteFile(s.pidFile, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
+	err = os.WriteFile(s.pidFile, fmt.Appendf(nil, "%d\n", os.Getpid()), 0644)
 	if err != nil {
 		fmt.Printf("pidfile error: %v\n", err)
 		os.Exit(1)
 	}
-	err = os.WriteFile(s.netFile, []byte(fmt.Sprintf("%s\n", addr)), 0644)
+	err = os.WriteFile(s.netFile, fmt.Appendf(nil, "%s\n", addr), 0644)
 	if err != nil {
 		fmt.Printf("netfile error: %v\n", err)
 		os.Exit(1)
@@ -413,7 +413,7 @@ func (s *Server) Start() {
 	listenAddr, listening := s.node.ListeningAddress()
 	if listening {
 		s.netListenFile = filepath.Join(s.RootPath, "algod-listen.net")
-		err = os.WriteFile(s.netListenFile, []byte(fmt.Sprintf("%s\n", listenAddr)), 0644)
+		err = os.WriteFile(s.netListenFile, fmt.Appendf(nil, "%s\n", listenAddr), 0644)
 		if err != nil {
 			fmt.Printf("netlistenfile error: %v\n", err)
 			os.Exit(1)

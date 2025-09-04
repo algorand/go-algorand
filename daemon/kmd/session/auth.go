@@ -91,8 +91,8 @@ func generateHandleIDAndSecret() ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 
-	hexID := []byte(fmt.Sprintf("%x", handleID))
-	hexSecret := []byte(fmt.Sprintf("%x", handleSecret))
+	hexID := fmt.Appendf(nil, "%x", handleID)
+	hexSecret := fmt.Appendf(nil, "%x", handleSecret)
 	return hexID, hexSecret, nil
 }
 
@@ -149,7 +149,7 @@ func (sm *Manager) InitWalletHandle(w wallet.Wallet, pw []byte) ([]byte, error) 
 	sm.mux.Lock()
 	defer sm.mux.Unlock()
 	sm.walletHandles[string(handleID)] = handle
-	handleToken := []byte(fmt.Sprintf("%s%s%s", handleID, wHandleTokenSplitChar, handleSecret))
+	handleToken := fmt.Appendf(nil, "%s%s%s", handleID, wHandleTokenSplitChar, handleSecret)
 
 	return handleToken, nil
 }

@@ -126,7 +126,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		if versionStr != "1" {
 			logging.Base().Debugf("LedgerService.ServeHTTP: bad version '%s'", versionStr)
 			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(fmt.Sprintf("unsupported version '%s'", versionStr)))
+			response.Write(fmt.Appendf(nil, "unsupported version '%s'", versionStr))
 			return
 		}
 	}
@@ -134,7 +134,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		if ls.genesisID != genesisID {
 			logging.Base().Debugf("LedgerService.ServeHTTP: bad genesisID mine=%#v theirs=%#v", ls.genesisID, genesisID)
 			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(fmt.Sprintf("mismatching genesisID '%s'", genesisID)))
+			response.Write(fmt.Appendf(nil, "mismatching genesisID '%s'", genesisID))
 			return
 		}
 	} else {
@@ -150,7 +150,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		if err != nil {
 			logging.Base().Debugf("LedgerService.ServeHTTP: parse form err : %v", err)
 			response.WriteHeader(http.StatusBadRequest)
-			response.Write([]byte(fmt.Sprintf("unable to parse form body : %v", err)))
+			response.Write(fmt.Appendf(nil, "unable to parse form body : %v", err))
 			return
 		}
 		roundStrs, ok := request.Form["r"]
@@ -167,13 +167,13 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 				if versionStrs[0] != "1" {
 					logging.Base().Debugf("LedgerService.ServeHTTP: bad version '%s'", versionStr)
 					response.WriteHeader(http.StatusBadRequest)
-					response.Write([]byte(fmt.Sprintf("unsupported version specified '%s'", versionStrs[0])))
+					response.Write(fmt.Appendf(nil, "unsupported version specified '%s'", versionStrs[0]))
 					return
 				}
 			} else {
 				logging.Base().Debugf("LedgerService.ServeHTTP: wrong number of v=%d args", len(versionStrs))
 				response.WriteHeader(http.StatusBadRequest)
-				response.Write([]byte(fmt.Sprintf("invalid number of version specified %d", len(versionStrs))))
+				response.Write(fmt.Appendf(nil, "invalid number of version specified %d", len(versionStrs)))
 				return
 			}
 		}
@@ -182,7 +182,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	if err != nil {
 		logging.Base().Debugf("LedgerService.ServeHTTP: round parse fail ('%s'): %v", roundStr, err)
 		response.WriteHeader(http.StatusBadRequest)
-		response.Write([]byte(fmt.Sprintf("specified round number could not be parsed using base 36 : %v", err)))
+		response.Write(fmt.Appendf(nil, "specified round number could not be parsed using base 36 : %v", err))
 		return
 	}
 	logging.Base().Infof("LedgerService.ServeHTTP: serving catchpoint round %d", round)
@@ -193,13 +193,13 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
 			response.WriteHeader(http.StatusNotFound)
-			response.Write([]byte(fmt.Sprintf("catchpoint file for round %d is not available", round)))
+			response.Write(fmt.Appendf(nil, "catchpoint file for round %d is not available", round))
 			return
 		default:
 			// unexpected error.
 			logging.Base().Warnf("LedgerService.ServeHTTP : failed to retrieve catchpoint %d %v", round, err)
 			response.WriteHeader(http.StatusInternalServerError)
-			response.Write([]byte(fmt.Sprintf("catchpoint file for round %d could not be retrieved due to internal error : %v", round, err)))
+			response.Write(fmt.Appendf(nil, "catchpoint file for round %d could not be retrieved due to internal error : %v", round, err))
 			return
 		}
 	}
@@ -237,7 +237,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	if err != nil {
 		logging.Base().Warnf("LedgerService.ServeHTTP : failed to decompress catchpoint %d %v", round, err)
 		response.WriteHeader(http.StatusInternalServerError)
-		response.Write([]byte(fmt.Sprintf("catchpoint file for round %d could not be decompressed due to internal error : %v", round, err)))
+		response.Write(fmt.Appendf(nil, "catchpoint file for round %d could not be decompressed due to internal error : %v", round, err))
 		return
 	}
 	defer decompressedGzip.Close()

@@ -147,7 +147,7 @@ func (ws *WalletServer) writeStateFiles(netAddr string) (err error) {
 		return
 	}
 	// pidPath file contains current process ID
-	err = os.WriteFile(ws.pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0640)
+	err = os.WriteFile(ws.pidPath, fmt.Appendf(nil, "%d", os.Getpid()), 0640)
 	return
 }
 

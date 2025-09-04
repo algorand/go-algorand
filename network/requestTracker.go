@@ -323,8 +323,8 @@ func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTi
 	// http handler can handle, or getting requests that fails before the header retrieval is complete.
 	// in this case, we want to send our response right away and disconnect. If the client is currently still sending it's request, it might not know how to handle
 	// this correctly. This use case is similar to the issue handled by the go-server in the same manner. ( see "431 Request Header Fields Too Large" in the server.go )
-	_, err = conn.Write([]byte(
-		fmt.Sprintf("HTTP/1.1 %d %s\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n%s: %d\r\n\r\n", http.StatusTooManyRequests, http.StatusText(http.StatusTooManyRequests), TooManyRequestsRetryAfterHeader, rt.config.ConnectionsRateLimitingWindowSeconds)))
+	_, err = conn.Write(
+		fmt.Appendf(nil, "HTTP/1.1 %d %s\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n%s: %d\r\n\r\n", http.StatusTooManyRequests, http.StatusText(http.StatusTooManyRequests), TooManyRequestsRetryAfterHeader, rt.config.ConnectionsRateLimitingWindowSeconds))
 	if err != nil {
 		rt.log.With("connection", "tcp").Debugf("Failed to write response to a blocked connection response: %v", err)
 		return

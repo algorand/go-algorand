@@ -42,7 +42,7 @@ var readOnlyParticipationVotes = []*crypto.OneTimeSignatureSecrets{}
 func init() {
 	rand.Seed(randseed)
 	for i := 0; i < 64; i++ {
-		prngSeed := []byte(fmt.Sprintf("Fuzzer-OTSS-PRNG-%d", i))
+		prngSeed := fmt.Appendf(nil, "Fuzzer-OTSS-PRNG-%d", i)
 		rng := crypto.MakePRNG(prngSeed)
 		readOnlyParticipationVotes = append(readOnlyParticipationVotes, crypto.GenerateOneTimeSignatureSecretsRNG(0, 1000, rng))
 	}

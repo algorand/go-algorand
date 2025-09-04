@@ -138,7 +138,7 @@ func (status CommandStatus) String() string {
 // ProcessRequest processes the command received via the CC Service
 func (agent *Agent) ProcessRequest(managementServiceRequest lib.CCServiceRequest) (err error) {
 	log.Infof("received command for %s\n", managementServiceRequest.Component)
-	err = agent.ServiceConnection.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("received request %+v ", managementServiceRequest)))
+	err = agent.ServiceConnection.WriteMessage(websocket.TextMessage, fmt.Appendf(nil, "received request %+v ", managementServiceRequest))
 	if err != nil {
 		log.Errorf("problem sending ack to client , %v", err)
 	}
@@ -225,7 +225,7 @@ func (agent *Agent) processPingPongComponentRequest(managementServiceRequest lib
 		err := componentInstance.Process(componentCommand)
 		if err != nil {
 			log.Errorf("error processing ping pong component request %v", err)
-			err = agent.ServiceConnection.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("error processing request %+v with err: %v", managementServiceRequest, err)))
+			err = agent.ServiceConnection.WriteMessage(websocket.TextMessage, fmt.Appendf(nil, "error processing request %+v with err: %v", managementServiceRequest, err))
 			if err != nil {
 				log.Errorf("error sending message to service %v", err)
 			}

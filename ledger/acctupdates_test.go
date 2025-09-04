@@ -1082,7 +1082,7 @@ func TestKVCache(t *testing.T) {
 
 	kvMap := make(map[string][]byte)
 	for i := 0; i < kvCnt; i++ {
-		kvMap[fmt.Sprintf("%d", i)] = []byte(fmt.Sprintf("value%d", i))
+		kvMap[fmt.Sprintf("%d", i)] = fmt.Appendf(nil, "value%d", i)
 	}
 
 	// add kvsPerBlock KVs on each iteration. The first kvCnt/kvsPerBlock
@@ -2620,7 +2620,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	var currentRound basics.Round
 	kvMap := make(map[string][]byte)
 	for i := 0; i < kvCnt; i++ {
-		kvMap[fmt.Sprintf("%d", i)] = []byte(fmt.Sprintf("value%d", i))
+		kvMap[fmt.Sprintf("%d", i)] = fmt.Appendf(nil, "value%d", i)
 	}
 
 	// Iterate through rounds 1..9, creating KvDeltas and modifying some accounts/assets

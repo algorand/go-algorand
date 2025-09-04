@@ -135,7 +135,7 @@ func TestP2PSubmitTX(t *testing.T) {
 
 	// send messages from B and confirm that they get received by C (via A)
 	for i := 0; i < 10; i++ {
-		err = netB.Broadcast(context.Background(), protocol.TxnTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
+		err = netB.Broadcast(context.Background(), protocol.TxnTag, fmt.Appendf(nil, "hello %d", i), false, nil)
 		require.NoError(t, err)
 	}
 
@@ -224,7 +224,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	netB.RegisterValidatorHandlers(passThroughHandler)
 	netC.RegisterValidatorHandlers(passThroughHandler)
 	for i := 0; i < 10; i++ {
-		err = netA.Broadcast(context.Background(), protocol.TxnTag, []byte(fmt.Sprintf("test %d", i)), false, nil)
+		err = netA.Broadcast(context.Background(), protocol.TxnTag, fmt.Appendf(nil, "test %d", i), false, nil)
 		require.NoError(t, err)
 	}
 
@@ -309,7 +309,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	// send messages from B and confirm that they get received by C (via A)
 	for i := 0; i < 10; i++ {
-		err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
+		err = netB.Broadcast(context.Background(), testTag, fmt.Appendf(nil, "hello %d", i), false, nil)
 		require.NoError(t, err)
 	}
 
@@ -1333,9 +1333,9 @@ func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
 
 			// send messages from both nodes to each other and confirm they are received.
 			for i := 0; i < 10; i++ {
-				err = netA.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from A %d", i)), false, nil)
+				err = netA.Broadcast(context.Background(), testTag, fmt.Appendf(nil, "hello from A %d", i), false, nil)
 				require.NoError(t, err)
-				err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from B %d", i)), false, nil)
+				err = netB.Broadcast(context.Background(), testTag, fmt.Appendf(nil, "hello from B %d", i), false, nil)
 				require.NoError(t, err)
 			}
 

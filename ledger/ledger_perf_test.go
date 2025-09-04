@@ -249,7 +249,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			// add 1.
 			for k := uint64(0); k < numApps; k++ {
 				tx.Sender = creator
-				tx.Note = []byte(fmt.Sprintf("%d,%d,%d", i, j, k))
+				tx.Note = fmt.Appendf(nil, "%d,%d,%d", i, j, k)
 				tx.GenesisHash = crypto.Digest{1}
 
 				// add tx to block
@@ -279,7 +279,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 					tx = makeUnsignedASATx(createdAppIdx, basics.Address{}, i)
 					tx.OnCompletion = transactions.OptInOC
 					tx.Sender = acct
-					tx.Note = []byte(fmt.Sprintf("%d,%d,%d", i, j, k))
+					tx.Note = fmt.Appendf(nil, "%d,%d,%d", i, j, k)
 					tx.GenesisHash = crypto.Digest{1}
 					k++
 

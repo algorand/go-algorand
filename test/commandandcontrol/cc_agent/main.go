@@ -153,7 +153,7 @@ func main() {
 				log.Errorf("error processRequest: %v\n", err)
 				return
 			}
-			serverChannel <- []byte(fmt.Sprintf("agent %s is processing request %+v", component.GetHostAgent().Host.Name, managementServiceRequest))
+			serverChannel <- fmt.Appendf(nil, "agent %s is processing request %+v", component.GetHostAgent().Host.Name, managementServiceRequest)
 		}
 	}()
 
@@ -166,7 +166,7 @@ func main() {
 		case <-done:
 			return
 		case t := <-ticker.C:
-			err := serverWs.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("heartbeat from agent %s with time %s", component.GetHostAgent().Host.Name, t.String())))
+			err := serverWs.WriteMessage(websocket.TextMessage, fmt.Appendf(nil, "heartbeat from agent %s with time %s", component.GetHostAgent().Host.Name, t.String()))
 			if err != nil {
 				log.Error("write:", err)
 				return

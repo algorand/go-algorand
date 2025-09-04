@@ -78,5 +78,5 @@ func GenerateWalletID() ([]byte, error) {
 	if err != nil {
 		return []byte(""), err
 	}
-	return []byte(fmt.Sprintf("%x", bytes)), nil
+	return fmt.Appendf(nil, "%x", bytes), nil
 }

@@ -63,7 +63,7 @@ func main() {
 		}
 		if *webProxyLogFile != "" {
 			f, _ := os.OpenFile(*webProxyLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			f.Write([]byte(fmt.Sprintf("proxy saw request for %s\n", request.URL.String())))
+			f.Write(fmt.Appendf(nil, "proxy saw request for %s\n", request.URL.String()))
 			f.Close()
 		}
 

@@ -2033,7 +2033,7 @@ func BenchmarkLRUResources(b *testing.B) {
 	for i := 0; i < 850; i++ {
 		data.Data.ApprovalProgram = make([]byte, 8096*4)
 		data.Aidx = basics.CreatableIndex(1)
-		addrBytes := ([]byte(fmt.Sprintf("%d", i)))[:32]
+		addrBytes := (fmt.Appendf(nil, "%d", i))[:32]
 		var addr basics.Address
 		for i, b := range addrBytes {
 			addr[i] = b
@@ -2120,7 +2120,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 					var pv trackerdb.PersistedKVData
 					boxName := boxNames[i%totalBoxes]
 					b.StartTimer()
-					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.Round, &v)
+					err = lookupStmt.QueryRow(fmt.Appendf(nil, "%d", boxName)).Scan(&pv.Round, &v)
 					b.StopTimer()
 					require.NoError(b, err)
 					require.True(b, v.Valid)
@@ -2150,7 +2150,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 				for i := 0; i < b.N+lookback; i++ {
 					var pv trackerdb.PersistedKVData
 					boxName := boxNames[i%totalBoxes]
-					err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.Round, &v)
+					err = lookupStmt.QueryRow(fmt.Appendf(nil, "%d", boxName)).Scan(&pv.Round, &v)
 					require.NoError(b, err)
 					require.True(b, v.Valid)
 
@@ -2158,7 +2158,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 					if i >= lookback {
 						boxName = boxNames[(i-lookback)%totalBoxes]
 						b.StartTimer()
-						err = lookupStmt.QueryRow([]byte(fmt.Sprintf("%d", boxName))).Scan(&pv.Round, &v)
+						err = lookupStmt.QueryRow(fmt.Appendf(nil, "%d", boxName)).Scan(&pv.Round, &v)
 						b.StopTimer()
 						require.NoError(b, err)
 						require.True(b, v.Valid)

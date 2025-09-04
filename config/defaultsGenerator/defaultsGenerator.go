@@ -65,7 +65,7 @@ func main() {
 	localDefaultsBytes = append(localDefaultsBytes, []byte(autoGenHeader)...)
 
 	// add the package name:
-	localDefaultsBytes = append(localDefaultsBytes, []byte(fmt.Sprintf("\npackage %s\n\n", *packageName))...)
+	localDefaultsBytes = append(localDefaultsBytes, fmt.Appendf(nil, "\npackage %s\n\n", *packageName)...)
 
 	autoDefaultsBytes := []byte(prettyPrint(config.AutogenLocal, "go"))
 
