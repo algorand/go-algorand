@@ -480,7 +480,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	minParallelRequests := seedLookback
 
 	// Start the limited requests at max(1, 'seedLookback')
-	limitedParallelRequests := max(uint64(1), seedLookback)
+	limitedParallelRequests := max(1, seedLookback)
 
 	completed := make(map[basics.Round]chan bool)
 	var wg sync.WaitGroup
