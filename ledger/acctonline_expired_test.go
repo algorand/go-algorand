@@ -661,7 +661,7 @@ func BenchmarkExpiredOnlineCirculation(b *testing.B) {
 	var acctCounter uint64
 	for i := 0; i < totalAccounts/maxKeyregPerBlock; i++ {
 		blockCounter++
-		for j := 0; j < maxKeyregPerBlock; j++ {
+		for range maxKeyregPerBlock {
 			acctCounter++
 			// go online for a random number of rounds, from 400 to 1600
 			validFor := 400 + basics.Round(rand.Intn(1200))

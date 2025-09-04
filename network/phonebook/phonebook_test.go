@@ -45,7 +45,7 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 	uniformityTestLength := 250000 / len(set)
 	expected := (uniformityTestLength * getsize) / len(set)
 	counts := make([]int, len(set))
-	for i := 0; i < uniformityTestLength; i++ {
+	for range uniformityTestLength {
 		actual := ph.GetAddresses(getsize, RelayRole)
 		for i, known := range set {
 			for _, xa := range actual {
@@ -342,8 +342,8 @@ func TestPhonebookRoles(t *testing.T) {
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
 	for _, role := range []Role{RelayRole, ArchivalRole} {
-		for k := 0; k < 100; k++ {
-			for l := 0; l < 3; l++ {
+		for range 100 {
+			for l := range 3 {
 				entries := ph.GetAddresses(l, role)
 				if role == RelayRole {
 					for _, entry := range entries {

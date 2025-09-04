@@ -61,7 +61,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 	addresses := make([]basics.Address, numUsers)
 
 	genesis := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -191,7 +191,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	addresses := make([]basics.Address, numUsers)
 
 	genesis := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret

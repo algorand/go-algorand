@@ -42,7 +42,7 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 	b.Run(fmt.Sprintf("KeyInsert_%d", numKeys), func(b *testing.B) {
 		a := require.New(b)
 		for n := 0; n < b.N; n++ {
-			for key := 0; key < numKeys; key++ {
+			for key := range numKeys {
 				p := makeTestParticipation(a, key, basics.Round(0), basics.Round(1000000), 3)
 				registry.Insert(p)
 			}
@@ -53,7 +53,7 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 	b.Run(fmt.Sprintf("KeyRegistered_%d", numKeys), func(b *testing.B) {
 		a := require.New(b)
 		for n := 0; n < b.N; n++ {
-			for key := 0; key < numKeys; key++ {
+			for key := range numKeys {
 				p := makeTestParticipation(a, key, basics.Round(0), basics.Round(1000000), 3)
 
 				// Unfortunately we need to repeatedly clear out the registration fields to ensure the
@@ -71,7 +71,7 @@ func benchmarkKeyRegistration(numKeys int, b *testing.B) {
 	b.Run(fmt.Sprintf("NoOp_%d", numKeys), func(b *testing.B) {
 		a := require.New(b)
 		for n := 0; n < b.N; n++ {
-			for key := 0; key < numKeys; key++ {
+			for key := range numKeys {
 				p := makeTestParticipation(a, key, basics.Round(0), basics.Round(1000000), 3)
 				registry.Register(p.ID(), 50)
 			}

@@ -2968,7 +2968,7 @@ func parseIntImmArgs(program []byte, pos int) (intc []uint64, nextpc int, err er
 		return
 	}
 	intc = make([]uint64, numInts)
-	for i := uint64(0); i < numInts; i++ {
+	for i := range numInts {
 		if pos >= len(program) {
 			err = errShortIntImmArgs
 			return
@@ -3005,7 +3005,7 @@ func parseByteImmArgs(program []byte, pos int) (bytec [][]byte, nextpc int, err 
 		return
 	}
 	bytec = make([][]byte, numItems)
-	for i := uint64(0); i < numItems; i++ {
+	for i := range numItems {
 		if pos >= len(program) {
 			err = errShortByteImmArgs
 			return
@@ -3050,7 +3050,7 @@ func parseLabels(program []byte, pos int) (targets []int, nextpc int, err error)
 		err = errors.New("could not decode labels")
 		return
 	}
-	for i := 0; i < numOffsets; i++ {
+	for range numOffsets {
 		offset := decodeBranchOffset(program, pos)
 		target := end + offset
 		targets = append(targets, target)

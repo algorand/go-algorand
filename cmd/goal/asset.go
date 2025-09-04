@@ -671,7 +671,7 @@ func assetDecimalsFmt(amount uint64, decimals uint64) string {
 
 	// Otherwise, ensure there are decimals digits to the right of the decimal point
 	pow := uint64(1)
-	for i := uint64(0); i < decimals; i++ {
+	for range decimals {
 		pow *= 10
 	}
 	return fmt.Sprintf("%d.%0*d", amount/pow, decimals, amount%pow)

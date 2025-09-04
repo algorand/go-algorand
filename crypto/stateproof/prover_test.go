@@ -68,7 +68,7 @@ func hashBytes(hash hash.Hash, m []byte) []byte {
 func createParticipantSliceWithWeight(totalWeight, numberOfParticipant int, key *merklesignature.Verifier) []basics.Participant {
 	parts := make([]basics.Participant, 0, numberOfParticipant)
 
-	for i := 0; i < numberOfParticipant; i++ {
+	for range numberOfParticipant {
 		part := basics.Participant{
 			PK:     *key,
 			Weight: uint64(totalWeight / 2 / numberOfParticipant),
@@ -115,7 +115,7 @@ func generateProofForTesting(a *require.Assertions, doLargeTest bool) paramsForT
 	sig, err := signerInRound.SignBytes(data[:])
 	a.NoError(err, "failed to create keys")
 
-	for i := 0; i < npart; i++ {
+	for range npart {
 		sigs = append(sigs, sig)
 	}
 
@@ -267,7 +267,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	var parts []basics.Participant
 	var sigs []merklesignature.Signature
 
-	for i := 0; i < numPart; i++ {
+	for range numPart {
 		key := generateTestSigner(0, uint64(stateProofIntervalForTests)*8, stateProofIntervalForTests, a)
 
 		part := basics.Participant{
@@ -288,7 +288,7 @@ func TestSignatureCommitmentBinaryFormat(t *testing.T) {
 	b, err := MakeProver(data, stateProofIntervalForTests, uint64(totalWeight/(2*numPart)), parts, partcom, stateProofStrengthTargetForTests)
 	a.NoError(err)
 
-	for i := 0; i < numPart; i++ {
+	for i := range numPart {
 		a.False(b.Present(uint64(i)))
 		a.NoError(b.IsValid(uint64(i), &sigs[i], false))
 		b.Add(uint64(i), sigs[i])
@@ -387,7 +387,7 @@ func verifyMerklePath(idx uint64, pathLe byte, sigBytes []byte, parsedBytes int,
 
 	// use the verification path to hash siblings up to the root
 	parsedBytes += (16 - int(pathLe)) * 64
-	for i := uint8(0); i < pathLe; i++ {
+	for range pathLe {
 		var innerNodeBytes []byte
 
 		siblingHash := sigBytes[parsedBytes : parsedBytes+64]
@@ -545,11 +545,11 @@ func checkSigsArray(n int, a *require.Assertions) {
 	b := &Prover{
 		sigs: make([]sigslot, n),
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		b.sigs[i].L = uint64(i)
 		b.sigs[i].Weight = 1
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		pos, err := b.coinIndex(uint64(i))
 		a.NoError(err)
 		a.Equal(uint64(i), pos)
@@ -581,7 +581,7 @@ func TestCoinIndexBetweenWeights(t *testing.T) {
 	b := &Prover{
 		sigs: make([]sigslot, n),
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		b.sigs[i].Weight = 2
 	}
 
@@ -651,7 +651,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 	var parts []basics.Participant
 	//var partkeys []*merklesignature.Secrets
 	var sigs []merklesignature.Signature
-	for i := 0; i < npart; i++ {
+	for range npart {
 		signer := generateTestSigner(0, stateProofIntervalForTests+1, stateProofIntervalForTests, a)
 		part := basics.Participant{
 			PK:     *signer.GetVerifier(),
@@ -680,7 +680,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 				b.Error(err)
 			}
 
-			for i := 0; i < npart; i++ {
+			for i := range npart {
 				a.False(builder.Present(uint64(i)))
 				a.NoError(builder.IsValid(uint64(i), &sigs[i], true))
 				builder.Add(uint64(i), sigs[i])

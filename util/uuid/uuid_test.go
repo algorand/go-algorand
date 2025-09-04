@@ -27,7 +27,7 @@ import (
 func TestUUID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for i := 0; i < 500; i++ {
+	for range 500 {
 		s := New()
 		require.Equal(t, 36, len(s))
 		require.Equal(t, "-", string(s[8]))

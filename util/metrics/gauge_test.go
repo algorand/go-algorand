@@ -48,10 +48,10 @@ func TestMetricGauge(t *testing.T) {
 	})
 	metricService.Start(context.Background())
 	gauges := make([]*Gauge, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		gauges[i] = MakeGauge(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
 	}
-	for i := 0; i < 9; i++ {
+	for i := range 9 {
 		gauges[i%3].Set(uint64(i*100 + i))
 		// wait half-a cycle
 		time.Sleep(test.sampleRate / 2)

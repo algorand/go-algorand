@@ -30,7 +30,7 @@ type s struct {
 
 func BenchmarkCodecEncoder(b *testing.B) {
 	var s s
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		s.X[i] = byte(i)
 	}
 

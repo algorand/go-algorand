@@ -38,11 +38,11 @@ func TestNodeSerialization(t *testing.T) {
 	// create 1024 hashes.
 	leafsCount := 1024
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		mt1.Add(hashes[i][:])
 	}
 	for _, page := range mt1.cache.pageToNIDsPtr {
@@ -71,7 +71,7 @@ func (n *node) leafUsingChildrenLength() bool {
 
 func makeHashes(n int) [][]byte {
 	hashes := make([][]byte, n)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		buf := make([]byte, 32)
 		binary.BigEndian.PutUint64(buf, uint64(i))
 		h := crypto.Hash(buf)
@@ -88,7 +88,7 @@ func BenchmarkNodeLeafImplementation(b *testing.B) {
 		memConfig := defaultTestMemoryConfig
 		mt1, _ := MakeTrie(&memoryCommitter, memConfig)
 
-		for i := 0; i < len(hashes); i++ {
+		for i := range hashes {
 			mt1.Add(hashes[i][:])
 		}
 		b.ResetTimer()
@@ -110,7 +110,7 @@ func BenchmarkNodeLeafImplementation(b *testing.B) {
 		memConfig := defaultTestMemoryConfig
 		mt1, _ := MakeTrie(&memoryCommitter, memConfig)
 
-		for i := 0; i < len(hashes); i++ {
+		for i := range hashes {
 			mt1.Add(hashes[i][:])
 		}
 		b.ResetTimer()

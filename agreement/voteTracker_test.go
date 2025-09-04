@@ -198,12 +198,12 @@ func TestVoteTrackerProposeNoOp(t *testing.T) {
 
 	const NumUpperBound = 2000
 	inputVotes := make([]event, NumUpperBound)
-	for i := 0; i < len(inputVotes); i++ {
+	for i := range inputVotes {
 		inputVotes[i] = helper.MakeValidVoteAccepted(t, i, propose)
 	}
 
 	// here, each input is a separate test-case
-	for i := 0; i < NumUpperBound; i++ {
+	for i := range NumUpperBound {
 		testCase := determisticTraceTestCase{
 			inputs:          inputVotes[i : i+1],
 			expectedOutputs: nil, // we expect the input to panic
@@ -544,7 +544,7 @@ func TestVoteTrackerFiltersDuplicateVoteOnce(t *testing.T) {
 	const Num = 10
 	inputVotes := make([]event, Num+1)
 	expectedOutputs := make([]event, Num+1)
-	for i := 0; i < int(Num+1); i++ {
+	for i := range int(Num + 1) {
 		switch {
 		case i < Num:
 			inputVotes[i] = helper.MakeValidVoteAcceptedVal(t, i, next, Val1)
@@ -588,7 +588,7 @@ func TestVoteTrackerForwardsFirstEquivocation(t *testing.T) {
 
 	inputVotes := make([]event, V1V2Bound+1)
 	expectedOutputs := make([]event, V1V2Bound+1)
-	for i := 0; i < int(V1V2Bound+1); i++ {
+	for i := range int(V1V2Bound + 1) {
 		switch {
 		case i < V1Bound:
 			// these will eventually equivocate
@@ -643,7 +643,7 @@ func TestVoteTrackerFiltersFutureEquivocations(t *testing.T) {
 	const Num = 100
 	inputVotes := make([]event, Num)
 	expectedOutputs := make([]event, Num)
-	for i := 0; i < int(Num); i++ {
+	for i := range int(Num) {
 		switch {
 		case i == 0:
 			Val := proposalValue{BlockDigest: randomBlockHash()}

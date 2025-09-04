@@ -417,7 +417,7 @@ func TestBoxRW(t *testing.T) {
 		dl.txn(call.Args("set", "x", "ABCDEFGHI"), "replacement end 9")
 
 		// Advance more than 320 rounds, ensure box is still there
-		for i := 0; i < 330; i++ {
+		for range 330 {
 			dl.fullBlock()
 		}
 		time.Sleep(5 * time.Second) // balancesFlushInterval, so commit happens
@@ -511,7 +511,7 @@ assert
 		dl.txn(verifyAppCall.Args(uint64ToArgStr(proto.MinBalance+2*proto.BoxFlatMinBalance+23*proto.BoxByteMinBalance), "\x02", "\x17"))
 
 		// Advance more than 320 rounds, ensure box is still there
-		for i := 0; i < 330; i++ {
+		for range 330 {
 			dl.fullBlock()
 		}
 		time.Sleep(5 * time.Second) // balancesFlushInterval, so commit happens

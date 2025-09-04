@@ -409,7 +409,7 @@ func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest
 	// it should not go through because the defaultSendMessageTags should not be accepted
 	// and the connection should be dropped dropped
 	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
-	for p := 0; p < 100; p++ {
+	for range 100 {
 		if strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from") {
 			break
 		}
@@ -650,7 +650,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	cancel()
 
 	// try calling broadcast
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		netA.broadcaster.broadcast(ctx, tags[i], data[i], true, nil)
 	}
 
@@ -663,7 +663,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 
 	// try calling innerBroadcast
 	peers, _ := netA.peerSnapshot([]*wsPeer{})
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		request := broadcastRequest{tag: tags[i], data: data[i], enqueueTime: time.Now(), ctx: ctx}
 		netA.broadcaster.innerBroadcast(request, true, peers)
 	}
@@ -843,7 +843,7 @@ func TestLineNetwork(t *testing.T) {
 	counter.done = make(chan struct{})
 	counterDone := counter.done
 	counter.verbose = true
-	for i := 0; i < lineNetworkNumMessages; i++ {
+	for range lineNetworkNumMessages {
 		sendTime := time.Now().UnixNano()
 		var timeblob [8]byte
 		binary.LittleEndian.PutUint64(timeblob[:], uint64(sendTime))
@@ -920,7 +920,7 @@ func TestSlowHandlers(t *testing.T) {
 	}
 	ipi := 0
 	// start slow handler calls that will block all handler threads
-	for i := 0; i < incomingThreads; i++ {
+	for i := range incomingThreads {
 		data := []byte{byte(i)}
 		node.handler.readBuffer <- IncomingMessage{Sender: &injectionPeers[ipi], Tag: slowTag, Data: data, Net: node}
 		ipi++
@@ -928,7 +928,7 @@ func TestSlowHandlers(t *testing.T) {
 	defer slowCounter.Broadcast()
 
 	// start fast handler calls that won't get to run
-	for i := 0; i < incomingThreads; i++ {
+	for i := range incomingThreads {
 		data := []byte{byte(i)}
 		node.handler.readBuffer <- IncomingMessage{Sender: &injectionPeers[ipi], Tag: fastTag, Data: data, Net: node}
 		ipi++
@@ -936,7 +936,7 @@ func TestSlowHandlers(t *testing.T) {
 	ok := false
 	lastnw := -1
 	totalWait := 0
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		waitTime := int(1 << uint64(i))
 		time.Sleep(time.Duration(waitTime) * time.Millisecond)
 		totalWait += waitTime
@@ -998,14 +998,14 @@ func TestFloodingPeer(t *testing.T) {
 	const numBadPeers = 1
 	// start slow handler calls that will block some threads
 	ctx, cancel := context.WithCancel(context.Background())
-	for i := 0; i < numBadPeers; i++ {
+	for i := range numBadPeers {
 		myI := i
 		myIpi := ipi
 		go func() {
 			processed := make(chan struct{}, 1)
 			processed <- struct{}{}
 
-			for qi := 0; qi < incomingThreads*2; qi++ {
+			for qi := range incomingThreads * 2 {
 				data := []byte{byte(myI), byte(qi)}
 				select {
 				case <-processed:
@@ -1085,14 +1085,14 @@ func TestSlowOutboundPeer(t *testing.T) {
 	}
 	node.Start()
 	tctx, cf := context.WithTimeout(context.Background(), 5*time.Second)
-	for i := 0; i < sendBufferLength; i++ {
+	for i := range sendBufferLength {
 		t.Logf("broadcast %d", i)
 		sent := node.Broadcast(tctx, xtag, []byte{byte(i)}, true, nil)
 		require.NoError(t, sent)
 	}
 	cf()
 	ok := false
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		time.Sleep(time.Millisecond)
 		aoql := avgSendBufferHighPrioLength(node)
 		if aoql == sendBufferLength {
@@ -1106,7 +1106,7 @@ func TestSlowOutboundPeer(t *testing.T) {
 		if p == 0 {
 			continue
 		}
-		for j := 0; j < sendBufferLength; j++ {
+		for range sendBufferLength {
 			// throw away a message as if sent
 			<-destPeers[p].sendBufferHighPrio
 		}
@@ -2496,7 +2496,7 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 	clientConf.NetAddress = ""
 
 	var clients []*WebsocketNetwork
-	for i := 0; i < numClients; i++ {
+	for range numClients {
 		client := makeTestWebsocketNodeWithConfig(t, clientConf)
 		client.config.GossipFanout = 1
 		client.phonebook.ReplacePeerList([]string{relayAddr}, "default", phonebook.RelayRole)
@@ -2509,7 +2509,7 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 	readyTimeout := time.NewTimer(30 * time.Second)
 	waitReady(t, relay, readyTimeout.C)
 
-	for i := 0; i < numClients; i++ {
+	for i := range numClients {
 		waitReady(t, clients[i], readyTimeout.C)
 	}
 
@@ -2632,7 +2632,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 	waitReady(t, netB, readyTimeout.C)
 
 	currentTime := time.Now()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		err := netA.broadcastWithTimestamp(protocol.TxnTag, []byte("foo"), currentTime.Add(time.Hour*time.Duration(i-5)))
 		require.NoErrorf(t, err, "No error was expected")
 	}
@@ -2775,7 +2775,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	waitReady(t, netC, readyTimeout.C)
 
 	// send 5 messages from both netB and netC to netA
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
 		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
@@ -2799,7 +2799,7 @@ func TestForceMessageRelaying(t *testing.T) {
 	// hack the relayMessages on the netB so that it would start sending messages.
 	netB.relayMessages = true
 	// send additional 10 messages from netB
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3}, true, nil)
 		require.NoError(t, err)
 	}
@@ -3083,7 +3083,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 
 	messageArriveWg.Add(5) // we're expecting exactly 5 messages.
 	// send 5 messages of few types.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if failed.Load() != 0 {
 			t.Errorf("failed")
 			break
@@ -3187,7 +3187,7 @@ func TestWebsocketNetworkTXMessageOfInterestRelay(t *testing.T) {
 
 	messageArriveWg.Add(5 * 4) // we're expecting exactly 20 messages.
 	// send 5 messages of few types.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
@@ -3271,7 +3271,7 @@ func TestWebsocketNetworkTXMessageOfInterestForceTx(t *testing.T) {
 
 	messageArriveWg.Add(5 * 4) // we're expecting exactly 20 messages.
 	// send 5 messages of few types.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
@@ -3349,7 +3349,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 
 	netB.OnNetworkAdvance()
 	waitForMOIRefreshQuiet(netB)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if netB.wantTXGossip.Load() == uint32(wantTXGossipNo) {
 			break
 		}
@@ -3363,7 +3363,7 @@ func TestWebsocketNetworkTXMessageOfInterestNPN(t *testing.T) {
 
 	messageArriveWg.Add(5 * 3) // we're expecting exactly 15 messages.
 	// send 5 messages of few types.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil) // THESE WILL BE DROPPED
 		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
@@ -3455,7 +3455,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 
 	netB.OnNetworkAdvance()
 	waitForMOIRefreshQuiet(netB)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if netB.wantTXGossip.Load() == uint32(wantTXGossipYes) {
 			break
 		}
@@ -3468,7 +3468,7 @@ func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
 
 	messageArriveWg.Add(5 * 4) // we're expecting exactly 20 messages.
 	// send 5 messages of few types.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		netA.Broadcast(context.Background(), protocol.AgreementVoteTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.TxnTag, []byte{0, 1, 2, 3, 4}, true, nil)
 		netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0, 1, 2, 3, 4}, true, nil)
@@ -4083,7 +4083,7 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 	netA.tryConnect(s.URL, s.URL)
 	p := netA.peers[0]
 	var messageCount uint64
-	for x := 0; x < 1000; x++ {
+	for range 1000 {
 		messageCount = p.miMessageCount.Load()
 		if messageCount == 1 {
 			break
@@ -4485,14 +4485,14 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 		primaryRelayAddresses := make([]string, 0)
 		secondaryRelayAddresses := make([]string, 0)
 		extraSecondaryRelayAddresses := make([]string, 0)
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			relayID := alphaNumStr(2)
 			primaryRelayAddresses = append(primaryRelayAddresses, fmt.Sprintf("r-%s.algorand-%s.network",
 				relayID, network))
 			secondaryRelayAddresses = append(secondaryRelayAddresses, fmt.Sprintf("r-%s.algorand-%s.net",
 				relayID, network))
 		}
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			relayID := alphaNumStr(2) + "-" + alphaNumStr(1)
 			primaryRelayAddresses = append(primaryRelayAddresses, fmt.Sprintf("relay-%s.algorand-%s.network",
 				relayID, network))
@@ -4500,7 +4500,7 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 				relayID, network))
 		}
 		// Add additional secondary ones that intentionally do not duplicate primary ones
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			relayID := alphaNumStr(2) + "-" + alphaNumStr(1)
 			extraSecondaryRelayAddresses = append(extraSecondaryRelayAddresses, fmt.Sprintf("noduprelay-%s.algorand-%s.net",
 				relayID, network))
@@ -4579,7 +4579,7 @@ func TestSendMessageCallbacks(t *testing.T) {
 
 	// The for loop simulates netA receiving 100 UE block requests from netB
 	// and goes through the actual response code path to generate and send TS responses to netB
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		randInt := crypto.RandUint64()%(128) + 1
 		counter.Add(randInt)
 		topic := MakeTopic("val", []byte("blah"))
@@ -4622,7 +4622,7 @@ func TestSendMessageCallbackDrain(t *testing.T) {
 
 	var target, counter uint64
 	// send messages to the peer that won't read them so they will sit in the sendQueue
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		randInt := crypto.RandUint64()%(128) + 1
 		target += randInt
 		topic := MakeTopic("val", []byte("blah"))

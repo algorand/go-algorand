@@ -1497,7 +1497,7 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 	blk := genesisInitState.Block
 
 	// Fill ledger (and its cache) with blocks
-	for i := 0; i < 1024; i++ {
+	for range 1024 {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err := l.AddBlock(blk, agreement.Certificate{})
@@ -1563,7 +1563,7 @@ func testLedgerReload(t *testing.T, cfg config.Local) {
 	defer l.Close()
 
 	blk := genesisInitState.Block
-	for i := 0; i < 128; i++ {
+	for i := range 128 {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err = l.AddBlock(blk, agreement.Certificate{})
@@ -1625,7 +1625,7 @@ func generateCreatables(numElementsPerSegement int) (
 	asCounter3 := 0
 	apCounter3 := 0
 
-	for x := 0; x < 10; x++ {
+	for range 10 {
 		// find the assetid greater than at least 2 assetids
 		for cID, crtble := range randomCtbs {
 			switch crtble.Ctype {
@@ -1807,7 +1807,7 @@ func createBlkWithStateproof(t *testing.T, maxBlocks int, proto config.Consensus
 func addDummyBlock(t *testing.T, addresses []basics.Address, proto config.ConsensusParams, l *Ledger, initKeys map[basics.Address]*crypto.SignatureSecrets, genesisInitState ledgercore.InitState) {
 	numOfTransactions := 2
 	stxns := make([]transactions.SignedTxn, numOfTransactions)
-	for j := 0; j < numOfTransactions; j++ {
+	for j := range numOfTransactions {
 		txHeader := transactions.Header{
 			Sender:      addresses[0],
 			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
@@ -1879,9 +1879,9 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	curAddressIdx := 0
 	// run for maxBlocks rounds
 	// generate 1000 txn per block
-	for i := 0; i < maxBlocks; i++ {
+	for i := range maxBlocks {
 		stxns := make([]transactions.SignedTxn, 1000)
-		for j := 0; j < 1000; j++ {
+		for j := range 1000 {
 			txHeader := transactions.Header{
 				Sender:      addresses[curAddressIdx],
 				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
@@ -2133,11 +2133,11 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	txnIDs := make(map[basics.Round]map[transactions.Txid]struct{})
 	// run for maxBlocks rounds with random payment transactions
 	// generate 1000 txn per block
-	for i := 0; i < maxBlocks; i++ {
+	for i := range maxBlocks {
 		stxns := make([]transactions.SignedTxn, 10)
 		latest := l.Latest()
 		txnIDs[latest+1] = make(map[transactions.Txid]struct{})
-		for j := 0; j < 10; j++ {
+		for j := range 10 {
 			feeMult := rand.Intn(5) + 1
 			amountMult := rand.Intn(1000) + 1
 			receiver := ledgertesting.RandomAddress()
@@ -2556,7 +2556,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 	txnIDs := make(map[basics.Round]map[transactions.Txid]struct{})
 	// run for maxBlocks rounds with random payment transactions
 	// generate numTxns txn per block
-	for i := 0; i < maxBlocks; i++ {
+	for i := range maxBlocks {
 		numTxns := crypto.RandUint64()%9 + 7
 		stxns := make([]transactions.SignedTxn, numTxns)
 		latest := l.Latest()
@@ -2745,7 +2745,7 @@ func TestLedgerTxTailCachedBlockHeaders(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	maxBlocks := 2 * proto.MaxTxnLife
-	for i := uint64(0); i < maxBlocks; i++ {
+	for i := range maxBlocks {
 		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
 		if i%100 == 0 || i == maxBlocks-1 {
@@ -2825,12 +2825,12 @@ func TestLedgerKeyregFlip(t *testing.T) {
 	}
 	// run for numFullBlocks rounds
 	// generate 10 txn per block
-	for i := 0; i < numFullBlocks; i++ {
+	for i := range numFullBlocks {
 		stxns := make([]transactions.SignedTxn, numAccounts)
 		latest := l.Latest()
 		require.Equal(t, basics.Round(i), latest)
 		seed := int(crypto.RandUint63() % 1_000_000)
-		for j := 0; j < numAccounts; j++ {
+		for j := range numAccounts {
 			txHeader := transactions.Header{
 				Sender:      addresses[j],
 				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
@@ -2867,7 +2867,7 @@ func TestLedgerKeyregFlip(t *testing.T) {
 		}
 		err = l.addBlockTxns(t, genesisInitState.Accounts, stxns, transactions.ApplyData{})
 		require.NoError(t, err)
-		for k := 0; k < numAccounts; k++ {
+		for k := range numAccounts {
 			data, rnd, _, err := l.LookupAccount(basics.Round(i+1), addresses[k])
 			require.NoError(t, err)
 			require.Equal(t, rnd, basics.Round(i+1))
@@ -2887,7 +2887,7 @@ func TestLedgerKeyregFlip(t *testing.T) {
 	l.WaitForCommit(l.Latest())
 	require.Equal(t, basics.Round(numFullBlocks), l.Latest())
 
-	for i := 0; i < numEmptyBlocks; i++ {
+	for i := range numEmptyBlocks {
 		nextRound := basics.Round(numFullBlocks + i + 1)
 		balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
 		acctRoundIdx := int(balancesRound) - 1
@@ -2895,7 +2895,7 @@ func TestLedgerKeyregFlip(t *testing.T) {
 			// checked all saved history, stop
 			break
 		}
-		for k := 0; k < numAccounts; k++ {
+		for k := range numAccounts {
 			od, err := l.LookupAgreement(balancesRound, addresses[k])
 			require.NoError(t, err)
 			data := accounts[acctRoundIdx][k]
@@ -3283,7 +3283,7 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	lastStateProofContextConfirmedRound := firstStateProofContextConfirmedRound + proto.StateProofInterval*(numOfStateProofs-1)
 	lastStateProofContextTargetRound := lastStateProofContextConfirmedRound + proto.StateProofInterval
 
-	for i := uint64(0); i < lastStateProofContextConfirmedRound; i++ {
+	for range lastStateProofContextConfirmedRound {
 		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
 	}
 
@@ -3446,7 +3446,7 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 	defer l.Close()
 
 	// make 1500 blocks
-	for i := 0; i < 1500; i++ {
+	for range 1500 {
 		eval := nextBlock(t, l)
 		endBlock(t, l, eval)
 	}

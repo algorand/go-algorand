@@ -85,7 +85,7 @@ func TestIndexing(t *testing.T) {
 
 func vcSizeInnerTest(size uint64) *vectorCommitmentArray {
 	testArray := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		crypto.RandBytes(testArray[i][:])
 	}
 	return generateVectorCommitmentArray(testArray)
@@ -179,7 +179,7 @@ func TestVcArrayPadding(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testArray := make(TestArray, 11)
-	for i := uint64(0); i < 11; i++ {
+	for i := range uint64(11) {
 		crypto.RandBytes(testArray[i][:])
 	}
 	vc := generateVectorCommitmentArray(testArray)

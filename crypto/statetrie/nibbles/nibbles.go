@@ -45,7 +45,7 @@ const (
 func Pack(nyb Nibbles) ([]byte, bool) {
 	length := len(nyb)
 	data := make([]byte, length/2+length%2, length/2+length%2+1)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		if i%2 == 0 {
 			data[i/2] = nyb[i] << 4
 		} else {
@@ -84,7 +84,7 @@ func ShiftLeft(nyb1 Nibbles, numNibbles int) Nibbles {
 // between nyb1 and nyb2
 func SharedPrefix(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
 	minLength := min(len(nyb2), len(nyb1))
-	for i := 0; i < minLength; i++ {
+	for i := range minLength {
 		if nyb1[i] != nyb2[i] {
 			return nyb1[:i]
 		}

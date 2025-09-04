@@ -412,7 +412,7 @@ func (n *P2PNetwork) Start() error {
 		n.wsPeersConnectivityCheckTicker.Stop()
 	}
 	n.wsPeersConnectivityCheckTicker = time.NewTicker(connectionActivityMonitorInterval)
-	for i := 0; i < incomingThreads; i++ {
+	for range incomingThreads {
 		n.wg.Add(1)
 		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
 		go n.handler.messageHandlerThread(&n.wg, n.wsPeersConnectivityCheckTicker.C, n, "network", "P2PNetwork")
@@ -1060,7 +1060,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	const threads = incomingThreads / 2 // perf tests showed that 10 (half of incomingThreads) was optimal in terms of TPS (attempted 1, 5, 10, 20)
 	var wg sync.WaitGroup
 	wg.Add(threads)
-	for i := 0; i < threads; i++ {
+	for range threads {
 		go func(ctx context.Context, sub p2p.SubNextCancellable, wantTXGossip *atomic.Bool, peerID peer.ID, log logging.Logger) {
 			defer wg.Done()
 			for {

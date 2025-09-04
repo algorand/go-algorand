@@ -226,7 +226,7 @@ func (b *Prover) CreateProof() (*StateProof, error) {
 
 	var proofPositions []uint64
 	revealsSequence := make([]uint64, nr)
-	for j := uint64(0); j < nr; j++ {
+	for j := range nr {
 		coin := coinHash.getNextCoin()
 		pos, idxErr := b.coinIndex(coin)
 		if idxErr != nil {

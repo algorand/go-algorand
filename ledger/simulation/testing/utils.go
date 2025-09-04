@@ -283,7 +283,7 @@ func PrepareSimulatorTest(t *testing.T) Environment {
 
 	// append a random number of blocks to ensure simulation results have a valid LastRound field
 	numBlocks := rand.Intn(4)
-	for i := 0; i < numBlocks; i++ {
+	for range numBlocks {
 		nextBlock := bookkeeping.MakeBlock(latestHeader)
 		nextBlock.TxnCounter = latestHeader.TxnCounter
 		err = ledger.AddBlock(nextBlock, agreement.Certificate{})

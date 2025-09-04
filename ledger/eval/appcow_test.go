@@ -209,7 +209,7 @@ func (st *stateTracker) del(aapp addrApp, key string) error {
 func randomAddrApps(n int) ([]storagePtr, []basics.Address) {
 	out := make([]storagePtr, n)
 	outa := make([]basics.Address, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out[i] = storagePtr{
 			aidx:   basics.AppIndex(rand.Intn(100000) + 1),
 			global: rand.Intn(2) == 0,
@@ -237,12 +237,12 @@ func TestCowStorage(t *testing.T) {
 	childDepth := 0
 
 	allKeys := make([]string, 10)
-	for i := 0; i < len(allKeys); i++ {
+	for i := range allKeys {
 		allKeys[i] = fmt.Sprintf("%d", i)
 	}
 
 	allValues := make([]basics.TealValue, 100)
-	for i := 0; i < len(allValues); i++ {
+	for i := range allValues {
 		if i%2 == 0 {
 			allValues[i] = basics.TealValue{
 				Type:  basics.TealBytesType,
@@ -257,7 +257,7 @@ func TestCowStorage(t *testing.T) {
 	}
 
 	iters := 1000
-	for i := 0; i < iters; i++ {
+	for range iters {
 		// Pick a random sptr
 		r := rand.Intn(len(allSptrs))
 		sptr := allSptrs[r]

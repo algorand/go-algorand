@@ -47,7 +47,7 @@ func makeMsgPool(N int, peers []Peer) (out []IncomingMessage) {
 		}
 
 		addMsg := func(msgCount int) {
-			for i := 0; i < msgCount; i++ {
+			for i := range msgCount {
 				msg.Sender = peers[(int(msgIndex)+i)%len(peers)].(DisconnectableAddressablePeer)
 				timer += int64(7 * time.Nanosecond)
 				msg.Received = timer
@@ -118,7 +118,7 @@ func TestConnMonitorStageTiming(t *testing.T) {
 			break
 		}
 	}
-	for i := 0; i < len(stageTimings); i++ {
+	for i := range stageTimings {
 		if stageNotifyCalls[i] == 0 {
 			continue
 		}
@@ -135,10 +135,10 @@ func TestBucketsPruning(t *testing.T) {
 
 	bucketsCount := 100
 	curTime := time.Now().UnixNano()
-	for i := 0; i < bucketsCount; i++ {
+	for i := range bucketsCount {
 		perfMonitor := makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 		// create bucketsCount buckets, where i of them are before the "current" time stamp and bucketsCount-i are after the time stamp.
-		for j := 0; j < bucketsCount; j++ {
+		for j := range bucketsCount {
 			if j < i {
 				perfMonitor.pendingMessagesBuckets = append(perfMonitor.pendingMessagesBuckets, &pmPendingMessageBucket{endTime: curTime - 1})
 			} else {
@@ -149,10 +149,10 @@ func TestBucketsPruning(t *testing.T) {
 		require.Equal(t, bucketsCount-i, len(perfMonitor.pendingMessagesBuckets))
 	}
 
-	for i := 0; i < bucketsCount; i++ {
+	for i := range bucketsCount {
 		perfMonitor := makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 
-		for j := 0; j < bucketsCount; j++ {
+		for j := range bucketsCount {
 			perfMonitor.pendingMessagesBuckets = append(perfMonitor.pendingMessagesBuckets, &pmPendingMessageBucket{endTime: curTime + int64(j)})
 		}
 

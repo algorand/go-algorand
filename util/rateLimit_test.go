@@ -186,22 +186,22 @@ func TestREDCongestionManagerShouldDrop(t *testing.T) {
 	red.targetRateRefreshTicks = 1
 	red.Start()
 	// indicate that the arrival rate is essentially 1/s
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		red.Consumed(client, time.Now())
 	}
 	// indicate that the service rate is essentially 0.9/s
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		red.Served(time.Now())
 	}
 	// allow the statistics to catch up before asserting
 	time.Sleep(100 * time.Millisecond)
 	// the service rate should be 0.9/s, and the arrival rate for this client should be 1/s
 	// for this reason, it should always drop the message
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		assert.True(t, red.ShouldDrop(client))
 	}
 	// this caller hasn't consumed any capacity before, so it won't need to drop
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		assert.False(t, red.ShouldDrop(other))
 	}
 	// allow the congestion manager to consume and process the given messages
@@ -225,15 +225,15 @@ func TestREDCongestionManagerShouldntDrop(t *testing.T) {
 	red.Consumed(client, time.Now())
 
 	// drive 10k messages, in batches of 500, with 100ms sleeps
-	for i := 0; i < 20; i++ {
-		for j := 0; j < 500; j++ {
+	for range 20 {
+		for range 500 {
 			red.Served(time.Now())
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	// the service rate should be 1000/s, and the arrival rate for this client should be 0.1/s
 	// for this reason, shouldDrop should almost certainly return false (true only 1/100k times)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		assert.False(t, red.ShouldDrop(client))
 	}
 	// allow the congestion manager to consume and process the given messages

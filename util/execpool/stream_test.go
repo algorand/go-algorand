@@ -142,7 +142,7 @@ func TestStreamToBatchBasic(t *testing.T) {
 	}
 	numError := fmt.Errorf("err on GetNumberOfBatchableItems")
 	mockJobs := make([]*mockJob, numJobs, numJobs)
-	for i := 0; i < numJobs; i++ {
+	for i := range numJobs {
 		mockJobs[i] = &mockJob{
 			id: i,
 			// get some jobs with 0 items too
@@ -172,7 +172,7 @@ func TestStreamToBatchBasic(t *testing.T) {
 		<-done
 	}()
 	wg.Wait()
-	for i := 0; i < numJobs; i++ {
+	for i := range numJobs {
 		if i%99 == 0 {
 			// this should be GetNumberOfBatchableItems
 			require.ErrorIs(t, mockJobs[i].returnError, numError)

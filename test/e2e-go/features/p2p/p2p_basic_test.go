@@ -96,7 +96,7 @@ func TestP2PTwoNodes(t *testing.T) {
 		return b
 	}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, randNote(t))
 		pongTxidsToAddresses[pongTx.ID().String()] = pongAccount
 		require.NoError(t, err)

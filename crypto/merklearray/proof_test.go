@@ -30,7 +30,7 @@ func TestProofSerialization(t *testing.T) {
 	a := require.New(t)
 
 	array := make(TestArray, 3)
-	for i := uint64(0); i < 3; i++ {
+	for i := range uint64(3) {
 		crypto.RandBytes(array[i][:])
 	}
 
@@ -89,7 +89,7 @@ func TestProofSerializationMaxTree(t *testing.T) {
 	a := require.New(t)
 
 	array := make(TestArray, MaxNumLeavesOnEncodedTree)
-	for i := uint64(0); i < MaxNumLeavesOnEncodedTree; i++ {
+	for i := range uint64(MaxNumLeavesOnEncodedTree) {
 		crypto.RandBytes(array[i][:])
 	}
 
@@ -103,7 +103,7 @@ func TestProofSerializationMaxTree(t *testing.T) {
 	a.Equal(len(data), 1+(MaxEncodedTreeDepth*crypto.Sha512_256Size))
 
 	proofData := data[1:]
-	for i := 0; i < MaxEncodedTreeDepth; i++ {
+	for i := range MaxEncodedTreeDepth {
 		a.Equal([]byte(p.Path[i]), proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
 	}
 }
@@ -127,7 +127,7 @@ func TestProofSerializationOneLeafTree(t *testing.T) {
 	zeroDigest := make([]byte, crypto.Sha512_256Size)
 
 	proofData := data[1:]
-	for i := 0; i < MaxEncodedTreeDepth; i++ {
+	for i := range MaxEncodedTreeDepth {
 		a.Equal(zeroDigest, proofData[crypto.Sha512_256Size*i:crypto.Sha512_256Size*(i+1)])
 	}
 
@@ -138,7 +138,7 @@ func TestConcatenatedProofsMissingChild(t *testing.T) {
 	a := require.New(t)
 
 	array := make(TestArray, 7)
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		crypto.RandBytes(array[i][:])
 	}
 
@@ -172,7 +172,7 @@ func TestConcatenatedProofsFullTree(t *testing.T) {
 	a := require.New(t)
 
 	array := make(TestArray, 8)
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		crypto.RandBytes(array[i][:])
 	}
 

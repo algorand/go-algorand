@@ -70,7 +70,7 @@ func (l *List[T]) AllocateFreeNodes(numAllocs int) *List[T] {
 	if l.freeList == nil {
 		return l
 	}
-	for i := 0; i < numAllocs; i++ {
+	for range numAllocs {
 		l.insertNodeToFreeList(new(ListNode[T]))
 	}
 

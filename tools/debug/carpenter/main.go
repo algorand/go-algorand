@@ -296,20 +296,20 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 	bodyTabWriter := tabwriter.NewWriter(os.Stdout, columnWidth, 0, 0, ' ', tabwriter.Debug)
 	sort.Strings(columns)
 	columnHeaders := ""
-	for i := 0; i < columnCount; i++ {
+	for i := range columnCount {
 		columnHeaders = fmt.Sprintf("%s%s\t", columnHeaders, columns[i])
 	}
 
 	outputRow(headerTabWriter, columnHeaders)
 
 	maxLen := len(out)
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		start := i * columnWidth
 		end := min(start+columnWidth, maxLen)
 		if start < len(out) {
 			row := strings.TrimSpace(out[start:end])
 			output := ""
-			for j := 0; j < len(columns); j++ {
+			for j := range columns {
 				if colPositions[event.Source] == j {
 					output = fmt.Sprintf("%s%s", output, row)
 				}

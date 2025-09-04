@@ -285,7 +285,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 		// if account has created assets, have these defined.
 		createdAssetsCount := crypto.RandUint64()%20 + 1
 		data.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, createdAssetsCount)
-		for i := uint64(0); i < createdAssetsCount; i++ {
+		for range createdAssetsCount {
 			ap := RandomAssetParams()
 			*lastCreatableID++
 			data.AssetParams[basics.AssetIndex(*lastCreatableID)] = ap
@@ -296,7 +296,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 		// if account owns assets
 		ownedAssetsCount := crypto.RandUint64()%20 + 1
 		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding, ownedAssetsCount)
-		for i := uint64(0); i < ownedAssetsCount; i++ {
+		for range ownedAssetsCount {
 			ah := RandomAssetHolding(false)
 			var aidx basics.AssetIndex
 			for {
@@ -316,7 +316,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 	if (crypto.RandUint64() % 3) == 1 {
 		appParamsCount := crypto.RandUint64()%5 + 1
 		data.AppParams = make(map[basics.AppIndex]basics.AppParams, appParamsCount)
-		for i := uint64(0); i < appParamsCount; i++ {
+		for range appParamsCount {
 			ap := RandomAppParams()
 			*lastCreatableID++
 			data.AppParams[basics.AppIndex(*lastCreatableID)] = ap
@@ -326,7 +326,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 	if (crypto.RandUint64()%3 == 1) && (len(apps) > 0) {
 		appStatesCount := crypto.RandUint64()%20 + 1
 		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, appStatesCount)
-		for i := uint64(0); i < appStatesCount; i++ {
+		for range appStatesCount {
 			ap := RandomAppLocalState()
 			var aidx basics.AppIndex
 			for {
@@ -359,14 +359,14 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 func RandomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.AccountData {
 	res := make(map[basics.Address]basics.AccountData)
 	if simpleAccounts {
-		for i := 0; i < niter; i++ {
+		for range niter {
 			res[RandomAddress()] = RandomAccountData(0)
 		}
 	} else {
 		lastCreatableID := basics.CreatableIndex(crypto.RandUint64() % 512)
 		assets := make(map[basics.AssetIndex]struct{})
 		apps := make(map[basics.AppIndex]struct{})
-		for i := 0; i < niter; i++ {
+		for range niter {
 			res[RandomAddress()] = RandomFullAccountData(0, &lastCreatableID, assets, apps)
 		}
 	}
@@ -514,7 +514,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 	}
 
 	// Change some new accounts
-	for i := 0; i < niter; i++ {
+	for range niter {
 		addr := RandomAddress()
 		old := totals[addr]
 		var new ledgercore.AccountData

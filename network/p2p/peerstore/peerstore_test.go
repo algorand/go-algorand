@@ -55,7 +55,7 @@ func TestPeerstore(t *testing.T) {
 	// add peer addresses
 	var addrs []string
 	var peerIDs []peer.ID
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		privKey, _, err := libp2p_crypto.GenerateEd25519Key(rand.Reader)
 		require.NoError(t, err)
 		peerID, err := peer.IDFromPrivateKey(privKey)
@@ -114,10 +114,10 @@ func testPhonebookUniform(t *testing.T, set []*peer.AddrInfo, ph *PeerStore, get
 	uniformityTestLength := 250000 / len(set)
 	expected := (uniformityTestLength * getsize) / len(set)
 	counts := make(map[string]int)
-	for i := 0; i < len(set); i++ {
+	for i := range set {
 		counts[set[i].ID.String()] = 0
 	}
-	for i := 0; i < uniformityTestLength; i++ {
+	for range uniformityTestLength {
 		actual := ph.GetAddresses(getsize, phonebook.RelayRole)
 		for _, info := range actual {
 			if _, ok := counts[info.ID.String()]; ok {
@@ -472,8 +472,8 @@ func TestPhonebookRoles(t *testing.T) {
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
 	for _, role := range []phonebook.Role{phonebook.RelayRole, phonebook.ArchivalRole} {
-		for k := 0; k < 100; k++ {
-			for l := 0; l < 3; l++ {
+		for range 100 {
+			for l := range 3 {
 				entries := ph.GetAddresses(l, role)
 				if role == phonebook.RelayRole {
 					for _, entry := range entries {

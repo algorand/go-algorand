@@ -32,7 +32,7 @@ func cascadeCreateAndFundAccounts(amountToSend, transactionFee uint64, fundingAc
 	outputTxidsToAccounts := make(map[string]string)
 	const txnPoolLimit = 5 // wait for 5 txns to confirm at a time, as transaction pool rejects more than 5 txns from the same acct at a time
 	i := 0                 // for assert debug messages
-	for j := 0; j < txnPoolLimit; j++ {
+	for range txnPoolLimit {
 		wh, err := client.GetUnencryptedWalletHandle()
 		a.NoError(err, "should be able to get unencrypted wallet handle")
 		newAddress, err := client.GenerateAddress(wh)

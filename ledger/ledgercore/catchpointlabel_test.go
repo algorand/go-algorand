@@ -35,7 +35,7 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 	stateProofVerificationContextHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
 	totals := []AccountTotals{}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ledgerRoundBlockHashes = append(ledgerRoundBlockHashes, crypto.Hash([]byte{byte(i)}))
 		stateProofVerificationContextHashes = append(stateProofVerificationContextHashes, crypto.Hash([]byte{byte(i), byte(1)}))
 		balancesMerkleRoots = append(balancesMerkleRoots, crypto.Hash([]byte{byte(i), byte(i), byte(1)}))
@@ -69,7 +69,7 @@ func TestCatchpointLabelParsing(t *testing.T) {
 	stateProofVerificationContextHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
 	totals := []AccountTotals{}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ledgerRoundBlockHashes = append(ledgerRoundBlockHashes, crypto.Hash([]byte{byte(i)}))
 		stateProofVerificationContextHashes = append(stateProofVerificationContextHashes, crypto.Hash([]byte{byte(i), byte(1)}))
 		balancesMerkleRoots = append(balancesMerkleRoots, crypto.Hash([]byte{byte(i), byte(i), byte(1)}))

@@ -273,7 +273,7 @@ func TestPeerSelector_HistoricData(t *testing.T) {
 	)
 
 	var counters [5]int
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		psp, getPeerErr := peerSelector.getNextPeer()
 		require.NoError(t, getPeerErr)
 		peer := psp.Peer
@@ -347,7 +347,7 @@ func TestPeerSelector_PeersDownloadError(t *testing.T) {
 	)
 
 	var counters [5]int
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		psp, getPeerErr := peerSelector.getNextPeer()
 		peer := psp.Peer
 
@@ -423,7 +423,7 @@ func TestPeerSelector_Penalty(t *testing.T) {
 	)
 
 	var counters [5]int
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		psp, getPeerErr := peerSelector.getNextPeer()
 		peer := psp.Peer
 		switch peer.(*mockHTTPPeer).address {
@@ -548,7 +548,7 @@ func TestPeerSelector_PenaltyBounds(t *testing.T) {
 
 	class := peerClass{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivalNodes}
 	hs := makeHistoricStatus(peerHistoryWindowSize, class)
-	for x := 0; x < 65; x++ {
+	for x := range 65 {
 		r0 := hs.push(peerRank2LowBlockTime+50, uint64(x+1), class)
 		require.LessOrEqual(t, peerRank2LowBlockTime, r0)
 		require.GreaterOrEqual(t, peerRank2HighBlockTime, r0)
@@ -586,7 +586,7 @@ func TestPeerSelector_ClassUpperBound(t *testing.T) {
 
 	_, err := peerSelector.getNextPeer()
 	require.NoError(t, err)
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		psp, err := peerSelector.getNextPeer()
 		require.NoError(t, err)
 		if i < 6 {
@@ -621,7 +621,7 @@ func TestPeerSelector_ClassLowerBound(t *testing.T) {
 
 	_, err := peerSelector.getNextPeer()
 	require.NoError(t, err)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		psp, err := peerSelector.getNextPeer()
 		require.NoError(t, err)
 		peerSelector.rankPeer(psp, lowerBound(pClass))
@@ -655,7 +655,7 @@ func TestPeerSelector_EvictionAndUpgrade(t *testing.T) {
 
 	_, err := peerSelector.getNextPeer()
 	require.NoError(t, err)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if peerSelector.pools[len(peerSelector.pools)-1].rank == peerRankDownloadFailed {
 			require.Equal(t, 6, i)
 			break

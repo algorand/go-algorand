@@ -149,7 +149,7 @@ func AfterBlock(round basics.Round) Event {
 // OpcodeEvents returns a slice of events that represent calling `count` opcodes
 func OpcodeEvents(count int, endsWithError bool) []Event {
 	events := make([]Event, 0, count*2)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		hasError := false
 		if endsWithError && i+1 == count {
 			hasError = true

@@ -74,7 +74,7 @@ func (i *atomicInt) Add(other int) int {
 // IsText checks if the input has all printable characters with strconv.IsPrint
 func IsText(data []byte) bool {
 	printable := true
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		if !strconv.IsPrint(rune(data[i])) {
 			printable = false
 			break
@@ -86,7 +86,7 @@ func IsText(data []byte) bool {
 // IsTextFile checks the input with strconv.IsPrint and for tabs and new lines
 func IsTextFile(data []byte) bool {
 	printable := true
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		ch := data[i]
 		if !strconv.IsPrint(rune(ch)) && ch != '\n' && ch != '\r' && ch != '\t' {
 			printable = false

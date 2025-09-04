@@ -58,7 +58,7 @@ func TestBatchVerifierBulk(t *testing.T) {
 		bv := MakeBatchVerifierWithHint(n)
 		var s Seed
 
-		for i := 0; i < n; i++ {
+		for range n {
 			msg := randString()
 			RandBytes(s[:])
 			sigSecrets := GenerateSignatureSecrets(s)
@@ -78,7 +78,7 @@ func TestBatchVerifierBulkWithExpand(t *testing.T) {
 	var s Seed
 	RandBytes(s[:])
 
-	for i := 0; i < n; i++ {
+	for range n {
 		msg := randString()
 		sigSecrets := GenerateSignatureSecrets(s)
 		sig := sigSecrets.Sign(msg)
@@ -204,7 +204,7 @@ func TestBatchVerifierIndividualResults(t *testing.T) {
 		var s Seed
 		badSigs := make([]bool, n, n)
 		hasBadSig := false
-		for i := 0; i < n; i++ {
+		for i := range n {
 			msg := randString()
 			RandBytes(s[:])
 			sigSecrets := GenerateSignatureSecrets(s)
@@ -240,7 +240,7 @@ func TestBatchVerifierIndividualResultsAllValid(t *testing.T) {
 		n := i
 		bv := MakeBatchVerifierWithHint(n)
 		var s Seed
-		for i := 0; i < n; i++ {
+		for range n {
 			msg := randString()
 			RandBytes(s[:])
 			sigSecrets := GenerateSignatureSecrets(s)
@@ -261,14 +261,14 @@ func TestBatchVerifierGC(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const n = 128
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 
 			bv := MakeBatchVerifierWithHint(n)
 			var s Seed
 
-			for i := 0; i < n; i++ {
+			for range n {
 				msg := randString()
 				RandBytes(s[:])
 				sigSecrets := GenerateSignatureSecrets(s)

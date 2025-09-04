@@ -432,7 +432,7 @@ func TestPlayerSynchronous(t *testing.T) {
 
 	player, router, accs, f, ledger := testPlayerSetup()
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		simulateSingleSynchronousRound(t, &router, &player, accs, f, ledger)
 	}
 }
@@ -452,7 +452,7 @@ func TestPlayerOffsetStart(t *testing.T) {
 
 	simulateSynchronousRoundRecovery(t, &router, &player, accs, f, ledger)
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		simulateSingleSynchronousRound(t, &router, &player, accs, f, ledger)
 	}
 }
@@ -485,7 +485,7 @@ func TestPlayerLateBlockProposalPeriod0(t *testing.T) {
 	act := simulateCertExpectEnsureAssemble(t, &router, &player, lowestProposal, certEventBatch)
 	ledger.EnsureBlock(act.Payload.Block, act.Certificate)
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		simulateSingleSynchronousRound(t, &router, &player, accs, f, ledger)
 	}
 }
@@ -3432,7 +3432,7 @@ func testPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T, addBette
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
 	require.True(t, pWhite.lowestCredentialArrivals.isFull())
-	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
+	for i := range dynamicFilterCredentialArrivalHistory {
 		// only the last historyLen samples are kept, so the first one is discarded
 		timestamp := 500 + i
 		if addBetterLate {
@@ -3639,7 +3639,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
 	require.True(t, pWhite.lowestCredentialArrivals.isFull())
-	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
+	for i := range dynamicFilterCredentialArrivalHistory {
 		// only the last historyLen samples are kept, so the first one is discarded
 		timestamp := 500 + i
 		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals.history[i])
@@ -3851,7 +3851,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
 	require.True(t, pWhite.lowestCredentialArrivals.isFull())
-	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
+	for i := range dynamicFilterCredentialArrivalHistory {
 		// only the last historyLen samples are kept, so the first one is discarded
 		timestamp := 500 + i
 		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals.history[i])

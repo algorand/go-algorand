@@ -38,7 +38,7 @@ func TestUnmarshallMessageOfInterestErrors(t *testing.T) {
 	require.Equal(t, 0, len(tags))
 
 	longTagsList := ""
-	for i := 0; i < 1024; i++ {
+	for range 1024 {
 		longTagsList += ",XQ"
 	}
 	longTagsList = longTagsList[1:]

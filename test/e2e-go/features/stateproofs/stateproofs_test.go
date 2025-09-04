@@ -238,7 +238,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 
 	// Get node libgoal clients in order to update their participation keys
 	libgoalNodeClients := make([]libgoal.Client, pNodes, pNodes)
-	for i := 0; i < pNodes; i++ {
+	for i := range pNodes {
 		nodeName := fmt.Sprintf("Node%d", i)
 		c := fixture.GetLibGoalClientForNamedNode(nodeName)
 		libgoalNodeClients[i] = c
@@ -262,14 +262,14 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 		if rnd == basics.Round(consensusParams.StateProofInterval)*5 { // allow some buffer period before the voting keys are expired (for the keyreg to take effect)
 			fmt.Println("at round.. installing", rnd)
 			// Generate participation keys (for the same accounts)
-			for i := 0; i < pNodes; i++ {
+			for i := range pNodes {
 				// Overlapping stateproof keys (the key for round 0 is valid up to 256)
 				_, part, err := installParticipationKey(t, libgoalNodeClients[i], accounts[i], 0, 400)
 				r.NoError(err)
 				participations[i] = part
 			}
 			// Register overlapping participation keys
-			for i := 0; i < pNodes; i++ {
+			for i := range pNodes {
 				registerParticipationAndWait(t, libgoalNodeClients[i], participations[i])
 			}
 		}
@@ -1078,7 +1078,7 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 	stxn := getWellformedSPTransaction(params.LastRound+1, genesisHash, consensusParams, t)
 
 	// Send well formed but bad stateproof transactions from two goroutines
-	for spSpam := 0; spSpam < 2; spSpam++ {
+	for range 2 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -1094,7 +1094,7 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 	}
 
 	// Send payment transactions from two goroutines
-	for txnSpam := 0; txnSpam < 2; txnSpam++ {
+	for txnSpam := range 2 {
 		wg.Add(1)
 		go func(amt uint64) {
 			defer wg.Done()
@@ -1215,7 +1215,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 	// Get node libgoal clients in order to update their participation keys
 	libgoalNodeClients := make([]libgoal.Client, pNodes, pNodes)
 	accountsAddresses := make([]string, pNodes, pNodes)
-	for i := 0; i < pNodes; i++ {
+	for i := range pNodes {
 		nodeName := fmt.Sprintf("Node%d", i)
 		libgoalNodeClients[i] = fixture.GetLibGoalClientForNamedNode(nodeName)
 		parts, err := libgoalNodeClients[i].GetParticipationKeys()
@@ -1259,7 +1259,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 			totalSupplyAtRound[rnd] = totalSupply
 
 			accountSnapshotAtRound[rnd] = make([]model.Account, pNodes, pNodes)
-			for i := 0; i < pNodes; i++ {
+			for i := range pNodes {
 				accountSnapshotAtRound[rnd][i], err = libgoalClient.AccountInformation(accountsAddresses[i], false)
 				r.NoError(err)
 				r.NotEqual(accountSnapshotAtRound[rnd][i].Amount, uint64(0))
@@ -1300,7 +1300,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 			// once the state proof is accepted we want to make sure that the weight
 			for _, v := range stateProof.Reveals {
 				found := false
-				for i := 0; i < len(accountSnapshot); i++ {
+				for i := range accountSnapshot {
 					if bytes.Compare(v.Part.PK.Commitment[:], *accountSnapshot[i].Participation.StateProofKey) == 0 {
 						r.Equal(v.Part.Weight, accountSnapshot[i].Amount)
 						found = true

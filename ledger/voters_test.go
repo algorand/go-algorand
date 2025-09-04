@@ -79,7 +79,7 @@ func checkVoters(a *require.Assertions, ao *onlineAccounts, expectedSize uint64)
 func makeRandomOnlineAccounts(numberOfAccounts uint64) map[basics.Address]basics.AccountData {
 	res := make(map[basics.Address]basics.AccountData)
 
-	for i := uint64(0); i < numberOfAccounts; i++ {
+	for range numberOfAccounts {
 		var data basics.AccountData
 
 		// Avoid overflowing totals

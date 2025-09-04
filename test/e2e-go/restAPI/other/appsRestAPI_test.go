@@ -268,7 +268,7 @@ end:
 		txns := make([]transactions.Transaction, len(boxNames))
 		txIDs := make(map[string]string, len(boxNames))
 
-		for i := 0; i < len(boxNames); i++ {
+		for i := range boxNames {
 			appArgs := [][]byte{
 				[]byte(operation),
 				[]byte(boxNames[i]),
@@ -290,7 +290,7 @@ end:
 		a.NoError(err)
 
 		stxns := make([]transactions.SignedTxn, len(boxNames))
-		for i := 0; i < len(boxNames); i++ {
+		for i := range boxNames {
 			txns[i].Group = gid
 			wh, err = testClient.GetUnencryptedWalletHandle()
 			a.NoError(err)

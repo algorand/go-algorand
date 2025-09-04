@@ -99,7 +99,7 @@ func processResults(ctx context.Context, errChan chan<- error, resultChan <-chan
 	defer wg.Done()
 	defer close(errChan)
 	// process the results
-	for x := 0; x < numOfTxnGroups; x++ {
+	for x := range numOfTxnGroups {
 		select {
 		case <-ctx.Done():
 		case result := <-resultChan:
@@ -393,13 +393,13 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	wg.Wait()
 
 	// Send more tasks to fill the queueof the backlog worker after the consumer shuts down
-	for x := 0; x < 100; x++ {
+	for range 100 {
 		verificationPool.EnqueueBacklog(context.Background(),
 			func(arg interface{}) interface{} { <-holdTasks; return nil }, nil, nil)
 	}
 
 	// make sure the EnqueueBacklogis returning err
-	for x := 0; x < 10; x++ {
+	for x := range 10 {
 		err := verificationPool.EnqueueBacklog(context.Background(),
 			func(arg interface{}) interface{} { return nil }, nil, nil)
 		require.Error(t, err, fmt.Sprintf("x = %d", x))
@@ -533,7 +533,7 @@ func TestStreamToBatchBlockWatcher(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for x := 0; x < 100; x++ {
+		for range 100 {
 			blkHdr.Round++
 			nbw.OnNewBlock(bookkeeping.Block{BlockHeader: blkHdr}, ledgercore.StateDelta{})
 			time.Sleep(10 * time.Millisecond)
@@ -754,7 +754,7 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 
 	var droppedPool uint64
 	// wait until overflow transactions are dropped
-	for w := 0; w < 100; w++ {
+	for range 100 {
 		droppedPool = droppedFromPool.GetUint64Value()
 		if droppedPool >= uint64(overflow) {
 			break

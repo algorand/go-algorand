@@ -214,7 +214,7 @@ func download() {
 	fetchPerServer := *connsFlag
 	for _, srv := range serverList {
 		wg.Add(fetchPerServer)
-		for i := 0; i < fetchPerServer; i++ {
+		for range fetchPerServer {
 			go fetcher(srv, &wg)
 		}
 	}

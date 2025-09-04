@@ -202,12 +202,12 @@ func (r *accountsReader) AccountsOnlineTop(rnd basics.Round, offset uint64, n ui
 	var value []byte
 
 	// first, drop the results from 0 to the offset
-	for i := uint64(0); i < offset; i++ {
+	for range offset {
 		iter.Next()
 	}
 
 	// add the other results to the map
-	for i := uint64(0); i < n; i++ {
+	for range n {
 		// if no more results, return early
 		if !iter.Next() {
 			return

@@ -163,7 +163,7 @@ func TestDisposableKeysGeneration(t *testing.T) {
 	a := require.New(t)
 
 	signer := generateTestSigner(0, 100, 1, a)
-	for i := uint64(0); i < 100; i++ {
+	for i := range uint64(100) {
 		k := signer.GetKey(i)
 		a.NotNil(k)
 	}

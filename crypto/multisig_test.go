@@ -51,7 +51,7 @@ func TestMultisigAddr(t *testing.T) {
 
 	secrets = make([]*SecretKey, 4)
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
 	}
@@ -94,7 +94,7 @@ func TestMultisig(t *testing.T) {
 	txid := TestingHashable{[]byte("test: txid 1000")}
 
 	secrets = make([]*SecretKey, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
 	}
@@ -174,7 +174,7 @@ func TestMultisigAddAndMerge(t *testing.T) {
 	RandBytes(s[:])
 
 	pks = make([]PublicKey, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		secrets[i] = GenerateSignatureSecrets(s)
 		pks[i] = secrets[i].SignatureVerifier
 	}
@@ -293,7 +293,7 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	threshold := uint8(1)
 	pks = make([]PublicKey, multiSigLen)
 	secrets = make([]*SecretKey, multiSigLen)
-	for i := 0; i < multiSigLen; i++ {
+	for i := range multiSigLen {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
 		pks[i] = secrets[i].SignatureVerifier
@@ -304,7 +304,7 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 
 	sigs := make([]MultisigSig, multiSigLen)
 
-	for i := 0; i < len(sigs); i++ {
+	for i := range sigs {
 		sigs[i], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[i])
 		require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk %v", i)
 	}
@@ -329,7 +329,7 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 	threshold := uint8(multiSigLen)
 	pks = make([]PublicKey, multiSigLen)
 	secrets = make([]*SecretKey, multiSigLen)
-	for i := 0; i < multiSigLen; i++ {
+	for i := range multiSigLen {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
 		pks[i] = secrets[i].SignatureVerifier
@@ -340,7 +340,7 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 
 	sigs := make([]MultisigSig, multiSigLen)
 
-	for i := 0; i < multiSigLen; i++ {
+	for i := range multiSigLen {
 		sigs[i], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[i])
 		require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk %v", i)
 	}
@@ -368,7 +368,7 @@ func TestOneSignatureIsInvalid(t *testing.T) {
 	threshold := uint8(3)
 	pks = make([]PublicKey, multiSigLen)
 	userkeypair = make([]*SecretKey, multiSigLen)
-	for i := 0; i < multiSigLen; i++ {
+	for i := range multiSigLen {
 		RandBytes(s[:])
 		userkeypair[i] = GenerateSignatureSecrets(s)
 		pks[i] = userkeypair[i].SignatureVerifier
@@ -379,7 +379,7 @@ func TestOneSignatureIsInvalid(t *testing.T) {
 
 	sigs := make([]MultisigSig, multiSigLen)
 
-	for i := 0; i < multiSigLen; i++ {
+	for i := range multiSigLen {
 		sigs[i], err = MultisigSign(txid, addr, version, threshold, pks, *userkeypair[i])
 		require.NoError(t, err, "Multisig: unexpected failure in generating sig from pk %v", i)
 	}
@@ -414,7 +414,7 @@ func TestMultisigLessThanTrashold(t *testing.T) {
 	txid := TestingHashable{[]byte("test: txid 1000")}
 
 	secrets = make([]*SecretKey, 4)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		RandBytes(s[:])
 		secrets[i] = GenerateSignatureSecrets(s)
 	}

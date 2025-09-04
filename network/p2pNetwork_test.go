@@ -134,7 +134,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	netC.RegisterValidatorHandlers(passThroughHandler)
 
 	// send messages from B and confirm that they get received by C (via A)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		err = netB.Broadcast(context.Background(), protocol.TxnTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
 		require.NoError(t, err)
 	}
@@ -223,7 +223,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	netB.RegisterValidatorHandlers(passThroughHandler)
 	netC.RegisterValidatorHandlers(passThroughHandler)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		err = netA.Broadcast(context.Background(), protocol.TxnTag, []byte(fmt.Sprintf("test %d", i)), false, nil)
 		require.NoError(t, err)
 	}
@@ -308,7 +308,7 @@ func TestP2PSubmitWS(t *testing.T) {
 	netC.RegisterHandlers(passThroughHandler)
 
 	// send messages from B and confirm that they get received by C (via A)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
 		require.NoError(t, err)
 	}
@@ -941,7 +941,7 @@ func TestP2PRelay(t *testing.T) {
 
 	// send 5 messages from netB to netA
 	// since relaying is disabled on net B => no messages should be received by net A
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3, byte(i)}, true, nil)
 		require.NoError(t, err)
 	}
@@ -994,14 +994,14 @@ func TestP2PRelay(t *testing.T) {
 	netA.ClearValidatorHandlers()
 	netA.RegisterValidatorHandlers(counterHandler)
 
-	for i := 0; i < expectedMsgs/2; i++ {
+	for i := range expectedMsgs / 2 {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{5, 6, 7, byte(i)}, true, nil)
 		require.NoError(t, err)
 		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{11, 12, 10 + byte(i), 14}, true, nil)
 		require.NoError(t, err)
 	}
 	// send some duplicate messages, they should be dropped
-	for i := 0; i < expectedMsgs/2; i++ {
+	for i := range expectedMsgs / 2 {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{5, 6, 7, byte(i)}, true, nil)
 		require.NoError(t, err)
 	}
@@ -1332,7 +1332,7 @@ func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
 			netB.RegisterHandlers(passThroughHandlerB)
 
 			// send messages from both nodes to each other and confirm they are received.
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				err = netA.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from A %d", i)), false, nil)
 				require.NoError(t, err)
 				err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from B %d", i)), false, nil)

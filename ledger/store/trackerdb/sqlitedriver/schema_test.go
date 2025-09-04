@@ -66,7 +66,7 @@ func TestAccountsReencoding(t *testing.T) {
 				return err
 			}
 		}
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			addr := ledgertesting.RandomAddress()
 			accData := basics.AccountData{
 				MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff},

@@ -1842,7 +1842,7 @@ int 1`
 
 		expectedMaxLogCalls, expectedMaxLogSize := 2048, 65536
 		expectedLog := make([]string, LogTimes)
-		for i := 0; i < LogTimes; i++ {
+		for i := range LogTimes {
 			expectedLog[i] = LogLongLine
 		}
 		return simulationTestCase{
@@ -1935,7 +1935,7 @@ int 1`
 		expectedMaxLogCalls, expectedMaxLogSize := 2048, 65536
 		actualLogTimes := 65536 / len(LogLongLine)
 		expectedLog := make([]string, actualLogTimes)
-		for i := 0; i < actualLogTimes; i++ {
+		for i := range actualLogTimes {
 			expectedLog[i] = LogLongLine
 		}
 		return simulationTestCase{

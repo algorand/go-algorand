@@ -69,7 +69,7 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 		syncer := MakeService(logging.TestingLog(b), defaultConfig, net, local, new(mockedAuthenticator), nil, nil)
 		b.StartTimer()
 		syncer.Start()
-		for w := 0; w < 1000; w++ {
+		for range 1000 {
 			if remote.LastRound() == local.LastRound() {
 				break
 			}
@@ -100,7 +100,7 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 	genesis := make(map[basics.Address]basics.AccountData)
 	gen := rand.New(rand.NewSource(2))
 	parts := make([]account.Participation, P)
-	for i := 0; i < P; i++ {
+	for i := range P {
 		access, err := db.MakeAccessor(t.Name()+"_root_benchenv"+strconv.Itoa(i), false, true)
 		if err != nil {
 			panic(err)

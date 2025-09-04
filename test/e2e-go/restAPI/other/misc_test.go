@@ -187,7 +187,7 @@ func TestClientTruncatesPendingTransactions(t *testing.T) {
 	addresses, _ := testClient.ListAddresses(wh)
 	fromAddress := addresses[0]
 	txIDsSeen := make(map[string]bool)
-	for i := 0; i < NumTxns; i++ {
+	for range NumTxns {
 		toAddress, _ := testClient.GenerateAddress(wh)
 		tx2, err := testClient.SendPaymentFromUnencryptedWallet(fromAddress, toAddress, minTxnFee, minAcctBalance, nil)
 		a.NoError(err)
@@ -228,7 +228,7 @@ func TestClientPrioritizesPendingTransactions(t *testing.T) {
 
 	NumTxns := 5
 	MaxTxns := 3
-	for i := 0; i < NumTxns; i++ {
+	for range NumTxns {
 		toAddress2, _ := testClient.GenerateAddress(wh)
 		_, err := testClient.SendPaymentFromUnencryptedWallet(fromAddress, toAddress2, minTxnFee, minAcctBalance, nil)
 		a.NoError(err)

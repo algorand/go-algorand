@@ -39,7 +39,7 @@ func testCyclicWrite(t *testing.T, liveFileName, archiveFileName string) {
 	cyclicWriter := MakeCyclicFileWriter(liveFileName, archiveFileName, limit, 0)
 
 	firstWrite := make([]byte, space, space)
-	for i := 0; i < space; i++ {
+	for i := range space {
 		firstWrite[i] = 'A'
 	}
 	n, err := cyclicWriter.Write(firstWrite)
@@ -59,7 +59,7 @@ func testCyclicWrite(t *testing.T, liveFileName, archiveFileName string) {
 	oldData, err := os.ReadFile(archiveFileName)
 	require.NoError(t, err)
 	require.Len(t, oldData, space)
-	for i := 0; i < space; i++ {
+	for i := range space {
 		require.Equal(t, byte('A'), oldData[i])
 	}
 }

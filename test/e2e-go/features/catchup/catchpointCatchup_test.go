@@ -60,7 +60,7 @@ func waitForCatchpointGeneration(t *testing.T, fixture *fixtures.RestClientFixtu
 	var round basics.Round
 	var status model.NodeStatusResponse
 	catchpointConfirmed := false
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		status, err = client.Status()
 		require.NoError(t, err)
 		if status.LastCatchpoint != nil && len(*status.LastCatchpoint) > 0 {
@@ -955,7 +955,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	a.Error(err)
 
 	// Wait for the catchup
-	for t := 0; t < 10; t++ {
+	for range 10 {
 		status1, err := client1.Status()
 		a.NoError(err)
 		status2, err := client2.Status()

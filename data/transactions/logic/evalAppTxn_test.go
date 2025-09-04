@@ -3209,7 +3209,7 @@ func TestInnerCallDepth(t *testing.T) {
 	apps = append(apps, basics.AppIndex(200))
 
 	// 201-210 will be apps that call the next lower one.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		source := main(`
  global CurrentApplicationID
  itob

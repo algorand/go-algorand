@@ -92,7 +92,7 @@ func makeAppRateLimiter(maxCacheSize int, maxAppPeerRate uint64, serviceRateWind
 	}
 	crypto.RandBytes(r.salt[:])
 
-	for i := 0; i < numBuckets; i++ {
+	for i := range numBuckets {
 		r.buckets[i] = appRateLimiterBucket{entries: make(map[keyType]*appRateLimiterEntry), lru: util.NewList[keyType]()}
 	}
 	return r
@@ -203,7 +203,7 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, nowNano i
 
 func (r *appRateLimiter) len() int {
 	var count int
-	for i := 0; i < numBuckets; i++ {
+	for i := range numBuckets {
 		r.buckets[i].mu.RLock()
 		count += len(r.buckets[i].entries)
 		r.buckets[i].mu.RUnlock()

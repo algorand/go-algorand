@@ -68,7 +68,7 @@ func TestBitSet(t *testing.T) {
 func TestBitSetOneBit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		var a bitset
 		a.SetBit(byte(i))
 		require.Equal(t, 1, bits.OnesCount64(a.d[0])+bits.OnesCount64(a.d[1])+bits.OnesCount64(a.d[2])+bits.OnesCount64(a.d[3]))

@@ -79,7 +79,7 @@ func makeTestGenesisAccounts(tb testing.TB, numUsers int) ([]basics.Address, []*
 	addresses := make([]basics.Address, numUsers)
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	genesis := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -127,7 +127,7 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 
 	makeTxns := func(N int) [][]transactions.SignedTxn {
 		ret := make([][]transactions.SignedTxn, 0, N)
-		for u := 0; u < N; u++ {
+		for u := range N {
 			// generate transactions
 			tx := transactions.Transaction{
 				Type: protocol.PaymentTx,
@@ -207,7 +207,7 @@ func BenchmarkTimeAfter(b *testing.B) {
 func makeRandomTransactions(num int) ([]transactions.SignedTxn, []byte) {
 	stxns := make([]transactions.SignedTxn, num)
 	result := make([]byte, 0, num*200)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		var sig crypto.Signature
 		crypto.RandBytes(sig[:])
 		var addr basics.Address
@@ -247,7 +247,7 @@ func TestTxHandlerProcessIncomingTxn(t *testing.T) {
 	require.Equal(t, 1, len(handler.backlogQueue))
 	msg := <-handler.backlogQueue
 	require.Equal(t, numTxns, len(msg.unverifiedTxGroup))
-	for i := 0; i < numTxns; i++ {
+	for i := range numTxns {
 		require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
 	}
 }
@@ -278,7 +278,7 @@ func BenchmarkTxHandlerProcessIncomingTxn(b *testing.B) {
 	go func(ctx context.Context, n int) {
 		defer wg.Done()
 	outer:
-		for i := 0; i < n; i++ {
+		for range n {
 			select {
 			case <-ctx.Done():
 				break outer
@@ -363,7 +363,7 @@ func benchTxHandlerProcessIncomingTxnSubmit(b *testing.B, handler *TxHandler, bl
 		}
 	}
 
-	for g := 0; g < numThreads; g++ {
+	for g := range numThreads {
 		start := g * hashesPerThread
 		end := (g + 1) * (hashesPerThread)
 		// workaround for trivial runs with b.N = 1
@@ -694,7 +694,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 
 	encodeGroup := func(t *testing.T, g []transactions.SignedTxn, blobRef []byte) []byte {
 		result := make([]byte, 0, len(blobRef))
-		for i := 0; i < len(g); i++ {
+		for i := range g {
 			enc := protocol.Encode(&g[i])
 			result = append(result, enc...)
 		}
@@ -736,7 +736,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
 		msg := <-handler.backlogQueue
 		require.Equal(t, num, len(msg.unverifiedTxGroup))
-		for i := 0; i < num; i++ {
+		for i := range num {
 			require.Equal(t, stxns[i], msg.unverifiedTxGroup[i])
 		}
 
@@ -754,7 +754,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 		require.Len(t, handler.backlogQueue, 1)
 		msg = <-handler.backlogQueue
 		require.Equal(t, num, len(msg.unverifiedTxGroup))
-		for i := 0; i < num; i++ {
+		for i := range num {
 			require.Equal(t, swapped[i], msg.unverifiedTxGroup[i])
 		}
 
@@ -770,7 +770,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 		require.Len(t, handler.backlogQueue, 1)
 		msg = <-handler.backlogQueue
 		require.Equal(t, num, len(msg.unverifiedTxGroup))
-		for i := 0; i < num; i++ {
+		for i := range num {
 			require.Equal(t, forged[i], msg.unverifiedTxGroup[i])
 		}
 
@@ -780,7 +780,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 		copied = copy(nonCan, stxns)
 		require.Equal(t, num, copied)
 		blobNonCan := make([]byte, 0, len(blob))
-		for j := 0; j < num; j++ {
+		for j := range num {
 			enc := protocol.Encode(&nonCan[j])
 			if j == i {
 				enc = craftNonCanonical(t, &stxns[j], enc)
@@ -1095,7 +1095,7 @@ loop:
 	handler.streamVerifierChan <- &verify.UnverifiedTxnSigJob{
 		TxnGroup: msg.unverifiedTxGroup, BacklogMessage: msg}
 	var currentCount uint64
-	for x := 0; x < 1000; x++ {
+	for range 1000 {
 		currentCount = transactionMessagesDroppedFromPool.GetUint64Value()
 		if currentCount > 0 {
 			break
@@ -1360,7 +1360,7 @@ func getTransaction(sender, receiver basics.Address, u int) transactions.Transac
 func getTransactionGroups(N, numUsers, maxGroupSize int, addresses []basics.Address) [][]transactions.Transaction {
 	txnGrps := make([][]transactions.Transaction, N)
 	protoMaxGrpSize := proto.MaxTxGroupSize
-	for u := 0; u < N; u++ {
+	for u := range N {
 		grpSize := rand.Intn(protoMaxGrpSize-1) + 1
 		if grpSize > maxGroupSize {
 			grpSize = maxGroupSize
@@ -1430,7 +1430,7 @@ func signMSigTransactionGroups(txnGroups [][]transactions.Transaction, secrets [
 			msigVer := uint8(1)
 			msigTHld := uint8(msigSize)
 			pks := make([]crypto.PublicKey, msigSize)
-			for x := 0; x < msigSize; x++ {
+			for x := range msigSize {
 				pks[x] = secrets[(i+x)%numUsers].SignatureVerifier
 			}
 			multiSigAddr, err := crypto.MultisigAddrGen(msigVer, msigTHld, pks)
@@ -1685,7 +1685,7 @@ func makeLsigGenerator(tb testing.TB, numUsers, maxGroupSize int, invalidRate fl
 func (g *lsigGenerator) createSignedTxGroups(tb testing.TB, txgCount int) ([][]transactions.SignedTxn, map[uint64]interface{}) {
 	stxns := make([][]transactions.SignedTxn, txgCount)
 	badTxnGroups := make(map[uint64]interface{})
-	for i := 0; i < txgCount; i++ {
+	for i := range txgCount {
 		txns := txntest.CreateTinyManTxGroup(tb, true)
 		stxns[i], _ = txntest.CreateTinyManSignedTxGroup(tb, txns)
 
@@ -2167,7 +2167,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	addresses := make([]basics.Address, numAccts)
 	secrets := make([]*crypto.SignatureSecrets, numAccts)
 
-	for i := 0; i < numAccts; i++ {
+	for i := range numAccts {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -2403,7 +2403,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 
 	// prepare the accounts
 	genesis := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -2461,7 +2461,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 		time.Sleep(rateAdjuster)
 	}
 	// stop in a loop to test for possible race conditions
-	for x := 0; x < 1000; x++ {
+	for range 1000 {
 		handler.Stop()
 		handler.Start()
 	}
@@ -2498,7 +2498,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 	inputGoodTxnCount := len(signedTransactionGroups) - len(badTxnGroups)
 	tp := handler.txPool
 	// Wait untill all the expected transactions are in the pool
-	for x := 0; x < 100; x++ {
+	for range 100 {
 		if len(tp.PendingTxGroups()) == inputGoodTxnCount {
 			break
 		}
@@ -2680,7 +2680,7 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 	counterBefore := transactionMessagesAppLimiterDrop.GetUint64Value()
 	// trigger the rate limiter and ensure the txn is ignored
 	numTxnToTriggerARL := cfg.TxBacklogAppTxPerSecondRate * cfg.TxBacklogServiceRateWindowSeconds
-	for i := 0; i < numTxnToTriggerARL; i++ {
+	for i := range numTxnToTriggerARL {
 		tx2 := tx
 		tx2.Header.Sender = addresses[i+1]
 		signedTx2 := tx2.Sign(secrets[i+1])
@@ -2745,7 +2745,7 @@ func TestTxHandlerCapGuard(t *testing.T) {
 
 	var completed atomic.Bool
 	go func() {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			outgoing := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: mockSender{}})
 			require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, outgoing)
 			require.Equal(t, 0, len(handler.backlogQueue))

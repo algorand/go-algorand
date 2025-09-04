@@ -3198,7 +3198,7 @@ int 1
 	require.Len(t, ops.Program, 9) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*2)
 
 	var labels []string
-	for i := 0; i < 255; i++ {
+	for i := range 255 {
 		labels = append(labels, fmt.Sprintf("label%d", i))
 	}
 
@@ -3620,7 +3620,7 @@ int 1
 	testProg(t, source, AssemblerMaxVersion)
 
 	var labels []string
-	for i := 0; i < 255; i++ {
+	for i := range 255 {
 		labels = append(labels, fmt.Sprintf("label%d", i))
 	}
 

@@ -407,7 +407,7 @@ func TestBasicCatchupCompletes(t *testing.T) {
 	// Moreover, it takes some time to transition from the catchup to agreement.
 	// Give it some more time and check again..
 	pass := false
-	for x := 0; x < 100; x++ {
+	for range 100 {
 		curStatus, statusErr := client.Status()
 		require.NoError(t, statusErr, "fixture should be able to get node status")
 		currentStateMsec := time.Duration(curStatus.CatchupTime).Milliseconds()

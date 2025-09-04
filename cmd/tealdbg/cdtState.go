@@ -445,7 +445,7 @@ func tealValueToString(tv *basics.TealValue, hint typeHint) string {
 
 func prepareArray(array []basics.TealValue) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
-	for i := 0; i < len(array); i++ {
+	for i := range array {
 		tv := array[i]
 		name := strconv.Itoa(i)
 		result = append(result, tealValueToFieldDesc(name, tv))
@@ -455,7 +455,7 @@ func prepareArray(array []basics.TealValue) []fieldDesc {
 
 func prepareStringArray(array []string) []fieldDesc {
 	result := make([]fieldDesc, 0)
-	for i := 0; i < len(array); i++ {
+	for i := range array {
 		value := array[i]
 		name := strconv.Itoa(i)
 		result = append(result, fieldDesc{name, value, "string"})
@@ -478,7 +478,7 @@ func makePreview(fields []fieldDesc) (prop []cdt.RuntimePropertyPreview) {
 
 func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
 	prop = make([]cdt.RuntimePropertyPreview, 0)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		v := cdt.RuntimePropertyPreview{
 			Name:  strconv.Itoa(i),
 			Value: "Object",
@@ -878,7 +878,7 @@ func makeInnerTxnImpl(txn *transactions.SignedTxnWithAD, groupIndexes []int, pre
 }
 
 func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
-	for i := 0; i < length; i++ {
+	for i := range length {
 		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i), false)
 		if err != nil {
 			return []fieldDesc{}

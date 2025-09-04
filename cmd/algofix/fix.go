@@ -760,12 +760,12 @@ func killPos(v reflect.Value) {
 		}
 	case reflect.Slice:
 		n := v.Len()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			killPos(v.Index(i))
 		}
 	case reflect.Struct:
 		n := v.NumField()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			f := v.Field(i)
 			if f.Type() == posType {
 				f.SetInt(0)

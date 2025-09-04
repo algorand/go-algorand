@@ -84,7 +84,7 @@ func TestLimitedReaderSlurper_FuzzedBlippedSource(t *testing.T) {
 	arraySize := uint64(300000)
 	bytesBlob := make([]byte, arraySize)
 	crypto.RandBytes(bytesBlob[:])
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		for _, maxSize := range []uint64{arraySize - 10000, arraySize, arraySize + 10000} {
 			reader := MakeLimitedReaderSlurper(512, maxSize)
 			err := reader.Read(&fuzzReader{buf: bytesBlob})
@@ -169,7 +169,7 @@ func TestLimitedReaderSlurperPerMessageMaxSize(t *testing.T) {
 
 	maxMessageSize := 1024
 	slurper := MakeLimitedReaderSlurper(512, uint64(maxMessageSize))
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		var b []byte
 		randPick := randMode(crypto.RandUint64() % uint64(3))
 		currentSize := crypto.RandUint64()%uint64(maxMessageSize) + 1

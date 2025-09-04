@@ -115,7 +115,7 @@ func opDupN(cx *EvalContext) error {
 	n := int(cx.program[cx.pc+1])
 	finalLen := len(cx.Stack) + n
 	cx.ensureStackCap(finalLen)
-	for i := 0; i < n; i++ {
+	for range n {
 		// There will be enough room that this will not allocate
 		cx.Stack = append(cx.Stack, cx.Stack[last])
 	}

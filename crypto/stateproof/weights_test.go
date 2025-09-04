@@ -126,11 +126,11 @@ func TestNumRevealsApproxBound(t *testing.T) {
 	// that we would not be able to generate proof since the MaxReveals would be too high.
 	// This test points out on the minimal ratio signedWt/provenWt we would ever prdouce.
 
-	for j := 0; j < 10; j++ {
+	for j := range 10 {
 		sigWt := uint64(1<<(40-j) - 1)
 		// we check the ratios = signedWt/provenWt {3, 2.99, 2.98...1}
 		// ratio = 1.33 (i==167) would give 625 would be the lower bound we can expect
-		for i := 0; i < 168; i++ {
+		for i := range 168 {
 			a.NoError(checkRatio(i, sigWt, stateProofStrengthTargetForTests))
 		}
 		a.ErrorIs(checkRatio(168, sigWt, stateProofStrengthTargetForTests), ErrTooManyReveals)

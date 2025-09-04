@@ -174,7 +174,7 @@ func TestBlockQueueSyncerDeletion(t *testing.T) {
 			// add 15k blocks
 			const maxBlocks = maxDeletionBatchSize + maxDeletionBatchSize/2 // 15_000
 			err = blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				for i := 0; i < maxBlocks; i++ {
+				for i := range maxBlocks {
 					err0 := blockdb.BlockPut(
 						tx,
 						bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(i)}},

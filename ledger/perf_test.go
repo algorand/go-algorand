@@ -113,7 +113,7 @@ func BenchmarkValidate(b *testing.B) {
 		require.True(b, ok)
 
 		var txbytes int
-		for i := 0; i < 10000; i++ {
+		for i := range 10000 {
 			t := transactions.Transaction{
 				Type: protocol.PaymentTx,
 				Header: transactions.Header{

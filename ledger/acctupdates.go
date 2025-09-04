@@ -1701,7 +1701,7 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	// 300 bytes per acct in delta * 50,000 accts (full block)  * 500 rounds = 7.5 GB
 	const deltasClearThreshold = 500
 	if offset > deltasClearThreshold {
-		for i := uint64(0); i < offset; i++ {
+		for i := range offset {
 			au.deltas[i] = ledgercore.StateDelta{}
 		}
 	}

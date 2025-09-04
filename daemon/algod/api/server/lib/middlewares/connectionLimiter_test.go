@@ -43,12 +43,12 @@ func TestConnectionLimiterBasic(t *testing.T) {
 	middleware := middlewares.MakeConnectionLimiter(uint64(limit))
 
 	numConnections := 13
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		var recorders []*httptest.ResponseRecorder
 		doneCh := make(chan int)
 		errCh := make(chan error)
 
-		for index := 0; index < numConnections; index++ {
+		for index := range numConnections {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			rec := httptest.NewRecorder()
 			ctx := e.NewContext(req, rec)
@@ -69,18 +69,18 @@ func TestConnectionLimiterBasic(t *testing.T) {
 		}
 
 		// Let handlers finish.
-		for j := 0; j < limit; j++ {
+		for range limit {
 			handlerCh <- struct{}{}
 		}
 
 		// All other connections must return 200.
-		for j := 0; j < limit; j++ {
+		for range limit {
 			index := <-doneCh
 			assert.Equal(t, http.StatusOK, recorders[index].Code)
 		}
 
 		// Check that no errors were returned by the middleware.
-		for i := 0; i < numConnections; i++ {
+		for range numConnections {
 			assert.NoError(t, <-errCh)
 		}
 	}

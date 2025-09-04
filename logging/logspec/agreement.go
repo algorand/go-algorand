@@ -177,7 +177,7 @@ type AgreementEvent struct {
 }
 
 func agreementTypeFromString(s string) (AgreementType, bool) {
-	for i := 0; i < int(numAgreementTypes); i++ {
+	for i := range int(numAgreementTypes) {
 		t := AgreementType(i)
 		if t.String() == s {
 			return t, true

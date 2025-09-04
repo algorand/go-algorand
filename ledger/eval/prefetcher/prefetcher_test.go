@@ -618,9 +618,9 @@ func TestAssetLookupError(t *testing.T) {
 	const numGroups = 5
 	const txnPerGroup = 2
 	groups := make([][]transactions.SignedTxnWithAD, numGroups)
-	for i := 0; i < numGroups; i++ {
+	for i := range numGroups {
 		groups[i] = make([]transactions.SignedTxnWithAD, txnPerGroup)
-		for j := 0; j < txnPerGroup; j++ {
+		for j := range txnPerGroup {
 			groups[i][j].SignedTxn = assetTransferTxn
 			if i == 2 {
 				// force error in asset lookup in the second txn group only
@@ -676,9 +676,9 @@ func TestGetCreatorForRoundError(t *testing.T) {
 	const numGroups = 5
 	const txnPerGroup = 10
 	groups := make([][]transactions.SignedTxnWithAD, numGroups)
-	for i := 0; i < numGroups; i++ {
+	for i := range numGroups {
 		groups[i] = make([]transactions.SignedTxnWithAD, txnPerGroup)
-		for j := 0; j < txnPerGroup; j++ {
+		for j := range txnPerGroup {
 			groups[i][j].SignedTxn = createAssetTxn
 			// fail only the first txn in the first group
 			if i == 0 && j == 0 {
@@ -732,9 +732,9 @@ func TestLookupWithoutRewards(t *testing.T) {
 	const numGroups = 5
 	const txnPerGroup = 10
 	groups := make([][]transactions.SignedTxnWithAD, numGroups)
-	for i := 0; i < numGroups; i++ {
+	for i := range numGroups {
 		groups[i] = make([]transactions.SignedTxnWithAD, txnPerGroup)
-		for j := 0; j < txnPerGroup; j++ {
+		for j := range txnPerGroup {
 			groups[i][j].SignedTxn = createAssetTxn
 			// fail only last txn in the first group
 			if i == 0 && j == txnPerGroup-1 {

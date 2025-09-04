@@ -343,14 +343,14 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 	cps = makeClassBasedPeerSelector(wrappedPeerSelectors)
 
 	// We should always get the peer from the top priority selector since rankings are not updated/list is not re-sorted.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		peerResult, err = cps.getNextPeer()
 		require.Nil(t, err)
 		require.Equal(t, mockPeer, peerResult)
 	}
 
 	// Okay, record enough download failures to disable the first selector
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		cps.rankPeer(mockPeer, peerRankNoBlockForRound)
 	}
 
@@ -365,7 +365,7 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 	require.Equal(t, 0, cps.peerSelectors[2].downloadFailures)
 
 	// Now, record download failures just up to the tolerance factor for the second selector
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		cps.rankPeer(mockPeer2, peerRankNoBlockForRound)
 	}
 
@@ -385,7 +385,7 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 	require.Equal(t, 0, cps.peerSelectors[2].downloadFailures)
 
 	// Now, record download failures just up to the tolerance factor for the third selector
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		cps.rankPeer(mockPeer3, peerRankNoBlockForRound)
 	}
 
@@ -449,7 +449,7 @@ func TestClassBasedPeerSelector_integration(t *testing.T) {
 	require.Equal(t, durationRank, newRank)
 
 	// Let's simulate a few download failures (not enough to disable the selector)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		expectedOldRank := newRank
 		peerResult, err = cps.getNextPeer()
 

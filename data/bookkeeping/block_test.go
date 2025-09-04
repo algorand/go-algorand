@@ -864,7 +864,7 @@ func testBlockContentsMatchHeader(t *testing.T, cv protocol.ConsensusVersion) {
 	block.CurrentProtocol = cv
 	crypto.RandBytes(block.BlockHeader.GenesisHash[:])
 
-	for i := 0; i < 1024; i++ {
+	for range 1024 {
 		txn := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
@@ -1116,7 +1116,7 @@ func TestFirstYearsBonus(t *testing.T) {
 	bonus := plan.BaseAmount
 	interval := int(plan.DecayInterval)
 	r := 0
-	for i := 0; i < yearRounds; i++ {
+	for range yearRounds {
 		r++
 		sum += bonus
 		if r%interval == 0 {
@@ -1135,7 +1135,7 @@ func TestFirstYearsBonus(t *testing.T) {
 	a.InDelta(0.90, float64(bonus)/float64(plan.BaseAmount), 0.01)
 
 	// year 2
-	for i := 0; i < yearRounds; i++ {
+	for range yearRounds {
 		r++
 		sum += bonus
 		if r%interval == 0 {
@@ -1155,7 +1155,7 @@ func TestFirstYearsBonus(t *testing.T) {
 	a.InDelta(0.81, float64(bonus)/float64(plan.BaseAmount), 0.01)
 
 	// year 3
-	for i := 0; i < yearRounds; i++ {
+	for range yearRounds {
 		r++
 		sum += bonus
 		if r%interval == 0 {

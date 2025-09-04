@@ -50,7 +50,7 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 	hir := hostIncomingRequests{}
 	now := time.Now()
 	perm := rand.Perm(100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute))
 		hir.add(trackedRequest)
 	}
@@ -121,7 +121,7 @@ func TestRateLimiting(t *testing.T) {
 
 	networks := make([]*WebsocketNetwork, clientsCount)
 	phonebooks := make([]phonebook.Phonebook, clientsCount)
-	for i := 0; i < clientsCount; i++ {
+	for i := range clientsCount {
 		networks[i] = makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 		networks[i].config.GossipFanout = 1
 		phonebooks[i] = phonebook.MakePhonebook(networks[i].config.ConnectionsRateLimitingCount,
@@ -138,7 +138,7 @@ func TestRateLimiting(t *testing.T) {
 
 	deadline := time.Now().Add(time.Duration(testConfig.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
-	for i := 0; i < clientsCount; i++ {
+	for i := range clientsCount {
 		networks[i].Start()
 	}
 
@@ -151,7 +151,7 @@ func TestRateLimiting(t *testing.T) {
 		}
 		connectedClients = 0
 		time.Sleep(100 * time.Millisecond)
-		for i := 0; i < clientsCount; i++ {
+		for i := range clientsCount {
 			// check if the channel is ready.
 			readyCh := networks[i].Ready()
 			select {

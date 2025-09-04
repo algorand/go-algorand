@@ -1698,7 +1698,7 @@ func init() {
 	}
 
 	onCompletionMap = make(map[string]uint64, len(OnCompletionNames))
-	for oc := NoOp; oc < invalidOnCompletionConst; oc++ {
+	for oc := range invalidOnCompletionConst {
 		symbol := oc.String()
 		OnCompletionNames[oc] = symbol
 		onCompletionMap[symbol] = uint64(oc)

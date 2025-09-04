@@ -156,7 +156,7 @@ func TestAcctOnline(t *testing.T) {
 	allAccts := make([]basics.BalanceRecord, numAccts)
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
-	for i := 0; i < numAccts; i++ {
+	for i := range numAccts {
 		allAccts[i] = basics.BalanceRecord{
 			Addr:        ledgertesting.RandomAddress(),
 			AccountData: ledgertesting.RandomOnlineAccountData(0),
@@ -450,7 +450,7 @@ func TestAcctOnlineCache(t *testing.T) {
 			allAccts := make([]basics.BalanceRecord, numAccts)
 			genesisAccts := []map[basics.Address]basics.AccountData{{}}
 			genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts+1)
-			for i := 0; i < numAccts; i++ {
+			for i := range numAccts {
 				allAccts[i] = basics.BalanceRecord{
 					Addr:        ledgertesting.RandomAddress(),
 					AccountData: ledgertesting.RandomOnlineAccountData(0),
@@ -846,7 +846,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 	allAccts := make([]basics.BalanceRecord, numAccts)
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
-	for i := 0; i < numAccts; i++ {
+	for i := range numAccts {
 		allAccts[i] = basics.BalanceRecord{
 			Addr:        ledgertesting.RandomAddress(),
 			AccountData: ledgertesting.RandomOnlineAccountData(0),
@@ -1139,7 +1139,7 @@ func TestAcctOnlineBaseAccountCache(t *testing.T) {
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
 	var addrA basics.Address
-	for i := 0; i < numAccts; i++ {
+	for i := range numAccts {
 		allAccts[i] = basics.BalanceRecord{
 			Addr:        ledgertesting.RandomAddress(),
 			AccountData: ledgertesting.RandomOnlineAccountData(0),
@@ -1244,7 +1244,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
 	var addrA basics.Address
-	for i := 0; i < numAccts; i++ {
+	for range numAccts {
 		addr := ledgertesting.RandomAddress()
 		genesisAccts[0][addr] = ledgertesting.RandomOnlineAccountData(0)
 		if addrA.IsZero() {
@@ -1384,7 +1384,7 @@ func compareTopAccounts(a *require.Assertions, testingResult []*ledgercore.Onlin
 	a.Equal(true, isSorted)
 
 	var onlineAccoutsFromTests []*ledgercore.OnlineAccount
-	for i := 0; i < len(expectedAccountsBalances); i++ {
+	for i := range expectedAccountsBalances {
 		if expectedAccountsBalances[i].Status != basics.Online {
 			continue
 		}
@@ -1401,7 +1401,7 @@ func compareTopAccounts(a *require.Assertions, testingResult []*ledgercore.Onlin
 		return onlineAccoutsFromTests[i].MicroAlgos.Raw > onlineAccoutsFromTests[j].MicroAlgos.Raw
 	})
 
-	for i := 0; i < len(testingResult); i++ {
+	for i := range testingResult {
 		a.Equal(*onlineAccoutsFromTests[i], *testingResult[i])
 	}
 
@@ -1561,7 +1561,7 @@ func TestAcctOnlineTopInBatches(t *testing.T) {
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
 
-	for i := 0; i < numAccts; i++ {
+	for i := range numAccts {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: intToAddress(i + 1),
 			AccountData: basics.AccountData{
@@ -1635,7 +1635,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
 
-	for i := 0; i < numAccts; i++ {
+	for i := range numAccts {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
@@ -1726,7 +1726,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
 
-	for i := 0; i < numAccts; i++ {
+	for i := range numAccts {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
@@ -1817,7 +1817,7 @@ func TestAcctOnlineTop_ChangeOnlineStake(t *testing.T) {
 	allAccts := make([]basics.BalanceRecord, numAccts)
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
-	for i := 0; i < numAccts-1; i++ {
+	for i := range numAccts - 1 {
 		allAccts[i] = basics.BalanceRecord{
 			Addr: ledgertesting.RandomAddress(),
 			AccountData: basics.AccountData{
@@ -1934,7 +1934,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 		if x == 0 {
 			return ret
 		}
-		for i := uint64(0); i < y; i++ {
+		for range y {
 			ret *= x
 		}
 		return ret
@@ -1947,7 +1947,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	genesisAccts := []map[basics.Address]basics.AccountData{{}}
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
 	totalStake := basics.MicroAlgos{Raw: 0}
-	for i := 0; i < numAccts-1; i++ {
+	for i := range numAccts - 1 {
 		stake := i * 10
 		if stake == 0 {
 			stake = 1
@@ -2079,7 +2079,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			// mutate the committed state
 			// addrA, addrB: offline, online not expired, online expired
 			dbSeed := dbState(9999) // not initialized
-			for i := uint64(0); i < dbRoundsToCommit; i++ {
+			for i := range uint64(dbRoundsToCommit) {
 				combo := ternDb[i]
 				d, err := strconv.Atoi(string(combo))
 				a.NoError(err)
@@ -2262,7 +2262,7 @@ func TestAcctOnline_OnlineAcctsExpiredByRound(t *testing.T) {
 	genesisAccts[0] = make(map[basics.Address]basics.AccountData, numAccts)
 	numExpiredAccts := 5
 	totalExpiredStake := basics.MicroAlgos{Raw: 0}
-	for i := 0; i < numAccts; i++ {
+	for i := range numAccts {
 		allAccts[i] = basics.BalanceRecord{
 			Addr:        ledgertesting.RandomAddress(),
 			AccountData: ledgertesting.RandomOnlineAccountData(0),

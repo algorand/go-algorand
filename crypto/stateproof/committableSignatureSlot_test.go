@@ -90,7 +90,7 @@ func calculateHashOnSigLeaf(t *testing.T, sig merklesignature.Signature, lValue 
 		sigCommitment = append(sigCommitment, zeroDigest...)
 	}
 
-	for i := byte(0); i < proofLenByte; i++ {
+	for i := range proofLenByte {
 		sigCommitment = append(sigCommitment, sig.Proof.Path[i]...)
 	}
 

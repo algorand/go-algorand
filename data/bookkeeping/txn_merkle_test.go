@@ -41,7 +41,7 @@ func TestTxnMerkleElemHash(t *testing.T) {
 func TestTxnMerkle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for ntxn := uint64(0); ntxn < 128; ntxn++ {
+	for ntxn := range uint64(128) {
 		var b Block
 		b.CurrentProtocol = protocol.ConsensusCurrentVersion
 		crypto.RandBytes(b.BlockHeader.GenesisHash[:])
@@ -92,7 +92,7 @@ func TestTxnMerkle(t *testing.T) {
 func TestBlock_TxnMerkleTreeSHA256(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for ntxn := uint64(0); ntxn < 128; ntxn++ {
+	for ntxn := range uint64(128) {
 		var b Block
 		b.CurrentProtocol = protocol.ConsensusCurrentVersion
 		crypto.RandBytes(b.BlockHeader.GenesisHash[:])

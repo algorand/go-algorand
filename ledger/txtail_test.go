@@ -221,7 +221,7 @@ func TestTxTailLoadFromDisk(t *testing.T) {
 	require.Equal(t, ledger.Latest(), txtail.lowWaterMark)
 
 	// do some fuzz testing for leases -
-	for i := 0; i < 5000; i++ {
+	for range 5000 {
 		r := basics.Round(crypto.RandUint64() % uint64(ledger.Latest()))
 		txIdx := int(crypto.RandUint64() % uint64(len(txtail.recent)))
 		txn := makeTxTailTestTransaction(r, txIdx)

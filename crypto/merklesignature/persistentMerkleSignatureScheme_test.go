@@ -81,7 +81,7 @@ func TestFetchRestoreAllSecrets(t *testing.T) {
 	err = newMss.RestoreAllSecrets(*store)
 	a.NoError(err)
 
-	for i := uint64(0); i < LastValid; i++ {
+	for i := range LastValid {
 		key1 := mss.GetKey(i)
 		key2 := newMss.GetKey(i)
 		a.NotNil(key1)

@@ -126,7 +126,7 @@ func (v *Verifier) Verify(round basics.Round, data MessageHash, s *StateProof) e
 	}
 
 	coinHash := makeCoinGenerator(&choice)
-	for j := uint64(0); j < nr; j++ {
+	for j := range nr {
 		pos := s.PositionsToReveal[j]
 		reveal, exists := s.Reveals[pos]
 		if !exists {

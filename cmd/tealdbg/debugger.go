@@ -208,7 +208,7 @@ func (s *session) resume() {
 	// See a comment in Registered function.
 	// This loop adds delays to mitigate possible race:
 	// if the channel is not ready then yield and give another go-routine a chance.
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		select {
 		case s.acknowledged <- true:
 			return

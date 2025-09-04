@@ -120,7 +120,7 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	crypto.RandBytes(junk[:])
 
 	a := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		crypto.RandBytes(a[i][:])
 	}
 
@@ -132,7 +132,7 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 	var allpos []uint64
 	allmap := make(map[uint64]crypto.Hashable)
 
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 
@@ -157,7 +157,7 @@ func testMerkle(t *testing.T, hashtype crypto.HashType, size uint64) {
 
 	var somepos []uint64
 	somemap := make(map[uint64]crypto.Hashable)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		pos := crypto.RandUint64() % size
 		somepos = append(somepos, pos)
 		somemap[pos] = a[pos]
@@ -227,7 +227,7 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	a := require.New(t)
 
 	arr := make(TestArray, 4)
-	for i := uint64(0); i < 4; i++ {
+	for i := range uint64(4) {
 		crypto.RandBytes(arr[i][:])
 	}
 
@@ -264,7 +264,7 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 	a := require.New(t)
 
 	arr := make(TestArray, 5)
-	for i := uint64(0); i < 5; i++ {
+	for i := range uint64(5) {
 		crypto.RandBytes(arr[i][:])
 	}
 	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
@@ -306,7 +306,7 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	a := require.New(t)
 
 	arr := make(TestArray, 4)
-	for i := uint64(0); i < 4; i++ {
+	for i := range uint64(4) {
 		crypto.RandBytes(arr[i][:])
 	}
 	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
@@ -341,7 +341,7 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	arr = make(TestArray, 1)
-	for i := uint64(0); i < 1; i++ {
+	for i := range uint64(1) {
 		crypto.RandBytes(arr[i][:])
 	}
 
@@ -359,7 +359,7 @@ func TestProveDuplicateLeaves(t *testing.T) {
 	a := require.New(t)
 
 	arr := make(TestArray, 4)
-	for i := uint64(0); i < 4; i++ {
+	for i := range uint64(4) {
 		crypto.RandBytes(arr[i][:])
 	}
 	tree, err := Build(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
@@ -390,7 +390,7 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	a := require.New(t)
 
 	arr := make(TestArray, 4)
-	for i := uint64(0); i < 4; i++ {
+	for i := range uint64(4) {
 		crypto.RandBytes(arr[i][:])
 	}
 	tree, err := BuildVectorCommitmentTree(arr, crypto.HashFactory{HashType: crypto.Sha512_256})
@@ -425,7 +425,7 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	arr = make(TestArray, 1)
-	for i := uint64(0); i < 1; i++ {
+	for i := range uint64(1) {
 		crypto.RandBytes(arr[i][:])
 	}
 
@@ -568,7 +568,7 @@ func TestSizeLimitsMerkle(t *testing.T) {
 
 func testMerkelSizeLimits(t *testing.T, hashtype crypto.HashType, size uint64, positions []uint64) (*Tree, *Proof) {
 	a := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		crypto.RandBytes(a[i][:])
 	}
 
@@ -772,7 +772,7 @@ func TestMerkleTreeKATs(t *testing.T) {
 }
 
 func testMerkleTreeKATsAux(t *testing.T, KATs []KATElement, hashType crypto.HashType) {
-	for j := 0; j < len(KATs); j++ {
+	for j := range KATs {
 		a := make(TestArray, len(KATs[j].elements))
 		for i := 0; i < len(KATs[j].elements); i++ {
 			decodedBytes, err := hex.DecodeString(KATs[j].elements[i])
@@ -809,7 +809,7 @@ func TestMerkleTreeInternalNodeWithOneChild(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := make(TestArray, 5)
-	for i := uint64(0); i < 5; i++ {
+	for i := range uint64(5) {
 		crypto.RandBytes(a[i][:])
 	}
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
@@ -837,7 +837,7 @@ func TestMerkleTreeInternalNodeFullTree(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := make(TestArray, 4)
-	for i := uint64(0); i < 4; i++ {
+	for i := range uint64(4) {
 		crypto.RandBytes(a[i][:])
 	}
 	h := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
@@ -872,7 +872,7 @@ func hashInternalNode(h hash.Hash, firstLeafHash []byte, secondLeafHash []byte) 
 func getRegularPositions(numElets, max uint64) (res []uint64) {
 	skip := max / numElets
 	pos := uint64(0)
-	for i := uint64(0); i < numElets; i++ {
+	for range numElets {
 		res = append(res, pos)
 		pos += skip
 	}
@@ -881,7 +881,7 @@ func getRegularPositions(numElets, max uint64) (res []uint64) {
 
 func getRandomPositions(numElets, max uint64) (res []uint64) {
 	used := make([]bool, max)
-	for i := uint64(0); i < numElets; i++ {
+	for range numElets {
 
 		pos := crypto.RandUint64() % max
 		for used[pos] {
@@ -915,7 +915,7 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 	crypto.RandBytes(junk[:])
 
 	a := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		crypto.RandBytes(a[i][:])
 	}
 
@@ -927,7 +927,7 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 	var allpos []uint64
 	allmap := make(map[uint64]crypto.Hashable)
 
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 
@@ -952,7 +952,7 @@ func testMerkleVC(t *testing.T, hashtype crypto.HashType, size uint64) {
 
 	var somepos []uint64
 	somemap := make(map[uint64]crypto.Hashable)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		pos := crypto.RandUint64() % size
 		somepos = append(somepos, pos)
 		somemap[pos] = a[pos]
@@ -1026,7 +1026,7 @@ func TestTreeDepthField(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, p.TreeDepth, uint8(0))
 
-	for i := 0; i < len(sizes); i++ {
+	for i := range sizes {
 		a = require.New(t)
 		size = uint64(sizes[i])
 		arr = make(TestArray, size)
@@ -1110,7 +1110,7 @@ func TestProveSingleLeaf(t *testing.T) {
 
 	size := uint64(15)
 	a := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		crypto.RandBytes(a[i][:])
 	}
 
@@ -1119,7 +1119,7 @@ func TestProveSingleLeaf(t *testing.T) {
 
 	root := tree.Root()
 
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 
@@ -1138,7 +1138,7 @@ func TestVCProveSingleLeaf(t *testing.T) {
 
 	size := uint64(15)
 	a := make(TestArray, size)
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		crypto.RandBytes(a[i][:])
 	}
 
@@ -1147,7 +1147,7 @@ func TestVCProveSingleLeaf(t *testing.T) {
 
 	root := tree.Root()
 
-	for i := uint64(0); i < size; i++ {
+	for i := range size {
 		proof, err := tree.Prove([]uint64{i})
 		require.NoError(t, err)
 

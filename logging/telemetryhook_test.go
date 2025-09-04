@@ -172,7 +172,7 @@ func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
 	}
 	hook := createAsyncHook(&testHook, 4, entryCount)
 	hook.ready = true
-	for i := 0; i < entryCount; i++ {
+	for range entryCount {
 		entry := logrus.Entry{
 			Level: logrus.ErrorLevel,
 		}
@@ -200,7 +200,7 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 
 	hook := createAsyncHook(&testHook, entryCount, maxDepth)
 	hook.ready = true
-	for i := 0; i < entryCount; i++ {
+	for range entryCount {
 		entry := logrus.Entry{
 			Level: logrus.ErrorLevel,
 		}
@@ -235,7 +235,7 @@ func TestAsyncTelemetryHook_SelfReporting(t *testing.T) {
 
 	hook := createAsyncHook(&testHook, 100, 10)
 	hook.ready = true
-	for i := 0; i < entryCount; i++ {
+	for range entryCount {
 		selfEntry := logrus.Entry{
 			Level:   logrus.ErrorLevel,
 			Data:    logrus.Fields{"TelemetryError": true},

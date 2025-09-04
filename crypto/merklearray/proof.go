@@ -117,7 +117,7 @@ func (p *SingleLeafProof) GetFixedLengthHashableRepresentation() []byte {
 		binProof = append(binProof, zeroDigest...)
 	}
 
-	for i := uint8(0); i < proofLenByte; i++ {
+	for i := range proofLenByte {
 		if i < proofLenByte && p.Path[i] != nil {
 			binProof = append(binProof, p.Path[i]...)
 		} else {

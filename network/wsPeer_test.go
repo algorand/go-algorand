@@ -65,7 +65,7 @@ func TestGetRequestNonce(t *testing.T) {
 	numValues := 1000
 	peer := wsPeer{}
 	valueChannel := make(chan uint64, numValues)
-	for x := 0; x < numValues; x++ {
+	for range numValues {
 		go func() {
 			ans := peer.getRequestNonce()
 			val, _ := binary.Uvarint(ans)
@@ -78,7 +78,7 @@ func TestGetRequestNonce(t *testing.T) {
 
 	// check if all the values are unique
 	seenValue := make([]bool, numValues+1)
-	for x := 0; x < numValues; x++ {
+	for range numValues {
 		select {
 		case val := <-valueChannel:
 			require.Equal(t, false, seenValue[val])

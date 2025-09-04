@@ -140,7 +140,7 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 	var iss, exp int
 	u := uint64(0)
 
-	for i := 0; i < numTxs; i++ {
+	for i := range numTxs {
 		s := rand.Intn(numMultiSigAcct)
 		r := rand.Intn(numMultiSigAcct)
 		a := rand.Intn(1000)
@@ -158,7 +158,7 @@ func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testin
 
 		// create multi sig that 2 out of 3 has signed the txn
 		var sigs [2]crypto.MultisigSig
-		for j := 0; j < 2; j++ {
+		for j := range 2 {
 			msig, err := crypto.MultisigSign(txs[i], crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
 			require.NoError(t, err)
 			sigs[j] = msig
@@ -194,7 +194,7 @@ func generateAccounts(numAccs int) ([]*crypto.SignatureSecrets, []basics.Address
 	addresses := make([]basics.Address, numAccs)
 	pks := make([]crypto.PublicKey, numAccs)
 
-	for i := 0; i < numAccs; i++ {
+	for i := range numAccs {
 		secret := keypair()
 		addr := basics.Address(secret.SignatureVerifier)
 		secrets[i] = secret
@@ -211,7 +211,7 @@ func generateTestObjects(numTxs, numAccs, noteOffset int, blockRound basics.Roun
 
 	var iss, exp int
 	u := uint64(0)
-	for i := 0; i < numTxs; i++ {
+	for i := range numTxs {
 		s := rand.Intn(numAccs)
 		r := rand.Intn(numAccs)
 		a := rand.Intn(1000)
@@ -887,7 +887,7 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 	blkHdr := createDummyBlockHeader()
 
 	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
-	for i := 0; i < len(txnGroups); i++ {
+	for i := range txnGroups {
 		txnGroups[i] = make([]transactions.SignedTxn, 1)
 		txnGroups[i][0] = signedTxn[i]
 	}
@@ -909,7 +909,7 @@ func TestTxnHeartbeat(t *testing.T) {
 	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
 
 	txnGroups := make([][]transactions.SignedTxn, 2) // verifyGroup requires at least 2
-	for i := 0; i < len(txnGroups); i++ {
+	for i := range txnGroups {
 		txnGroups[i] = make([]transactions.SignedTxn, 1)
 		txnGroups[i][0] = createHeartbeatTxn(blkHdr.Round-1, t)
 	}
@@ -941,7 +941,7 @@ func TestTxnGroupCacheUpdateRejLogic(t *testing.T) {
 	blkHdr := createDummyBlockHeader()
 
 	// sign the transaction with logic
-	for i := 0; i < len(signedTxn); i++ {
+	for i := range signedTxn {
 		// add a simple logic that verifies this condition:
 		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
 		op, err := logic.AssembleString(`arg 0
@@ -957,7 +957,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 
 	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
-	for i := 0; i < len(txnGroups); i++ {
+	for i := range txnGroups {
 		txnGroups[i] = make([]transactions.SignedTxn, 1)
 		txnGroups[i][0] = signedTxn[i]
 	}
@@ -983,7 +983,7 @@ func TestTxnGroupCacheUpdateLogicWithSig(t *testing.T) {
 	_, signedTxn, secrets, addresses := generateTestObjects(100, 20, 0, 50)
 	blkHdr := createDummyBlockHeader()
 
-	for i := 0; i < len(signedTxn); i++ {
+	for i := range signedTxn {
 		// add a simple logic that verifies this condition:
 		// sha256(arg0) == base64decode(5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=)
 		op, err := logic.AssembleString(`arg 0
@@ -1003,7 +1003,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 
 	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
-	for i := 0; i < len(txnGroups); i++ {
+	for i := range txnGroups {
 		txnGroups[i] = make([]transactions.SignedTxn, 1)
 		txnGroups[i][0] = signedTxn[i]
 	}
@@ -1039,7 +1039,7 @@ func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 	signedTxn := make([]transactions.SignedTxn, numOfTxn)
 
 	numMultiSigAcct := len(multiAddress)
-	for i := 0; i < numOfTxn; i++ {
+	for i := range numOfTxn {
 		s := rand.Intn(numMultiSigAcct)
 		r := rand.Intn(numMultiSigAcct)
 		a := rand.Intn(1000)
@@ -1062,7 +1062,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 
 		// create multi sig that 2 out of 3 has signed the txn
 		var sigs [2]crypto.MultisigSig
-		for j := 0; j < 2; j++ {
+		for j := range 2 {
 			msig, err := crypto.MultisigSign(program, crypto.Digest(multiAddress[s]), 1, 2, pks[3*s:3*s+3], *secrets[3*s+j])
 			require.NoError(t, err)
 			sigs[j] = msig
@@ -1073,7 +1073,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 
 	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
-	for i := 0; i < len(txnGroups); i++ {
+	for i := range txnGroups {
 		txnGroups[i] = make([]transactions.SignedTxn, 1)
 		txnGroups[i][0] = signedTxn[i]
 	}

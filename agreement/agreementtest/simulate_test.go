@@ -334,7 +334,7 @@ func generateNAccounts(t *testing.T, N int, firstRound, lastRound basics.Round, 
 			acc.Close()
 		}
 	}
-	for i := 0; i < N; i++ {
+	for i := range N {
 		access, err := db.MakeAccessor(t.Name()+"_root_testingenv_"+strconv.Itoa(i), false, true)
 		if err != nil {
 			panic(err)

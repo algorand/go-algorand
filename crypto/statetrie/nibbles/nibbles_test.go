@@ -40,7 +40,7 @@ func TestNibblesRandom(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < 1_000; i++ {
+	for range 1_000 {
 		length := localRand.Intn(8192) + 1
 		data := make([]byte, length)
 		localRand.Read(data)

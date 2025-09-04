@@ -185,7 +185,7 @@ func TestBasicPayouts(t *testing.T) {
 		account15.Address, *offTxn.ConfirmedRound+lookback)
 
 	var feesink basics.Address
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		status, err := client.Status()
 		a.NoError(err)
 		block, err := client.BookkeepingBlock(status.LastRound)

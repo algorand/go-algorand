@@ -507,7 +507,7 @@ func BenchmarkBn254(b *testing.B) {
 		benchmarkOperation(b, g1teal, "dup; extract 0 32; ec_scalar_mul BN254g1", "len")
 	})
 
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
@@ -519,7 +519,7 @@ func BenchmarkBn254(b *testing.B) {
 		benchmarkOperation(b, g2teal, "dup; extract 0 32; ec_scalar_mul BN254g2", "len")
 	})
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
@@ -538,7 +538,7 @@ func BenchmarkBn254(b *testing.B) {
 	b.Run("pairing 1", func(b *testing.B) {
 		benchmarkOperation(b, "", g1teal+g2teal+"ec_pairing_check BN254g1; !; assert", "int 1")
 	})
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 
@@ -695,7 +695,7 @@ func BenchmarkBls12381(b *testing.B) {
 	b.Run("g1 scalar_mul", func(b *testing.B) {
 		benchmarkOperation(b, g1teal, "dup; extract 0 32; ec_scalar_mul BLS12_381g1", "len")
 	})
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g1 multi_exp %d", size), func(b *testing.B) {
@@ -706,7 +706,7 @@ func BenchmarkBls12381(b *testing.B) {
 	b.Run("g2 scalar_mul", func(b *testing.B) {
 		benchmarkOperation(b, g2teal, "dup; extract 0 32; ec_scalar_mul BLS12_381g2", "len")
 	})
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 		b.Run(fmt.Sprintf("g2 multi_exp %d", size), func(b *testing.B) {
@@ -725,7 +725,7 @@ func BenchmarkBls12381(b *testing.B) {
 	b.Run("g1 pairing f", func(b *testing.B) {
 		benchmarkOperation(b, "", g1teal+g2teal+"ec_pairing_check BLS12_381g1; !; assert", "int 1")
 	})
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		size := 1 << uint(i)
 		dups := strings.Repeat("dup; concat;", i)
 

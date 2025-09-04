@@ -58,11 +58,11 @@ func TestCacheEviction1(t *testing.T) {
 	// create 13000 hashes.
 	leafsCount := 13000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < defaultTestEvictSize; i++ {
+	for i := range defaultTestEvictSize {
 		mt1.Add(hashes[i][:])
 	}
 
@@ -82,11 +82,11 @@ func TestCacheEviction2(t *testing.T) {
 	// create 20000 hashes.
 	leafsCount := 20000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < defaultTestEvictSize; i++ {
+	for i := range defaultTestEvictSize {
 		mt1.Add(hashes[i][:])
 	}
 
@@ -111,11 +111,11 @@ func TestCacheEviction3(t *testing.T) {
 	// create 200000 hashes.
 	leafsCount := 200000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < defaultTestEvictSize; i++ {
+	for i := range defaultTestEvictSize {
 		mt1.Add(hashes[i][:])
 	}
 
@@ -164,7 +164,7 @@ func cacheEvictionFuzzer(t *testing.T, hashes []crypto.Digest, pageSize int64, e
 	mt1, _ := MakeTrie(&memoryCommitter, memoryConfig)
 
 	// add the first 10 hashes.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		mt1.Add(hashes[i][:])
 	}
 
@@ -197,7 +197,7 @@ func TestCacheEvictionFuzzer(t *testing.T) {
 	// create 2000 hashes.
 	leafsCount := 2000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 	for _, pageSize := range []int64{2, 3, 8, 12, 17} {
@@ -217,10 +217,10 @@ func TestCacheEvictionFuzzer2(t *testing.T) {
 	// create 1000 hashes.
 	leafsCount := 1000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
-	for i := 0; i < 80; i++ {
+	for range 80 {
 		pageSize := int64(1 + crypto.RandUint64()%101)
 		evictSize := int(1 + crypto.RandUint64()%37)
 		hashesCount := uint64(100) + crypto.RandUint64()%uint64(leafsCount-100)
@@ -244,11 +244,11 @@ func TestCacheMidTransactionPageDeletion(t *testing.T) {
 	// create 10000 hashes.
 	leafsCount := 10000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		added, err := mt1.Add(hashes[i][:])
 		require.NoError(t, err)
 		require.True(t, added)
@@ -332,11 +332,11 @@ func TestCacheTransactionRollbackPageDeletion(t *testing.T) {
 	// create 1000 hashes.
 	leafsCount := 1000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		added, err := mt1.Add(hashes[i][:])
 		require.NoError(t, err)
 		require.True(t, added)
@@ -346,7 +346,7 @@ func TestCacheTransactionRollbackPageDeletion(t *testing.T) {
 
 	var deleted bool
 	var err error
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		deleted, err = mt1.TestDeleteRollback(hashes[i][:])
 		if err != nil {
 			break
@@ -375,16 +375,16 @@ func TestCacheDeleteNodeMidTransaction(t *testing.T) {
 	// create 1000 hashes.
 	leafsCount := 10000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		added, err := mt1.Add(hashes[i][:])
 		require.NoError(t, err)
 		require.True(t, added)
 	}
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		deleted, err := mt1.Delete(hashes[i][:])
 		require.NoError(t, err)
 		require.True(t, deleted)
@@ -406,11 +406,11 @@ func TestCachePageReloading(t *testing.T) {
 	// create 10 hashes.
 	leafsCount := 10
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		mt1.Add(hashes[i][:])
 	}
 	_, err := mt1.Evict(true)
@@ -450,7 +450,7 @@ func TestCachePagedOutTip(t *testing.T) {
 	// create 2048 hashes.
 	leafsCount := 2048
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
@@ -486,11 +486,11 @@ func TestCacheLoadingDeferedPage(t *testing.T) {
 	// create 100000 hashes.
 	leafsCount := 100000
 	hashes := make([]crypto.Digest, leafsCount)
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
 	}
 
-	for i := 0; i < len(hashes); i++ {
+	for i := range hashes {
 		mt1.Add(hashes[i][:])
 	}
 	_, err := mt1.Commit()

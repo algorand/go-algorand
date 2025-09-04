@@ -101,7 +101,7 @@ func generateEnvironment(numAccounts int) (map[basics.Address]basics.AccountData
 	vrfSecrets := make([]*crypto.VRFSecrets, numAccounts)
 	otSecrets := make([]crypto.OneTimeSigner, numAccounts)
 	var total basics.MicroAlgos
-	for i := 0; i < numAccounts; i++ {
+	for i := range numAccounts {
 		addr, vrfSec, otSec := generateKeys(0, keyBatchesForward)
 		addrs[i] = addr
 		vrfSecrets[i] = vrfSec

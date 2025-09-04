@@ -133,7 +133,7 @@ func toUint11Array(arr []byte) []uint32 {
 	var numberOfBit uint32
 	var output []uint32
 
-	for i := 0; i < len(arr); i++ {
+	for i := range arr {
 		// prepend bits to buffer
 		buffer |= uint32(arr[i]) << numberOfBit
 		numberOfBit += 8
@@ -163,7 +163,7 @@ func toByteArray(arr []uint32) []byte {
 	var numberOfBits uint32
 	var output []byte
 
-	for i := 0; i < len(arr); i++ {
+	for i := range arr {
 		buffer |= uint32(arr[i]) << numberOfBits
 		numberOfBits += 11
 
@@ -183,7 +183,7 @@ func toByteArray(arr []uint32) []byte {
 
 func applyWords(arr []uint32, words []string) []string {
 	res := make([]string, len(arr))
-	for i := 0; i < len(arr); i++ {
+	for i := range arr {
 		res[i] = words[arr[i]]
 	}
 	return res

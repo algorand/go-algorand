@@ -617,7 +617,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	// Insert the same record twice
 	// Pretty much copied from the Insert function without error checking.
 	err := registry.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			record := p
 			_, err := tx.Exec(
 				insertKeysetQuery,
@@ -896,7 +896,7 @@ func TestFlushDeadlock(t *testing.T) {
 	}
 
 	// Start spammers.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		go spam()
 	}
@@ -1230,7 +1230,7 @@ func TestParticipationDB_Locking(t *testing.T) {
 	defer registryCloseTest(t, registry, dbName)
 
 	var id2 ParticipationID
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		part := makeTestParticipation(a, 1, 0, 511, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 		id, err := registry.Insert(part)
 		if i == 0 {
@@ -1248,7 +1248,7 @@ func TestParticipationDB_Locking(t *testing.T) {
 	var flushCount int32
 	const targetFlushes = 5
 	go func() {
-		for i := 0; i < 25; i++ {
+		for i := range 25 {
 			registry.DeleteExpired(basics.Round(i), config.Consensus[protocol.ConsensusCurrentVersion])
 			registry.Flush(defaultTimeout)
 			if atomic.LoadInt32(&flushCount) < targetFlushes {
@@ -1258,7 +1258,7 @@ func TestParticipationDB_Locking(t *testing.T) {
 		wg.Done()
 	}()
 
-	for i := 0; i < 25; i++ {
+	for range 25 {
 	repeat:
 		// to not start lookup until deleted some keys
 		if atomic.LoadInt32(&flushCount) < targetFlushes {
@@ -1297,7 +1297,7 @@ func TestParticipationDBInstallWhileReading(t *testing.T) {
 	defer registryCloseTest(t, registry, dbName)
 
 	var sampledPartID ParticipationID
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		part := makeTestParticipation(a, 1, 0, 511, config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution)
 		id, err := registry.Insert(part)
 		if i == 0 {
@@ -1321,7 +1321,7 @@ func TestParticipationDBInstallWhileReading(t *testing.T) {
 	}()
 
 	<-appendedKeys // Makes sure we start fetching keys after the append keys operation has already started
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		_, err = registry.GetStateProofSecretsForRound(sampledPartID, basics.Round(256))
 		// The error we're trying to avoid is "database is locked", since we're reading from StateProofKeys table,
 		// while a different go routine is installing new keys.

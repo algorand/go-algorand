@@ -39,7 +39,7 @@ func RandomString(len int) string {
 	// re-seed the RNG to mitigate randomString collisions across tests
 	rand.Seed(time.Now().UnixNano())
 	bytes := make([]byte, len)
-	for i := 0; i < len; i++ {
+	for i := range len {
 		bytes[i] = randomUpperAlphaAsByte()
 	}
 	return string(bytes)

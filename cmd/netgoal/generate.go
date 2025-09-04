@@ -246,7 +246,7 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 	template := netdeploy.NetworkTemplate{}
 	template.Nodes = make([]remote.NodeConfigGoal, 0, relays+nodes+npnNodes)
 	template.Genesis = generateWalletGenesisData(walletsToGenerate, 0)
-	for i := 0; i < relays; i++ {
+	for i := range relays {
 		name := "relay" + strconv.Itoa(i+1)
 		newNode := remote.NodeConfigGoal{
 			Name:    name,
@@ -256,7 +256,7 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 		template.Nodes = append(template.Nodes, newNode)
 	}
 
-	for i := 0; i < nodes; i++ {
+	for i := range nodes {
 		name := "node" + strconv.Itoa(i+1)
 		newNode := remote.NodeConfigGoal{
 			Name:    name,
@@ -265,7 +265,7 @@ func generateNetworkGoalTemplate(templateFilename string, wallets, relays, nodes
 		template.Nodes = append(template.Nodes, newNode)
 	}
 
-	for i := 0; i < npnNodes; i++ {
+	for i := range npnNodes {
 		name := "nonParticipatingNode" + strconv.Itoa(i+1)
 		newNode := remote.NodeConfigGoal{
 			Name:    name,
@@ -325,7 +325,7 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 	leafTemplates := unpackNodeConfig(baseNode)
 	npnTemplates := unpackNodeConfig(baseNonPartNode)
 
-	for i := 0; i < relays; i++ {
+	for i := range relays {
 		indexID := strconv.Itoa(i + 1)
 		host := remote.HostConfig{
 			Name: "R" + indexID,
@@ -343,7 +343,7 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 		network.Hosts = append(network.Hosts, host)
 	}
 
-	for i := 0; i < nodeHosts; i++ {
+	for i := range nodeHosts {
 		indexID := strconv.Itoa(i + 1)
 		host := remote.HostConfig{
 			Name: "N" + indexID,
@@ -372,7 +372,7 @@ func generateNetworkTemplate(templateFilename string, wallets, relays, nodeHosts
 	}
 
 	npnHostIndexes := make([]int, 0, npnHosts)
-	for i := 0; i < npnHosts; i++ {
+	for i := range npnHosts {
 		indexID := strconv.Itoa(i + 1)
 
 		name := "nonParticipatingNode" + strconv.Itoa(i+1)
@@ -505,7 +505,7 @@ func generateWalletGenesisData(wallets, npnNodes int) gen.GenesisData {
 
 	stake := ratZero
 	stakeSum := new(big.Rat).Set(ratZero)
-	for i := 0; i < totalWallets; i++ {
+	for i := range totalWallets {
 
 		if i < wallets {
 			stake = participatingNodeStake

@@ -256,7 +256,7 @@ func GenerateOneTimeSignatureSecretsRNG(startBatch uint64, numBatches uint64, rn
 	master, ephemeralSec := ed25519GenerateKeyRNG(rng)
 
 	subkeys := make([]ephemeralSubkey, numBatches)
-	for i := uint64(0); i < numBatches; i++ {
+	for i := range numBatches {
 		pk, sk := ed25519GenerateKeyRNG(rng)
 		batchnum := startBatch + i
 

@@ -39,7 +39,7 @@ func TestLRUBasicKV(t *testing.T) {
 
 	kvNum := 50
 	// write 50 KVs
-	for i := 0; i < kvNum; i++ {
+	for i := range kvNum {
 		kvValue := fmt.Sprintf("kv %d value", i)
 		kv := trackerdb.PersistedKVData{
 			Value: []byte(kvValue),
@@ -49,7 +49,7 @@ func TestLRUBasicKV(t *testing.T) {
 	}
 
 	// verify that all these KVs are truly there.
-	for i := 0; i < kvNum; i++ {
+	for i := range kvNum {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), kv.Round)
@@ -104,7 +104,7 @@ func TestLRUKVDisable(t *testing.T) {
 	baseKV.flushPendingWrites()
 	require.Empty(t, baseKV.kvs)
 
-	for i := 0; i < kvNum; i++ {
+	for i := range kvNum {
 		kvValue := fmt.Sprintf("kv %d value", i)
 		kv := trackerdb.PersistedKVData{
 			Value: []byte(kvValue),
@@ -123,7 +123,7 @@ func TestLRUKVPendingWrites(t *testing.T) {
 	kvNum := 250
 	baseKV.init(logging.TestingLog(t), kvNum*2, kvNum)
 
-	for i := 0; i < kvNum; i++ {
+	for i := range kvNum {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
 			kvValue := fmt.Sprintf("kv %d value", i)
@@ -140,7 +140,7 @@ func TestLRUKVPendingWrites(t *testing.T) {
 
 		// check if all kvs were loaded into "main" cache.
 		allKVsLoaded := true
-		for i := 0; i < kvNum; i++ {
+		for i := range kvNum {
 			_, has := baseKV.read(fmt.Sprintf("key%d", i))
 			if !has {
 				allKVsLoaded = false
@@ -177,7 +177,7 @@ func TestLRUKVPendingWritesWarning(t *testing.T) {
 	pendingWritesThreshold := 40
 	log := &lruKVTestLogger{Logger: logging.TestingLog(t)}
 	baseKV.init(log, pendingWritesBuffer, pendingWritesThreshold)
-	for j := 0; j < 50; j++ {
+	for j := range 50 {
 		for i := 0; i < j; i++ {
 			kvValue := fmt.Sprintf("kv %d value", i)
 			kv := trackerdb.PersistedKVData{
@@ -215,7 +215,7 @@ func TestLRUKVOmittedPendingWrites(t *testing.T) {
 	baseKV.flushPendingWrites()
 
 	// verify that all these kvs are truly there.
-	for i := 0; i < pendingWritesBuffer; i++ {
+	for i := range pendingWritesBuffer {
 		kv, has := baseKV.read(fmt.Sprintf("key%d", i))
 		require.True(t, has)
 		require.Equal(t, basics.Round(i), kv.Round)

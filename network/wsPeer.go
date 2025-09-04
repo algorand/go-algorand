@@ -362,7 +362,7 @@ func (wp *wsPeer) ipAddr() []byte {
 // see http://www.tcpipguide.com/free/t_IPv6IPv4AddressEmbedding.htm for details.
 func (wp *wsPeer) RoutingAddr() []byte {
 	isZeros := func(ip []byte) bool {
-		for i := 0; i < len(ip); i++ {
+		for i := range ip {
 			if ip[i] != 0 {
 				return false
 			}
@@ -419,7 +419,7 @@ func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) err
 func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
 	// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
 	var uconn net.Conn = wp.conn.UnderlyingConn()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wconn, ok := uconn.(wrappedConn)
 		if !ok {
 			break
@@ -485,7 +485,7 @@ func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
 	// another one onto wp.net.readBuffer.  Prime it with dummy
 	// values so that we can write to readBuffer initially.
 	wp.processed = make(chan struct{}, msgsInReadBufferPerPeer)
-	for i := 0; i < msgsInReadBufferPerPeer; i++ {
+	for range msgsInReadBufferPerPeer {
 		wp.processed <- struct{}{}
 	}
 

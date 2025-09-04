@@ -558,7 +558,7 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	crypto.RandBytes(stateProofID.Commitment[:])
 	updates = make(map[basics.Address]basics.AccountData, numAccounts)
 
-	for i := 0; i < numAccounts; i++ {
+	for i := range numAccounts {
 		addr := ledgertesting.RandomAddress()
 		updates[addr] = basics.AccountData{
 			MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff / uint64(numAccounts)},
@@ -826,7 +826,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 			return
 		}
 
-		for i := 0; i < len(kvPairDBPrepareSet); i++ {
+		for i := range kvPairDBPrepareSet {
 			err := writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), kvPairDBPrepareSet[i].value)
 			require.NoError(t, err)
 		}
@@ -989,7 +989,7 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	valueBuffer := make([]byte, 5)
 
 	// from 2^1 -> 2^2 -> ... -> 2^22 sized DB
-	for bIndex := 0; bIndex < 22; bIndex++ {
+	for range 22 {
 		var prefix string
 
 		// make writer to DB
@@ -1100,7 +1100,7 @@ func TestKVStoreNilBlobConversion(t *testing.T) {
 			return
 		}
 		defer writer.Close()
-		for i := 0; i < len(kvPairDBPrepareSet); i++ {
+		for i := range kvPairDBPrepareSet {
 			err0 = writer.UpsertKvPair(string(kvPairDBPrepareSet[i].key), nil)
 			if err0 != nil {
 				return
@@ -1692,7 +1692,7 @@ func permHeap(n int) (result [][]int) {
 	numResults := factorial(n)
 	result = make([][]int, 0, numResults)
 	input := make([]int, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		input[i] = i
 	}
 	temp := make([]int, n)
@@ -2030,7 +2030,7 @@ func BenchmarkLRUResources(b *testing.B) {
 	var data trackerdb.PersistedResourcesData
 	var has bool
 	addrs := make([]basics.Address, 850)
-	for i := 0; i < 850; i++ {
+	for i := range 850 {
 		data.Data.ApprovalProgram = make([]byte, 8096*4)
 		data.Aidx = basics.CreatableIndex(1)
 		addrBytes := ([]byte(fmt.Sprintf("%d", i)))[:32]
@@ -2095,7 +2095,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 	getBoxNamePermutation := func(totalBoxes int) []int {
 		rand.Seed(time.Now().UnixNano())
 		boxNames := make([]int, totalBoxes)
-		for i := 0; i < totalBoxes; i++ {
+		for i := range totalBoxes {
 			boxNames[i] = i
 		}
 		rand.Shuffle(len(boxNames), func(x, y int) { boxNames[x], boxNames[y] = boxNames[y], boxNames[x] })
@@ -3338,7 +3338,7 @@ func TestEncodedBaseAccountDataSize(t *testing.T) {
 
 func makeString(len int) string {
 	s := ""
-	for i := 0; i < len; i++ {
+	for i := range len {
 		s += string(byte(i))
 	}
 	return s

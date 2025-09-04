@@ -158,7 +158,7 @@ func MultisigSign(msg Hashable, addr Digest, version, threshold uint8, pk []Publ
 
 	// check if sk.pk exist in the pk list
 	keyexist := len(pk)
-	for i := 0; i < len(pk); i++ {
+	for i := range pk {
 		if sk.SignatureVerifier == pk[i] {
 			keyexist = i
 		}
@@ -169,7 +169,7 @@ func MultisigSign(msg Hashable, addr Digest, version, threshold uint8, pk []Publ
 	}
 
 	// form the multisig
-	for i := 0; i < len(pk); i++ {
+	for i := range pk {
 		sig.Subsigs[i].Key = pk[i]
 		if sk.SignatureVerifier == pk[i] {
 			sig.Subsigs[i].Sig = sk.Sign(msg)
@@ -217,7 +217,7 @@ func MultisigAssemble(unisig []MultisigSig) (msig MultisigSig, err error) {
 	for i := 0; i < len(unisig[0].Subsigs); i++ {
 		msig.Subsigs[i].Key = unisig[0].Subsigs[i].Key
 	}
-	for i := 0; i < len(unisig); i++ {
+	for i := range unisig {
 		for j := 0; j < len(unisig[0].Subsigs); j++ {
 			if !unisig[i].Subsigs[j].Sig.Blank() {
 				msig.Subsigs[j].Sig = unisig[i].Subsigs[j].Sig
@@ -283,7 +283,7 @@ func MultisigAdd(unisig []MultisigSig, msig *MultisigSig) (err error) {
 	}
 
 	// check if all unisig match
-	for i := 0; i < len(unisig); i++ {
+	for i := range unisig {
 		if msig.Threshold != unisig[i].Threshold {
 			err = errInvalidThreshold
 			return
@@ -306,7 +306,7 @@ func MultisigAdd(unisig []MultisigSig, msig *MultisigSig) (err error) {
 		}
 	}
 	// update the msig
-	for i := 0; i < len(unisig); i++ {
+	for i := range unisig {
 		for j := 0; j < len(msig.Subsigs); j++ {
 			if !unisig[i].Subsigs[j].Sig.Blank() {
 				if msig.Subsigs[j].Sig.Blank() {

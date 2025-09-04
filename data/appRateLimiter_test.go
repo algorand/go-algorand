@@ -44,7 +44,7 @@ func TestAppRateLimiter_Make(t *testing.T) {
 	require.Equal(t, 2, rm.maxBucketSize)
 	require.NotEmpty(t, rm.seed)
 	require.NotEmpty(t, rm.salt)
-	for i := 0; i < len(rm.buckets); i++ {
+	for i := range len(rm.buckets) {
 		require.NotNil(t, rm.buckets[i].entries)
 		require.NotNil(t, rm.buckets[i].lru)
 	}
@@ -291,7 +291,7 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 	bucket := int(memhash64(uint64(1), rm.seed) % numBuckets)
 	require.Equal(t, bucketSize, len(rm.buckets[bucket].entries))
 	var totalSize int
-	for i := 0; i < len(rm.buckets); i++ {
+	for i := range len(rm.buckets) {
 		totalSize += len(rm.buckets[i].entries)
 		if i != bucket {
 			require.Equal(t, 0, len(rm.buckets[i].entries))
@@ -313,7 +313,7 @@ func TestAppRateLimiter_EvictOrder(t *testing.T) {
 
 	keys := make([]keyType, 0, int(bucketSize)+1)
 	bucket := int(memhash64(uint64(1), rm.seed) % numBuckets)
-	for i := 0; i < bucketSize; i++ {
+	for i := range bucketSize {
 		bk := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)}, rm.seed, rm.salt, numBuckets)
 		require.Equal(t, 1, len(bk.buckets))
 		require.Equal(t, 1, len(bk.keys))
@@ -339,7 +339,7 @@ func TestAppRateLimiter_EvictOrder(t *testing.T) {
 	}
 
 	var totalSize int
-	for i := 0; i < len(rm.buckets); i++ {
+	for i := range len(rm.buckets) {
 		totalSize += len(rm.buckets[i].entries)
 		if i != bucket {
 			require.Equal(t, 0, len(rm.buckets[i].entries))

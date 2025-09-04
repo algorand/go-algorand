@@ -2084,7 +2084,7 @@ func opSqrt(cx *EvalContext) error {
 	var rem uint64 = 0
 	var root uint64 = 0
 
-	for i := 0; i < 32; i++ {
+	for range 32 {
 		root <<= 1
 		rem = (rem << 2) | (sq >> (64 - 2))
 		sq <<= 2
@@ -2676,7 +2676,7 @@ func checkSwitch(cx *EvalContext) error {
 	numOffsets := int(cx.program[cx.pc+1])
 	eoi := cx.pc + 2 + 2*numOffsets
 
-	for branchIdx := 0; branchIdx < numOffsets; branchIdx++ {
+	for branchIdx := range numOffsets {
 		target, err := switchTarget(cx, uint64(branchIdx))
 		if err != nil {
 			return err

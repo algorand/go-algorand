@@ -479,7 +479,7 @@ func TestAssetInformation(t *testing.T) {
 
 	// Create some assets
 	txids := make(map[string]string)
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		tx, err := client.MakeUnsignedAssetCreateTx(1+uint64(i), false, manager, reserve, freeze, clawback, fmt.Sprintf("test%d", i), fmt.Sprintf("testname%d", i), "foo://bar", nil, 0)
 		txid, err := helperFillSignBroadcast(client, wh, account0, tx, err)
 		a.NoError(err)

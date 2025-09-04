@@ -60,7 +60,7 @@ func spinNetwork(t *testing.T, nodesCount int, cfg config.Local) ([]*networkImpl
 	start := time.Now()
 	nodesAddresses := []string{}
 	gossipNodes := []network.GossipNode{}
-	for nodeIdx := 0; nodeIdx < nodesCount; nodeIdx++ {
+	for nodeIdx := range nodesCount {
 		gossipNode, err := network.NewWebsocketGossipNode(log.With("node", nodeIdx), cfg, nodesAddresses, "go-test-agreement-network-genesis", config.Devtestnet)
 		if err != nil {
 			t.Fatalf("fail making ws node: %v", err)
@@ -231,7 +231,7 @@ func testNetworkImplMixed2(t *testing.T, nodesCount int, cfg config.Local) {
 	defer shutdownNetwork(nets, counters)
 
 	const loadSize = 12
-	for i := byte(0); i < loadSize; i++ {
+	for i := range byte(loadSize) {
 		ok := nets[0].Broadcast(protocol.AgreementVoteTag, []byte{i})
 		assert.NoError(t, ok)
 		if i%2 == 0 {
@@ -268,7 +268,7 @@ func testNetworkImplReordered(t *testing.T, nodesCount int, cfg config.Local) {
 	// repeat in parallel.
 	wg := &sync.WaitGroup{}
 	wg.Add(loadSize)
-	for i := byte(0); i < loadSize; i++ {
+	for i := range byte(loadSize) {
 		go func(i byte) {
 			ok := nets[0].Broadcast(protocol.AgreementVoteTag, []byte{i})
 			assert.NoError(t, ok)
