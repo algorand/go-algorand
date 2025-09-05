@@ -100,7 +100,7 @@ func isSliceOfBytes(a interface{}) bool {
 				return false
 			}
 		}
-		return true
+		return len(v) > 0 // No need to treat empty slice specially
 	default:
 		return false
 	}
@@ -115,7 +115,7 @@ func isSliceOfString(a interface{}) bool {
 				return false
 			}
 		}
-		return true
+		return len(v) > 0 // No need to treat empty slice specially
 	default:
 		return false
 	}
@@ -180,7 +180,7 @@ func decodeSliceOfString(a interface{}, decodeFunc func(string) ([]byte, error))
 	for _, e := range v {
 		es, entryIsString := e.(string)
 		if !entryIsString {
-			return nil, fmt.Errorf("expected string in decodeSliceOfString")
+			return nil, fmt.Errorf("expected string element in slice")
 		}
 		decoded, err := decodeFunc(es)
 		if err != nil {
