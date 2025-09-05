@@ -5816,6 +5816,16 @@ func opBlock(cx *EvalContext) error {
 		cx.Stack[last] = stackValue{Uint: hdr.Bonus.Raw}
 	case BlkProposerPayout:
 		cx.Stack[last] = stackValue{Uint: hdr.ProposerPayout.Raw}
+
+	case BlkBranch512:
+		cx.Stack[last].Bytes = hdr.Branch512[:]
+	case BlkSha512_256TxnCommitment:
+		cx.Stack[last].Bytes = hdr.NativeSha512_256Commitment[:]
+	case BlkSha256TxnCommitment:
+		cx.Stack[last].Bytes = hdr.Sha256Commitment[:]
+	case BlkSha512TxnCommitment:
+		cx.Stack[last].Bytes = hdr.Sha512Commitment[:]
+
 	default:
 		return fmt.Errorf("invalid block field %s", fs.field)
 	}
