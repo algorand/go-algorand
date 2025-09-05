@@ -153,7 +153,6 @@ func makeTestLedger(state map[basics.Address]basics.AccountData, sync testLedger
 	l.certs = make(map[basics.Round]agreement.Certificate)
 	l.nextRound = 1
 
-	// deep copy of state
 	l.state = make(map[basics.Address]basics.AccountData)
 	maps.Copy(l.state, state)
 
