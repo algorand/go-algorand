@@ -34,12 +34,10 @@ const zstdCompressionLevel = zstd.BestSpeed
 
 // zstdCompressMsg returns a concatenation of a tag and compressed data
 func zstdCompressMsg(tbytes []byte, d []byte) ([]byte, string) {
-	bound := zstd.CompressBound(len(d))
-	if bound < len(d) {
+	bound := max(zstd.CompressBound(len(d)),
 		// although CompressBound allocated more than the src size, this is an implementation detail.
 		// increase the buffer size to always have enough space for the raw data if compression fails.
-		bound = len(d)
-	}
+		len(d))
 	mbytesComp := make([]byte, len(tbytes)+bound)
 	copy(mbytesComp, tbytes)
 	comp, err := zstd.CompressLevel(mbytesComp[len(tbytes):], d, zstdCompressionLevel)

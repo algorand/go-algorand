@@ -522,13 +522,10 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minAvmVersion := computeMinAvmVersion(txg)
-	// Can't happen currently, since earliest inner callable version is higher
-	// than any minimum imposed otherwise.  But is correct to inherit a stronger
-	// restriction from above, in case of future restriction.
-	if minAvmVersion < caller.minAvmVersion {
-		minAvmVersion = caller.minAvmVersion
-	}
+	minAvmVersion := max(computeMinAvmVersion(txg), caller.minAvmVersion)
+	// caller.AvmVersion can't exceed the computed value currently, since earliest
+	// inner callable version is higher than any minimum imposed otherwise.  But is
+	// correct to inherit a stronger restriction from above, in case of future restriction.
 
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
 
@@ -1638,10 +1635,7 @@ func (cx *EvalContext) step() error {
 		if len(cx.Stack) == 0 {
 			stackString = "<empty stack>"
 		} else {
-			num := 1
-			if len(spec.Return.Types) > 1 {
-				num = len(spec.Return.Types)
-			}
+			num := max(len(spec.Return.Types), 1)
 			// check for nil error here, because we might not return
 			// values if we encounter an error in the opcode
 			if err == nil {
@@ -3238,10 +3232,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 			return sv, fmt.Errorf("invalid ApprovalProgramPages index %d", arrayFieldIdx)
 		}
 		first := arrayFieldIdx * maxStringSize
-		last := first + maxStringSize
-		if last > uint64(len(txn.ApprovalProgram)) {
-			last = uint64(len(txn.ApprovalProgram))
-		}
+		last := min(first+maxStringSize, uint64(len(txn.ApprovalProgram)))
 		sv.Bytes = txn.ApprovalProgram[first:last]
 	case NumClearStateProgramPages:
 		sv.Uint = uint64(basics.DivCeil(len(txn.ClearStateProgram), maxStringSize))
@@ -3251,10 +3242,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 			return sv, fmt.Errorf("invalid ClearStateProgramPages index %d", arrayFieldIdx)
 		}
 		first := arrayFieldIdx * maxStringSize
-		last := first + maxStringSize
-		if last > uint64(len(txn.ClearStateProgram)) {
-			last = uint64(len(txn.ClearStateProgram))
-		}
+		last := min(first+maxStringSize, uint64(len(txn.ClearStateProgram)))
 		sv.Bytes = txn.ClearStateProgram[first:last]
 	case RekeyTo:
 		sv.Bytes = txn.RekeyTo[:]

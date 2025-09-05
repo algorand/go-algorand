@@ -475,10 +475,7 @@ func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	iteration-- // 0-based here
 
 	delSegmentEnd := iteration * numElementsPerSegement
-	delSegmentStart := delSegmentEnd - numElementsPerSegement
-	if delSegmentStart < 0 {
-		delSegmentStart = 0
-	}
+	delSegmentStart := max(delSegmentEnd-numElementsPerSegement, 0)
 
 	newSample := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	stop := delSegmentEnd + numElementsPerSegement
@@ -707,10 +704,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		b.StopTimer()
 		balancesLoopStart := time.Now()
 		// generate a chunk;
-		chunkSize := targetAccountsCount - accountsLoaded
-		if chunkSize > BalancesPerCatchpointFileChunk {
-			chunkSize = BalancesPerCatchpointFileChunk
-		}
+		chunkSize := min(targetAccountsCount-accountsLoaded, BalancesPerCatchpointFileChunk)
 		last64KSize += chunkSize
 		if accountsLoaded >= targetAccountsCount-64*1024 && last64KStart.IsZero() {
 			last64KStart = time.Now()

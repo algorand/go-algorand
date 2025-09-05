@@ -51,10 +51,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 	last64KIndex = -1
 	for accounts < accountsCount {
 		// generate a chunk;
-		chunkSize := accountsCount - accounts
-		if chunkSize > BalancesPerCatchpointFileChunk {
-			chunkSize = BalancesPerCatchpointFileChunk
-		}
+		chunkSize := min(accountsCount-accounts, BalancesPerCatchpointFileChunk)
 		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
 			last64KIndex = len(encodedAccountChunks)
 		}
