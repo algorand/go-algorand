@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -171,12 +172,7 @@ func TestGenesisJsonCreation(t *testing.T) {
 		deterministicAddresses := []string{"FeeSink", "RewardsPool"}
 
 		isNondeterministicAddress := func(name string) bool {
-			for _, address := range deterministicAddresses {
-				if name == address {
-					return false
-				}
-			}
-			return true
+			return !slices.Contains(deterministicAddresses, name)
 		}
 
 		for i := range as {
