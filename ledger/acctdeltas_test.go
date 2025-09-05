@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
 	"os"
@@ -188,9 +189,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates l
 
 func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.AccountDeltas) map[basics.Address]basics.AccountData {
 	result := make(map[basics.Address]basics.AccountData, len(base)+deltas.Len())
-	for addr, ad := range base {
-		result[addr] = ad
-	}
+	maps.Copy(result, base)
 
 	for i := 0; i < deltas.Len(); i++ {
 		addr, _ := deltas.GetByIdx(i)
@@ -1478,18 +1477,10 @@ func (m mockAccountWriter) clone() (m2 mockAccountWriter) {
 	m2.resources = make(map[mockResourcesKey]ledgercore.AccountResource, len(m.resources))
 	m2.addresses = make(map[basics.Address]trackerdb.AccountRef, len(m.resources))
 	m2.rowids = make(map[trackerdb.AccountRef]basics.Address, len(m.rowids))
-	for k, v := range m.accounts {
-		m2.accounts[k] = v
-	}
-	for k, v := range m.resources {
-		m2.resources[k] = v
-	}
-	for k, v := range m.addresses {
-		m2.addresses[k] = v
-	}
-	for k, v := range m.rowids {
-		m2.rowids[k] = v
-	}
+	maps.Copy(m2.accounts, m.accounts)
+	maps.Copy(m2.resources, m.resources)
+	maps.Copy(m2.addresses, m.addresses)
+	maps.Copy(m2.rowids, m.rowids)
 	m2.lastAcctRef = m.lastAcctRef
 	m2.availAcctRefs = m.availAcctRefs
 	return m2

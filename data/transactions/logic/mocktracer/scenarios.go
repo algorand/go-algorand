@@ -19,6 +19,7 @@ package mocktracer
 import (
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"math"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -836,9 +837,7 @@ func MergeStateDeltas(deltas ...ledgercore.StateDelta) ledgercore.StateDelta {
 			includedTx.Intra += txidBase
 			result.Txids[txid] = includedTx
 		}
-		for lease, round := range delta.Txleases {
-			result.Txleases[lease] = round
-		}
+		maps.Copy(result.Txleases, delta.Txleases)
 	}
 	return result
 }
