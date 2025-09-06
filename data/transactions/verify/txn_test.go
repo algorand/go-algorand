@@ -833,10 +833,7 @@ func generateTransactionGroups(maxGroupSize int, signedTxns []transactions.Signe
 
 	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxns))
 	for i := 0; i < len(signedTxns); {
-		txnsInGroup := rand.Intn(protoMaxGroupSize-1) + 1
-		if txnsInGroup > maxGroupSize {
-			txnsInGroup = maxGroupSize
-		}
+		txnsInGroup := min(rand.Intn(protoMaxGroupSize-1)+1, maxGroupSize)
 		if i+txnsInGroup > len(signedTxns) {
 			txnsInGroup = len(signedTxns) - i
 		}

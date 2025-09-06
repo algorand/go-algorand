@@ -764,9 +764,7 @@ func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basic
 
 	if acct.TotalAppParams > 0 || prev.AppParams != nil {
 		result.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		for aidx, params := range prev.AppParams {
-			result.AppParams[aidx] = params
-		}
+		maps.Copy(result.AppParams, prev.AppParams)
 		for aapp, idx := range ad.appResourcesCache {
 			if aapp.Address == addr {
 				rec := ad.AppResources[idx]
@@ -784,9 +782,7 @@ func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basic
 
 	if acct.TotalAppLocalStates > 0 || prev.AppLocalStates != nil {
 		result.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-		for aidx, state := range prev.AppLocalStates {
-			result.AppLocalStates[aidx] = state
-		}
+		maps.Copy(result.AppLocalStates, prev.AppLocalStates)
 		for aapp, idx := range ad.appResourcesCache {
 			if aapp.Address == addr {
 				rec := ad.AppResources[idx]
@@ -804,9 +800,7 @@ func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basic
 
 	if acct.TotalAssetParams > 0 || prev.AssetParams != nil {
 		result.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
-		for aidx, params := range prev.AssetParams {
-			result.AssetParams[aidx] = params
-		}
+		maps.Copy(result.AssetParams, prev.AssetParams)
 		for aapp, idx := range ad.assetResourcesCache {
 			if aapp.Address == addr {
 				rec := ad.AssetResources[idx]
@@ -824,9 +818,7 @@ func (ad AccountDeltas) ApplyToBasicsAccountData(addr basics.Address, prev basic
 
 	if acct.TotalAssets > 0 || prev.Assets != nil {
 		result.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
-		for aidx, params := range prev.Assets {
-			result.Assets[aidx] = params
-		}
+		maps.Copy(result.Assets, prev.Assets)
 		for aapp, idx := range ad.assetResourcesCache {
 			if aapp.Address == addr {
 				rec := ad.AssetResources[idx]

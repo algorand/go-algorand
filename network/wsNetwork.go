@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -620,13 +621,7 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.eventualReadyDelay = time.Minute
 	wn.prioTracker = newPrioTracker(wn)
 
-	readBufferLen := wn.config.IncomingConnectionsLimit + wn.config.GossipFanout
-	if readBufferLen < 100 {
-		readBufferLen = 100
-	}
-	if readBufferLen > 10000 {
-		readBufferLen = 10000
-	}
+	readBufferLen := min(max(wn.config.IncomingConnectionsLimit+wn.config.GossipFanout, 100), 10000)
 	wn.handler = msgHandler{
 		ctx:        wn.ctx,
 		log:        wn.log,
@@ -2467,9 +2462,7 @@ func (wn *WebsocketNetwork) registerMessageInterest(t protocol.Tag) {
 
 	if wn.messagesOfInterest == nil {
 		wn.messagesOfInterest = make(map[protocol.Tag]bool)
-		for tag, flag := range defaultSendMessageTags {
-			wn.messagesOfInterest[tag] = flag
-		}
+		maps.Copy(wn.messagesOfInterest, defaultSendMessageTags)
 	}
 
 	wn.messagesOfInterest[t] = true
@@ -2483,9 +2476,7 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
 
 	if wn.messagesOfInterest == nil {
 		wn.messagesOfInterest = make(map[protocol.Tag]bool)
-		for tag, flag := range defaultSendMessageTags {
-			wn.messagesOfInterest[tag] = flag
-		}
+		maps.Copy(wn.messagesOfInterest, defaultSendMessageTags)
 	}
 
 	delete(wn.messagesOfInterest, t)

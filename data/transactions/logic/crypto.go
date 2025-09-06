@@ -125,6 +125,13 @@ func opSumhash512(cx *EvalContext) error {
 	return nil
 }
 
+func opSHA512(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	hash := sha512.Sum512(cx.Stack[last].Bytes)
+	cx.Stack[last].Bytes = hash[:]
+	return nil
+}
+
 func opFalconVerify(cx *EvalContext) error {
 	last := len(cx.Stack) - 1 // index of PK
 	prev := last - 1          // index of signature

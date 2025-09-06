@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"maps"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -457,9 +458,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 			break
 		}
 	}
-	for assetID, ap := range newAssets {
-		pps.cinfo.AssetParams[assetID] = ap
-	}
+	maps.Copy(pps.cinfo.AssetParams, newAssets)
 	return nil
 }
 

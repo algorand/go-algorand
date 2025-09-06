@@ -1361,10 +1361,7 @@ func getTransactionGroups(N, numUsers, maxGroupSize int, addresses []basics.Addr
 	txnGrps := make([][]transactions.Transaction, N)
 	protoMaxGrpSize := proto.MaxTxGroupSize
 	for u := 0; u < N; u++ {
-		grpSize := rand.Intn(protoMaxGrpSize-1) + 1
-		if grpSize > maxGroupSize {
-			grpSize = maxGroupSize
-		}
+		grpSize := min(rand.Intn(protoMaxGrpSize-1)+1, maxGroupSize)
 		var txGroup transactions.TxGroup
 		txns := make([]transactions.Transaction, 0, grpSize)
 		for g := 0; g < grpSize; g++ {
@@ -1794,10 +1791,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 	}
 
 	// Prepare 1000 transactions
-	genTCount := 1000
-	if b.N < genTCount {
-		genTCount = b.N
-	}
+	genTCount := min(b.N, 1000)
 	signedTransactionGroups, badTxnGroups := txGen.createSignedTxGroups(b, genTCount)
 	var encStxns []network.IncomingMessage
 	if useBacklogWorker {

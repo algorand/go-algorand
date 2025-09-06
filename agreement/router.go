@@ -64,11 +64,7 @@ func init() {
 	// for consistency in analytics we are setting the minimum to be 8 rounds
 	// (equivalent to a dynamicFilterTimeoutLowerBound of 500 ms).
 	minCredentialRoundLag := round(8) // round 2*2000ms / 500ms
-	credentialRoundLag = round(2 * config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound)
-
-	if credentialRoundLag < minCredentialRoundLag {
-		credentialRoundLag = minCredentialRoundLag
-	}
+	credentialRoundLag = max(round(2*config.Protocol.SmallLambda/dynamicFilterTimeoutLowerBound), minCredentialRoundLag)
 	if credentialRoundLag*round(dynamicFilterTimeoutLowerBound) < round(2*config.Protocol.SmallLambda) {
 		credentialRoundLag++
 	}
