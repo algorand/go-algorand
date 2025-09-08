@@ -92,7 +92,12 @@ func (i *instant) runRound(r basics.Round) {
 }
 
 func (i *instant) shutdown() {
-	<-i.Z1
+	// If Zero() is currently blocked trying to send on Z1, receive once to
+	// release it; otherwise, don't block shutdown.
+	select {
+	case <-i.Z1:
+	default:
+	}
 }
 
 func (i *instant) UpdateEventsQueue(queueName string, queueLength int) {
