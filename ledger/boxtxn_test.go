@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -127,7 +128,12 @@ var passThruSource = main(`
   itxn_submit
 `)
 
-const boxVersion = 36
+const (
+	boxVersion          = 36
+	accessVersion       = 38
+	boxQuotaBumpVersion = 41
+	newAppCreateVersion = 41
+)
 
 func boxFee(p config.ConsensusParams, nameAndValueSize uint64) uint64 {
 	return p.BoxFlatMinBalance + p.BoxByteMinBalance*(nameAndValueSize)
@@ -539,16 +545,20 @@ func TestBoxIOBudgets(t *testing.T) {
 			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (1024) exceeded")
-		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (1024) exceeded")
+			call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
 			"write budget (2048) exceeded")
 		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (3072) exceeded")
-		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are 4 box refs
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (3072) exceeded")
+			call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		}
+		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are enough box refs
 			"below min") // big box would need more balance
 		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
 			"write budget (4096) exceeded")
@@ -572,11 +582,10 @@ func TestBoxIOBudgets(t *testing.T) {
 		dl.txgroup("", &fundApp, create)
 
 		// Now that we've created a 4,096 byte box, test READ budget
-		// It works at the start, because call still has 4 brs.
+		// It works at the start, because call still has enough brs.
 		dl.txn(call.Args("check", "x", "\x00"))
-		call.Boxes = call.Boxes[:3]
-		dl.txn(call.Args("check", "x", "\x00"),
-			"box read budget (3072) exceeded")
+		call.Boxes = call.Boxes[:len(call.Boxes)-1] // remove one ref
+		dl.txn(call.Args("check", "x", "\x00"), "box read budget")
 
 		// Give a budget over 32768, confirm failure anyway
 		empties := [32]transactions.BoxRef{}
@@ -603,7 +612,7 @@ func TestBoxInners(t *testing.T) {
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 
-		boxID := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
+		boxID := dl.fundedApp(addrs[0], 4_000_000, boxAppSource)  // there are some big boxes made
 		passID := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
 		call := txntest.Txn{
 			Type:          "appl",
@@ -621,11 +630,19 @@ func TestBoxInners(t *testing.T) {
 		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
 
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (1024) exceeded")
-		dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
-		call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
-		dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (1024) exceeded")
+			dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
+			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+			dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+		} else {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (2048) exceeded")
+			dl.txn(call.Args("create", "x", "\x08\x00")) // 2048
+			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+			dl.txn(call.Args("create", "y", "\x10\x00")) // 4096
+		}
 
 		require.Len(t, call.Boxes, 2)
 		setX := call.Args("set", "x", "A")
@@ -683,5 +700,171 @@ func TestBoxInners(t *testing.T) {
 		// good change
 		dl.txn(call.Args("put", "x", "mark doe"))
 		dl.txn(call.Args("check", "x", "mark d"))
+	})
+}
+
+// Create the app with bytecode in txn.ApplicationArgs[0], pass my arg[1] as created arg[0]
+var passThruCreator = main(`
+  itxn_begin
+  txn TypeEnum; itxn_field TypeEnum
+  txn ApplicationArgs 0; itxn_field ApprovalProgram
+  txn ApplicationArgs 0; itxn_field ClearStateProgram // need something, won't be used
+  txn ApplicationArgs 1; itxn_field ApplicationArgs
+  itxn_submit
+`)
+
+// TestNewAppBoxCreate exercised proto.EnableUnnamedBoxCreate
+func TestNewAppBoxCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// We're going to create an app that will, during its own creation,
+		// create a box.  That requires two tricks.
+
+		// 1) Figure out the appID it will have and prefund it.  This _could_ be
+		// done within the group itself - an early transaction deduces the
+		// transaction counter, so it can know what the later create will be,
+		// and compute it's app address.
+
+		// 2) a) Use the the predicted appID to name the box ref.
+		// or b) Use 0 as the app in the box ref, meaning "this app"
+		// or c) EnableUnnamedBoxCreate will allow such a creation if there are empty box refs.
+
+		// 2a is pretty much impossible in practice, we can only do it here
+		// because our blockchain is "quiet" we know the upcoming appID.
+
+		// 2b won't work for inner app creates, since the 0 appID gets replaced
+		// with the _top-level_ app's ID.
+
+		// 2c would allow newly created apps, even if inners, to create boxes.
+		// It also has the nice property of not needing to know the box's
+		// name. So it can be computed in app.  We don't need the name because
+		// we can short-circuit the lookup - the box _must_ be empty.
+
+		// boxCreate is an app that tries to make a box from its first argument, even during its own creation.
+		boxCreate := "txn ApplicationArgs 0; int 24; box_create;" // Succeeds if the box is created and did not already exist
+
+		// boxPut is an app that tries to make a box from its first argument, even during its own creation (but using box_put)
+		boxPut := "txn ApplicationArgs 0; int 24; bzero; box_put; int 1;"
+
+		for _, createSrc := range []string{boxCreate, boxPut} {
+			// doubleSrc tries to create TWO boxes. The second is always named by ApplicationArgs 1
+			doubleSrc := createSrc + `txn ApplicationArgs 1; int 24; box_create; pop;` // return result of FIRST box_create
+			// need to call one inner txn, and have have mbr for itself and inner created app
+			passID := dl.fundedApp(addrs[0], 201_000, passThruCreator) // Will be used to show inners have same power
+
+			// Since we used fundedApp, the next app created would be passID+2.
+			// We'll prefund a whole bunch of the next apps that we can then create
+			// at will below.
+
+			var testTxns = basics.AppIndex(20)
+			for i := range testTxns {
+				dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: (passID + 2 + testTxns + i).Address(), Amount: 500_000})
+			}
+
+			// Try to create it. It will fail because there's no box ref. (does not increment txncounter)
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}}},
+				"invalid Box reference 0x01")
+
+			// 2a. Create it with a box ref of the predicted appID
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+				ForeignApps: []basics.AppIndex{passID + testTxns + 2},
+				Boxes:       []transactions.BoxRef{{Index: 1, Name: []byte{0x01}}}})
+
+			// 2a. Create it with a box ref of the predicted appID (Access list)
+			if ver >= accessVersion {
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{
+						{App: passID + testTxns + 3},
+						{Box: transactions.BoxRef{Index: 1, Name: []byte{0x01}}}}})
+			}
+
+			// 2b. Create it with a box ref of 0, which means "this app"
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}})
+
+			// 2b. Create it with a box ref of 0, which means "this app" (Access List)
+			if ver >= accessVersion {
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{
+						{Box: transactions.BoxRef{Index: 0, Name: []byte{0x01}}}}})
+			}
+
+			// you can manipulate it twice if you want (this tries to create it twice)
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x01}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}})
+
+			// but you still can't make a second box
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}},
+				"invalid Box reference 0x02")
+
+			// until you list it as well
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{
+					{Index: 0, Name: []byte{0x01}},
+					{Index: 0, Name: []byte{0x02}},
+				}})
+
+			if ver >= newAppCreateVersion {
+				// 2c. Create it with an empty box ref
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+					Boxes: []transactions.BoxRef{{}}})
+
+				// 2c. Create it with an empty box ref
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{{Box: transactions.BoxRef{}}}})
+
+				// but you can't do a second create
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+					Boxes: []transactions.BoxRef{{}}},
+					"invalid Box reference 0x02")
+
+				// until you add a second box ref
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+					Boxes: []transactions.BoxRef{{}, {}}})
+
+				// Now confirm that 2c also works for an inner created app
+				ops, err := logic.AssembleString("#pragma version 12\n" + createSrc)
+				require.NoError(t, err, ops.Errors)
+				createSrcByteCode := ops.Program
+				// create app as an inner, fails w/o empty box ref
+				dl.txn(&txntest.Txn{Sender: addrs[0],
+					Type:            "appl",
+					ApplicationID:   passID,
+					ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
+				}, "invalid Box reference 0x01")
+				// create app as an inner, succeeds w/ empty box ref
+				dl.txn(&txntest.Txn{Sender: addrs[0],
+					Type:            "appl",
+					ApplicationID:   passID,
+					ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
+					Boxes:           []transactions.BoxRef{{}},
+				})
+			} else {
+				// 2c. Doesn't work yet until `newAppCreateVersion`
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrc, ApplicationArgs: [][]byte{{0x01}},
+					Boxes: []transactions.BoxRef{{}}},
+					"invalid Box reference 0x01")
+			}
+		}
 	})
 }

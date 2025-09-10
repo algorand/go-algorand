@@ -149,8 +149,16 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 }
 
 func runSimulationTestCase(t *testing.T, env simulationtesting.Environment, testcase simulationTestCase) {
+	t.Helper()
+
 	actual, err := simulation.MakeSimulator(env.Ledger, testcase.developerAPI).Simulate(testcase.input)
 	require.NoError(t, err)
+
+	for i := range actual.TxnGroups {
+		if actual.TxnGroups[i].UnnamedResourcesAccessed != nil {
+			actual.TxnGroups[i].UnnamedResourcesAccessed.Simplify()
+		}
+	}
 
 	validateSimulationResult(t, actual)
 
@@ -7067,9 +7075,9 @@ func TestUnnamedResources(t *testing.T) {
 				if v >= 8 { // boxes introduced
 					program += `byte "A"; int 64; box_create; assert;`
 					program += `byte "B"; box_len; !; assert; !; assert;`
-					expectedUnnamedResourceGroupAssignment.Boxes = map[logic.BoxRef]uint64{
-						{App: 0, Name: "A"}: 0,
-						{App: 0, Name: "B"}: 0,
+					expectedUnnamedResourceGroupAssignment.Boxes = map[basics.BoxRef]simulation.BoxStat{
+						{App: 0, Name: "A"}: {},
+						{App: 0, Name: "B"}: {},
 					}
 				}
 
@@ -7107,7 +7115,7 @@ func TestUnnamedResources(t *testing.T) {
 					local.Address = testAppID.Address()
 					expectedUnnamedResourceGroupAssignment.AppLocals[local] = struct{}{}
 				}
-				var boxesToFix []logic.BoxRef
+				var boxesToFix []basics.BoxRef
 				for box := range expectedUnnamedResourceGroupAssignment.Boxes {
 					if box.App == 0 {
 						// replace with app ID
@@ -7517,10 +7525,14 @@ int 1
 	}
 }
 
-const boxTestProgram = `#pragma version %d
-txn ApplicationID
-bz end // Do nothing during create
+const verPragma = "#pragma version %d\n"
 
+const bailOnCreate = `
+txn ApplicationID
+bz end
+`
+
+const mainBoxTestProgram = `
 byte "create"
 byte "delete"
 byte "read"
@@ -7560,12 +7572,22 @@ end:
 int 1
 `
 
+// boxTestProgram executes the operations defined by boxOperation
+const boxTestProgram = verPragma + bailOnCreate + mainBoxTestProgram
+
+// boxDuringCreateProgram will even try to operate during the app creation.
+const boxDuringCreateProgram = verPragma + mainBoxTestProgram
+
+// boxOperation is used to describe something we want done to a box. A
+// transaction doing it will be created and run in a test.
 type boxOperation struct {
 	op            logic.BoxOperation
 	name          string
 	createSize    uint64
 	contents      []byte
 	otherRefCount int
+	withBoxRefs   int  // Add this many box refs to the generated transaction
+	duringCreate  bool // If true, instantiate `boxDuringCreateProgram` to execute the op
 }
 
 func (o boxOperation) appArgs() [][]byte {
@@ -7602,13 +7624,16 @@ func (o boxOperation) boxRefs() []transactions.BoxRef {
 }
 
 type boxTestResult struct {
-	Boxes           map[logic.BoxRef]uint64
+	Boxes           map[basics.BoxRef]uint64 // maps observed boxes to their size when read
 	NumEmptyBoxRefs int
 
 	FailureMessage string
 	FailingIndex   int
 }
 
+// testUnnamedBoxOperations creates a group with one transaction per boxOp,
+// calling `app` with arguments meant to effect the boxOps.  The results must
+// match `expected`.
 func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, app basics.AppIndex, boxOps []boxOperation, expected boxTestResult) {
 	t.Helper()
 
@@ -7616,6 +7641,7 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 	require.LessOrEqual(t, len(boxOps), maxGroupSize)
 
 	otherAssets := 0
+	boxRefs := 0
 	txns := make([]*txntest.Txn, maxGroupSize)
 	for i, op := range boxOps {
 		txn := env.TxnInfo.NewTxn(txntest.Txn{
@@ -7624,10 +7650,18 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 			ApplicationID:   app,
 			ApplicationArgs: op.appArgs(),
 			ForeignAssets:   make([]basics.AssetIndex, op.otherRefCount),
+			Boxes:           slices.Repeat(op.boxRefs(), op.withBoxRefs),
 			Note:            []byte{byte(i)}, // Make each txn unique
 		})
+		if op.duringCreate {
+			txn.ApplicationID = 0
+			v := env.TxnInfo.CurrentProtocolParams().LogicSigVersion
+			txn.ApprovalProgram = fmt.Sprintf(boxDuringCreateProgram, v)
+			txn.ClearStateProgram = fmt.Sprintf("#pragma version %d\n int 1", v)
+		}
 		txns[i] = &txn
 		otherAssets += op.otherRefCount
+		boxRefs += op.withBoxRefs
 	}
 	for i := len(boxOps); i < maxGroupSize; i++ {
 		// Fill out the rest of the group with non-app transactions. This reduces the amount of
@@ -7649,6 +7683,11 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
 	for i := range expectedTxnResults {
 		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+		if i < len(boxOps) && boxOps[i].duringCreate {
+			// 1007 here is because of the number of transactions we used to
+			// setup the env.  See explanation in: TestUnnamedResourcesBoxIOBudget
+			expectedTxnResults[i].Txn.ApplyData.ApplicationID = 1007 + basics.AppIndex(i)
+		}
 	}
 
 	var failedAt simulation.TxnPath
@@ -7661,13 +7700,18 @@ func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, a
 		MaxAccounts:  len(boxOps) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 		MaxAssets:    len(boxOps)*proto.MaxAppTxnForeignAssets - otherAssets,
 		MaxApps:      len(boxOps) * proto.MaxAppTxnForeignApps,
-		MaxBoxes:     len(boxOps) * proto.MaxAppBoxReferences,
-		MaxTotalRefs: len(boxOps)*proto.MaxAppTotalTxnReferences - otherAssets,
+		MaxBoxes:     len(boxOps)*proto.MaxAppBoxReferences - boxRefs,
+		MaxTotalRefs: len(boxOps)*proto.MaxAppTotalTxnReferences - otherAssets - boxRefs,
 
-		Boxes:           expected.Boxes,
 		NumEmptyBoxRefs: expected.NumEmptyBoxRefs,
 
 		MaxCrossProductReferences: len(boxOps) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+	}
+	if expected.Boxes != nil {
+		expectedUnnamedResources.Boxes = make(map[basics.BoxRef]simulation.BoxStat, len(expected.Boxes))
+		for key, size := range expected.Boxes {
+			expectedUnnamedResources.Boxes[key] = simulation.BoxStat{ReadSize: size}
+		}
 	}
 
 	if !expectedUnnamedResources.HasResources() {
@@ -7726,8 +7770,12 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			})
 
 			// MBR is needed for boxes.
-			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
-			env.TransferAlgos(env.Accounts[1].Addr, appID.Address(), transferable)
+			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - 2*proto.MinTxnFee
+			env.TransferAlgos(env.Accounts[1].Addr, appID.Address(), transferable/2)
+			// we're also going to make new boxes in a new app, which will be
+			// the sixth txns after the appID creation (because of two
+			// TrsnaferAlgos and 3 env.Txn, below)
+			env.TransferAlgos(env.Accounts[1].Addr, (appID + 6).Address(), transferable/2)
 
 			// Set up boxes A, B, C for testing.
 			// A is a box with a size of exactly BytesPerBoxReference
@@ -7776,27 +7824,33 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			// in separate simulations, so we can reuse the same environment and not have to worry
 			// about the effects of one test interfering with another.
 
-			// Reading exisitng boxes
+			// Reading existing boxes
 			testBoxOps([]boxOperation{
 				{op: logic.BoxReadOperation, name: "A"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
 			})
 			testBoxOps([]boxOperation{
 				{op: logic.BoxReadOperation, name: "B"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "B"}: 1,
 				},
 			})
 			testBoxOps([]boxOperation{
 				{op: logic.BoxReadOperation, name: "C"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 				},
+				// We need an additional empty box ref because the size of C exceeds BytesPerBoxReference
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "C", withBoxRefs: 1},
+			}, boxTestResult{
 				// We need an additional empty box ref because the size of C exceeds BytesPerBoxReference
 				NumEmptyBoxRefs: 1,
 			})
@@ -7804,7 +7858,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxReadOperation, name: "A"},
 				{op: logic.BoxReadOperation, name: "B"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 					{App: appID, Name: "B"}: 1,
 				},
@@ -7813,7 +7867,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxReadOperation, name: "A"},
 				{op: logic.BoxReadOperation, name: "C"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 				},
@@ -7824,17 +7878,19 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxReadOperation, name: "B"},
 				{op: logic.BoxReadOperation, name: "C"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 					{App: appID, Name: "B"}: 1,
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 				},
 				// No empty box refs needed because we have perfectly reached 3 * BytesPerBoxReference
 			})
+
+			// non-existent box
 			testBoxOps([]boxOperation{
 				{op: logic.BoxReadOperation, name: "Q"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "Q"}: 0,
 				},
 			})
@@ -7843,14 +7899,14 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			testBoxOps([]boxOperation{
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 				},
 			})
 			testBoxOps([]boxOperation{
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 1},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 				},
 				NumEmptyBoxRefs: 1,
@@ -7858,7 +7914,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			testBoxOps([]boxOperation{
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference * 3},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 				},
 				NumEmptyBoxRefs: 2,
@@ -7867,10 +7923,34 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: 1},
 				{op: logic.BoxCreateOperation, name: "E", createSize: 1},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "E"}: 0,
 				},
+			})
+
+			// Try to read during a new app create. These boxes _can't_ exist, so no need for extra read quota
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "X", duringCreate: true},
+			}, boxTestResult{
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "X", duringCreate: true},
+				{op: logic.BoxReadOperation, name: "Y", duringCreate: true},
+			}, boxTestResult{
+				NumEmptyBoxRefs: 2,
+			})
+			// now try to create, which can cause enough dirty bytes to require empty refs
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "small", createSize: proto.BytesPerBoxReference, duringCreate: true},
+			}, boxTestResult{
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "big", createSize: proto.BytesPerBoxReference + 1, duringCreate: true},
+			}, boxTestResult{
+				NumEmptyBoxRefs: 2,
 			})
 
 			// Creating new boxes and reading existing ones
@@ -7878,7 +7958,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
 				{op: logic.BoxReadOperation, name: "A"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
@@ -7889,7 +7969,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxReadOperation, name: "A"},
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
@@ -7901,7 +7981,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
 				{op: logic.BoxWriteOperation, name: "A", contents: []byte{1}},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
@@ -7911,7 +7991,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
 				{op: logic.BoxWriteOperation, name: "B", contents: []byte{1}},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "B"}: 1,
 				},
@@ -7924,7 +8004,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxCreateOperation, name: "D", createSize: 4 * proto.BytesPerBoxReference},
 				{op: logic.BoxDeleteOperation, name: "D"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 				},
 				// Still need 3 empty box refs because we went over the write budget before deletion.
@@ -7937,7 +8017,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				{op: logic.BoxDeleteOperation, name: "D"},
 				{op: logic.BoxReadOperation, name: "C"},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "D"}: 0,
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 				},
@@ -7956,7 +8036,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences - 1,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
 			})
@@ -7987,7 +8067,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
 					{App: appID, Name: "X"}: 0,
 				},
@@ -8002,7 +8082,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences - 1,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "X"}: 0,
 				},
 			})
@@ -8016,7 +8096,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences - 1,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "X"}: 0,
 				},
 				FailureMessage: fmt.Sprintf("logic eval error: write budget (%d) exceeded %d", proto.BytesPerBoxReference, proto.BytesPerBoxReference+1),
@@ -8037,7 +8117,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "X"}: 0,
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
@@ -8056,7 +8136,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 					otherRefCount: proto.MaxAppBoxReferences,
 				},
 			}, boxTestResult{
-				Boxes: map[logic.BoxRef]uint64{
+				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
 				},
 				FailureMessage: fmt.Sprintf("logic eval error: invalid Box reference %#x", "B"),
@@ -8440,14 +8520,14 @@ func mapWithKeys[K comparable, V any](keys []K, defaultValue V) map[K]V {
 	return m
 }
 
-func boxNamesToRefs(app basics.AppIndex, names []string) []logic.BoxRef {
+func boxNamesToRefs(app basics.AppIndex, names []string) []basics.BoxRef {
 	if names == nil {
 		return nil
 	}
 
-	refs := make([]logic.BoxRef, len(names))
+	refs := make([]basics.BoxRef, len(names))
 	for i, name := range names {
-		refs[i] = logic.BoxRef{
+		refs[i] = basics.BoxRef{
 			App:  app,
 			Name: name,
 		}
@@ -8506,7 +8586,7 @@ func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, 
 		MaxBoxes:     proto.MaxAppBoxReferences,
 		MaxTotalRefs: proto.MaxAppTotalTxnReferences,
 
-		Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
+		Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), simulation.BoxStat{}),
 
 		MaxCrossProductReferences: proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
 	}
@@ -8660,7 +8740,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				unnamedResourceArguments{}.
 					addAccounts(otherAccounts[:proto.MaxAppTotalTxnReferences+1]...).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[proto.MaxAppTotalTxnReferences]),
+				fmt.Sprintf("logic eval error: unavailable Account %s", otherAccounts[proto.MaxAppTotalTxnReferences]),
 			)
 
 			// Exactly at asset limit
@@ -8726,7 +8806,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 			// Adding 1 more of any is over the limit
 			testResourceAccess(
 				atLimit.addAccounts(otherAccounts[len(otherAccounts)-1]).markLimitExceeded(),
-				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[len(otherAccounts)-1]),
+				fmt.Sprintf("logic eval error: unavailable Account %s", otherAccounts[len(otherAccounts)-1]),
 			)
 			testResourceAccess(
 				atLimit.addAssets(assets[len(assets)-1]).markLimitExceeded(),
@@ -8877,7 +8957,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atAssetHoldingLimit.
 					addAssetHoldings(assets[assetHoldingLimitIndex], otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[assetHoldingLimitIndex]),
+				fmt.Sprintf("logic eval error: unavailable Holding %d+%s", assets[assetHoldingLimitIndex], otherAccounts[0]),
 			)
 
 			// Over app local limit
@@ -8885,7 +8965,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atAppLocalLimit.
 					addAppLocals(appID, otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+				fmt.Sprintf("logic eval error: unavailable Local State %d+%s", appID, otherAccounts[0]),
 			)
 
 			// Over total cross-product limit with asset holding
@@ -8893,7 +8973,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atCombinedLimit.
 					addAssetHoldings(assets[1], otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[1]),
+				fmt.Sprintf("logic eval error: unavailable Holding %d+%s", assets[1], otherAccounts[0]),
 			)
 
 			// Over total cross-product limit with app local
@@ -8901,7 +8981,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 				atCombinedLimit.
 					addAppLocals(appID, otherAccounts[0]).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+				fmt.Sprintf("logic eval error: unavailable Local State %d+%s", appID, otherAccounts[0]),
 			)
 		})
 	}

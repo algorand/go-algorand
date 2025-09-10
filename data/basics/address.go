@@ -55,7 +55,7 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 	decoded, err := base32Encoder.DecodeString(address)
 
 	if err != nil {
-		return Address{}, fmt.Errorf("failed to decode address %s to base 32", address)
+		return Address{}, fmt.Errorf("failed to decode address %s from base 32", address)
 	}
 	var short Address
 	if len(decoded) < len(short) {

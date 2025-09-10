@@ -395,12 +395,17 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 	}
 
 	hasMsig := false
+	hasLMsig := false
 	numSigs := 0
 	if !lsig.Sig.Blank() {
 		numSigs++
 	}
 	if !lsig.Msig.Blank() {
 		hasMsig = true
+		numSigs++
+	}
+	if !lsig.LMsig.Blank() {
+		hasLMsig = true
 		numSigs++
 	}
 	if numSigs == 0 {
@@ -413,18 +418,33 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 		return errors.New("LogicNot signed and not a Logic-only account")
 	}
 	if numSigs > 1 {
-		return errors.New("LogicSig should only have one of Sig or Msig but has more than one")
+		return errors.New("LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
 	}
 
-	if !hasMsig {
+	if !hasMsig && !hasLMsig {
 		program := logic.Program(lsig.Logic)
 		batchVerifier.EnqueueSignature(crypto.PublicKey(txn.Authorizer()), &program, lsig.Sig)
 	} else {
-		program := logic.Program(lsig.Logic)
-		if err := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); err != nil {
+		var program crypto.Hashable
+		var msig crypto.MultisigSig
+		if hasLMsig {
+			if !groupCtx.consensusParams.LogicSigLMsig {
+				return errors.New("LogicSig LMsig field not supported in this consensus version")
+			}
+			program = logic.MultisigProgram{Addr: crypto.Digest(txn.Authorizer()), Program: lsig.Logic}
+			msig = crypto.MultisigSig(lsig.LMsig)
+		} else {
+			if !groupCtx.consensusParams.LogicSigMsig {
+				return errors.New("LogicSig Msig field not supported in this consensus version")
+			}
+			program = logic.Program(lsig.Logic)
+			msig = lsig.Msig
+		}
+		if err := crypto.MultisigBatchPrep(program, crypto.Digest(txn.Authorizer()), msig, batchVerifier); err != nil {
 			return fmt.Errorf("logic multisig validation failed: %w", err)
 		}
-		sigs := lsig.Msig.Signatures()
+
+		sigs := msig.Signatures()
 		if sigs <= 4 {
 			msigLsigLessOrEqual4.Inc(nil)
 		} else if sigs <= 10 {

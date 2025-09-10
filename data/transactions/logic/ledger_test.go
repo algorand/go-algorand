@@ -731,17 +731,20 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 	}
 	fholding, ok := fbr.holdings[aid]
 	if !ok {
-		if from == to && amount == 0 {
-			// opt in
-			if params, exists := l.assets[aid]; exists {
-				fbr.holdings[aid] = basics.AssetHolding{
-					Frozen: params.DefaultFrozen,
+		if amount == 0 {
+			if from == to {
+				// opt in
+				if params, exists := l.assets[aid]; exists {
+					fbr.holdings[aid] = basics.AssetHolding{
+						Frozen: params.DefaultFrozen,
+					}
+				} else {
+					return fmt.Errorf("Asset (%d) does not exist", aid)
 				}
-				return nil
 			}
-			return fmt.Errorf("Asset (%d) does not exist", aid)
+		} else {
+			return fmt.Errorf("Sender (%s) not opted in to %d", from, aid)
 		}
-		return fmt.Errorf("Sender (%s) not opted in to %d", from, aid)
 	}
 	if fholding.Frozen {
 		return fmt.Errorf("Sender (%s) is frozen for %d", from, aid)

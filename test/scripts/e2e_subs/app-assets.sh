@@ -202,15 +202,15 @@ ${gcmd} asset config --manager $SMALL --assetid $ASSETID --new-clawback $APPACCT
 cb_addr=$(${gcmd} asset info --assetid $ASSETID | clawback_addr)
 [ "$cb_addr" = "$APPACCT" ] #app is set as clawback address
 # transfer asset from $SMALL to $USER
-appl "transfer(uint64):void"  --app-arg="int:1000"  --foreign-asset="$ASSETID" --from="$SMALL" --app-account="$USER2"
+appl "transfer(uint64):void" --app-arg="int:1000" --foreign-asset="$ASSETID" --from="$SMALL" --app-account="$USER2"
 [ $(asset_bal "$USER2") = 1000 ]
 [ $(asset_bal "$SMALL") = 998000 ]
 # transfer asset from $USER to $SMALL
-appl "transfer(uint64):void"  --app-arg="int:100" --foreign-asset="$ASSETID" --from="$USER2" --app-account="$SMALL"
+appl "transfer(uint64):void" --app-arg="int:100" --foreign-asset="$ASSETID" --from="$USER2" --app-account="$SMALL"
+
 [ $(asset_bal "$USER2") = 900 ]
 [ $(asset_bal "$SMALL") = 998100 ]
 
-# opt in more assets
 ASSETID2=$(asset-create 1000000  --name "alpha" --unitname "a"  | asset-id)
 appl "optin():void" --foreign-asset="$ASSETID2" --from="$SMALL"
 ASSETID3=$(asset-create 1000000  --name "beta" --unitname "b"  | asset-id)
@@ -219,16 +219,16 @@ appl "optin():void" --foreign-asset="$ASSETID3" --from="$SMALL"
 IDs="$ASSETID
 $ASSETID2
 $ASSETID3"
-[[ "$(asset_ids "$APPACCT")" = $IDs ]]  # account has 3 assets
+[[ "$(asset_ids "$APPACCT")" = $IDs ]] || exit 1  # account has 3 assets
 
 # opt out of assets
 appl "close():void"  --foreign-asset="$ASSETID2" --from="$SMALL"
 IDs="$ASSETID
 $ASSETID3"
-[[ "$(asset_ids "$APPACCT")" = $IDs ]] # account has 2 assets
+[[ "$(asset_ids "$APPACCT")" = $IDs ]] || exit 1 # account has 2 assets
 appl "close():void" --foreign-asset="$ASSETID" --from="$SMALL"
 appl "close():void" --foreign-asset="$ASSETID3" --from="$SMALL"
-[[ "$(asset_ids "$APPACCT")" = "" ]] # account has no assets
+[[ "$(asset_ids "$APPACCT")" = "" ]] || exit 1 # account has no assets
 
 # app creates asset
 appl "create(uint64):void" --app-arg="int:1000000" --from="$SMALL"
@@ -248,7 +248,7 @@ IDs="$ASSETID
 $ASSETID2
 $ASSETID3
 $APPASSETID"
-[[ "$(asset_ids "$SMALL")" = $IDs ]] # has new asset
+[[ "$(asset_ids "$SMALL")" = $IDs ]] || exit 1 # has new asset
 [ "$(asset_bal "$SMALL" | awk 'FNR==4{print $0}')" =  1000 ] # correct balances
 [ "$(asset_bal "$APPACCT")" = 999000 ] # 1k sent
 
