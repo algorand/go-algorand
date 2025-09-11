@@ -58,10 +58,24 @@ const TXTopicName = "algotx01"
 
 const incomingThreads = 20 // matches to number wsNetwork workers
 
-func makePubSub(ctx context.Context, cfg config.Local, host host.Host, opts ...pubsub.Option) (*pubsub.PubSub, error) {
-	//defaultParams := pubsub.DefaultGossipSubParams()
+// deriveGossipSubParams derives the gossip sub parameters from the cfg.GossipFanout value
+// by using the same proportions as pubsub defaults - see GossipSubD, GossipSubDlo, etc.
+func deriveGossipSubParams(cfg config.Local) pubsub.GossipSubParams {
+	params := pubsub.DefaultGossipSubParams()
+	params.D = cfg.GossipFanout
+	params.Dlo = params.D - 1
+	if params.Dlo <= 0 {
+		params.Dlo = params.D
+	}
+	params.Dscore = params.D * 2 / 3
+	params.Dout = params.D * 1 / 3
+	return params
+}
 
+func makePubSub(ctx context.Context, cfg config.Local, host host.Host, opts ...pubsub.Option) (*pubsub.PubSub, error) {
+	gossipSubParams := deriveGossipSubParams(cfg)
 	options := []pubsub.Option{
+		pubsub.WithGossipSubParams(gossipSubParams),
 		pubsub.WithPeerScore(&pubsub.PeerScoreParams{
 			DecayInterval: pubsub.DefaultDecayInterval,
 			DecayToZero:   pubsub.DefaultDecayToZero,
