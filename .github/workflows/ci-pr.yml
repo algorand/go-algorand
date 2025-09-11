@@ -64,6 +64,14 @@ jobs:
           job-type: "Test"
           build-type: "PR Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: |
+            **/*.log
+          retention-days: 30
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
