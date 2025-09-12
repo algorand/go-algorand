@@ -88,8 +88,7 @@ func SetEd25519BatchVerifier(useEd25519Consensus bool) {
 	}
 }
 
-// MakeBatchVerifier creates a BatchVerifier instance with the provided options.
-// small-order A (public keys) while still rejecting non-canonical encodings.
+// MakeBatchVerifier creates a BatchVerifier instance.
 func MakeBatchVerifier() BatchVerifier {
 	return ed25519BatchVerifierFactory(minBatchVerifierAlloc)
 }
