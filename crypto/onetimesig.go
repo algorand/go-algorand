@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+	"github.com/hdevalence/ed25519consensus"
 )
 
 // A OneTimeSignature is a cryptographic signature that is produced a limited
@@ -375,7 +376,7 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	}
 
 	if !useSingleVerifierDefault {
-		return v.batchVerify(batchID, offsetID, message, sig)
+		return v.batchVerifyEd25519Consensus(batchID, offsetID, message, sig)
 	}
 
 	if !ed25519Verify(ed25519PublicKey(v), HashRep(batchID), sig.PK2Sig) {
@@ -410,6 +411,14 @@ func (v OneTimeSignatureVerifier) batchVerify(batchID OneTimeSignatureSubkeyBatc
 		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
 	)
 	return allValid
+}
+
+func (v OneTimeSignatureVerifier) batchVerifyEd25519Consensus(batchID OneTimeSignatureSubkeyBatchID, offsetID OneTimeSignatureSubkeyOffsetID, message Hashable, sig OneTimeSignature) bool {
+	bv := ed25519consensus.NewPreallocatedBatchVerifier(3)
+	bv.Add(v[:], HashRep(batchID), sig.PK2Sig[:])
+	bv.Add(batchID.SubKeyPK[:], HashRep(offsetID), sig.PK1Sig[:])
+	bv.Add(offsetID.SubKeyPK[:], HashRep(message), sig.Sig[:])
+	return bv.Verify()
 }
 
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.
