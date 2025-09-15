@@ -35,7 +35,7 @@ func TestPubsub_GossipSubParamsBasic(t *testing.T) {
 	for _, fanout := range []int{4, 8} {
 		cfg.GossipFanout = fanout
 
-		params := deriveGossipSubParams(cfg)
+		params := deriveGossipSubParams(cfg.GossipFanout)
 
 		require.Equal(t, fanout, params.D)
 		require.Equal(t, fanout-1, params.Dlo)
@@ -56,7 +56,7 @@ func TestPubsub_GossipSubParamsEdgeCases(t *testing.T) {
 	// D = 1 => Dlo must not drop below 1
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = 1
-	p := deriveGossipSubParams(cfg)
+	p := deriveGossipSubParams(cfg.GossipFanout)
 	require.Equal(t, 1, p.D)
 	require.Equal(t, 1, p.Dlo)
 	require.Equal(t, 0, p.Dscore)
@@ -65,7 +65,7 @@ func TestPubsub_GossipSubParamsEdgeCases(t *testing.T) {
 	// D = 0 => keep Dlo = D (0) instead of negative
 	cfg = config.GetDefaultLocal()
 	cfg.GossipFanout = 0
-	p = deriveGossipSubParams(cfg)
+	p = deriveGossipSubParams(cfg.GossipFanout)
 	require.Equal(t, 0, p.D)
 	require.Equal(t, 0, p.Dlo)
 	require.Equal(t, 0, p.Dscore)

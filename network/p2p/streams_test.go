@@ -46,6 +46,9 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 	logger.SetLevel(logging.Debug)
 
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = ":1"
+	cfg.EnableP2PHybridMode = true
+	cfg.P2PHybridNetAddress = ":2"
 
 	pstore1, err := peerstore.NewPeerStore(nil, "test1")
 	require.NoError(t, err)
