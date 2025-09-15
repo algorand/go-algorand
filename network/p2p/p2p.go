@@ -76,9 +76,15 @@ type Service interface {
 	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
+// subset of config.Local needed here
+type nodeSubConfig interface {
+	IsHybridServer() bool
+}
+
 // serviceImpl manages integration with libp2p and implements the Service interface
 type serviceImpl struct {
 	log        logging.Logger
+	subcfg     nodeSubConfig
 	listenAddr string
 	host       host.Host
 	streams    *streamManager
@@ -222,7 +228,7 @@ func SetPubSubPeerFilter(filter func(checker pstore.RoleChecker, pid peer.ID) bo
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
+	sm := makeStreamManager(ctx, log, cfg, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
 
 	for _, pair := range wsStreamHandlers {
@@ -234,12 +240,13 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 		opt(&pubsubOpts)
 	}
 
-	ps, err := makePubSub(ctx, cfg, h, pubsubOpts...)
+	ps, err := makePubSub(ctx, h, cfg.GossipFanout, pubsubOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return &serviceImpl{
 		log:        log,
+		subcfg:     cfg,
 		listenAddr: listenAddr,
 		host:       h,
 		streams:    sm,
@@ -318,8 +325,10 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
-		return err
+	if s.subcfg.IsHybridServer() {
+		if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
+			return err
+		}
 	}
 	return s.host.Connect(ctx, *peer)
 }

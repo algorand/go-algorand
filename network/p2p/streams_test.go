@@ -79,8 +79,8 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 
 	ctx := context.Background()
 	handlers := StreamHandlers{}
-	dialerSM = makeStreamManager(ctx, logger, dialerHost, handlers, false)
-	listenerSM = makeStreamManager(ctx, logger, listenerHost, handlers, false)
+	dialerSM = makeStreamManager(ctx, logger, cfg, dialerHost, handlers, false)
+	listenerSM = makeStreamManager(ctx, logger, cfg, listenerHost, handlers, false)
 
 	// Setup Connected notification
 	dialerHost.Network().Notify(dialerSM)

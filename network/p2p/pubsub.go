@@ -20,7 +20,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -60,9 +59,9 @@ const incomingThreads = 20 // matches to number wsNetwork workers
 
 // deriveGossipSubParams derives the gossip sub parameters from the cfg.GossipFanout value
 // by using the same proportions as pubsub defaults - see GossipSubD, GossipSubDlo, etc.
-func deriveGossipSubParams(cfg config.Local) pubsub.GossipSubParams {
+func deriveGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams {
 	params := pubsub.DefaultGossipSubParams()
-	params.D = cfg.GossipFanout
+	params.D = numOutgoingConns
 	params.Dlo = params.D - 1
 	if params.Dlo <= 0 {
 		params.Dlo = params.D
@@ -72,8 +71,8 @@ func deriveGossipSubParams(cfg config.Local) pubsub.GossipSubParams {
 	return params
 }
 
-func makePubSub(ctx context.Context, cfg config.Local, host host.Host, opts ...pubsub.Option) (*pubsub.PubSub, error) {
-	gossipSubParams := deriveGossipSubParams(cfg)
+func makePubSub(ctx context.Context, host host.Host, numOutgoingConns int, opts ...pubsub.Option) (*pubsub.PubSub, error) {
+	gossipSubParams := deriveGossipSubParams(numOutgoingConns)
 	options := []pubsub.Option{
 		pubsub.WithGossipSubParams(gossipSubParams),
 		pubsub.WithPeerScore(&pubsub.PeerScoreParams{

@@ -1572,7 +1572,6 @@ func (wn *WebsocketNetwork) meshThreadInner(targetConnCount int) int {
 		}
 	}
 
-	// Return true if we created new connections OR if we already have enough connections
 	currentConnections := wn.numOutgoingPeers() + wn.numOutgoingPending()
 	return currentConnections
 }
