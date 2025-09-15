@@ -322,10 +322,7 @@ func testNetworkImplRebroadcast(t *testing.T, nodesCount int, cfg config.Local) 
 	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
-	rebroadcastNodes := nodesCount
-	if rebroadcastNodes > 3 {
-		rebroadcastNodes = 3
-	}
+	rebroadcastNodes := min(nodesCount, 3)
 	for i := byte(0); i < byte(rebroadcastNodes); i++ {
 		ok := nets[i].Broadcast(protocol.AgreementVoteTag, []byte{i, i + 1})
 		assert.NoError(t, ok)

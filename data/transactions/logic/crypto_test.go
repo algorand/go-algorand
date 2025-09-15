@@ -76,7 +76,7 @@ func TestSumhash(t *testing.T) {
 	}
 
 	for _, v := range testVectors {
-		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 12)
+		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 13)
 	}
 }
 
@@ -115,6 +115,18 @@ sha512_256
 byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 ==`
 	testAccepts(t, progText, 1)
+}
+
+func TestSHA512(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// echo -n "hello" | sha512sum
+	progText := `
+byte "hello"; sha512
+byte 0x9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043
+==`
+	testAccepts(t, progText, 13)
 }
 
 func TestMimc(t *testing.T) {
@@ -793,7 +805,7 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 }
 
 func BenchmarkHashes(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111"} {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "sha512"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
 			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111") {
 				continue

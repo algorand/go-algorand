@@ -1408,12 +1408,35 @@ proc ::AlgorandGoal::InspectTransactionFile { TRX_FILE } {
 proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DIR} {
     set timeout [expr $DURATION + 60]
     if { [ catch {
-        set pingpong_base "pingpong run --duration $DURATION -d $TEST_PRIMARY_NODE_DIR --quiet "
+        set pingpong_base "pingpong run --duration $DURATION -d $TEST_PRIMARY_NODE_DIR "
         set pingpong_command [concat $pingpong_base $PINGPONG_OPTIONS]
         puts "starting pingpong test with command:  $pingpong_command"
+
+        # Track whether we're expecting app calls
+        set expecting_apps 0
+        if {[string match "*--numapp*" $PINGPONG_OPTIONS]} {
+            set expecting_apps 1
+            set saw_app_calls 0
+            puts "Test expects app calls since --numapp is specified"
+        }
+
         eval spawn $pingpong_command
         expect {
-            timeout { puts "pingpong test interrupted by timeout, terminating after $timeout seconds" }
+            timeout { ::AlgorandGoal::Abort "pingpong test interrupted by timeout after $timeout seconds" }
+            "no acct" {::AlgorandGoal::Abort "pingpong failed with 'no acct' error - likely sender not set in constructAppTxn"}
+            -re {(?i)error[ :]} {
+                ::AlgorandGoal::Abort "pingpong encountered error: $expect_out(0,string)"
+            }
+            -re {(?i)panic} {
+                ::AlgorandGoal::Abort "pingpong panicked: $expect_out(0,string)"
+            }
+            "Calling app" {
+                if {$expecting_apps} {
+                    set saw_app_calls 1
+                    puts "Saw app call"
+                }
+                exp_continue
+            }
             -re {Sent (\d+) transactions \((\d+) attempted\).} {
                     set actual $expect_out(1,string) ;
                     set attempted $expect_out(2,string) ;
@@ -1421,7 +1444,12 @@ proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DI
                     if { $actual != $attempted } then { ::AlgorandGoal::Abort "Pingpong attempted to send $attempted transactions, but actual was $actual"; break;}
                     exp_continue
                 }
-            "Terminating after max run time of" {puts "end of ping pong test"}
+            "Terminating after max run time of" {
+                puts "end of ping pong test"
+                if {$expecting_apps && !$saw_app_calls} {
+                    ::AlgorandGoal::Abort "Test with --numapp expected app calls but saw none - possible constructAppTxn bug"
+                }
+            }
             eof {::AlgorandGoal::Abort "pingpong terminated unexpectedly: $expect_out(buffer)"}
             "Error" {::AlgorandGoal::Abort "error running pingpong: $expect_out(buffer)"}
         }

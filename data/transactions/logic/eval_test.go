@@ -1271,6 +1271,9 @@ global PayoutsMaxBalance; int 6; ==; assert
 const globalV12TestProgram = globalV11TestProgram + `
 `
 
+const globalV13TestProgram = globalV12TestProgram + `
+`
+
 func TestAllGlobals(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1294,6 +1297,7 @@ func TestAllGlobals(t *testing.T) {
 		10: {GenesisHash, globalV10TestProgram},
 		11: {PayoutsMaxBalance, globalV11TestProgram},
 		12: {PayoutsMaxBalance, globalV12TestProgram},
+		13: {PayoutsMaxBalance, globalV13TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1811,6 +1815,10 @@ txn RejectVersion
 !
 `
 
+const testTxnProgramTextV13 = testTxnProgramTextV12 + `
+assert
+int 1`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1925,6 +1933,7 @@ func TestTxn(t *testing.T) {
 		10: testTxnProgramTextV10,
 		11: testTxnProgramTextV11,
 		12: testTxnProgramTextV12,
+		13: testTxnProgramTextV13,
 	}
 
 	for i, txnField := range TxnFieldNames {

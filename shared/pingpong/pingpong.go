@@ -1205,12 +1205,10 @@ func (pps *WorkerState) constructAppTxn(from string, fee uint64, client *libgoal
 	}
 
 	appOptIns := pps.cinfo.OptIns[aidx]
+	sender = from
 	if len(appOptIns) > 0 {
 		indices := rand.Perm(len(appOptIns))
-		limit := 5
-		if len(indices) < limit {
-			limit = len(indices)
-		}
+		limit := min(len(indices), 5)
 		for i := 0; i < limit; i++ {
 			idx := indices[i]
 			accounts = append(accounts, appOptIns[idx])
@@ -1219,6 +1217,7 @@ func (pps *WorkerState) constructAppTxn(from string, fee uint64, client *libgoal
 		if pps.cinfo.AppParams[aidx].Creator != from &&
 			!slices.Contains(appOptIns, from) {
 			from = accounts[0]
+			sender = from
 		}
 		accounts = accounts[1:]
 	}

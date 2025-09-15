@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -59,17 +60,10 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	}
 
 	methodIsSkipped := func(methodName string) bool {
-		for _, overridenMethod := range overridenMethods {
-			if overridenMethod == methodName {
-				return true
-			}
+		if slices.Contains(overridenMethods, methodName) {
+			return true
 		}
-		for _, excludedMethod := range excludedMethods {
-			if excludedMethod == methodName {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(excludedMethods, methodName)
 	}
 
 	methodExistsInEvalLedger := func(methodName string) bool {

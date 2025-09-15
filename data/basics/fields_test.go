@@ -18,6 +18,7 @@ package basics_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -35,11 +36,9 @@ func makeTypeCheckFunction(t *testing.T, exceptions []reflectionhelpers.TypePath
 	return func(path reflectionhelpers.TypePath, stack []reflect.Type) bool {
 		currentType := stack[len(stack)-1]
 
-		for _, exception := range exceptions {
-			if path.Equals(exception) {
-				t.Logf("Skipping exception for path: %s", path)
-				return true
-			}
+		if slices.ContainsFunc(exceptions, path.Equals) {
+			t.Logf("Skipping exception for path: %s", path)
+			return true
 		}
 
 		switch currentType.Kind() {

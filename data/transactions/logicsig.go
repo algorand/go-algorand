@@ -40,8 +40,9 @@ type LogicSig struct {
 	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
 	Logic []byte `codec:"l,allocbound=bounds.MaxLogicSigMaxSize"`
 
-	Sig  crypto.Signature   `codec:"sig"`
-	Msig crypto.MultisigSig `codec:"msig"`
+	Sig   crypto.Signature   `codec:"sig"`
+	Msig  crypto.MultisigSig `codec:"msig"`
+	LMsig crypto.MultisigSig `codec:"lmsig"`
 
 	// Args are not signed, but checked by Logic
 	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=bounds.MaxLogicSigMaxSize"`
@@ -69,7 +70,7 @@ func (lsig *LogicSig) Len() int {
 // different behaviors within the evaluation of a LogicSig,
 // due to differences in msgpack encoding behavior.
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
-	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig)
+	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig) && lsig.LMsig.Equal(b.LMsig)
 	if !sigs {
 		return false
 	}

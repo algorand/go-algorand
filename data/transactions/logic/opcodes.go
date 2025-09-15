@@ -28,7 +28,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 12
+const LogicVersion = 13
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -81,7 +81,7 @@ const mimcVersion = 11
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const spOpcodesVersion = 12 // falcon_verify, sumhash512
+const sumhashVersion = 13
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
@@ -655,8 +655,9 @@ var OpSpecs = []OpSpec{
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), 7, costly(1900)},
-	{0x85, "falcon_verify", opFalconVerify, proto("bb{1232}b{1793}:T"), spOpcodesVersion, costly(1700)}, // dynamic for internal hash?
-	{0x86, "sumhash512", opSumhash512, proto("b:b{64}"), spOpcodesVersion, costByLength(150, 7, 4, 0)},
+	{0x85, "falcon_verify", opFalconVerify, proto("bb{1232}b{1793}:T"), 12, costly(1700)}, // dynamic for internal hash?
+	{0x86, "sumhash512", opSumhash512, proto("b:b{64}"), sumhashVersion, costByLength(150, 7, 4, 0)},
+	{0x87, "sha512", opSHA512, proto("b:b{64}"), 13, costByLength(15, 32, 2, 0)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
