@@ -45,7 +45,7 @@ func TestEd25519ConsensusBatchVerifierTypes(t *testing.T) {
 
 // Test vectors for 12 edge cases listed in Appendix C of "Taming the many EdDSAs" https://eprint.iacr.org/2020/1244
 // These are also checked in test_edge_cases in go-algorand/crypto/libsodium-fork/test/default/batch.c
-func TestBatchVerifierLibsodiumEdgeCases(t *testing.T) {
+func TestBatchVerifierTamingEdDSAsEdgeCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	hexVecs := make([]batchTestCaseHex, len(tamingEdDSAsTestVectors))
@@ -75,7 +75,6 @@ func TestBatchVerifierEd25519ConsensusTestData(t *testing.T) {
 	for i := range expectedFail {
 		expectedFail[i] = true
 	}
-
 	runBatchVerifierImpls(t, func(t *testing.T, makeBV func(int) BatchVerifier) {
 		testBatchVectors(t, makeBV, decodeHexTestCases(t, hexVecs), expectedFail)
 	})
@@ -148,53 +147,58 @@ func TestBatchVerifierLibsodiumTestData(t *testing.T) {
 func testBatchVectors(t *testing.T, makeBV func(int) BatchVerifier, testVectors []batchTestCase, expectedFail []bool) {
 	require.Len(t, expectedFail, len(testVectors))
 
-	// shuffle the vectors so we're not always testing in the same order
-	rand.Shuffle(len(testVectors), func(i, j int) {
-		testVectors[i], testVectors[j] = testVectors[j], testVectors[i]
-		expectedFail[i], expectedFail[j] = expectedFail[j], expectedFail[i]
-	})
-
 	// run a single batch of test vectors and compare to expected failures
 	runBatch := func(t *testing.T, vecs []batchTestCase, expFail []bool) {
 		bv := makeBV(len(vecs))
-
 		for _, tv := range vecs {
 			bv.EnqueueSignature(SignatureVerifier(tv.pk), noHashID(tv.msg), Signature(tv.sig))
 		}
-
 		failed, err := bv.VerifyWithFeedback()
-		if slices.Contains(expFail, true) {
+		if slices.Contains(expFail, true) { // some failures expected
 			require.Error(t, err)
 			require.NotNil(t, failed)
 			require.Len(t, failed, len(vecs))
 			for i := range expFail {
 				assert.Equal(t, expFail[i], failed[i])
 			}
-		} else {
+		} else { // no failures expected
 			require.NoError(t, err)
 			require.Nil(t, failed)
 		}
 	}
 
-	n := len(testVectors)
-	batchSizes := []int{1, 2, 4, 8, 16, 32, 64, 100, 128, 256, 512, 1024, n}
-	for _, batchSize := range batchSizes {
-		if batchSize > n {
-			continue
-		}
-		t.Run(fmt.Sprintf("batchSize=%d", batchSize), func(t *testing.T) {
-			vectorBatches := splitBatches(testVectors, batchSize)
-			failBatches := splitBatches(expectedFail, batchSize)
-			require.Equal(t, len(vectorBatches), len(failBatches))
-			//t.Logf("Testing with batch size %d: %d total signatures in %d batches", batchSize, n, len(vectorBatches))
+	// run all the test vectors in a single batch
+	t.Run("all", func(t *testing.T) { runBatch(t, testVectors, expectedFail) })
 
-			for i, batch := range vectorBatches {
-				batchExpectedFail := failBatches[i]
-				//t.Logf("Batch %d/%d: signatures [%d-%d), size=%d", i+1, len(vectorBatches), i*batchSize, i*batchSize+len(batch), len(batch))
-				runBatch(t, batch, batchExpectedFail)
+	// split into multiple batches of different sizes, optionally shuffled
+	runBatchSizes := func(shuffle bool, vecs []batchTestCase, expFail []bool) {
+		if shuffle {
+			vecs, expFail = slices.Clone(vecs), slices.Clone(expFail)
+			rand.Shuffle(len(vecs), func(i, j int) {
+				vecs[i], vecs[j], expFail[i], expFail[j] = vecs[j], vecs[i], expFail[j], expFail[i]
+			})
+		}
+
+		for _, batchSize := range []int{1, 2, 4, 8, 16, 32, 64, 100, 128, 256, 512, 1024} {
+			if batchSize > len(vecs) {
+				continue
 			}
-		})
+			t.Run(fmt.Sprintf("batchSize=%d", batchSize), func(t *testing.T) {
+				vectorBatches := splitBatches(vecs, batchSize)
+				failBatches := splitBatches(expFail, batchSize)
+				require.Equal(t, len(vectorBatches), len(failBatches))
+				//t.Logf("Testing with batch size %d: %d total signatures in %d batches", batchSize, n, len(vectorBatches))
+				for i, batch := range vectorBatches {
+					batchExpectedFail := failBatches[i]
+					//t.Logf("Batch %d/%d: signatures [%d-%d), size=%d", i+1, len(vectorBatches), i*batchSize, i*batchSize+len(batch), len(batch))
+					runBatch(t, batch, batchExpectedFail)
+				}
+			})
+		}
 	}
+
+	t.Run("unshuffled", func(t *testing.T) { runBatchSizes(false, testVectors, expectedFail) })
+	t.Run("shuffled", func(t *testing.T) { runBatchSizes(true, testVectors, expectedFail) })
 }
 
 // splitBatches splits items into batches of the specified size
