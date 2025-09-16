@@ -87,6 +87,11 @@ type StateSchema struct {
 	NumByteSlice uint64 `codec:"nbs"`
 }
 
+// String returns a string representation of a StateSchema
+func (sm StateSchema) String() string {
+	return fmt.Sprintf("{NumUint:%d NumByteSlice:%d}", sm.NumUint, sm.NumByteSlice)
+}
+
 // AddSchema adds two StateSchemas together
 func (sm StateSchema) AddSchema(osm StateSchema) (out StateSchema) {
 	out.NumUint = AddSaturate(sm.NumUint, osm.NumUint)

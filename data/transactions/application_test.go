@@ -553,7 +553,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
 			},
-			expectedError: "tx.GlobalStateSchema is immutable",
+			expectedError: "inappropriate non-zero tx.GlobalStateSchema",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -563,7 +563,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				LocalStateSchema: basics.StateSchema{NumUint: 1},
 			},
-			expectedError: "tx.LocalStateSchema is immutable",
+			expectedError: "inappropriate non-zero tx.LocalStateSchema",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -597,7 +597,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				ExtraProgramPages: 1,
 			},
-			expectedError: "tx.ExtraProgramPages is immutable",
+			expectedError: "inappropriate non-zero tx.ExtraProgramPages",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -728,7 +728,45 @@ func TestWellFormedErrors(t *testing.T) {
 				OnCompletion:      UpdateApplicationOC,
 			},
 			cv:            cv28,
-			expectedError: "tx.ExtraProgramPages is immutable",
+			expectedError: "inappropriate non-zero tx.ExtraProgramPages",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+				OnCompletion:      UpdateApplicationOC,
+			},
+			cv:            cv28,
+			expectedError: "inappropriate non-zero tx.GlobalStateSchema",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 1,
+				OnCompletion:      UpdateApplicationOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+				OnCompletion:      UpdateApplicationOC,
+			},
 		},
 		{
 			ac: ApplicationCallTxnFields{

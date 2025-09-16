@@ -181,7 +181,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	return nil
 }
 
-func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, appIdx basics.AppIndex) error {
+func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, appIdx basics.AppIndex, updater basics.Address) error {
 	// Updating the application. Fetch the creator's balance record
 	params, _, err := balances.GetAppParams(creator, appIdx)
 	if err != nil {
@@ -189,18 +189,70 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	proto := balances.ConsensusParams()
+	sizeChange := ac.UpdatingSizes(proto.AppSizeUpdates)
 
 	// The pre-application well-formedness check rejects big programs
 	// conservatively, it doesn't know the actual params.ExtraProgramPages, so
 	// it allows any programs that fit under the absolute max.
-	if err = ac.WellSizedPrograms(params.ExtraProgramPages, proto); err != nil {
-		return err
+	if !sizeChange { // when changing sizes, the well-formedness check was sufficient
+		if err = ac.WellSizedPrograms(params.ExtraProgramPages, proto); err != nil {
+			return err
+		}
 	}
-
 	params.ApprovalProgram = ac.ApprovalProgram
 	params.ClearStateProgram = ac.ClearStateProgram
 	if proto.EnableAppVersioning {
 		params.Version++
+	}
+
+	// Install the new epp and schema (if its sufficient)
+	if sizeChange {
+		// Keep in mind that the creator and updater may be the same account.
+		creatorRecord, err := balances.Get(creator, false)
+		if err != nil {
+			return err
+		}
+
+		updaterRecord, err := balances.Get(updater, false)
+		if err != nil {
+			return err
+		}
+
+		// We need to decide whether TotalAppParams should be updated this way.
+		// I think maybe not.  Leave the 0.1A MBR on the creator. Only the extra
+		// space for programs and globals should be moved to the updater.
+		creatorRecord.TotalAppParams = basics.SubSaturate(creatorRecord.TotalAppParams, 1)
+		creatorRecord.TotalAppSchema =
+			creatorRecord.TotalAppSchema.SubSchema(params.GlobalStateSchema)
+		creatorRecord.TotalExtraAppPages =
+			basics.SubSaturate(creatorRecord.TotalExtraAppPages, params.ExtraProgramPages)
+
+		/* We need to check that the `ac.GlobalStateSchema` is sufficient to
+		   hold the current globals of the app. But the current globals are not
+		   in `params`, they are stored as changes in storageDeltas.  We'll have
+		   to dig out the current limits from the `counts` and update
+		   `maxCounts` to allow future changes to be checked against this new
+		   schema.
+		*/
+
+		params.GlobalStateSchema = ac.GlobalStateSchema
+		params.ExtraProgramPages = ac.ExtraProgramPages
+
+		updaterRecord.TotalAppParams = basics.AddSaturate(updaterRecord.TotalAppParams, 1)
+		updaterRecord.TotalAppSchema =
+			updaterRecord.TotalAppSchema.AddSchema(params.GlobalStateSchema)
+		updaterRecord.TotalExtraAppPages =
+			basics.AddSaturate(updaterRecord.TotalExtraAppPages, params.ExtraProgramPages)
+
+		err = balances.Put(creator, creatorRecord)
+		if err != nil {
+			return err
+		}
+
+		err = balances.Put(updater, updaterRecord)
+		if err != nil {
+			return err
+		}
 	}
 
 	return balances.PutAppParams(creator, appIdx, params)
@@ -464,7 +516,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		}
 
 	case transactions.UpdateApplicationOC:
-		err = updateApplication(&ac, balances, creator, appIdx)
+		err = updateApplication(&ac, balances, creator, appIdx, header.Sender)
 		if err != nil {
 			return err
 		}
