@@ -93,7 +93,10 @@ type storageDelta struct {
 	action storageAction
 	kvCow  stateDelta
 
-	counts, maxCounts *basics.StateSchema
+	// counts represents the number of each value type currently used
+	counts basics.StateSchema
+	// maxCounts is the maximum allowed counts (it comes from the app's schema)
+	maxCounts basics.StateSchema
 
 	// account index for an address that was first referenced as in app_local_get/app_local_put/app_local_del
 	// this is for backward compatibility with original implementation of applications
@@ -125,8 +128,8 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 	lsd = &storageDelta{
 		action:    defaultAction,
 		kvCow:     make(stateDelta),
-		counts:    &counts,
-		maxCounts: &maxCounts,
+		counts:    counts,
+		maxCounts: maxCounts,
 	}
 
 	if cb.compatibilityMode && !global {
@@ -163,7 +166,7 @@ func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIn
 	aapp := storagePtr{aidx, global}
 	lsd, ok := cb.sdeltas[addr][aapp]
 	if ok {
-		return *lsd.counts, nil
+		return lsd.counts, nil
 	}
 
 	// Otherwise, check our parent
@@ -185,7 +188,7 @@ func (cb *roundCowState) getStorageLimits(addr basics.Address, aidx basics.AppIn
 	aapp := storagePtr{aidx, global}
 	lsd, ok := cb.sdeltas[addr][aapp]
 	if ok {
-		return *lsd.maxCounts, nil
+		return lsd.maxCounts, nil
 	}
 
 	// Otherwise, check our parent
@@ -241,7 +244,7 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 	}
 
 	lsd.action = allocAction
-	lsd.maxCounts = &space
+	lsd.maxCounts = space
 
 	if global {
 		cb.mods.AddCreatable(basics.CreatableIndex(aidx), ledgercore.ModifiedCreatable{
@@ -271,8 +274,8 @@ func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex
 	}
 
 	lsd.action = deallocAction
-	lsd.counts = &basics.StateSchema{}
-	lsd.maxCounts = &basics.StateSchema{}
+	lsd.counts = basics.StateSchema{}
+	lsd.maxCounts = basics.StateSchema{}
 	lsd.kvCow = make(stateDelta)
 
 	if global {

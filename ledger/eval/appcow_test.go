@@ -276,8 +276,7 @@ func TestCowStorage(t *testing.T) {
 			}
 			err := cow.AllocateApp(addr, sptr.aidx, sptr.global, rschema)
 			if actuallyAllocated {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "cannot allocate")
+				require.ErrorContains(t, err, "cannot allocate")
 			} else {
 				require.NoError(t, err)
 				err = st.alloc(aapp, rschema)
@@ -294,8 +293,7 @@ func TestCowStorage(t *testing.T) {
 				err := st.dealloc(aapp)
 				require.NoError(t, err)
 			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "cannot deallocate")
+				require.ErrorContains(t, err, "cannot deallocate")
 			}
 		}
 
@@ -310,8 +308,7 @@ func TestCowStorage(t *testing.T) {
 				err = st.set(aapp, rkey, rval)
 				require.NoError(t, err)
 			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "cannot set")
+				require.ErrorContains(t, err, "cannot set")
 			}
 		}
 
@@ -325,8 +322,7 @@ func TestCowStorage(t *testing.T) {
 				err = st.del(aapp, rkey)
 				require.NoError(t, err)
 			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "cannot del")
+				require.ErrorContains(t, err, "cannot del")
 			}
 		}
 
@@ -412,8 +408,7 @@ func TestCowBuildDelta(t *testing.T) {
 	// check global delta
 	cow.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
 	ed, err = cow.buildEvalDelta(1, &txn)
-	a.Error(err)
-	a.Contains(err.Error(), "found storage delta for different app")
+	a.ErrorContains(err, "found storage delta for different app")
 	a.Empty(ed)
 
 	cow.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
@@ -423,16 +418,14 @@ func TestCowBuildDelta(t *testing.T) {
 
 	cow.sdeltas[creator][storagePtr{aidx + 1, true}] = &storageDelta{}
 	ed, err = cow.buildEvalDelta(aidx, &txn)
-	a.Error(err)
-	a.Contains(err.Error(), "found storage delta for different app")
+	a.ErrorContains(err, "found storage delta for different app")
 	a.Empty(ed)
 
 	delete(cow.sdeltas[creator], storagePtr{aidx + 1, true})
 	cow.sdeltas[sender] = make(map[storagePtr]*storageDelta)
 	cow.sdeltas[sender][storagePtr{aidx, true}] = &storageDelta{}
 	ed, err = cow.buildEvalDelta(aidx, &txn)
-	a.Error(err)
-	a.Contains(err.Error(), "found more than one global delta")
+	a.ErrorContains(err, "found more than one global delta")
 	a.Empty(ed)
 
 	// check local delta
@@ -440,8 +433,7 @@ func TestCowBuildDelta(t *testing.T) {
 	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{}
 
 	ed, err = cow.buildEvalDelta(aidx, &txn)
-	a.Error(err)
-	a.Contains(err.Error(), "invalid Account reference ")
+	a.ErrorContains(err, "invalid Account reference ")
 	a.Empty(ed)
 
 	// check v26 behavior for empty deltas
@@ -708,10 +700,8 @@ func TestApplyChild(t *testing.T) {
 
 	emptyStorageDelta := func(action storageAction) storageDelta {
 		return storageDelta{
-			action:    action,
-			kvCow:     make(stateDelta),
-			counts:    &basics.StateSchema{},
-			maxCounts: &basics.StateSchema{},
+			action: action,
+			kvCow:  make(stateDelta),
 		}
 	}
 	getSchema := func(u, b int) basics.StateSchema {
@@ -722,9 +712,9 @@ func TestApplyChild(t *testing.T) {
 	child := emptyStorageDelta(0)
 
 	chkEmpty := func(delta *storageDelta) {
-		a.Empty(delta.action)
-		a.Empty(*delta.counts)
-		a.Empty(*delta.maxCounts)
+		a.Zero(delta.action)
+		a.Zero(delta.counts)
+		a.Zero(delta.maxCounts)
 		a.Zero(len(delta.kvCow))
 	}
 
@@ -738,15 +728,13 @@ func TestApplyChild(t *testing.T) {
 
 	// check child overwrites values
 	child.action = allocAction
-	s1 := getSchema(1, 2)
-	s2 := getSchema(3, 4)
-	child.counts = &s1
-	child.maxCounts = &s2
+	child.counts = getSchema(1, 2)
+	child.maxCounts = getSchema(3, 4)
 	parent.applyChild(&child)
 	a.Equal(allocAction, parent.action)
 	a.Equal(1, len(parent.kvCow))
-	a.Equal(getSchema(1, 2), *parent.counts)
-	a.Equal(getSchema(3, 4), *parent.maxCounts)
+	a.Equal(getSchema(1, 2), parent.counts)
+	a.Equal(getSchema(3, 4), parent.maxCounts)
 
 	// check child is correctly merged into parent
 	empty := func() valueDelta {
@@ -817,18 +805,17 @@ func TestApplyChild(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			parent := emptyStorageDelta(0)
-			ps := getSchema(len(test.pkv), 0)
-			parent.counts = &ps
+			parent.counts = getSchema(len(test.pkv), 0)
 			parent.kvCow = test.pkv
 
 			child := emptyStorageDelta(remainAllocAction)
 			cs := getSchema(len(test.ckv)+len(test.pkv), 0)
-			child.counts = &cs
+			child.counts = cs
 			child.kvCow = test.ckv
 
 			parent.applyChild(&child)
 			a.Equal(test.result, parent.kvCow)
-			a.Equal(cs, *parent.counts)
+			a.Equal(cs, parent.counts)
 		})
 	}
 }
@@ -1126,9 +1113,8 @@ func TestCowGetKey(t *testing.T) {
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
 	_, ok, err := c.getKey(addr, aidx, true, "gkey", 0)
-	a.Error(err)
 	a.False(ok)
-	a.Contains(err.Error(), "cannot fetch key")
+	a.ErrorContains(err, "cannot fetch key")
 
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: allocAction}},
@@ -1201,15 +1187,13 @@ func TestCowSetKey(t *testing.T) {
 	val := "val"
 	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
 	err := c.setKey(addr, aidx, true, key, tv, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "key too long")
+	a.ErrorContains(err, "key too long")
 
 	key = "key"
 	val = strings.Repeat("val", 100)
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
 	err = c.setKey(addr, aidx, true, key, tv, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "value too long")
+	a.ErrorContains(err, "value too long")
 
 	val = "val"
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
@@ -1217,30 +1201,21 @@ func TestCowSetKey(t *testing.T) {
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
 	err = c.setKey(addr, aidx, true, key, tv, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot set key")
+	a.ErrorContains(err, "cannot set key")
 
-	counts := basics.StateSchema{}
-	maxCounts := basics.StateSchema{}
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, true}: &storageDelta{
-				action:    allocAction,
-				kvCow:     make(stateDelta),
-				counts:    &counts,
-				maxCounts: &maxCounts,
+				action: allocAction,
+				kvCow:  make(stateDelta),
 			},
 		},
 	}
 	err = c.setKey(addr, aidx, true, key, tv, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema bytes")
+	a.ErrorContains(err, "exceeds schema bytes")
 
-	counts = basics.StateSchema{NumUint: 1}
-	maxCounts = basics.StateSchema{NumByteSlice: 1}
-	err = c.setKey(addr, aidx, true, key, tv, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema integer")
+	err = c.setKey(addr, aidx, true, key, basics.TealValue{Type: basics.TealUintType}, 0)
+	a.ErrorContains(err, "exceeds schema integer")
 
 	tv2 := basics.TealValue{Type: basics.TealUintType, Uint: 1}
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
@@ -1248,16 +1223,14 @@ func TestCowSetKey(t *testing.T) {
 			storagePtr{aidx, true}: &storageDelta{
 				action:    allocAction,
 				kvCow:     stateDelta{key: valueDelta{new: tv2, newExists: true}},
-				counts:    &counts,
-				maxCounts: &maxCounts,
+				counts:    basics.StateSchema{NumUint: 1},
+				maxCounts: basics.StateSchema{NumByteSlice: 1},
 			},
 		},
 	}
 	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.NoError(err)
 
-	counts = basics.StateSchema{NumUint: 1}
-	maxCounts = basics.StateSchema{NumByteSlice: 1, NumUint: 1}
 	err = c.setKey(addr, aidx, true, key, tv, 0)
 	a.NoError(err)
 
@@ -1268,8 +1241,8 @@ func TestCowSetKey(t *testing.T) {
 			storagePtr{aidx, false}: &storageDelta{
 				action:    allocAction,
 				kvCow:     stateDelta{key: valueDelta{new: tv2, newExists: true}},
-				counts:    &counts,
-				maxCounts: &maxCounts,
+				counts:    basics.StateSchema{NumUint: 1},
+				maxCounts: basics.StateSchema{NumByteSlice: 1, NumUint: 1},
 			},
 		},
 	}
@@ -1298,22 +1271,19 @@ func TestCowSetKeyVFuture(t *testing.T) {
 	val := "val"
 	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
 	err := c.setKey(addr, aidx, true, key, tv, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "key too long")
+	a.ErrorContains(err, "key too long")
 
 	key = "key"
 	val = strings.Repeat("val", 100)
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
 	err = c.setKey(addr, aidx, true, key, tv, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "value too long")
+	a.ErrorContains(err, "value too long")
 
 	key = strings.Repeat("k", protoF.MaxAppKeyLen)
 	val = strings.Repeat("v", protoF.MaxAppSumKeyValueLens-len(key)+1)
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
 	err = c.setKey(addr, aidx, true, key, tv, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "key/value total too long")
+	a.ErrorContains(err, "key/value total too long")
 }
 
 func TestCowAccountIdx(t *testing.T) {
@@ -1344,16 +1314,12 @@ func TestCowAccountIdx(t *testing.T) {
 	a.NoError(err)
 	a.Equal(uint64(123), sd.accountIdx)
 
-	counts := basics.StateSchema{}
-	maxCounts := basics.StateSchema{}
 	for _, global := range []bool{false, true} {
 		c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 			addr: {
 				storagePtr{aidx, global}: &storageDelta{
 					action:     allocAction,
 					kvCow:      stateDelta{key: valueDelta{new: tv, newExists: true}},
-					counts:     &counts,
-					maxCounts:  &maxCounts,
 					accountIdx: 123,
 				},
 			},
@@ -1380,18 +1346,13 @@ func TestCowDelKey(t *testing.T) {
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
 	err := c.delKey(addr, aidx, true, key, 0)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot del key")
+	a.ErrorContains(err, "cannot del key")
 
-	counts := basics.StateSchema{}
-	maxCounts := basics.StateSchema{}
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, true}: &storageDelta{
-				action:    allocAction,
-				kvCow:     make(stateDelta),
-				counts:    &counts,
-				maxCounts: &maxCounts,
+				action: allocAction,
+				kvCow:  make(stateDelta),
 			},
 		},
 	}
@@ -1401,10 +1362,8 @@ func TestCowDelKey(t *testing.T) {
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, false}: &storageDelta{
-				action:    allocAction,
-				kvCow:     make(stateDelta),
-				counts:    &counts,
-				maxCounts: &maxCounts,
+				action: allocAction,
+				kvCow:  make(stateDelta),
 			},
 		},
 	}
