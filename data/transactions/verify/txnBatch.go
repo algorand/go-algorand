@@ -201,8 +201,6 @@ func (tbp *txnSigBatchProcessor) ProcessBatch(txns []execpool.InputJob) {
 func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uTxns))
-	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
-	// XXX ?
 	blockHeader := tbp.nbw.getBlockHeader()
 
 	for i := range uTxns {
