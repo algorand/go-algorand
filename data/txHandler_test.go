@@ -176,8 +176,8 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 // vtCache is a noop VerifiedTransactionCache
 type vtCache struct{}
 
-func (vtCache) Add(txgroup []transactions.SignedTxn, groupCtx *verify.GroupContext) {}
-func (vtCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*verify.GroupContext) {
+func (vtCache) Add(groupCtx *verify.GroupContext) {}
+func (vtCache) AddPayset(groupCtxs []*verify.GroupContext) {
 	return
 }
 func (vtCache) GetUnverifiedTransactionGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
