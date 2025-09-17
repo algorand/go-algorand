@@ -469,7 +469,7 @@ var sendCmd = &cobra.Command{
 				},
 			}
 			groupCtx, err1 := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil, nil)
-			if err1 == nil {
+			if err1 != nil {
 				reportErrorf("%s: txn error %s", outFilename, err1)
 			}
 			bv := crypto.MakeBatchVerifier()
