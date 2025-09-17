@@ -18,6 +18,7 @@ package verify
 
 import (
 	"errors"
+	"reflect"
 
 	"github.com/algorand/go-deadlock"
 
@@ -243,6 +244,9 @@ func (v *verifiedTransactionCache) Pin(txgroup []transactions.SignedTxn) (err er
 
 // add is the internal implementation of Add/AddPayset which adds a transaction group to the buffer.
 func (v *verifiedTransactionCache) add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
+	if !reflect.DeepEqual(txgroup, groupCtx.signedGroupTxns) {
+		panic("Mismatched transaction group and group context")
+	}
 	if len(v.buckets[v.base])+len(txgroup) > v.entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
@@ -262,9 +266,17 @@ type mockedCache struct {
 }
 
 func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
+	if !reflect.DeepEqual(txgroup, groupCtx.signedGroupTxns) {
+		panic("Mismatched transaction group and group context")
+	}
 }
 
 func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) {
+	for i := range txgroup {
+		if !reflect.DeepEqual(txgroup[i], groupCtxs[i].signedGroupTxns) {
+			panic("Mismatched transaction group and group context")
+		}
+	}
 }
 
 func (v *mockedCache) GetUnverifiedTransactionGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
