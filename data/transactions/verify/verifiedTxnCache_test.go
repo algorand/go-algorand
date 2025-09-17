@@ -36,7 +36,7 @@ func TestAddingToCache(t *testing.T) {
 	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 	groupCtx, err := PrepareGroupContext(txnGroups[0], blockHeader, nil, nil)
 	require.NoError(t, err)
-	impl.Add(txnGroups[0], groupCtx)
+	impl.Add(groupCtx)
 	// make it was added.
 	for _, txn := range txnGroups[0] {
 		ctx, has := impl.buckets[impl.base][txn.ID()]
@@ -61,7 +61,7 @@ func TestBucketCycling(t *testing.T) {
 		txnGroup := []transactions.SignedTxn{signedTxn[i]}
 		groupCtx, err := PrepareGroupContext(txnGroup, blockHeader, nil, nil)
 		require.NoError(t, err)
-		impl.Add(txnGroup, groupCtx)
+		impl.Add(groupCtx)
 		// test to see that the base is sliding when bucket get filled up.
 		require.Equal(t, i/entriesPerBucket, impl.base)
 	}
@@ -75,7 +75,7 @@ func TestBucketCycling(t *testing.T) {
 	txnGroup := []transactions.SignedTxn{signedTxn[len(signedTxn)-1]}
 	groupCtx, err := PrepareGroupContext(txnGroup, blockHeader, nil, nil)
 	require.NoError(t, err)
-	impl.Add(txnGroup, groupCtx)
+	impl.Add(groupCtx)
 	require.Equal(t, 0, impl.base)
 	require.Equal(t, 1, len(impl.buckets[0]))
 }
@@ -97,7 +97,7 @@ func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 			expectedUnverifiedGroups = append(expectedUnverifiedGroups, txnGroups[i])
 		} else {
 			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
-			impl.Add(txnGroups[i], groupCtx)
+			impl.Add(groupCtx)
 		}
 	}
 
@@ -121,7 +121,7 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 			queryTxnGroups = append(queryTxnGroups, txnGroups[i])
 		} else {
 			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
-			impl.Add(txnGroups[i], groupCtx)
+			impl.Add(groupCtx)
 		}
 	}
 
@@ -150,7 +150,7 @@ func TestUpdatePinned(t *testing.T) {
 	// insert some entries.
 	for i := 0; i < len(txnGroups); i++ {
 		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
-		impl.Add(txnGroups[i], groupCtx)
+		impl.Add(groupCtx)
 	}
 
 	// pin the first half.
@@ -179,7 +179,7 @@ func TestPinningTransactions(t *testing.T) {
 	// insert half of the entries.
 	for i := 0; i < len(txnGroups)/2; i++ {
 		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
-		impl.Add(txnGroups[i], groupCtx)
+		impl.Add(groupCtx)
 	}
 
 	// try to pin a previously added entry.

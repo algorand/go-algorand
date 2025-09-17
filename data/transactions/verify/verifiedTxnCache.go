@@ -18,7 +18,6 @@ package verify
 
 import (
 	"errors"
-	"reflect"
 
 	"github.com/algorand/go-deadlock"
 
@@ -57,9 +56,9 @@ var errMissingPinnedEntry = &VerifiedTxnCacheError{errors.New("Missing pinned en
 type VerifiedTransactionCache interface {
 	// Add adds a given transaction group and its associated group context to the cache. If any of the transactions already appear
 	// in the cache, the new entry overrides the old one.
-	Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext)
+	Add(groupCtx *GroupContext)
 	// AddPayset works in a similar way to Add, but is intended for adding an array of transaction groups, along with their corresponding contexts.
-	AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext)
+	AddPayset(groupCtxs []*GroupContext)
 	// GetUnverifiedTransactionGroups compares the provided payset against the currently cached transactions and figure which transaction groups aren't fully cached.
 	GetUnverifiedTransactionGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn
 	// UpdatePinned replaces the pinned entries with the one provided in the pinnedTxns map. This is typically expected to be a subset of the
@@ -99,18 +98,18 @@ func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 
 // Add adds a given transaction group and it's associated group context to the cache. If any of the transactions already appear
 // in the cache, the new entry overrides the old one.
-func (v *verifiedTransactionCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
+func (v *verifiedTransactionCache) Add(groupCtx *GroupContext) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	v.add(txgroup, groupCtx)
+	v.add(groupCtx)
 }
 
 // AddPayset works in a similar way to Add, but is intended for adding an array of transaction groups, along with their corresponding contexts.
-func (v *verifiedTransactionCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) {
+func (v *verifiedTransactionCache) AddPayset(groupCtxs []*GroupContext) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	for i := range txgroup {
-		v.add(txgroup[i], groupCtxs[i])
+	for _, groupCtx := range groupCtxs {
+		v.add(groupCtx)
 	}
 }
 
@@ -243,17 +242,14 @@ func (v *verifiedTransactionCache) Pin(txgroup []transactions.SignedTxn) (err er
 }
 
 // add is the internal implementation of Add/AddPayset which adds a transaction group to the buffer.
-func (v *verifiedTransactionCache) add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
-	if !reflect.DeepEqual(txgroup, groupCtx.signedGroupTxns) {
-		panic("Mismatched transaction group and group context")
-	}
-	if len(v.buckets[v.base])+len(txgroup) > v.entriesPerBucket {
+func (v *verifiedTransactionCache) add(groupCtx *GroupContext) {
+	if len(v.buckets[v.base])+len(groupCtx.signedGroupTxns) > v.entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
 		v.buckets[v.base] = make(map[transactions.Txid]*GroupContext, v.entriesPerBucket)
 	}
 	currentBucket := v.buckets[v.base]
-	for _, txn := range txgroup {
+	for _, txn := range groupCtx.signedGroupTxns {
 		currentBucket[txn.ID()] = groupCtx
 	}
 }
@@ -265,18 +261,10 @@ type mockedCache struct {
 	alwaysVerified bool
 }
 
-func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
-	if !reflect.DeepEqual(txgroup, groupCtx.signedGroupTxns) {
-		panic("Mismatched transaction group and group context")
-	}
+func (v *mockedCache) Add(groupCtx *GroupContext) {
 }
 
-func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) {
-	for i := range txgroup {
-		if !reflect.DeepEqual(txgroup[i], groupCtxs[i].signedGroupTxns) {
-			panic("Mismatched transaction group and group context")
-		}
-	}
+func (v *mockedCache) AddPayset(groupCtxs []*GroupContext) {
 }
 
 func (v *mockedCache) GetUnverifiedTransactionGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
