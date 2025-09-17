@@ -534,8 +534,8 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 					}
 					// After batch verification, evaluate LogicSig programs for each group
 					for _, groupCtx := range groupCtxs {
-						if err := evalGroupLogicSigs(groupCtx); err != nil {
-							return err
+						if evalErr := evalGroupLogicSigs(groupCtx); evalErr != nil {
+							return evalErr
 						}
 					}
 					cache.AddPayset(txnGroups, groupCtxs)

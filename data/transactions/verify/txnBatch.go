@@ -267,8 +267,8 @@ func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed
 	if err == nil { // success, all signatures verified
 		// Evaluate LogicSig programs for each group after batch verification
 		for i, groupCtx := range bl.groupCtxs {
-			if err := evalGroupLogicSigs(groupCtx); err != nil {
-				tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], err)
+			if evalErr := evalGroupLogicSigs(groupCtx); evalErr != nil {
+				tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], evalErr)
 				// Don't add failed groups to cache, but continue processing other groups
 				continue
 			}
