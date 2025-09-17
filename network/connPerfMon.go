@@ -384,3 +384,30 @@ func (pm *connectionPerformanceMonitor) accumulateMessage(msg *IncomingMessage, 
 		delete(msgBucket.messages, msgDigest)
 	}
 }
+
+type networkAdvanceMonitor struct {
+	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
+	// it used as a watchdog to help us detect connectivity issues ( such as cliques )
+	lastNetworkAdvance time.Time
+
+	mu deadlock.Mutex
+}
+
+func makeNetworkAdvanceMonitor() *networkAdvanceMonitor {
+	return &networkAdvanceMonitor{
+		lastNetworkAdvance: time.Now().UTC(),
+	}
+}
+
+func (m *networkAdvanceMonitor) lastAdvancedWithin(interval time.Duration) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// now < last + interval <=> now - last < interval
+	return time.Now().UTC().Before(m.lastNetworkAdvance.Add(interval))
+}
+
+func (m *networkAdvanceMonitor) updateLastAdvance() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lastNetworkAdvance = time.Now().UTC()
+}

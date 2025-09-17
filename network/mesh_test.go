@@ -46,7 +46,7 @@ func (m *mockP2PService) IDSigner() *p2piface.PeerIDChallengeSigner { return nil
 func (m *mockP2PService) AddrInfo() peer.AddrInfo                   { return peer.AddrInfo{} }
 func (m *mockP2PService) NetworkNotify(network.Notifiee)            {}
 func (m *mockP2PService) NetworkStopNotify(network.Notifiee)        {}
-func (m *mockP2PService) DialPeersUntilTargetCount(int)             { m.dialCount.Add(1) }
+func (m *mockP2PService) DialPeersUntilTargetCount(int) bool        { m.dialCount.Add(1); return true }
 func (m *mockP2PService) ClosePeer(peer.ID) error                   { return nil }
 func (m *mockP2PService) Conns() []network.Conn                     { return nil }
 func (m *mockP2PService) ListPeersForTopic(string) []peer.ID        { return nil }

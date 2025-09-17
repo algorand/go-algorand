@@ -486,10 +486,7 @@ func (n *P2PNetwork) innerStop() {
 	closeGroup.Wait()
 }
 
-// meshThreadInner fetches nodes from DHT and attempts to connect to them
-func (n *P2PNetwork) meshThreadInner(targetConnCount int) int {
-	defer n.service.DialPeersUntilTargetCount(targetConnCount)
-
+func (n *P2PNetwork) refreshPeerStoreAddresses() int {
 	// fetch peers from DNS
 	var dnsPeers, dhtPeers []peer.AddrInfo
 	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.genesisInfo.NetworkID, dnsaddr.NewMultiaddrDNSResolveController(n.config.DNSSecurityTXTEnforced(), ""))
@@ -529,6 +526,17 @@ func (n *P2PNetwork) meshThreadInner(targetConnCount int) int {
 		n.pstore.ReplacePeerList(replace, string(n.genesisInfo.NetworkID), phonebook.RelayRole)
 	}
 	return len(peers)
+}
+
+// meshThreadInner fetches nodes from DHT and attempts to connect to them
+func (n *P2PNetwork) meshThreadInner(targetConnCount int) int {
+	numPeers := n.refreshPeerStoreAddresses()
+	madeConns := n.service.DialPeersUntilTargetCount(targetConnCount)
+	if !madeConns {
+
+	}
+
+	return numPeers
 }
 
 func (n *P2PNetwork) httpdThread() {

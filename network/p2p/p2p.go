@@ -64,7 +64,7 @@ type Service interface {
 	NetworkNotify(network.Notifiee)
 	NetworkStopNotify(network.Notifiee)
 
-	DialPeersUntilTargetCount(targetConnCount int)
+	DialPeersUntilTargetCount(targetConnCount int) bool
 	ClosePeer(peer.ID) error
 
 	Conns() []network.Conn
@@ -289,7 +289,7 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 }
 
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
-func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
+func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
 	addrInfos := ps.GetAddresses(targetConnCount, phonebook.RelayRole)
 	conns := s.host.Network().Conns()
@@ -299,10 +299,11 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 			numOutgoingConns++
 		}
 	}
+	preExistingConns := numOutgoingConns
 	for _, peerInfo := range addrInfos {
 		// if we are at our target count stop trying to connect
 		if numOutgoingConns >= targetConnCount {
-			return
+			return numOutgoingConns > preExistingConns
 		}
 		// if we are already connected to this peer, skip it
 		if len(s.host.Network().ConnsToPeer(peerInfo.ID)) > 0 {
@@ -315,6 +316,7 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 			numOutgoingConns++
 		}
 	}
+	return numOutgoingConns > preExistingConns
 }
 
 // dialNode attempts to establish a connection to the provided peer

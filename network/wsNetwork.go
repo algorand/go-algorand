@@ -229,12 +229,9 @@ type WebsocketNetwork struct {
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
-	// lastNetworkAdvanceMu synchronized the access to lastNetworkAdvance
-	lastNetworkAdvanceMu deadlock.Mutex
-
-	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
+	// networkAdvanceMonitor is used to track the last timestamp where the agreement protocol was able to make a notable progress.
 	// it used as a watchdog to help us detect connectivity issues ( such as cliques )
-	lastNetworkAdvance time.Time
+	networkAdvanceMonitor *networkAdvanceMonitor
 
 	// number of throttled outgoing connections "slots" needed to be populated.
 	throttledOutgoingConnections atomic.Int32
@@ -638,7 +635,7 @@ func (wn *WebsocketNetwork) setup() error {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
-	wn.lastNetworkAdvance = time.Now().UTC()
+	wn.networkAdvanceMonitor = makeNetworkAdvanceMonitor()
 
 	// set our supported versions
 	if wn.config.NetworkProtocolVersion != "" {
@@ -1687,8 +1684,7 @@ func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting(targetConn
 // checkNetworkAdvanceDisconnect is using the lastNetworkAdvance indicator to see if the network is currently "stuck".
 // if it's seems to be "stuck", a randomally picked peer would be disconnected.
 func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
-	lastNetworkAdvance := wn.getLastNetworkAdvance()
-	if time.Now().UTC().Sub(lastNetworkAdvance) < cliqueResolveInterval {
+	if wn.networkAdvanceMonitor.lastAdvancedWithin(cliqueResolveInterval) {
 		return false
 	}
 	outgoingPeers := wn.outgoingPeers()
@@ -1710,20 +1706,12 @@ func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
 	return true
 }
 
-func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
-	wn.lastNetworkAdvanceMu.Lock()
-	defer wn.lastNetworkAdvanceMu.Unlock()
-	return wn.lastNetworkAdvance
-}
-
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
 // this is the only indication that we have that we haven't formed a clique, where all incoming messages
 // arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
 // characteristics as with a watchdog timer.
 func (wn *WebsocketNetwork) OnNetworkAdvance() {
-	wn.lastNetworkAdvanceMu.Lock()
-	defer wn.lastNetworkAdvanceMu.Unlock()
-	wn.lastNetworkAdvance = time.Now().UTC()
+	wn.networkAdvanceMonitor.updateLastAdvance()
 	if wn.nodeInfo != nil && !wn.relayMessages && !wn.config.ForceFetchTransactions {
 		select {
 		case wn.messagesOfInterestRefresh <- struct{}{}:

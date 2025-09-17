@@ -355,7 +355,8 @@ func (s *mockService) AddrInfo() peer.AddrInfo {
 	}
 }
 
-func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) {
+func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) bool {
+	return false
 }
 
 func (s *mockService) ClosePeer(peer peer.ID) error {
