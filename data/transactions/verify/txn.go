@@ -337,7 +337,7 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVe
 		return nil
 
 	case logicSig:
-		if err := logicSigVerify(gi, groupCtx); err != nil {
+		if err := LogicSigSanityCheckBatchPrep(gi, groupCtx, batchVerifier); err != nil {
 			return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonLogicSigFailed}
 		}
 		return nil
@@ -350,21 +350,10 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVe
 	}
 }
 
-// LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
-// It does not evaluate the logic.
-func LogicSigSanityCheck(gi int, groupCtx *GroupContext) error {
-	batchVerifier := crypto.MakeBatchVerifier()
-
-	if err := logicSigSanityCheckBatchPrep(gi, groupCtx, batchVerifier); err != nil {
-		return err
-	}
-	return batchVerifier.Verify()
-}
-
-// logicSigSanityCheckBatchPrep checks that the signature is valid and that the program is basically well formed.
+// LogicSigSanityCheckBatchPrep checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
 // it is the caller responsibility to call batchVerifier.Verify()
-func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVerifier) error {
+func LogicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVerifier) error {
 	if groupCtx.consensusParams.LogicSigVersion == 0 {
 		return errors.New("LogicSig not enabled")
 	}
@@ -457,8 +446,8 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 }
 
 // logicSigVerify checks that the signature is valid, executing the program.
-func logicSigVerify(gi int, groupCtx *GroupContext) error {
-	err := LogicSigSanityCheck(gi, groupCtx)
+func logicSigVerify(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVerifier) error {
+	err := LogicSigSanityCheckBatchPrep(gi, groupCtx, batchVerifier)
 	if err != nil {
 		return err
 	}

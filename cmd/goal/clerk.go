@@ -470,10 +470,14 @@ var sendCmd = &cobra.Command{
 			}
 			groupCtx, err1 := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil, nil)
 			if err1 == nil {
-				err1 = verify.LogicSigSanityCheck(0, groupCtx)
-			}
-			if err1 != nil {
 				reportErrorf("%s: txn error %s", outFilename, err1)
+			}
+			bv := crypto.MakeBatchVerifier()
+			if err := verify.LogicSigSanityCheckBatchPrep(0, groupCtx, bv); err != nil {
+				reportErrorf("%s: txn check error %s", outFilename, err)
+			}
+			if err := bv.Verify(); err != nil {
+				reportErrorf("%s: txn verify error %s", outFilename, err)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -878,9 +882,12 @@ var signCmd = &cobra.Command{
 			for i := range txnGroup {
 				var signedTxn transactions.SignedTxn
 				if lsig.Logic != nil {
-					err = verify.LogicSigSanityCheck(i, groupCtx)
-					if err != nil {
-						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
+					bv := crypto.MakeBatchVerifier()
+					if err := verify.LogicSigSanityCheckBatchPrep(i, groupCtx, bv); err != nil {
+						reportErrorf("%s: txn[%d] check error %s", txFilename, txnIndex[txnGroups[group][i]], err)
+					}
+					if err := bv.Verify(); err != nil {
+						reportErrorf("%s: txn[%d] verify error %s", txFilename, txnIndex[txnGroups[group][i]], err)
 					}
 					signedTxn = txnGroup[i]
 				} else {

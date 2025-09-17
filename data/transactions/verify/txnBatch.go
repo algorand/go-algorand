@@ -202,6 +202,7 @@ func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.Input
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uTxns))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
+	// XXX ?
 	blockHeader := tbp.nbw.getBlockHeader()
 
 	for i := range uTxns {
@@ -242,7 +243,15 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) 
 	case multiSig:
 		return uint64(stx.Msig.Signatures()), nil
 	case logicSig:
-		// Currently the sigs in here are not batched. Something to consider later.
+		if !stx.Lsig.LMsig.Blank() {
+			return uint64(stx.Lsig.LMsig.Signatures()), nil
+		}
+		if !stx.Lsig.Msig.Blank() {
+			return uint64(stx.Lsig.Msig.Signatures()), nil
+		}
+		if !stx.Lsig.Sig.Blank() {
+			return 1, nil
+		}
 		return 0, nil
 	case stateProofTxn:
 		return 0, nil
