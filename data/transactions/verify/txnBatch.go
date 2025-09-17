@@ -263,16 +263,24 @@ func getNumberOfBatchableSigsInTxn(stx *transactions.SignedTxn, groupIndex int) 
 
 func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed []bool, err error) {
 	bl := ctx.(*batchLoad)
-	if err == nil { // success, all signatures verified
-		for i := range bl.txnGroups {
-			tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)
-		}
-		tbp.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
-		return
-	}
-
 	verifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(bl.txnGroups))
 	verifiedGroupCtxs := make([]*GroupContext, 0, len(bl.groupCtxs))
+
+	if err == nil { // success, all signatures verified
+		// Evaluate LogicSig programs for each group after batch verification
+		for i, groupCtx := range bl.groupCtxs {
+			if err := evalGroupLogicSigs(groupCtx); err != nil {
+				tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], err)
+				// Don't add failed groups to cache, but continue processing other groups
+				continue
+			}
+			tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)
+			verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[i])
+			verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[i])
+		}
+		tbp.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+		return
+	}
 	failedSigIdx := 0
 	for txgIdx := range bl.txnGroups {
 		txGroupSigFailed := false
@@ -289,8 +297,13 @@ func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed
 		}
 		var result error
 		if !txGroupSigFailed {
-			verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
-			verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
+			// Evaluate LogicSig programs after signature verification
+			if logicErr := evalGroupLogicSigs(bl.groupCtxs[txgIdx]); logicErr != nil {
+				result = logicErr
+			} else {
+				verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
+				verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
+			}
 		} else {
 			result = err
 		}

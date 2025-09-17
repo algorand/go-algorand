@@ -328,7 +328,7 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	_, signedTxn, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
 	txnGroups = generateTransactionGroups(1, signedTxn, secrets, addrs)
 
-	// logicsig
+	// logicsig with single sig
 	op, err := logic.AssembleString(`arg 0
 sha256
 byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
@@ -343,7 +343,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[mod][0].Lsig.Sig = secrets[s].Sign(program)
 	batchSigs, err = UnverifiedTxnSigJob{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableItems()
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), batchSigs)
+	require.Equal(t, uint64(1), batchSigs)
 	mod++
 
 	// txn with sig and msig

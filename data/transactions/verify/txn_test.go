@@ -66,7 +66,14 @@ func verifyTxn(gi int, groupCtx *GroupContext) error {
 	if err := txnBatchPrep(gi, groupCtx, batchVerifier); err != nil {
 		return err
 	}
-	return batchVerifier.Verify()
+	if err := batchVerifier.Verify(); err != nil {
+		return err
+	}
+	// After batch verification, evaluate LogicSig program if present
+	if !groupCtx.signedGroupTxns[gi].Lsig.Blank() {
+		return logicSigVerify(gi, groupCtx)
+	}
+	return nil
 }
 
 type DummyLedgerForSignature struct {

@@ -196,6 +196,11 @@ func txnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader
 		return nil, err
 	}
 
+	// After batch verification, evaluate LogicSig programs
+	if err := evalGroupLogicSigs(groupCtx); err != nil {
+		return nil, err
+	}
+
 	if cache != nil {
 		cache.Add(stxs, groupCtx)
 	}
@@ -446,12 +451,7 @@ func LogicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 }
 
 // logicSigVerify checks that the signature is valid, executing the program.
-func logicSigVerify(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVerifier) error {
-	err := LogicSigSanityCheckBatchPrep(gi, groupCtx, batchVerifier)
-	if err != nil {
-		return err
-	}
-
+func logicSigVerify(gi int, groupCtx *GroupContext) error {
 	pass, cx, err := logic.EvalSignatureFull(gi, groupCtx.evalParams)
 	if err != nil {
 		logicErrTotal.Inc(nil)
@@ -464,7 +464,19 @@ func logicSigVerify(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVe
 	logicGoodTotal.Inc(nil)
 	logicCostTotal.AddUint64(uint64(cx.Cost()), nil)
 	return nil
+}
 
+// evalGroupLogicSigs evaluates the LogicSig programs for transactions in a group
+// This should be called after batch verification of signatures succeeds
+func evalGroupLogicSigs(groupCtx *GroupContext) error {
+	for gi, stxn := range groupCtx.signedGroupTxns {
+		if !stxn.Lsig.Blank() {
+			if err := logicSigVerify(gi, groupCtx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // PaysetGroups verifies that the payset have a good signature and that the underlying
@@ -519,6 +531,12 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 					verifyErr := batchVerifier.Verify()
 					if verifyErr != nil {
 						return verifyErr
+					}
+					// After batch verification, evaluate LogicSig programs for each group
+					for _, groupCtx := range groupCtxs {
+						if err := evalGroupLogicSigs(groupCtx); err != nil {
+							return err
+						}
 					}
 					cache.AddPayset(txnGroups, groupCtxs)
 					return nil
