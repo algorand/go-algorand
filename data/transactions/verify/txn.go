@@ -472,7 +472,7 @@ func evalGroupLogicSigs(groupCtx *GroupContext) error {
 	for gi, stxn := range groupCtx.signedGroupTxns {
 		if !stxn.Lsig.Blank() {
 			if err := logicSigVerify(gi, groupCtx); err != nil {
-				return err
+				return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonLogicSigFailed}
 			}
 		}
 	}
