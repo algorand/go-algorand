@@ -24,13 +24,13 @@ import (
 
 // ed25519ConsensusVerifySingle performs single signature verification using ed25519consensus,
 // with additional checks to reject non-canonical encodings and small-order public keys.
-func ed25519ConsensusVerifySingle(publicKey []byte, message []byte, signature []byte) bool {
+func ed25519ConsensusVerifySingle(publicKey [32]byte, message []byte, signature [64]byte) bool {
 	// Check for non-canonical public key or R (first 32 bytes of signature), and reject small-order public keys
-	if !isCanonicalPoint([32]byte(publicKey)) || !isCanonicalPoint([32]byte(signature[:32])) || hasSmallOrder([32]byte(publicKey)) {
+	if !isCanonicalPoint(publicKey) || !isCanonicalPoint([32]byte(signature[:32])) || hasSmallOrder(publicKey) {
 		return false
 	}
 
-	return ed25519consensus.Verify(publicKey, message, signature)
+	return ed25519consensus.Verify(publicKey[:], message, signature[:])
 }
 
 type ed25519ConsensusVerifyEntry struct {
@@ -105,7 +105,7 @@ func (b *ed25519ConsensusBatchVerifier) VerifyWithFeedback() (failed []bool, err
 		if b.entries[i].failedChecks {
 			failed[i] = true
 		} else {
-			failed[i] = !ed25519ConsensusVerifySingle(b.entries[i].publicKey[:], b.entries[i].msgHashRep, b.entries[i].signature[:])
+			failed[i] = !ed25519ConsensusVerifySingle(b.entries[i].publicKey, b.entries[i].msgHashRep, b.entries[i].signature)
 		}
 	}
 
