@@ -101,7 +101,7 @@ func MakeBatchVerifierWithHint(hint int) BatchVerifier {
 
 func makeLibsodiumBatchVerifier(hint int) BatchVerifier {
 	// preallocate enough storage for the expected usage. We will reallocate as needed.
-	if hint < minBatchVerifierAlloc {
+	if hint <= 0 {
 		hint = minBatchVerifierAlloc
 	}
 	return &cgoBatchVerifier{

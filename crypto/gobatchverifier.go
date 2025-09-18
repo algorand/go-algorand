@@ -47,7 +47,7 @@ type ed25519ConsensusBatchVerifier struct {
 }
 
 func makeEd25519ConsensusBatchVerifier(hint int) BatchVerifier {
-	if hint < minBatchVerifierAlloc {
+	if hint <= 0 {
 		hint = minBatchVerifierAlloc
 	}
 	return &ed25519ConsensusBatchVerifier{

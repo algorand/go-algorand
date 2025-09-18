@@ -44,13 +44,13 @@ func randSignedMsg(t testing.TB, r io.Reader) (SignatureVerifier, Hashable, Sign
 func BenchmarkBatchVerifierImpls(b *testing.B) {
 	partitiontest.PartitionTest(b)
 
-	bN := 100
+	numBatches := 100
 	batchSize := 64
-	msgs := make([][]Hashable, bN)
-	pks := make([][]SignatureVerifier, bN)
-	sigs := make([][]Signature, bN)
+	msgs := make([][]Hashable, numBatches)
+	pks := make([][]SignatureVerifier, numBatches)
+	sigs := make([][]Signature, numBatches)
 	r := cryptorand.Reader
-	for i := 0; i < bN; i++ {
+	for i := 0; i < numBatches; i++ {
 		for j := 0; j < batchSize; j++ {
 			pk, msg, sig := randSignedMsg(b, r)
 			msgs[i] = append(msgs[i], msg)
@@ -59,14 +59,15 @@ func BenchmarkBatchVerifierImpls(b *testing.B) {
 		}
 	}
 
-	b.Log("running with", b.N, "signatures in", len(msgs), "batches of", batchSize, "signatures")
+	b.Log("running with", b.N, "iterations using", len(msgs), "batches of", batchSize, "signatures")
 	runImpl := func(b *testing.B, bv BatchVerifier,
 		msgs [][]Hashable, pks [][]SignatureVerifier, sigs [][]Signature) {
-		b.Logf("Running %T with %d batches", bv, min(b.N, len(msgs)))
+		b.Logf("Running %T with %d iterations", bv, b.N)
 		b.StartTimer()
-		for i := 0; i < min(b.N, len(msgs)); i++ {
-			for j := range msgs[i] {
-				bv.EnqueueSignature(pks[i][j], msgs[i][j], sigs[i][j])
+		for i := 0; i < b.N; i++ {
+			batchIdx := i % numBatches
+			for j := range msgs[batchIdx] {
+				bv.EnqueueSignature(pks[batchIdx][j], msgs[batchIdx][j], sigs[batchIdx][j])
 			}
 			require.NoError(b, bv.Verify())
 		}
