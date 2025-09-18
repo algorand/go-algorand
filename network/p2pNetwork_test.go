@@ -1064,11 +1064,13 @@ func TestP2PWantTXGossip(t *testing.T) {
 	peerID := peer.ID("myPeerID")
 	mockService := &mockSubPService{mockService: mockService{id: peerID}, shouldNextFail: true}
 	net := &P2PNetwork{
-		service:  mockService,
-		log:      logging.TestingLog(t),
-		ctx:      ctx,
-		nodeInfo: &nopeNodeInfo{},
+		service:         mockService,
+		log:             logging.TestingLog(t),
+		ctx:             ctx,
+		nodeInfo:        &nopeNodeInfo{},
+		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag}),
 	}
+	net.outgoingConnsCloser = makeOutgoingConnsCloser(logging.TestingLog(t), net, net.connPerfMonitor, cliqueResolveInterval)
 
 	// ensure wantTXGossip from false to false is noop
 	net.wantTXGossip.Store(false)
