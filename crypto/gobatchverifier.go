@@ -26,7 +26,7 @@ import (
 // with additional checks to reject non-canonical encodings and small-order public keys.
 func ed25519ConsensusVerifySingle(publicKey []byte, message []byte, signature []byte) bool {
 	// Check for non-canonical public key or R (first 32 bytes of signature), and reject small-order public keys
-	if !isCanonicalPoint(publicKey) || !isCanonicalPoint(signature[:32]) || hasSmallOrder(publicKey) {
+	if !isCanonicalPoint([32]byte(publicKey)) || !isCanonicalPoint([32]byte(signature[:32])) || hasSmallOrder([32]byte(publicKey)) {
 		return false
 	}
 
@@ -58,7 +58,7 @@ func makeEd25519ConsensusBatchVerifier(hint int) BatchVerifier {
 
 func (b *ed25519ConsensusBatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
 	msgHashRep := HashRep(message)
-	failedChecks := !isCanonicalPoint(sigVerifier[:]) || !isCanonicalPoint(sig[:32]) || hasSmallOrder(sigVerifier[:])
+	failedChecks := !isCanonicalPoint(sigVerifier) || !isCanonicalPoint([32]byte(sig[:32])) || hasSmallOrder(sigVerifier)
 
 	entry := ed25519ConsensusVerifyEntry{
 		msgHashRep:   msgHashRep,
@@ -114,11 +114,7 @@ func (b *ed25519ConsensusBatchVerifier) VerifyWithFeedback() (failed []bool, err
 
 // Check that Y is canonical, using the succeed-fast algorithm from
 // the "Taming the many EdDSAs" paper.
-func isCanonicalY(p []byte) bool {
-	if len(p) != 32 {
-		return false
-	}
-
+func isCanonicalY(p [32]byte) bool {
 	if p[0] < 237 {
 		return true
 	}
@@ -132,7 +128,7 @@ func isCanonicalY(p []byte) bool {
 
 // isCanonicalPoint is a variable-time check that returns true if the
 // 32-byte ed25519 point encoding is canonical.
-func isCanonicalPoint(p []byte) bool {
+func isCanonicalPoint(p [32]byte) bool {
 	if !isCanonicalY(p) {
 		return false
 	}
@@ -140,17 +136,17 @@ func isCanonicalPoint(p []byte) bool {
 	// Test for the two cases with a non-canonical sign bit not caught by the
 	// non-canonical y-coordinate check above. They are points number 9 and 10
 	// from Table 1 of the "Taming the many EdDSAs" paper.
-	if bytes.Equal(p, []byte{ // (−0, 1)
+	if p == [32]byte{ // (−0, 1)
 		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80,
-	}) || bytes.Equal(p, []byte{ // (-0, 2^255-20)
+	} || p == [32]byte{ // (-0, 2^255-20)
 		0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	}) {
+	} {
 		return false
 	}
 
@@ -193,11 +189,7 @@ var smallOrderPoints = [][32]byte{
 
 // hasSmallOrder checks if a point is in the small-order blacklist.
 // Based on libsodium ge25519_has_small_order, but this version is variable-time.
-func hasSmallOrder(p []byte) bool {
-	if len(p) != 32 {
-		return false
-	}
-
+func hasSmallOrder(p [32]byte) bool {
 	for _, point := range smallOrderPoints {
 		if !bytes.Equal(p[:31], point[:31]) {
 			continue

@@ -188,13 +188,13 @@ func TestBatchVerifierFilippoVectors(t *testing.T) {
 		for _, v := range vectors {
 			A, err := hex.DecodeString(v.A)
 			require.NoError(t, err)
-			require.Equal(t, !slices.Contains(v.Flags, "NonCanonicalA"), isCanonicalPoint(A))
-			require.Equal(t, slices.Contains(v.Flags, "LowOrderA"), hasSmallOrder(A))
+			require.Equal(t, !slices.Contains(v.Flags, "NonCanonicalA"), isCanonicalPoint([32]byte(A)))
+			require.Equal(t, slices.Contains(v.Flags, "LowOrderA"), hasSmallOrder([32]byte(A)))
 
 			R, err := hex.DecodeString(v.R)
 			require.NoError(t, err)
-			require.Equal(t, !slices.Contains(v.Flags, "NonCanonicalR"), isCanonicalPoint(R))
-			require.Equal(t, slices.Contains(v.Flags, "LowOrderR"), hasSmallOrder(R))
+			require.Equal(t, !slices.Contains(v.Flags, "NonCanonicalR"), isCanonicalPoint([32]byte(R)))
+			require.Equal(t, slices.Contains(v.Flags, "LowOrderR"), hasSmallOrder([32]byte(R)))
 		}
 	})
 

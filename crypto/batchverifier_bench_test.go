@@ -105,19 +105,19 @@ func BenchmarkCanonicalityCheck(b *testing.B) {
 
 	b.Run("pubkey_check", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_ = isCanonicalPoint(pubkeys[i%maxN][:])
+			_ = isCanonicalPoint(pubkeys[i%maxN])
 		}
 	})
 
 	b.Run("signature_R_check", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_ = isCanonicalPoint(sigs[i%maxN][:32])
+			_ = isCanonicalPoint([32]byte(sigs[i%maxN][:32]))
 		}
 	})
 
 	b.Run("both_checks", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_ = !isCanonicalPoint(pubkeys[i%maxN][:]) || !isCanonicalPoint(sigs[i%maxN][:32])
+			_ = !isCanonicalPoint(pubkeys[i%maxN]) || !isCanonicalPoint([32]byte(sigs[i%maxN][:32]))
 		}
 	})
 }
