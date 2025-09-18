@@ -62,8 +62,7 @@ func BenchmarkBatchVerifierImpls(b *testing.B) {
 	b.Log("running with", b.N, "iterations using", len(msgs), "batches of", batchSize, "signatures")
 	runImpl := func(b *testing.B, bv BatchVerifier,
 		msgs [][]Hashable, pks [][]SignatureVerifier, sigs [][]Signature) {
-		b.Logf("Running %T with %d iterations", bv, b.N)
-		b.StartTimer()
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			batchIdx := i % numBatches
 			for j := range msgs[batchIdx] {
@@ -71,10 +70,7 @@ func BenchmarkBatchVerifierImpls(b *testing.B) {
 			}
 			require.NoError(b, bv.Verify())
 		}
-		b.StopTimer()
 	}
-	b.StopTimer()
-	b.ResetTimer()
 
 	b.Run("libsodium_single", func(b *testing.B) {
 		bv := makeLibsodiumBatchVerifier(batchSize)
