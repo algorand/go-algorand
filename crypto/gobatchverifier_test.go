@@ -18,8 +18,10 @@ package crypto
 
 import (
 	"bufio"
+	"compress/gzip"
 	"crypto/ed25519"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -141,6 +143,61 @@ func TestBatchVerifierLibsodiumTestData(t *testing.T) {
 	runBatchVerifierImpls(t, func(t *testing.T, makeBV func(int) BatchVerifier) {
 		testBatchVectors(t, makeBV, testVectors, expectedFail)
 	})
+}
+
+// based on TestEd25519Vectors from go/src/crypto/ed25519/ed25519vectors_test.go
+// which uses test vectors from filippo.io/mostly-harmless/ed25519vectors
+func TestBatchVerifierFilippoVectors(t *testing.T) {
+	var vectors []struct {
+		A, R, S, M string
+		Flags      []string
+	}
+	f, err := os.Open("./testdata/ed25519vectors.json.gz")
+	require.NoError(t, err)
+	defer f.Close()
+	rd, err := gzip.NewReader(f)
+	require.NoError(t, err)
+	defer rd.Close()
+	err = json.NewDecoder(rd).Decode(&vectors)
+	require.NoError(t, err)
+
+	expectedFail := make([]bool, len(vectors))
+	hexVecs := make([]batchTestCaseHex, len(vectors))
+	for i, v := range vectors {
+		for _, f := range v.Flags {
+			switch f {
+			case "LowOrderA": // reject small-order A
+				expectedFail[i] = true
+			case "NonCanonicalA", "NonCanonicalR": // reject non-canonical A or R
+				expectedFail[i] = true
+			case "LowOrderR": // small-order R allowed
+			case "LowOrderComponentR", "LowOrderComponentA": // torsion component allowed
+			case "LowOrderResidue": // cofactorless batch verification
+			default:
+				require.Fail(t, "unknown flag %q in test vector %d", f, i)
+			}
+		}
+		hexVecs[i] = batchTestCaseHex{pkHex: v.A, sigHex: v.R + v.S, msgHex: hex.EncodeToString([]byte(v.M))}
+	}
+	runBatchVerifierImpls(t, func(t *testing.T, makeBV func(int) BatchVerifier) {
+		testBatchVectors(t, makeBV, decodeHexTestCases(t, hexVecs), expectedFail)
+	})
+
+	// test isCanonicalPoint and hasSmallOrder against A and R
+	t.Run("ARchecks", func(t *testing.T) {
+		for _, v := range vectors {
+			A, err := hex.DecodeString(v.A)
+			require.NoError(t, err)
+			require.Equal(t, !slices.Contains(v.Flags, "NonCanonicalA"), isCanonicalPoint(A))
+			require.Equal(t, slices.Contains(v.Flags, "LowOrderA"), hasSmallOrder(A))
+
+			R, err := hex.DecodeString(v.R)
+			require.NoError(t, err)
+			require.Equal(t, !slices.Contains(v.Flags, "NonCanonicalR"), isCanonicalPoint(R))
+			require.Equal(t, slices.Contains(v.Flags, "LowOrderR"), hasSmallOrder(R))
+		}
+	})
+
 }
 
 // testBatchVectors tests a batch of signatures with expected pass/fail results using various batch sizes
