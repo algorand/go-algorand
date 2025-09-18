@@ -94,7 +94,7 @@ func MakeBatchVerifier() BatchVerifier {
 }
 
 // MakeBatchVerifierWithHint creates a BatchVerifier instance. This function pre-allocates
-// amount of free space to enqueue signatures without expanding.
+// space to enqueue signatures without expanding.
 func MakeBatchVerifierWithHint(hint int) BatchVerifier {
 	return ed25519BatchVerifierFactory(hint)
 }
