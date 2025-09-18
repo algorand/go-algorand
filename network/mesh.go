@@ -239,12 +239,14 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 
 	out := make(chan meshRequest, 5)
 	var wg sync.WaitGroup
+	var prevWsConnections int = -1 // -1 means not initialized
 
 	meshFn := func(targetConnCount int) int {
 		wsConnections := cfg.wsnet.meshThreadInner(targetConnCount)
 
 		var p2pConnections int
-		if wsConnections <= targetConnCount {
+		// skip p2p mesh for the first time to give wsnet to establish connections
+		if prevWsConnections != -1 && prevWsConnections <= targetConnCount {
 			// note "less or equal". Even if p2pTarget is zero it makes sense to call
 			// p2p meshThreadInner to fetch DHT peers
 			p2pTarget := targetConnCount - wsConnections
@@ -255,6 +257,7 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 					wsConnections, p2pConnections, targetConnCount)
 			}
 		}
+		prevWsConnections = wsConnections
 		return wsConnections + p2pConnections
 	}
 
