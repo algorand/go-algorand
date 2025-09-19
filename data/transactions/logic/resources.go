@@ -53,7 +53,11 @@ type resources struct {
 	// of the box - has it been modified in this txngroup? If yes, the size of
 	// the box counts against the group writeBudget. So delete is NOT a dirtying
 	// operation.
-	boxes map[BoxRef]bool
+	boxes map[basics.BoxRef]bool
+
+	// unnamedAccess is the number of times that a newly created app may access
+	// a box that was not named.  It is decremented for each box accessed this way.
+	unnamedAccess int
 
 	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
 	dirtyBytes uint64
@@ -72,6 +76,18 @@ func (r *resources) shareAccountAndHolding(addr basics.Address, id basics.AssetI
 
 func (r *resources) shareLocal(addr basics.Address, id basics.AppIndex) {
 	r.sharedLocals[ledgercore.AccountApp{Address: addr, App: id}] = struct{}{}
+}
+
+func (r *resources) shareBox(br basics.BoxRef, current basics.AppIndex) {
+	if br.App == 0 {
+		// "current app": Ignore if this is a create, else use ApplicationID
+		if current == 0 {
+			// When the create actually happens, and we learn the appID, we'll add it.
+			return
+		}
+		br.App = current
+	}
+	r.boxes[br] = false
 }
 
 // In the fill* and allows* routines, we pass the header and the fields in
@@ -223,24 +239,30 @@ func (cx *EvalContext) requireHolding(acct basics.Address, id basics.AssetIndex)
 		return nil
 	}
 	if !cx.allowsHolding(acct, id) {
-		return fmt.Errorf("unavailable Holding %s x %d would be accessible", acct, id)
+		return fmt.Errorf("unavailable Holding %d+%s would be accessible", id, acct)
 	}
 	return nil
 }
 
 func (cx *EvalContext) requireLocals(acct basics.Address, id basics.AppIndex) error {
 	if !cx.allowsLocals(acct, id) {
-		return fmt.Errorf("unavailable Local State %s x %d would be accessible", acct, id)
+		return fmt.Errorf("unavailable Local State %d+%s would be accessible", id, acct)
 	}
 	return nil
 }
 
 func (cx *EvalContext) allowsAssetTransfer(hdr *transactions.Header, tx *transactions.AssetTransferTxnFields) error {
-	err := cx.requireHolding(hdr.Sender, tx.XferAsset)
-	if err != nil {
-		return fmt.Errorf("axfer Sender: %w", err)
+	// After EnableInnerClawbackWithoutSenderHolding appears in a consensus
+	// update, we should remove it from consensus params and assume it's true in
+	// the next release. It only needs to be in there so that it gates the
+	// behavior change in the release it first appears.
+	if !cx.Proto.EnableInnerClawbackWithoutSenderHolding || tx.AssetSender.IsZero() {
+		err := cx.requireHolding(hdr.Sender, tx.XferAsset)
+		if err != nil {
+			return fmt.Errorf("axfer Sender: %w", err)
+		}
 	}
-	err = cx.requireHolding(tx.AssetReceiver, tx.XferAsset)
+	err := cx.requireHolding(tx.AssetReceiver, tx.XferAsset)
 	if err != nil {
 		return fmt.Errorf("axfer AssetReceiver: %w", err)
 	}
@@ -271,6 +293,52 @@ func (cx *EvalContext) allowsAssetFreeze(hdr *transactions.Header, tx *transacti
 }
 
 func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
+	if tx.Access != nil {
+		r.fillApplicationCallAccess(ep, hdr, tx)
+	} else {
+		r.fillApplicationCallForeign(ep, hdr, tx)
+	}
+}
+
+func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
+	// The only implicitly available things are the sender, the app, and the sender's locals
+	r.sharedAccounts[hdr.Sender] = struct{}{}
+	if tx.ApplicationID != 0 {
+		r.sharedApps[tx.ApplicationID] = struct{}{}
+		r.shareLocal(hdr.Sender, tx.ApplicationID)
+	}
+
+	// Access is a explicit list of resources that should be made "available"
+	for _, rr := range tx.Access {
+		switch {
+		case !rr.Address.IsZero():
+			r.sharedAccounts[rr.Address] = struct{}{}
+		case rr.Asset != 0:
+			r.sharedAsas[rr.Asset] = struct{}{}
+		case rr.App != 0:
+			r.sharedApps[rr.App] = struct{}{}
+		case !rr.Holding.Empty():
+			// ApplicationCallTxnFields.wellFormed ensures no error here.
+			address, asset, _ := rr.Holding.Resolve(tx.Access, hdr.Sender)
+			r.shareHolding(address, asset)
+		case !rr.Locals.Empty():
+			// ApplicationCallTxnFields.wellFormed ensures no error here.
+			address, app, _ := rr.Locals.Resolve(tx.Access, hdr.Sender)
+			r.shareLocal(address, app)
+		case !rr.Box.Empty():
+			// ApplicationCallTxnFields.wellFormed ensures no error here.
+			app, name, _ := rr.Box.Resolve(tx.Access)
+			r.shareBox(basics.BoxRef{App: app, Name: name}, tx.ApplicationID)
+		default:
+			// all empty equals an "empty boxref" which allows one unnamed access
+			if ep.Proto.EnableUnnamedBoxAccessInNewApps {
+				r.unnamedAccess++
+			}
+		}
+	}
+}
+
+func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
 	txAccounts := make([]basics.Address, 0, 2+len(tx.Accounts)+len(tx.ForeignApps))
 	txAccounts = append(txAccounts, hdr.Sender)
 	txAccounts = append(txAccounts, tx.Accounts...)
@@ -306,21 +374,17 @@ func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header
 	}
 
 	for _, br := range tx.Boxes {
+		if ep.Proto.EnableUnnamedBoxAccessInNewApps && br.Empty() {
+			r.unnamedAccess++
+		}
 		var app basics.AppIndex
-		if br.Index == 0 {
-			// "current app": Ignore if this is a create, else use ApplicationID
-			if tx.ApplicationID == 0 {
-				// When the create actually happens, and we learn the appID, we'll add it.
-				continue
-			}
-			app = tx.ApplicationID
-		} else {
+		if br.Index > 0 {
 			// Bounds check will already have been done by
 			// WellFormed. For testing purposes, it's better to panic
 			// now than after returning a nil.
-			app = tx.ForeignApps[br.Index-1] // shift for the 0=this convention
+			app = tx.ForeignApps[br.Index-1] // shift for the 0=current convention
 		}
-		r.boxes[BoxRef{app, string(br.Name)}] = false
+		r.shareBox(basics.BoxRef{App: app, Name: string(br.Name)}, tx.ApplicationID)
 	}
 }
 

@@ -19,6 +19,7 @@ package fuzzer
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/rand"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -152,11 +153,8 @@ func makeTestLedger(state map[basics.Address]basics.AccountData, sync testLedger
 	l.certs = make(map[basics.Round]agreement.Certificate)
 	l.nextRound = 1
 
-	// deep copy of state
 	l.state = make(map[basics.Address]basics.AccountData)
-	for k, v := range state {
-		l.state[k] = v
-	}
+	maps.Copy(l.state, state)
 
 	l.notifications = make(map[basics.Round]signal)
 	l.EnsuringDigestStartCh = make(chan struct{})

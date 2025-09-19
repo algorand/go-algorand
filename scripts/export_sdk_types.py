@@ -108,8 +108,9 @@ def sdkize(input):
     input = input.replace("OneTimeSignatureVerifier", "VotePK")
     input = input.replace("VRFVerifier", "VRFPK")
     input = input.replace("merklesignature.Commitment", "MerkleVerifier")
-    # appl - Someone had the bright idea to change the name of this field (and type) in the SDK.
+    # appl - Someone had the bright idea to change the names of these fields (and the type) in the SDK.
     input = input.replace("Boxes []BoxRef", "BoxReferences []BoxReference")
+    input = re.sub("Box\\s+BoxRef", "Box BoxReference", input)
 
     # transaction - for some reason, ApplicationCallTxnFields is wrapped in this nothing-burger
     input = input.replace("ApplicationCallTxnFields", "ApplicationFields")
@@ -141,14 +142,23 @@ def export_thing(pattern, name, src, dst):
     line = find_line(src, start)
     if line == "":
         raise ValueError(f"Unable to find {name} in {src}")
-    stop = "\n}\n" if line.endswith("{") else "\n"
-    x = extract_between(src, start, stop)
+    src_stop = "\n}\n" if line.endswith("{") else "\n"
+    x = extract_between(src, start, src_stop)
     x = sdkize(x)
     if dst.endswith(".go"):     # explicit dst
         dst = f"{SDK}{dst}"
     else:
         dst = f"{SDK}types/{dst}.go"
-    replace_between(dst, x, start, stop)
+
+    line = find_line(dst, start)
+    if line == "":
+        raise ValueError(f"Unable to find {name} in {dst}  If it's new, add a dummy version to place it.")
+    dst_stop = "\n}\n" if line.endswith("{") else "\n"
+    # Allow a struct to replace a one-line type def by adding } to extracted text
+    if "}" in src_stop and "}" not in dst_stop:
+        x += "\n}"
+    replace_between(dst, x, start, dst_stop)
+
     subprocess.run(["gofmt", "-w", dst])
 
 if __name__ == "__main__":
@@ -186,6 +196,11 @@ if __name__ == "__main__":
     export_type("AssetParams", "data/basics/userBalance.go", "asset")
     #   apps
     export_type("ApplicationCallTxnFields", "data/transactions/application.go", "applications")
+    export_type("ResourceRef", "data/transactions/application.go", "applications")
+    # Don't export this, since it was greatly modified in the SDK. We'll just stick to the manual definition.
+    # export_type("BoxRef", "data/transactions/application.go", "applications")
+    export_type("HoldingRef", "data/transactions/application.go", "applications")
+    export_type("LocalsRef", "data/transactions/application.go", "applications")
     export_type("AppIndex", "data/basics/userBalance.go", "applications")
 
     # Block

@@ -1,0 +1,98 @@
+#!/usr/bin/expect -f
+# Common utilities for pingpong tests
+# This file should be sourced by individual pingpong test files
+
+source goalExpectCommon.exp
+
+# Setup a pingpong test network and return network info
+proc setupPingpongNetwork { TEST_ALGO_DIR TEST_DATA_DIR } {
+    set timeout 60
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root_$TIME_STAMP
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    # Copy genesis file
+    exec cp $TEST_DATA_DIR/../../installer/genesis/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create and start network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
+
+    # Get network info
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    # Wait for round 1 to ensure network is ready
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+
+    # Return list of important values
+    return [list $TEST_ROOT_DIR $TEST_PRIMARY_NODE_DIR $NETWORK_NAME $PRIMARY_NODE_ADDRESS $PRIMARY_ACCOUNT_ADDRESS]
+}
+
+# Teardown a pingpong test network
+proc teardownPingpongNetwork { NETWORK_NAME TEST_ROOT_DIR } {
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
+}
+
+# Run a pingpong variation with the given arguments
+proc runPingpongVariation { variation_name pingpong_args TEST_PRIMARY_NODE_DIR duration } {
+    puts "Running pingpong variation: $variation_name"
+    puts "Arguments: $pingpong_args"
+    puts "Duration: $duration seconds"
+
+    ::AlgorandGoal::RunPingpong $duration $pingpong_args $TEST_PRIMARY_NODE_DIR
+}
+
+# Common error handler for pingpong tests
+proc pingpongTestErrorHandler { test_name exception } {
+    ::AlgorandGoal::Abort "ERROR in $test_name: $exception"
+}
+
+# Main test runner that does all the work
+proc runPingpongTest { test_name variation_name pingpong_args {duration 5} } {
+    global TEST_ALGO_DIR TEST_DATA_DIR
+
+    # Setup network
+    set network_info [setupPingpongNetwork $TEST_ALGO_DIR $TEST_DATA_DIR]
+    set TEST_ROOT_DIR [lindex $network_info 0]
+    set TEST_PRIMARY_NODE_DIR [lindex $network_info 1]
+    set NETWORK_NAME [lindex $network_info 2]
+
+    # Run the test
+    runPingpongVariation $variation_name $pingpong_args $TEST_PRIMARY_NODE_DIR $duration
+
+    # Teardown network
+    teardownPingpongNetwork $NETWORK_NAME $TEST_ROOT_DIR
+
+    puts "Pingpong $test_name Test Successful"
+}
+
+# Main entry point for all pingpong tests
+proc pingpongTestMain { test_name variation_name pingpong_args {duration 5} } {
+    global TEST_ALGO_DIR TEST_DATA_DIR
+
+    if { [catch {
+        source goalExpectCommon.exp
+        puts "Starting $test_name"
+        puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+        puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+        runPingpongTest $test_name $variation_name $pingpong_args $duration
+
+        exit 0
+    } EXCEPTION ] } {
+        pingpongTestErrorHandler $test_name $EXCEPTION
+    }
+}

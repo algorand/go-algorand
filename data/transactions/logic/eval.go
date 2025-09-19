@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 // The constants below control opcode evaluation and MAY NOT be changed without
@@ -275,12 +276,6 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
-type BoxRef struct {
-	App  basics.AppIndex
-	Name string
-}
-
 // UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
 // This should only be used during simulation or debugging.
 type UnnamedResourcePolicy interface {
@@ -289,7 +284,8 @@ type UnnamedResourcePolicy interface {
 	AvailableApp(app basics.AppIndex) bool
 	AllowsHolding(addr basics.Address, asset basics.AssetIndex) bool
 	AllowsLocal(addr basics.Address, app basics.AppIndex) bool
-	AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool
+	AvailableBox(app basics.AppIndex, name string, newAppAccess bool, createSize uint64) bool
+	IOSurplus(surplus int64) bool
 }
 
 // EvalConstants contains constant parameters that are used by opcodes during evaluation (including both real-execution and simulation).
@@ -368,10 +364,13 @@ type EvalParams struct {
 	// readBudgetChecked allows us to only check the read budget once
 	readBudgetChecked bool
 
-	// SurplusReadBudget is the number of bytes from the IO budget that were not used for reading
-	// in boxes before evaluation began. In other words, the txn group could have read in
-	// SurplusReadBudget more box bytes, but did not.
-	SurplusReadBudget uint64
+	// SurplusReadBudget is the number of bytes from the IO budget that were not
+	// used for reading in boxes before evaluation began. In other words, the
+	// txn group could have read in SurplusReadBudget more box bytes, but did
+	// not.  It is signed because `simulate` evaluates groups even if they come
+	// in with insufficient io budget, and reports the need, when invoked with
+	// AllowUnnamedResources.
+	SurplusReadBudget int64
 
 	EvalConstants
 
@@ -496,7 +495,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedApps:     make(map[basics.AppIndex]struct{}),
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
-		boxes:          make(map[BoxRef]bool),
+		boxes:          make(map[basics.BoxRef]bool),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
@@ -523,13 +522,10 @@ func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
 func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext) *EvalParams {
-	minAvmVersion := computeMinAvmVersion(txg)
-	// Can't happen currently, since earliest inner callable version is higher
-	// than any minimum imposed otherwise.  But is correct to inherit a stronger
-	// restriction from above, in case of future restriction.
-	if minAvmVersion < caller.minAvmVersion {
-		minAvmVersion = caller.minAvmVersion
-	}
+	minAvmVersion := max(computeMinAvmVersion(txg), caller.minAvmVersion)
+	// caller.AvmVersion can't exceed the computed value currently, since earliest
+	// inner callable version is higher than any minimum imposed otherwise.  But is
+	// correct to inherit a stronger restriction from above, in case of future restriction.
 
 	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
 
@@ -1076,29 +1072,16 @@ func (cx *EvalContext) evalStates() []evalState {
 		// should be located outside of the evalState, with the PC.
 		var stack []any
 		if cx.groupIndex == i {
-			stack = convertSlice(cx.Stack, func(sv stackValue) any {
-				return sv.asAny()
-			})
+			stack = util.Map(cx.Stack, stackValue.asAny)
 		}
 
 		states[i] = evalState{
 			Scratch: scratchAsAny,
 			Stack:   stack,
-			Logs:    convertSlice(cx.TxnGroup[i].EvalDelta.Logs, func(s string) []byte { return []byte(s) }),
+			Logs:    util.Map(cx.TxnGroup[i].EvalDelta.Logs, func(s string) []byte { return []byte(s) }),
 		}
 	}
 	return states
-}
-
-func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
-	if input == nil {
-		return nil
-	}
-	output := make([]Y, len(input))
-	for i := range input {
-		output[i] = fn(input[i])
-	}
-	return output
 }
 
 // EvalContract executes stateful program as the gi'th transaction in params
@@ -1129,7 +1112,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
-			return false, nil, fmt.Errorf("Attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
+			return false, nil, fmt.Errorf("attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
 		}
 	}
 
@@ -1140,9 +1123,15 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	// If this is a creation...
 	if cx.txn.Txn.ApplicationID == 0 {
 		// make any "0 index" box refs available now that we have an appID.
+		// This allows case 2b in TestNewAppBoxCreate of boxtxn_test.go
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				cx.EvalParams.available.boxes[BoxRef{cx.appID, string(br.Name)}] = false
+				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(br.Name)}] = false
+			}
+		}
+		for _, rr := range cx.txn.Txn.Access {
+			if len(rr.Box.Name) > 0 && rr.Box.Index == 0 { // len check ensures we have a box ref
+				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(rr.Box.Name)}] = false
 			}
 		}
 		// and add the appID to `createdApps`
@@ -1154,13 +1143,21 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	// Check the I/O budget for reading if this is the first top-level app call
 	if cx.caller == nil && !cx.readBudgetChecked {
-		boxRefCount := uint64(0) // Intentionally counts duplicates
+		bumps := uint64(0) // Intentionally counts duplicates
 		for _, tx := range cx.TxnGroup {
-			boxRefCount += uint64(len(tx.Txn.Boxes))
+			bumps += uint64(len(tx.Txn.Boxes))
+			for _, rr := range tx.Txn.Access {
+				// A box or an empty ref is an io quota bump
+				if !rr.Box.Empty() || rr.Empty() {
+					bumps++
+				}
+			}
 		}
-		cx.ioBudget = boxRefCount * cx.Proto.BytesPerBoxReference
+		cx.ioBudget = basics.MulSaturate(bumps, cx.Proto.BytesPerBoxReference)
 
 		used := uint64(0)
+		var surplus int64
+		var overflow bool
 		for br := range cx.available.boxes {
 			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
@@ -1178,7 +1175,9 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			cx.available.boxes[br] = false
 
 			used = basics.AddSaturate(used, size)
-			if used > cx.ioBudget {
+			surplus, overflow = basics.ODiff(cx.ioBudget, used)
+			// we defer the check if we have cx.UnnamedResources, so we can ask for the entire surplus at the end.
+			if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
 				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
 				if !cx.Proto.EnableBareBudgetError {
 					// We return an EvalError here because we used to do
@@ -1192,8 +1191,14 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 				return false, nil, err
 			}
 		}
+
+		// Report the surplus/deficit to the policy, and find out if we should continue
+		if cx.UnnamedResources != nil && !cx.UnnamedResources.IOSurplus(surplus) {
+			return false, nil, fmt.Errorf("box read budget (%d) exceeded despite policy", cx.ioBudget)
+		}
+
 		cx.readBudgetChecked = true
-		cx.SurplusReadBudget = cx.ioBudget - used
+		cx.SurplusReadBudget = surplus // Can be negative, but only in `simulate`
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
@@ -1358,18 +1363,18 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 // static checks and reject programs that are invalid. Prior to v4,
 // these static checks include a cost estimate that must be low enough
 // (controlled by params.Proto).
-func CheckContract(program []byte, params *EvalParams) error {
-	return check(program, params, ModeApp)
+func CheckContract(program []byte, gi int, params *EvalParams) error {
+	return check(program, gi, params, ModeApp)
 }
 
 // CheckSignature should be faster than EvalSignature.  It can perform static
 // checks and reject programs that are invalid. Prior to v4, these static checks
 // include a cost estimate that must be low enough (controlled by params.Proto).
 func CheckSignature(gi int, params *EvalParams) error {
-	return check(params.TxnGroup[gi].Lsig.Logic, params, ModeSig)
+	return check(params.TxnGroup[gi].Lsig.Logic, gi, params, ModeSig)
 }
 
-func check(program []byte, params *EvalParams, mode RunMode) (err error) {
+func check(program []byte, gi int, params *EvalParams, mode RunMode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
@@ -1391,6 +1396,7 @@ func check(program []byte, params *EvalParams, mode RunMode) (err error) {
 	cx.runMode = mode
 	cx.branchTargets = make([]bool, len(program)+1) // teal v2 allowed jumping to the end of the prog
 	cx.instructionStarts = make([]bool, len(program)+1)
+	cx.txn = &params.TxnGroup[gi]
 
 	if err := cx.begin(program); err != nil {
 		return err
@@ -1431,6 +1437,16 @@ func (cx *EvalContext) begin(program []byte) error {
 	}
 	if version > cx.Proto.LogicSigVersion {
 		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
+	}
+	// We disallow pre-sharedResources programs with tx.Access for the same
+	// reason that we don't allow resource sharing to happen for low version
+	// programs. We don't want programs to have access to unexpected
+	// things. Worse, we don't want to deal with the potentially new sitation
+	// that a preSharing program could have access to an account and an ASA, but
+	// not the corresponding holding. We DO allow logicsigs, because they can't
+	// access state anyway.
+	if version < sharedResourcesVersion && cx.runMode == ModeApp && len(cx.txn.Txn.Access) > 0 {
+		return fmt.Errorf("pre-sharedResources program cannot be invoked with tx.Access")
 	}
 
 	cx.version = version
@@ -1619,10 +1635,7 @@ func (cx *EvalContext) step() error {
 		if len(cx.Stack) == 0 {
 			stackString = "<empty stack>"
 		} else {
-			num := 1
-			if len(spec.Return.Types) > 1 {
-				num = len(spec.Return.Types)
-			}
+			num := max(len(spec.Return.Types), 1)
 			// check for nil error here, because we might not return
 			// values if we encounter an error in the opcode
 			if err == nil {
@@ -1986,7 +1999,7 @@ func opBtoi(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	ibytes := cx.Stack[last].Bytes
 	if len(ibytes) > 8 {
-		return fmt.Errorf("btoi arg too long, got [%d]bytes", len(ibytes))
+		return fmt.Errorf("btoi arg too long, got %d bytes", len(ibytes))
 	}
 	value := uint64(0)
 	for _, b := range ibytes {
@@ -3219,10 +3232,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 			return sv, fmt.Errorf("invalid ApprovalProgramPages index %d", arrayFieldIdx)
 		}
 		first := arrayFieldIdx * maxStringSize
-		last := first + maxStringSize
-		if last > uint64(len(txn.ApprovalProgram)) {
-			last = uint64(len(txn.ApprovalProgram))
-		}
+		last := min(first+maxStringSize, uint64(len(txn.ApprovalProgram)))
 		sv.Bytes = txn.ApprovalProgram[first:last]
 	case NumClearStateProgramPages:
 		sv.Uint = uint64(basics.DivCeil(len(txn.ClearStateProgram), maxStringSize))
@@ -3232,10 +3242,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 			return sv, fmt.Errorf("invalid ClearStateProgramPages index %d", arrayFieldIdx)
 		}
 		first := arrayFieldIdx * maxStringSize
-		last := first + maxStringSize
-		if last > uint64(len(txn.ClearStateProgram)) {
-			last = uint64(len(txn.ClearStateProgram))
-		}
+		last := min(first+maxStringSize, uint64(len(txn.ClearStateProgram)))
 		sv.Bytes = txn.ClearStateProgram[first:last]
 	case RekeyTo:
 		sv.Bytes = txn.RekeyTo[:]
@@ -4239,7 +4246,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	// created earlier in the group, or because of group sharing)
 	ok := cx.availableAccount(addr)
 	if !ok {
-		return addr, 0, fmt.Errorf("invalid Account reference %s", addr)
+		return addr, 0, fmt.Errorf("unavailable Account %s", addr)
 	}
 	// available, but not in txn.Accounts. Return 1 higher to signal.
 	return addr, uint64(len(cx.txn.Txn.Accounts) + 1), nil
@@ -4535,7 +4542,7 @@ func opAppLocalPut(cx *EvalContext) error {
 	// programs. The test here is to ensure that we didn't get access to the
 	// address from another txn, but don't have access to the local state.
 	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
-		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
+		return fmt.Errorf("unavailable Local State %d+%s", cx.appID, addr)
 	}
 
 	// if writing the same value, don't record in EvalDelta, matching ledger
@@ -4630,7 +4637,7 @@ func opAppLocalDel(cx *EvalContext) error {
 	// programs. The test here is to ensure that we didn't get access to the
 	// address from another txn, but don't have access to the local state.
 	if cx.version >= sharedResourcesVersion && !cx.allowsLocals(addr, cx.appID) {
-		return fmt.Errorf("unavailable Local State %s x %d", addr, cx.appID)
+		return fmt.Errorf("unavailable Local State %d+%s", cx.appID, addr)
 	}
 
 	// if deleting a non-existent value, don't record in EvalDelta, matching
@@ -4706,9 +4713,9 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppInd
 	if foreign {
 		// In old versions, a foreign reference must be an index in ForeignApps or 0
 		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-			return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+			return cx.txn.Txn.ForeignApps[ref-1], nil
 		}
-		return 0, fmt.Errorf("App index %d beyond txn.ForeignApps", ref)
+		return 0, fmt.Errorf("%d is not a valid foreign app slot", ref)
 	}
 	// Otherwise it's direct
 	return basics.AppIndex(ref), nil
@@ -4738,8 +4745,12 @@ func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 	// given to anyone who cares about semantics in the first few rounds of
 	// a new network - don't use indexes for references, use the App ID
 	if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+		return cx.txn.Txn.ForeignApps[ref-1], nil
 	}
+	if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].App != 0 {
+		return cx.txn.Txn.Access[ref-1].App, nil
+	}
+
 	return 0, fmt.Errorf("unavailable App %d", ref)
 }
 
@@ -4761,21 +4772,23 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 			}
 		}
 
-		// Do an extra check to give a better error. The app is definitely
-		// available. If the addr is too, then the trouble is they must have
-		// come from different transactions, and the HOLDING is the problem.
+		// Do an extra check to give a better error, which also allows the
+		// UnnamedResources code to notice that the account must be available as
+		// well.
 
 		acctOK := cx.availableAccount(addr)
+		localsErr := fmt.Errorf("unavailable Local State %d+%s", aid, addr)
+
 		switch {
 		case err != nil && acctOK:
-			// do nothing, err contains the an Asset specific problem
+			// do nothing, err contains an App specific problem
 		case err == nil && acctOK:
 			// although both are available, the LOCALS are not
-			err = fmt.Errorf("unavailable Local State %s x %d", addr, aid)
+			err = localsErr
 		case err != nil && !acctOK:
-			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+			err = fmt.Errorf("unavailable Account %s, %w, %w", addr, err, localsErr)
 		case err == nil && !acctOK:
-			err = fmt.Errorf("unavailable Account %s", addr)
+			err = fmt.Errorf("unavailable Account %s, %w", addr, localsErr)
 		}
 
 		return basics.Address{}, 0, 0, err
@@ -4791,6 +4804,7 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 	if err != nil {
 		return basics.Address{}, 0, 0, err
 	}
+
 	return addr, app, addrIdx, nil
 }
 
@@ -4813,9 +4827,9 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 	if foreign {
 		// In old versions, a foreign reference must be an index in ForeignAssets
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+			return cx.txn.Txn.ForeignAssets[ref], nil
 		}
-		return 0, fmt.Errorf("Asset index %d beyond txn.ForeignAssets", ref)
+		return 0, fmt.Errorf("%d is not a valid foreign asset slot", ref)
 	}
 	// Otherwise it's direct
 	return basics.AssetIndex(ref), nil
@@ -4823,9 +4837,8 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 
 const lastForbiddenResource = 255
 
-// resolveAsset figures out what Asset an integer is referring to, considering 0 as
-// current app first, then uses the integer as is if it is an availableAsset, then
-// tries to perform a slot lookup.
+// resolveAsset figures out what Asset an integer is referring to, checking if
+// the integer is an availableAsset, then tries to perform a slot lookup.
 func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err error) {
 	if cx.Proto.AppForbidLowResources {
 		defer func() {
@@ -4843,7 +4856,10 @@ func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err erro
 	// given to anyone who cares about semantics in the first few rounds of
 	// a new network - don't use indexes for references, use the Asset ID
 	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+		return cx.txn.Txn.ForeignAssets[ref], nil
+	}
+	if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
+		return cx.txn.Txn.Access[ref-1].Asset, nil
 	}
 	return 0, fmt.Errorf("unavailable Asset %d", ref)
 }
@@ -4868,10 +4884,10 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 		acctOK := cx.availableAccount(addr)
 		switch {
 		case err != nil && acctOK:
-			// do nothing, err contains the an Asset specific problem
+			// do nothing, err contains an Asset specific problem
 		case err == nil && acctOK:
 			// although both are available, the HOLDING is not
-			err = fmt.Errorf("unavailable Holding %s x %d", addr, aid)
+			err = fmt.Errorf("unavailable Holding %d+%s", aid, addr)
 		case err != nil && !acctOK:
 			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
 		case err == nil && !acctOK:
@@ -5200,7 +5216,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("unavailable Asset %d", aid)
+	return 0, fmt.Errorf("unavailable Asset %d during assignment %v", aid, cx.available)
 }
 
 // availableAsset determines whether an asset is "available". Before
@@ -5211,7 +5227,10 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 // transaction (axfer,acfg,afrz), but not for holding lookups or assignments to
 // an inner static array.
 func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
-	// Ensure that aid is in Foreign Assets
+	// Check if aid is in an access array
+	if slices.ContainsFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool { return rr.Asset == aid }) {
+		return true
+	}
 	if slices.Contains(cx.txn.Txn.ForeignAssets, aid) {
 		return true
 	}
@@ -5253,7 +5272,10 @@ func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 }
 
 func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
-	// Ensure that aid is in Foreign Apps
+	// Check if aid is in an access array
+	if slices.ContainsFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool { return rr.App == aid }) {
+		return true
+	}
 	if slices.Contains(cx.txn.Txn.ForeignApps, aid) {
 		return true
 	}
@@ -5794,6 +5816,16 @@ func opBlock(cx *EvalContext) error {
 		cx.Stack[last] = stackValue{Uint: hdr.Bonus.Raw}
 	case BlkProposerPayout:
 		cx.Stack[last] = stackValue{Uint: hdr.ProposerPayout.Raw}
+
+	case BlkBranch512:
+		cx.Stack[last].Bytes = hdr.Branch512[:]
+	case BlkSha512_256TxnCommitment:
+		cx.Stack[last].Bytes = hdr.NativeSha512_256Commitment[:]
+	case BlkSha256TxnCommitment:
+		cx.Stack[last].Bytes = hdr.Sha256Commitment[:]
+	case BlkSha512TxnCommitment:
+		cx.Stack[last].Bytes = hdr.Sha512Commitment[:]
+
 	default:
 		return fmt.Errorf("invalid block field %s", fs.field)
 	}

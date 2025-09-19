@@ -447,10 +447,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		}
 		if time.Since(lastProgressUpdate) > 50*time.Millisecond && catchpointFileSize > 0 {
 			lastProgressUpdate = time.Now()
-			progressRatio := int(float64(progress) * barLength / float64(catchpointFileSize))
-			if progressRatio > barLength {
-				progressRatio = barLength
-			}
+			progressRatio := min(int(float64(progress)*barLength/float64(catchpointFileSize)), barLength)
 			printLoadCatchpointProgressLine(progressRatio, barLength, int64(progress))
 		}
 	}

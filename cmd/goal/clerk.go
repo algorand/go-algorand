@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 
 	"github.com/spf13/cobra"
 )
@@ -68,6 +69,7 @@ var (
 	rawOutput          bool
 	requestFilename    string
 	requestOutFilename string
+	inspectTxid        bool
 
 	simulateStartRound            basics.Round
 	simulateAllowEmptySignatures  bool
@@ -97,6 +99,9 @@ func init() {
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+
+	// inspect flags
+	inspectCmd.Flags().BoolVarP(&inspectTxid, "txid", "t", false, "Display the TxID for each transaction")
 
 	// send flags
 	sendCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (If not specified, uses default account)")
@@ -411,13 +416,13 @@ var sendCmd = &cobra.Command{
 			var err1 error
 			rekeyTo, err1 = basics.UnmarshalChecksumAddress(rekeyToAddress)
 			if err1 != nil {
-				reportErrorln(err1.Error())
+				reportErrorln(err1)
 			}
 		}
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
-			reportErrorln(err.Error())
+			reportErrorln(err)
 		}
 		payment, err := client.ConstructPayment(
 			fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved,
@@ -548,7 +553,7 @@ var sendCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err1 = waitForCommit(client, txid, lastValid)
 				if err1 != nil {
-					reportErrorln(err1.Error())
+					reportErrorln(err1)
 				}
 			}
 		} else {
@@ -558,7 +563,7 @@ var sendCmd = &cobra.Command{
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			}
 			if err != nil {
-				reportErrorln(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -723,7 +728,11 @@ var inspectCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(txDecodeError, txFilename, err)
 				}
-				fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				if inspectTxid {
+					fmt.Printf("%s[%d] - %s\n%s\n\n", txFilename, count, sti.Txn.ID(), string(protocol.EncodeJSON(sti)))
+				} else {
+					fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				}
 				count++
 			}
 		}
@@ -1156,13 +1165,10 @@ var dryrunCmd = &cobra.Command{
 			// Write dryrun data to file
 			dataDir := datadir.EnsureSingleDataDir()
 			client := ensureFullClient(dataDir)
-			accts, err := unmarshalSlice(dumpForDryrunAccts)
-			if err != nil {
-				reportErrorln(err.Error())
-			}
+			accts := util.Map(dumpForDryrunAccts, cliAddress)
 			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
-				reportErrorln(err.Error())
+				reportErrorln(err)
 			}
 			writeFile(outFilename, data, 0600)
 			return
@@ -1373,19 +1379,6 @@ var simulateCmd = &cobra.Command{
 			fmt.Println(string(encodedResponse))
 		}
 	},
-}
-
-// unmarshalSlice converts string addresses to basics.Address
-func unmarshalSlice(accts []string) ([]basics.Address, error) {
-	result := make([]basics.Address, 0, len(accts))
-	for _, acct := range accts {
-		addr, err := basics.UnmarshalChecksumAddress(acct)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, addr)
-	}
-	return result, nil
 }
 
 func decodeTxnsFromFile(file string) []transactions.SignedTxn {

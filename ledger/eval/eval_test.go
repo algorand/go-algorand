@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"testing"
 
@@ -886,9 +887,7 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	newBalances := make(map[basics.Address]basics.AccountData)
 
 	// copy the previous balances.
-	for k, v := range ledger.roundBalances[vb.Block().Round()-1] {
-		newBalances[k] = v
-	}
+	maps.Copy(newBalances, ledger.roundBalances[vb.Block().Round()-1])
 
 	// update
 	deltas := vb.Delta()

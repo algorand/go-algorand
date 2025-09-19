@@ -30,6 +30,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1198,41 +1199,42 @@ func (pps *WorkerState) constructAppTxn(from string, fee uint64, client *libgoal
 	}
 
 	// construct box ref array
-	var boxRefs []transactions.BoxRef
+	var boxRefs []basics.BoxRef
 	for i := range pps.getNumBoxes() {
-		boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
+		boxRefs = append(boxRefs, basics.BoxRef{App: 0, Name: fmt.Sprintf("%d", i)})
 	}
 
 	appOptIns := pps.cinfo.OptIns[aidx]
 	sender = from
 	if len(appOptIns) > 0 {
 		indices := rand.Perm(len(appOptIns))
-		limit := 5
-		if len(indices) < limit {
-			limit = len(indices)
-		}
+		limit := min(len(indices), 5)
 		for i := 0; i < limit; i++ {
 			idx := indices[i]
 			accounts = append(accounts, appOptIns[idx])
 		}
-		if pps.cinfo.AppParams[aidx].Creator == from {
-			// if the application was created by the "from" account, then we don't need to worry about it being opted-in.
-		} else {
-			fromIsOptedIn := false
-			for i := 0; i < len(appOptIns); i++ {
-				if appOptIns[i] == from {
-					fromIsOptedIn = true
-					break
-				}
-			}
-			if !fromIsOptedIn {
-				sender = accounts[0]
-				from = sender
-			}
+		// change `from` to an account that's opted-in. creator also allowed.
+		if pps.cinfo.AppParams[aidx].Creator != from &&
+			!slices.Contains(appOptIns, from) {
+			from = accounts[0]
+			sender = from
 		}
 		accounts = accounts[1:]
 	}
-	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, boxRefs, 0)
+	addresses := make([]basics.Address, 0, len(accounts))
+	for _, acct := range accounts {
+		var addr basics.Address
+		addr, err = basics.UnmarshalChecksumAddress(acct)
+		if err != nil {
+			return
+		}
+		addresses = append(addresses, addr)
+	}
+	refs := libgoal.RefBundle{
+		Accounts: addresses,
+		Boxes:    boxRefs,
+	}
+	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, refs, 0)
 	if err != nil {
 		return
 	}

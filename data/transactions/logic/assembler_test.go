@@ -432,11 +432,20 @@ online_stake
 voter_params_get VoterIncentiveEligible
 `
 
-const stateProofNonsense = `
-pushbytes 0x0123456789abcd
-sumhash512
+const fvNonsense = `
+pushbytes 0xabcd
 dup; dup
 falcon_verify
+`
+
+const sumhashNonsense = `
+pushbytes 0x0123
+sumhash512
+`
+
+const sha512Nonsense = `
+pushbytes 0x0123
+sha512
 `
 
 const mimcNonsense = `
@@ -457,7 +466,9 @@ const v10Nonsense = v9Nonsense + pairingNonsense + spliceNonsence
 
 const v11Nonsense = v10Nonsense + incentiveNonsense + mimcNonsense
 
-const v12Nonsense = v11Nonsense + stateProofNonsense
+const v12Nonsense = v11Nonsense + fvNonsense
+
+const v13Nonsense = v12Nonsense + sumhashNonsense + sha512Nonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
@@ -480,12 +491,15 @@ const spliceCompiled = "d2d3"
 const v10Compiled = v9Compiled + pairingCompiled + spliceCompiled
 
 const incentiveCompiled = "757401"
-
-const stateProofCompiled = "80070123456789abcd86494985"
 const mimcCompiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe601"
-
 const v11Compiled = v10Compiled + incentiveCompiled + mimcCompiled
-const v12Compiled = v11Compiled + stateProofCompiled
+
+const fvCompiled = "8002abcd494985"
+const v12Compiled = v11Compiled + fvCompiled
+
+const sumhashCompiled = "8002012386"
+const sha512Compiled = "8002012387"
+const v13Compiled = v12Compiled + sumhashCompiled + sha512Compiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,
@@ -500,6 +514,7 @@ var nonsense = map[uint64]string{
 	10: v10Nonsense,
 	11: v11Nonsense,
 	12: v12Nonsense,
+	13: v13Nonsense,
 }
 
 var compiled = map[uint64]string{
@@ -515,6 +530,7 @@ var compiled = map[uint64]string{
 	10: "0a" + v10Compiled,
 	11: "0b" + v11Compiled,
 	12: "0c" + v12Compiled,
+	13: "0d" + v13Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -568,7 +584,7 @@ func TestAssemble(t *testing.T) {
 	}
 }
 
-var experiments = []uint64{spOpcodesVersion}
+var experiments = []uint64{sumhashVersion}
 
 // TestExperimental forces a conscious choice to promote "experimental" opcode
 // groups. This will fail when we increment vFuture's LogicSigVersion. If we had
@@ -1731,6 +1747,14 @@ global PayoutsPercent
 global PayoutsMinBalance
 global PayoutsMaxBalance
 txn RejectVersion
+pushint 1
+block BlkBranch512
+pushint 1
+block BlkSha512_256TxnCommitment
+pushint 1
+block BlkSha512TxnCommitment
+pushint 1
+block BlkSha256TxnCommitment
 `, AssemblerMaxVersion)
 	for _, names := range [][]string{GlobalFieldNames[:], TxnFieldNames[:], blockFieldNames[:]} {
 		for _, f := range names {

@@ -59,10 +59,7 @@ type fuzzReader struct {
 }
 
 func (f *fuzzReader) Read(b []byte) (n int, err error) {
-	s := int(crypto.RandUint64() % 19)
-	if s > len(b) {
-		s = len(b)
-	}
+	s := min(int(crypto.RandUint64()%19), len(b))
 	if f.pos >= len(f.buf) {
 		return 0, io.EOF
 	}

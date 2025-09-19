@@ -407,39 +407,56 @@ func TestMultisigSignProgram(t *testing.T) {
 
 	program := []byte("blah blah blah, not a real program, just some bytes to sign, kmd does not have a program interpreter to know if the program is legitimate, but it _does_ prefix the program with protocol.Program and we can verify that here below")
 
-	// Try to sign
-	req2 := kmdapi.APIV1POSTMultisigProgramSignRequest{
-		WalletHandleToken: walletHandleToken,
-		Program:           program,
-		Address:           basics.Address(msigAddr).String(),
-		PublicKey:         pk1,
-		PartialMsig:       crypto.MultisigSig{},
-		WalletPassword:    f.WalletPassword,
+	testMultisigSign := func(t *testing.T, useLegacyMsig bool) {
+		// Try to sign
+		req2 := kmdapi.APIV1POSTMultisigProgramSignRequest{
+			WalletHandleToken: walletHandleToken,
+			Program:           program,
+			Address:           basics.Address(msigAddr).String(),
+			PublicKey:         pk1,
+			PartialMsig:       crypto.MultisigSig{},
+			WalletPassword:    f.WalletPassword,
+			UseLegacyMsig:     useLegacyMsig,
+		}
+		resp2 := kmdapi.APIV1POSTMultisigProgramSignResponse{}
+		err = f.Client.DoV1Request(req2, &resp2)
+		a.NoError(err)
+
+		var msig crypto.MultisigSig
+		err = protocol.Decode(resp2.Multisig, &msig)
+		a.NoError(err)
+
+		// Try to add another signature
+		req3 := kmdapi.APIV1POSTMultisigProgramSignRequest{
+			WalletHandleToken: walletHandleToken,
+			Program:           program,
+			Address:           basics.Address(msigAddr).String(),
+			PublicKey:         pk2,
+			PartialMsig:       msig,
+			WalletPassword:    f.WalletPassword,
+			UseLegacyMsig:     useLegacyMsig,
+		}
+		resp3 := kmdapi.APIV1POSTMultisigProgramSignResponse{}
+		err = f.Client.DoV1Request(req3, &resp3)
+		a.NoError(err)
+
+		err = protocol.Decode(resp3.Multisig, &msig)
+		a.NoError(err)
+
+		var prog, wrongProg crypto.Hashable
+		if useLegacyMsig {
+			prog = logic.Program(program)
+			wrongProg = logic.MultisigProgram{Addr: crypto.Digest(msigAddr), Program: program}
+		} else {
+			prog = logic.MultisigProgram{Addr: crypto.Digest(msigAddr), Program: program}
+			wrongProg = logic.Program(program)
+		}
+		err = crypto.MultisigVerify(prog, crypto.Digest(msigAddr), msig)
+		a.NoError(err)
+		err = crypto.MultisigVerify(wrongProg, crypto.Digest(msigAddr), msig)
+		a.ErrorContains(err, "At least one signature didn't pass verification")
 	}
-	resp2 := kmdapi.APIV1POSTMultisigProgramSignResponse{}
-	err = f.Client.DoV1Request(req2, &resp2)
-	a.NoError(err)
 
-	var msig crypto.MultisigSig
-	err = protocol.Decode(resp2.Multisig, &msig)
-	a.NoError(err)
-
-	// Try to add another signature
-	req3 := kmdapi.APIV1POSTMultisigProgramSignRequest{
-		WalletHandleToken: walletHandleToken,
-		Program:           program,
-		Address:           basics.Address(msigAddr).String(),
-		PublicKey:         pk2,
-		PartialMsig:       msig,
-		WalletPassword:    f.WalletPassword,
-	}
-	resp3 := kmdapi.APIV1POSTMultisigProgramSignResponse{}
-	err = f.Client.DoV1Request(req3, &resp3)
-	a.NoError(err)
-
-	err = protocol.Decode(resp3.Multisig, &msig)
-	a.NoError(err)
-
-	err = crypto.MultisigVerify(logic.Program(program), crypto.Digest(msigAddr), msig)
-	a.NoError(err)
+	t.Run("LegacyMsig", func(t *testing.T) { testMultisigSign(t, true) })
+	t.Run("NewLMsig", func(t *testing.T) { testMultisigSign(t, false) })
 }

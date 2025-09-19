@@ -400,10 +400,8 @@ func (t *txTail) recentTailHash(offset uint64, retainSize uint64) (crypto.Digest
 	buffer := make([]byte, (retainSize)*crypto.DigestSize)
 	bufIdx := 0
 	t.tailMu.RLock()
-	lastOffset := offset + retainSize // size of interval [offset, lastOffset) is retainSize
-	if lastOffset > uint64(len(t.roundTailHashes)) {
-		lastOffset = uint64(len(t.roundTailHashes))
-	}
+	// size of interval [offset, lastOffset) is retainSize
+	lastOffset := min(offset+retainSize, uint64(len(t.roundTailHashes)))
 	for i := offset; i < lastOffset; i++ {
 		copy(buffer[bufIdx:], t.roundTailHashes[i][:])
 		bufIdx += crypto.DigestSize

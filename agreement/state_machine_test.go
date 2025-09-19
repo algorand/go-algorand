@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/algorand/go-algorand/logging"
@@ -158,12 +159,7 @@ func (t ioTrace) CountEvent(b event) (count int) {
 
 // for each event, passes it into the given fn; if returns true, returns true.
 func (t ioTrace) ContainsFn(compareFn func(b event) bool) bool {
-	for _, ev := range t.events {
-		if compareFn(ev) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(t.events, compareFn)
 }
 
 func (t ioTrace) countAction() (count int) {

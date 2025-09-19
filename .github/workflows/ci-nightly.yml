@@ -44,6 +44,8 @@ jobs:
         fetch-depth: 0
     - name: Set up Go
       uses: ./.github/actions/setup-go
+      with:
+        cache-prefix: buildsrc
     - name: Cache libsodium
       uses: actions/cache@v4
       with:
@@ -95,6 +97,8 @@ jobs:
         shell: bash
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: test
       - name: Run tests
         run: |
           ./scripts/configure_dev.sh
@@ -115,6 +119,14 @@ jobs:
           job-type: "Test"
           build-type: "Nightly Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: |
+            **/*.log
+          retention-days: 30
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -153,7 +165,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 2
       E2E_TEST_FILTER: GO
-      PARALLEL_FLAG: "-p 4"
+      PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -167,6 +179,8 @@ jobs:
         shell: bash
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: build-e2e
       - name: Run integration tests
         run: |
           ./scripts/configure_dev.sh
@@ -208,7 +222,7 @@ jobs:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 2
       E2E_TEST_FILTER: EXPECT
-      PARALLEL_FLAG: "-p 4"
+      PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -222,6 +236,8 @@ jobs:
         shell: bash
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: build-e2e
       - name: Run E2E expect tests
         run: |
           scripts/configure_dev.sh
@@ -263,6 +279,12 @@ jobs:
       CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
       S3_TESTDATA: ${{ secrets.S3_TESTDATA }}
     steps:
+      - name: Set CI_E2E_FILENAME for e2e test data publishing
+        run: |
+          # Set CI_E2E_FILENAME based on branch name, replacing '/' with '-' - used when publishing e2e test data to S3 (e2e.sh) for indexer tests
+          BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
+          MODIFIED_BRANCH_NAME="${BRANCH_NAME//\//-}"
+          echo "CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> $GITHUB_ENV
       - name: Download workspace archive
         uses: actions/download-artifact@v4
         with:
@@ -275,6 +297,8 @@ jobs:
         shell: bash
       - name: Set up Go
         uses: ./.github/actions/setup-go
+        with:
+          cache-prefix: buildsrc
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.2.1
         with:

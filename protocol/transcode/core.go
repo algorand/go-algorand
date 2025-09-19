@@ -91,6 +91,36 @@ func Transcode(mpToJSON bool, base32Encoding, strictJSON bool, in io.Reader, out
 	}
 }
 
+func isSliceOfBytes(a interface{}) bool {
+	switch v := a.(type) {
+	case []interface{}:
+		for _, e := range v {
+			_, ok := e.([]byte)
+			if !ok {
+				return false
+			}
+		}
+		return len(v) > 0 // No need to treat empty slice specially
+	default:
+		return false
+	}
+}
+
+func isSliceOfString(a interface{}) bool {
+	switch v := a.(type) {
+	case []interface{}:
+		for _, e := range v {
+			_, ok := e.(string)
+			if !ok {
+				return false
+			}
+		}
+		return len(v) > 0 // No need to treat empty slice specially
+	default:
+		return false
+	}
+}
+
 func toJSON(a interface{}, base32Encoding, strictJSON bool) interface{} {
 	switch v := a.(type) {
 	case map[interface{}]interface{}:
@@ -100,16 +130,23 @@ func toJSON(a interface{}, base32Encoding, strictJSON bool) interface{} {
 			// a []byte, base64-encode the entry and append
 			// ":b64" to the key (or, if the base32Encoding flag
 			// is set, base32-encode and append ":b32").
-			ks, ok1 := k.(string)
-			eb, ok2 := e.([]byte)
+			ks, keyIsString := k.(string)
+			eb, entryIsBytes := e.([]byte)
 
-			if ok1 && ok2 {
+			switch {
+			case keyIsString && entryIsBytes:
 				if base32Encoding {
 					r[fmt.Sprintf("%s:b32", ks)] = base32.StdEncoding.EncodeToString(eb)
 				} else {
 					r[fmt.Sprintf("%s:b64", ks)] = base64.StdEncoding.EncodeToString(eb)
 				}
-			} else {
+			case keyIsString && isSliceOfBytes(e):
+				if base32Encoding {
+					r[fmt.Sprintf("%s:b32", ks)] = toJSON(e, base32Encoding, strictJSON)
+				} else {
+					r[fmt.Sprintf("%s:b64", ks)] = toJSON(e, base32Encoding, strictJSON)
+				}
+			default:
 				if strictJSON {
 					k = fmt.Sprintf("%v", k)
 				}
@@ -133,6 +170,28 @@ func toJSON(a interface{}, base32Encoding, strictJSON bool) interface{} {
 	}
 }
 
+func decodeSliceOfString(a interface{}, decodeFunc func(string) ([]byte, error)) ([][]byte, error) {
+	v, ok := a.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected []interface{} for decodeSliceOfString")
+	}
+
+	var all [][]byte
+	for _, e := range v {
+		es, entryIsString := e.(string)
+		if !entryIsString {
+			return nil, fmt.Errorf("expected string element in slice")
+		}
+		decoded, err := decodeFunc(es)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, decoded)
+	}
+
+	return all, nil
+}
+
 func fromJSON(a interface{}) interface{} {
 	switch v := a.(type) {
 	case map[interface{}]interface{}:
@@ -142,24 +201,35 @@ func fromJSON(a interface{}) interface{} {
 			// ":b64", and entry is a string, then base64-decode
 			// the entry and drop the ":b64" from the key.
 			// Same for ":b32" and base32-decoding.
-			ks, ok1 := k.(string)
-			es, ok2 := e.(string)
+			ks, keyIsString := k.(string)
+			es, entryIsString := e.(string)
 
-			if ok1 && ok2 && strings.HasSuffix(ks, ":b64") {
+			switch {
+			case keyIsString && strings.HasSuffix(ks, ":b64") && entryIsString:
 				eb, err := base64.StdEncoding.DecodeString(es)
 				if err != nil {
 					panic(err)
 				}
-
 				r[ks[:len(ks)-4]] = eb
-			} else if ok1 && ok2 && strings.HasSuffix(ks, ":b32") {
+			case keyIsString && strings.HasSuffix(ks, ":b32") && entryIsString:
 				eb, err := base32.StdEncoding.DecodeString(es)
 				if err != nil {
 					panic(err)
 				}
-
 				r[ks[:len(ks)-4]] = eb
-			} else {
+			case keyIsString && strings.HasSuffix(ks, ":b64") && isSliceOfString(e):
+				eb, err := decodeSliceOfString(e, base64.StdEncoding.DecodeString)
+				if err != nil {
+					panic(err)
+				}
+				r[ks[:len(ks)-4]] = eb
+			case keyIsString && strings.HasSuffix(ks, ":b32") && isSliceOfString(e):
+				eb, err := decodeSliceOfString(e, base32.StdEncoding.DecodeString)
+				if err != nil {
+					panic(err)
+				}
+				r[ks[:len(ks)-4]] = eb
+			default:
 				r[fromJSON(k)] = fromJSON(e)
 			}
 		}
@@ -167,29 +237,40 @@ func fromJSON(a interface{}) interface{} {
 
 	case map[string]interface{}:
 		r := make(map[string]interface{})
-		for k, e := range v {
+		for ks, e := range v {
 			// Special case: if key ends in ":b64", and entry
 			// is a string, then base64-decode the entry and
 			// drop the ":b64" from the key.  Same for ":b32"
 			// and base32-decoding.
-			es, ok := e.(string)
+			es, entryIsString := e.(string)
 
-			if ok && strings.HasSuffix(k, ":b64") {
+			switch {
+			case strings.HasSuffix(ks, ":b64") && entryIsString:
 				eb, err := base64.StdEncoding.DecodeString(es)
 				if err != nil {
 					panic(err)
 				}
-
-				r[k[:len(k)-4]] = eb
-			} else if ok && strings.HasSuffix(k, ":b32") {
+				r[ks[:len(ks)-4]] = eb
+			case strings.HasSuffix(ks, ":b32") && entryIsString:
 				eb, err := base32.StdEncoding.DecodeString(es)
 				if err != nil {
 					panic(err)
 				}
-
-				r[k[:len(k)-4]] = eb
-			} else {
-				r[k] = fromJSON(e)
+				r[ks[:len(ks)-4]] = eb
+			case strings.HasSuffix(ks, ":b64") && isSliceOfString(e):
+				eb, err := decodeSliceOfString(e, base64.StdEncoding.DecodeString)
+				if err != nil {
+					panic(err)
+				}
+				r[ks[:len(ks)-4]] = eb
+			case strings.HasSuffix(ks, ":b32") && isSliceOfString(e):
+				eb, err := decodeSliceOfString(e, base32.StdEncoding.DecodeString)
+				if err != nil {
+					panic(err)
+				}
+				r[ks[:len(ks)-4]] = eb
+			default:
+				r[ks] = fromJSON(e)
 			}
 		}
 		return r

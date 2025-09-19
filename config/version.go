@@ -33,7 +33,7 @@ const VersionMajor = 4
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
-const VersionMinor = 1
+const VersionMinor = 4
 
 // Version is the type holding our full version information.
 type Version struct {

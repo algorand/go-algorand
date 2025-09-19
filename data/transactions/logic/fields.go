@@ -1075,6 +1075,18 @@ const (
 	// BlkProposerPayout is the actual amount moved from feesink to proposer
 	BlkProposerPayout
 
+	// BlkBranch512 is the wider, sha-512 hash of the previous block
+	BlkBranch512
+
+	// BlkSha512_256TxnCommitment is "Algorand Native" txn merkle root
+	BlkSha512_256TxnCommitment
+
+	// BlkSha256TxnCommitment is the sha256 txn merkle root
+	BlkSha256TxnCommitment
+
+	// BlkSha512TxnCommitment is the sha512 txn merkle root
+	BlkSha512TxnCommitment
+
 	invalidBlockField // compile-time constant for number of fields
 )
 
@@ -1097,6 +1109,10 @@ var blockFieldSpecs = [...]blockFieldSpec{
 	{BlkProtocol, StackBytes, incentiveVersion},
 	{BlkTxnCounter, StackUint64, incentiveVersion},
 	{BlkProposerPayout, StackUint64, incentiveVersion},
+	{BlkBranch512, StackBytes64, 13},
+	{BlkSha512_256TxnCommitment, StackBytes32, 13},
+	{BlkSha256TxnCommitment, StackBytes32, 13},
+	{BlkSha512TxnCommitment, StackBytes64, 13},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {

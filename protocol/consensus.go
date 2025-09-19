@@ -224,6 +224,11 @@ const ConsensusV40 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/236dcc18c9c507d794813ab768e467ea42d1b4d9",
 )
 
+// ConsensusV41 enables txn access, Sha512BlockHash, AppVersioning and TEAL v12 including the falcon verify opcode
+const ConsensusV41 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/953304de35264fc3ef91bcd05c123242015eeaed",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -253,7 +258,7 @@ const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV40
+const ConsensusCurrentVersion = ConsensusV41
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
