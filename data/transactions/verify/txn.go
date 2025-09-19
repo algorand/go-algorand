@@ -197,7 +197,7 @@ func txnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader
 	}
 
 	if cache != nil {
-		cache.Add(stxs, groupCtx)
+		cache.Add(groupCtx)
 	}
 
 	return
@@ -531,7 +531,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 					if verifyErr != nil {
 						return verifyErr
 					}
-					cache.AddPayset(txnGroups, groupCtxs)
+					cache.AddPayset(groupCtxs)
 					return nil
 				}, nextWorkset, worksDoneCh)
 				if err1 != nil {

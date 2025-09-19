@@ -258,11 +258,10 @@ func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed
 		for i := range bl.txnGroups {
 			tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)
 		}
-		tbp.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
+		tbp.cache.AddPayset(bl.groupCtxs)
 		return
 	}
 
-	verifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(bl.txnGroups))
 	verifiedGroupCtxs := make([]*GroupContext, 0, len(bl.groupCtxs))
 	failedSigIdx := 0
 	for txgIdx := range bl.txnGroups {
@@ -280,7 +279,6 @@ func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed
 		}
 		var result error
 		if !txGroupSigFailed {
-			verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
 			verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
 		} else {
 			result = err
@@ -288,5 +286,5 @@ func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed
 		tbp.sendResult(bl.txnGroups[txgIdx], bl.backlogMessage[txgIdx], result)
 	}
 	// loading them all at once by locking the cache once
-	tbp.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+	tbp.cache.AddPayset(verifiedGroupCtxs)
 }
