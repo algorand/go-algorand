@@ -1020,6 +1020,10 @@ func TestNodeHybridTopology(t *testing.T) {
 		return node0Conn && node1Conn && node2Conn
 	}, 60*time.Second, 500*time.Millisecond)
 
+	// node 0 has GossipFanout=0 but we still want to run all the machinery to update phonebooks
+	// (it this particular case to update peerstore with DHT nodes)
+	nodes[0].net.RequestConnectOutgoing(false, nil)
+
 	initialRound := nodes[0].ledger.NextRound()
 	targetRound := initialRound + 10
 
