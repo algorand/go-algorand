@@ -453,7 +453,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	effectiveEPP := ac.ExtraProgramPages
 	// Schemas and ExtraProgramPages may only be set during application creation
 	// and explicit attempts to change size during updates.
-	if ac.ApplicationID != 0 && !ac.UpdatingSizes(proto.AppSizeUpdates) {
+	if ac.ApplicationID != 0 && !(proto.AppSizeUpdates && ac.UpdatingSizes()) {
 		if ac.GlobalStateSchema != (basics.StateSchema{}) {
 			return fmt.Errorf("inappropriate non-zero tx.GlobalStateSchema (%v)",
 				ac.GlobalStateSchema)
@@ -559,10 +559,9 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	return nil
 }
 
-// UpdatingSizes returns true if the transaction is setting the
-// extra-program-pages or global schema size during an update.
-func (ac ApplicationCallTxnFields) UpdatingSizes(allowed bool) bool {
-	return allowed && ac.OnCompletion == UpdateApplicationOC &&
+// UpdatingSizes returns true if the transaction is has non-zero sizing fields.
+func (ac ApplicationCallTxnFields) UpdatingSizes() bool {
+	return ac.OnCompletion == UpdateApplicationOC &&
 		(ac.ExtraProgramPages != 0 || ac.GlobalStateSchema != (basics.StateSchema{}))
 }
 

@@ -25,9 +25,9 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// getAppParams fetches the creator address and basics.AppParams for the app index,
-// if they exist. It does *not* clone the basics.AppParams, so the returned params
-// must not be modified directly.
+// getAppParams fetches the creator address and basics.AppParams for the app
+// index, if they exist. It does not deep copy the basics.AppParams, so internal
+// reference types (programs, globals) must not be modified directly.
 func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
 	creator, exists, err = balances.GetCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
@@ -189,12 +189,18 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	proto := balances.ConsensusParams()
-	sizeChange := ac.UpdatingSizes(proto.AppSizeUpdates)
+	sizeChange := ac.UpdatingSizes()
 
-	// The pre-application well-formedness check rejects big programs
-	// conservatively, it doesn't know the actual params.ExtraProgramPages, so
-	// it allows any programs that fit under the absolute max.
-	if !sizeChange { // when changing sizes, the well-formedness check was sufficient
+	if sizeChange {
+		if !proto.AppSizeUpdates {
+			return fmt.Errorf("application size updates are disabled")
+		}
+		// when changing sizes, the well-formedness check was sufficient to
+		// check program sizes because the txn contained the programs
+	} else {
+		// The pre-application well-formedness check rejects big programs
+		// conservatively, it doesn't know the actual params.ExtraProgramPages, so
+		// it allows any programs that fit under the absolute max.
 		if err = ac.WellSizedPrograms(params.ExtraProgramPages, proto); err != nil {
 			return err
 		}
@@ -205,7 +211,7 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 		params.Version++
 	}
 
-	// Install the new epp and schema (if its sufficient)
+	// Install the new epp and schema (if its sufficient for current globals)
 	if sizeChange {
 		// Keep in mind that the creator and updater may be the same account.
 		creatorRecord, err := balances.Get(creator, false)
@@ -227,13 +233,10 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 		creatorRecord.TotalExtraAppPages =
 			basics.SubSaturate(creatorRecord.TotalExtraAppPages, params.ExtraProgramPages)
 
-		/* We need to check that the `ac.GlobalStateSchema` is sufficient to
-		   hold the current globals of the app. But the current globals are not
-		   in `params`, they are stored as changes in storageDeltas.  We'll have
-		   to dig out the current limits from the `counts` and update
-		   `maxCounts` to allow future changes to be checked against this new
-		   schema.
-		*/
+		err = balances.SetAppGlobalSchema(creator, appIdx, ac.GlobalStateSchema)
+		if err != nil {
+			return fmt.Errorf("unable to change global schema: %w", err)
+		}
 
 		params.GlobalStateSchema = ac.GlobalStateSchema
 		params.ExtraProgramPages = ac.ExtraProgramPages

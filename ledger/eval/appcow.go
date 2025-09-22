@@ -151,6 +151,19 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 	return lsd, nil
 }
 
+// SetAppGlobalSchema sets the maximum allowed counts for app globals. It can
+// be changed during evaluation by an app update.
+func (cb *roundCowState) SetAppGlobalSchema(addr basics.Address, aidx basics.AppIndex, limits basics.StateSchema) error {
+	// Obtain a storageDelta to record the schema change
+	lsd, err := cb.ensureStorageDelta(addr, aidx, true, remainAllocAction, 0)
+	if err != nil {
+		return err
+	}
+
+	lsd.maxCounts = limits
+	return lsd.checkCounts()
+}
+
 // getStorageCounts returns current storage usage for a given {addr, aidx, global} as basics.StateSchema
 func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
 	// If we haven't allocated storage, then our used storage count is zero

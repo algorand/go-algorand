@@ -68,6 +68,8 @@ type Balances interface {
 	PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error
 	DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error
 
+	SetAppGlobalSchema(addr basics.Address, aidx basics.AppIndex, limits basics.StateSchema) error
+
 	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
 	PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error
 	DeleteAssetHolding(addr basics.Address, aidx basics.AssetIndex) error

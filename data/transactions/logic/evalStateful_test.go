@@ -363,11 +363,16 @@ log
 				Freeze:        tx.Receiver,
 				Clawback:      tx.Receiver,
 			}
-			algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 			ledger.NewAccount(tx.Sender, 1)
-			ledger.NewApp(tx.Sender, 100, basics.AppParams{})
+			ledger.NewApp(tx.Sender, 100, basics.AppParams{
+				StateSchemas: basics.StateSchemas{
+					GlobalStateSchema: basics.StateSchema{
+						NumUint: 1,
+					},
+				},
+			})
 			ledger.NewLocals(tx.Sender, 100)
-			ledger.NewLocal(tx.Sender, 100, "ALGO", algoValue)
+			ledger.NewLocal(tx.Sender, 100, "ALGO", 0x77)
 			ledger.NewAsset(tx.Sender, 5, params)
 
 			if mode == ModeSig {
@@ -825,7 +830,7 @@ err
 exist:
 byte "ALGO"
 ==`
-	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 100, string(protocol.PaymentTx), "ALGO")
 
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
@@ -845,7 +850,7 @@ byte "ALGO"
 	// opt into 123, and try again
 	ledger.NewApp(now.TxnGroup[0].Txn.Receiver, 123, basics.AppParams{})
 	ledger.NewLocals(now.TxnGroup[0].Txn.Receiver, 123)
-	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 123, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 123, string(protocol.PaymentTx), "ALGO")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 123", -1), now)
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 0", -1), now)
 
@@ -868,7 +873,7 @@ exist:
 byte "ALGO"
 ==`
 
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), "ALGO")
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
@@ -888,7 +893,7 @@ byte "ALGO"
 ==`
 
 	ledger.NewLocals(now.TxnGroup[0].Txn.Sender, 56)
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 56, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 56, string(protocol.PaymentTx), "ALGO")
 	testApp(t, text, now)
 
 	// check app_local_get
@@ -898,7 +903,7 @@ app_local_get
 byte "ALGO"
 ==`
 
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), "ALGO")
 	now.TxnGroup[0].Txn.ApplicationID = 100
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
@@ -915,7 +920,7 @@ app_local_get
 int 0
 ==`
 
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), "ALGO")
 	testApp(t, text, now)
 }
 
@@ -1074,7 +1079,7 @@ byte "ALGO"
 
 	testApp(t, text, now, "err opcode")
 
-	ledger.NewGlobal(100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewGlobal(100, string(protocol.PaymentTx), "ALGO")
 
 	testApp(t, text, now)
 
@@ -1090,8 +1095,13 @@ byte "ALGO"
 	text = "byte 0x414c474f55; app_global_get; int 0; =="
 
 	ledger.NewLocals(now.TxnGroup[0].Txn.Sender, 100)
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), "ALGO")
 	testApp(t, text, now)
+
+	ledger.SetAppGlobalSchema(100, basics.StateSchema{
+		NumUint:      1, // we're about to add an int
+		NumByteSlice: 1, // "pay" is still there
+	})
 
 	text = `
 byte 0x41414141
@@ -1534,7 +1544,7 @@ func TestAppDisambiguation(t *testing.T) {
 						ExtraProgramPages: uint32(appID),
 					})
 					ledger.NewLocals(tx.Sender, appID)
-					ledger.NewLocal(tx.Sender, appID, "x", basics.TealValue{Type: basics.TealUintType, Uint: uint64(appID) * 10})
+					ledger.NewLocal(tx.Sender, appID, "x", uint64(appID)*10)
 				}
 				makeIdentifiableApp(1)
 				makeIdentifiableApp(20)
@@ -1836,8 +1846,8 @@ intc_1
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
 
-			ledger.NewLocal(txn.Txn.Sender, 100, "ALGO", basics.TealValue{Type: basics.TealUintType, Uint: 0x77})
-			ledger.NewLocal(txn.Txn.Sender, 100, "ALGOA", basics.TealValue{Type: basics.TealUintType, Uint: 1})
+			ledger.NewLocal(txn.Txn.Sender, 100, "ALGO", 0x77)
+			ledger.NewLocal(txn.Txn.Sender, 100, "ALGOA", 1)
 
 			ledger.Reset()
 			pass, err := EvalApp(ops.Program, 0, 100, ep)
@@ -1932,8 +1942,7 @@ int 0x77
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		delta, _ = testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
@@ -1961,7 +1970,7 @@ exist2:
 ==
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
@@ -1979,7 +1988,7 @@ app_local_put
 int 1
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
@@ -2009,7 +2018,7 @@ int 0x78
 ==
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
@@ -2037,7 +2046,7 @@ int 0x78             // value
 app_local_put
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
@@ -2071,7 +2080,7 @@ app_local_put
 int 1
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		ledger.NewAccount(txn.Receiver, 500)
@@ -2114,6 +2123,10 @@ func TestAppLocalGlobalErrorCases(t *testing.T) {
 		}
 		testApp(t, notrack(fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1))), ep, "key too long")
 
+		testApp(t, fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep, "app 888 global schema")
+
+		ledger.SetAppGlobalSchema(888, basics.StateSchema{NumUint: 1})
+
 		testApp(t, fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
 		ledger.NewLocals(tx.Sender, 888)
@@ -2122,6 +2135,10 @@ func TestAppLocalGlobalErrorCases(t *testing.T) {
 		testApp(t, fmt.Sprintf(sender+`byte "%v"; int 1;`+l+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
 		testApp(t, fmt.Sprintf(`byte "foo"; byte "%v";`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen+1)), ep, "value too long for key")
+
+		testApp(t, fmt.Sprintf(`byte "foo"; byte "%v";`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen)), ep, "app 888 global schema") // because we tried to set a byte value
+
+		ledger.SetAppGlobalSchema(888, basics.StateSchema{NumByteSlice: 1, NumUint: 1})
 
 		testApp(t, fmt.Sprintf(`byte "foo"; byte "%v";`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen)), ep)
 
@@ -2167,7 +2184,7 @@ int 0x77
 			if name == "read" {
 				testAppBytes(t, ops.Program, ep, "err opcode") // no such key
 			}
-			ledger.NewGlobal(100, "ALGO", basics.TealValue{Type: basics.TealUintType, Uint: 0x77})
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			ledger.Reset()
 
@@ -2248,7 +2265,11 @@ int 0x77
 			txn.ApplicationID = 100
 			txn.ForeignApps = []basics.AppIndex{txn.ApplicationID}
 			ledger.NewAccount(txn.Sender, 1)
-			ledger.NewApp(txn.Sender, 100, basics.AppParams{})
+			ledger.NewApp(txn.Sender, 100, basics.AppParams{
+				StateSchemas: basics.StateSchemas{
+					GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+				},
+			})
 
 			if bySlot {
 				// 100 is in the ForeignApps array, name it by slot
@@ -2286,8 +2307,7 @@ int 0x77
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NoGlobal(100, "ALGO")
 
-			algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
@@ -2311,7 +2331,7 @@ int 0x77
 `
 			ledger.Reset()
 			ledger.NoGlobal(100, "ALGOA")
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
@@ -2351,7 +2371,7 @@ byte "ALGO"
 `
 			ledger.Reset()
 			ledger.NoGlobal(100, "ALGOA")
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			delta, _ = testApp(t, source, ep)
 
@@ -2415,8 +2435,7 @@ byte "myval"
 
 			ledger.NewApp(txn.Receiver, 101, basics.AppParams{})
 			ledger.NewApp(txn.Receiver, 100, basics.AppParams{}) // this keeps current app id = 100
-			algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
-			ledger.NewGlobal(101, "mykey", algoValue)
+			ledger.NewGlobal(101, "mykey", "myval")
 
 			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
@@ -2449,7 +2468,11 @@ int 7
 	testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
 		txn.ApplicationID = 100
 		ledger.NewAccount(txn.Sender, 1)
-		ledger.NewApp(txn.Sender, 100, basics.AppParams{})
+		ledger.NewApp(txn.Sender, 100, basics.AppParams{
+			StateSchemas: basics.StateSchemas{
+				GlobalStateSchema: basics.StateSchema{NumUint: 1},
+			},
+		})
 
 		delta, _ := testApp(t, source, ep)
 		require.Empty(t, delta.LocalDeltas)
@@ -2491,18 +2514,18 @@ int 1
 
 			ledger.NewAccount(txn.Sender, 1)
 			txn.ApplicationID = 100
-			ledger.NewApp(txn.Sender, 100, basics.AppParams{})
+			ledger.NewApp(txn.Sender, 100, basics.AppParams{
+				StateSchemas: basics.StateSchemas{
+					GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+				},
+			})
 
 			delta, _ := testApp(t, source, ep)
 			require.Len(t, delta.GlobalDelta, 2)
 			require.Empty(t, delta.LocalDeltas)
-
 			ledger.Reset()
-			ledger.NoGlobal(100, "ALGOA")
-			ledger.NoGlobal(100, "ALGO")
 
-			algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete existing
 			source = `byte "ALGO"
@@ -2531,14 +2554,12 @@ app_global_get_ex
 			require.Equal(t, uint64(0), vd.Uint)
 			require.Equal(t, "", vd.Bytes)
 			require.Equal(t, 0, len(delta.LocalDeltas))
-
 			ledger.Reset()
-			ledger.NoGlobal(100, "ALGOA")
-			ledger.NoGlobal(100, "ALGO")
 
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete and write non-existing
+			ledger.SetAppGlobalSchema(100, basics.StateSchema{NumUint: 2})
 			source = `byte "ALGOA"
 app_global_del
 int 0
@@ -2561,7 +2582,7 @@ app_global_put
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NoGlobal(100, "ALGO")
 
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete and write existing
 			source = `byte "ALGO"
@@ -2582,7 +2603,7 @@ int 1
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NoGlobal(100, "ALGO")
 
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete,write,delete existing
 			source = `byte "ALGO"
@@ -2605,7 +2626,7 @@ int 1
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NoGlobal(100, "ALGO")
 
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete, write, delete non-existing
 			source = `byte "ALGOA"   // key "ALGOA"
@@ -2693,8 +2714,7 @@ int 1
 		ledger.NoLocal(txn.Receiver, 100, "ALGOA")
 		ledger.NoLocal(txn.Receiver, 100, "ALGO")
 
-		algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete existing
 		source = `txn Sender
@@ -2722,7 +2742,7 @@ app_local_get_ex
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete and write non-existing
 		source = `txn Sender
@@ -2753,7 +2773,7 @@ app_local_put
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete and write existing
 		source = `txn Sender
@@ -2780,7 +2800,7 @@ int 1
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete,write,delete existing
 		source = `txn Sender
@@ -2810,7 +2830,7 @@ int 1
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete, write, delete non-existing
 		source = `txn Sender
@@ -2969,10 +2989,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 				})
 
 				ledger.NewLocals(otherAccount, 500)
-				ledger.NewLocal(otherAccount, 500, "local key", basics.TealValue{
-					Type:  basics.TealBytesType,
-					Bytes: "local value",
-				})
+				ledger.NewLocal(otherAccount, 500, "local key", "local value")
 
 				ledger.NewAsset(tx.Sender, 501, basics.AssetParams{Total: 501})
 				ledger.NewHolding(otherAccount, 501, 2, false)
@@ -3448,13 +3465,18 @@ func TestReturnTypes(t *testing.T) {
 					Clawback:      tx.Receiver,
 				}
 				ledger.NewAsset(tx.Sender, 400, params)
-				ledger.NewApp(tx.Sender, 300, basics.AppParams{})
+				ledger.NewApp(tx.Sender, 300, basics.AppParams{
+					StateSchemas: basics.StateSchemas{
+						GlobalStateSchema: basics.StateSchema{
+							NumUint: 1,
+						},
+					},
+				})
 				ledger.NewAccount(tx.Receiver, 1000000)
 				ledger.NewLocals(tx.Receiver, 300)
 				key, err := hex.DecodeString("33343536")
 				require.NoError(t, err)
-				algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-				ledger.NewLocal(tx.Receiver, 300, string(key), algoValue)
+				ledger.NewLocal(tx.Receiver, 300, string(key), 0x77)
 				ledger.NewAccount(appAddr(300), 1000000)
 
 				// these allows the box_* opcodes that to work

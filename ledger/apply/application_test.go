@@ -18,15 +18,14 @@ package apply
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"maps"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -36,14 +35,10 @@ import (
 )
 
 func getRandomAddress(a *require.Assertions) basics.Address {
-	const rl = 16
-	b := make([]byte, rl)
-	n, err := rand.Read(b)
+	address := basics.Address{}
+	_, err := rand.Read(address[:])
 	a.NoError(err)
-	a.Equal(rl, n)
-
-	address := crypto.Hash(b)
-	return basics.Address(address)
+	return address
 }
 
 type testBalances struct {

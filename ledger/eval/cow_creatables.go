@@ -91,7 +91,7 @@ func (cs *roundCowState) GetAssetParams(addr basics.Address, aidx basics.AssetIn
 		return
 	}
 	if d.Params == nil {
-		// found and not deleled => must exist. Err if not
+		// found and not deleted => must exist. Err if not
 		err = fmt.Errorf("GetAppLocalState got a nil entry for (%s, %d): %p, %v", addr.String(), aidx, d.Params, d.Deleted)
 	}
 	ret = *d.Params

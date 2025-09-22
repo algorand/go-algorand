@@ -135,6 +135,9 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 			MinBalance:  5,
 			MaxBalance:  6,
 		},
+
+		EnableAppVersioning: true,
+		AppSizeUpdates:      true,
 	}
 	for _, opt := range opts {
 		if opt != nil { // so some callsites can take one arg and pass it in
