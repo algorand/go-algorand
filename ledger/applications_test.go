@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -1432,4 +1433,135 @@ return
 	err = l2.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{})
 	a.NoError(err)
 
+}
+
+// TestSizeUpdates tests that apps can get new extra-pages and global schemas
+func TestSizeUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+		a := require.New(t)
+
+		// app sets a global based on its args, if they are there
+		setter := main(`
+txn NumAppArgs
+int 2
+==
+bz maybe_del
+txna ApplicationArgs 0
+txna ApplicationArgs 1
+app_global_put
+maybe_del:
+txn NumAppArgs
+int 1
+==
+bz end							// "main" puts in "end" label
+txna ApplicationArgs 0
+app_global_del
+`)
+		appID := dl.createApp(addrs[0], setter)
+
+		// call with no args, passes fine
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{},
+		})
+
+		app := func() basics.AppParams {
+			ap, err := dl.generator.LookupApplication(dl.generator.Latest(), addrs[0], appID)
+			a.NoError(err)
+			return *ap.AppParams
+		}
+		a.Zero(app().GlobalStateSchema)
+		a.Zero(app().GlobalState)
+
+		// call with two args, fails from lack of globals
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'A'}, {'B'}},
+		}, "store bytes count 1 exceeds schema bytes count 0")
+
+		update := txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[0],
+			ApplicationID:     appID,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			ApprovalProgram:   app().ApprovalProgram, // keep it
+			GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+		}
+		// update the global schema to allow 1 byteslice
+		if ver >= 42 {
+			dl.txn(&update)
+		} else {
+			dl.txn(&update, "application size updates are disabled")
+			return // no more tests, growing is disallowed
+		}
+		a.EqualValues(1, app().GlobalStateSchema.NumByteSlice)
+		a.Zero(app().GlobalStateSchema.NumUint)
+		a.Empty(app().GlobalState)
+
+		// call with two args can now suceed
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'A'}, {'B'}},
+		})
+		a.EqualValues(1, app().GlobalStateSchema.NumByteSlice)
+		a.Zero(app().GlobalStateSchema.NumUint)
+		a.Len(app().GlobalState, 1)
+
+		// same global can be changed
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'A'}, {'C'}},
+		})
+
+		// new global is too many
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'X'}, {'Y'}},
+		}, "store bytes count 2 exceeds schema bytes count 1")
+
+		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 2}
+		dl.txn(&update)
+		// ok now
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'X'}, {'Y'}},
+		})
+
+		// Now that we're using 2 globals, we can't go back
+		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 1}
+		update.FirstValid = 0 // So it changes when set to default
+		dl.txn(&update, "unable to change global schema: store bytes count 2 exceeds schema bytes count 1")
+
+		// Show that the size change goes into effect during group evaluation by
+		// updating in txn0 and using the global in tx1.
+
+		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 3}
+		dl.txgroup("", // no problem
+			&update,
+			&txntest.Txn{
+				Type:            protocol.ApplicationCallTx,
+				Sender:          addrs[0],
+				ApplicationID:   appID,
+				ApplicationArgs: [][]byte{{'J'}, {'1'}},
+			},
+		)
+	})
 }

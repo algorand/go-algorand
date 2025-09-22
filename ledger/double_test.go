@@ -164,7 +164,9 @@ func (dl *DoubleLedger) createApp(sender basics.Address, source string) basics.A
 		ApprovalProgram: source,
 	}
 	vb := dl.fullBlock(&createapp)
-	return vb.Block().Payset[0].ApplyData.ApplicationID
+	return basics.AppIndex(vb.Block().BlockHeader.TxnCounter)
+	// The following only works for v30 and above, when we start recording the id in AD.
+	// return vb.Block().Payset[0].ApplyData.ApplicationID
 }
 
 func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {
