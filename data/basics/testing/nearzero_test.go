@@ -58,8 +58,7 @@ func TestNearZeros(t *testing.T) {
 
 	// Show that Two is allocated (twice, once for I, once for J)
 	count := 0
-	for _, nz := range NearZeros(t, four{}) {
-		f := nz.(four)
+	for _, f := range NearZeros(t, four{}) {
 		if f.Two != nil {
 			count++
 		}
@@ -76,8 +75,7 @@ func TestNearZeros(t *testing.T) {
 
 	// Show that Slice is allocated once
 	count = 0
-	for _, nz := range NearZeros(t, five{}) {
-		f := nz.(five)
+	for _, f := range NearZeros(t, five{}) {
 		if f.Slice != nil {
 			count++
 		}
@@ -94,8 +92,7 @@ func TestNearZeros(t *testing.T) {
 
 	// Show that Slice2 is allocated twice, in order to fill Slice2[0].{I,J}
 	count = 0
-	for _, nz := range NearZeros(t, six{}) {
-		f := nz.(six)
+	for _, f := range NearZeros(t, six{}) {
 		if f.Slice2 != nil {
 			count++
 			a.True(f.Slice2[0].I > 0 || f.Slice2[0].J > 0)
@@ -123,18 +120,18 @@ func TestMap(t *testing.T) {
 		A map[int]int
 	}
 	assert.Len(t, NearZeros(t, mapint{}), 1)
-	assert.Zero(t, NearZeros(t, mapint{})[0].(mapint).A[1])
+	assert.Zero(t, NearZeros(t, mapint{})[0].A[1])
 
 	type mapstring struct {
 		A map[int]string
 	}
 	assert.Len(t, NearZeros(t, mapstring{}), 1)
-	assert.Zero(t, NearZeros(t, mapstring{})[0].(mapstring).A[1])
+	assert.Zero(t, NearZeros(t, mapstring{})[0].A[1])
 
 	type mapstruct2 struct {
 		A map[int]struct{ A, B, C int }
 	}
 	assert.Len(t, NearZeros(t, mapstruct2{}), 1)
-	assert.Len(t, NearZeros(t, mapstruct2{})[0].(mapstruct2).A, 1)
-	assert.Zero(t, NearZeros(t, mapstruct2{})[0].(mapstruct2).A[1])
+	assert.Len(t, NearZeros(t, mapstruct2{})[0].A, 1)
+	assert.Zero(t, NearZeros(t, mapstruct2{})[0].A[1])
 }

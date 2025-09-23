@@ -132,6 +132,17 @@ func nilToZero[T any](valPtr *T) T {
 	return *valPtr
 }
 
+func nilToZeroAddr(s *string) (basics.Address, error) {
+	if s == nil {
+		return basics.Address{}, nil
+	}
+	addr, err := basics.UnmarshalChecksumAddress(*s)
+	if err != nil {
+		return basics.Address{}, err
+	}
+	return addr, nil
+}
+
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
 	// Compute transaction index in block
 	txID := tx.Txn.Txn.ID()

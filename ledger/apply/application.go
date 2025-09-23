@@ -136,32 +136,38 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 }
 
 func deleteApplication(balances Balances, creator basics.Address, appIdx basics.AppIndex) error {
-	// Deleting the application. Fetch the creator's balance record
+	// We need the AppParams to know how much space/MBR to deallocate
+	params, _, err := balances.GetAppParams(creator, appIdx)
+	if err != nil {
+		return err
+	}
+
+	// Remove the MBR for application creation
 	record, err := balances.Get(creator, false)
 	if err != nil {
 		return err
 	}
-
-	var params basics.AppParams
-	params, _, err = balances.GetAppParams(creator, appIdx)
+	record.TotalAppParams = basics.SubSaturate(record.TotalAppParams, 1)
+	err = balances.Put(creator, record)
 	if err != nil {
 		return err
 	}
 
-	// Update the TotalAppSchema used for MinBalance calculation,
-	// since the creator no longer has to store the GlobalState
-	totalSchema := record.TotalAppSchema
-	globalSchema := params.GlobalStateSchema
-	totalSchema = totalSchema.SubSchema(globalSchema)
-	record.TotalAppSchema = totalSchema
-	record.TotalAppParams = basics.SubSaturate(record.TotalAppParams, 1)
-
+	// Remove the MBR for globals and pages for the app from the renter
+	renter := params.Renter
+	if renter.IsZero() {
+		renter = creator
+	}
+	record, err = balances.Get(renter, false)
+	if err != nil {
+		return err
+	}
+	record.TotalAppSchema = record.TotalAppSchema.SubSchema(params.GlobalStateSchema)
 	// There was a short-lived bug so in one version, pages were not deallocated.
 	if balances.ConsensusParams().EnableProperExtraPageAccounting {
 		record.TotalExtraAppPages = basics.SubSaturate(record.TotalExtraAppPages, params.ExtraProgramPages)
 	}
-
-	err = balances.Put(creator, record)
+	err = balances.Put(renter, record)
 	if err != nil {
 		return err
 	}
@@ -213,45 +219,52 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	// Install the new epp and schema (if its sufficient for current globals)
 	if sizeChange {
-		// Keep in mind that the creator and updater may be the same account.
-		creatorRecord, err := balances.Get(creator, false)
+		// We'll call the account that is currently on the hook for MBR space
+		// the "renter".  It begins as the creator, but changes whenever there
+		// is a sizeChange update.
+
+		renter := params.Renter
+		if renter.IsZero() {
+			renter = creator
+		}
+
+		// Since the renter and the updater may be the same account, we make the
+		// entire change to the renter, including Put(), before we Get() the
+		// updater. (similar to how Move() works)
+
+		renterRecord, err := balances.Get(renter, false)
 		if err != nil {
 			return err
+		}
+		renterRecord.TotalAppSchema =
+			renterRecord.TotalAppSchema.SubSchema(params.GlobalStateSchema)
+		renterRecord.TotalExtraAppPages =
+			basics.SubSaturate(renterRecord.TotalExtraAppPages, params.ExtraProgramPages)
+		err = balances.Put(renter, renterRecord)
+		if err != nil {
+			return err
+		}
+
+		err = balances.SetAppGlobalSchema(creator, appIdx, ac.GlobalStateSchema)
+		if err != nil {
+			return fmt.Errorf("unable to change global schema: %w", err)
+		}
+		params.GlobalStateSchema = ac.GlobalStateSchema
+		params.ExtraProgramPages = ac.ExtraProgramPages
+		if updater == creator {
+			params.Renter = basics.Address{}
+		} else {
+			params.Renter = updater
 		}
 
 		updaterRecord, err := balances.Get(updater, false)
 		if err != nil {
 			return err
 		}
-
-		// We need to decide whether TotalAppParams should be updated this way.
-		// I think maybe not.  Leave the 0.1A MBR on the creator. Only the extra
-		// space for programs and globals should be moved to the updater.
-		creatorRecord.TotalAppParams = basics.SubSaturate(creatorRecord.TotalAppParams, 1)
-		creatorRecord.TotalAppSchema =
-			creatorRecord.TotalAppSchema.SubSchema(params.GlobalStateSchema)
-		creatorRecord.TotalExtraAppPages =
-			basics.SubSaturate(creatorRecord.TotalExtraAppPages, params.ExtraProgramPages)
-
-		err = balances.SetAppGlobalSchema(creator, appIdx, ac.GlobalStateSchema)
-		if err != nil {
-			return fmt.Errorf("unable to change global schema: %w", err)
-		}
-
-		params.GlobalStateSchema = ac.GlobalStateSchema
-		params.ExtraProgramPages = ac.ExtraProgramPages
-
-		updaterRecord.TotalAppParams = basics.AddSaturate(updaterRecord.TotalAppParams, 1)
 		updaterRecord.TotalAppSchema =
 			updaterRecord.TotalAppSchema.AddSchema(params.GlobalStateSchema)
 		updaterRecord.TotalExtraAppPages =
 			basics.AddSaturate(updaterRecord.TotalExtraAppPages, params.ExtraProgramPages)
-
-		err = balances.Put(creator, creatorRecord)
-		if err != nil {
-			return err
-		}
-
 		err = balances.Put(updater, updaterRecord)
 		if err != nil {
 			return err
