@@ -45,8 +45,6 @@ func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
 			LocalStateSchema:  basics.StateSchema{NumUint: li, NumByteSlice: lb},
 			GlobalStateSchema: basics.StateSchema{NumUint: gi, NumByteSlice: gb},
 		},
-		ExtraProgramPages: 0,
-		Version:           0,
 	}
 }
 

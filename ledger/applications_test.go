@@ -1435,13 +1435,14 @@ return
 
 }
 
-// TestSizeUpdates tests that apps can get new extra-pages and global schemas
-func TestSizeUpdates(t *testing.T) {
+// TestSchemaUpdates tests that apps can get new global schemas
+func TestSchemaUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 		a := require.New(t)
@@ -1463,7 +1464,9 @@ bz end							// "main" puts in "end" label
 txna ApplicationArgs 0
 app_global_del
 `)
-		appID := dl.createApp(addrs[0], setter)
+		appID := dl.createApp(addrs[0], setter,
+			basics.StateSchema{NumUint: 2},      // Set, but won't allow bytes
+			basics.StateSchema{NumByteSlice: 3}) // Set, but won't allow globals
 
 		// call with no args, passes fine
 		dl.txn(&txntest.Txn{
@@ -1478,8 +1481,19 @@ app_global_del
 			a.NoError(err)
 			return *ap.AppParams
 		}
-		a.Zero(app().GlobalStateSchema)
+
+		mbr := func(addr basics.Address) uint64 {
+			acct := lookup(t, dl.generator, addr)
+			return acct.MinBalance(proto.BalanceRequirements()).Raw
+		}
+		a.Equal(basics.StateSchema{NumUint: 2}, app().GlobalStateSchema)
+		a.Equal(basics.StateSchema{NumByteSlice: 3}, app().LocalStateSchema)
 		a.Zero(app().GlobalState)
+		a.Equal(proto.MinBalance+
+			proto.AppFlatParamsMinBalance+
+			2*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[0]))
+		a.Equal(proto.MinBalance, mbr(addrs[1]))
 
 		// call with two args, fails from lack of globals
 		dl.txn(&txntest.Txn{
@@ -1491,7 +1505,7 @@ app_global_del
 
 		update := txntest.Txn{
 			Type:              protocol.ApplicationCallTx,
-			Sender:            addrs[0],
+			Sender:            addrs[1], // Use another sender, to follow MBR changes
 			ApplicationID:     appID,
 			OnCompletion:      transactions.UpdateApplicationOC,
 			ApprovalProgram:   app().ApprovalProgram, // keep it
@@ -1505,8 +1519,14 @@ app_global_del
 			return // no more tests, growing is disallowed
 		}
 		a.EqualValues(1, app().GlobalStateSchema.NumByteSlice)
-		a.Zero(app().GlobalStateSchema.NumUint)
+		a.Zero(app().GlobalStateSchema.NumUint)                              // cleared
+		a.Equal(basics.StateSchema{NumByteSlice: 3}, app().LocalStateSchema) // unchanged
 		a.Empty(app().GlobalState)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+
+			1*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance)+
+			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[1]))
 
 		// call with two args can now suceed
 		dl.txn(&txntest.Txn{
@@ -1516,10 +1536,9 @@ app_global_del
 			ApplicationArgs: [][]byte{{'A'}, {'B'}},
 		})
 		a.EqualValues(1, app().GlobalStateSchema.NumByteSlice)
-		a.Zero(app().GlobalStateSchema.NumUint)
-		a.Len(app().GlobalState, 1)
+		a.Len(app().GlobalState, 1) // 'A' has been added
 
-		// same global can be changed
+		// same global ('A') can be changed
 		dl.txn(&txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[0],
@@ -1527,7 +1546,7 @@ app_global_del
 			ApplicationArgs: [][]byte{{'A'}, {'C'}},
 		})
 
-		// new global is too many
+		// new global ('X') is too many
 		dl.txn(&txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[0],
@@ -1537,6 +1556,11 @@ app_global_del
 
 		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 2}
 		dl.txn(&update)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+
+			2*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance)+
+			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[1]))
 		// ok now
 		dl.txn(&txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
@@ -1563,5 +1587,29 @@ app_global_del
 				ApplicationArgs: [][]byte{{'J'}, {'1'}},
 			},
 		)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+
+			3*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance)+
+			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[1]))
+
+		// Fail to delete it, because we tried to use another global
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[2],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'K'}, {'1'}},
+			OnCompletion:    transactions.DeleteApplicationOC,
+		}, "exceeds schema bytes count 3")
+
+		// Delete it so we can check MBR reductions
+		dl.txn(&txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[2],
+			ApplicationID: appID,
+			OnCompletion:  transactions.DeleteApplicationOC,
+		})
+		a.Equal(proto.MinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance, mbr(addrs[1]))
 	})
 }

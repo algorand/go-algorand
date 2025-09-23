@@ -92,6 +92,11 @@ func (sm StateSchema) String() string {
 	return fmt.Sprintf("{NumUint:%d NumByteSlice:%d}", sm.NumUint, sm.NumByteSlice)
 }
 
+// Empty returns true if the StateSchema has no entries
+func (sm StateSchema) Empty() bool {
+	return sm.NumUint == 0 && sm.NumByteSlice == 0
+}
+
 // AddSchema adds two StateSchemas together
 func (sm StateSchema) AddSchema(osm StateSchema) (out StateSchema) {
 	out.NumUint = AddSaturate(sm.NumUint, osm.NumUint)

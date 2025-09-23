@@ -250,6 +250,10 @@ type AppParams struct {
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
 	Version           uint64 `codec:"v"`
+
+	// Renter, if non-zero, is the account that must hold MBR for
+	// extra program pages, and the global schema.
+	Renter Address `codec:"r"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the

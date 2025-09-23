@@ -37,8 +37,7 @@ func TestResourceRefEmpty(t *testing.T) {
 	t.Parallel()
 
 	assert.True(t, ResourceRef{}.Empty())
-	for _, nz := range basics_testing.NearZeros(t, ResourceRef{}) {
-		rr := nz.(ResourceRef)
+	for _, rr := range basics_testing.NearZeros(t, ResourceRef{}) {
 		assert.False(t, rr.Empty(), "Empty is disregarding a non-zero field in %+v", rr)
 	}
 }
@@ -52,8 +51,7 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 	ac := ApplicationCallTxnFields{}
 	a.True(ac.Empty())
 
-	for _, nz := range basics_testing.NearZeros(t, ac) {
-		fields := nz.(ApplicationCallTxnFields)
+	for _, fields := range basics_testing.NearZeros(t, ac) {
 		a.False(fields.Empty(), "Empty is disregarding a non-zero field in %+v", fields)
 	}
 }

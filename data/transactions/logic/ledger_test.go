@@ -983,9 +983,10 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 			if ep.Proto.AppSizeUpdates {
 				app.ExtraProgramPages = appl.ExtraProgramPages
 				app.GlobalStateSchema = appl.GlobalStateSchema
+				app.Renter = from
 			} else {
 				return fmt.Errorf("Tried to update size epp=%v gs=%v",
-					appl.ExtraProgramPages, app.GlobalStateSchema)
+					appl.ExtraProgramPages, appl.GlobalStateSchema)
 			}
 		}
 		l.applications[aid] = app
