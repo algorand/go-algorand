@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -1611,5 +1612,97 @@ app_global_del
 		})
 		a.Equal(proto.MinBalance, mbr(addrs[0]))
 		a.Equal(proto.MinBalance, mbr(addrs[1]))
+	})
+}
+
+// TestExtraPagesUpdate tests how apps can change their extra pages allocation
+func TestExtraPagesUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 28, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+		a := require.New(t)
+
+		app := func(id basics.AppIndex) basics.AppParams {
+			c, _, err := dl.generator.GetCreator(basics.CreatableIndex(id), basics.AppCreatable)
+			a.NoError(err)
+			ap, err := dl.generator.LookupApplication(dl.generator.Latest(), c, id)
+			a.NoError(err)
+			return *ap.AppParams
+		}
+
+		mbr := func(addr basics.Address) uint64 {
+			acct := lookup(t, dl.generator, addr)
+			return acct.MinBalance(proto.BalanceRequirements()).Raw
+		}
+
+		small := "int 1000; return"
+		big := strings.Repeat(small+"\n", 1500)
+		smallID := dl.createApp(addrs[0], small)
+		bigID := dl.createApp(addrs[1], big)
+		a.EqualValues(0, app(smallID).ExtraProgramPages)
+		a.EqualValues(2, app(bigID).ExtraProgramPages)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+3*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
+
+		update := txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[1],
+			ApplicationID:     smallID,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			ApprovalProgram:   app(smallID).ApprovalProgram, // keep it
+			ExtraProgramPages: 1,
+		}
+
+		// update the apps to have 3 extra pages
+		if ver >= 42 {
+			dl.txn(&update)
+		} else {
+			dl.txn(&update, "application size updates are disabled")
+			return // no more tests, growing is disallowed
+		}
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		// addr[1] is now the renter for the small app, which now has 1 epp
+		a.Equal(proto.MinBalance+4*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
+
+		dl.txn(&txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[2],
+			ApplicationID:     bigID,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			ApprovalProgram:   app(bigID).ApprovalProgram, // keep it
+			ExtraProgramPages: 3,
+		})
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		// addr[1] is still the renter for the small appp, which now has 1 epp (and big creator)
+		a.Equal(proto.MinBalance+2*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
+		// but addr[2] has taken over rent for the big app (which is now 3)
+		a.Equal(proto.MinBalance+3*proto.AppFlatParamsMinBalance, mbr(addrs[2]))
+
+		dl.txn(&txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[3],
+			ApplicationID: bigID,
+			OnCompletion:  transactions.DeleteApplicationOC,
+		})
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		// addr[1] is only the renter for the small app, which now has 1 epp
+		a.Equal(proto.MinBalance+1*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
+		// addr[2] responsibility for big app is gone
+		a.Equal(proto.MinBalance, mbr(addrs[2]))
+
+		dl.txn(&txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[1],
+			ApplicationID: smallID,
+			OnCompletion:  transactions.DeleteApplicationOC,
+		})
+		a.Equal(proto.MinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance, mbr(addrs[1]))
+		a.Equal(proto.MinBalance, mbr(addrs[2]))
 	})
 }
