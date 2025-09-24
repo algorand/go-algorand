@@ -392,10 +392,10 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.Access != nil {
 		return false
 	}
-	if ac.LocalStateSchema != (basics.StateSchema{}) {
+	if !ac.LocalStateSchema.Empty() {
 		return false
 	}
-	if ac.GlobalStateSchema != (basics.StateSchema{}) {
+	if !ac.GlobalStateSchema.Empty() {
 		return false
 	}
 	if ac.ApprovalProgram != nil {
@@ -454,11 +454,11 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	// Schemas and ExtraProgramPages may only be set during application creation
 	// and explicit attempts to change size during updates.
 	if ac.ApplicationID != 0 && !(proto.AppSizeUpdates && ac.UpdatingSizes()) {
-		if ac.GlobalStateSchema != (basics.StateSchema{}) {
+		if !ac.GlobalStateSchema.Empty() {
 			return fmt.Errorf("inappropriate non-zero tx.GlobalStateSchema (%v)",
 				ac.GlobalStateSchema)
 		}
-		if ac.LocalStateSchema != (basics.StateSchema{}) {
+		if !ac.LocalStateSchema.Empty() {
 			return fmt.Errorf("inappropriate non-zero tx.LocalStateSchema (%v)",
 				ac.LocalStateSchema)
 		}
@@ -562,7 +562,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 // UpdatingSizes returns true if the transaction is has non-zero sizing fields.
 func (ac ApplicationCallTxnFields) UpdatingSizes() bool {
 	return ac.OnCompletion == UpdateApplicationOC &&
-		(ac.ExtraProgramPages != 0 || ac.GlobalStateSchema != (basics.StateSchema{}))
+		(ac.ExtraProgramPages != 0 || !ac.GlobalStateSchema.Empty())
 }
 
 // WellSizedPrograms checks the sizes of the programs in ac, based on the
