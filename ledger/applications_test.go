@@ -1594,14 +1594,40 @@ app_global_del
 			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
 			mbr(addrs[1]))
 
+		// Show that the size change goes into effect across groups in a block
+		// by doing txns separately. This shows that maxCounts are properly
+		// propagated to parent cows.
+		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 4}
+		update.Group = crypto.Digest{} // was filled above when part of a group
+		dl.beginBlock()
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'J'}, {'2'}}, // allocates storageDelta
+		})
+		dl.txn(&update) // schema change must propagate into existing storageDelta
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'K'}, {'1'}}, // confirms new schema is available
+		})
+		dl.endBlock()
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+
+			4*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance)+
+			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[1]))
+
 		// Fail to delete it, because we tried to use another global
 		dl.txn(&txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[2],
 			ApplicationID:   appID,
-			ApplicationArgs: [][]byte{{'K'}, {'1'}},
+			ApplicationArgs: [][]byte{{'L'}, {'1'}},
 			OnCompletion:    transactions.DeleteApplicationOC,
-		}, "exceeds schema bytes count 3")
+		}, "exceeds schema bytes count 4")
 
 		// Delete it so we can check MBR reductions
 		dl.txn(&txntest.Txn{
