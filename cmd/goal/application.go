@@ -620,6 +620,11 @@ var updateAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
+		tx.GlobalStateSchema = basics.StateSchema{
+			NumUint:      globalSchemaUints,
+			NumByteSlice: globalSchemaByteSlices,
+		}
+		tx.ExtraProgramPages = extraPages
 
 		// Fill in note and lease
 		tx.Note = parseNoteField(cmd)
@@ -1383,7 +1388,7 @@ var methodAppCmd = &cobra.Command{
 					reportErrorf("--global-ints, --global-byteslices, --local-ints, and --local-byteslices must only be provided with --create or when updating")
 				}
 				if extraPages != 0 {
-					reportErrorf("--extra-pages must only be provided with --create")
+					reportErrorf("--extra-pages must only be provided with --create or when updating")
 				}
 			}
 			if !localSchema.Empty() {
