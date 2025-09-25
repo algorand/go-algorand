@@ -106,7 +106,7 @@ ${gcmd} asset create --creator "${ACCOUNT}" --manager "${ACCOUNTB}" --reserve "$
 EXPERROR='account asset info not found'
 RES=$(${gcmd} asset info --creator $ACCOUNT --unitname dma 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+asset-misc FAIL asset info should fail unless reserve account was opted in %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL asset info should fail unless reserve account was opted in %Y%m%d_%H%M%S"
     exit 1
 else
     echo ok
@@ -192,7 +192,7 @@ fi
 EXPERROR='asset 0 does not exist or has been deleted'
 RES=$(${gcmd} asset send --from "${ACCOUNT}" --to "${ACCOUNT}" --assetid 0 --amount 0 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-  date '+asset-zero FAIL asset transfer of 0 units of 0 asset should not be allowed to self in %Y%m%d_%H%M%S'
+  date "+${scriptname} FAIL asset transfer of 0 units of 0 asset should not be allowed to self in %Y%m%d_%H%M%S"
   exit 1
 else
   echo ok
@@ -205,7 +205,7 @@ ${gcmd} asset send --from "${ACCOUNT}" --to "${ACCOUNTB}" --assetid 0 --amount 0
 EXPERROR='asset 0 not present in account'
 RES=$(${gcmd} asset send --from "${ACCOUNT}" --to "${ACCOUNTB}" --assetid 0 --amount 0 --close-to "${ACCOUNTB}" 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-  date '+asset-zero FAIL asset transfer of 0 units of 0 asset including a close-to should not be allowed in %Y%m%d_%H%M%S'
+  date "+${scriptname} FAIL asset transfer of 0 units of 0 asset including a close-to should not be allowed in %Y%m%d_%H%M%S"
   exit 1
 else
   echo ok
