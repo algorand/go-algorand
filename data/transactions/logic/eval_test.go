@@ -96,7 +96,6 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 		MaxAssetDecimals:      4,
 		SupportRekeying:       true,
 		MaxTxnNoteBytes:       500,
-		EnableFeePooling:      true,
 
 		// Chosen to be different from one another and from normal proto
 		MaxAppBoxReferences:      2,

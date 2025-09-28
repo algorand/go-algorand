@@ -1028,8 +1028,8 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	}
 
 	// Validate group fees against BaseFee from block header (it was previously checked against MinFee)
-	paidTxnCount, feesPaid := transactions.SummarizeFees(txgroup)
-	if err := verify.CheckGroupFees(feesPaid, paidTxnCount, eval.block.BlockHeader.BaseFee.Raw); err != nil {
+	required, feesPaid := transactions.SummarizeFees(txgroup)
+	if err := verify.CheckGroupFees(feesPaid, required, eval.block.BlockHeader.BaseFee); err != nil {
 		return err
 	}
 
@@ -1472,7 +1472,7 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 					highWeight = expectedVotersWeight
 					lowWeight = actualVotersWeight
 				}
-				const stakeDiffusionFactor = 1
+				const stakeDiffusionFactor = uint64(1)
 				allowedDelta, overflowed := basics.Muldiv(expectedVotersWeight.Raw, stakeDiffusionFactor, 100)
 				if overflowed {
 					return fmt.Errorf("StateProofOnlineTotalWeight overflow: %v != %v", actualVotersWeight, expectedVotersWeight)
@@ -1778,7 +1778,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 	}
 }
 
-const absentFactor = 20
+const absentFactor = uint64(20)
 
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// Don't consider accounts that were online when payouts went into effect as
