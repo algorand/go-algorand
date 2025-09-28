@@ -143,16 +143,24 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	return txgroupad
 }
 
-// SummarizeFees takes a group and returns the number of fees required and the
-// total amount paid.
-func SummarizeFees(txgroup []SignedTxnWithAD) (count uint64, paid uint64) {
-	// This is the same logic as in txnBatchPrep, but that logic runs over
-	// SignedTxn, and is interspersed with other work.
+// SummarizeFees takes a group and returns required fees and the total amount
+// paid. The returned `factor` expresses how many base fees must be paid by the
+// group.
+func SummarizeFees(txgroup []SignedTxnWithAD) (factor basics.Micros, paid basics.MicroAlgos) {
 	for _, txad := range txgroup {
-		paid = basics.AddSaturate(paid, txad.SignedTxn.Txn.Fee.Raw)
-		if !txad.SignedTxn.Txn.IsFree() {
-			count++
-		}
+		factor = basics.AddSaturate(factor, txad.SignedTxn.Txn.FeeFactor())
+		paid.Raw = basics.AddSaturate(paid.Raw, txad.SignedTxn.Txn.Fee.Raw)
+	}
+	return
+}
+
+// SummarizeTxnFees should be _exactly_ like SummarizeFees, and exists so that
+// pointless SignedTxnWithAD objects need not be created, nor slices coerced
+// into an interface.
+func SummarizeTxnFees(txgroup []SignedTxn) (factor basics.Micros, paid basics.MicroAlgos) {
+	for _, stx := range txgroup {
+		factor = basics.AddSaturate(factor, stx.Txn.FeeFactor())
+		paid.Raw = basics.AddSaturate(paid.Raw, stx.Txn.Fee.Raw)
 	}
 	return
 }

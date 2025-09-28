@@ -146,10 +146,10 @@ generate: deps
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
 api:
-	make -C daemon/algod/api
+	$(MAKE) -j7 -C daemon/algod/api
 
 logic:
-	make -C data/transactions/logic
+	$(MAKE) -C data/transactions/logic
 
 
 %/msgp_gen.go: deps ALWAYS
