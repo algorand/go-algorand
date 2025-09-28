@@ -1130,7 +1130,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 	suma := sum / 1_000_000 // micro to Algos
@@ -1149,7 +1149,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 
@@ -1169,7 +1169,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 
@@ -1293,6 +1293,7 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			GenesisID:   prev.GenesisID,
 			GenesisHash: prev.GenesisHash,
 			Branch:      prev.Hash(),
+			Branch512:   prev.Hash512(),
 			Load:        500_000, // irrelevant
 			BaseFee:     NextBaseFee(prev.Load, prev.BaseFee, &params),
 		}
@@ -1323,6 +1324,7 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			GenesisID:   prev.GenesisID,
 			GenesisHash: prev.GenesisHash,
 			Branch:      prev.Hash(),
+			Branch512:   prev.Hash512(),
 			Load:        0,
 			BaseFee:     basics.MicroAlgos{},
 		}

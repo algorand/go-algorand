@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -305,6 +306,28 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 	return nil
 }
 
+// checkSufficientFee take a set of signed transactions and verifies that each
+// transaction has sufficient fee to get into the transaction pool. If we reject
+// a transaction unjustly, the caller will be sad, but it is not a protocol
+// violation.  Similarly, if we allow a transaction in, the fee will be further
+// checked in the evaluation of the transaction.
+func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
+	// get the most recent base fee
+	latest := pool.ledger.Latest()
+	hdr, err := pool.ledger.BlockHdr(latest)
+	if err != nil {
+		return fmt.Errorf("couldn't fetch latest block header: %w", err)
+	}
+	base := hdr.BaseFee
+
+	required, feesPaid := transactions.SummarizeTxnFees(txgroup)
+	if err := verify.CheckGroupFees(feesPaid, required, base); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Test performs basic duplicate detection and well-formedness checks
 // on a transaction group without storing the group.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
@@ -378,7 +401,12 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 
 	}
 
-	err := pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats)
+	err := pool.checkSufficientFee(txgroup)
+	if err != nil {
+		return err
+	}
+
+	err = pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats)
 	if err != nil {
 		return err
 	}
@@ -661,10 +689,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				stats.ExpiredCount++
 			case *ledgercore.LeaseInLedgerError:
 				asmStats.LeaseErrorCount++
-				stats.RemovedInvalidCount++
-				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
-			case *transactions.MinFeeError:
-				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case logic.EvalError:
