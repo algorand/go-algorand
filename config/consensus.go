@@ -102,11 +102,6 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
-	// EnableFeePooling specifies that the sum of the fees in a
-	// group must exceed one MinTxnFee per Txn, rather than check that
-	// each Txn has a MinFee.
-	EnableFeePooling bool
-
 	// EnableAppCostPooling specifies that the sum of fees for application calls
 	// in a group is checked against the sum of the budget for application calls,
 	// rather than check each individual app call is within the budget.
@@ -1185,7 +1180,6 @@ func initConsensusProtocols() {
 	// "reachability" between accounts and creatables, so we
 	// retain 4 x 4 as worst case.
 
-	v28.EnableFeePooling = true
 	v28.EnableKeyregCoherencyCheck = true
 
 	Consensus[protocol.ConsensusV28] = v28

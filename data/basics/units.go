@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/algorand/go-codec/codec"
@@ -24,9 +25,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 )
-
-// RoundInterval is a number of rounds
-type RoundInterval uint64
 
 // MicroAlgos is our unit of currency.  It is wrapped in a struct to nudge
 // developers to use an overflow-checking library for any arithmetic.
@@ -165,4 +163,14 @@ func (round Round) RoundUpToMultipleOf(n Round) Round {
 // RoundDownToMultipleOf rounds down round to a multiple of n.
 func (round Round) RoundDownToMultipleOf(n Round) Round {
 	return (round / n) * n
+}
+
+// Micros repesents millionths of something. It's a fixed-point number with 6
+// digits of precision.
+type Micros uint64
+
+//msgp:ignore Micros
+
+func (m Micros) String() string {
+	return fmt.Sprintf("%d.%06d", m/1e6, m%1e6)
 }
