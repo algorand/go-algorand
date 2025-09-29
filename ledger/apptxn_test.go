@@ -1823,8 +1823,9 @@ func TestSelfCheckHoldingNewApp(t *testing.T) {
 			ForeignAssets: []basics.AssetIndex{assetID},
 		}
 		selfcheck.ApplicationID = dl.txn(&selfcheck).ApplicationID
-		selfcheck.ApprovalProgram = []byte{}
-		selfcheck.ClearStateProgram = []byte{}
+		// remove programs to just call the app
+		selfcheck.ApprovalProgram = nil
+		selfcheck.ClearStateProgram = nil
 
 		dl.txn(&selfcheck)
 
