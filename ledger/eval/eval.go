@@ -1184,6 +1184,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 			return err
 		}
 
+		err = txn.Txn.WellFormed(eval.specials, eval.proto)
+		if err != nil {
+			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
+			return &txnErr
+		}
+
 		// Transaction already in the ledger?
 		err = cow.checkDup(txn.Txn.FirstValid, txn.Txn.LastValid, txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 		if err != nil {

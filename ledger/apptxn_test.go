@@ -62,19 +62,24 @@ func TestPayAction(t *testing.T) {
 
 		// We're going to test some payout effects here too, so that we have an inner transaction example.
 		proposer := basics.Address{0x01, 0x02, 0x03}
+		stateProofPK := merklesignature.Commitment{0x03}
+		if ver < 31 { // no state proof support
+			stateProofPK = merklesignature.Commitment{}
+		}
 		dl.txns(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[7],
 			Receiver: proposer,
 			Amount:   1_000_000 * 1_000_000, // 1 million algos is surely an eligible amount
 		}, &txntest.Txn{
-			Type:         "keyreg",
-			Sender:       proposer,
-			Fee:          3_000_000,
-			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
-			SelectionPK:  crypto.VRFVerifier{0x02},
-			StateProofPK: merklesignature.Commitment{0x03},
-			VoteFirst:    1, VoteLast: 1000,
+			Type:            "keyreg",
+			Sender:          proposer,
+			Fee:             3_000_000,
+			VotePK:          crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:     crypto.VRFVerifier{0x02},
+			VoteKeyDilution: 1000,
+			StateProofPK:    stateProofPK,
+			VoteFirst:       1, VoteLast: 1000,
 		})
 
 		payout1 := txntest.Txn{
@@ -1818,6 +1823,8 @@ func TestSelfCheckHoldingNewApp(t *testing.T) {
 			ForeignAssets: []basics.AssetIndex{assetID},
 		}
 		selfcheck.ApplicationID = dl.txn(&selfcheck).ApplicationID
+		selfcheck.ApprovalProgram = []byte{}
+		selfcheck.ClearStateProgram = []byte{}
 
 		dl.txn(&selfcheck)
 
@@ -1867,6 +1874,8 @@ func TestCheckHoldingNewApp(t *testing.T) {
 			ForeignAssets: []basics.AssetIndex{assetID},
 		}
 		check.ApplicationID = dl.txn(&check).ApplyData.ApplicationID
+		check.ApprovalProgram = []byte{}
+		check.ClearStateProgram = []byte{}
 
 		create := txntest.Txn{
 			Type:          "appl",
@@ -3703,8 +3712,10 @@ func TestUnfundedSenders(t *testing.T) {
 
 		// v34 enabled UnfundedSenders
 		var problem string
-		if ver < 34 {
-			// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
+		// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
+		if ver < 28 {
+			problem = "transaction had fee 0, which is less than the minimum 1000"
+		} else if ver < 34 {
 			problem = "balance 0 below min"
 		}
 		for i, e := range ephemeral {

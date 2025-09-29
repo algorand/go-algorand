@@ -1410,6 +1410,7 @@ func TestAbsenteeChecks(t *testing.T) {
 			Header: transactions.Header{
 				Sender:      addrs[i],
 				Fee:         minFee,
+				FirstValid:  blkEval.Round().SubSaturate(1000),
 				LastValid:   blkEval.Round(),
 				GenesisHash: l.GenesisHash(),
 			},
