@@ -1875,8 +1875,9 @@ func TestCheckHoldingNewApp(t *testing.T) {
 			ForeignAssets: []basics.AssetIndex{assetID},
 		}
 		check.ApplicationID = dl.txn(&check).ApplyData.ApplicationID
-		check.ApprovalProgram = []byte{}
-		check.ClearStateProgram = []byte{}
+		// remove the programs to just call the app
+		check.ApprovalProgram = nil
+		check.ClearStateProgram = nil
 
 		create := txntest.Txn{
 			Type:          "appl",
