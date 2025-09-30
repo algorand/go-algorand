@@ -298,10 +298,6 @@ func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMe
 	return nil
 }
 
-func (p *testUnicastPeer) Version() string {
-	return p.version
-}
-
 func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
 	return makeTestUnicastPeerWithResponseOverride(gn, t, nil)
 }

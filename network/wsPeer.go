@@ -294,8 +294,6 @@ type HTTPPeer interface {
 // It is possible that we can only initiate a connection to a peer over websockets.
 type UnicastPeer interface {
 	GetAddress() string
-	// Version returns the matching version from network.SupportedProtocolVersions
-	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, outMsg OutgoingMessage) (e error)
 }
@@ -333,11 +331,6 @@ func (wp *wsPeerCore) GetHTTPClient() *http.Client {
 
 func (wp *wsPeerCore) GetNetwork() GossipNode {
 	return wp.net
-}
-
-// Version returns the matching version from network.SupportedProtocolVersions
-func (wp *wsPeer) Version() string {
-	return wp.version
 }
 
 func (wp *wsPeer) ipAddr() []byte {

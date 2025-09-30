@@ -51,9 +51,6 @@ type mockUnicastPeer struct {
 func (d *mockUnicastPeer) GetAddress() string {
 	return d.address
 }
-func (d *mockUnicastPeer) Version() string {
-	return ""
-}
 func (d *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil
 }

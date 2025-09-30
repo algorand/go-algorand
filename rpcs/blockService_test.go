@@ -52,9 +52,6 @@ type mockUnicastPeer struct {
 func (mup *mockUnicastPeer) GetAddress() string {
 	return ""
 }
-func (mup *mockUnicastPeer) Version() string {
-	return "2.1"
-}
 
 // GetConnectionLatency returns the connection latency between the local node and this peer.
 func (mup *mockUnicastPeer) GetConnectionLatency() time.Duration {
