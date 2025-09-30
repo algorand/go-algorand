@@ -52,9 +52,6 @@ type mockUnicastPeer struct {
 func (mup *mockUnicastPeer) GetAddress() string {
 	return ""
 }
-func (mup *mockUnicastPeer) Unicast(ctx context.Context, data []byte, tag protocol.Tag) error {
-	return nil
-}
 func (mup *mockUnicastPeer) Version() string {
 	return "2.1"
 }

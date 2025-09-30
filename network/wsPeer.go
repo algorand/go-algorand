@@ -294,8 +294,6 @@ type HTTPPeer interface {
 // It is possible that we can only initiate a connection to a peer over websockets.
 type UnicastPeer interface {
 	GetAddress() string
-	// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
-	Unicast(ctx context.Context, data []byte, tag protocol.Tag) error
 	// Version returns the matching version from network.SupportedProtocolVersions
 	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
@@ -388,29 +386,6 @@ func (wp *wsPeer) RoutingAddr() []byte {
 		return ip[12:16]
 	}
 	return ip[0:8]
-}
-
-// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
-// (Implements UnicastPeer)
-func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
-	var err error
-
-	tbytes := []byte(tag)
-	mbytes := make([]byte, len(tbytes)+len(msg))
-	copy(mbytes, tbytes)
-	copy(mbytes[len(tbytes):], msg)
-	var digest crypto.Digest
-	if tag != protocol.MsgDigestSkipTag && len(msg) >= messageFilterSize {
-		digest = crypto.Hash(mbytes)
-	}
-
-	ok := wp.writeNonBlock(ctx, mbytes, false, digest, time.Now())
-	if !ok {
-		networkBroadcastsDropped.Inc(nil)
-		err = fmt.Errorf("wsPeer failed to unicast: %v", wp.GetAddress())
-	}
-
-	return err
 }
 
 // GetUnderlyingConnTCPInfo unwraps the connection and returns statistics about it on supported underlying implementations
@@ -1076,9 +1051,13 @@ func (wp *wsPeer) setPeerData(key string, value interface{}) {
 }
 
 func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, messagesOfInterestEnc []byte) {
-	err := wp.Unicast(wp.netCtx, messagesOfInterestEnc, protocol.MsgOfInterestTag)
-	if err != nil {
-		wp.log.Errorf("ws send msgOfInterest: %v", err)
+	mbytes := make([]byte, len(protocol.MsgOfInterestTag)+len(messagesOfInterestEnc))
+	copy(mbytes, []byte(protocol.MsgOfInterestTag))
+	copy(mbytes[len(protocol.MsgOfInterestTag):], messagesOfInterestEnc)
+
+	ok := wp.writeNonBlock(wp.netCtx, mbytes, false, crypto.Digest{}, time.Now())
+	if !ok {
+		wp.log.Errorf("ws send msgOfInterest: failed to send to %v", wp.GetAddress())
 	} else {
 		wp.messagesOfInterestGeneration.Store(messagesOfInterestGeneration)
 	}
