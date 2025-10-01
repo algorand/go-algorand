@@ -1045,7 +1045,7 @@ func (wp *wsPeer) setPeerData(key string, value interface{}) {
 
 func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, messagesOfInterestEnc []byte) {
 	mbytes := append([]byte(protocol.MsgOfInterestTag), messagesOfInterestEnc...)
-	ok := wp.writeNonBlock(wp.netCtx, mbytes, false, crypto.Digest{}, time.Now())
+	ok := wp.writeNonBlock(wp.netCtx, mbytes, true, crypto.Digest{}, time.Now())
 	if !ok {
 		wp.log.Errorf("ws send msgOfInterest: failed to send to %v", wp.GetAddress())
 	} else {
