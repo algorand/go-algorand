@@ -395,12 +395,12 @@ func (n *P2PNetwork) setup() error {
 
 func (n *P2PNetwork) outgoingPeers() (peers []Peer) {
 	n.wsPeersLock.RLock()
+	defer n.wsPeersLock.RUnlock()
 	for _, peer := range n.wsPeers {
 		if peer.outgoing {
 			peers = append(peers, Peer(peer))
 		}
 	}
-	n.wsPeersLock.RUnlock()
 	return peers
 }
 
