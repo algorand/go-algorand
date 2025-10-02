@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -92,7 +93,7 @@ func BenchmarkConnMonitor(b *testing.B) {
 	}
 }
 
-func TestConnMonitorStageTiming(t *testing.T) {
+func TestConnMonitor_StageTiming(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	peers := []Peer{&wsPeer{}, &wsPeer{}, &wsPeer{}, &wsPeer{}}
@@ -130,7 +131,7 @@ func TestConnMonitorStageTiming(t *testing.T) {
 	}
 
 }
-func TestBucketsPruning(t *testing.T) {
+func TestConnMonitor_BucketsPruning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	bucketsCount := 100
@@ -159,4 +160,83 @@ func TestBucketsPruning(t *testing.T) {
 		perfMonitor.pruneOldMessages(curTime + int64(pmMaxMessageWaitTime) + int64(i-1))
 		require.Equal(t, bucketsCount-i, len(perfMonitor.pendingMessagesBuckets))
 	}
+}
+
+type mockOutgoingNet struct {
+	peers            []Peer
+	pending          int
+	disconnectedPeer Peer
+	disconnectReason disconnectReason
+	advanceCalled    bool
+}
+
+func (m *mockOutgoingNet) outgoingPeers() (peers []Peer) { return m.peers }
+func (m *mockOutgoingNet) numOutgoingPending() int       { return m.pending }
+func (m *mockOutgoingNet) disconnect(badnode Peer, reason disconnectReason) {
+	m.disconnectedPeer = badnode
+	m.disconnectReason = reason
+}
+func (m *mockOutgoingNet) OnNetworkAdvance() { m.advanceCalled = true }
+
+func TestConnMonitor_CheckExistingConnections_ThrottledPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	mon := makeConnectionPerformanceMonitor(nil)
+
+	p1 := &wsPeer{throttledOutgoingConnection: true}
+	mockNet := &mockOutgoingNet{peers: []Peer{p1}}
+	cc := makeOutgoingConnsCloser(logging.TestingLog(t), mockNet, mon, 100*time.Second)
+
+	res := cc.checkExistingConnectionsNeedDisconnecting(2)
+	require.False(t, res)
+	require.Nil(t, mockNet.disconnectedPeer)
+
+	p2 := &wsPeer{throttledOutgoingConnection: false} // not throttled
+	mockNet = &mockOutgoingNet{peers: []Peer{p1, p2}}
+	cc = makeOutgoingConnsCloser(logging.TestingLog(t), mockNet, mon, 100*time.Second)
+
+	mon.Reset(mockNet.peers)
+	mon.stage = pmStageStopped
+	mon.connectionDelay = map[Peer]int64{p1: 20, p2: 10}
+	mon.firstMessageCount = map[Peer]int64{p1: 1, p2: 2}
+	mon.msgCount = 3
+
+	res = cc.checkExistingConnectionsNeedDisconnecting(2)
+	require.True(t, res, "expected disconnect")
+	require.Equal(t, p1, mockNet.disconnectedPeer)
+	require.Equal(t, disconnectLeastPerformingPeer, mockNet.disconnectReason)
+}
+
+func TestConnMonitor_CheckExistingConnections_NoThrottledPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	mon := makeConnectionPerformanceMonitor(nil)
+	p1 := &wsPeer{throttledOutgoingConnection: false}
+	p2 := &wsPeer{throttledOutgoingConnection: false}
+	mockNet := &mockOutgoingNet{peers: []Peer{p1, p2}}
+	cc := makeOutgoingConnsCloser(logging.TestingLog(t), mockNet, mon, 0)
+	mon.Reset(mockNet.peers)
+	mon.stage = pmStageStopped
+	mon.connectionDelay = map[Peer]int64{p1: 5, p2: 6}
+	mon.firstMessageCount = map[Peer]int64{p1: 1, p2: 1}
+	mon.msgCount = 2
+
+	res := cc.checkExistingConnectionsNeedDisconnecting(2)
+	require.True(t, res)
+	require.NotNil(t, mockNet.disconnectedPeer)
+	require.NotEqual(t, disconnectLeastPerformingPeer, mockNet.disconnectReason)
+}
+
+func TestNetworkAdvanceMonitor(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	m := makeNetworkAdvanceMonitor()
+
+	require.True(t, m.lastAdvancedWithin(500*time.Millisecond))
+
+	m.mu.Lock()
+	m.lastNetworkAdvance = time.Now().Add(-2 * time.Second)
+	m.mu.Unlock()
+	require.False(t, m.lastAdvancedWithin(500*time.Millisecond), "expected false after stale interval")
+
+	// update and verify within again
+	m.updateLastAdvance()
+	require.True(t, m.lastAdvancedWithin(500*time.Millisecond))
 }
