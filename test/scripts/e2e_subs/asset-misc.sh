@@ -106,7 +106,7 @@ ${gcmd} asset create --creator "${ACCOUNT}" --manager "${ACCOUNTB}" --reserve "$
 EXPERROR='account asset info not found'
 RES=$(${gcmd} asset info --creator $ACCOUNT --unitname dma 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+asset-misc FAIL asset info should fail unless reserve account was opted in %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL asset info should fail unless reserve account was opted in %Y%m%d_%H%M%S"
     exit 1
 else
     echo ok
@@ -185,6 +185,30 @@ if ${gcmd} asset destroy --creator "${ACCOUNTX}" -S "${ACCOUNTY}" --assetid $ASS
 else
     date "+${scriptname} rekeyed account unable to destroy asset %Y%m%d_%H%M%S"
     exit 1
+fi
+
+# Test Scenario - check transferring of the 0 asset
+# case 1: send 0 units of 0 asset to self should fail
+EXPERROR='asset 0 does not exist or has been deleted'
+RES=$(${gcmd} asset send --from "${ACCOUNT}" --to "${ACCOUNT}" --assetid 0 --amount 0 2>&1 || true)
+if [[ $RES != *"${EXPERROR}"* ]]; then
+  date "+${scriptname} FAIL asset transfer of 0 units of 0 asset should not be allowed to self in %Y%m%d_%H%M%S"
+  exit 1
+else
+  echo ok
+fi
+
+# case 2: send 0 units of 0 asset to someone else should succeed
+${gcmd} asset send --from "${ACCOUNT}" --to "${ACCOUNTB}" --assetid 0 --amount 0
+
+# case 3: send 0 units of 0 asset to someone else including a close-to should fail
+EXPERROR='asset 0 not present in account'
+RES=$(${gcmd} asset send --from "${ACCOUNT}" --to "${ACCOUNTB}" --assetid 0 --amount 0 --close-to "${ACCOUNTB}" 2>&1 || true)
+if [[ $RES != *"${EXPERROR}"* ]]; then
+  date "+${scriptname} FAIL asset transfer of 0 units of 0 asset including a close-to should not be allowed in %Y%m%d_%H%M%S"
+  exit 1
+else
+  echo ok
 fi
 
 date "+$scriptname OK %Y%m%d_%H%M%S"
