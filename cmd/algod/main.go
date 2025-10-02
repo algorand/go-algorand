@@ -210,6 +210,9 @@ func run() int {
 		log.Fatalf("Unable to load optional consensus protocols file: %v", err)
 	}
 
+	// Configure batch verifier implementation based on config
+	crypto.SetEd25519BatchVerifier(cfg.EnableBatchVerification)
+
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
