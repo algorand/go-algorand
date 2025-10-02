@@ -223,10 +223,17 @@ func TestPayoutFees(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// Lots of balance checks that would be messed up by rewards
-	genBalances, addrs, _ := ledgertesting.NewTestGenesis(ledgertesting.TurnOffRewards)
 	payoutsBegin := 40
 	ledgertesting.TestConsensusRange(t, payoutsBegin-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		// Lots of balance checks that would be messed up by rewards
+		opts := []ledgertesting.TestGenesisOption{ledgertesting.TurnOffRewards}
+		// When payouts are enabled, set a starting feesink balance to ensure it drains by the end of the test
+		if ver >= payoutsBegin {
+			opts = append(opts, ledgertesting.InitialFeeSinkBalance(18_998_000))
+		}
+
+		// Create genesis with the appropriate options
+		genBalances, addrs, _ := ledgertesting.NewTestGenesis(opts...)
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -241,13 +248,14 @@ func TestPayoutFees(t *testing.T) {
 		require.False(t, prp.IncentiveEligible)
 
 		dl.txn(&txntest.Txn{
-			Type:         "keyreg",
-			Sender:       proposer,
-			Fee:          eFee,
-			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
-			SelectionPK:  crypto.VRFVerifier{0x02},
-			StateProofPK: merklesignature.Commitment{0x03},
-			VoteFirst:    1, VoteLast: 1000,
+			Type:            "keyreg",
+			Sender:          proposer,
+			Fee:             eFee,
+			VotePK:          crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:     crypto.VRFVerifier{0x02},
+			StateProofPK:    merklesignature.Commitment{0x03},
+			VoteKeyDilution: 1000,
+			VoteFirst:       1, VoteLast: 1000,
 		})
 
 		prp = lookup(dl.t, dl.generator, proposer)
@@ -266,7 +274,7 @@ func TestPayoutFees(t *testing.T) {
 			Receiver: addrs[2],
 			Amount:   100000,
 		}
-		dl.txns(&pay, pay.Args("again"))
+		dl.txns(&pay, pay.Noted("again"))
 		vb := dl.endBlock(proposer)
 
 		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
@@ -318,13 +326,9 @@ func TestPayoutFees(t *testing.T) {
 
 		// Get the feesink down low, then drain it by proposing.
 		feesink := vb.Block().FeeSink
-		data := lookup(t, dl.generator, feesink)
-		dl.txn(&txntest.Txn{
-			Type:     "pay",
-			Sender:   feesink,
-			Receiver: addrs[1],
-			Amount:   data.MicroAlgos.Raw - 12_000_000,
-		})
+		dl.beginBlock()
+		dl.endBlock()
+
 		dl.beginBlock()
 		dl.endBlock(proposer)
 		require.EqualValues(t, micros(t, dl.generator, feesink), 2_000_000)
@@ -378,11 +382,12 @@ func TestIncentiveEligible(t *testing.T) {
 
 		// Keyreg to get online with various fees. Sufficient fee gets `smallest` eligible
 		keyreg := txntest.Txn{
-			Type:         "keyreg",
-			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
-			SelectionPK:  crypto.VRFVerifier{0x02},
-			StateProofPK: merklesignature.Commitment{0x03},
-			VoteFirst:    1, VoteLast: 1000,
+			Type:            "keyreg",
+			VotePK:          crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:     crypto.VRFVerifier{0x02},
+			StateProofPK:    merklesignature.Commitment{0x03},
+			VoteKeyDilution: 1000,
+			VoteFirst:       1, VoteLast: 1000,
 		}
 		tooSmallKR := keyreg
 		tooSmallKR.Sender = tooSmall
@@ -485,11 +490,15 @@ func TestAbsentTracking(t *testing.T) {
 		// have addrs[1] go online explicitly, which makes it eligible for suspension.
 		// use a large fee, so we can see IncentiveEligible change
 		vb := dl.fullBlock(&txntest.Txn{ // #2
-			Type:        "keyreg",
-			Fee:         10_000_000,
-			Sender:      addrs[1],
-			VotePK:      [32]byte{1},
-			SelectionPK: [32]byte{1},
+			Type:            "keyreg",
+			Fee:             10_000_000,
+			Sender:          addrs[1],
+			VotePK:          [32]byte{1},
+			SelectionPK:     [32]byte{1},
+			VoteKeyDilution: 1,
+			StateProofPK:    merklesignature.Commitment{1},
+			VoteFirst:       1,
+			VoteLast:        1000,
 		})
 		addr1Keyreg := vb.Block().Round()
 		require.EqualValues(t, 2, addr1Keyreg) // sanity check
@@ -558,10 +567,12 @@ func TestAbsentTracking(t *testing.T) {
 
 		// ONLINE keyreg without extra fee
 		vb = dl.fullBlock(&txntest.Txn{
-			Type:        "keyreg",
-			Sender:      addrs[2],
-			VotePK:      [32]byte{1},
-			SelectionPK: [32]byte{1},
+			Type:            "keyreg",
+			Sender:          addrs[2],
+			VotePK:          [32]byte{1},
+			SelectionPK:     [32]byte{1},
+			VoteKeyDilution: 1,
+			StateProofPK:    merklesignature.Commitment{1},
 		}) // #10
 		printAbsent(vb)
 		// online totals have grown, addr[2] was added
@@ -583,11 +594,13 @@ func TestAbsentTracking(t *testing.T) {
 
 		// ONLINE keyreg with extra fee
 		vb = dl.fullBlock(&txntest.Txn{
-			Type:        "keyreg",
-			Fee:         2_000_000,
-			Sender:      addrs[2],
-			VotePK:      [32]byte{1},
-			SelectionPK: [32]byte{1},
+			Type:            "keyreg",
+			Fee:             2_000_000,
+			Sender:          addrs[2],
+			VotePK:          [32]byte{1},
+			SelectionPK:     [32]byte{1},
+			VoteKeyDilution: 1,
+			StateProofPK:    merklesignature.Commitment{1},
 		}) // #14
 		printAbsent(vb)
 		addr2Eligible := vb.Block().Round()
@@ -737,11 +750,13 @@ func TestAbsenteeChallenges(t *testing.T) {
 				Receiver: guy,
 				Amount:   10_000_000,
 			}, &txntest.Txn{
-				Type:        "keyreg",
-				Fee:         5_000_000, // enough to be incentive eligible
-				Sender:      guy,
-				VotePK:      [32]byte{byte(i + 1)},
-				SelectionPK: [32]byte{byte(i + 1)},
+				Type:            "keyreg",
+				Fee:             5_000_000, // enough to be incentive eligible
+				Sender:          guy,
+				VotePK:          [32]byte{byte(i + 1)},
+				SelectionPK:     [32]byte{byte(i + 1)},
+				VoteKeyDilution: uint64(i + 1),
+				StateProofPK:    merklesignature.Commitment{byte(i + 1)},
 			})
 			acct := lookup(t, dl.generator, guy)
 			require.Equal(t, basics.Online, acct.Status)
@@ -768,10 +783,12 @@ func TestAbsenteeChallenges(t *testing.T) {
 
 		// regguy keyregs before he's caught, which is a heartbeat, he stays on as well
 		vb := dl.fullBlock(&txntest.Txn{
-			Type:        "keyreg", // Does not pay extra fee, since he's still eligible
-			Sender:      regguy,
-			VotePK:      [32]byte{1},
-			SelectionPK: [32]byte{1},
+			Type:            "keyreg", // Does not pay extra fee, since he's still eligible
+			Sender:          regguy,
+			VotePK:          [32]byte{1},
+			SelectionPK:     [32]byte{1},
+			VoteKeyDilution: 1,
+			StateProofPK:    merklesignature.Commitment{1},
 		})
 		require.Equal(t, basics.Round(1200), vb.Block().Round())
 		require.Empty(t, vb.Block().AbsentParticipationAccounts)
@@ -924,10 +941,12 @@ func TestVoterAccess(t *testing.T) {
 
 		// have addrs[1] go online, though it won't be visible right away
 		dl.txn(&txntest.Txn{
-			Type:        "keyreg",
-			Sender:      addrs[1],
-			VotePK:      [32]byte{0xaa},
-			SelectionPK: [32]byte{0xbb},
+			Type:            "keyreg",
+			Sender:          addrs[1],
+			VotePK:          [32]byte{0xaa},
+			SelectionPK:     [32]byte{0xbb},
+			VoteKeyDilution: 1000,
+			StateProofPK:    merklesignature.Commitment{0xcc},
 		})
 
 		one := basics.Address{0xaa, 0x11}
@@ -971,10 +990,12 @@ func TestVoterAccess(t *testing.T) {
 				Receiver: addr,
 				Amount:   (uint64(i) + 1) * 1_000_000_000,
 			}, &txntest.Txn{
-				Type:        "keyreg",
-				Sender:      addr,
-				VotePK:      [32]byte{byte(i + 1)},
-				SelectionPK: [32]byte{byte(i + 1)},
+				Type:            "keyreg",
+				Sender:          addr,
+				VotePK:          [32]byte{byte(i + 1)},
+				SelectionPK:     [32]byte{byte(i + 1)},
+				VoteKeyDilution: uint64(1000 + i),
+				StateProofPK:    merklesignature.Commitment{byte(i + 1)},
 			})
 		}
 		// they don't have online stake yet

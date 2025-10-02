@@ -707,13 +707,16 @@ func (eic *erlIPClient) OnClose(f func()) {
 // by adding a helper closer function to track connection closures
 func (eic *erlIPClient) register(ec util.ErlClient) {
 	eic.m.Lock()
-	defer eic.m.Unlock()
 	if _, has := eic.clients[ec]; has {
 		// this peer is known => noop
+		eic.m.Unlock()
 		return
 	}
 	eic.clients[ec] = struct{}{}
+	eic.m.Unlock()
 
+	// Register the OnClose callback without holding eic.m to avoid
+	// lock ordering deadlock with wsPeer.closersMu
 	ec.OnClose(func() {
 		eic.connClosed(ec)
 	})

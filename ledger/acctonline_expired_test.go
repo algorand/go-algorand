@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -320,6 +321,7 @@ func (m *doubleLedgerAcctModel) goOnline(addr basics.Address, firstvalid, lastva
 		// meaningless non-zero voting data
 		VotePK:          crypto.OneTimeSignatureVerifier(addr),
 		SelectionPK:     crypto.VRFVerifier(addr),
+		StateProofPK:    merklesignature.Commitment{1},
 		VoteKeyDilution: 1024,
 	})
 	m.accts[addr] = m.ops.Sub(m.accts[addr], basics.MicroAlgos{Raw: minFee})

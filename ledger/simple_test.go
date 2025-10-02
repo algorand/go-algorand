@@ -117,7 +117,9 @@ func fillDefaults(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *
 	if txn.FirstValid == 0 {
 		txn.FirstValid = eval.Round()
 	}
-	if txn.Type == protocol.KeyRegistrationTx && txn.VoteFirst == 0 {
+	if txn.Type == protocol.KeyRegistrationTx && txn.VoteFirst == 0 &&
+		// check this is not an offline txn
+		(!txn.VotePK.IsEmpty() || !txn.SelectionPK.IsEmpty()) {
 		txn.VoteFirst = eval.Round()
 	}
 
