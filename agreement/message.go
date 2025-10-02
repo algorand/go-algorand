@@ -18,7 +18,6 @@ package agreement
 
 import (
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/msgp/msgp"
 )
 
 // A message represents an internal message which is passed between components
@@ -26,9 +25,6 @@ import (
 type message struct {
 	_struct struct{} `codec:","`
 
-	// this field is for backwards compatibility with crash state serialized using go-codec prior to explicit unexport.
-	// should be removed after the next consensus update.
-	MessageHandle msgp.Raw `codec:"MessageHandle,omitempty"`
 	// explicitly unexport this field since we can't define serializers for interface{} type
 	// the only implementation of this is gossip.messageMetadata which doesn't have exported fields to serialize.
 	messageHandle MessageHandle
