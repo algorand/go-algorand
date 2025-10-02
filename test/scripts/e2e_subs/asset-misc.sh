@@ -187,7 +187,7 @@ else
     exit 1
 fi
 
-# Test Scenario - check transfering of the 0 asset
+# Test Scenario - check transferring of the 0 asset
 # case 1: send 0 units of 0 asset to self should fail
 EXPERROR='asset 0 does not exist or has been deleted'
 RES=$(${gcmd} asset send --from "${ACCOUNT}" --to "${ACCOUNT}" --assetid 0 --amount 0 2>&1 || true)
