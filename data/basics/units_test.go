@@ -260,9 +260,9 @@ func BenchmarkNewMuldiv(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		u64 := uint64(i + 1)
 		Muldiv(u64, u64, u64)
-		Muldiv(math.MaxUint64, u64, u64)
-		Muldiv(u64, math.MaxUint64, u64)
-		Muldiv(math.MaxInt64, math.MaxInt64, u64)
+		Muldiv(uint64(math.MaxUint64), u64, u64)
+		Muldiv(u64, uint64(math.MaxUint64), u64)
+		Muldiv(uint64(math.MaxInt64), uint64(math.MaxInt64), u64)
 	}
 }
 

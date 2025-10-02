@@ -44,6 +44,7 @@ var proto2 = protocol.ConsensusVersion("Test2")
 var proto3 = protocol.ConsensusVersion("Test3")
 var protoUnsupported = protocol.ConsensusVersion("TestUnsupported")
 var protoDelay = protocol.ConsensusVersion("TestDelay")
+var protoCongestion = protocol.ConsensusVersion("TestCongestion")
 
 func init() {
 	verBeforeBonus := protocol.ConsensusV39
@@ -76,6 +77,11 @@ func init() {
 		proto1: 5,
 	}
 	config.Consensus[protoDelay] = paramsDelay
+
+	paramsCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
+	paramsCongestion.CongestionFees = true
+	paramsCongestion.MinTxnFee = 1000
+	config.Consensus[protoCongestion] = paramsCongestion
 }
 
 func TestUpgradeVote(t *testing.T) {
@@ -1040,6 +1046,10 @@ func TestBlockHeader_PreCheck_Branch512(t *testing.T) {
 		Branch: prevHeader.Hash(),
 	}
 	currentHeader.CurrentProtocol = cv
+	if config.Consensus[cv].CongestionFees {
+		// prevent a failure for congestion reasons
+		currentHeader.BaseFee = basics.MicroAlgos{Raw: 1000}
+	}
 	// empty Branch512 fails
 	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
 	// correct Branch512 passes
@@ -1120,7 +1130,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 	suma := sum / 1_000_000 // micro to Algos
@@ -1139,7 +1149,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 
@@ -1159,7 +1169,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 
@@ -1214,5 +1224,224 @@ func TestAlive(t *testing.T) {
 	bh.Round = header.LastValid + 1
 	if bh.Alive(header) == nil {
 		t.Errorf("expired transaction alive %v", header)
+	}
+}
+
+func TestNextBaseFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Create consensus params with congestion fees enabled
+	params := config.Consensus[protoCongestion]
+
+	tests := []struct {
+		name        string
+		prevLoad    uint64
+		prevBaseFee uint64
+		expected    uint64
+	}{
+		{"empty_block_cutoff", 0, 1500, 1000}, // -50%
+		{"empty_block_extra", 0, 3000, 1500},
+		{"quarter_full", 250_000, 2000, 1500},
+		{"half_full", 500_000, 2000, 2000}, // no change
+		{"half_full_cutoff", 500_000, 999, 1000},
+		{"three_quarter_full", 750_000, 2000, 2500}, // +25%
+		{"full_block", 1_000_000, 2000, 3000},       // +50%
+		{"min_fee_floor", 0, 500, 1000},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			prevBaseFee := basics.MicroAlgos{Raw: test.prevBaseFee}
+			expected := basics.MicroAlgos{Raw: test.expected}
+			result := NextBaseFee(test.prevLoad, prevBaseFee, &params)
+			require.Equal(t, expected, result)
+		})
+	}
+}
+
+func TestNextBaseFeeDisabled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Create consensus params with congestion fees disabled
+	params := config.Consensus[protocol.ConsensusCurrentVersion]
+	params.CongestionFees = false
+
+	result := NextBaseFee(500_000, basics.MicroAlgos{Raw: 2000}, &params)
+	require.Zero(t, result)
+}
+
+func TestBlockHeaderCongestionValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test with congestion fees enabled
+	t.Run("congestion_fees_enabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       1,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			Load:        750_000,
+			BaseFee:     basics.MicroAlgos{Raw: 2000},
+		}
+		prev.CurrentProtocol = protoCongestion
+
+		params := config.Consensus[protoCongestion]
+		current := BlockHeader{
+			Round:       prev.Round + 1,
+			GenesisID:   prev.GenesisID,
+			GenesisHash: prev.GenesisHash,
+			Branch:      prev.Hash(),
+			Branch512:   prev.Hash512(),
+			Load:        500_000, // irrelevant
+			BaseFee:     NextBaseFee(prev.Load, prev.BaseFee, &params),
+		}
+		current.CurrentProtocol = protoCongestion
+		require.Equal(t, prev.BaseFee.Raw*5/4, current.BaseFee.Raw) // 75% load causes 25% growth
+
+		// Should pass with correct BaseFee
+		require.NoError(t, current.PreCheck(prev))
+
+		// Should fail with incorrect BaseFee
+		current.BaseFee = basics.MicroAlgos{Raw: 1000}
+		require.ErrorContains(t, current.PreCheck(prev), "bad base fee")
+	})
+
+	// Test with congestion fees disabled
+	t.Run("congestion_fees_disabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       1,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			Load:        0,
+			BaseFee:     basics.MicroAlgos{},
+		}
+		prev.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+		current := BlockHeader{
+			Round:       prev.Round + 1,
+			GenesisID:   prev.GenesisID,
+			GenesisHash: prev.GenesisHash,
+			Branch:      prev.Hash(),
+			Branch512:   prev.Hash512(),
+			Load:        0,
+			BaseFee:     basics.MicroAlgos{},
+		}
+		current.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+		// Should pass with zero values
+		require.NoError(t, current.PreCheck(prev))
+
+		// Should fail with non-zero BaseFee
+		current.BaseFee = basics.MicroAlgos{Raw: 1000}
+		require.ErrorContains(t, current.PreCheck(prev), "base fee should be zero when congestion measurement is disabled")
+
+		// Should fail with non-zero Load
+		current.BaseFee = basics.MicroAlgos{}
+		current.Load = 500_000
+		require.ErrorContains(t, current.PreCheck(prev), "load should be zero when congestion measurement is disabled")
+	})
+}
+
+func TestMakeBlockCongestionFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test MakeBlock sets congestion fields correctly
+	t.Run("congestion_fees_enabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       10,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			Load:        600_000,
+			BaseFee:     basics.MicroAlgos{Raw: 1500},
+		}
+		prev.CurrentProtocol = protoCongestion
+
+		block := MakeBlock(prev)
+
+		// BaseFee should be calculated from previous load
+		params := config.Consensus[protoCongestion]
+		expectedBaseFee := NextBaseFee(prev.Load, prev.BaseFee, &params)
+		require.Equal(t, expectedBaseFee, block.BaseFee)
+
+		// Load should be 0 for empty block (will be set during block evaluation)
+		require.Equal(t, uint64(0), block.Load)
+	})
+
+	t.Run("congestion_fees_disabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       10,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			Load:        0,
+			BaseFee:     basics.MicroAlgos{},
+		}
+		// If/when ConsensusCurrentVersion has Congestion enabled, switch this for an older version
+		prev.CurrentProtocol = protocol.ConsensusCurrentVersion
+		require.False(t, config.Consensus[prev.CurrentProtocol].CongestionFees)
+
+		block := MakeBlock(prev)
+		require.Zero(t, block.BaseFee)
+		require.Zero(t, block.Load)
+	})
+}
+
+func TestLoadCalculation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test the Load calculation logic (from eval package)
+	tests := []struct {
+		name      string
+		blockSize int
+		maxSize   int
+		expected  uint64
+	}{
+		{"empty_block", 0, 1000, 0},
+		{"quarter_full", 250, 1000, 250_000},
+		{"half_full", 500, 1000, 500_000},
+		{"three_quarter_full", 750, 1000, 750_000},
+		{"full_block", 1000, 1000, 1_000_000},
+		{"realistic_size", 512_000, 1_024_000, 500_000},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Simulate the ComputeLoad function from eval package
+			load := uint64(test.blockSize * 1_000_000 / test.maxSize)
+			require.Equal(t, test.expected, load)
+		})
+	}
+}
+
+func TestCongestionFeeScaling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test the scaling behavior of congestion fees
+	params := config.Consensus[protoCongestion]
+
+	baseFee := basics.MicroAlgos{Raw: 2000}
+
+	// Test different load levels and their effect on base fee
+	tests := []struct {
+		load        uint64
+		scaleFactor string // for documentation
+		expectedFee uint64
+	}{
+		{0, "0.5x", 1000},         // 0% load: 0.5x scale, but min fee applies
+		{250_000, "0.75x", 1500},  // 25% load: 0.75x scale
+		{500_000, "1.0x", 2000},   // 50% load: 1.0x scale (no change)
+		{750_000, "1.25x", 2500},  // 75% load: 1.25x scale
+		{1_000_000, "1.5x", 3000}, // 100% load: 1.5x scale
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("load_%d_%s", test.load, test.scaleFactor), func(t *testing.T) {
+			nextFee := NextBaseFee(test.load, baseFee, &params)
+			require.Equal(t, test.expectedFee, nextFee.Raw)
+		})
 	}
 }

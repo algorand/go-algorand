@@ -852,10 +852,15 @@ func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
 	return node.genesisHash
 }
 
-// SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
-// Caller should set fee to max(MinTxnFee, SuggestedFee() * len(encoded SignedTxn))
-func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
-	return basics.MicroAlgos{Raw: node.transactionPool.FeePerByte()}
+// BaseFee returns the suggested fee recommended to ensure a new transaction is processed in a timely fashion.
+// It is based on the current BaseFee from the latest block header.
+func (node *AlgorandFullNode) BaseFee() basics.MicroAlgos {
+	latest := node.ledger.Latest()
+	latestHdr, err := node.ledger.BlockHdr(latest)
+	if err != nil {
+		return basics.MicroAlgos{}
+	}
+	return latestHdr.BaseFee
 }
 
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.
