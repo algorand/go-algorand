@@ -30,7 +30,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -51,12 +50,6 @@ type mockUnicastPeer struct {
 
 func (d *mockUnicastPeer) GetAddress() string {
 	return d.address
-}
-func (d *mockUnicastPeer) Unicast(ctx context.Context, data []byte, tag protocol.Tag) error {
-	return nil
-}
-func (d *mockUnicastPeer) Version() string {
-	return ""
 }
 func (d *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil

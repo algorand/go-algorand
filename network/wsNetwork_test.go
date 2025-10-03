@@ -588,29 +588,6 @@ func TestWebsocketVoteCompression(t *testing.T) {
 	}
 }
 
-// Repeat basic, but test a unicast
-func TestWebsocketNetworkUnicast(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
-	defer closeFunc()
-	counterDone := counter.done
-
-	require.Equal(t, 1, len(netA.peers))
-	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
-	peerB := netA.peers[0]
-	err := peerB.Unicast(context.Background(), []byte("foo"), protocol.TxnTag)
-	assert.NoError(t, err)
-	err = peerB.Unicast(context.Background(), []byte("bar"), protocol.TxnTag)
-	assert.NoError(t, err)
-
-	select {
-	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 2", counter.count)
-	}
-}
-
 // Like a basic test, but really we just want to have SetPeerData()/GetPeerData()
 func TestWebsocketPeerData(t *testing.T) {
 	partitiontest.PartitionTest(t)
