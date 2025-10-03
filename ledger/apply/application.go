@@ -197,16 +197,11 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	proto := balances.ConsensusParams()
 	sizeChange := ac.UpdatingSizes()
 
-	if sizeChange {
-		if !proto.AppSizeUpdates {
-			return fmt.Errorf("application size updates are disabled")
-		}
-		// when changing sizes, the well-formedness check was sufficient to
-		// check program sizes because the txn contained the programs
-	} else {
-		// The pre-application well-formedness check rejects big programs
-		// conservatively, it doesn't know the actual params.ExtraProgramPages, so
-		// it allows any programs that fit under the absolute max.
+	if !sizeChange {
+		// The wellFormed() check rejects big programs conservatively, but it
+		// doesn't know the actual params.ExtraProgramPages, so it allows any
+		// programs that fit under the absolute max. (if there is a size change,
+		// that check is precise because the programs are in the transaction)
 		if err = ac.WellSizedPrograms(params.ExtraProgramPages, proto); err != nil {
 			return err
 		}
