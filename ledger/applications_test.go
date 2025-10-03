@@ -1516,7 +1516,7 @@ app_global_del
 		if ver >= 42 {
 			dl.txn(&update)
 		} else {
-			dl.txn(&update, "application size updates are disabled")
+			dl.txn(&update, "inappropriate non-zero tx.GlobalStateSchema")
 			return // no more tests, growing is disallowed
 		}
 		a.EqualValues(1, app().GlobalStateSchema.NumByteSlice)
@@ -1688,7 +1688,7 @@ func TestExtraPagesUpdate(t *testing.T) {
 		if ver >= 42 {
 			dl.txn(&update)
 		} else {
-			dl.txn(&update, "application size updates are disabled")
+			dl.txn(&update, "inappropriate non-zero tx.ExtraProgramPages (1)")
 			return // no more tests, growing is disallowed
 		}
 		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
