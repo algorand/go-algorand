@@ -110,7 +110,7 @@ type BlockHeader struct {
 	// Each block is associated with at most one active upgrade proposal
 	// (a new version of the protocol).  An upgrade proposal can be made
 	// by a block proposer, as long as no other upgrade proposal is active.
-	// The upgrade proposal lasts for many rounds (UpgradeVoteRounds), and
+	// The upgrade proposal lasts for consensus.UpgradeVoteRounds, and
 	// in each round, that round's block proposer votes to support (or not)
 	// the proposed upgrade.
 	//
@@ -232,7 +232,7 @@ type UpgradeState struct {
 	NextProtocol    protocol.ConsensusVersion `codec:"nextproto"`
 	// NextProtocolApprovals is the number of approvals for the next protocol proposal. It is expressed in basics.Round because it is a count of rounds.
 	NextProtocolApprovals basics.Round `codec:"nextyes"`
-	// NextProtocolVoteBefore specify the last voting round for the next protocol proposal. If there is no voting for
+	// NextProtocolVoteBefore specifies the last voting round for the next protocol proposal. If there is no voting for
 	// an upgrade taking place, this would be zero.
 	NextProtocolVoteBefore basics.Round `codec:"nextbefore"`
 	// NextProtocolSwitchOn specify the round number at which the next protocol would be adopted. If there is no upgrade taking place,
