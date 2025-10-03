@@ -1732,3 +1732,96 @@ func TestExtraPagesUpdate(t *testing.T) {
 		a.Equal(proto.MinBalance, mbr(addrs[2]))
 	})
 }
+
+// TestExtraPagesInnerUpdate shows that apps can be crown with inner transactions
+func TestExtraPagesInnerUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	const innerAppls = 31
+	ledgertesting.TestConsensusRange(t, innerAppls, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+		a := require.New(t)
+
+		app := func(id basics.AppIndex) basics.AppParams {
+			c, _, err := dl.generator.GetCreator(basics.CreatableIndex(id), basics.AppCreatable)
+			a.NoError(err)
+			ap, err := dl.generator.LookupApplication(dl.generator.Latest(), c, id)
+			a.NoError(err)
+			return *ap.AppParams
+		}
+
+		mbr := func(addr basics.Address) uint64 {
+			acct := lookup(t, dl.generator, addr)
+			return acct.MinBalance(proto.BalanceRequirements()).Raw
+		}
+
+		// if we give an app arg, the app will use another global
+		small := main(`txn NumAppArgs; bz end; txn ApplicationArgs 0; byte "X"; app_global_put;`)
+		smallID := dl.createApp(addrs[0], small)
+		a.Zero(0, app(smallID).ExtraProgramPages)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   smallID,
+			ApplicationArgs: [][]byte{{'A'}},
+		}, "store bytes count 1 exceeds schema bytes count 0")
+
+		// An app that will update another app with 1 epp, 2 ints, 3 byteslices
+		updater := main(`
+itxn_begin
+int appl;              itxn_field TypeEnum
+txn Applications 1;    itxn_field ApplicationID
+int UpdateApplication; itxn_field OnCompletion
+txn Applications 1; app_params_get AppApprovalProgram;     assert; itxn_field ApprovalProgram
+txn Applications 1; app_params_get AppClearStateProgram;   assert; itxn_field ClearStateProgram
+int 2; itxn_field ExtraProgramPages
+int 3; itxn_field GlobalNumUint
+int 4; itxn_field GlobalNumByteSlice
+itxn_next						// right after updating, try call again, schema should be ok
+int appl;              itxn_field TypeEnum
+txn Applications 1;    itxn_field ApplicationID
+byte "A";              itxn_field ApplicationArgs
+itxn_submit
+// for good measure, do it again in another inner group
+itxn_begin
+int appl;              itxn_field TypeEnum
+txn Applications 1;    itxn_field ApplicationID
+byte "B";              itxn_field ApplicationArgs
+itxn_submit
+`)
+		updaterID := dl.fundedApp(addrs[2], 3_000_000, updater)
+
+		// call the updater on smallID
+		innerUpdate := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[3],
+			ApplicationID: updaterID,
+			ForeignApps:   []basics.AppIndex{smallID},
+		}
+		if ver < 42 {
+			dl.txn(&innerUpdate, "inappropriate non-zero tx.GlobalStateSchema")
+			return // no more tests, growing is disallowed
+		}
+		dl.txn(&innerUpdate)
+		// no extra MBR on the original creator
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		// the app account is now the renter for the app, which now has 2,3,4
+		a.Equal(proto.MinBalance+
+			2*proto.AppFlatParamsMinBalance+ // epp
+			3*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance)+
+			4*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance),
+			mbr(updaterID.Address()))
+		a.Equal(app(smallID).GlobalState["A"], basics.TealValue{
+			Type: basics.TealBytesType, Bytes: "X",
+		})
+		a.Equal(app(smallID).GlobalState["B"], basics.TealValue{
+			Type: basics.TealBytesType, Bytes: "X",
+		})
+	})
+}
