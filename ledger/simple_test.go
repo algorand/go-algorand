@@ -111,7 +111,8 @@ func nextBlock(t testing.TB, ledger *Ledger) *eval.BlockEvaluator {
 }
 
 func fillDefaults(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn) {
-	if txn.GenesisHash.IsZero() && ledger.GenesisProto().SupportGenesisHash {
+	proto := eval.ConsensusParams()
+	if txn.GenesisHash.IsZero() && proto.SupportGenesisHash {
 		txn.GenesisHash = ledger.GenesisHash()
 	}
 	if txn.FirstValid == 0 {
@@ -123,7 +124,7 @@ func fillDefaults(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *
 		txn.VoteFirst = eval.Round()
 	}
 
-	txn.FillDefaults(ledger.GenesisProto())
+	txn.FillDefaults(proto)
 }
 
 func txns(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) {

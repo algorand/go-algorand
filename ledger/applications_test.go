@@ -144,32 +144,64 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 	a.Contains(genesisInitState.Accounts, userLocal2)
 
+	// Calculate expected balances based on the protocol's MinTxnFee
+	// This makes the test resilient to fee changes
+
+	// Look up initial balances - these addresses are deterministic based on the GenerateInitState function
+	// The creator address corresponds to a specific genaddrs index
+	creatorInitialBalance := genesisInitState.Accounts[creator].MicroAlgos.Raw
+	userOptinInitialBalance := genesisInitState.Accounts[userOptin].MicroAlgos.Raw
+	userLocalInitialBalance := genesisInitState.Accounts[userLocal].MicroAlgos.Raw
+
+	// Creator pays 1 transaction with Fee = 2 * MinTxnFee
+	creatorFinalBalance := creatorInitialBalance - (proto.MinTxnFee * 2)
+	// UserOptin pays 1 transaction with Fee = 2 * MinTxnFee
+	userOptinFinalBalance := userOptinInitialBalance - (proto.MinTxnFee * 2)
+	// UserLocal pays 2 transactions with Fee = 2 * MinTxnFee each
+	userLocalFinalBalance := userLocalInitialBalance - (proto.MinTxnFee * 2 * 2)
+
+	// Build the expected encoded structures dynamically
+	// Note: These are MessagePack encoded AccountData structures
+	// We need to preserve the exact format but update the balance fields
+
 	var expectedCreatorBase, expectedCreatorResource, expectedUserOptInBase, expectedUserOptInResource, expectedUserLocalBase, expectedUserLocalResource []byte
 	// the difference between these encoded structure is the UpdateRound variable. This variable is not being set before
 	// the consensus upgrade, and affects only nodes that have been updated.
 	if proto.EnableLedgerDataUpdateRound {
-		expectedCreatorBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce009d2290a16704a16b01a17a01")
+		// Build the hex strings dynamically with the calculated balances
+		// Format: 87a14301a144ce000186a0a16101a162ce[BALANCE]a16704a16b01a17a01
+		creatorHex := fmt.Sprintf("87a14301a144ce000186a0a16101a162ce%08xa16704a16b01a17a01", creatorFinalBalance)
+		expectedCreatorBase, err = hex.DecodeString(creatorHex)
 		a.NoError(err)
 		expectedCreatorResource, err = hex.DecodeString("86a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903a17a01")
 		a.NoError(err)
-		expectedUserOptInBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce00a02fd0a16701a16c01a17a02")
+
+		userOptinHex := fmt.Sprintf("87a14301a144ce000186a0a16101a162ce%08xa16701a16c01a17a02", userOptinFinalBalance)
+		expectedUserOptInBase, err = hex.DecodeString(userOptinHex)
 		a.NoError(err)
 		expectedUserOptInResource, err = hex.DecodeString("82a16f01a17a02")
 		a.NoError(err)
-		expectedUserLocalBase, err = hex.DecodeString("87a14301a144ce000186a0a16101a162ce00a33540a16701a16c01a17a04")
+
+		userLocalHex := fmt.Sprintf("87a14301a144ce000186a0a16101a162ce%08xa16701a16c01a17a04", userLocalFinalBalance)
+		expectedUserLocalBase, err = hex.DecodeString(userLocalHex)
 		a.NoError(err)
 		expectedUserLocalResource, err = hex.DecodeString("83a16f01a17081a26c6b82a27462a56c6f63616ca2747401a17a04")
 		a.NoError(err)
 	} else {
-		expectedCreatorBase, err = hex.DecodeString("84a16101a162ce009d2290a16704a16b01")
+		creatorHex := fmt.Sprintf("84a16101a162ce%08xa16704a16b01", creatorFinalBalance)
+		expectedCreatorBase, err = hex.DecodeString(creatorHex)
 		a.NoError(err)
 		expectedCreatorResource, err = hex.DecodeString("85a171c45602200200012604056c6f63616c06676c6f62616c026c6b02676b3118221240003331192212400010311923124000022243311b221240001c361a00281240000a361a0029124000092243222a28664200032b29672343a172c40102a17501a17704a17903")
 		a.NoError(err)
-		expectedUserOptInBase, err = hex.DecodeString("84a16101a162ce00a02fd0a16701a16c01")
+
+		userOptinHex := fmt.Sprintf("84a16101a162ce%08xa16701a16c01", userOptinFinalBalance)
+		expectedUserOptInBase, err = hex.DecodeString(userOptinHex)
 		a.NoError(err)
 		expectedUserOptInResource, err = hex.DecodeString("81a16f01")
 		a.NoError(err)
-		expectedUserLocalBase, err = hex.DecodeString("84a16101a162ce00a33540a16701a16c01")
+
+		userLocalHex := fmt.Sprintf("84a16101a162ce%08xa16701a16c01", userLocalFinalBalance)
+		expectedUserLocalBase, err = hex.DecodeString(userLocalHex)
 		a.NoError(err)
 		expectedUserLocalResource, err = hex.DecodeString("82a16f01a17081a26c6b82a27462a56c6f63616ca2747401")
 		a.NoError(err)

@@ -2,6 +2,9 @@
 
 date '+teal-split-test start %Y%m%d_%H%M%S'
 
+my_dir="$(dirname "$0")"
+source "$my_dir/rest.sh" "$@"
+
 set -e
 set -x
 set -o pipefail
@@ -11,12 +14,16 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
+# Get network's minimum fee
+MIN_FEE=$(get_min_fee)
+echo "Network MinFee: $MIN_FEE"
+
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTC=$(${gcmd} account new|awk '{ print $6 }')
 
-sed s/TMPL_RCV1/${ACCOUNTB}/g < tools/teal/templates/split.teal.tmpl | sed s/TMPL_RCV2/${ACCOUNTC}/g | sed s/TMPL_RAT1/60/g | sed s/TMPL_RAT2/40/g | sed s/TMPL_MINPAY/100000/g | sed s/TMPL_TIMEOUT/4/g | sed s/TMPL_OWN/${ACCOUNTB}/g | sed s/TMPL_FEE/10000/g > ${TEMPDIR}/split.teal
+sed s/TMPL_RCV1/${ACCOUNTB}/g < tools/teal/templates/split.teal.tmpl | sed s/TMPL_RCV2/${ACCOUNTC}/g | sed s/TMPL_RAT1/60/g | sed s/TMPL_RAT2/40/g | sed s/TMPL_MINPAY/100000/g | sed s/TMPL_TIMEOUT/4/g | sed s/TMPL_OWN/${ACCOUNTB}/g | sed s/TMPL_FEE/${MIN_FEE}/g > ${TEMPDIR}/split.teal
 
 ACCOUNT_SPLIT=$(${gcmd} clerk compile ${TEMPDIR}/split.teal -o ${TEMPDIR}/split.tealc|awk '{ print $2 }')
 

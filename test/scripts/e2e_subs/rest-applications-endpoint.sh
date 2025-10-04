@@ -9,6 +9,7 @@ date "+$0 start %Y%m%d_%H%M%S"
 
 # Create an application
 printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
+# shellcheck disable=SC2154  # gcmd is defined in rest.sh
 APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints 2 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
 
 # Good request, non-existent app id

@@ -52,7 +52,7 @@ var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c
 var minFee basics.MicroAlgos
 
 func init() {
-	params := config.Consensus[protocol.ConsensusCurrentVersion]
+	params := config.Consensus[protocol.ConsensusFuture]
 	minFee = basics.MicroAlgos{Raw: params.MinTxnFee}
 }
 

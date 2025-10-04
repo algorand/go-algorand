@@ -64,7 +64,9 @@ if { [catch {
     # Transfer Algos from primary account to account 1
     set MIN_BALANCE 100000
     set TRANSFER_AMOUNT  [expr {3 * $MIN_BALANCE}]
-    set FEE_AMOUNT 1000
+    # Get suggested fee from network
+    set FEE_AMOUNT [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Network suggested fee: $FEE_AMOUNT"
     set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
 
     # Print the transaction id

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -87,7 +88,8 @@ func TestHeartbeat(t *testing.T) {
 	require.ErrorContains(t, err, "cheap heartbeat")
 
 	// address fee
-	tx.Fee = basics.MicroAlgos{Raw: 1000}
+	proto := config.Consensus[protocol.ConsensusFuture]
+	tx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 
 	// Seed is missing
 	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)

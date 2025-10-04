@@ -4,6 +4,9 @@ filename=$(basename "$0")
 scriptname="${filename%.*}"
 date "+${scriptname} start %Y%m%d_%H%M%S"
 
+my_dir="$(dirname "$0")"
+source "$my_dir/rest.sh" "$@"
+
 set -e
 set -x
 set -o pipefail
@@ -11,6 +14,10 @@ set -o pipefail
 WALLET=$1
 
 gcmd="goal -w ${WALLET}"
+
+# Get network's minimum fee
+MIN_FEE=$(get_min_fee)
+echo "Network MinFee: $MIN_FEE"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
@@ -60,4 +67,4 @@ ${gcmd} clerk sign -i ${TEMPDIR}/hdr.tx -o ${TEMPDIR}/hdr.stx --program ${TEMPDI
 ${gcmd} clerk rawsend -f ${TEMPDIR}/hdr.stx
 
 # remove min fee + 10
-[ "$(balance "$SIGACCOUNT")" =        898990 ]
+[ "$(balance "$SIGACCOUNT")" = $((900000 - 10 - MIN_FEE)) ]

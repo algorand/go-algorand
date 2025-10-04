@@ -73,11 +73,14 @@ if { [catch {
 
     puts "Primary Account Address: $PRIMARY_ACCOUNT_ADDRESS   Balance: $PRIMARY_ACCOUNT_BALANCE"
 
+    # Get suggested fee from network
+    set FEE_AMOUNT [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Network suggested fee: $FEE_AMOUNT"
+
     # Transfer Algos from primary account to account
 
     set MINIMUM_BALANCE 100000
     set TRANSFER_AMOUNT [expr {10 * $MINIMUM_BALANCE}]
-    set FEE_AMOUNT 1000
     set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
 
     # Print the transaction id
@@ -97,13 +100,13 @@ if { [catch {
     # AMOUNT-MINIMUM alone (below) would not leave any overhead to pay fees. So, transfer AMOUNT-2*MINIMUM instead.
     set TRANSFER_1_AMOUNT [expr $TRANSFER_AMOUNT - $MINIMUM_BALANCE - $MINIMUM_BALANCE]
 
-    set TRANSACTION_ID_2 [::AlgorandGoal::AccountTransfer $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TRANSFER_1_AMOUNT $ACCOUNT_2_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
- 
+    set TRANSACTION_ID_2 [::AlgorandGoal::AccountTransfer $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TRANSFER_1_AMOUNT $ACCOUNT_2_ADDRESS 0 $TEST_PRIMARY_NODE_DIR ""]
+
     # perform the following operation :
-    # set TRANSACTION_ID_3 [::AlgorandGoal::AccountTransfer $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TRANSFER_1_AMOUNT $ACCOUNT_3_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
+    # set TRANSACTION_ID_3 [::AlgorandGoal::AccountTransfer $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TRANSFER_1_AMOUNT $ACCOUNT_3_ADDRESS 0 $TEST_PRIMARY_NODE_DIR ""]
     # but expect to see that it's failing due to double spending.
     set timeout 60
-    spawn goal clerk send --fee $FEE_AMOUNT --wallet $WALLET_1_NAME --amount $TRANSFER_1_AMOUNT --from $ACCOUNT_1_ADDRESS --to $ACCOUNT_3_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+    spawn goal clerk send --wallet $WALLET_1_NAME --amount $TRANSFER_1_AMOUNT --from $ACCOUNT_1_ADDRESS --to $ACCOUNT_3_ADDRESS -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { close; ::AlgorandGoal::Abort "Timed out transferring funds"  }
         "Please enter the password for wallet '$WALLET_1_NAME':" { send "$WALLET_1_PASSWORD\r"; exp_continue }

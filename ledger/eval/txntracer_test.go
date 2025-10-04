@@ -231,13 +231,40 @@ int 1`
 			err = eval.TransactionGroup(secondTxGroup)
 			require.NoError(t, err)
 
+			// Calculate expected balances dynamically based on proto.MinTxnFee
+			// Genesis gives each address: 5_000_000_000_000_000 / 3 ≈ 1_666_666_666_666_666
+			genesisBalance := uint64(5_000_000_000_000_000 / 3)
+
+			// addrs[0]: paid 3 fees (basicAppCall, innerAppCall, innerBoxAppCall)
+			expectedAddr0 := genesisBalance - 3*proto.MinTxnFee
+
+			// testSinkAddr: received fees from ALL transactions in the round
+			// (4 outer + 2 inner from first group + 1 from secondPayTxn = 7 total)
+			// Note: Fee sink accumulates for the entire round, unlike other accounts which are per-group
+			expectedSink := genesisBalance + 7*proto.MinTxnFee
+
+			// addrs[2]: received 1_000_000 from payTxn (in this transaction group)
+			// Note: secondPayTxn is in a separate group and affects addrs[2], but the delta we're
+			// testing here (actualDelta from txgroup[0]) only includes the first group's effects
+			expectedAddr2 := genesisBalance + 1_000_000
+
+			// addrs[3]: received CloseRemainderTo from addrs[1]
+			// addrs[1] started with genesisBalance, paid 1 fee (payTxn), sent 1_000_000, remainder to addrs[3]
+			expectedAddr3 := genesisBalance + (genesisBalance - proto.MinTxnFee - 1_000_000)
+
+			// innerAppAddress: started with 1_000_000, inner txn spawned an app
+			// The MBR cost is constant at 51_000 regardless of MinTxnFee
+			// (Inner txn fees are paid by the outer transaction via fee pooling, not deducted from innerAppAddress)
+			const innerAppMBRCost = 51_000
+			expectedInnerApp := uint64(1_000_000) - innerAppMBRCost
+
 			expectedAccts := ledgercore.AccountDeltas{
 				Accts: []ledgercore.BalanceRecord{
 					{
 						Addr: addrs[0],
 						AccountData: ledgercore.AccountData{
 							AccountBaseData: ledgercore.AccountBaseData{
-								MicroAlgos:     basics.MicroAlgos{Raw: 1666666666663666},
+								MicroAlgos:     basics.MicroAlgos{Raw: expectedAddr0},
 								TotalAppParams: 3,
 							},
 						},
@@ -247,7 +274,7 @@ int 1`
 						AccountData: ledgercore.AccountData{
 							AccountBaseData: ledgercore.AccountBaseData{
 								Status:     basics.Status(2),
-								MicroAlgos: basics.MicroAlgos{Raw: 1666666666673666},
+								MicroAlgos: basics.MicroAlgos{Raw: expectedSink},
 							},
 						},
 					},
@@ -268,7 +295,7 @@ int 1`
 						Addr: addrs[2],
 						AccountData: ledgercore.AccountData{
 							AccountBaseData: ledgercore.AccountBaseData{
-								MicroAlgos: basics.MicroAlgos{Raw: 1666666667666666},
+								MicroAlgos: basics.MicroAlgos{Raw: expectedAddr2},
 							},
 						},
 					},
@@ -276,7 +303,7 @@ int 1`
 						Addr: addrs[3],
 						AccountData: ledgercore.AccountData{
 							AccountBaseData: ledgercore.AccountBaseData{
-								MicroAlgos: basics.MicroAlgos{Raw: 3333333332332332},
+								MicroAlgos: basics.MicroAlgos{Raw: expectedAddr3},
 							},
 						},
 					},
@@ -284,7 +311,7 @@ int 1`
 						Addr: innerAppAddress,
 						AccountData: ledgercore.AccountData{
 							AccountBaseData: ledgercore.AccountBaseData{
-								MicroAlgos:     basics.MicroAlgos{Raw: 997000},
+								MicroAlgos:     basics.MicroAlgos{Raw: expectedInnerApp},
 								TotalAppParams: 1,
 							},
 						},

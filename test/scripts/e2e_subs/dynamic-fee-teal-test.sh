@@ -1,5 +1,8 @@
 #!/bin/bash
 
+my_dir="$(dirname "$0")"
+source "$my_dir/rest.sh" "$@"
+
 date '+dynamic-fee-teal-test start %Y%m%d_%H%M%S'
 
 set -e
@@ -16,6 +19,10 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTC=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
 LEASE=uImiLf+mqOqs0BFsqIUHBh436N/z964X50e3P9Ii4ac=
+
+# Get network's minimum fee
+MIN_FEE=$(get_min_fee)
+echo "Network MinFee: $MIN_FEE"
 
 # Fund ACCOUNTB
 ${gcmd} clerk send -a 100000000 -f ${ACCOUNT} -t ${ACCOUNTB}
@@ -36,14 +43,14 @@ ${gcmd} clerk compile -a ${ACCOUNTB} -s ${TEMPDIR}/dynamic.teal -o ${TEMPDIR}/dy
 ${gcmd} account delete -a ${ACCOUNTB}
 
 # Create first transaction to spend fee (can't sign yet, no group)
-${gcmd} clerk send -f ${ACCOUNT} -t ${ACCOUNTB} -a 1234 -o ${TEMPDIR}/feefund.txn
+${gcmd} clerk send -f ${ACCOUNT} -t ${ACCOUNTB} -a ${MIN_FEE} -o ${TEMPDIR}/feefund.txn
 
 #
 # First test (negative)
 #
 
-# Create second transaction mostly as per template, but pay wrong fee
-${gcmd} clerk send --fee=1235 --lease=${LEASE} --firstvalid=1 --lastvalid=1001 -f ${ACCOUNTB} -a=1000000 -t=${ACCOUNTD} --close-to=${ACCOUNTC} -o ${TEMPDIR}/fundedpayment.txn
+# Create second transaction mostly as per template, but pay wrong fee (off by 1)
+${gcmd} clerk send --fee=$((MIN_FEE + 1)) --lease=${LEASE} --firstvalid=1 --lastvalid=1001 -f ${ACCOUNTB} -a=1000000 -t=${ACCOUNTD} --close-to=${ACCOUNTC} -o ${TEMPDIR}/fundedpayment.txn
 
 # Cat txns together
 cat ${TEMPDIR}/feefund.txn ${TEMPDIR}/fundedpayment.txn > ${TEMPDIR}/group.txn
@@ -75,8 +82,8 @@ fi
 # Second test (positive)
 #
 
-# Create second transaction as per template
-${gcmd} clerk send --fee=1234 --lease=${LEASE} --firstvalid=1 --lastvalid=1001 -f ${ACCOUNTB} -a=1000000 -t=${ACCOUNTD} --close-to=${ACCOUNTC} -o ${TEMPDIR}/fundedpayment.txn
+# Create second transaction as per template with correct fee
+${gcmd} clerk send --fee=${MIN_FEE} --lease=${LEASE} --firstvalid=1 --lastvalid=1001 -f ${ACCOUNTB} -a=1000000 -t=${ACCOUNTD} --close-to=${ACCOUNTC} -o ${TEMPDIR}/fundedpayment.txn
 
 # Cat txns together
 cat ${TEMPDIR}/feefund.txn ${TEMPDIR}/fundedpayment.txn > ${TEMPDIR}/group.txn

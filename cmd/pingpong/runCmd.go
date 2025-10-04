@@ -103,7 +103,7 @@ func init() {
 	runCmd.Flags().Uint64VarP(&minAccountFunds, "minaccount", "", 0, "The minimum amount to fund a test account with")
 	runCmd.Flags().Uint64VarP(&txnPerSec, "tps", "t", 0, "Number of Txn per second that pingpong sends")
 	runCmd.Flags().Int64VarP(&maxFee, "mf", "f", -1, "The MAX fee to be used for transactions, a value of '0' tells the server to use a suggested fee.")
-	runCmd.Flags().Uint64VarP(&minFee, "minf", "m", 1000, "The MIN fee to be used for randomFee transactions")
+	runCmd.Flags().Uint64VarP(&minFee, "minf", "m", 0, "The MIN fee to be used for randomFee transactions (0 will use suggested fee)")
 	runCmd.Flags().BoolVar(&randomAmount, "ra", false, "Set to enable random amounts (up to maxamount)")
 	runCmd.Flags().BoolVar(&noRandomAmount, "nra", false, "Set to disable random amounts")
 	runCmd.Flags().BoolVar(&randomFee, "rf", false, "Set to enable random fees (between minf and mf)")

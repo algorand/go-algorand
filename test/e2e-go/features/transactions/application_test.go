@@ -58,7 +58,7 @@ func TestApplication(t *testing.T) {
 	_, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
-	fee := uint64(1000)
+	fee := proto.MinTxnFee
 
 	counter := `#pragma version 5
 int 1

@@ -7,6 +7,7 @@ source "$my_dir/rest.sh" "$@"
 
 date "+$0 start %Y%m%d_%H%M%S"
 
+# shellcheck disable=SC2154  # gcmd is defined in rest.sh
 ASSET_ID=$(${gcmd} asset create --creator "${ACCOUNT}" --total 10000 --decimals 19 --asseturl 'https://www.reddit.com/r/AlgorandOfficial/' --name "spanish coin" --unitname "doubloon" | grep "Created asset with asset index" | rev | cut -d ' ' -f 1 | rev)
 
 # Good request, non-existent asset id

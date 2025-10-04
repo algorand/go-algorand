@@ -1248,15 +1248,19 @@ int 1`
 	}
 	balanceBlob := protocol.EncodeMsgp(&br)
 
+	// Get proto using the same lookup that LocalRunner.Setup will use
+	_, proto, err := protoFromString(string(protocol.ConsensusCurrentVersion))
+	a.NoError(err)
+
 	// two testcase: success with enough fees and fail otherwise
 	var tests = []struct {
 		fee      uint64
 		expected func(LocalRunner, runAllResult)
 	}{
-		{2000, func(l LocalRunner, r runAllResult) {
+		{2 * proto.MinTxnFee, func(l LocalRunner, r runAllResult) {
 			a.Equal(allPassing(len(l.runs)), r)
 		}},
-		{1500, func(_ LocalRunner, r runAllResult) {
+		{proto.MinTxnFee + proto.MinTxnFee/2, func(_ LocalRunner, r runAllResult) {
 			a.Condition(allErrors(r.allErrors()))
 			for _, result := range r.results {
 				a.False(result.pass)

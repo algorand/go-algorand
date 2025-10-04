@@ -1601,6 +1601,7 @@ int 1
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(7)
+	proto := config.Consensus[dryrunProtoVersion]
 	dr := DryrunRequest{
 		ProtocolVersion: string(dryrunProtoVersion),
 		Txns: []transactions.SignedTxn{txntest.Txn{
@@ -1618,8 +1619,8 @@ int 1
 		// Sender must exist (though no fee is ever taken)
 		// AppAccount must exist and be able to pay the inner fee and the pay amount (but min balance not checked)
 		Accounts: []model.Account{
-			{Address: sender.String(), Status: "Offline"},                                                // sender
-			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: 1_010}}, // app account
+			{Address: sender.String(), Status: "Offline"},                                                               // sender
+			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: proto.MinTxnFee + 10}}, // app account needs MinTxnFee + pay amount
 	}
 	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)

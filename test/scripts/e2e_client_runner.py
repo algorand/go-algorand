@@ -113,22 +113,23 @@ def _script_thread_inner(runset, scriptname, timeout):
     # send one million Algos to the test wallet's account
     params = algod.suggested_params()
     round = params.first
-    max_init_wait_rounds = 5
+    max_init_wait_rounds = 20  # Increased from 5 to handle 67 concurrent funding transactions
     params.last = params.first + max_init_wait_rounds
     txn = algosdk.transaction.PaymentTxn(maxpubaddr, params, addr, 1_000_000_000_000)
     stxn = kmd.sign_transaction(pubw, '', txn)
     txid = algod.send_transaction(stxn)
-    ptxinfo = None
+    txinfo = None
     for _ in range(max_init_wait_rounds):
         txinfo = algod.pending_transaction_info(txid)
-        if txinfo.get('round'):
+        if txinfo.get('confirmed-round'):
             break
         status = algod.status_after_block(round_num=round)
         round = status['last-round']
 
-    if ptxinfo is not None:
-        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname, max_init_wait_rounds))
+    if not txinfo or not txinfo.get('confirmed-round'):
+        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds. txinfo: {}\n'.format(scriptname, max_init_wait_rounds, txinfo))
         runset.done(scriptname, False, time.time() - start)
+        return
 
     env = dict(runset.env)
     env['TEMPDIR'] = os.path.join(env['TEMPDIR'], walletname)

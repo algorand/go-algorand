@@ -53,7 +53,9 @@ end:
 
 txinfo, err = goal.app_create(joe, goal.assemble(teal))
 assert not err, err
-joeb = joeb-1000
+# Get the network's minimum fee
+min_fee = goal.params().min_fee
+joeb = joeb-min_fee
 app_id = txinfo['application-index']
 assert app_id
 
@@ -70,7 +72,7 @@ assert goal.balance(joe) == joeb+1, goal.balance(joe)
 
 txinfo, err = goal.app_call(joe, app_id, accounts=[flo])
 assert not err, err
-joeb = joeb-1000
+joeb = joeb-min_fee
 assert goal.balance(joe) == joeb+6, goal.balance(joe)
 
 # can spend again
