@@ -47,6 +47,7 @@ func TestPayAction(t *testing.T) {
 	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
+		proto := config.Consensus[cv]
 
 		ai := dl.fundedApp(addrs[0], 200000, // account min balance, plus fees
 			main(`
@@ -98,7 +99,7 @@ func TestPayAction(t *testing.T) {
 		const payoutsVer = 40
 		if ver >= payoutsVer {
 			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)
-			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
+			require.EqualValues(t, 2*proto.MinTxnFee, vb.Block().FeesCollected.Raw)
 		} else {
 			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)
 			require.Zero(t, vb.Block().FeesCollected)
@@ -109,11 +110,11 @@ func TestPayAction(t *testing.T) {
 
 		dl.t.Log("postsink", postsink, "postprop", postprop)
 		if ver >= payoutsVer {
-			bonus := 10_000_000                                 // config/consensus.go
-			assert.EqualValues(t, bonus-1000, presink-postsink) // based on 50% in config/consensus.go
-			require.EqualValues(t, bonus+1000, postprop-preprop)
+			bonus := 10_000_000                                                 // config/consensus.go
+			assert.EqualValues(t, bonus-int(proto.MinTxnFee), presink-postsink) // based on 50% in config/consensus.go
+			require.EqualValues(t, bonus+int(proto.MinTxnFee), postprop-preprop)
 		} else {
-			require.EqualValues(t, 2000, postsink-presink) // no payouts yet
+			require.EqualValues(t, 2*proto.MinTxnFee, postsink-presink) // no payouts yet
 		}
 
 		ad0 := micros(dl.t, dl.generator, addrs[0])
@@ -121,12 +122,12 @@ func TestPayAction(t *testing.T) {
 		app := micros(dl.t, dl.generator, ai.Address())
 
 		genAccounts := genBalances.Balances
-		// create(1000) and fund(1000 + 200000)
-		require.Equal(t, uint64(202000), genAccounts[addrs[0]].MicroAlgos.Raw-ad0)
-		// paid 5000, but 1000 fee
-		require.Equal(t, uint64(4000), ad1-genAccounts[addrs[1]].MicroAlgos.Raw)
-		// app still has 194000 (paid out 5000, and paid fee to do it)
-		require.Equal(t, uint64(194000), app)
+		// create(MinTxnFee) and fund(MinTxnFee + 200000)
+		require.Equal(t, uint64(2*proto.MinTxnFee+200000), genAccounts[addrs[0]].MicroAlgos.Raw-ad0)
+		// paid 5000, but MinTxnFee fee
+		require.Equal(t, uint64(5000-proto.MinTxnFee), ad1-genAccounts[addrs[1]].MicroAlgos.Raw)
+		// app still has 200000-5000-MinTxnFee (paid out 5000, and paid fee to do it)
+		require.Equal(t, uint64(200000-5000-proto.MinTxnFee), app)
 
 		// Build up Residue in RewardsState so it's ready to pay
 		for i := 1; i < 10; i++ {
@@ -162,11 +163,11 @@ func TestPayAction(t *testing.T) {
 		ad2 := micros(dl.t, dl.validator, addrs[2])
 		app = micros(dl.t, dl.validator, ai.Address())
 
-		// paid 5000, in first payout (only), but paid 1000 fee in each payout txn
-		require.Equal(t, rewards+3000, ad1-genAccounts[addrs[1]].MicroAlgos.Raw)
-		// app still has 188000 (paid out 10000, and paid 2k fees to do it)
+		// paid 5000, in first payout (only), but paid MinTxnFee fee in each payout txn
+		require.Equal(t, rewards+5000-2*proto.MinTxnFee, ad1-genAccounts[addrs[1]].MicroAlgos.Raw)
+		// app still has 200000-10000-2*MinTxnFee (paid out 10000, and paid 2 fees to do it)
 		// no rewards because owns less than an algo
-		require.Equal(t, uint64(200000)-10000-2000, app)
+		require.Equal(t, uint64(200000)-10000-2*proto.MinTxnFee, app)
 
 		// paid 5000 by payout2, never paid any fees, got same rewards
 		require.Equal(t, rewards+uint64(5000), ad2-genAccounts[addrs[2]].MicroAlgos.Raw)
@@ -195,7 +196,7 @@ func TestPayAction(t *testing.T) {
 		appreward := inners[0].SenderRewards.Raw
 		require.Greater(t, appreward, uint64(1000))
 
-		require.Equal(t, beforepay+appreward-5000-1000, afterpay)
+		require.Equal(t, beforepay+appreward-5000-proto.MinTxnFee, afterpay)
 	})
 }
 
@@ -367,6 +368,7 @@ func TestClawbackAction(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
+		proto := config.Consensus[cv]
 		app := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
@@ -405,7 +407,7 @@ func TestClawbackAction(t *testing.T) {
 			Type:     "pay",
 			Sender:   bystander,
 			Receiver: bystander,
-			Fee:      2000, // Overpay fee so that app account can be unfunded
+			Fee:      2 * proto.MinTxnFee, // Overpay fee so that app account can be unfunded
 		}
 		clawmove := txntest.Txn{
 			Type:          "appl",
@@ -435,6 +437,7 @@ func TestRekeyAction(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
+		proto := config.Consensus[cv]
 		ezpayer := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[5],
@@ -477,7 +480,7 @@ skipclose:
 		// addrs[2] got paid
 		require.Equal(t, uint64(5000), micros(t, dl.generator, addrs[2])-micros(t, dl.generator, addrs[6]))
 		// addrs[0] paid 5k + rekey fee + inner txn fee
-		require.Equal(t, uint64(7000), micros(t, dl.generator, addrs[6])-micros(t, dl.generator, addrs[0]))
+		require.Equal(t, 5000+2*proto.MinTxnFee, micros(t, dl.generator, addrs[6])-micros(t, dl.generator, addrs[0]))
 
 		baduse := txntest.Txn{
 			Type:          "appl",
@@ -586,6 +589,7 @@ func TestDuplicatePayAction(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
+		proto := config.Consensus[cv]
 		source := main(`
          itxn_begin
           int pay;         itxn_field TypeEnum
@@ -615,12 +619,12 @@ func TestDuplicatePayAction(t *testing.T) {
 		ad1 := micros(t, dl.generator, addrs[1])
 		app := micros(t, dl.generator, appID.Address())
 
-		// create(1000) and fund(1000 + 200000), extra create+fund (1000 + 201000)
-		require.Equal(t, 404000, int(genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0))
-		// paid 10000, but 1000 fee on tx
-		require.Equal(t, 9000, int(ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw))
-		// app still has 188000 (paid out 10000, and paid 2 x fee to do it)
-		require.Equal(t, 188000, int(app))
+		// create(MinTxnFee) and fund(MinTxnFee + 200000), extra create+fund (MinTxnFee + 200000+MinTxnFee)
+		require.Equal(t, int(4*proto.MinTxnFee+400_000), int(genBalances.Balances[addrs[0]].MicroAlgos.Raw-ad0))
+		// paid 10000, but MinTxnFee fee on tx
+		require.Equal(t, int(10_000-proto.MinTxnFee), int(ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw))
+		// app still has (200000 - 10000 - 2*MinTxnFee) = 190000 - 2*MinTxnFee (paid out 10000, and paid 2 x fee to do it)
+		require.Equal(t, int(200_000-10_000-2*proto.MinTxnFee), int(app))
 
 		// Now create another app, and see if it gets the ID we expect (2
 		// higher, because of the intervening fund txn)
@@ -678,6 +682,7 @@ func TestAcfgAction(t *testing.T) {
 	ledgertesting.TestConsensusRange(t, 30, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
+		proto := config.Consensus[cv]
 
 		appID := dl.fundedApp(addrs[0], 200_000, // exactly account min balance + one asset
 			main(`
@@ -782,13 +787,15 @@ submit:  itxn_submit
 		}
 
 		// Can't create an asset if you have exactly 200,000 and need to pay fee
-		dl.txn(&createAsa, "balance 199000 below min 200000")
-		// add some more
+		// After fundedApp, the app has 200_000 - proto.MinTxnFee (paid during app call/funding)
+		dl.txn(&createAsa, fmt.Sprintf("balance %d below min 200000", 200_000-proto.MinTxnFee))
+		// add some more (need to add enough to reach 200_000 MBR requirement)
+		// App has 200_000 - proto.MinTxnFee, needs 200_000, so add proto.MinTxnFee
 		dl.txn(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: appID.Address(),
-			Amount:   10_000,
+			Amount:   proto.MinTxnFee,
 		})
 		asaID := dl.txn(&createAsa).EvalDelta.InnerTxns[0].ConfigAsset
 		require.NotZero(t, asaID)
@@ -803,6 +810,14 @@ submit:  itxn_submit
 		require.Equal(t, "https://gold.rush/", asaParams.URL)
 
 		require.Equal(t, appID.Address(), asaParams.Manager)
+
+		// Fund the app for the subsequent operations (4 operations * proto.MinTxnFee for inner txns)
+		dl.txn(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: appID.Address(),
+			Amount:   4 * proto.MinTxnFee,
+		})
 
 		for _, a := range []string{"reserve", "freeze", "clawback", "manager"} {
 			check := txntest.Txn{
@@ -965,10 +980,11 @@ func TestInnerAppCreateAndOptin(t *testing.T) {
 `))
 		// Don't use `main` here, we want to do the work during creation. Rekey
 		// to the helper and invoke it, trusting it to opt us into the ASA.
+		proto := config.Consensus[cv]
 		createapp := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
-			Fee:    3 * 1000, // to pay for self, call to helper, and helper's axfer
+			Fee:    3 * proto.MinTxnFee, // to pay for self, call to helper, and helper's axfer
 			ApprovalProgram: `
   itxn_begin
    int appl;      itxn_field TypeEnum
@@ -1019,10 +1035,11 @@ func TestParentGlobals(t *testing.T) {
   itxn_submit
   int 1
 `
+		proto := config.Consensus[cv]
 		createapp := txntest.Txn{
 			Type:            "appl",
 			Sender:          addrs[0],
-			Fee:             2 * 1000, // to pay for self and call to helper
+			Fee:             2 * proto.MinTxnFee, // to pay for self and call to helper
 			ApprovalProgram: createProgram,
 			ForeignApps:     []basics.AppIndex{checkParent},
 		}
@@ -1039,7 +1056,7 @@ func TestParentGlobals(t *testing.T) {
 		outer := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
-			Fee:    3 * 1000, // to pay for self, call to inner create, and its call to helper
+			Fee:    3 * proto.MinTxnFee, // to pay for self, call to inner create, and its call to helper
 			ApprovalProgram: `
   itxn_begin
    int appl;      itxn_field TypeEnum
@@ -1108,6 +1125,7 @@ func TestKeyreg(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
+		proto := config.Consensus[cv]
 		app := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
@@ -1165,8 +1183,8 @@ nonpart:
 			ApplicationArgs: [][]byte{[]byte("pay")},
 		}
 		dl.fullBlock(&pay)
-		// 2000 was earned in rewards (- 1000 fee, -1 pay)
-		require.Equal(t, 1_000_000_999, int(micros(t, dl.generator, appID.Address())))
+		// 2000 was earned in rewards (- MinTxnFee fee, -1 pay)
+		require.Equal(t, int(1_000_000_000+2000-proto.MinTxnFee-1), int(micros(t, dl.generator, appID.Address())))
 
 		// Go nonpart
 		nonpart := txntest.Txn{
@@ -1176,7 +1194,8 @@ nonpart:
 			ApplicationArgs: [][]byte{[]byte("nonpart")},
 		}
 		dl.fullBlock(&nonpart)
-		require.Equal(t, 999_999_999, int(micros(t, dl.generator, appID.Address())))
+		// After nonpart: previous balance - MinTxnFee
+		require.Equal(t, int(1_000_000_000+2000-2*proto.MinTxnFee-1), int(micros(t, dl.generator, appID.Address())))
 
 		// Build up Residue in RewardsState so it's ready to pay AGAIN
 		// But expect no rewards
@@ -1185,7 +1204,9 @@ nonpart:
 		}
 		dl.txn(pay.Noted("again"))
 		dl.txn(nonpart.Noted("again"), "cannot change online/offline")
-		require.Equal(t, 999_998_998, int(micros(t, dl.generator, appID.Address())))
+		// After one more successful txn (the nonpart fails): previous balance - MinTxnFee - 1 (pay)
+		// Note: The second nonpart.Noted("again") fails with "cannot change online/offline", so no fee is charged
+		require.Equal(t, int(1_000_000_000+2000-3*proto.MinTxnFee-2), int(micros(t, dl.generator, appID.Address())))
 	})
 }
 
@@ -1638,6 +1659,7 @@ func TestMaxInnerTxForSingleAppCall(t *testing.T) {
 	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
+		proto := config.Consensus[cv]
 
 		program := `
 txn ApplicationArgs 0
@@ -1675,7 +1697,7 @@ assert
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: id0.Address(),
-			Amount:   1_000_000,
+			Amount:   256 * proto.MinTxnFee * 3, // Fund enough for 256 inner txns with more buffer for higher fees
 		}
 
 		app1 := txntest.Txn{
@@ -1691,6 +1713,15 @@ assert
 
 		payset := dl.txns(&app1, &fund0)
 		id1 := payset[0].ApplicationID
+
+		// Fund app1 as well since it will be called by inner transactions
+		fund1 := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: id1.Address(),
+			Amount:   100_000 + proto.MinTxnFee*256, // Minimum balance plus fees for all possible inner calls
+		}
+		dl.txn(&fund1)
 
 		callTxGroup := make([]*txntest.Txn, 16)
 		callTxGroup[0] = &txntest.Txn{
@@ -2736,6 +2767,8 @@ func TestClearStateInnerPay(t *testing.T) {
 			l := newSimpleLedgerWithConsensusVersion(t, genBalances, test.consensus, cfg)
 			defer l.Close()
 
+			proto := config.Consensus[test.consensus]
+
 			app0 := txntest.Txn{
 				Type:   "appl",
 				Sender: addrs[0],
@@ -2785,8 +2818,8 @@ itxn_submit
 			// Check that addrs[1] got paid during optin, and pay txn is in block
 			ad1 := micros(t, l, addrs[1])
 
-			// paid 3000, but 1000 fee, 2000 bump
-			require.Equal(t, uint64(2000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+			// paid 3000, but MinTxnFee fee, 3000-MinTxnFee bump
+			require.Equal(t, 3000-proto.MinTxnFee, ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
 			// InnerTxn in block ([1] position, because followed fund0)
 			require.Len(t, vb.Block().Payset[1].EvalDelta.InnerTxns, 1)
 			require.Equal(t, vb.Block().Payset[1].EvalDelta.InnerTxns[0].Txn.Amount.Raw, uint64(3000))
@@ -2807,16 +2840,16 @@ itxn_submit
 
 			// The pay only happens if the clear state approves (and it was legal back in V30)
 			if test.approval == "int 1" && test.consensus == protocol.ConsensusV30 {
-				// had 2000 bump, now paid 2k, charge 1k, left with 3k total bump
-				require.Equal(t, uint64(3000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+				// had (3000-MinTxnFee) bump, now paid 2k, charge MinTxnFee, left with (3000-MinTxnFee)+2000-MinTxnFee = 5000-2*MinTxnFee total bump
+				require.Equal(t, 5000-2*proto.MinTxnFee, ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
 				// InnerTxn in block
 				require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, id0)
 				require.Equal(t, vb.Block().Payset[0].Txn.OnCompletion, transactions.ClearStateOC)
 				require.Len(t, vb.Block().Payset[0].EvalDelta.InnerTxns, 1)
 				require.Equal(t, vb.Block().Payset[0].EvalDelta.InnerTxns[0].Txn.Amount.Raw, uint64(2000))
 			} else {
-				// Only the fee is paid because pay is "erased", so goes from 2k down to 1k
-				require.Equal(t, uint64(1000), ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
+				// Only the fee is paid because pay is "erased", so goes from (3000-MinTxnFee) down by MinTxnFee = 3000-2*MinTxnFee
+				require.Equal(t, 3000-2*proto.MinTxnFee, ad1-genBalances.Balances[addrs[1]].MicroAlgos.Raw)
 				// no InnerTxn in block
 				require.Equal(t, vb.Block().Payset[0].Txn.ApplicationID, id0)
 				require.Equal(t, vb.Block().Payset[0].Txn.OnCompletion, transactions.ClearStateOC)
@@ -3752,6 +3785,7 @@ func TestAppCallAppDuringInit(t *testing.T) {
 		}
 
 		// now make a new app that calls it during init
+		proto := config.Consensus[cv]
 		callInInit := txntest.Txn{
 			Type:   "appl",
 			Sender: addrs[0],
@@ -3765,7 +3799,7 @@ func TestAppCallAppDuringInit(t *testing.T) {
               int 1
             `,
 			ForeignApps: []basics.AppIndex{approveID},
-			Fee:         2000, // Enough to have the inner fee paid for
+			Fee:         2 * proto.MinTxnFee, // Enough to have the inner fee paid for
 		}
 		// v34 is the likely version for UnfundedSenders. Change if that doesn't happen.
 		var problem string

@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -72,6 +73,8 @@ func TestBasicPayouts(t *testing.T) {
 	c01, account01 := clientAndAccount("Node01")
 	relay, _ := clientAndAccount("Relay")
 
+	proto := config.Consensus[protocol.ConsensusFuture]
+
 	data01 := rekeyreg(a, c01, account01.Address, true)
 	data15 := rekeyreg(a, c15, account15.Address, true)
 
@@ -87,7 +90,7 @@ func TestBasicPayouts(t *testing.T) {
 	// have account01 burn some money to get below the eligibility cap
 	// Starts with 100M, so burn 60M and get under 70M cap.
 	txn, err := c01.SendPaymentFromUnencryptedWallet(account01.Address, basics.Address{}.String(),
-		1000, 60_000_000_000_000, nil)
+		proto.MinTxnFee, 60_000_000_000_000, nil)
 	a.NoError(err)
 	burn, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	a.NoError(err)
@@ -172,7 +175,7 @@ func TestBasicPayouts(t *testing.T) {
 	// 32 rounds) only account01 (who is eligible) is proposing, so drainage
 	// will happen soon after.
 
-	offline, err := c15.MakeUnsignedGoOfflineTx(account15.Address, 0, 0, 1000, [32]byte{})
+	offline, err := c15.MakeUnsignedGoOfflineTx(account15.Address, 0, 0, proto.MinTxnFee, [32]byte{})
 	a.NoError(err)
 	wh, err := c15.GetUnencryptedWalletHandle()
 	a.NoError(err)
@@ -233,7 +236,7 @@ func TestBasicPayouts(t *testing.T) {
 	a.NoError(err)
 
 	// put 50 algos back into the feesink, show it pays out again
-	txn, err = c01.SendPaymentFromUnencryptedWallet(account01.Address, feesink.String(), 1000, 50_000_000, nil)
+	txn, err = c01.SendPaymentFromUnencryptedWallet(account01.Address, feesink.String(), proto.MinTxnFee, 50_000_000, nil)
 	a.NoError(err)
 	refill, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	fmt.Printf("refilled fee sink in %d\n", *refill.ConfirmedRound)
@@ -254,7 +257,7 @@ func TestBasicPayouts(t *testing.T) {
 	wh, err = c01.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	junk := basics.Address{0x01, 0x01}.String()
-	txn, err = c01.SendPaymentFromWallet(wh, nil, account01.Address, junk, 1000, 0, nil, junk /* close to */, 0, 0)
+	txn, err = c01.SendPaymentFromWallet(wh, nil, account01.Address, junk, proto.MinTxnFee, 0, nil, junk /* close to */, 0, 0)
 	a.NoError(err)
 	close, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	a.NoError(err)
@@ -276,8 +279,10 @@ func TestBasicPayouts(t *testing.T) {
 	data, err = relay.AccountData(feesink.String())
 	a.NoError(err)
 	// Don't want to bother dealing with the exact fees paid in/out.
-	a.Less(data.MicroAlgos.Raw, expected+5000)
-	a.Greater(data.MicroAlgos.Raw, expected-5000)
+	// Allow wider tolerance to account for varying MinTxnFee values across protocol versions
+	tolerance := basics.Round(100000) // 0.1 Algo tolerance
+	a.Less(data.MicroAlgos.Raw, uint64(expected+tolerance))
+	a.Greater(data.MicroAlgos.Raw, uint64(expected-tolerance))
 
 	// Lest one be concerned about that cavalier attitude, wait for a few more
 	// rounds, and show feesink is unchanged.
@@ -304,7 +309,8 @@ func rekeyreg(a *require.Assertions, client libgoal.Client, address string, beco
 	// IncentiveEligible, and to get some funds into FeeSink because we will
 	// watch it drain toward bottom of test.
 
-	fee := uint64(1000)
+	proto := config.Consensus[protocol.ConsensusFuture]
+	fee := proto.MinTxnFee
 	if becomeEligible {
 		fee = 12_000_000
 	}

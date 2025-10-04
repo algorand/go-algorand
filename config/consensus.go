@@ -1448,6 +1448,9 @@ func initConsensusProtocols() {
 	v41.LogicSigMsig = false
 	v41.LogicSigLMsig = true
 
+	// TODO: Temporary current min txn fee change!
+	v41.MinTxnFee = 1002 // Placeholder value for testing fee changes
+
 	Consensus[protocol.ConsensusV41] = v41
 
 	// v40 can be upgraded to v41, with an update delay of 7d:
@@ -1461,6 +1464,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.MinTxnFee = 1010 // Placeholder value for testing fee changes
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

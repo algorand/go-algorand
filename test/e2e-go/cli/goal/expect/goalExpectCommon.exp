@@ -526,19 +526,42 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
     return $TRANSACTION_ID
 }
 
+# Get the network's suggested minimum fee by sending a test transaction
+# Returns the fee value
+proc ::AlgorandGoal::GetSuggestedFee { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
+    set SUGGESTED_FEE 0
+    set timeout 30
+    spawn goal clerk send --wallet $WALLET_NAME --from $ACCOUNT_ADDRESS --to $ACCOUNT_ADDRESS -a 1 -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { ::AlgorandGoal::Abort "Timeout waiting for test transaction to determine suggested fee" }
+        -re {Fee set to ([0-9]+)} { set SUGGESTED_FEE $expect_out(1,string); exp_continue }
+        -re {committed in round ([0-9]+)} { exp_continue }
+        eof {}
+    }
+    if { $SUGGESTED_FEE == 0 } {
+        ::AlgorandGoal::Abort "Failed to detect network suggested fee from transaction output"
+    }
+    return $SUGGESTED_FEE
+}
+
 # Account Transfer ( with optional wait flag)
 proc ::AlgorandGoal::AccountTransferWait { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT TEST_PRIMARY_NODE_DIR OUT_FILE WAIT} {
     set timeout 60
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
+        # Build fee argument - if FEE_AMOUNT is 0, omit --fee flag to use suggested fee
+        set FEE_ARG ""
+        if { $FEE_AMOUNT != 0 } {
+            set FEE_ARG "--fee $FEE_AMOUNT"
+        }
         if { $OUT_FILE == "" } {
              if { $WAIT == "" } {
-                 spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --no-wait
+                 spawn goal clerk send {*}$FEE_ARG --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --no-wait
              } else {
-                 spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+                 spawn goal clerk send {*}$FEE_ARG --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
              }
         } else {
-            spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --out $OUT_FILE
+            spawn goal clerk send {*}$FEE_ARG --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --out $OUT_FILE
         }
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out transferring funds"  }

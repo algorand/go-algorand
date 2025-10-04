@@ -53,7 +53,9 @@ teal = """
  itxn_submit
 
  itxn Fee
- int 2000
+ global MinTxnFee
+ int 2
+ *
  ==
  assert
 
