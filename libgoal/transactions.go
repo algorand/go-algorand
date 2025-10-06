@@ -19,7 +19,6 @@ package libgoal
 import (
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 
 	"github.com/algorand/go-algorand/config"
@@ -506,24 +505,16 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid bas
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
-	// Fee is tricky, should taken care last. We encode the final
+	// Fee is tricky, should be taken care of last. We encode the final
 	// transaction to get the size post signing and encoding.
 	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
 		estimatedSize := tx.EstimateEncodedSize()
-		calculatedFee := basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, estimatedSize)
+		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, estimatedSize)
 
-		// DEBUG: Log fee calculation details
-		fmt.Fprintf(os.Stderr, "DEBUG FillUnsignedTxTemplate: TxType=%v, Sender=%v, AppID=%v\n", tx.Type, tx.Sender, tx.ApplicationID)
-		fmt.Fprintf(os.Stderr, "  params.Fee=%d, estimatedSize=%d, calculatedFee=%d\n", params.Fee, estimatedSize, calculatedFee.Raw)
-		fmt.Fprintf(os.Stderr, "  params.MinFee=%d, cparams.MinTxnFee=%d, params.ConsensusVersion=%s\n", params.MinFee, cparams.MinTxnFee, params.ConsensusVersion)
-
-		tx.Fee = calculatedFee
 		if tx.Fee.Raw < cparams.MinTxnFee {
-			fmt.Fprintf(os.Stderr, "  Raising fee from %d to cparams.MinTxnFee=%d\n", tx.Fee.Raw, cparams.MinTxnFee)
 			tx.Fee.Raw = cparams.MinTxnFee
 		}
-		fmt.Fprintf(os.Stderr, "  Final fee: %d\n", tx.Fee.Raw)
 	}
 
 	return tx, nil
