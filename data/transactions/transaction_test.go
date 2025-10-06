@@ -142,3 +142,15 @@ func TestEvalDataEquality(t *testing.T) {
 	}
 
 }
+
+func TestLogicSigEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var empty LogicSig
+	for _, nz := range basics_testing.NearZeros(t, LogicSig{}) {
+		ls := nz.(LogicSig)
+		assert.False(t, ls.Equal(&empty), "Equal() seems to be disregarding something %+v", ls)
+	}
+
+}
