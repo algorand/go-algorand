@@ -18,6 +18,7 @@ package testing
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -35,7 +36,7 @@ func NearZeros(t *testing.T, sample any) []any {
 	if typ.Kind() != reflect.Struct {
 		t.Fatalf("NearZeros: sample must be a struct, got %s", typ.Kind())
 	}
-	paths := CollectPaths(typ, []int{})
+	paths := collectPaths(typ, nil, nil)
 	var results []any
 	for _, path := range paths {
 		inst := makeInstanceWithNonZeroField(typ, path)
@@ -45,14 +46,22 @@ func NearZeros(t *testing.T, sample any) []any {
 }
 
 // CollectPaths walks over the struct type (recursively) and returns a slice of
-// index paths. Each path points to exactly one (exported) sub-field.
+// index paths. Each path points to exactly one (exported) sub-field. If the
+// type supplied is recursive, the path terminates at the recursion point.
 func CollectPaths(typ reflect.Type, prefix []int) [][]int {
+	return collectPaths(typ, prefix, []reflect.Type{})
+}
+
+// collectPaths walks over the struct type (recursively) and returns a slice of
+// index paths. Each path points to exactly one (exported) sub-field.
+// It tracks types in the current path to avoid infinite loops on recursive types.
+func collectPaths(typ reflect.Type, prefix []int, pathStack []reflect.Type) [][]int {
 	var paths [][]int
 
 	switch typ.Kind() {
 	case reflect.Ptr, reflect.Slice, reflect.Array:
 		// Look through container to the element
-		return CollectPaths(typ.Elem(), prefix)
+		return collectPaths(typ.Elem(), prefix, pathStack)
 
 	case reflect.Map:
 		// Record as a leaf because we will just make a single entry in the map
@@ -64,13 +73,23 @@ func CollectPaths(typ reflect.Type, prefix []int) [][]int {
 			return [][]int{prefix}
 		}
 
+		// Check if this type is already in the path stack (cycle detection)
+		if slices.Contains(pathStack, typ) {
+			// We've encountered a cycle, treat this as a leaf
+			return [][]int{prefix}
+		}
+
+		// Add this type to the path stack
+		// Clone to avoid sharing the underlying array across branches
+		newStack := append(slices.Clone(pathStack), typ)
+
 		for i := 0; i < typ.NumField(); i++ {
 			field := typ.Field(i)
 			if !field.IsExported() {
 				continue
 			}
 			newPath := append(append([]int(nil), prefix...), i)
-			subPaths := CollectPaths(field.Type, newPath)
+			subPaths := collectPaths(field.Type, newPath, newStack)
 
 			// If recursion yielded deeper paths, use them
 			if len(subPaths) > 0 {
