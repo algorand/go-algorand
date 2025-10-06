@@ -801,6 +801,8 @@ func TestP2PHTTPHandler(t *testing.T) {
 	// zero clients allowed, rate limiting window (10s) is greater than queue deadline (1s)
 	netB, err := NewP2PNetwork(log, cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
 	require.NoError(t, err)
+	defer netB.Stop() // Ensure netB is properly stopped to clean up DHT resources
+	
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
 	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.RelayRole)

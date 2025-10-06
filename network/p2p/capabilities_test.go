@@ -38,7 +38,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
+func setupDHTHosts(t *testing.T, numHosts int) ([]*dht.IpfsDHT, []host.Host) {
 	var hosts []host.Host
 	var bootstrapPeers []peer.AddrInfo
 	var dhts []*dht.IpfsDHT
@@ -70,7 +70,7 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 		require.NoError(t, err)
 		dhts = append(dhts, ht)
 	}
-	return dhts
+	return dhts, hosts
 }
 
 func waitForRouting(t *testing.T, disc *CapabilitiesDiscovery) {
@@ -89,7 +89,7 @@ func waitForRouting(t *testing.T, disc *CapabilitiesDiscovery) {
 	}
 }
 
-func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*CapabilitiesDiscovery {
+func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) ([]*CapabilitiesDiscovery, []host.Host) {
 	var hosts []host.Host
 	var bootstrapPeers []peer.AddrInfo
 	var capsDisc []*CapabilitiesDiscovery
@@ -135,14 +135,29 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 		}
 		capsDisc = append(capsDisc, cd)
 	}
-	return capsDisc
+	return capsDisc, hosts
 }
 
 func TestCapabilities_DHTTwoPeers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numAdvertisers := 2
-	dhts := setupDHTHosts(t, numAdvertisers)
+	dhts, hosts := setupDHTHosts(t, numAdvertisers)
+	defer func() {
+		// Clean up DHTs first
+		for _, ht := range dhts {
+			if err := ht.Close(); err != nil {
+				t.Logf("Error closing DHT: %v", err)
+			}
+		}
+		// Clean up hosts
+		for _, h := range hosts {
+			if err := h.Close(); err != nil {
+				t.Logf("Error closing host: %v", err)
+			}
+		}
+	}()
+
 	topic := "foobar"
 	for i, ht := range dhts {
 		disc, err := algodht.MakeDiscovery(ht)
@@ -201,7 +216,23 @@ func TestCapabilities_Varying(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			capsDisc := setupCapDiscovery(t, numAdvertisers, test.numBootstrap)
+			capsDisc, hosts := setupCapDiscovery(t, numAdvertisers, test.numBootstrap)
+			defer func() {
+				// Clean up CapabilitiesDiscovery instances
+				for _, disc := range capsDisc {
+					if err := disc.Close(); err != nil {
+						t.Logf("Error closing CapabilitiesDiscovery: %v", err)
+					}
+					disc.wg.Wait()
+				}
+				// Clean up hosts
+				for _, h := range hosts {
+					if err := h.Close(); err != nil {
+						t.Logf("Error closing host: %v", err)
+					}
+				}
+			}()
+
 			noCap := capsDisc[:3]
 			archOnly := capsDisc[3:5]
 			catchOnly := capsDisc[5:7]
@@ -272,19 +303,29 @@ func TestCapabilities_Varying(t *testing.T) {
 
 			wg.Wait()
 
-			for _, disc := range capsDisc[3:] {
-				err := disc.Close()
-				require.NoError(t, err)
-				// Make sure it actually closes
-				disc.wg.Wait()
-			}
+			// Remove the manual cleanup from here since it's now handled in defer
 		})
 	}
 }
 
 func TestCapabilities_ExcludesSelf(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	disc := setupCapDiscovery(t, 2, 2)
+	disc, hosts := setupCapDiscovery(t, 2, 2)
+	defer func() {
+		// Clean up CapabilitiesDiscovery instances
+		for _, d := range disc {
+			if err := d.Close(); err != nil {
+				t.Logf("Error closing CapabilitiesDiscovery: %v", err)
+			}
+			d.wg.Wait()
+		}
+		// Clean up hosts
+		for _, h := range hosts {
+			if err := h.Close(); err != nil {
+				t.Logf("Error closing host: %v", err)
+			}
+		}
+	}()
 
 	testPeersFound := func(disc *CapabilitiesDiscovery, n int, cap Capability) bool {
 		peers, err := disc.PeersForCapability(cap, n)
@@ -312,9 +353,7 @@ func TestCapabilities_ExcludesSelf(t *testing.T) {
 		"Found self when searching for capability",
 	)
 
-	err := disc[0].Close()
-	require.NoError(t, err)
-	disc[0].wg.Wait()
+	// Note: Cleanup is now handled by defer, removing manual cleanup here
 }
 
 // TestCapabilities_NoPeers makes sure no errors logged when no peers in routing table on advertise

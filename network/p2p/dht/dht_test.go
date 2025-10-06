@@ -32,18 +32,32 @@ import (
 func TestDHTBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// Create cancellable context for proper cleanup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	h, err := libp2p.New()
 	require.NoError(t, err)
+	defer h.Close() // Ensure the libp2p host is closed
+
 	dht, err := MakeDHT(
-		context.Background(),
+		ctx,
 		h,
 		"devtestnet",
 		config.GetDefaultLocal(),
 		func() []peer.AddrInfo { return nil })
 	require.NoError(t, err)
+	defer func() {
+		// Close DHT to stop background goroutines
+		if err := dht.Close(); err != nil {
+			t.Logf("Error closing DHT: %v", err)
+		}
+	}()
+
 	_, err = MakeDiscovery(dht)
 	require.NoError(t, err)
-	err = dht.Bootstrap(context.Background())
+	
+	err = dht.Bootstrap(ctx)
 	require.NoError(t, err)
 }
 
@@ -51,14 +65,29 @@ func TestDHTBasicAlgodev(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	logging.SetDebugLogging()
+	
+	// Create cancellable context for proper cleanup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	h, err := libp2p.New()
 	require.NoError(t, err)
+	defer h.Close() // Ensure the libp2p host is closed
+
 	cfg := config.GetDefaultLocal()
 	cfg.DNSBootstrapID = "<network>.algodev.network"
-	dht, err := MakeDHT(context.Background(), h, "betanet", cfg, func() []peer.AddrInfo { return nil })
+	dht, err := MakeDHT(ctx, h, "betanet", cfg, func() []peer.AddrInfo { return nil })
 	require.NoError(t, err)
+	defer func() {
+		// Close DHT to stop background goroutines
+		if err := dht.Close(); err != nil {
+			t.Logf("Error closing DHT: %v", err)
+		}
+	}()
+
 	_, err = MakeDiscovery(dht)
 	require.NoError(t, err)
-	err = dht.Bootstrap(context.Background())
+	
+	err = dht.Bootstrap(ctx)
 	require.NoError(t, err)
 }
