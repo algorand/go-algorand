@@ -104,7 +104,8 @@ if [[ $REGOK != 1 ]]; then
 fi
 
 echo "replay keyreg transaction with different fee"
-${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx --fee 100000
+# Use a fee within the allowed range (MIN_FEE * 2 <= MIN_FEE * 6) to ensure we test the lease check, not the fee check
+${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx --fee $((MIN_FEE * 2))
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx || true)

@@ -252,11 +252,10 @@ int 1`
 			// addrs[1] started with genesisBalance, paid 1 fee (payTxn), sent 1_000_000, remainder to addrs[3]
 			expectedAddr3 := genesisBalance + (genesisBalance - proto.MinTxnFee - 1_000_000)
 
-			// innerAppAddress: started with 1_000_000, inner txn spawned an app
-			// The MBR cost is constant at 51_000 regardless of MinTxnFee
-			// (Inner txn fees are paid by the outer transaction via fee pooling, not deducted from innerAppAddress)
-			const innerAppMBRCost = 51_000
-			expectedInnerApp := uint64(1_000_000) - innerAppMBRCost
+			// innerAppAddress: started with 1_000_000, spawned 3 inner txns (1 app call + 2 payments)
+			// Each inner txn pays its own fee from the innerAppAddress balance
+			// Total fees: 3 * proto.MinTxnFee
+			expectedInnerApp := uint64(1_000_000) - 3*proto.MinTxnFee
 
 			expectedAccts := ledgercore.AccountDeltas{
 				Accts: []ledgercore.BalanceRecord{
