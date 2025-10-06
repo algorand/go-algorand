@@ -694,18 +694,18 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 }
 
 func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) model.NodeStatusResponse {
-	currentRnd, err := client.CurrentRound()
+	txParams, err := client.SuggestedParams()
 	require.NoError(t, err)
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, 1000, currentRnd, part.LastValid, [32]byte{}, true)
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, txParams.Fee, txParams.LastRound+1, part.LastValid, [32]byte{}, true)
 	assert.NoError(t, err)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
 	require.NoError(t, err)
 	require.NotEmpty(t, onlineTxID)
-	status, err := client.WaitForRound(currentRnd + 1)
+	status, err := client.WaitForRound(txParams.LastRound + 1)
 	require.NoError(t, err)
 	return status
 }
