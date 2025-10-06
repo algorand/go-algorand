@@ -153,12 +153,12 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		return err
 	}
 
-	// Remove the MBR for globals and pages for the app from the renter
-	renter := params.Renter
-	if renter.IsZero() {
-		renter = creator
+	// Remove the MBR for globals and pages for the app from the sponsor
+	sponsor := params.SizeSponsor
+	if sponsor.IsZero() {
+		sponsor = creator
 	}
-	record, err = balances.Get(renter, false)
+	record, err = balances.Get(sponsor, false)
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	if balances.ConsensusParams().EnableProperExtraPageAccounting {
 		record.TotalExtraAppPages = basics.SubSaturate(record.TotalExtraAppPages, params.ExtraProgramPages)
 	}
-	err = balances.Put(renter, record)
+	err = balances.Put(sponsor, record)
 	if err != nil {
 		return err
 	}
@@ -215,27 +215,27 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// Install the new epp and schema (if its sufficient for current globals)
 	if sizeChange {
 		// We'll call the account that is currently on the hook for MBR space
-		// the "renter".  It begins as the creator, but changes whenever there
-		// is a sizeChange update.
+		// the "size sponsor".  It begins as the creator, but changes whenever
+		// there is a sizeChange update.
 
-		renter := params.Renter
-		if renter.IsZero() {
-			renter = creator
+		sponsor := params.SizeSponsor
+		if sponsor.IsZero() {
+			sponsor = creator
 		}
 
-		// Since the renter and the updater may be the same account, we make the
-		// entire change to the renter, including Put(), before we Get() the
+		// Since the sponsor and the updater may be the same account, we make the
+		// entire change to the sponsor, including Put(), before we Get() the
 		// updater. (similar to how Move() works)
 
-		renterRecord, err := balances.Get(renter, false)
+		sponsorRecord, err := balances.Get(sponsor, false)
 		if err != nil {
 			return err
 		}
-		renterRecord.TotalAppSchema =
-			renterRecord.TotalAppSchema.SubSchema(params.GlobalStateSchema)
-		renterRecord.TotalExtraAppPages =
-			basics.SubSaturate(renterRecord.TotalExtraAppPages, params.ExtraProgramPages)
-		err = balances.Put(renter, renterRecord)
+		sponsorRecord.TotalAppSchema =
+			sponsorRecord.TotalAppSchema.SubSchema(params.GlobalStateSchema)
+		sponsorRecord.TotalExtraAppPages =
+			basics.SubSaturate(sponsorRecord.TotalExtraAppPages, params.ExtraProgramPages)
+		err = balances.Put(sponsor, sponsorRecord)
 		if err != nil {
 			return err
 		}
@@ -247,9 +247,9 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 		params.GlobalStateSchema = ac.GlobalStateSchema
 		params.ExtraProgramPages = ac.ExtraProgramPages
 		if updater == creator {
-			params.Renter = basics.Address{}
+			params.SizeSponsor = basics.Address{}
 		} else {
-			params.Renter = updater
+			params.SizeSponsor = updater
 		}
 
 		updaterRecord, err := balances.Get(updater, false)

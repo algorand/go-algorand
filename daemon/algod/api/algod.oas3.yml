@@ -1399,8 +1399,8 @@
           "local-state-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
           },
-          "renter": {
-            "description": "\\[r\\] the account responsible for extra pages and global state MBR",
+          "size-sponsor": {
+            "description": "\\[ss\\] the account responsible for extra pages and global state MBR",
             "type": "string",
             "x-algorand-format": "Address"
           },

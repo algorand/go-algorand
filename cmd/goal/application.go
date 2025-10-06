@@ -1134,9 +1134,9 @@ var infoAppCmd = &cobra.Command{
 			fmt.Printf("Program version:       %d\n", *ver)
 		}
 
-		renter := params.Renter
-		if renter != nil {
-			fmt.Printf("Program renter:        %v\n", *renter)
+		sponsor := params.SizeSponsor
+		if sponsor != nil {
+			fmt.Printf("Size sponsor:        %v\n", *sponsor)
 		}
 
 		epp := params.ExtraProgramPages

@@ -395,7 +395,7 @@ func ApplicationParamsToAppParams(gap *model.ApplicationParams) (basics.AppParam
 	}
 	ap.GlobalState = kv
 
-	ap.Renter, err = nilToZeroAddr(gap.Renter)
+	ap.SizeSponsor, err = nilToZeroAddr(gap.SizeSponsor)
 	if err != nil {
 		return basics.AppParams{}, err
 	}
@@ -422,8 +422,8 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 				NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
 				NumUint:      appParams.GlobalStateSchema.NumUint,
 			},
-			Version: omitEmpty(appParams.Version),
-			Renter:  addrOrNil(appParams.Renter),
+			Version:     omitEmpty(appParams.Version),
+			SizeSponsor: addrOrNil(appParams.SizeSponsor),
 		},
 	}
 	return app

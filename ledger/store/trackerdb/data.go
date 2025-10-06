@@ -134,7 +134,7 @@ type ResourcesData struct {
 
 	Version uint64 `codec:"A"`
 
-	Renter basics.Address `codec:"B"`
+	SizeSponsor basics.Address `codec:"B"`
 }
 
 // BaseVotingData is the base struct used to store voting data
@@ -735,7 +735,7 @@ func (rd *ResourcesData) ClearAppParams() {
 	rd.GlobalStateSchemaNumByteSlice = 0
 	rd.ExtraProgramPages = 0
 	rd.Version = 0
-	rd.Renter = basics.Address{}
+	rd.SizeSponsor = basics.Address{}
 	hadHolding := (rd.ResourceFlags & ResourceFlagsNotHolding) == ResourceFlagsHolding
 	rd.ResourceFlags -= rd.ResourceFlags & ResourceFlagsOwnership
 	rd.ResourceFlags &= ^ResourceFlagsEmptyApp
@@ -755,7 +755,7 @@ func (rd *ResourcesData) SetAppParams(ap basics.AppParams, haveHoldings bool) {
 	rd.GlobalStateSchemaNumByteSlice = ap.GlobalStateSchema.NumByteSlice
 	rd.ExtraProgramPages = ap.ExtraProgramPages
 	rd.Version = ap.Version
-	rd.Renter = ap.Renter
+	rd.SizeSponsor = ap.SizeSponsor
 	rd.ResourceFlags |= ResourceFlagsOwnership
 	if !haveHoldings {
 		rd.ResourceFlags |= ResourceFlagsNotHolding
@@ -784,7 +784,7 @@ func (rd *ResourcesData) GetAppParams() basics.AppParams {
 		},
 		ExtraProgramPages: rd.ExtraProgramPages,
 		Version:           rd.Version,
-		Renter:            rd.Renter,
+		SizeSponsor:       rd.SizeSponsor,
 	}
 }
 

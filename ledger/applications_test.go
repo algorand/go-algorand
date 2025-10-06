@@ -1692,7 +1692,7 @@ func TestExtraPagesUpdate(t *testing.T) {
 			return // no more tests, growing is disallowed
 		}
 		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
-		// addr[1] is now the renter for the small app, which now has 1 epp
+		// addr[1] is now the sponsor for the small app, which now has 1 epp
 		a.Equal(proto.MinBalance+4*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
 
 		dl.txn(&txntest.Txn{
@@ -1704,7 +1704,7 @@ func TestExtraPagesUpdate(t *testing.T) {
 			ExtraProgramPages: 3,
 		})
 		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
-		// addr[1] is still the renter for the small appp, which now has 1 epp (and big creator)
+		// addr[1] is still the sponsor for the small appp, which now has 1 epp (and big creator)
 		a.Equal(proto.MinBalance+2*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
 		// but addr[2] has taken over rent for the big app (which is now 3)
 		a.Equal(proto.MinBalance+3*proto.AppFlatParamsMinBalance, mbr(addrs[2]))
@@ -1716,7 +1716,7 @@ func TestExtraPagesUpdate(t *testing.T) {
 			OnCompletion:  transactions.DeleteApplicationOC,
 		})
 		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
-		// addr[1] is only the renter for the small app, which now has 1 epp
+		// addr[1] is only the sponsor for the small app, which now has 1 epp
 		a.Equal(proto.MinBalance+1*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
 		// addr[2] responsibility for big app is gone
 		a.Equal(proto.MinBalance, mbr(addrs[2]))
@@ -1811,7 +1811,7 @@ itxn_submit
 		dl.txn(&innerUpdate)
 		// no extra MBR on the original creator
 		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
-		// the app account is now the renter for the app, which now has 2,3,4
+		// the app account is now the sponsor for the app, which now has 2,3,4
 		a.Equal(proto.MinBalance+
 			2*proto.AppFlatParamsMinBalance+ // epp
 			3*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance)+

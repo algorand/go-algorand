@@ -1196,7 +1196,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(appIdx, b.deAllocatedAppIdx)
-	a.Equal(2, b.put) // creator + renter (who happen to be the same here)
+	a.Equal(2, b.put) // creator + sponsor (who happen to be the same here)
 	a.Zero(b.putAppParams)
 	a.Equal(1, b.deleteAppParams)
 	br = b.balances[creator]
@@ -1228,7 +1228,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 		err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 		a.NoError(err)
 		a.Equal(appIdx, b.deAllocatedAppIdx)
-		a.Equal(2, b.put) // creator + renter (who happen to be the same here)
+		a.Equal(2, b.put) // creator + sponsor (who happen to be the same here)
 		a.Zero(b.putAppParams)
 		a.Equal(1, b.deleteAppParams)
 		br = b.balances[creator]

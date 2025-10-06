@@ -2034,7 +2034,7 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 		zb0003Len--
 		zb0003Mask |= 0x80
 	}
-	if (*z).Renter.MsgIsZero() {
+	if (*z).SizeSponsor.MsgIsZero() {
 		zb0003Len--
 		zb0003Mask |= 0x100
 	}
@@ -2135,9 +2135,9 @@ func (z *AppParams) MarshalMsg(b []byte) (o []byte) {
 			}
 		}
 		if (zb0003Mask & 0x100) == 0 { // if not empty
-			// string "r"
-			o = append(o, 0xa1, 0x72)
-			o = (*z).Renter.MarshalMsg(o)
+			// string "ss"
+			o = append(o, 0xa2, 0x73, 0x73)
+			o = (*z).SizeSponsor.MarshalMsg(o)
 		}
 		if (zb0003Mask & 0x200) == 0 { // if not empty
 			// string "v"
@@ -2405,9 +2405,9 @@ func (z *AppParams) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 		}
 		if zb0003 > 0 {
 			zb0003--
-			bts, err = (*z).Renter.UnmarshalMsgWithState(bts, st)
+			bts, err = (*z).SizeSponsor.UnmarshalMsgWithState(bts, st)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Renter")
+				err = msgp.WrapError(err, "struct-from-array", "SizeSponsor")
 				return
 			}
 		}
@@ -2652,10 +2652,10 @@ func (z *AppParams) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o
 					err = msgp.WrapError(err, "Version")
 					return
 				}
-			case "r":
-				bts, err = (*z).Renter.UnmarshalMsgWithState(bts, st)
+			case "ss":
+				bts, err = (*z).SizeSponsor.UnmarshalMsgWithState(bts, st)
 				if err != nil {
-					err = msgp.WrapError(err, "Renter")
+					err = msgp.WrapError(err, "SizeSponsor")
 					return
 				}
 			default:
@@ -2689,13 +2689,13 @@ func (z *AppParams) Msgsize() (s int) {
 			s += 0 + msgp.StringPrefixSize + len(zb0001) + zb0002.Msgsize()
 		}
 	}
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size + 2 + msgp.Uint64Size + 2 + (*z).Renter.Msgsize()
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size + 2 + msgp.Uint64Size + 3 + (*z).SizeSponsor.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *AppParams) MsgIsZero() bool {
-	return (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && (len((*z).GlobalState) == 0) && (((*z).StateSchemas.LocalStateSchema.NumUint == 0) && ((*z).StateSchemas.LocalStateSchema.NumByteSlice == 0)) && (((*z).StateSchemas.GlobalStateSchema.NumUint == 0) && ((*z).StateSchemas.GlobalStateSchema.NumByteSlice == 0)) && ((*z).ExtraProgramPages == 0) && ((*z).Version == 0) && ((*z).Renter.MsgIsZero())
+	return (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && (len((*z).GlobalState) == 0) && (((*z).StateSchemas.LocalStateSchema.NumUint == 0) && ((*z).StateSchemas.LocalStateSchema.NumByteSlice == 0)) && (((*z).StateSchemas.GlobalStateSchema.NumUint == 0) && ((*z).StateSchemas.GlobalStateSchema.NumByteSlice == 0)) && ((*z).ExtraProgramPages == 0) && ((*z).Version == 0) && ((*z).SizeSponsor.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -2706,7 +2706,7 @@ func AppParamsMaxSize() (s int) {
 	s += bounds.EncodedMaxKeyValueEntries * (msgp.StringPrefixSize + bounds.MaxAppBytesKeyLen)
 	// Adding size of map values for z.GlobalState
 	s += bounds.EncodedMaxKeyValueEntries * (TealValueMaxSize())
-	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size + 2 + msgp.Uint64Size + 2 + AddressMaxSize()
+	s += 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 5 + 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint32Size + 2 + msgp.Uint64Size + 3 + AddressMaxSize()
 	return
 }
 
