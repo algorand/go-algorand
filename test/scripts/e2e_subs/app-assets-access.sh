@@ -29,10 +29,19 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 MIN_FEE=$(get_min_fee)
 echo "Network MinFee: $MIN_FEE"
 
-# Create a smaller account so rewards won't change balances.
+# Under 1 Algo (1,000,000 microAlgos) receives no rewards. RewardUnit = 1e6.
+# This test uses approximately 30-35 transactions from SMALL account
+NEEDED_FOR_FEES=$((MIN_FEE * 35))
+
+# Ensure we don't exceed reward threshold while having enough for fees
+if [ $NEEDED_FOR_FEES -gt 999999 ]; then
+    echo "ERROR: MIN_FEE=$MIN_FEE too high - would require balance >= 1 Algo and earn rewards"
+    exit 1
+fi
+
+# Cap at 999999 to prevent crossing reward threshold (stay below 1,000,000)
+SMALL_FUNDING=$((999999 < (999000 + NEEDED_FOR_FEES) ? 999999 : 999000 + NEEDED_FOR_FEES))
 SMALL=$(${gcmd} account new | awk '{ print $6 }')
-# Under one algo receives no rewards. Scale funding with MinTxnFee (base 999000 + buffer for fees).
-SMALL_FUNDING=$((999000 + MIN_FEE * 35))  # 35 transactions * MIN_FEE as buffer
 ${gcmd} clerk send -a $SMALL_FUNDING -f "$ACCOUNT" -t "$SMALL"
 
 function balance {
