@@ -123,8 +123,10 @@ func TestSendingNotClosingAccountErrs(t *testing.T) {
 	if someAddress == "" {
 		t.Error("no addr with funds")
 	}
-	amt := someBal - 10000 - 1
-	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, amt, nil, "", 0, 0)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+	amt := someBal - params.Fee - 1
+	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.Fee, amt, nil, "", 0, 0)
 	a.Error(err)
 }
 

@@ -679,8 +679,11 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	addrs2, err := client2.ListAddresses(wallet2)
 	a.NoError(err)
 
+	params, err := client2.SuggestedParams()
+	a.NoError(err)
+
 	// let the second node have insufficient stake for proposing a block
-	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 4999999999000000, nil)
+	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.Fee, 4999999999000000, nil)
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
@@ -704,7 +707,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	a.NoError(err)
 
 	// let the 2nd client send a transaction
-	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 50000, nil)
+	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.Fee, 50000, nil)
 	a.NoError(err)
 
 	status, err = client2.Status()
@@ -786,8 +789,11 @@ func TestReadyEndpoint(t *testing.T) {
 	addrs2, err := client2.ListAddresses(wallet2)
 	a.NoError(err)
 
+	params, err := client2.SuggestedParams()
+	a.NoError(err)
+
 	// let the second node have insufficient stake for proposing a block
-	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 4999999999000000, nil)
+	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.Fee, 4999999999000000, nil)
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
@@ -924,8 +930,11 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	addrs2, err := client2.ListAddresses(wallet2)
 	a.NoError(err)
 
+	params, err := client2.SuggestedParams()
+	a.NoError(err)
+
 	// let the second node have insufficient stake for proposing a block
-	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 4999999999000000, nil)
+	tx, err := client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.Fee, 4999999999000000, nil)
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
@@ -940,7 +949,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	client1.FullStop()
 
 	// let the 2nd client send a transaction
-	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], 1000, 50000, nil)
+	tx, err = client2.SendPaymentFromUnencryptedWallet(addrs2[0], addrs1[0], params.Fee, 50000, nil)
 	a.NoError(err)
 
 	// now that the primary missed the transaction, start it, and let it catchup

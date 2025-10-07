@@ -253,7 +253,9 @@ func wait(f *fixtures.RestClientFixture, a *require.Assertions, count basics.Rou
 
 func pay(a *require.Assertions, c libgoal.Client,
 	from string, to string, amount uint64) v2.PreEncodedTxInfo {
-	pay, err := c.SendPaymentFromUnencryptedWallet(from, to, 1000, amount, nil)
+	params, err := c.SuggestedParams()
+	a.NoError(err)
+	pay, err := c.SendPaymentFromUnencryptedWallet(from, to, params.Fee, amount, nil)
 	a.NoError(err)
 	tx, err := c.WaitForConfirmedTxn(pay.LastValid, pay.ID().String())
 	a.NoError(err)
