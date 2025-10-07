@@ -38,20 +38,22 @@ jobs:
         uses: ./.github/actions/setup-test
       - name: Run tests
         run: |
-          mkdir -p ~/test_results/ubuntu-24.04_test
-          # Profile the slow test
-          go test -v -run TestRandomizedEncodingFullDiskState \
-            -cpuprofile=~/test_results/ubuntu-24.04_test/cpu.prof \
-            -memprofile=~/test_results/ubuntu-24.04_test/mem.prof \
+          mkdir -p /home/runner/test_results/ubuntu-24.04_test
+          # Profile the slow test with gotestsum
+          gotestsum --format standard-quiet \
+            --jsonfile /home/runner/test_results/ubuntu-24.04_test/testresults.json \
+            -- -run TestRandomizedEncodingFullDiskState \
+            -cpuprofile=/home/runner/test_results/ubuntu-24.04_test/cpu.prof \
+            -memprofile=/home/runner/test_results/ubuntu-24.04_test/mem.prof \
             -tags "sqlite_unlock_notify sqlite_omit_load_extension" \
             ./agreement/
           # Generate text reports from profiles
-          go tool pprof -top -cum ~/test_results/ubuntu-24.04_test/cpu.prof > ~/test_results/ubuntu-24.04_test/cpu_profile.txt || true
-          go tool pprof -top -sample_index=alloc_space ~/test_results/ubuntu-24.04_test/mem.prof > ~/test_results/ubuntu-24.04_test/mem_profile.txt || true
+          go tool pprof -top -cum /home/runner/test_results/ubuntu-24.04_test/cpu.prof > /home/runner/test_results/ubuntu-24.04_test/cpu_profile.txt || true
+          go tool pprof -top -sample_index=alloc_space /home/runner/test_results/ubuntu-24.04_test/mem.prof > /home/runner/test_results/ubuntu-24.04_test/mem_profile.txt || true
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: test-profile-results-${{ github.run_id }}
-          path: ~/test_results
+          path: /home/runner/test_results
           retention-days: 7
