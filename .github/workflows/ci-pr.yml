@@ -13,6 +13,10 @@ env:
   ALGOTEST: 1
   SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
   SKIP_GO_INSTALLATION: True
+  # Partition configuration - edit these to change partition counts
+  TEST_PARTITIONS: 6
+  INTEGRATION_PARTITIONS: 5
+  E2E_EXPECT_PARTITIONS: 10
 
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
@@ -28,11 +32,11 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4, 5] # Must match TEST_PARTITIONS above
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 6
+      PARTITION_TOTAL: ${{ env.TEST_PARTITIONS }}
       CIRCLECI: true
       SHORTTEST: "-short"
     steps:
@@ -109,12 +113,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4] # Must match INTEGRATION_PARTITIONS above
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 5
+      PARTITION_TOTAL: ${{ env.INTEGRATION_PARTITIONS }}
       E2E_TEST_FILTER: GO
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
@@ -169,12 +173,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # Must match E2E_EXPECT_PARTITIONS above
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 10
+      PARTITION_TOTAL: ${{ env.E2E_EXPECT_PARTITIONS }}
       E2E_TEST_FILTER: EXPECT
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
@@ -277,19 +281,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - test_type: test
-            platform: ubuntu-24.04
-            partition_total: 6
-          - test_type: integration
-            platform: ubuntu-24.04
-            partition_total: 5
-          - test_type: e2e_expect
-            platform: ubuntu-24.04
-            partition_total: 10
-          - test_type: e2e_subs
-            platform: ubuntu-24.04
-            partition_total: 0
+        test_type: ["test", "integration", "e2e_expect", "e2e_subs"]
+        platform: ["ubuntu-24.04"]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -308,13 +301,28 @@ jobs:
               TestAlgohWithExpect \
               TestGoalWithExpect \
               TestTealdbgWithExpect
+      - name: Determine partition total
+        if: ${{ !cancelled() && matrix.test_type != 'e2e_subs' }}
+        shell: bash
+        run: |
+          case "${{ matrix.test_type }}" in
+            test)
+              echo "PARTITION_TOTAL=${{ env.TEST_PARTITIONS }}" >> $GITHUB_ENV
+              ;;
+            integration)
+              echo "PARTITION_TOTAL=${{ env.INTEGRATION_PARTITIONS }}" >> $GITHUB_ENV
+              ;;
+            e2e_expect)
+              echo "PARTITION_TOTAL=${{ env.E2E_EXPECT_PARTITIONS }}" >> $GITHUB_ENV
+              ;;
+          esac
       - name: Save timing data for future partition optimization
-        if: ${{ !cancelled() && matrix.partition_total > 0 }}
+        if: ${{ !cancelled() && matrix.test_type != 'e2e_subs' }}
         uses: ./.github/actions/save-partition-timing
         with:
           test-type: ${{ matrix.test_type }}
           platform: ${{ matrix.platform }}
-          partition-total: ${{ matrix.partition_total }}
+          partition-total: ${{ env.PARTITION_TOTAL }}
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify

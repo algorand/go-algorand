@@ -8,15 +8,30 @@ inputs:
     description: 'Platform (ubuntu-24.04, macos-14, etc.)'
     required: true
   partition-total:
-    description: 'Total number of partitions'
+    description: 'Expected total number of partitions'
     required: true
 runs:
   using: 'composite'
   steps:
-    - name: Set cache date
+    - name: Set cache date and validate partition total
       shell: bash
       run: |
         echo "TIMING_CACHE_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+        # Validate partition total matches actual number of partition directories
+        TEST_RESULTS_DIR="$HOME/test_results/${{ inputs.platform }}_${{ inputs.test-type }}"
+        if [ -d "$TEST_RESULTS_DIR" ]; then
+          ACTUAL_PARTITIONS=$(find "$TEST_RESULTS_DIR" -maxdepth 1 -type d -name '[0-9]*' | wc -l | tr -d ' ')
+          EXPECTED_PARTITIONS="${{ inputs.partition-total }}"
+          if [ "$ACTUAL_PARTITIONS" != "$EXPECTED_PARTITIONS" ]; then
+            echo "ERROR: Expected $EXPECTED_PARTITIONS partitions but found $ACTUAL_PARTITIONS"
+            echo "This indicates a configuration mismatch in ci-pr.yml"
+            exit 1
+          fi
+          echo "Validated $ACTUAL_PARTITIONS partitions match expected count"
+        else
+          echo "ERROR: No test results directory found at $TEST_RESULTS_DIR"
+          exit 1
+        fi
     - name: Prepare timing data directory
       shell: bash
       run: |

@@ -24,8 +24,9 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
-	"sync"
 	"testing"
+
+	"github.com/algorand/go-deadlock"
 )
 
 // testTiming represents the duration of a test
@@ -42,7 +43,7 @@ type partitionState struct {
 
 // partitionAssignments caches the computed partition assignments
 var (
-	assignmentsLock sync.Mutex
+	assignmentsLock  deadlock.Mutex
 	assignmentsCache *partitionState
 )
 
