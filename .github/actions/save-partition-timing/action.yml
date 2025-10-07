@@ -10,13 +10,15 @@ inputs:
   partition-total:
     description: 'Expected total number of partitions'
     required: true
+  run-id:
+    description: 'GitHub run ID for unique cache key'
+    required: true
 runs:
   using: 'composite'
   steps:
-    - name: Set cache date and validate partition total
+    - name: Validate partition total
       shell: bash
       run: |
-        echo "TIMING_CACHE_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
         # Validate partition total matches actual number of partition directories
         TEST_RESULTS_DIR="$HOME/test_results/${{ inputs.platform }}_${{ inputs.test-type }}"
         if [ -d "$TEST_RESULTS_DIR" ]; then
@@ -60,4 +62,5 @@ runs:
       if: always()
       with:
         path: results
-        key: test-timing-${{ inputs.test-type }}-${{ inputs.platform }}-${{ inputs.partition-total }}-${{ github.ref_name }}-${{ env.TIMING_CACHE_DATE }}
+        # Use run-id to create unique key, but restore-keys will find the latest
+        key: test-timing-${{ inputs.test-type }}-${{ inputs.platform }}-${{ inputs.partition-total }}-${{ github.ref_name }}-${{ inputs.run-id }}

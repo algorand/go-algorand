@@ -320,6 +320,7 @@ jobs:
           test-type: ${{ matrix.test_type }}
           platform: ${{ matrix.platform }}
           partition-total: ${{ env.PARTITION_TOTAL }}
+          run-id: ${{ github.run_id }}
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify

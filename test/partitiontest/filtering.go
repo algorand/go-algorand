@@ -108,7 +108,12 @@ func computePartitionAssignments(partitions int) map[string]int {
 	}
 
 	if os.Getenv("PARTITION_DEBUG") != "" {
-		fmt.Fprintf(os.Stderr, "[partition] Using greedy algorithm with %d tests for %d partitions\n", len(timings), partitions)
+		// Compute checksum of test names for debugging cache consistency
+		h := fnv.New64a()
+		for _, t := range timings {
+			h.Write([]byte(t.testName))
+		}
+		fmt.Fprintf(os.Stderr, "[partition] Using greedy algorithm with %d tests for %d partitions (checksum: %x)\n", len(timings), partitions, h.Sum64())
 	}
 
 	// Sort tests by duration (largest first) for greedy bin-packing
