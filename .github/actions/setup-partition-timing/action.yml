@@ -1,0 +1,45 @@
+name: 'Setup Partition Timing Data'
+description: 'Download test timing data from previous runs to optimize partition assignments'
+inputs:
+  test-type:
+    description: 'Test type (test, integration, e2e_expect)'
+    required: true
+  platform:
+    description: 'Platform (ubuntu-24.04, macos-14, etc.)'
+    required: true
+  partition-total:
+    description: 'Total number of partitions'
+    required: true
+outputs:
+  cache-hit:
+    description: 'Whether timing data was found in cache'
+    value: ${{ steps.restore-cache.outputs.cache-hit }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Set cache date
+      shell: bash
+      run: |
+        echo "TIMING_CACHE_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+    - name: Restore timing data from cache
+      id: restore-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: results
+        key: test-timing-${{ inputs.test-type }}-${{ inputs.platform }}-${{ inputs.partition-total }}-${{ github.ref_name }}-${{ env.TIMING_CACHE_DATE }}
+        restore-keys: |
+          test-timing-${{ inputs.test-type }}-${{ inputs.platform }}-${{ inputs.partition-total }}-${{ github.ref_name }}-
+          test-timing-${{ inputs.test-type }}-${{ inputs.platform }}-${{ inputs.partition-total }}-master-
+          test-timing-${{ inputs.test-type }}-${{ inputs.platform }}-${{ inputs.partition-total }}-
+    - name: Set PARTITION_TIMING_PATH
+      shell: bash
+      run: |
+        if [ -d "results" ]; then
+          echo "PARTITION_TIMING_PATH=${{ github.workspace }}/results" >> $GITHUB_ENV
+          echo "Found cached timing data at ${{ github.workspace }}/results"
+          # Show some stats about the timing data
+          TEST_COUNT=$(find results -name "testresults.json" -exec cat {} \; | grep -c '"Action":"pass"' || echo "0")
+          echo "Loaded timing data for approximately $TEST_COUNT test results"
+        else
+          echo "No cached timing data found, will use hash-based partitioning"
+        fi

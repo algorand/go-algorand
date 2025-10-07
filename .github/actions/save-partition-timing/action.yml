@@ -1,0 +1,48 @@
+name: 'Save Partition Timing Data'
+description: 'Save test timing data to cache for future partition optimization'
+inputs:
+  test-type:
+    description: 'Test type (test, integration, e2e_expect)'
+    required: true
+  platform:
+    description: 'Platform (ubuntu-24.04, macos-14, etc.)'
+    required: true
+  partition-total:
+    description: 'Total number of partitions'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Set cache date
+      shell: bash
+      run: |
+        echo "TIMING_CACHE_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+    - name: Prepare timing data directory
+      shell: bash
+      run: |
+        mkdir -p results/${{ inputs.platform }}_${{ inputs.test-type }}
+        # Copy all testresults.json files from the test run
+        TEST_RESULTS_DIR="$HOME/test_results/${{ inputs.platform }}_${{ inputs.test-type }}"
+        if [ -d "$TEST_RESULTS_DIR" ]; then
+          # Find and copy all testresults.json files, preserving structure
+          find "$TEST_RESULTS_DIR" -name "testresults.json" -type f | while read file; do
+            # Get relative path from test_results
+            rel_path="${file#$HOME/test_results/}"
+            target_dir="results/$(dirname "$rel_path")"
+            mkdir -p "$target_dir"
+            cp "$file" "$target_dir/"
+          done
+          echo "Copied timing data to results/ directory"
+          echo "Timing data files:"
+          find results -name "testresults.json" -type f
+          echo "Total timing entries:"
+          find results -name "testresults.json" -exec cat {} \; | grep -c '"Action":"pass"' || echo "0"
+        else
+          echo "No test results found at $TEST_RESULTS_DIR"
+        fi
+    - name: Save timing data to cache
+      uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: results
+        key: test-timing-${{ inputs.test-type }}-${{ inputs.platform }}-${{ inputs.partition-total }}-${{ github.ref_name }}-${{ env.TIMING_CACHE_DATE }}

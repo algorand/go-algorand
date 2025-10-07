@@ -44,6 +44,12 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           cache-prefix: test
+      - name: Restore partition timing data
+        uses: ./.github/actions/setup-partition-timing
+        with:
+          test-type: test
+          platform: ${{ matrix.platform }}
+          partition-total: ${{ env.PARTITION_TOTAL }}
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
@@ -121,6 +127,12 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           cache-prefix: build-e2e
+      - name: Restore partition timing data
+        uses: ./.github/actions/setup-partition-timing
+        with:
+          test-type: integration
+          platform: ${{ matrix.platform }}
+          partition-total: ${{ env.PARTITION_TOTAL }}
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Build e2e binaries
@@ -175,6 +187,12 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           cache-prefix: build-e2e
+      - name: Restore partition timing data
+        uses: ./.github/actions/setup-partition-timing
+        with:
+          test-type: e2e_expect
+          platform: ${{ matrix.platform }}
+          partition-total: ${{ env.PARTITION_TOTAL }}
       - name: Setup test environment
         uses: ./.github/actions/setup-test
         with:
@@ -259,8 +277,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_type: ["test", "integration", "e2e_expect", "e2e_subs"]
-        platform: ["ubuntu-24.04"]
+        include:
+          - test_type: test
+            platform: ubuntu-24.04
+            partition_total: 6
+          - test_type: integration
+            platform: ubuntu-24.04
+            partition_total: 5
+          - test_type: e2e_expect
+            platform: ubuntu-24.04
+            partition_total: 10
+          - test_type: e2e_subs
+            platform: ubuntu-24.04
+            partition_total: 0
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -279,6 +308,13 @@ jobs:
               TestAlgohWithExpect \
               TestGoalWithExpect \
               TestTealdbgWithExpect
+      - name: Save timing data for future partition optimization
+        if: ${{ !cancelled() && matrix.partition_total > 0 }}
+        uses: ./.github/actions/save-partition-timing
+        with:
+          test-type: ${{ matrix.test_type }}
+          platform: ${{ matrix.platform }}
+          partition-total: ${{ matrix.partition_total }}
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
