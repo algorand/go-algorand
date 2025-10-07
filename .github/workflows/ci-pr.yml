@@ -43,8 +43,6 @@ jobs:
         uses: ./.github/actions/setup-test
       - name: Run tests
         run: |
-          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
           mkdir -p /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}
           gotestsum --format standard-quiet \
             --junitfile /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/results.xml \
@@ -53,7 +51,7 @@ jobs:
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
             -cpuprofile=/home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/cpu.prof \
             -memprofile=/home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/mem.prof \
-            $PACKAGE_NAMES
+            ./agreement/
           # Generate text reports from profiles
           go tool pprof -top -cum /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/cpu.prof > /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/cpu_profile.txt || true
           go tool pprof -top -sample_index=alloc_space /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/mem.prof > /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/mem_profile.txt || true
