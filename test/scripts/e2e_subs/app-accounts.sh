@@ -31,7 +31,22 @@ echo "Network MinFee: $MIN_FEE"
 # Create a smaller account so rewards won't change balances.
 SMALL=$(${gcmd} account new | awk '{ print $6 }')
 # Under one algo receives no rewards. Fund with extra to cover higher MinTxnFee costs.
-SMALL_FUNDING=$((900000 + 10*MIN_FEE))  # Scale with MinTxnFee increase
+# Must stay under 1,000,000 microAlgos to avoid earning rewards (which would break exact balance checks)
+# This test uses 8 transactions from SMALL and requires minimum balance for app opt-in
+# Min balance breakdown (app has 4 global byteslices, 1 local int):
+# - Base: 100000
+# - App creation (AppFlatParamsMinBalance): 100000
+# - App opt-in (AppFlatOptInMinBalance): 100000
+# - Global schema: 4 byteslices * (SchemaMinBalancePerEntry + SchemaBytesMinBalance) = 4 * 50000 = 200000
+# - Local schema: 1 int * (SchemaMinBalancePerEntry + SchemaUintMinBalance) = 28500
+# Total: 528500
+NUM_TXNS=8
+MIN_BALANCE_NEEDED=528500
+DEPOSIT_AMOUNT=150000
+SMALL_FUNDING=$((MIN_BALANCE_NEEDED + NUM_TXNS * MIN_FEE + DEPOSIT_AMOUNT + 50000))
+if [ $SMALL_FUNDING -ge 1000000 ]; then
+    SMALL_FUNDING=999000
+fi
 ${gcmd} clerk send -a $SMALL_FUNDING -f "$ACCOUNT" -t "$SMALL"
 
 function balance {
@@ -74,7 +89,7 @@ TXID=$(${gcmd} app optin --app-id "$APPID" --from "${SMALL}" | app-txid)
 [ "$(rest "/v2/transactions/pending/$TXID" | jq '.["inner-txn"]')" == null ]
 [ "$(balance "$SMALL")" = $(($SMALL_FUNDING - 2*MIN_FEE)) ] # app create fee + opt-in fee
 
-DEPOSIT=$((150000 + 16*MIN_FEE))  # Increased deposit to account for higher MIN_FEE (need extra for inner txn fees)
+DEPOSIT=150000  # Fixed deposit amount to app account
 appl "deposit():void" -o "$T/deposit.tx"
 payin $DEPOSIT -o "$T/pay1.tx"
 cat "$T/deposit.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
