@@ -70,7 +70,7 @@ type StatefulEncoder struct{ dynamicTableState }
 type StatefulDecoder struct{ dynamicTableState }
 
 // NewStatefulEncoder creates a new StatefulEncoder with initialized LRU tables of the specified size
-func NewStatefulEncoder(tableSize uint32) (*StatefulEncoder, error) {
+func NewStatefulEncoder(tableSize uint) (*StatefulEncoder, error) {
 	e := &StatefulEncoder{}
 	if err := e.initTables(tableSize); err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func NewStatefulEncoder(tableSize uint32) (*StatefulEncoder, error) {
 }
 
 // NewStatefulDecoder creates a new StatefulDecoder with initialized LRU tables of the specified size
-func NewStatefulDecoder(tableSize uint32) (*StatefulDecoder, error) {
+func NewStatefulDecoder(tableSize uint) (*StatefulDecoder, error) {
 	d := &StatefulDecoder{}
 	if err := d.initTables(tableSize); err != nil {
 		return nil, err
@@ -102,8 +102,33 @@ type dynamicTableState struct {
 	lastRnd uint64
 }
 
+// pkSigPair is a 32-byte public key + 64-byte signature
+// used for the LRU tables for p+p1s and p2+p2s.
+type pkSigPair struct {
+	pk  [pkSize]byte
+	sig [sigSize]byte
+}
+
+func (p *pkSigPair) hash() uint64 {
+	// Since pk and sig should already be uniformly distributed, we can use a
+	// simple XOR of the first 8 bytes of each to get a good hash.
+	// Any invalid votes intentionally designed to cause collisions will only
+	// affect the sending peer's own per-peer compression state, and cause
+	// agreement to disconnect the peer.
+	return binary.LittleEndian.Uint64(p.pk[:8]) ^ binary.LittleEndian.Uint64(p.sig[:8])
+}
+
+// addressValue is a 32-byte address used for the LRU table for snd.
+type addressValue [digestSize]byte
+
+func (v *addressValue) hash() uint64 {
+	// addresses are fairly uniformly distributed, so we can use a simple XOR
+	return binary.LittleEndian.Uint64(v[:8]) ^ binary.LittleEndian.Uint64(v[8:16]) ^
+		binary.LittleEndian.Uint64(v[16:24]) ^ binary.LittleEndian.Uint64(v[24:])
+}
+
 // initTables initializes the LRU tables with the specified size for all tables
-func (s *dynamicTableState) initTables(tableSize uint32) error {
+func (s *dynamicTableState) initTables(tableSize uint) error {
 	var err error
 	if s.sndTable, err = newLRUTable[addressValue](tableSize); err != nil {
 		return err

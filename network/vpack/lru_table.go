@@ -17,7 +17,6 @@
 package vpack
 
 import (
-	"encoding/binary"
 	"errors"
 )
 
@@ -31,7 +30,7 @@ import (
 // Reference IDs are encoded as (bucket << 1) | slot, where bucket is the index
 // of the bucket and slot is the index of the slot within the bucket (0 or 1).
 type lruTable[K comparable] struct {
-	numBuckets uint32
+	numBuckets uint
 	buckets    []twoSlotBucket[K]
 	mru        []byte // 1 bit per bucket
 }
@@ -39,7 +38,7 @@ type lruTable[K comparable] struct {
 // newLRUTable creates a new LRU table with the given size N.
 // The size N is the total number of entries in the table.
 // The number of buckets is N/2, and each bucket contains 2 slots.
-func newLRUTable[K comparable](N uint32) (*lruTable[K], error) {
+func newLRUTable[K comparable](N uint) (*lruTable[K], error) {
 	// enforce size is a power of 2 and at least 16
 	if N < 16 || N&(N-1) != 0 {
 		return nil, errors.New("lruTable size must be a power of 2 and at least 16")
@@ -63,31 +62,6 @@ type lruSlotIndex uint8
 
 // lruTableReferenceID is the reference ID for a key in the LRU table.
 type lruTableReferenceID uint16
-
-// pkSigPair is a 32-byte public key + 64-byte signature
-// used for the LRU tables for p+p1s and p2+p2s.
-type pkSigPair struct {
-	pk  [pkSize]byte
-	sig [sigSize]byte
-}
-
-func (p *pkSigPair) hash() uint64 {
-	// Since pk and sig should already be uniformly distributed, we can use a
-	// simple XOR of the first 8 bytes of each to get a good hash.
-	// Any invalid votes intentionally designed to cause collisions will only
-	// affect the sending peer's own per-peer compression state, and cause
-	// agreement to disconnect the peer.
-	return binary.LittleEndian.Uint64(p.pk[:8]) ^ binary.LittleEndian.Uint64(p.sig[:8])
-}
-
-// addressValue is a 32-byte address used for the LRU table for snd.
-type addressValue [digestSize]byte
-
-func (v *addressValue) hash() uint64 {
-	// addresses are fairly uniformly distributed, so we can use a simple XOR
-	return binary.LittleEndian.Uint64(v[:8]) ^ binary.LittleEndian.Uint64(v[8:16]) ^
-		binary.LittleEndian.Uint64(v[16:24]) ^ binary.LittleEndian.Uint64(v[24:])
-}
 
 // mruBitmask returns the byte index and bit mask for the MRU bit of bucket b.
 func (t *lruTable[K]) mruBitmask(b lruBucketIndex) (byteIdx uint32, mask byte) {
