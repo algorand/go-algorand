@@ -41,12 +41,6 @@ jobs:
           cache-prefix: test
       - name: Setup test environment
         uses: ./.github/actions/setup-test
-      - name: Restore partition timing data
-        uses: ./.github/actions/setup-partition-timing
-        with:
-          test-type: test
-          platform: ubuntu-24.04
-          partition-total: 6
       - name: Run tests
         run: |
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
