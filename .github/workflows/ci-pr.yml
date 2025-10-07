@@ -25,6 +25,11 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-24.04
+    env:
+      PARTITION_ID: 3
+      PARTITION_TOTAL: 6
+      CIRCLECI: true
+      SHORTTEST: "-short"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,24 +41,33 @@ jobs:
           cache-prefix: test
       - name: Setup test environment
         uses: ./.github/actions/setup-test
+      - name: Restore partition timing data
+        uses: ./.github/actions/setup-partition-timing
+        with:
+          test-type: test
+          platform: ubuntu-24.04
+          partition-total: 6
       - name: Run tests
         run: |
-          mkdir -p /home/runner/test_results/ubuntu-24.04_test
-          # Profile the slow test with gotestsum
+          PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+          mkdir -p /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}
           gotestsum --format standard-quiet \
-            --jsonfile /home/runner/test_results/ubuntu-24.04_test/testresults.json \
-            -- -run TestRandomizedEncodingFullDiskState \
-            -cpuprofile=/home/runner/test_results/ubuntu-24.04_test/cpu.prof \
-            -memprofile=/home/runner/test_results/ubuntu-24.04_test/mem.prof \
-            -tags "sqlite_unlock_notify sqlite_omit_load_extension" \
-            ./agreement/
+            --junitfile /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/results.xml \
+            --jsonfile /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/testresults.json \
+            -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
+            -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
+            -cpuprofile=/home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/cpu.prof \
+            -memprofile=/home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/mem.prof \
+            $PACKAGE_NAMES
           # Generate text reports from profiles
-          go tool pprof -top -cum /home/runner/test_results/ubuntu-24.04_test/cpu.prof > /home/runner/test_results/ubuntu-24.04_test/cpu_profile.txt || true
-          go tool pprof -top -sample_index=alloc_space /home/runner/test_results/ubuntu-24.04_test/mem.prof > /home/runner/test_results/ubuntu-24.04_test/mem_profile.txt || true
+          go tool pprof -top -cum /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/cpu.prof > /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/cpu_profile.txt || true
+          go tool pprof -top -sample_index=alloc_space /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/mem.prof > /home/runner/test_results/ubuntu-24.04_test/${PARTITION_ID}/mem_profile.txt || true
       - name: Upload test artifacts to GitHub
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: test-profile-results-${{ github.run_id }}
+          name: test-results-partition-3-${{ github.run_id }}
           path: /home/runner/test_results
           retention-days: 7
+
