@@ -13,10 +13,6 @@ env:
   ALGOTEST: 1
   SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
   SKIP_GO_INSTALLATION: True
-  # Partition configuration - edit these to change partition counts
-  TEST_PARTITIONS: 6
-  INTEGRATION_PARTITIONS: 5
-  E2E_EXPECT_PARTITIONS: 10
 
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
@@ -32,11 +28,11 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5] # Must match TEST_PARTITIONS above
+        partition_id: [0, 1, 2, 3, 4, 5] # 6 partitions total
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: ${{ env.TEST_PARTITIONS }}
+      PARTITION_TOTAL: 6
       CIRCLECI: true
       SHORTTEST: "-short"
     steps:
@@ -53,7 +49,7 @@ jobs:
         with:
           test-type: test
           platform: ${{ matrix.platform }}
-          partition-total: ${{ env.PARTITION_TOTAL }}
+          partition-total: 6
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Run tests
@@ -113,12 +109,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4] # Must match INTEGRATION_PARTITIONS above
+        partition_id: [0, 1, 2, 3, 4] # 5 partitions total
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: ${{ env.INTEGRATION_PARTITIONS }}
+      PARTITION_TOTAL: 5
       E2E_TEST_FILTER: GO
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
@@ -136,7 +132,7 @@ jobs:
         with:
           test-type: integration
           platform: ${{ matrix.platform }}
-          partition-total: ${{ env.PARTITION_TOTAL }}
+          partition-total: 5
       - name: Setup test environment
         uses: ./.github/actions/setup-test
       - name: Build e2e binaries
@@ -173,12 +169,12 @@ jobs:
       fail-fast: false
       matrix:
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # Must match E2E_EXPECT_PARTITIONS above
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] # 10 partitions total
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: ${{ env.E2E_EXPECT_PARTITIONS }}
+      PARTITION_TOTAL: 10
       E2E_TEST_FILTER: EXPECT
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
@@ -196,7 +192,7 @@ jobs:
         with:
           test-type: e2e_expect
           platform: ${{ matrix.platform }}
-          partition-total: ${{ env.PARTITION_TOTAL }}
+          partition-total: 10
       - name: Setup test environment
         uses: ./.github/actions/setup-test
         with:
@@ -307,13 +303,13 @@ jobs:
         run: |
           case "${{ matrix.test_type }}" in
             test)
-              echo "PARTITION_TOTAL=${{ env.TEST_PARTITIONS }}" >> $GITHUB_ENV
+              echo "PARTITION_TOTAL=6" >> $GITHUB_ENV
               ;;
             integration)
-              echo "PARTITION_TOTAL=${{ env.INTEGRATION_PARTITIONS }}" >> $GITHUB_ENV
+              echo "PARTITION_TOTAL=5" >> $GITHUB_ENV
               ;;
             e2e_expect)
-              echo "PARTITION_TOTAL=${{ env.E2E_EXPECT_PARTITIONS }}" >> $GITHUB_ENV
+              echo "PARTITION_TOTAL=10" >> $GITHUB_ENV
               ;;
           esac
       - name: Save timing data for future partition optimization
