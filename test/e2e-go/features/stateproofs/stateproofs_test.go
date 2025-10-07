@@ -699,7 +699,7 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, txParams.Fee, txParams.LastRound+1, part.LastValid, [32]byte{}, true)
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, txParams.MinFee, txParams.LastRound+1, part.LastValid, [32]byte{}, true)
 	assert.NoError(t, err)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
@@ -1112,7 +1112,7 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 				ps.amount = cntr
 				cntr = cntr + 1
 				// ignore the returned error (most of the time will be error)
-				_, err := relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
+				_, err := relay.SendPaymentFromUnencryptedWallet(account0, account0, params.MinFee, ps.amount, []byte{byte(params.LastRound)})
 				require.Error(t, err)
 				require.Equal(t, "HTTP 400 Bad Request: TransactionPool.checkPendingQueueSize: transaction pool have reached capacity", err.Error())
 				time.Sleep(25 * time.Millisecond)

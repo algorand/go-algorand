@@ -118,7 +118,7 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ba
 	a.NoError(err)
 
 	tx := partKey.GenerateRegistrationTransaction(
-		basics.MicroAlgos{Raw: prms.Fee},
+		basics.MicroAlgos{Raw: prms.MinFee},
 		0,
 		100,
 		[32]byte{},

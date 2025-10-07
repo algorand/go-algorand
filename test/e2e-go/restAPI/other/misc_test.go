@@ -125,8 +125,8 @@ func TestSendingNotClosingAccountErrs(t *testing.T) {
 	}
 	params, err := testClient.SuggestedParams()
 	a.NoError(err)
-	amt := someBal - params.Fee - 1
-	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.Fee, amt, nil, "", 0, 0)
+	amt := someBal - params.MinFee - 1
+	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.MinFee, amt, nil, "", 0, 0)
 	a.Error(err)
 }
 

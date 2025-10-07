@@ -86,11 +86,11 @@ func TestTxnMerkleProof(t *testing.T) {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
-		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, params.Fee, 10000000, nil)
+		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, params.MinFee, 10000000, nil)
 		a.NoError(err)
 	}
 
-	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, params.Fee, 10000000, nil)
+	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, params.MinFee, 10000000, nil)
 	a.NoError(err)
 
 	txid := tx.ID()
@@ -173,11 +173,11 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
-		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, params.Fee, 10000000, nil)
+		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, params.MinFee, 10000000, nil)
 		a.NoError(err)
 	}
 
-	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, params.Fee, 10000000, nil)
+	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, params.MinFee, 10000000, nil)
 	a.NoError(err)
 
 	txid := tx.ID()

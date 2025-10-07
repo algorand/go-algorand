@@ -104,7 +104,7 @@ func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) 
 	params, err := fixture.LibGoalClient.SuggestedParams()
 	require.NoError(t, err)
 
-	fundingTx, err := fixture.LibGoalClient.SendPaymentFromWalletWithLease(wh, nil, sender.Address, receiver.String(), params.Fee, 100000, nil, "", [32]byte{1, 2, 3}, basics.Round(curRound).SubSaturate(1), 0)
+	fundingTx, err := fixture.LibGoalClient.SendPaymentFromWalletWithLease(wh, nil, sender.Address, receiver.String(), params.MinFee, 100000, nil, "", [32]byte{1, 2, 3}, basics.Round(curRound).SubSaturate(1), 0)
 	require.NoError(t, err)
 	txn, err := fixture.WaitForConfirmedTxn(curRound+5, fundingTx.ID().String())
 	require.NoError(t, err)
