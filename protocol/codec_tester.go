@@ -54,6 +54,8 @@ type randomizeObjectCfg struct {
 	ZeroesEveryN int
 	// AllUintSizes will be equally likely to generate 8-bit, 16-bit, 32-bit, or 64-bit uints.
 	AllUintSizes bool
+	// MaxCollectionLen bounds randomized slice/map lengths when positive.
+	MaxCollectionLen int
 }
 
 // RandomizeObjectOption is an option for RandomizeObject
@@ -67,6 +69,15 @@ func RandomizeObjectWithZeroesEveryN(n int) RandomizeObjectOption {
 // RandomizeObjectWithAllUintSizes will be equally likely to generate 8-bit, 16-bit, 32-bit, or 64-bit uints.
 func RandomizeObjectWithAllUintSizes() RandomizeObjectOption {
 	return func(cfg *randomizeObjectCfg) { cfg.AllUintSizes = true }
+}
+
+// RandomizeObjectWithMaxCollectionLen limits randomized slice/map lengths to n (when n>0).
+func RandomizeObjectWithMaxCollectionLen(n int) RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) {
+		if n > 0 {
+			cfg.MaxCollectionLen = n
+		}
+	}
 }
 
 // RandomizeObject returns a random object of the same type as template
@@ -359,7 +370,11 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 	case reflect.Slice:
 		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
 		// will result in nil and not slice of size 0
-		l := rand.Int()%31 + 1
+		maxLen := 31
+		if cfg.MaxCollectionLen > 0 && cfg.MaxCollectionLen < maxLen {
+			maxLen = cfg.MaxCollectionLen
+		}
+		l := rand.Intn(maxLen) + 1
 
 		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		if hasAllocBound {
@@ -385,7 +400,15 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))
-		l := rand.Int() % 32
+		maxLen := 32
+		if cfg.MaxCollectionLen > 0 {
+			// preserve possibility of zero entries while capping positive lengths
+			capLen := cfg.MaxCollectionLen + 1
+			if capLen < maxLen {
+				maxLen = capLen
+			}
+		}
+		l := rand.Intn(maxLen)
 		if hasAllocBound {
 			l = 1
 		}
