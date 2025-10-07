@@ -118,6 +118,7 @@ jobs:
       E2E_TEST_FILTER: GO
       PARALLEL_FLAG: "-p 4"
       SHORTTEST: "-short"
+      PARTITION_DEBUG: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

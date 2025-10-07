@@ -18,6 +18,7 @@ package partitiontest
 
 import (
 	"encoding/json"
+	"fmt"
 	"hash/fnv"
 	"os"
 	"path/filepath"
@@ -84,6 +85,9 @@ func PartitionTest(t testing.TB) {
 		testKey := file + ":" + name
 		nameNumber := stringToUint64(testKey)
 		idx = int(nameNumber % uint64(partitions))
+		if os.Getenv("PARTITION_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "[partition] Test %s not found in timing data, using hash-based: partition %d\n", name, idx)
+		}
 	}
 
 	if idx != partitionID {
@@ -97,12 +101,23 @@ func computePartitionAssignments(partitions int) map[string]int {
 	timings := loadTestTimings()
 	if len(timings) == 0 {
 		// No timing data available, return empty map to use hash-based fallback
+		if os.Getenv("PARTITION_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "[partition] No timing data found, using hash-based partitioning\n")
+		}
 		return make(map[string]int)
 	}
 
+	if os.Getenv("PARTITION_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[partition] Using greedy algorithm with %d tests for %d partitions\n", len(timings), partitions)
+	}
+
 	// Sort tests by duration (largest first) for greedy bin-packing
+	// Use test name as tiebreaker to ensure deterministic ordering
 	sort.Slice(timings, func(i, j int) bool {
-		return timings[i].duration > timings[j].duration
+		if timings[i].duration != timings[j].duration {
+			return timings[i].duration > timings[j].duration
+		}
+		return timings[i].testName < timings[j].testName
 	})
 
 	// Initialize partition bins with their total time
@@ -191,11 +206,18 @@ func loadTestTimings() []testTiming {
 		return nil
 	}
 
-	// Convert map to slice
-	for testName, duration := range seenTests {
+	// Convert map to slice with deterministic ordering
+	// Sort by test name to ensure consistent iteration order across processes
+	testNames := make([]string, 0, len(seenTests))
+	for testName := range seenTests {
+		testNames = append(testNames, testName)
+	}
+	sort.Strings(testNames)
+
+	for _, testName := range testNames {
 		timings = append(timings, testTiming{
 			testName: testName,
-			duration: duration,
+			duration: seenTests[testName],
 		})
 	}
 
