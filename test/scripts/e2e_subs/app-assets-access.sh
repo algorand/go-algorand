@@ -64,7 +64,8 @@ function balance {
 function check_balance {
     local acct=$1
     local expected=$2
-    local actual=$(balance "$acct")
+    local actual
+    actual=$(balance "$acct")
     local diff=$((actual - expected))
 
     if [ $diff -lt 0 ] || [ $diff -gt $BALANCE_TOLERANCE ]; then
