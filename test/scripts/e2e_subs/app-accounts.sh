@@ -42,7 +42,8 @@ SMALL=$(${gcmd} account new | awk '{ print $6 }')
 # Total: 528500
 NUM_TXNS=8
 MIN_BALANCE_NEEDED=528500
-DEPOSIT_AMOUNT=150000
+# Calculate DEPOSIT amount needed for all withdrawal tests (20k + 10k + 18k + 2*fee + 100k min)
+DEPOSIT_AMOUNT=$((20000 + 10000 + 18000 + 2*MIN_FEE + 100000))
 SMALL_FUNDING=$((MIN_BALANCE_NEEDED + NUM_TXNS * MIN_FEE + DEPOSIT_AMOUNT + 50000))
 if [ $SMALL_FUNDING -ge 1000000 ]; then
     SMALL_FUNDING=999000
@@ -89,7 +90,7 @@ TXID=$(${gcmd} app optin --app-id "$APPID" --from "${SMALL}" | app-txid)
 [ "$(rest "/v2/transactions/pending/$TXID" | jq '.["inner-txn"]')" == null ]
 [ "$(balance "$SMALL")" = $(($SMALL_FUNDING - 2*MIN_FEE)) ] # app create fee + opt-in fee
 
-DEPOSIT=150000  # Fixed deposit amount to app account
+DEPOSIT=$DEPOSIT_AMOUNT  # Use the pre-calculated deposit amount
 appl "deposit():void" -o "$T/deposit.tx"
 payin $DEPOSIT -o "$T/pay1.tx"
 cat "$T/deposit.tx" "$T/pay1.tx" | ${gcmd} clerk group -i - -o "$T/group.tx"
