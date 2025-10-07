@@ -58,18 +58,17 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 		return false
 	}
 
+	// GlobalDeltas must be equal
 	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
 		return false
 	}
 
-	if !slices.Equal(ed.SharedAccts, o.SharedAccts) {
-		return false
-	}
-
+	// Logs must be equal
 	if !slices.Equal(ed.Logs, o.Logs) {
 		return false
 	}
 
+	// InnerTxns must be equal
 	if len(ed.InnerTxns) != len(o.InnerTxns) {
 		return false
 	}
