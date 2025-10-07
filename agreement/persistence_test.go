@@ -187,6 +187,7 @@ const randomizedEncodingMaxCollectionLen = 8 // instead of 32 used in codec_test
 func randomizeDiskState() (rr rootRouter, p player) {
 	opts := []protocol.RandomizeObjectOption{
 		protocol.RandomizeObjectWithMaxCollectionLen(randomizedEncodingMaxCollectionLen),
+		protocol.RandomizeObjectSilenceAllocWarnings(),
 	}
 	p2, err := protocol.RandomizeObject(&player{}, opts...)
 	if err != nil {
