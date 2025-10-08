@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/stretchr/testify/require"
 
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -196,9 +197,10 @@ func TestBigIncrease(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
+	consensusVersion := protocol.ConsensusFuture
 	var fixture fixtures.RestClientFixture
 	const lookback = 32
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second/2, lookback)
+	fixture.FasterConsensus(consensusVersion, time.Second/2, lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()
 
@@ -227,7 +229,8 @@ func TestBigIncrease(t *testing.T) {
 	// have a fairly recent proposal, and not get knocked off.
 	pay(a, c1, account01.Address, account15.Address, 99*account01.Amount/100)
 
-	rekeyreg(a, c1, account01.Address, true)
+	proto := config.Consensus[consensusVersion]
+	rekeyreg(a, c1, proto, account01.Address, true)
 
 	// 2. Wait lookback rounds
 	wait(&fixture, a, lookback)

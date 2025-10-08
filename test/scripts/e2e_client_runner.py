@@ -113,7 +113,7 @@ def _script_thread_inner(runset, scriptname, timeout):
     # send one million Algos to the test wallet's account
     params = algod.suggested_params()
     round = params.first
-    max_init_wait_rounds = 20  # Increased from 5 to handle 67 concurrent funding transactions
+    max_init_wait_rounds = 5
     params.last = params.first + max_init_wait_rounds
     txn = algosdk.transaction.PaymentTxn(maxpubaddr, params, addr, 1_000_000_000_000)
     stxn = kmd.sign_transaction(pubw, '', txn)

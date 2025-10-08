@@ -36,6 +36,7 @@ func TestHeartbeat(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	testConsensusVersion := protocol.ConsensusFuture
 	// Creator
 	sender := basics.Address{0x01}
 	voter := basics.Address{0x02}
@@ -47,7 +48,7 @@ func TestHeartbeat(t *testing.T) {
 	id := basics.OneTimeIDForRound(lv, keyDilution)
 	otss := crypto.GenerateOneTimeSignatureSecrets(1, 2) // This will cover rounds 1-2*777
 
-	mockBal := makeMockBalancesWithAccounts(protocol.ConsensusFuture, map[basics.Address]basics.AccountData{
+	mockBal := makeMockBalancesWithAccounts(testConsensusVersion, map[basics.Address]basics.AccountData{
 		sender: {
 			MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
 		},
@@ -88,8 +89,8 @@ func TestHeartbeat(t *testing.T) {
 	require.ErrorContains(t, err, "cheap heartbeat")
 
 	// address fee
-	proto := config.Consensus[protocol.ConsensusFuture]
-	tx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
+	testProto := config.Consensus[testConsensusVersion]
+	tx.Fee = basics.MicroAlgos{Raw: testProto.MinTxnFee}
 
 	// Seed is missing
 	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
@@ -125,6 +126,7 @@ func TestCheapRules(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	testConsensusVersion := protocol.ConsensusFuture
 	type tcase struct {
 		rnd              basics.Round
 		addrStart        byte
@@ -162,7 +164,7 @@ func TestCheapRules(t *testing.T) {
 
 		sender := basics.Address{0x01}
 		voter := basics.Address{tc.addrStart}
-		mockBal := makeMockBalancesWithAccounts(protocol.ConsensusFuture, map[basics.Address]basics.AccountData{
+		mockBal := makeMockBalancesWithAccounts(testConsensusVersion, map[basics.Address]basics.AccountData{
 			sender: {
 				MicroAlgos: basics.MicroAlgos{Raw: 10_000_000},
 			},
@@ -179,7 +181,7 @@ func TestCheapRules(t *testing.T) {
 		mockHdr := makeMockHeaders()
 		mockHdr.setFallback(bookkeeping.BlockHeader{
 			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusFuture,
+				CurrentProtocol: testConsensusVersion,
 			},
 			Seed: seed,
 		})

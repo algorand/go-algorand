@@ -46,10 +46,12 @@ func TestBasicPayouts(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
+	consensusVersion := protocol.ConsensusFuture
+
 	var fixture fixtures.RestClientFixture
 	// Make the seed lookback shorter, otherwise we need to wait 320 rounds to become IncentiveEligible.
 	const lookback = 32
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
+	fixture.FasterConsensus(consensusVersion, time.Second, lookback)
 	t.Logf("lookback is %d\n", lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()
@@ -73,10 +75,10 @@ func TestBasicPayouts(t *testing.T) {
 	c01, account01 := clientAndAccount("Node01")
 	relay, _ := clientAndAccount("Relay")
 
-	proto := config.Consensus[protocol.ConsensusFuture]
+	proto := config.Consensus[consensusVersion]
 
-	data01 := rekeyreg(a, c01, account01.Address, true)
-	data15 := rekeyreg(a, c15, account15.Address, true)
+	data01 := rekeyreg(a, c01, proto, account01.Address, true)
+	data15 := rekeyreg(a, c15, proto, account15.Address, true)
 
 	// Wait a few rounds after rekeyreg, this means that `lookback` rounds after
 	// those rekeyregs, the nodes will be IncentiveEligible, but both will have
@@ -301,7 +303,7 @@ func getblock(client libgoal.Client, round basics.Round) (bookkeeping.Block, err
 	return client.BookkeepingBlock(round)
 }
 
-func rekeyreg(a *require.Assertions, client libgoal.Client, address string, becomeEligible bool) basics.AccountData {
+func rekeyreg(a *require.Assertions, client libgoal.Client, proto config.ConsensusParams, address string, becomeEligible bool) basics.AccountData {
 	// we start by making an _offline_ tx here, because we want to populate the
 	// key material ourself with a copy of the account's existing material. That
 	// makes it an _online_ keyreg. That allows the running node to chug along
@@ -309,7 +311,6 @@ func rekeyreg(a *require.Assertions, client libgoal.Client, address string, beco
 	// IncentiveEligible, and to get some funds into FeeSink because we will
 	// watch it drain toward bottom of test.
 
-	proto := config.Consensus[protocol.ConsensusFuture]
 	fee := proto.MinTxnFee
 	if becomeEligible {
 		fee = 12_000_000
