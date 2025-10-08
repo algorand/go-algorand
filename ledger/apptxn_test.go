@@ -110,9 +110,9 @@ func TestPayAction(t *testing.T) {
 
 		dl.t.Log("postsink", postsink, "postprop", postprop)
 		if ver >= payoutsVer {
-			bonus := 10_000_000                                            // config/consensus.go
-			assert.EqualValues(t, bonus-proto.MinTxnFee, presink-postsink) // based on 50% in config/consensus.go
-			require.EqualValues(t, bonus+proto.MinTxnFee, postprop-preprop)
+			bonus := 10_000_000                                                 // config/consensus.go
+			assert.EqualValues(t, bonus-int(proto.MinTxnFee), presink-postsink) // based on 50% in config/consensus.go
+			require.EqualValues(t, bonus+int(proto.MinTxnFee), postprop-preprop)
 		} else {
 			require.EqualValues(t, 2*proto.MinTxnFee, postsink-presink) // no payouts yet
 		}
