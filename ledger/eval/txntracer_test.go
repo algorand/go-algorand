@@ -99,6 +99,7 @@ func TestTransactionGroupWithDeltaTracer(t *testing.T) {
 			eval.validate = true
 			eval.generate = true
 			genHash := l.GenesisHash()
+			minFee := basics.MicroAlgos{Raw: eval.proto.MinTxnFee}
 
 			basicAppCallApproval := `#pragma version 8
 byte "hellobox"
