@@ -382,8 +382,8 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
 		// will result in nil and not slice of size 0
 		maxLen := 31
-		if cfg.MaxCollectionLen > 0 && cfg.MaxCollectionLen < maxLen {
-			maxLen = cfg.MaxCollectionLen
+		if cfg.MaxCollectionLen > 0 {
+			maxLen = min(maxLen, cfg.MaxCollectionLen)
 		}
 		l := rand.Intn(maxLen) + 1
 
@@ -414,10 +414,7 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 		maxLen := 32
 		if cfg.MaxCollectionLen > 0 {
 			// preserve possibility of zero entries while capping positive lengths
-			capLen := cfg.MaxCollectionLen + 1
-			if capLen < maxLen {
-				maxLen = capLen
-			}
+			maxLen = min(maxLen, cfg.MaxCollectionLen+1)
 		}
 		l := rand.Intn(maxLen)
 		if hasAllocBound {
