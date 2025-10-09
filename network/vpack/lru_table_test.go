@@ -41,7 +41,7 @@ func TestLRUTableSizeValidation(t *testing.T) {
 	require.Contains(t, err.Error(), "at least 16")
 
 	// Test valid sizes
-	for _, size := range []uint32{16, 32, 64, 128, 256, 512, 1024, 2048} {
+	for _, size := range []uint{16, 32, 64, 128, 256, 512, 1024, 2048} {
 		enc, err := NewStatefulEncoder(size)
 		require.NoError(t, err)
 		require.NotNil(t, enc)
