@@ -4496,7 +4496,7 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 		zb0005Len--
 		zb0005Mask |= 0x2000
 	}
-	if (*z).unauthenticatedProposal.Block.BlockHeader.Load == 0 {
+	if (*z).unauthenticatedProposal.Block.BlockHeader.Load.MsgIsZero() {
 		zb0005Len--
 		zb0005Mask |= 0x4000
 	}
@@ -4662,7 +4662,7 @@ func (z *proposal) MarshalMsg(b []byte) (o []byte) {
 		if (zb0005Mask & 0x4000) == 0 { // if not empty
 			// string "ld"
 			o = append(o, 0xa2, 0x6c, 0x64)
-			o = msgp.AppendUint64(o, (*z).unauthenticatedProposal.Block.BlockHeader.Load)
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.Load.MarshalMsg(o)
 		}
 		if (zb0005Mask & 0x8000) == 0 { // if not empty
 			// string "nextbefore"
@@ -5203,7 +5203,7 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 		}
 		if zb0005 > 0 {
 			zb0005--
-			(*z).unauthenticatedProposal.Block.BlockHeader.Load, bts, err = msgp.ReadUint64Bytes(bts)
+			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Load")
 				return
@@ -5549,7 +5549,7 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 					}
 				}
 			case "ld":
-				(*z).unauthenticatedProposal.Block.BlockHeader.Load, bts, err = msgp.ReadUint64Bytes(bts)
+				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Load")
 					return
@@ -5627,13 +5627,13 @@ func (z *proposal) Msgsize() (s int) {
 	for zb0004 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
 		s += (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].Msgsize()
 	}
-	s += 3 + msgp.Uint64Size + 3 + (*z).unauthenticatedProposal.Block.BlockHeader.BaseFee.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.Payset.Msgsize() + 5 + (*z).unauthenticatedProposal.SeedProof.Msgsize() + 5 + msgp.Uint64Size + 6 + (*z).unauthenticatedProposal.OriginalProposer.Msgsize()
+	s += 3 + (*z).unauthenticatedProposal.Block.BlockHeader.Load.Msgsize() + 3 + (*z).unauthenticatedProposal.Block.BlockHeader.BaseFee.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.Payset.Msgsize() + 5 + (*z).unauthenticatedProposal.SeedProof.Msgsize() + 5 + msgp.Uint64Size + 6 + (*z).unauthenticatedProposal.OriginalProposer.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *proposal) MsgIsZero() bool {
-	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch512.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Proposer.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.FeesCollected.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Bonus.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.ProposerPayout.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.Load == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.BaseFee.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero())
+	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch512.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Proposer.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.FeesCollected.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Bonus.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.ProposerPayout.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.Load.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.BaseFee.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -5650,7 +5650,7 @@ func ProposalMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((bounds.MaxMarkAbsent) * (basics.AddressMaxSize()))
-	s += 3 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 5
+	s += 3 + basics.MicrosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5
 	// Using maxtotalbytes for: z.unauthenticatedProposal.Block.Payset
 	s += bounds.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()
@@ -9122,7 +9122,7 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte) {
 		zb0005Len--
 		zb0005Mask |= 0x4000
 	}
-	if (*z).unauthenticatedProposal.Block.BlockHeader.Load == 0 {
+	if (*z).unauthenticatedProposal.Block.BlockHeader.Load.MsgIsZero() {
 		zb0005Len--
 		zb0005Mask |= 0x8000
 	}
@@ -9292,7 +9292,7 @@ func (z *transmittedPayload) MarshalMsg(b []byte) (o []byte) {
 		if (zb0005Mask & 0x8000) == 0 { // if not empty
 			// string "ld"
 			o = append(o, 0xa2, 0x6c, 0x64)
-			o = msgp.AppendUint64(o, (*z).unauthenticatedProposal.Block.BlockHeader.Load)
+			o = (*z).unauthenticatedProposal.Block.BlockHeader.Load.MarshalMsg(o)
 		}
 		if (zb0005Mask & 0x10000) == 0 { // if not empty
 			// string "nextbefore"
@@ -9838,7 +9838,7 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 		}
 		if zb0005 > 0 {
 			zb0005--
-			(*z).unauthenticatedProposal.Block.BlockHeader.Load, bts, err = msgp.ReadUint64Bytes(bts)
+			bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Load")
 				return
@@ -10192,7 +10192,7 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 					}
 				}
 			case "ld":
-				(*z).unauthenticatedProposal.Block.BlockHeader.Load, bts, err = msgp.ReadUint64Bytes(bts)
+				bts, err = (*z).unauthenticatedProposal.Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Load")
 					return
@@ -10276,13 +10276,13 @@ func (z *transmittedPayload) Msgsize() (s int) {
 	for zb0004 := range (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
 		s += (*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].Msgsize()
 	}
-	s += 3 + msgp.Uint64Size + 3 + (*z).unauthenticatedProposal.Block.BlockHeader.BaseFee.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.Payset.Msgsize() + 5 + (*z).unauthenticatedProposal.SeedProof.Msgsize() + 5 + msgp.Uint64Size + 6 + (*z).unauthenticatedProposal.OriginalProposer.Msgsize() + 3 + (*z).PriorVote.Msgsize()
+	s += 3 + (*z).unauthenticatedProposal.Block.BlockHeader.Load.Msgsize() + 3 + (*z).unauthenticatedProposal.Block.BlockHeader.BaseFee.Msgsize() + 5 + (*z).unauthenticatedProposal.Block.Payset.Msgsize() + 5 + (*z).unauthenticatedProposal.SeedProof.Msgsize() + 5 + msgp.Uint64Size + 6 + (*z).unauthenticatedProposal.OriginalProposer.Msgsize() + 3 + (*z).PriorVote.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *transmittedPayload) MsgIsZero() bool {
-	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch512.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Proposer.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.FeesCollected.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Bonus.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.ProposerPayout.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.Load == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.BaseFee.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero()) && ((*z).PriorVote.MsgIsZero())
+	return ((*z).unauthenticatedProposal.Block.BlockHeader.Round.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Branch512.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Seed.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.TimeStamp == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisID == "") && ((*z).unauthenticatedProposal.Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Proposer.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.FeesCollected.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.Bonus.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.ProposerPayout.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).unauthenticatedProposal.Block.BlockHeader.TxnCounter == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.StateProofTracking) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).unauthenticatedProposal.Block.BlockHeader.Load.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.BlockHeader.BaseFee.MsgIsZero()) && ((*z).unauthenticatedProposal.Block.Payset.MsgIsZero()) && ((*z).unauthenticatedProposal.SeedProof.MsgIsZero()) && ((*z).unauthenticatedProposal.OriginalPeriod == 0) && ((*z).unauthenticatedProposal.OriginalProposer.MsgIsZero()) && ((*z).PriorVote.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -10299,7 +10299,7 @@ func TransmittedPayloadMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((bounds.MaxMarkAbsent) * (basics.AddressMaxSize()))
-	s += 3 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 5
+	s += 3 + basics.MicrosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5
 	// Using maxtotalbytes for: z.unauthenticatedProposal.Block.Payset
 	s += bounds.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize() + 3 + UnauthenticatedVoteMaxSize()
@@ -11045,7 +11045,7 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte) {
 		zb0005Len--
 		zb0005Mask |= 0x2000
 	}
-	if (*z).Block.BlockHeader.Load == 0 {
+	if (*z).Block.BlockHeader.Load.MsgIsZero() {
 		zb0005Len--
 		zb0005Mask |= 0x4000
 	}
@@ -11211,7 +11211,7 @@ func (z *unauthenticatedProposal) MarshalMsg(b []byte) (o []byte) {
 		if (zb0005Mask & 0x4000) == 0 { // if not empty
 			// string "ld"
 			o = append(o, 0xa2, 0x6c, 0x64)
-			o = msgp.AppendUint64(o, (*z).Block.BlockHeader.Load)
+			o = (*z).Block.BlockHeader.Load.MarshalMsg(o)
 		}
 		if (zb0005Mask & 0x8000) == 0 { // if not empty
 			// string "nextbefore"
@@ -11752,7 +11752,7 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 		}
 		if zb0005 > 0 {
 			zb0005--
-			(*z).Block.BlockHeader.Load, bts, err = msgp.ReadUint64Bytes(bts)
+			bts, err = (*z).Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Load")
 				return
@@ -12098,7 +12098,7 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 					}
 				}
 			case "ld":
-				(*z).Block.BlockHeader.Load, bts, err = msgp.ReadUint64Bytes(bts)
+				bts, err = (*z).Block.BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Load")
 					return
@@ -12176,13 +12176,13 @@ func (z *unauthenticatedProposal) Msgsize() (s int) {
 	for zb0004 := range (*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
 		s += (*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].Msgsize()
 	}
-	s += 3 + msgp.Uint64Size + 3 + (*z).Block.BlockHeader.BaseFee.Msgsize() + 5 + (*z).Block.Payset.Msgsize() + 5 + (*z).SeedProof.Msgsize() + 5 + msgp.Uint64Size + 6 + (*z).OriginalProposer.Msgsize()
+	s += 3 + (*z).Block.BlockHeader.Load.Msgsize() + 3 + (*z).Block.BlockHeader.BaseFee.Msgsize() + 5 + (*z).Block.Payset.Msgsize() + 5 + (*z).SeedProof.Msgsize() + 5 + msgp.Uint64Size + 6 + (*z).OriginalProposer.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *unauthenticatedProposal) MsgIsZero() bool {
-	return ((*z).Block.BlockHeader.Round.MsgIsZero()) && ((*z).Block.BlockHeader.Branch.MsgIsZero()) && ((*z).Block.BlockHeader.Branch512.MsgIsZero()) && ((*z).Block.BlockHeader.Seed.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TimeStamp == 0) && ((*z).Block.BlockHeader.GenesisID == "") && ((*z).Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).Block.BlockHeader.Proposer.MsgIsZero()) && ((*z).Block.BlockHeader.FeesCollected.MsgIsZero()) && ((*z).Block.BlockHeader.Bonus.MsgIsZero()) && ((*z).Block.BlockHeader.ProposerPayout.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).Block.BlockHeader.TxnCounter == 0) && (len((*z).Block.BlockHeader.StateProofTracking) == 0) && (len((*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).Block.BlockHeader.Load == 0) && ((*z).Block.BlockHeader.BaseFee.MsgIsZero()) && ((*z).Block.Payset.MsgIsZero()) && ((*z).SeedProof.MsgIsZero()) && ((*z).OriginalPeriod == 0) && ((*z).OriginalProposer.MsgIsZero())
+	return ((*z).Block.BlockHeader.Round.MsgIsZero()) && ((*z).Block.BlockHeader.Branch.MsgIsZero()) && ((*z).Block.BlockHeader.Branch512.MsgIsZero()) && ((*z).Block.BlockHeader.Seed.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).Block.BlockHeader.TimeStamp == 0) && ((*z).Block.BlockHeader.GenesisID == "") && ((*z).Block.BlockHeader.GenesisHash.MsgIsZero()) && ((*z).Block.BlockHeader.Proposer.MsgIsZero()) && ((*z).Block.BlockHeader.FeesCollected.MsgIsZero()) && ((*z).Block.BlockHeader.Bonus.MsgIsZero()) && ((*z).Block.BlockHeader.ProposerPayout.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).Block.BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRate == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).Block.BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).Block.BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).Block.BlockHeader.TxnCounter == 0) && (len((*z).Block.BlockHeader.StateProofTracking) == 0) && (len((*z).Block.BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).Block.BlockHeader.Load.MsgIsZero()) && ((*z).Block.BlockHeader.BaseFee.MsgIsZero()) && ((*z).Block.Payset.MsgIsZero()) && ((*z).SeedProof.MsgIsZero()) && ((*z).OriginalPeriod == 0) && ((*z).OriginalProposer.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -12199,7 +12199,7 @@ func UnauthenticatedProposalMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((bounds.MaxMarkAbsent) * (basics.AddressMaxSize()))
-	s += 3 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 5
+	s += 3 + basics.MicrosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5
 	// Using maxtotalbytes for: z.Block.Payset
 	s += bounds.MaxTxnBytesPerBlock
 	s += 5 + crypto.VrfProofMaxSize() + 5 + msgp.Uint64Size + 6 + basics.AddressMaxSize()

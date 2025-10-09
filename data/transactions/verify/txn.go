@@ -247,18 +247,18 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 // feesPaid is the total fees paid by the group, required is the number of
 // base fees required, and feePerTxn is the minimum fee per transaction.
 func CheckGroupFees(feesPaid basics.MicroAlgos, required basics.Micros, feePerTxn basics.MicroAlgos) *TxGroupError {
-	feeNeeded, overflow := basics.Muldiv(required, feePerTxn.Raw, 1e6)
+	feeNeeded, overflow := basics.MulAM(feePerTxn, required)
 	if overflow {
 		return &TxGroupError{err: errTxGroupInvalidFee, GroupIndex: -1, Reason: TxGroupErrorReasonInvalidFee}
 	}
 	// feesPaid may have saturated. That's ok. Since we know
 	// feeNeeded did not overflow, simple comparison tells us
 	// feesPaid was enough.
-	if feesPaid.Raw < feeNeeded {
+	if feesPaid.LessThan(feeNeeded) {
 		return &TxGroupError{
 			err: fmt.Errorf(
-				"txgroup had %d in fees, which is less than the minimum %s * %d",
-				feesPaid, required, feePerTxn),
+				"txgroup with %s fees is less than %s (usage=%s * base=%s)",
+				feesPaid, feeNeeded, required, feePerTxn),
 			GroupIndex: -1,
 			Reason:     TxGroupErrorReasonInvalidFee,
 		}

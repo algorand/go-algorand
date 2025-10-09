@@ -32,6 +32,29 @@ type MicroAlgos struct {
 	Raw uint64
 }
 
+func (a MicroAlgos) String() string {
+	if a.Raw == 0 {
+		return "0.0A"
+	}
+	if a.Raw < 1_000 {
+		return fmt.Sprintf("%duA", a.Raw)
+	}
+	if a.Raw < 1_000_000 {
+		millis := a.Raw / 1_000
+		fraction := a.Raw % 1_000
+		if fraction == 0 {
+			return fmt.Sprintf("%dmA", millis)
+		}
+		return fmt.Sprintf("%d.%03dmA", millis, fraction)
+	}
+	whole := a.Raw / 1_000_000
+	fraction := a.Raw % 1_000_000
+	if fraction == 0 {
+		return fmt.Sprintf("%dA", whole)
+	}
+	return fmt.Sprintf("%d.%06d", whole, fraction)
+}
+
 // LessThan implements arithmetic comparison for MicroAlgos
 func (a MicroAlgos) LessThan(b MicroAlgos) bool {
 	return a.Raw < b.Raw
@@ -168,8 +191,6 @@ func (round Round) RoundDownToMultipleOf(n Round) Round {
 // Micros repesents millionths of something. It's a fixed-point number with 6
 // digits of precision.
 type Micros uint64
-
-//msgp:ignore Micros
 
 func (m Micros) String() string {
 	return fmt.Sprintf("%d.%06d", m/1e6, m%1e6)
