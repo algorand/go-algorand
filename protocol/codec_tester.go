@@ -54,6 +54,10 @@ type randomizeObjectCfg struct {
 	ZeroesEveryN int
 	// AllUintSizes will be equally likely to generate 8-bit, 16-bit, 32-bit, or 64-bit uints.
 	AllUintSizes bool
+	// MaxCollectionLen bounds randomized slice/map lengths when positive.
+	MaxCollectionLen int
+	// SilenceAllocWarnings suppresses allocbound warning prints.
+	SilenceAllocWarnings bool
 }
 
 // RandomizeObjectOption is an option for RandomizeObject
@@ -67,6 +71,20 @@ func RandomizeObjectWithZeroesEveryN(n int) RandomizeObjectOption {
 // RandomizeObjectWithAllUintSizes will be equally likely to generate 8-bit, 16-bit, 32-bit, or 64-bit uints.
 func RandomizeObjectWithAllUintSizes() RandomizeObjectOption {
 	return func(cfg *randomizeObjectCfg) { cfg.AllUintSizes = true }
+}
+
+// RandomizeObjectSilenceAllocWarnings silences allocbound warning prints.
+func RandomizeObjectSilenceAllocWarnings() RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) { cfg.SilenceAllocWarnings = true }
+}
+
+// RandomizeObjectWithMaxCollectionLen limits randomized slice/map lengths to n (when n>0).
+func RandomizeObjectWithMaxCollectionLen(n int) RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) {
+		if n > 0 {
+			cfg.MaxCollectionLen = n
+		}
+	}
 }
 
 // RandomizeObject returns a random object of the same type as template
@@ -185,7 +203,7 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 	return false
 }
 
-func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string) (hasAllocBound bool) {
+func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string, cfg randomizeObjectCfg) (hasAllocBound bool) {
 	var objType string
 	if val.Kind() == reflect.Slice {
 		objType = "slice"
@@ -199,7 +217,9 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 		tagsMap := parseStructTags(structTag)
 
 		if tagsMap["allocbound"] == "-" {
-			printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
+			if !cfg.SilenceAllocWarnings {
+				printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
+			}
 			return
 		}
 
@@ -234,7 +254,9 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 	}
 
 	if val.Type().Kind() == reflect.Slice || val.Type().Kind() == reflect.Map || val.Type().Kind() == reflect.Array {
-		printWarning(fmt.Sprintf("%s %s does not have an allocbound defined for %s %s", objType, datapath, val.Type().String(), val.Type().PkgPath()))
+		if !cfg.SilenceAllocWarnings {
+			printWarning(fmt.Sprintf("%s %s does not have an allocbound defined for %s %s", objType, datapath, val.Type().String(), val.Type().PkgPath()))
+		}
 	}
 	return
 }
@@ -285,7 +307,7 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 		v.SetInt(int64(rand.Uint64()))
 		*remainingChanges--
 	case reflect.String:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, cfg)
 		var buf []byte
 		var len int
 		if strings.HasSuffix(v.Type().PkgPath(), "go-algorand/agreement") && v.Type().Name() == "serializableError" {
@@ -359,9 +381,13 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 	case reflect.Slice:
 		// we don't want to allocate a slice with size of 0. This is because decoding and encoding this slice
 		// will result in nil and not slice of size 0
-		l := rand.Int()%31 + 1
+		maxLen := 31
+		if cfg.MaxCollectionLen > 0 {
+			maxLen = min(maxLen, cfg.MaxCollectionLen)
+		}
+		l := rand.Intn(maxLen) + 1
 
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, cfg)
 		if hasAllocBound {
 			l = 1
 		}
@@ -382,10 +408,15 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 		v.SetBool(rand.Uint32()%2 == 0)
 		*remainingChanges--
 	case reflect.Map:
-		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag, cfg)
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))
-		l := rand.Int() % 32
+		maxLen := 32
+		if cfg.MaxCollectionLen > 0 {
+			// preserve possibility of zero entries while capping positive lengths
+			maxLen = min(maxLen, cfg.MaxCollectionLen+1)
+		}
+		l := rand.Intn(maxLen)
 		if hasAllocBound {
 			l = 1
 		}
