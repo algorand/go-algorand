@@ -1512,10 +1512,10 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 }
 
 // ComputeLoad determines the load for the block based on block utilization.
-func ComputeLoad(blockSize int, maxSize int) uint64 {
+func ComputeLoad(blockSize int, maxSize int) basics.Micros {
 	// Load is expressed as a fixed-point integer with 6 digits of precision
 	// 1,000,000 represents a completely full block
-	return uint64(blockSize * 1_000_000 / maxSize)
+	return basics.Micros(blockSize * 1e6 / maxSize)
 }
 
 func (eval *BlockEvaluator) validateForPayouts() error {

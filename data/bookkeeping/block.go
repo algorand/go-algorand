@@ -18,6 +18,7 @@ package bookkeeping
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -149,7 +150,7 @@ type BlockHeader struct {
 	// the number of bytes in the final block, compared to the maximum allowed.
 	// It is expressed as a fixed-point integer with 6 digits of precision.  So,
 	// 1,000,000 is a completely full block.
-	Load uint64 `codec:"ld"`
+	Load basics.Micros `codec:"ld"`
 
 	// BaseFee is the fee required, per simple transaction, in this block.  It has a
 	// minimum value controlled by the MinFee consensus parameter, and scales
@@ -615,7 +616,7 @@ func computeBonus(current uint64, prevBonus basics.MicroAlgos, curPlan config.Bo
 }
 
 // NextBaseFee calculates the base fee for the next block based on the previous block's load.
-func NextBaseFee(prevLoad uint64, prevBaseFee basics.MicroAlgos, params *config.ConsensusParams) basics.MicroAlgos {
+func NextBaseFee(prevLoad basics.Micros, prevBaseFee basics.MicroAlgos, params *config.ConsensusParams) basics.MicroAlgos {
 	if !params.CongestionFees {
 		return basics.MicroAlgos{}
 	}
@@ -624,9 +625,13 @@ func NextBaseFee(prevLoad uint64, prevBaseFee basics.MicroAlgos, params *config.
 	// Scale factor: 0.5 + load/1,000,000
 	// At 0% load: 0.5x, at 50% load: 1.0x, at 100% load: 1.5x
 	scaleFactor := 500_000 + prevLoad // 0.5 to 1.5 in fixed point (with 6 digits precision)
-	scaledFee := prevBaseFee.Raw * scaleFactor / 1_000_000
-
-	return basics.MicroAlgos{Raw: max(scaledFee, params.MinTxnFee)}
+	scaledFee, o := basics.MulAM(prevBaseFee, scaleFactor)
+	if o {
+		// seems impossible, who could have paid the fees in previous blocks
+		// to drive it so high?
+		return basics.MicroAlgos{Raw: math.MaxUint64}
+	}
+	return basics.MicroAlgos{Raw: max(scaledFee.Raw, params.MinTxnFee)}
 }
 
 // MakeBlock constructs a new valid block with an empty payset and an unset Seed.

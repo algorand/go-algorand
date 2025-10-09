@@ -177,7 +177,7 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 		zb0005Len--
 		zb0005Mask |= 0x1000
 	}
-	if (*z).BlockHeader.Load == 0 {
+	if (*z).BlockHeader.Load.MsgIsZero() {
 		zb0005Len--
 		zb0005Mask |= 0x2000
 	}
@@ -331,7 +331,7 @@ func (z *Block) MarshalMsg(b []byte) (o []byte) {
 		if (zb0005Mask & 0x2000) == 0 { // if not empty
 			// string "ld"
 			o = append(o, 0xa2, 0x6c, 0x64)
-			o = msgp.AppendUint64(o, (*z).BlockHeader.Load)
+			o = (*z).BlockHeader.Load.MarshalMsg(o)
 		}
 		if (zb0005Mask & 0x4000) == 0 { // if not empty
 			// string "nextbefore"
@@ -857,7 +857,7 @@ func (z *Block) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []b
 		}
 		if zb0005 > 0 {
 			zb0005--
-			(*z).BlockHeader.Load, bts, err = msgp.ReadUint64Bytes(bts)
+			bts, err = (*z).BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Load")
 				return
@@ -1175,7 +1175,7 @@ func (z *Block) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []b
 					}
 				}
 			case "ld":
-				(*z).BlockHeader.Load, bts, err = msgp.ReadUint64Bytes(bts)
+				bts, err = (*z).BlockHeader.Load.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Load")
 					return
@@ -1231,13 +1231,13 @@ func (z *Block) Msgsize() (s int) {
 	for zb0004 := range (*z).BlockHeader.ParticipationUpdates.AbsentParticipationAccounts {
 		s += (*z).BlockHeader.ParticipationUpdates.AbsentParticipationAccounts[zb0004].Msgsize()
 	}
-	s += 3 + msgp.Uint64Size + 3 + (*z).BlockHeader.BaseFee.Msgsize() + 5 + (*z).Payset.Msgsize()
+	s += 3 + (*z).BlockHeader.Load.Msgsize() + 3 + (*z).BlockHeader.BaseFee.Msgsize() + 5 + (*z).Payset.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *Block) MsgIsZero() bool {
-	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Branch512.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.Proposer.MsgIsZero()) && ((*z).BlockHeader.FeesCollected.MsgIsZero()) && ((*z).BlockHeader.Bonus.MsgIsZero()) && ((*z).BlockHeader.ProposerPayout.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.StateProofTracking) == 0) && (len((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).BlockHeader.Load == 0) && ((*z).BlockHeader.BaseFee.MsgIsZero()) && ((*z).Payset.MsgIsZero())
+	return ((*z).BlockHeader.Round.MsgIsZero()) && ((*z).BlockHeader.Branch.MsgIsZero()) && ((*z).BlockHeader.Branch512.MsgIsZero()) && ((*z).BlockHeader.Seed.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).BlockHeader.TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).BlockHeader.TimeStamp == 0) && ((*z).BlockHeader.GenesisID == "") && ((*z).BlockHeader.GenesisHash.MsgIsZero()) && ((*z).BlockHeader.Proposer.MsgIsZero()) && ((*z).BlockHeader.FeesCollected.MsgIsZero()) && ((*z).BlockHeader.Bonus.MsgIsZero()) && ((*z).BlockHeader.ProposerPayout.MsgIsZero()) && ((*z).BlockHeader.RewardsState.FeeSink.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsPool.MsgIsZero()) && ((*z).BlockHeader.RewardsState.RewardsLevel == 0) && ((*z).BlockHeader.RewardsState.RewardsRate == 0) && ((*z).BlockHeader.RewardsState.RewardsResidue == 0) && ((*z).BlockHeader.RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocol.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).BlockHeader.UpgradeVote.UpgradeApprove == false) && ((*z).BlockHeader.TxnCounter == 0) && (len((*z).BlockHeader.StateProofTracking) == 0) && (len((*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).BlockHeader.ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).BlockHeader.Load.MsgIsZero()) && ((*z).BlockHeader.BaseFee.MsgIsZero()) && ((*z).Payset.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -1254,7 +1254,7 @@ func BlockMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((bounds.MaxMarkAbsent) * (basics.AddressMaxSize()))
-	s += 3 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize() + 5
+	s += 3 + basics.MicrosMaxSize() + 3 + basics.MicroAlgosMaxSize() + 5
 	// Using maxtotalbytes for: z.Payset
 	s += bounds.MaxTxnBytesPerBlock
 	return
@@ -1334,7 +1334,7 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte) {
 		zb0005Len--
 		zb0005Mask |= 0x1000
 	}
-	if (*z).Load == 0 {
+	if (*z).Load.MsgIsZero() {
 		zb0005Len--
 		zb0005Mask |= 0x2000
 	}
@@ -1484,7 +1484,7 @@ func (z *BlockHeader) MarshalMsg(b []byte) (o []byte) {
 		if (zb0005Mask & 0x2000) == 0 { // if not empty
 			// string "ld"
 			o = append(o, 0xa2, 0x6c, 0x64)
-			o = msgp.AppendUint64(o, (*z).Load)
+			o = (*z).Load.MarshalMsg(o)
 		}
 		if (zb0005Mask & 0x4000) == 0 { // if not empty
 			// string "nextbefore"
@@ -2005,7 +2005,7 @@ func (z *BlockHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 		}
 		if zb0005 > 0 {
 			zb0005--
-			(*z).Load, bts, err = msgp.ReadUint64Bytes(bts)
+			bts, err = (*z).Load.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Load")
 				return
@@ -2315,7 +2315,7 @@ func (z *BlockHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					}
 				}
 			case "ld":
-				(*z).Load, bts, err = msgp.ReadUint64Bytes(bts)
+				bts, err = (*z).Load.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Load")
 					return
@@ -2365,13 +2365,13 @@ func (z *BlockHeader) Msgsize() (s int) {
 	for zb0004 := range (*z).ParticipationUpdates.AbsentParticipationAccounts {
 		s += (*z).ParticipationUpdates.AbsentParticipationAccounts[zb0004].Msgsize()
 	}
-	s += 3 + msgp.Uint64Size + 3 + (*z).BaseFee.Msgsize()
+	s += 3 + (*z).Load.Msgsize() + 3 + (*z).BaseFee.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *BlockHeader) MsgIsZero() bool {
-	return ((*z).Round.MsgIsZero()) && ((*z).Branch.MsgIsZero()) && ((*z).Branch512.MsgIsZero()) && ((*z).Seed.MsgIsZero()) && ((*z).TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).TimeStamp == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).Proposer.MsgIsZero()) && ((*z).FeesCollected.MsgIsZero()) && ((*z).Bonus.MsgIsZero()) && ((*z).ProposerPayout.MsgIsZero()) && ((*z).RewardsState.FeeSink.MsgIsZero()) && ((*z).RewardsState.RewardsPool.MsgIsZero()) && ((*z).RewardsState.RewardsLevel == 0) && ((*z).RewardsState.RewardsRate == 0) && ((*z).RewardsState.RewardsResidue == 0) && ((*z).RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).UpgradeVote.UpgradeApprove == false) && ((*z).TxnCounter == 0) && (len((*z).StateProofTracking) == 0) && (len((*z).ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).Load == 0) && ((*z).BaseFee.MsgIsZero())
+	return ((*z).Round.MsgIsZero()) && ((*z).Branch.MsgIsZero()) && ((*z).Branch512.MsgIsZero()) && ((*z).Seed.MsgIsZero()) && ((*z).TxnCommitments.NativeSha512_256Commitment.MsgIsZero()) && ((*z).TxnCommitments.Sha256Commitment.MsgIsZero()) && ((*z).TxnCommitments.Sha512Commitment.MsgIsZero()) && ((*z).TimeStamp == 0) && ((*z).GenesisID == "") && ((*z).GenesisHash.MsgIsZero()) && ((*z).Proposer.MsgIsZero()) && ((*z).FeesCollected.MsgIsZero()) && ((*z).Bonus.MsgIsZero()) && ((*z).ProposerPayout.MsgIsZero()) && ((*z).RewardsState.FeeSink.MsgIsZero()) && ((*z).RewardsState.RewardsPool.MsgIsZero()) && ((*z).RewardsState.RewardsLevel == 0) && ((*z).RewardsState.RewardsRate == 0) && ((*z).RewardsState.RewardsResidue == 0) && ((*z).RewardsState.RewardsRecalculationRound.MsgIsZero()) && ((*z).UpgradeState.CurrentProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocol.MsgIsZero()) && ((*z).UpgradeState.NextProtocolApprovals.MsgIsZero()) && ((*z).UpgradeState.NextProtocolVoteBefore.MsgIsZero()) && ((*z).UpgradeState.NextProtocolSwitchOn.MsgIsZero()) && ((*z).UpgradeVote.UpgradePropose.MsgIsZero()) && ((*z).UpgradeVote.UpgradeDelay.MsgIsZero()) && ((*z).UpgradeVote.UpgradeApprove == false) && ((*z).TxnCounter == 0) && (len((*z).StateProofTracking) == 0) && (len((*z).ParticipationUpdates.ExpiredParticipationAccounts) == 0) && (len((*z).ParticipationUpdates.AbsentParticipationAccounts) == 0) && ((*z).Load.MsgIsZero()) && ((*z).BaseFee.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -2388,7 +2388,7 @@ func BlockHeaderMaxSize() (s int) {
 	s += 11
 	// Calculating size of slice: z.ParticipationUpdates.AbsentParticipationAccounts
 	s += msgp.ArrayHeaderSize + ((bounds.MaxMarkAbsent) * (basics.AddressMaxSize()))
-	s += 3 + msgp.Uint64Size + 3 + basics.MicroAlgosMaxSize()
+	s += 3 + basics.MicrosMaxSize() + 3 + basics.MicroAlgosMaxSize()
 	return
 }
 
