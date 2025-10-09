@@ -56,7 +56,7 @@ func TestDHTBasic(t *testing.T) {
 
 	_, err = MakeDiscovery(dht)
 	require.NoError(t, err)
-	
+
 	err = dht.Bootstrap(ctx)
 	require.NoError(t, err)
 }
@@ -65,7 +65,7 @@ func TestDHTBasicAlgodev(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	logging.SetDebugLogging()
-	
+
 	// Create cancellable context for proper cleanup
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -87,7 +87,7 @@ func TestDHTBasicAlgodev(t *testing.T) {
 
 	_, err = MakeDiscovery(dht)
 	require.NoError(t, err)
-	
+
 	err = dht.Bootstrap(ctx)
 	require.NoError(t, err)
 }
