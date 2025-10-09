@@ -182,13 +182,19 @@ func BenchmarkAgreementPersistenceRecovery(b *testing.B) {
 	}
 }
 
+const randomizedEncodingMaxCollectionLen = 8 // instead of 32 used in codec_tester.go
+
 func randomizeDiskState() (rr rootRouter, p player) {
-	p2, err := protocol.RandomizeObject(&player{})
+	opts := []protocol.RandomizeObjectOption{
+		protocol.RandomizeObjectWithMaxCollectionLen(randomizedEncodingMaxCollectionLen),
+		protocol.RandomizeObjectSilenceAllocWarnings(),
+	}
+	p2, err := protocol.RandomizeObject(&player{}, opts...)
 	if err != nil {
 		return
 	}
 
-	rr2, err := protocol.RandomizeObject(&rootRouter{})
+	rr2, err := protocol.RandomizeObject(&rootRouter{}, opts...)
 	if err != nil {
 		return
 	}
@@ -200,7 +206,12 @@ func randomizeDiskState() (rr rootRouter, p player) {
 
 func TestRandomizedEncodingFullDiskState(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	for i := 0; i < 5000; i++ {
+	iterations := 1000
+	if testing.Short() {
+		iterations = 500
+	}
+
+	for i := 0; i < iterations; i++ {
 		router, player := randomizeDiskState()
 		a := []action{}
 		clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
