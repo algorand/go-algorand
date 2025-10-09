@@ -1236,7 +1236,7 @@ func TestNextBaseFee(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		prevLoad    uint64
+		prevLoad    basics.Micros
 		prevBaseFee uint64
 		expected    uint64
 	}{
@@ -1367,7 +1367,7 @@ func TestMakeBlockCongestionFields(t *testing.T) {
 		require.Equal(t, expectedBaseFee, block.BaseFee)
 
 		// Load should be 0 for empty block (will be set during block evaluation)
-		require.Equal(t, uint64(0), block.Load)
+		require.Zero(t, block.Load)
 	})
 
 	t.Run("congestion_fees_disabled", func(t *testing.T) {
@@ -1427,7 +1427,7 @@ func TestCongestionFeeScaling(t *testing.T) {
 
 	// Test different load levels and their effect on base fee
 	tests := []struct {
-		load        uint64
+		load        basics.Micros
 		scaleFactor string // for documentation
 		expectedFee uint64
 	}{

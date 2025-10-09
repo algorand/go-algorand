@@ -179,6 +179,12 @@ func Muldiv[A ~uint64, B ~uint64](a A, b B, c uint64) (uint64, bool) {
 	return quo, false
 }
 
+// MulAM multiplies a MicroAlgos value by a Micros value.
+func MulAM(a MicroAlgos, m Micros) (MicroAlgos, bool) {
+	res, overflowed := Muldiv(a.Raw, m, 1e6)
+	return MicroAlgos{Raw: res}, overflowed
+}
+
 // DivCeil provides `math.Ceil` semantics using integer division.  The technique
 // avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
 //
