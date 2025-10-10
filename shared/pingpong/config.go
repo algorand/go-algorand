@@ -103,7 +103,7 @@ var DefaultConfig = PpConfig{
 	RandomizeAmt:    false,
 	RandomizeDst:    false,
 	MaxRandomDst:    200000,
-	MaxFee:          0,
+	MaxFee:          10000,
 	MinFee:          0,
 	MaxAmt:          1000,
 	TxnPerSec:       200,
