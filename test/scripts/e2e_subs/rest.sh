@@ -68,10 +68,15 @@ function call_delete {
   base_delete_call "$PUB_TOKEN" "$1" "$2"
 }
 
+# Helper function for simple REST API calls that returns response to stdout
+function rest {
+  curl -q -s -H "Authorization: Bearer $PUB_TOKEN" "$NET$1"
+}
+
 # Get the network's minimum transaction fee from suggested params
 function get_min_fee {
   local fee
-  fee=$(curl --max-time 10 -q -s -H "Authorization: Bearer $PUB_TOKEN" "$NET/v2/transactions/params" | jq -r '.["min-fee"]')
+  fee=$(rest "/v2/transactions/params" | jq -r '.["min-fee"]')
   if [ -z "$fee" ] || [ "$fee" = "null" ]; then
     echo "ERROR: Failed to get min fee from network" >&2
     exit 1

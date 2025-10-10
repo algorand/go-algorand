@@ -8,9 +8,6 @@ date "+${scriptname} start %Y%m%d_%H%M%S"
 
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"
-function rest() {
-    curl -q -s -H "Authorization: Bearer $PUB_TOKEN" "$NET$1"
-}
 
 set -e
 set -x
