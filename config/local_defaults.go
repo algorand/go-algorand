@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    36,
+	Version:                                    37,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -63,6 +63,7 @@ var defaultLocal = Local{
 	EnableAgreementReporting:                   false,
 	EnableAgreementTimeMetrics:                 false,
 	EnableAssembleStats:                        false,
+	EnableBatchVerification:                    true,
 	EnableBlockService:                         false,
 	EnableDHTProviders:                         false,
 	EnableDeveloperAPI:                         false,
