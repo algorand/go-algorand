@@ -750,7 +750,7 @@ func expr(s string) ast.Expr {
 	return x
 }
 
-var posType = reflect.TypeOf(token.Pos(0))
+var posType = reflect.TypeFor[token.Pos]()
 
 func killPos(v reflect.Value) {
 	switch v.Kind() {

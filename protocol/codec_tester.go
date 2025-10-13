@@ -42,7 +42,7 @@ type msgpMarshalUnmarshal interface {
 	msgp.Unmarshaler
 }
 
-var rawMsgpType = reflect.TypeOf(msgp.Raw{})
+var rawMsgpType = reflect.TypeFor[msgp.Raw]()
 var errSkipRawMsgpTesting = fmt.Errorf("skipping msgp.Raw serializing, since it won't be the same across go-codec and msgp")
 
 func oneOf(n int) bool {
