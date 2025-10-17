@@ -233,6 +233,17 @@ func TestPeerReadLoopSwitchAllTags(t *testing.T) {
 	})
 	require.True(t, readLoopFound)
 	require.NotEmpty(t, foundTags)
+	ignored := map[string]struct{}{
+		"VotePackedTag": {}, // normalized to AgreementVoteTag before the switch
+	}
+	filtered := allTags[:0]
+	for _, tag := range allTags {
+		if _, ok := ignored[tag]; ok {
+			continue
+		}
+		filtered = append(filtered, tag)
+	}
+	allTags = filtered
 	sort.Strings(allTags)
 	sort.Strings(foundTags)
 	require.Equal(t, allTags, foundTags)

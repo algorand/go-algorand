@@ -646,6 +646,10 @@ type Local struct {
 	// EnableVoteCompression controls whether vote compression is enabled for websocket networks
 	EnableVoteCompression bool `version[36]:"true"`
 
+	// VoteCompressionDynamicTableSize controls the size of the dynamic table used for vote compression.
+	// If 0, dynamic vote compression is disabled.
+	VoteCompressionDynamicTableSize uint `version[37]:"512"`
+
 	// EnableBatchVerification controls whether ed25519 batch verification is enabled
 	EnableBatchVerification bool `version[37]:"true"`
 }
