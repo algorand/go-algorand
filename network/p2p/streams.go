@@ -140,12 +140,13 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	// then it was made by some sub component like pubsub, ignore
 	if n.cfg.IsHybridServer() && conn.Stat().Direction == network.DirOutbound {
 		val, err := n.host.Peerstore().Get(remotePeer, psmdkDialed)
-		if err != nil {
-			n.log.Warnf("%s: failed to get dialed status for %s: %v", localPeer.String(), remotePeer.String(), err)
-		}
-		if val == nil || !val.(bool) {
+		if err != nil || val != nil && !val.(bool) {
+			// not found or false value
 			n.log.Debugf("%s: ignoring non-dialed outgoing peer ID %s", localPeer.String(), remotePeer.String())
 			return
+		}
+		if val == nil {
+			n.log.Warnf("%s: failed to get dialed status for %s: %v", localPeer.String(), remotePeer.String())
 		}
 	}
 

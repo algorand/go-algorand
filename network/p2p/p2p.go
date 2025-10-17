@@ -296,7 +296,15 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	var numOutgoingConns int
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
-			numOutgoingConns++
+			if s.subcfg.IsHybridServer() {
+				remotePeer := conn.RemotePeer()
+				val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
+				if err == nil && val != nil && val.(bool) {
+					numOutgoingConns++
+				}
+			} else {
+				numOutgoingConns++
+			}
 		}
 	}
 	preExistingConns := numOutgoingConns
