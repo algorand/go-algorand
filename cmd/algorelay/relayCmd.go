@@ -95,7 +95,7 @@ func loadRelays(file string) []eb.Relay {
 	err := codecs.LoadObjectFromFile(file, &relays)
 	if err != nil {
 		err = fmt.Errorf("Unable to load relays file - %v", err)
-		panic(makeExitError(1, err.Error()))
+		panic(makeExitError(1, "%s", err.Error()))
 	}
 	return relays
 }
@@ -126,27 +126,27 @@ func makeDNSContext() *dnsContext {
 
 	nameZoneID, err := cloudflareCred.GetZoneID(context.Background(), nameDomainArg)
 	if err != nil {
-		panic(makeExitError(1, err.Error()))
+		panic(makeExitError(1, "%s", err.Error()))
 	}
 
 	nameEntries, err := getReverseMappedEntries(nameZoneID, nameRecordTypes)
 	if err != nil {
-		panic(makeExitError(1, err.Error()))
+		panic(makeExitError(1, "%s", err.Error()))
 	}
 
 	srvZoneID, err := cloudflareCred.GetZoneID(context.Background(), srvDomainArg)
 	if err != nil {
-		panic(makeExitError(1, err.Error()))
+		panic(makeExitError(1, "%s", err.Error()))
 	}
 
 	bootstrap, err := getSrvRecords("_algobootstrap", dnsBootstrapArg+"."+srvDomainArg, srvZoneID)
 	if err != nil {
-		panic(makeExitError(1, err.Error()))
+		panic(makeExitError(1, "%s", err.Error()))
 	}
 
 	metrics, err := getSrvRecords("_metrics", srvDomainArg, srvZoneID)
 	if err != nil {
-		panic(makeExitError(1, err.Error()))
+		panic(makeExitError(1, "%s", err.Error()))
 	}
 
 	return &dnsContext{
@@ -585,7 +585,7 @@ func getSrvRecords(serviceName string, networkName, zoneID string) (service srvS
 		var port64 uint64
 		port64, err = strconv.ParseUint(portString, 10, 16)
 		if err != nil {
-			panic(makeExitError(1, fmt.Sprintf("Invalid SRV Port for %s: %s", target, portString)))
+			panic(makeExitError(1, "Invalid SRV Port for %s: %s", target, portString))
 		}
 		port := uint16(port64)
 
