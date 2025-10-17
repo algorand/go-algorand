@@ -146,7 +146,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 			return
 		}
 		if val == nil {
-			n.log.Warnf("%s: failed to get dialed status for %s: %v", localPeer.String(), remotePeer.String())
+			n.log.Warnf("%s: failed to get dialed status for %s", localPeer.String(), remotePeer.String())
 		}
 	}
 
