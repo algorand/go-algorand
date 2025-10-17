@@ -1,6 +1,6 @@
 golang.org/x/lint v0.0.0-20241112194109-818c5a804067
 golang.org/x/tools v0.27.0
 github.com/algorand/msgp v1.1.60
-github.com/algorand/go-swagger 60deb7a1e0d7fff30334471d6739abb0485915ba
+github.com/algorand/go-swagger v0.0.0-20251017160634-60deb7a1e0d7
 gotest.tools/gotestsum v1.13.0
 github.com/golangci/golangci-lint/cmd/golangci-lint v1.62.0
