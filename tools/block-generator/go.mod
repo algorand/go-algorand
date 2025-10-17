@@ -2,9 +2,9 @@ module github.com/algorand/go-algorand/tools/block-generator
 
 replace github.com/algorand/go-algorand => ../..
 
-go 1.23.0
+go 1.25.0
 
-toolchain go1.23.9
+toolchain go1.25.3
 
 require (
 	github.com/algorand/avm-abi v0.2.0
