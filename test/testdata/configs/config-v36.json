@@ -143,6 +143,5 @@
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30,
     "UseXForwardedForAddressField": "",
-    "VerifiedTranscationsCacheSize": 150000,
-    "VoteCompressionDynamicTableSize": 512
+    "VerifiedTranscationsCacheSize": 150000
 }
