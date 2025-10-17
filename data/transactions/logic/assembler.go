@@ -2207,7 +2207,7 @@ func checkMacroName(macroName string, version uint64, labels map[string]int) err
 		} else if count == 1 {
 			secondRune = r
 		}
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !otherAllowedChars[r] {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && (int(r) >= len(otherAllowedChars) || !otherAllowedChars[r]) {
 			return fmt.Errorf("%s character not allowed in macro name", string(r))
 		}
 		count++
