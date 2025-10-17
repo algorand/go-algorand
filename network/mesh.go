@@ -243,23 +243,22 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 
 	meshFn := func(targetConnCount int) int {
 		wsTarget := targetConnCount
+		// skip p2p mesh for the first time to give wsnet to establish connections
 		if prevP2PConnections != -1 && targetConnCount > prevP2PConnections {
 			wsTarget = targetConnCount - prevP2PConnections
 		}
 		wsConnections := cfg.wsnet.meshThreadInner(wsTarget)
 
 		var p2pConnections int
-		// skip p2p mesh for the first time to give wsnet to establish connections
-		if wsConnections <= targetConnCount {
-			// note "less or equal". Even if p2pTarget is zero it makes sense to call
-			// p2p meshThreadInner to fetch DHT peers
-			p2pTarget := targetConnCount - wsConnections
-			p2pConnections = cfg.p2pnet.meshThreadInner(p2pTarget)
+		p2pTarget := 0 // even if p2pTarget is zero it makes sense to call p2p meshThreadInner to fetch DHT peers
+		if wsConnections < targetConnCount {
+			p2pTarget = targetConnCount - wsConnections
+		}
+		p2pConnections = cfg.p2pnet.meshThreadInner(p2pTarget)
 
-			if cfg.wsnet.log.GetLevel() >= logging.Debug {
-				cfg.wsnet.log.Debugf("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d (prev=%d), target=%d",
-					wsConnections, p2pConnections, prevP2PConnections, targetConnCount)
-			}
+		if cfg.wsnet.log.GetLevel() >= logging.Debug && p2pTarget > 0 {
+			cfg.wsnet.log.Debugf("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d (prev=%d), target=%d",
+				wsConnections, p2pConnections, prevP2PConnections, targetConnCount)
 		}
 		prevP2PConnections = p2pConnections
 		return wsConnections + p2pConnections
