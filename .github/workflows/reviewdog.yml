@@ -1,6 +1,6 @@
 name: "ReviewDog workflow"
 env:
-  GOLANGCI_LINT_VERSION: "v1.62.0"
+  GOLANGCI_LINT_VERSION: "v1.64.8"
 on:
   push:
     branches:
@@ -24,7 +24,7 @@ jobs:
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make libsodium && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: reviewdog-golangci-lint
-        uses: reviewdog/action-golangci-lint@v2.7.0
+        uses: reviewdog/action-golangci-lint@v2.7.2
         with:
           go_version_file: go.mod
           golangci_lint_version: ${{ env.GOLANGCI_LINT_VERSION }}
