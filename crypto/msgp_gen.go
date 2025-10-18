@@ -2393,16 +2393,6 @@ func OneTimeSignatureSecretsMaxSize() (s int) {
 	s += 6 + msgp.Uint64Size + 4
 	// Calculating size of slice: z.OneTimeSignatureSecretsPersistent.Batches
 	panic("Slice z.OneTimeSignatureSecretsPersistent.Batches is unbounded")
-	s += 9 + msgp.Uint64Size + 8
-	// Calculating size of slice: z.OneTimeSignatureSecretsPersistent.Offsets
-	panic("Slice z.OneTimeSignatureSecretsPersistent.Offsets is unbounded")
-	s += 7
-	// Calculating size of array: z.OneTimeSignatureSecretsPersistent.OffsetsPK2
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
-	s += 10
-	// Calculating size of array: z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig
-	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2751,16 +2741,6 @@ func OneTimeSignatureSecretsPersistentMaxSize() (s int) {
 	s += 6 + msgp.Uint64Size + 4
 	// Calculating size of slice: z.Batches
 	panic("Slice z.Batches is unbounded")
-	s += 9 + msgp.Uint64Size + 8
-	// Calculating size of slice: z.Offsets
-	panic("Slice z.Offsets is unbounded")
-	s += 7
-	// Calculating size of array: z.OffsetsPK2
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
-	s += 10
-	// Calculating size of array: z.OffsetsPK2Sig
-	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler

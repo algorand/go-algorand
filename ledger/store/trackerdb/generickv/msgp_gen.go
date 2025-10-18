@@ -161,5 +161,4 @@ func (z *creatableEntry) MsgIsZero() bool {
 func CreatableEntryMaxSize() (s int) {
 	s = 1 + 6 + basics.CreatableTypeMaxSize() + 12
 	panic("Unable to determine max size: Byteslice type z.CreatorAddr is unbounded")
-	return
 }

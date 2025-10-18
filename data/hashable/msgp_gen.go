@@ -136,5 +136,4 @@ func (z *Message) MsgIsZero() bool {
 func MessageMaxSize() (s int) {
 	s = 1 + 4
 	panic("Unable to determine max size: String type z.Message is unbounded")
-	return
 }
