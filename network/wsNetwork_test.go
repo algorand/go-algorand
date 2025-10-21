@@ -692,10 +692,10 @@ func TestWebsocketVoteDynamicCompressionAbortMessage(t *testing.T) {
 	}
 
 	// Verify VP compression is established
-	require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled, "VP encoding not established on A->B")
-	require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled, "VP decoding not established on A->B")
-	require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled, "VP encoding not established on B->A")
-	require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled, "VP decoding not established on B->A")
+	require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(), "VP encoding not established on A->B")
+	require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(), "VP decoding not established on A->B")
+	require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(), "VP encoding not established on B->A")
+	require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(), "VP decoding not established on B->A")
 
 	// Send VP abort message from A to B
 	abortMsg := append([]byte(protocol.VotePackedTag), voteCompressionAbortMessage)
@@ -704,7 +704,7 @@ func TestWebsocketVoteDynamicCompressionAbortMessage(t *testing.T) {
 
 	// Wait for abort to be processed - verify B disabled its encoder (can't send VP to A anymore)
 	require.Eventually(t, func() bool {
-		return !peerBtoA.msgCodec.statefulVoteEncEnabled
+		return !peerBtoA.msgCodec.statefulVoteEncEnabled.Load()
 	}, 2*time.Second, 50*time.Millisecond, "VP encoding not disabled on B->A after receiving abort message")
 
 	// Verify connection is still up after abort
@@ -792,13 +792,13 @@ func testWebsocketVoteDynamicCompressionMessages(t *testing.T, msgs [][]byte, ex
 
 			// Check if dynamic compression is enabled
 			if tc.expectDynamic {
-				require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled,
+				require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(),
 					"A->B peer should have dynamic encoding enabled")
-				require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled,
+				require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(),
 					"A->B peer should have dynamic decoding enabled")
-				require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled,
+				require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(),
 					"B->A peer should have dynamic encoding enabled")
-				require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled,
+				require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(),
 					"B->A peer should have dynamic decoding enabled")
 
 				// Check negotiated table size
@@ -807,13 +807,13 @@ func testWebsocketVoteDynamicCompressionMessages(t *testing.T, msgs [][]byte, ex
 				require.Equal(t, uint(tc.expectedSize), peerBtoA.getBestVpackTableSize(),
 					"B->A peer should have expected table size")
 			} else {
-				require.False(t, peerAtoB.msgCodec.statefulVoteEncEnabled,
+				require.False(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(),
 					"A->B peer should not have dynamic encoding enabled")
-				require.False(t, peerAtoB.msgCodec.statefulVoteDecEnabled,
+				require.False(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(),
 					"A->B peer should not have dynamic decoding enabled")
-				require.False(t, peerBtoA.msgCodec.statefulVoteEncEnabled,
+				require.False(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(),
 					"B->A peer should not have dynamic encoding enabled")
-				require.False(t, peerBtoA.msgCodec.statefulVoteDecEnabled,
+				require.False(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(),
 					"B->A peer should not have dynamic decoding enabled")
 			}
 
@@ -838,17 +838,17 @@ func testWebsocketVoteDynamicCompressionMessages(t *testing.T, msgs [][]byte, ex
 			if tc.expectDynamic {
 				if expectCompressionAfter {
 					// Valid messages - compression should still be enabled
-					require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled,
+					require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(),
 						"Stateful encoding should still be enabled after sending valid votes")
-					require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled,
+					require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(),
 						"Stateful decoding should still be enabled after sending valid votes")
-					require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled,
+					require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(),
 						"Stateful encoding should still be enabled after receiving valid votes")
-					require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled,
+					require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(),
 						"Stateful decoding should still be enabled after receiving valid votes")
 				} else {
 					// Invalid messages - sender's encoder should be disabled when it fails to compress
-					require.False(t, peerAtoB.msgCodec.statefulVoteEncEnabled,
+					require.False(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(),
 						"Stateful encoding should be disabled after sending invalid messages")
 					// Note: peerBtoA never receives VP messages, only AV messages, so its decoder is not affected
 				}
