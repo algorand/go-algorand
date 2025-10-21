@@ -264,9 +264,8 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 		return wsConnections + p2pConnections
 	}
 
-	ctx := cfg.wsnet.ctx
 	mesh, err := newBaseMesher(
-		withContext(ctx),
+		withContext(cfg.wsnet.ctx),
 		withTargetConnCount(cfg.wsnet.config.GossipFanout),
 		withMeshNetMeshFn(meshFn),
 		withMeshPeerStatReporter(func() {
@@ -287,21 +286,25 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			return
-		case req := <-cfg.wsnet.meshUpdateRequests:
-			out <- req
+		for {
+			select {
+			case <-mesh.ctx.Done():
+				return
+			case req := <-cfg.wsnet.meshUpdateRequests:
+				out <- req
+			}
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			return
-		case req := <-cfg.p2pnet.meshUpdateRequests:
-			out <- req
+		for {
+			select {
+			case <-mesh.ctx.Done():
+				return
+			case req := <-cfg.p2pnet.meshUpdateRequests:
+				out <- req
+			}
 		}
 	}()
 
