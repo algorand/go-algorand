@@ -28,7 +28,7 @@ const (
 
 // Resolver provides equivalent functionality to the net.Resolver with one exception - it allows to use a provided DNS server instead of relying on the existing default resolver.
 type Resolver struct {
-	// DNSAddress is the the DNS server that we'll be trying to connect to.
+	// DNSAddress is the DNS server that we'll be trying to connect to.
 	dnsAddress net.IPAddr
 	resolver   ResolverIf
 }

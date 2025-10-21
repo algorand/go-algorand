@@ -2110,7 +2110,7 @@ func TestMakeCatchpointFilePath(t *testing.T) {
 // deadlock detection) and concurrent reads (from transaction evaluation, stake lookups, etc) can
 // cause the SQLite implementation in util/db/dbutil.go to retry the function looping over all
 // tracker commitRound implementations. Since catchpointtracker' commitRound updates a merkle trie's
-// DB storage and its in-memory cache, the retry can cause the the balancesTrie's cache to become
+// DB storage and its in-memory cache, the retry can cause the balancesTrie's cache to become
 // corrupted and out of sync with the DB (which uses transaction rollback between retries). The
 // merkle trie corruption manifests as error log messages like:
 //   - "attempted to add duplicate hash 'X' to merkle trie for account Y"

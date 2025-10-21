@@ -332,7 +332,7 @@ func shutdownClonedNode(nodeDataDir string, f *fixtures.RestClientFixture, t *te
 	}
 }
 
-// TestBasicCatchupCompletes confirms the the catchup eventually completes and stops.
+// TestBasicCatchupCompletes confirms the catchup eventually completes and stops.
 func TestBasicCatchupCompletes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)

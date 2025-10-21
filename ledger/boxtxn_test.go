@@ -772,7 +772,7 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 		// transaction counter, so it can know what the later create will be,
 		// and compute it's app address.
 
-		// 2) a) Use the the predicted appID to name the box ref.
+		// 2) a) Use the predicted appID to name the box ref.
 		// or b) Use 0 as the app in the box ref, meaning "this app"
 		// or c) EnableUnnamedBoxCreate will allow such a creation if there are empty box refs.
 

@@ -54,7 +54,7 @@ int crypto_vrf_ietfdraft03_keypair(unsigned char *pk, unsigned char *sk);
 // we call vrf_prove, the "secret key" our keygen function returns to the user
 // will actually be the secret key with the public key appended. To avoid
 // confusion, we'll use "seed" to refer to the 32-byte string called the "secret
-// key" in the IETF spec, and "augmented secret key" to refer to the the 64-byte
+// key" in the IETF spec, and "augmented secret key" to refer to the 64-byte
 // string returned by our keygen function. libsodium's crypto_sign_ed25519
 // takes the same approach.
 //

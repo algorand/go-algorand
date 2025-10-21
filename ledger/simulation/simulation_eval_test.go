@@ -9033,7 +9033,7 @@ func TestFixSigners(t *testing.T) {
 		txn ApplicationID
 		bz end
 
-		// Rekey to the the innerRekeyAddr
+		// Rekey to the innerRekeyAddr
 		itxn_begin
 		int pay
 		itxn_field TypeEnum

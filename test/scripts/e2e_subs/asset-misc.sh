@@ -112,7 +112,7 @@ else
     echo ok
 fi
 
-# case 3b: Reserve address opts into the the asset, and gets asset info successfully.
+# case 3b: Reserve address opts into the asset, and gets asset info successfully.
 ${gcmd} asset optin --creator "${ACCOUNT}" --asset dma --account ${ACCOUNTC}
 DIFF_MANAGER_ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname dma|grep 'Asset ID'|awk '{ print $3 }')
 
