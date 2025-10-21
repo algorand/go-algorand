@@ -896,22 +896,19 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 			}
 		}
 
-		// calculate expected balances after applying payTxn (if any)
-		if payTxnAmount > 0 {
-			receiver := afterPayTxnOnlineAccts[payTxnReceiver]
-			receiver.MicroAlgosWithRewards.Raw += payTxnAmount
-			sender := afterPayTxnOnlineAccts[payTxnSender]
-			sender.MicroAlgosWithRewards.Raw -= (payTxnAmount + config.Consensus[cv].MinTxnFee)
-			afterPayTxnOnlineAccts[payTxnReceiver] = receiver
-			afterPayTxnOnlineAccts[payTxnSender] = sender
-		}
-
 		require.Equal(t, onlineCount, onlineCnt)
 		require.Len(t, accts, onlineCnt)
 		if rnd == 0 {
 			// balances should be same as genesis
 			require.Equal(t, genesisOnlineAccts, accts)
 		} else {
+			// calculate expected balances after applying payTxn
+			receiver := afterPayTxnOnlineAccts[payTxnReceiver]
+			receiver.MicroAlgosWithRewards.Raw += payTxnAmount
+			sender := afterPayTxnOnlineAccts[payTxnSender]
+			sender.MicroAlgosWithRewards.Raw -= (payTxnAmount + config.Consensus[cv].MinTxnFee)
+			afterPayTxnOnlineAccts[payTxnReceiver] = receiver
+			afterPayTxnOnlineAccts[payTxnSender] = sender
 			// balances > rnd 1 should reflect payTxn change
 			require.Equal(t, afterPayTxnOnlineAccts, accts, "rnd %d", rnd)
 		}
