@@ -1175,11 +1175,7 @@ func (wp *wsPeer) getBestVpackTableSize() uint {
 		return 0 // Peer doesn't support dynamic compression
 	}
 
-	// Return the minimum of the two
-	if peerMaxSize < ourMaxSize {
-		return peerMaxSize
-	}
-	return ourMaxSize
+	return min(ourMaxSize, peerMaxSize)
 }
 
 //msgp:ignore peerFeatureFlag
