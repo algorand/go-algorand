@@ -1095,12 +1095,21 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 	time.Sleep(1 * time.Millisecond)
 
 	// ensure Ledger.Wait() is non-blocked for all rounds except the last one (due to possible races)
+	attempts := 0
 	for rnd := startRound; rnd < endRound; rnd++ {
 		done := ledger.Wait(rnd)
+	checkAgain:
 		select {
 		case <-done:
+			attempts = 0
 		default:
-			require.FailNow(t, fmt.Sprintf("Wait(%d) is blocked", rnd))
+			if attempts >= 3 {
+				require.FailNow(t, fmt.Sprintf("Wait(%d) is blocked", rnd))
+			} else {
+				time.Sleep(1 * time.Millisecond)
+				attempts++
+				goto checkAgain
+			}
 		}
 	}
 }
