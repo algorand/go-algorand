@@ -32,6 +32,7 @@ type MicroAlgos struct {
 	Raw uint64
 }
 
+// String returns a human-readable representation of MicroAlgos
 func (a MicroAlgos) String() string {
 	if a.Raw == 0 {
 		return "0.0A"
@@ -53,6 +54,16 @@ func (a MicroAlgos) String() string {
 		return fmt.Sprintf("%dA", whole)
 	}
 	return fmt.Sprintf("%d.%06d", whole, fraction)
+}
+
+// AddSaturate adds MicroAlgos, and won't rollover.
+func (a MicroAlgos) AddSaturate(b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: AddSaturate(a.Raw, b.Raw)}
+}
+
+// SubSaturate subtracts MicroAlgos, and won't rollover.
+func (a MicroAlgos) SubSaturate(b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: SubSaturate(a.Raw, b.Raw)}
 }
 
 // LessThan implements arithmetic comparison for MicroAlgos

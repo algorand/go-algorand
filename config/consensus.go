@@ -574,7 +574,7 @@ type ConsensusParams struct {
 	EnableInnerClawbackWithoutSenderHolding bool
 
 	// CongestionFees enables header values that track Load and a running
-	// BaseFee that grows/shrinks when blocks are more/less than half full
+	// CongestionFee that grows/shrinks when blocks are more/less than half full
 	CongestionFees bool
 }
 

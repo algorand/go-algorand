@@ -341,8 +341,8 @@ type EvalParams struct {
 
 	Specials *transactions.SpecialAddresses
 
-	// BaseFee is the per-transaction base fee from the block header, used for
-	// fee calculations in application evaluation. Only set for app evaluation, not LogicSig.
+	// BaseFee is the per-transaction base fee, used for fee calculations in
+	// application evaluation. Only set for app evaluation, not LogicSig.
 	BaseFee basics.MicroAlgos
 
 	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)

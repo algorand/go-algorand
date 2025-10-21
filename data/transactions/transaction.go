@@ -54,13 +54,18 @@ type SpecialAddresses struct {
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sender      basics.Address    `codec:"snd"`
-	Fee         basics.MicroAlgos `codec:"fee"`
-	FirstValid  basics.Round      `codec:"fv"`
-	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note,allocbound=bounds.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
-	GenesisID   string            `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
-	GenesisHash crypto.Digest     `codec:"gh"`
+	Sender basics.Address `codec:"snd"`
+
+	Fee           basics.MicroAlgos `codec:"fee"`
+	CostIncrement basics.Micros     `codec:"ci"` // All costs are multiplied by 1 + CostIncrement
+
+	FirstValid basics.Round `codec:"fv"`
+	LastValid  basics.Round `codec:"lv"`
+
+	Note []byte `codec:"note,allocbound=bounds.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
+
+	GenesisID   string        `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
+	GenesisHash crypto.Digest `codec:"gh"`
 
 	// Group specifies that this transaction is part of a
 	// transaction group (and, if so, specifies the hash

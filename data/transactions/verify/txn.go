@@ -232,8 +232,8 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		}
 	}
 
-	// This is just a first pass check, since it uses MinTxnFee. It can't use
-	// BaseFee, because we don't even know what block the group will end up in.
+	// This is just a first pass check, since it uses MinTxnFee. It use
+	// BaseFee, because we don't know what block the group will end up in.
 	required, feesPaid := transactions.SummarizeTxnFees(stxs)
 	minFee := basics.MicroAlgos{Raw: groupCtx.consensusParams.MinTxnFee}
 	if err := CheckGroupFees(feesPaid, required, minFee); err != nil {

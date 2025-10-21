@@ -149,7 +149,7 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 func SummarizeFees(txgroup []SignedTxnWithAD) (factor basics.Micros, paid basics.MicroAlgos) {
 	for _, txad := range txgroup {
 		factor = basics.AddSaturate(factor, txad.SignedTxn.Txn.FeeFactor())
-		paid.Raw = basics.AddSaturate(paid.Raw, txad.SignedTxn.Txn.Fee.Raw)
+		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 	}
 	return
 }
@@ -160,7 +160,7 @@ func SummarizeFees(txgroup []SignedTxnWithAD) (factor basics.Micros, paid basics
 func SummarizeTxnFees(txgroup []SignedTxn) (factor basics.Micros, paid basics.MicroAlgos) {
 	for _, stx := range txgroup {
 		factor = basics.AddSaturate(factor, stx.Txn.FeeFactor())
-		paid.Raw = basics.AddSaturate(paid.Raw, stx.Txn.Fee.Raw)
+		paid = paid.AddSaturate(stx.Txn.Fee)
 	}
 	return
 }

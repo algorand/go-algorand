@@ -135,7 +135,7 @@ type NodeInterface interface {
 	Simulate(request simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
-	BaseFee() basics.MicroAlgos
+	CongestionFee() basics.MicroAlgos
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
 	Config() config.Local
@@ -1478,7 +1478,7 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 		GenesisId:        v2.Node.GenesisID(),
 		LastRound:        stat.LastRound,
 		MinFee:           proto.MinTxnFee,
-		BaseFee:          omitEmpty(v2.Node.BaseFee().Raw),
+		CongestionFee:    omitEmpty(v2.Node.CongestionFee().Raw),
 	}
 
 	return ctx.JSON(http.StatusOK, response)
