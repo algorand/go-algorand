@@ -73,7 +73,7 @@ if { [catch {
 
     set MIN_BALANCE 100000
     set TRANSFER_AMOUNT  [expr {3 * $MIN_BALANCE}]
-    # Get suggested fee - this creates app ID 1001 as a test transaction
+    # Get suggested fee via REST API
     set FEE_AMOUNT [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
     puts "Network suggested fee: $FEE_AMOUNT"
 
@@ -84,23 +84,23 @@ if { [catch {
     set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
     set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $NEW_ACCOUNT_ADDRESS ${TEAL_PROGS_DIR}/clear_program_state.teal $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
 
-    # expect app idx = 1003 since GetSuggestedFee creates app 1001 as a test transaction, and the transfer creates app 1002
-    if { $APP_ID != 1003 } {
-        ::AlgorandGoal::Abort "Expected app id to be 1003 but got $APP_ID. GetSuggestedFee creates app 1001, transfer may create 1002."
+    # expect app idx = 1002 (txnCounter starts at 1000, AccountTransfer increments to 1001, AppCreate gets 1002)
+    if { $APP_ID != 1002 } {
+        ::AlgorandGoal::Abort "Expected app id to be 1002 but got $APP_ID. This is the first app created after the transfer transaction."
     }
 
-    # check JSON output to stdout - verify structure and app data, but not exact balance (depends on protocol MinFee)
+    # check JSON output to stdout - verify structure, app data, and exact balance
     set JSON_ACTUAL [exec goal account dump -a $NEW_ACCOUNT_ADDRESS --datadir $TEST_PRIMARY_NODE_DIR]
 
-    # Verify critical fields are present (address, app params, schemas) without hardcoding balance
+    # Verify critical fields are present (address, app params, schemas)
     if { ! [string match {*"addr": "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU"*} $JSON_ACTUAL] } {
         ::AlgorandGoal::Abort "JSON missing correct address"
     }
     if { ! [string match {*"appp"*} $JSON_ACTUAL] } {
         ::AlgorandGoal::Abort "JSON missing app params"
     }
-    if { ! [string match {*"1003"*} $JSON_ACTUAL] } {
-        ::AlgorandGoal::Abort "JSON missing app ID 1003"
+    if { ! [string match {*"1002"*} $JSON_ACTUAL] } {
+        ::AlgorandGoal::Abort "JSON missing app ID 1002"
     }
     if { ! [string match {*"approv": "AiABASI="*} $JSON_ACTUAL] } {
         ::AlgorandGoal::Abort "JSON missing or incorrect approval program"
@@ -127,20 +127,19 @@ if { [catch {
         eof { ::AlgorandGoal::CheckEOF "Failed to dump account" }
     }
 
-    # Verify msgpack file structure by converting to JSON and checking fields
-    set MSGP_AS_JSON [exec goal account dump -a $NEW_ACCOUNT_ADDRESS --datadir $TEST_PRIMARY_NODE_DIR]
-
-    # Verify the msgpack contains the same app data as JSON (balance may differ)
-    if { ! [string match {*"1003"*} $MSGP_AS_JSON] } {
-        ::AlgorandGoal::Abort "Msgpack dump missing app ID 1003"
+    # Verify msgpack file balance matches expected balance
+    set BALREC_CONTENT [exec cat $BALREC_FILE | msgpacktool -d]
+    if { ! [regexp {\"algo\": ([0-9]+)} $BALREC_CONTENT match msgp_balance] } {
+        ::AlgorandGoal::Abort "Failed to extract balance from msgpack file"
     }
-    if { ! [string match {*"approv"*} $MSGP_AS_JSON] } {
-        ::AlgorandGoal::Abort "Msgpack dump missing approval program"
+    if { $msgp_balance != $EXPECTED_BALANCE } {
+        ::AlgorandGoal::Abort "Msgpack balance $msgp_balance does not match expected $EXPECTED_BALANCE"
     }
-    if { ! [string match {*"clearp"*} $MSGP_AS_JSON] } {
-        ::AlgorandGoal::Abort "Msgpack dump missing clear program"
+    # Verify app ID is 1002 in msgpack (appears as integer key in JSON output)
+    if { ! [string match {*1002:*} $BALREC_CONTENT] } {
+        ::AlgorandGoal::Abort "Msgpack missing app ID 1002"
     }
-    puts "Msgpack dump verified (contains expected app data)"
+    puts "Msgpack dump verified (balance: $msgp_balance)"
 
     # check some empty response on non-existing address with zero exit code
     set PASSED 0

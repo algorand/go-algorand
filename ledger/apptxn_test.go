@@ -1697,7 +1697,7 @@ assert
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: id0.Address(),
-			Amount:   256 * proto.MinTxnFee * 3, // Fund enough for 256 inner txns with more buffer for higher fees
+			Amount:   256 * proto.MinTxnFee * 3, // 256 inner txns × MinTxnFee × 3 (extra buffer for min balance + variable fees)
 		}
 
 		app1 := txntest.Txn{

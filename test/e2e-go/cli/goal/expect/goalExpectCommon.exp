@@ -526,20 +526,25 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
     return $TRANSACTION_ID
 }
 
-# Get the network's suggested minimum fee by sending a test transaction
+# Get the network's suggested minimum fee via REST API
 # Returns the fee value
 proc ::AlgorandGoal::GetSuggestedFee { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
-    set SUGGESTED_FEE 0
-    set timeout 30
-    spawn goal clerk send --wallet $WALLET_NAME --from $ACCOUNT_ADDRESS --to $ACCOUNT_ADDRESS -a 1 -d $TEST_PRIMARY_NODE_DIR
-    expect {
-        timeout { ::AlgorandGoal::Abort "Timeout waiting for test transaction to determine suggested fee" }
-        -re {Fee set to ([0-9]+)} { set SUGGESTED_FEE $expect_out(1,string); exp_continue }
-        -re {committed in round ([0-9]+)} { exp_continue }
-        eof {}
-    }
-    if { $SUGGESTED_FEE == 0 } {
-        ::AlgorandGoal::Abort "Failed to detect network suggested fee from transaction output"
+    if { [catch {
+        set TOKEN_FILE [open $TEST_PRIMARY_NODE_DIR/algod.token]
+        set ALGOD_TOKEN [string trim [read $TOKEN_FILE]]
+        close $TOKEN_FILE
+
+        set NET_FILE [open $TEST_PRIMARY_NODE_DIR/algod.net]
+        set ALGOD_NET [string trim [read $NET_FILE]]
+        close $NET_FILE
+
+        set SUGGESTED_FEE [exec curl -q -s -H "Authorization: Bearer $ALGOD_TOKEN" "http://$ALGOD_NET/v2/transactions/params" | jq -r {.["min-fee"]}]
+
+        if { $SUGGESTED_FEE == "" || $SUGGESTED_FEE == "null" } {
+            ::AlgorandGoal::Abort "Failed to get min fee from network REST API"
+        }
+    } EXCEPTION ] } {
+        ::AlgorandGoal::Abort "ERROR in GetSuggestedFee: $EXCEPTION"
     }
     return $SUGGESTED_FEE
 }
