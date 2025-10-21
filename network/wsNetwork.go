@@ -167,6 +167,10 @@ type WebsocketNetwork struct {
 
 	config config.Local
 
+	// voteCompressionDynamicTableSize is the validated/normalized table size for VP compression.
+	// It is set during setup() by validating config.VoteCompressionDynamicTableSize.
+	voteCompressionDynamicTableSize uint
+
 	log logging.Logger
 
 	wg sync.WaitGroup
@@ -557,6 +561,9 @@ func (wn *WebsocketNetwork) setup() error {
 	}
 	wn.dialer = limitcaller.MakeRateLimitingDialer(wn.phonebook, preferredResolver)
 
+	// Validate and normalize vote compression table size
+	wn.voteCompressionDynamicTableSize = config.NormalizeVoteCompressionTableSize(wn.config.VoteCompressionDynamicTableSize, wn.log)
+
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
@@ -842,7 +849,8 @@ type peerMetadataProvider interface {
 	PublicAddress() string
 	RandomID() string
 	SupportedProtoVersions() []string
-	Config() config.Local
+	EnableVoteCompression() bool
+	VoteCompressionDynamicTableSize() uint
 }
 
 // TelemetryGUID returns the telemetry GUID of this node.
@@ -870,6 +878,16 @@ func (wn *WebsocketNetwork) Config() config.Local {
 	return wn.config
 }
 
+// VoteCompressionDynamicTableSize returns the validated/normalized vote compression table size.
+func (wn *WebsocketNetwork) VoteCompressionDynamicTableSize() uint {
+	return wn.voteCompressionDynamicTableSize
+}
+
+// EnableVoteCompression returns whether vote compression is enabled for this node.
+func (wn *WebsocketNetwork) EnableVoteCompression() bool {
+	return wn.config.EnableVoteCompression
+}
+
 func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvider) {
 	header.Set(TelemetryIDHeader, meta.TelemetryGUID())
 	header.Set(InstanceNameHeader, meta.InstanceName())
@@ -883,14 +901,14 @@ func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvide
 
 	// set the features header (comma-separated list)
 	features := []string{peerFeatureProposalCompression}
-	if meta.Config().EnableVoteCompression {
+	if meta.EnableVoteCompression() {
 		features = append(features, peerFeatureVoteVpackCompression)
 
 		// Announce our maximum supported dynamic table size
 		// Both sides will independently calculate min(ourSize, theirSize)
 		// Only advertise dynamic features if stateless compression is enabled
 		// Supported values: 16, 32, 64, 128, 256, 512, 1024 (or higher, which advertises 1024)
-		switch dtSize := uint32(meta.Config().VoteCompressionDynamicTableSize); {
+		switch dtSize := uint32(meta.VoteCompressionDynamicTableSize()); {
 		case dtSize >= 1024:
 			features = append(features, peerFeatureVoteVpackDynamic1024)
 		case dtSize >= 512:
@@ -1143,7 +1161,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		identityVerified:                atomic.Uint32{},
 		features:                        decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
 		enableVoteCompression:           wn.config.EnableVoteCompression,
-		voteCompressionDynamicTableSize: wn.config.VoteCompressionDynamicTableSize,
+		voteCompressionDynamicTableSize: wn.voteCompressionDynamicTableSize,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	wn.log.Debugf("Server: client features '%s', decoded %x, our response '%s'", request.Header.Get(PeerFeaturesHeader), peer.features, responseHeader.Get(PeerFeaturesHeader))
@@ -2211,7 +2229,7 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		identity:                        peerID,
 		features:                        decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
 		enableVoteCompression:           wn.config.EnableVoteCompression,
-		voteCompressionDynamicTableSize: wn.config.VoteCompressionDynamicTableSize,
+		voteCompressionDynamicTableSize: wn.voteCompressionDynamicTableSize,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	wn.log.Debugf("Client: server features '%s', decoded %x", response.Header.Get(PeerFeaturesHeader), peer.features)

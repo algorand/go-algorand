@@ -394,3 +394,41 @@ func ApplyShorterUpgradeRoundsForDevNetworks(id protocol.NetworkID) {
 		}
 	}
 }
+
+// NormalizeVoteCompressionTableSize validates and normalizes the VoteCompressionDynamicTableSize config value.
+// Supported values are powers of 2 in the range [16, 1024].
+// Values >= 1024 clamp to 1024.
+// Values 1-15 are below the minimum and return 0 (disabled).
+// Values between supported powers of 2 round down to the nearest supported value.
+// Logs a message if the configured value is adjusted.
+// Returns the normalized size.
+func NormalizeVoteCompressionTableSize(configured uint, log logger) uint {
+	if configured == 0 {
+		return 0
+	}
+	if configured < 16 {
+		log.Warnf("VoteCompressionDynamicTableSize configured as %d is invalid (minimum 16). Dynamic vote compression disabled.", configured)
+		return 0
+	}
+	if configured >= 1024 {
+		if configured != 1024 {
+			log.Infof("VoteCompressionDynamicTableSize configured as %d, using nearest supported value: 1024", configured)
+		}
+		return 1024
+	}
+
+	// Round down to nearest power of 2 within supported range [16, 512]
+	supportedSizes := []uint{512, 256, 128, 64, 32, 16}
+	for _, size := range supportedSizes {
+		if configured >= size {
+			if configured != size {
+				log.Infof("VoteCompressionDynamicTableSize configured as %d, using nearest supported value: %d", configured, size)
+			}
+			return size
+		}
+	}
+
+	// Should never reach here given the checks above
+	log.Warnf("VoteCompressionDynamicTableSize configured as %d is invalid. Dynamic vote compression disabled.", configured)
+	return 0
+}

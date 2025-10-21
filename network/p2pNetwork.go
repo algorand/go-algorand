@@ -56,10 +56,13 @@ type P2PNetwork struct {
 	log         logging.Logger
 	config      config.Local
 	genesisInfo GenesisInfo
-	ctx         context.Context
-	ctxCancel   context.CancelFunc
-	peerStats   map[peer.ID]*p2pPeerStats
-	peerStatsMu deadlock.Mutex
+	// voteCompressionDynamicTableSize is the validated/normalized table size for VP compression.
+	// It is set during setup() by validating config.VoteCompressionDynamicTableSize.
+	voteCompressionDynamicTableSize uint
+	ctx                             context.Context
+	ctxCancel                       context.CancelFunc
+	peerStats                       map[peer.ID]*p2pPeerStats
+	peerStatsMu                     deadlock.Mutex
 
 	wg sync.WaitGroup
 
@@ -353,6 +356,9 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 }
 
 func (n *P2PNetwork) setup() error {
+	// Validate and normalize vote compression table size
+	n.voteCompressionDynamicTableSize = config.NormalizeVoteCompressionTableSize(n.config.VoteCompressionDynamicTableSize, n.log)
+
 	if n.broadcaster.slowWritingPeerMonitorInterval == 0 {
 		n.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
@@ -828,6 +834,16 @@ func (n *P2PNetwork) PublicAddress() string {
 // Config returns the configuration of this node.
 func (n *P2PNetwork) Config() config.Local {
 	return n.config
+}
+
+// VoteCompressionDynamicTableSize returns the validated/normalized vote compression table size.
+func (n *P2PNetwork) VoteCompressionDynamicTableSize() uint {
+	return n.voteCompressionDynamicTableSize
+}
+
+// EnableVoteCompression returns whether vote compression is enabled for this node.
+func (n *P2PNetwork) EnableVoteCompression() bool {
+	return n.config.EnableVoteCompression
 }
 
 // wsStreamHandler is a callback that the p2p package calls when a new peer connects and establishes a
