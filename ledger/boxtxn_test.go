@@ -627,6 +627,7 @@ func TestBoxInners(t *testing.T) {
 	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
+		proto := config.Consensus[cv]
 
 		// Advance the creatable counter, so we don't have very low app ids that
 		// could be mistaken for indices into ForeignApps.
@@ -635,8 +636,8 @@ func TestBoxInners(t *testing.T) {
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 
-		boxID := dl.fundedApp(addrs[0], 4_000_000, boxAppSource)  // there are some big boxes made
-		passID := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
+		boxID := dl.fundedApp(addrs[0], 4_000_000, boxAppSource)                     // there are some big boxes made
+		passID := dl.fundedApp(addrs[0], 100_000+20*proto.MinTxnFee, passThruSource) // lowish, show it's not paying for boxes
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
@@ -800,7 +801,7 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 			// doubleSrc tries to create TWO boxes. The second is always named by ApplicationArgs 1
 			doubleSrc := createSrcVer + `txn ApplicationArgs 1; int 24; box_create; pop;` // return result of FIRST box_create
 			// need to call one inner txn, and have have mbr for itself and inner created app
-			passID := dl.fundedApp(addrs[0], 201_000, passThruCreator) // Will be used to show inners have same power
+			passID := dl.fundedApp(addrs[0], 200_000+proto.MinTxnFee, passThruCreator) // Will be used to show inners have same power
 
 			// Since we used fundedApp, the next app created would be passID+2.
 			// We'll prefund a whole bunch of the next apps that we can then create

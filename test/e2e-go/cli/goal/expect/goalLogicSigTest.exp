@@ -36,7 +36,7 @@ if { [catch {
     set TEAL_SOURCE "$TEST_ROOT_DIR/int1.teal"
     exec cp "$TEAL_PROGS_DIR/int1.teal" $TEAL_SOURCE
     set CONTRACT_ADDRESS [::AlgorandGoal::TealCompile $TEAL_SOURCE]
-    spawn goal clerk send -a 0 --fee 1000 -f $PRIMARY_ACCOUNT_ADDRESS -t $PRIMARY_ACCOUNT_ADDRESS --rekey-to $CONTRACT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+    spawn goal clerk send -a 0 -f $PRIMARY_ACCOUNT_ADDRESS -t $PRIMARY_ACCOUNT_ADDRESS --rekey-to $CONTRACT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { close; ::AlgorandGoal::Abort "goal clerk send timeout" }
         -re {Transaction ([A-Z0-9]+) expired before it could be included in a block} {
