@@ -660,6 +660,7 @@ type BlockEvaluator struct {
 	prevHeader  bookkeeping.BlockHeader // cached
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
+	baseFee     basics.MicroAlgos // cached sum of proto.MinTxnFee + hdr.CongestionFee
 
 	block        bookkeeping.Block
 	blockTxBytes int
@@ -747,6 +748,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 			RewardsPool: hdr.RewardsPool,
 		},
 		proto:               proto,
+		baseFee:             hdr.CongestionFee.AddSaturate(basics.MicroAlgos{Raw: proto.MinTxnFee}),
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
@@ -1027,16 +1029,17 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	// Validate group fees against BaseFee from block header (it was previously checked against MinFee)
+	// Validate group fees against baseFee (it was previously checked against MinFee)
 	required, feesPaid := transactions.SummarizeFees(txgroup)
-	if err := verify.CheckGroupFees(feesPaid, required, eval.block.BlockHeader.BaseFee); err != nil {
+	if err := verify.CheckGroupFees(feesPaid, required, eval.baseFee); err != nil {
 		return err
 	}
 
 	cow := eval.state.child(len(txgroup))
 	defer cow.recycle()
 
-	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, eval.block.BlockHeader.BaseFee)
+	baseFee := eval.block.BlockHeader.CongestionFee.AddSaturate(basics.MicroAlgos{Raw: eval.proto.MinTxnFee})
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, baseFee)
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -1306,7 +1309,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
 	case protocol.HeartbeatTx:
-		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round(), eval.block.BlockHeader.BaseFee)
+		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round(), eval.block.BlockHeader.CongestionFee)
 
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)

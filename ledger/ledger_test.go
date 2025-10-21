@@ -154,8 +154,8 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// UpgradeVote: empty,
-		BaseFee: bookkeeping.NextBaseFee(lastBlock.Load, lastBlock.BaseFee, &proto),
-		Load:    0, // Begins empty
+		CongestionFee: bookkeeping.NextCongestionFee(lastBlock.Load, lastBlock.CongestionFee, &proto),
+		Load:          0, // Begins empty
 	}
 
 	if proto.Payouts.Enabled {
@@ -291,7 +291,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 			RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 			UpgradeState: lastBlock.UpgradeState,
 			// UpgradeVote: empty,
-			BaseFee: bookkeeping.NextBaseFee(lastBlock.Load, lastBlock.BaseFee, &proto),
+			CongestionFee: bookkeeping.NextCongestionFee(lastBlock.Load, lastBlock.CongestionFee, &proto),
 		}
 		if proto.Payouts.Enabled {
 			correctHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
@@ -1335,7 +1335,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
 				// UpgradeVote: empty,
-				BaseFee: bookkeeping.NextBaseFee(lastBlock.Load, lastBlock.BaseFee, &proto),
+				CongestionFee: bookkeeping.NextCongestionFee(lastBlock.Load, lastBlock.CongestionFee, &proto),
 			}
 			correctHeader.RewardsPool = testPoolAddr
 			correctHeader.FeeSink = testSinkAddr

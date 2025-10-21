@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -104,10 +105,8 @@ func TestCongestion(t *testing.T) {
 
 			r := require.New(t)
 
-			proto := config.Consensus[cv]
-
 			vb := dl.fullBlock()
-			r.Equal(proto.MinTxnFee, vb.Block().BlockHeader.BaseFee.Raw)
+			r.Zero(vb.Block().BlockHeader.CongestionFee)
 
 			// A pay should cause some load, construct with a note so we can
 			// make two more in the next block that are exactly the same size
@@ -149,21 +148,21 @@ func TestCongestion(t *testing.T) {
 			// The error should be no more that 0.5 * #txns
 			r.InDelta(490_000, uint64(vb.Block().BlockHeader.Load), 0.5*float64(txnsUnderCongestion))
 
-			// Having a load under 500_000 does not raise the base fee
+			// Having a load under 500_000 does not raise the congestion fee
 			vb = dl.fullBlock()
-			r.Equal(proto.MinTxnFee, vb.Block().BlockHeader.BaseFee.Raw)
+			r.Zero(vb.Block().BlockHeader.CongestionFee)
 
 			vb = manyPays(txnsOverCongestion)
 			// The error should be no more that 0.5 * #txns
 			r.InDelta(510_000, uint64(vb.Block().BlockHeader.Load), 0.5*float64(txnsOverCongestion))
 
-			// Having a load over 500_000 does raise the base fee
+			// Having a load over 500_000 does raise it
 			vb = dl.fullBlock()
-			r.Less(proto.MinTxnFee, vb.Block().BlockHeader.BaseFee.Raw)
+			r.Positive(vb.Block().BlockHeader.CongestionFee.Raw)
 
-			// But after a block with nothing, it's back to minfee
+			// But after a block with nothing, it's back to zero
 			vb = dl.fullBlock()
-			r.Equal(proto.MinTxnFee, vb.Block().BlockHeader.BaseFee.Raw)
+			r.Zero(vb.Block().BlockHeader.CongestionFee)
 
 			// Now, raise raise base fee again, and show effect of transaction
 			// acceptance.
@@ -184,10 +183,11 @@ func TestCongestion(t *testing.T) {
 			}, "txgroup with 1mA fees is less")
 
 			// Figure out how much to pay
-			biggerFee := bookkeeping.NextBaseFee(
+			proto := config.Consensus[cv]
+			biggerFee := bookkeeping.NextCongestionFee(
 				vb.Block().BlockHeader.Load,
-				vb.Block().BlockHeader.BaseFee,
-				&dl.generator.genesisProto)
+				vb.Block().BlockHeader.CongestionFee,
+				&dl.generator.genesisProto).AddSaturate(basics.MicroAlgos{Raw: proto.MinTxnFee})
 			dl.txn(&txntest.Txn{
 				Type:     "pay",
 				Sender:   addrs[1],
