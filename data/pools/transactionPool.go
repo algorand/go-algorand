@@ -318,7 +318,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 	if err != nil {
 		return fmt.Errorf("couldn't fetch latest block header: %w", err)
 	}
-	base := hdr.BaseFee
+	base := hdr.CongestionFee
 
 	required, feesPaid := transactions.SummarizeTxnFees(txgroup)
 	if err := verify.CheckGroupFees(feesPaid, required, base); err != nil {

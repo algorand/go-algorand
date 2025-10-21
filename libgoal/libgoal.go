@@ -643,7 +643,7 @@ func suggestedFee(tx transactions.Transaction, suggested model.TransactionParame
 	// Default to the suggested fee, if the caller didn't supply it
 	// Fee should taken done last since it can depend on the final transaction size
 	pbf := basics.MulSaturate(suggested.Fee, uint64(tx.EstimateEncodedSize()))
-	return basics.MicroAlgos{Raw: max(pbf, suggested.MinFee, nilToZero(suggested.BaseFee))}
+	return basics.MicroAlgos{Raw: max(pbf, basics.AddSaturate(suggested.MinFee, nilToZero(suggested.CongestionFee)))}
 }
 
 /* Algod Wrappers */
@@ -905,10 +905,7 @@ func (c *Client) SuggestedFee() (base uint64, fpb uint64, err error) {
 	if err == nil {
 		params, err := algod.SuggestedParams()
 		if err == nil {
-			base := params.MinFee
-			if params.BaseFee != nil {
-				base = max(base, *params.BaseFee)
-			}
+			base := basics.AddSaturate(params.MinFee, nilToZero(params.CongestionFee))
 			return base, params.Fee, nil
 		}
 	}

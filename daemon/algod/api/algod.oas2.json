@@ -4738,8 +4738,8 @@
             "type": "integer",
             "x-go-type": "uint64"
           },
-          "base-fee": {
-            "description": "The current base transaction fee (not per byte) required for the txn to validate with the current congestion conditions.",
+          "congestion-fee": {
+            "description": "The current extra fee beyond min-fee required for the txn to validate with the current congestion conditions.",
             "type": "integer",
             "x-go-type": "uint64"
           }

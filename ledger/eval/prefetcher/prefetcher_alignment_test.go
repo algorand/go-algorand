@@ -346,7 +346,7 @@ func run(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Transa
 	// Jam in a fee, we're not testing fee calculation here.
 	hdr, err := l.BlockHdr(0)
 	require.NoError(t, err)
-	txn.Header.Fee = basics.MicroAlgos{Raw: max(hdr.BaseFee.Raw, l.GenesisProto().MinTxnFee)}
+	txn.Header.Fee = basics.MicroAlgos{Raw: max(hdr.CongestionFee.Raw, l.GenesisProto().MinTxnFee)}
 
 	runEval(t, l, txn)
 	requestedData := ledgerData{

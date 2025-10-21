@@ -852,15 +852,15 @@ func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
 	return node.genesisHash
 }
 
-// BaseFee returns the suggested fee recommended to ensure a new transaction is processed in a timely fashion.
-// It is based on the current BaseFee from the latest block header.
-func (node *AlgorandFullNode) BaseFee() basics.MicroAlgos {
+// CongestionFee returns the suggested fee recommended to ensure a basic transaction is processed in a timely fashion.
+// It is the the current CongestionFee from the latest block header.
+func (node *AlgorandFullNode) CongestionFee() basics.MicroAlgos {
 	latest := node.ledger.Latest()
 	latestHdr, err := node.ledger.BlockHdr(latest)
 	if err != nil {
 		return basics.MicroAlgos{}
 	}
-	return latestHdr.BaseFee
+	return latestHdr.CongestionFee
 }
 
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.
