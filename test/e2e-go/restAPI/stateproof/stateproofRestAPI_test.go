@@ -83,7 +83,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:      addr,
-			Fee:         basics.MicroAlgos{Raw: 10000},
+			Fee:         basics.MicroAlgos{Raw: params.MinFee},
 			FirstValid:  firstRound,
 			LastValid:   lastRound,
 			GenesisHash: gh,
@@ -181,7 +181,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:      addr,
-			Fee:         basics.MicroAlgos{Raw: 10000},
+			Fee:         basics.MicroAlgos{Raw: params.MinFee},
 			FirstValid:  firstRound,
 			LastValid:   lastRound,
 			GenesisHash: gh,
