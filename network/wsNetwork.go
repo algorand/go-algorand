@@ -882,28 +882,29 @@ func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvide
 	header.Set(GenesisHeader, meta.GetGenesisID())
 
 	// set the features header (comma-separated list)
-	features := []string{PeerFeatureProposalCompression}
+	features := []string{peerFeatureProposalCompression}
 	if meta.Config().EnableVoteCompression {
-		features = append(features, PeerFeatureVoteVpackCompression)
+		features = append(features, peerFeatureVoteVpackCompression)
 
 		// Announce our maximum supported dynamic table size
 		// Both sides will independently calculate min(ourSize, theirSize)
 		// Only advertise dynamic features if stateless compression is enabled
+		// Supported values: 16, 32, 64, 128, 256, 512, 1024 (or higher, which advertises 1024)
 		switch dtSize := uint32(meta.Config().VoteCompressionDynamicTableSize); {
 		case dtSize >= 1024:
-			features = append(features, PeerFeatureVoteVpackDynamic1024)
+			features = append(features, peerFeatureVoteVpackDynamic1024)
 		case dtSize >= 512:
-			features = append(features, PeerFeatureVoteVpackDynamic512)
+			features = append(features, peerFeatureVoteVpackDynamic512)
 		case dtSize >= 256:
-			features = append(features, PeerFeatureVoteVpackDynamic256)
+			features = append(features, peerFeatureVoteVpackDynamic256)
 		case dtSize >= 128:
-			features = append(features, PeerFeatureVoteVpackDynamic128)
+			features = append(features, peerFeatureVoteVpackDynamic128)
 		case dtSize >= 64:
-			features = append(features, PeerFeatureVoteVpackDynamic64)
+			features = append(features, peerFeatureVoteVpackDynamic64)
 		case dtSize >= 32:
-			features = append(features, PeerFeatureVoteVpackDynamic32)
+			features = append(features, peerFeatureVoteVpackDynamic32)
 		case dtSize >= 16:
-			features = append(features, PeerFeatureVoteVpackDynamic16)
+			features = append(features, peerFeatureVoteVpackDynamic16)
 		}
 	}
 	header.Set(PeerFeaturesHeader, strings.Join(features, ","))
@@ -1965,23 +1966,23 @@ const UserAgentHeader = "User-Agent"
 // PeerFeaturesHeader is the HTTP header listing features
 const PeerFeaturesHeader = "X-Algorand-Peer-Features"
 
-// PeerFeatureProposalCompression is a value for PeerFeaturesHeader indicating peer
+// peerFeatureProposalCompression is a value for PeerFeaturesHeader indicating peer
 // supports proposal payload compression with zstd
-const PeerFeatureProposalCompression = "ppzstd"
+const peerFeatureProposalCompression = "ppzstd"
 
-// PeerFeatureVoteVpackCompression is a value for PeerFeaturesHeader indicating peer
+// peerFeatureVoteVpackCompression is a value for PeerFeaturesHeader indicating peer
 // supports agreement vote message compression with vpack
-const PeerFeatureVoteVpackCompression = "avvpack"
+const peerFeatureVoteVpackCompression = "avvpack"
 
-// PeerFeatureVoteVpackDynamic* are values for PeerFeaturesHeader indicating peer
+// peerFeatureVoteVpackDynamic* are values for PeerFeaturesHeader indicating peer
 // supports specific dynamic table sizes for vpack compression
-const PeerFeatureVoteVpackDynamic1024 = "avvpack1024"
-const PeerFeatureVoteVpackDynamic512 = "avvpack512"
-const PeerFeatureVoteVpackDynamic256 = "avvpack256"
-const PeerFeatureVoteVpackDynamic128 = "avvpack128"
-const PeerFeatureVoteVpackDynamic64 = "avvpack64"
-const PeerFeatureVoteVpackDynamic32 = "avvpack32"
-const PeerFeatureVoteVpackDynamic16 = "avvpack16"
+const peerFeatureVoteVpackDynamic1024 = "avvpack1024"
+const peerFeatureVoteVpackDynamic512 = "avvpack512"
+const peerFeatureVoteVpackDynamic256 = "avvpack256"
+const peerFeatureVoteVpackDynamic128 = "avvpack128"
+const peerFeatureVoteVpackDynamic64 = "avvpack64"
+const peerFeatureVoteVpackDynamic32 = "avvpack32"
+const peerFeatureVoteVpackDynamic16 = "avvpack16"
 
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 

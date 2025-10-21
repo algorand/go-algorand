@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -159,16 +160,16 @@ func TestVersionToFeature(t *testing.T) {
 		{"1.2.3", "", peerFeatureFlag(0)},
 		{"a.b", "", peerFeatureFlag(0)},
 		{"2.1", "", peerFeatureFlag(0)},
-		{"2.1", PeerFeatureProposalCompression, peerFeatureFlag(0)},
+		{"2.1", peerFeatureProposalCompression, peerFeatureFlag(0)},
 		{"2.2", "", peerFeatureFlag(0)},
 		{"2.2", "test", peerFeatureFlag(0)},
 		{"2.2", strings.Join([]string{"a", "b"}, ","), peerFeatureFlag(0)},
-		{"2.2", PeerFeatureProposalCompression, pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, PeerFeatureVoteVpackCompression}, ","), pfCompressedVoteVpack | pfCompressedProposal},
-		{"2.2", PeerFeatureVoteVpackCompression, pfCompressedVoteVpack},
-		{"2.3", PeerFeatureProposalCompression, pfCompressedProposal},
+		{"2.2", peerFeatureProposalCompression, pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, peerFeatureVoteVpackCompression}, ","), pfCompressedVoteVpack | pfCompressedProposal},
+		{"2.2", peerFeatureVoteVpackCompression, pfCompressedVoteVpack},
+		{"2.3", peerFeatureProposalCompression, pfCompressedProposal},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
@@ -233,19 +234,12 @@ func TestPeerReadLoopSwitchAllTags(t *testing.T) {
 	})
 	require.True(t, readLoopFound)
 	require.NotEmpty(t, foundTags)
-	ignored := map[string]struct{}{
-		"VotePackedTag": {}, // normalized to AgreementVoteTag before the switch
-	}
-	filtered := allTags[:0]
-	for _, tag := range allTags {
-		if _, ok := ignored[tag]; ok {
-			continue
-		}
-		filtered = append(filtered, tag)
-	}
-	allTags = filtered
+	// Filter out VP, it's normalized to AV before the switch statement
+	allTags = slices.DeleteFunc(allTags, func(tag string) bool { return tag == "VotePackedTag" })
 	sort.Strings(allTags)
 	sort.Strings(foundTags)
+	t.Logf("All tags: %v", allTags)
+	t.Logf("Found tags: %v", foundTags)
 	require.Equal(t, allTags, foundTags)
 }
 

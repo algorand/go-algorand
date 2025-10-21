@@ -1232,31 +1232,31 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 	parts := strings.Split(announcedFeatures, ",")
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		if part == PeerFeatureProposalCompression {
+		if part == peerFeatureProposalCompression {
 			features |= pfCompressedProposal
 		}
-		if part == PeerFeatureVoteVpackCompression {
+		if part == peerFeatureVoteVpackCompression {
 			features |= pfCompressedVoteVpack
 		}
-		if part == PeerFeatureVoteVpackDynamic1024 {
+		if part == peerFeatureVoteVpackDynamic1024 {
 			features |= pfCompressedVoteVpackDynamic1024
 		}
-		if part == PeerFeatureVoteVpackDynamic512 {
+		if part == peerFeatureVoteVpackDynamic512 {
 			features |= pfCompressedVoteVpackDynamic512
 		}
-		if part == PeerFeatureVoteVpackDynamic256 {
+		if part == peerFeatureVoteVpackDynamic256 {
 			features |= pfCompressedVoteVpackDynamic256
 		}
-		if part == PeerFeatureVoteVpackDynamic128 {
+		if part == peerFeatureVoteVpackDynamic128 {
 			features |= pfCompressedVoteVpackDynamic128
 		}
-		if part == PeerFeatureVoteVpackDynamic64 {
+		if part == peerFeatureVoteVpackDynamic64 {
 			features |= pfCompressedVoteVpackDynamic64
 		}
-		if part == PeerFeatureVoteVpackDynamic32 {
+		if part == peerFeatureVoteVpackDynamic32 {
 			features |= pfCompressedVoteVpackDynamic32
 		}
-		if part == PeerFeatureVoteVpackDynamic16 {
+		if part == peerFeatureVoteVpackDynamic16 {
 			features |= pfCompressedVoteVpackDynamic16
 		}
 	}
