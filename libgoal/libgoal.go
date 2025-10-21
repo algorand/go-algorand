@@ -632,17 +632,18 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		copy(tx.Header.GenesisHash[:], params.GenesisHash)
 	}
 
-	// Default to the suggested fee, if the caller didn't supply it
-	// Fee is tricky, should taken care last. We encode the final transaction to get the size post signing and encoding
-	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
-		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, tx.EstimateEncodedSize())
-	}
-	if tx.Fee.Raw < cp.MinTxnFee {
-		tx.Fee.Raw = cp.MinTxnFee
+		tx.Fee = suggestedFee(tx, params)
 	}
 
 	return tx, nil
+}
+
+func suggestedFee(tx transactions.Transaction, suggested model.TransactionParametersResponse) basics.MicroAlgos {
+	// Default to the suggested fee, if the caller didn't supply it
+	// Fee should taken done last since it can depend on the final transaction size
+	pbf := basics.MulSaturate(suggested.Fee, uint64(tx.EstimateEncodedSize()))
+	return basics.MicroAlgos{Raw: max(pbf, basics.AddSaturate(suggested.MinFee, nilToZero(suggested.CongestionFee)))}
 }
 
 /* Algod Wrappers */
@@ -898,13 +899,14 @@ func (c Client) CurrentRound() (basics.Round, error) {
 	return resp.LastRound, nil
 }
 
-// SuggestedFee returns the suggested fee per byte by the network
-func (c *Client) SuggestedFee() (fee uint64, err error) {
+// SuggestedFee returns the base txn fee and per byte fee
+func (c *Client) SuggestedFee() (base uint64, fpb uint64, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		params, err := algod.SuggestedParams()
 		if err == nil {
-			fee = params.Fee
+			base := basics.AddSaturate(params.MinFee, nilToZero(params.CongestionFee))
+			return base, params.Fee, nil
 		}
 	}
 	return
@@ -1335,4 +1337,12 @@ func (c *Client) BlockLogs(round basics.Round) (resp model.BlockLogsResponse, er
 		return algod.BlockLogs(round)
 	}
 	return
+}
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
 }

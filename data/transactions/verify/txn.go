@@ -211,8 +211,6 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		return nil, err
 	}
 
-	minFeeCount := uint64(0)
-	feesPaid := uint64(0)
 	lSigPooledSize := 0
 	for i, stxn := range stxs {
 		prepErr := txnBatchPrep(i, groupCtx, verifier)
@@ -221,19 +219,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
 			return nil, prepErr
 		}
-		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
 		lSigPooledSize += stxn.Lsig.Len()
-		if stxn.Txn.Type == protocol.StateProofTx {
-			// State proofs are free, bail before incrementing
-			continue
-		}
-		if stxn.Txn.Type == protocol.HeartbeatTx && stxn.Txn.Group.IsZero() {
-			// In apply.Heartbeat, we further confirm that the heartbeat is for
-			// a challenged account. Such heartbeats are free, bail before
-			// incrementing
-			continue
-		}
-		minFeeCount++
 	}
 	if groupCtx.consensusParams.EnableLogicSigSizePooling {
 		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
@@ -245,26 +231,39 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
 		}
 	}
-	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
-	if overflow {
-		err = &TxGroupError{err: errTxGroupInvalidFee, GroupIndex: -1, Reason: TxGroupErrorReasonInvalidFee}
-		return nil, err
-	}
-	// feesPaid may have saturated. That's ok. Since we know
-	// feeNeeded did not overflow, simple comparison tells us
-	// feesPaid was enough.
-	if feesPaid < feeNeeded {
-		err = &TxGroupError{
-			err: fmt.Errorf(
-				"txgroup had %d in fees, which is less than the minimum %d * %d",
-				feesPaid, minFeeCount, groupCtx.consensusParams.MinTxnFee),
-			GroupIndex: -1,
-			Reason:     TxGroupErrorReasonInvalidFee,
-		}
+
+	// This is just a first pass check, since it uses MinTxnFee. It use
+	// BaseFee, because we don't know what block the group will end up in.
+	required, feesPaid := transactions.SummarizeTxnFees(stxs)
+	minFee := basics.MicroAlgos{Raw: groupCtx.consensusParams.MinTxnFee}
+	if err := CheckGroupFees(feesPaid, required, minFee); err != nil {
 		return nil, err
 	}
 
 	return groupCtx, nil
+}
+
+// CheckGroupFees validates that a transaction group has paid sufficient fees.
+// feesPaid is the total fees paid by the group, required is the number of
+// base fees required, and feePerTxn is the minimum fee per transaction.
+func CheckGroupFees(feesPaid basics.MicroAlgos, required basics.Micros, feePerTxn basics.MicroAlgos) *TxGroupError {
+	feeNeeded, overflow := basics.MulAM(feePerTxn, required)
+	if overflow {
+		return &TxGroupError{err: errTxGroupInvalidFee, GroupIndex: -1, Reason: TxGroupErrorReasonInvalidFee}
+	}
+	// feesPaid may have saturated. That's ok. Since we know
+	// feeNeeded did not overflow, simple comparison tells us
+	// feesPaid was enough.
+	if feesPaid.LessThan(feeNeeded) {
+		return &TxGroupError{
+			err: fmt.Errorf(
+				"txgroup with %s fees is less than %s (usage=%s * base=%s)",
+				feesPaid, feeNeeded, required, feePerTxn),
+			GroupIndex: -1,
+			Reason:     TxGroupErrorReasonInvalidFee,
+		}
+	}
+	return nil
 }
 
 type sigOrTxnType int

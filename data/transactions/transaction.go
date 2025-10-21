@@ -54,13 +54,18 @@ type SpecialAddresses struct {
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sender      basics.Address    `codec:"snd"`
-	Fee         basics.MicroAlgos `codec:"fee"`
-	FirstValid  basics.Round      `codec:"fv"`
-	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note,allocbound=bounds.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
-	GenesisID   string            `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
-	GenesisHash crypto.Digest     `codec:"gh"`
+	Sender basics.Address `codec:"snd"`
+
+	Fee           basics.MicroAlgos `codec:"fee"`
+	CostIncrement basics.Micros     `codec:"ci"` // All costs are multiplied by 1 + CostIncrement
+
+	FirstValid basics.Round `codec:"fv"`
+	LastValid  basics.Round `codec:"lv"`
+
+	Note []byte `codec:"note,allocbound=bounds.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
+
+	GenesisID   string        `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
+	GenesisHash crypto.Digest `codec:"gh"`
 
 	// Group specifies that this transaction is part of a
 	// transaction group (and, if so, specifies the hash
@@ -182,6 +187,17 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
+// FeeFactor is the factor by which the base transaction fee is multiplied
+// because the transaction uses advanced features, particularly large fields.
+// It is expressed as in fixed-point integer with 6 digits of precision. So 1e6
+// is a normal base fee transaction.
+func (tx Transaction) FeeFactor() basics.Micros {
+	if tx.IsFree() {
+		return 0
+	}
+	return 1e6
+}
+
 // txAllocSize returns the max possible size of a transaction without state proof fields.
 // It is used to preallocate a buffer for encoding a transaction.
 func txAllocSize() int {
@@ -279,11 +295,6 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 // This is the account that pays the associated Fee.
 func (tx Header) Src() basics.Address {
 	return tx.Sender
-}
-
-// TxFee returns the fee associated with this transaction.
-func (tx Header) TxFee() basics.MicroAlgos {
-	return tx.Fee
 }
 
 // MatchAddress checks if the transaction touches a given address.  The feesink
@@ -440,13 +451,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
-		if tx.Type == protocol.StateProofTx {
-			// Zero fee allowed for stateProof txn.
-		} else {
-			return makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", tx.Fee.Raw, proto.MinTxnFee)
-		}
-	}
 	if tx.LastValid < tx.FirstValid {
 		return fmt.Errorf("transaction invalid range (%v--%v)", tx.FirstValid, tx.LastValid)
 	}
@@ -473,6 +477,20 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
 	}
 	return nil
+}
+
+// IsFree returns true if the transaction is free, i.e., no required fee.
+func (tx Transaction) IsFree() bool {
+	// If the transaction is a state proof transaction, it is free
+	if tx.Type == protocol.StateProofTx {
+		return true
+	}
+
+	if tx.Type == protocol.HeartbeatTx && tx.Group.IsZero() {
+		return true
+	}
+
+	return false
 }
 
 // TxAmount returns the amount paid to the recipient in this payment

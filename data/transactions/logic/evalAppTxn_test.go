@@ -222,12 +222,12 @@ func TestAppPay(t *testing.T) {
 			"insufficient balance")
 		ledger.NewAccount(appAddr(888), 1000000)
 
-		// You might NewExpect this to fail because of min balance issue
-		// (receiving account only gets 100 microalgos).  It does not fail at
-		// this level, instead, we must be certain that the existing min
-		// balance check in eval.transaction() properly notices and fails
-		// the transaction later.  This fits with the model that we check
-		// min balances once at the end of each "top-level" transaction.
+		// You might expect this to fail because of min balance issue (receiving
+		// account only gets 100 microalgos).  It does not fail at this level,
+		// instead, we must be certain that the existing min balance check in
+		// eval.transaction() properly notices and fails the transaction later.
+		// This fits with the model that we check min balances once at the end
+		// of each "top-level" transaction.
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100" + pay)
 
 		// 100 of 1000000 spent, plus MinTxnFee in our fake protocol is 1001
@@ -1125,6 +1125,79 @@ txn Sender; itxn_field Receiver;
 		"itxn_submit; itxn Fee; int 1001; ==", // second one should have to pay
 		ep)
 
+}
+
+// TestInnerFeeHandling tests that inner transactions correctly inherit the
+// BaseFee from their parent EvalParams and fee credits work as expected.
+func TestInnerFeeHandling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := MakeSampleEnv()
+	ep.FeeCredit = nil
+
+	// Set a custom BaseFee that's different from MinTxnFee
+	const customBaseFee = 3000
+	ep.BaseFee = basics.MicroAlgos{Raw: customBaseFee}
+
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 50_000)
+
+	// Pay 500 to any caller.
+	pay := `
+int pay;    itxn_field TypeEnum;
+int 500;    itxn_field Amount;
+txn Sender; itxn_field Receiver;
+`
+	// since there's no FeeCredit at top-level, the inner pays full base fee
+	TestApp(t, "itxn_begin"+pay+"itxn_submit; itxn Fee; int "+strconv.Itoa(customBaseFee)+"; ==", ep)
+
+	// and if it tries not to pay, it fails
+	TestApp(t, "itxn_begin"+pay+"int 0; itxn_field Fee; itxn_submit; int 1", ep, "fee too small")
+
+	// Test that fee credit from overpayment allows 0 fees but still validates against BaseFee
+	TestApp(t, "itxn_begin"+pay+"int "+strconv.Itoa(2*customBaseFee)+"; itxn_field Fee; itxn_submit; "+
+		"itxn_begin"+pay+"int 0; itxn_field Fee; itxn_submit; "+
+		"itxn Fee; !", ep) // Second inner, with explict 0 fee works because first paid for both
+
+	// Test that fee credit from overpayment allows 0 fees but still validates against BaseFee
+	TestApp(t, "itxn_begin"+pay+"int "+strconv.Itoa(2*customBaseFee)+"; itxn_field Fee; itxn_submit; "+
+		"itxn_begin"+pay+"itxn_submit; "+
+		"itxn Fee; !", ep) // Second inner is free automatically because first paid for both
+
+	// Same test, realy, but in a single inner group
+	TestApp(t, "itxn_begin"+pay+"int "+strconv.Itoa(2*customBaseFee)+"; itxn_field Fee; "+
+		"itxn_next"+pay+"itxn_submit; "+
+		"gitxn 1 Fee; !", ep) // Second inner is free automatically because first paid for both
+
+	// We really need to test that an inner of an inner handles these things
+	// properly if we want to test NewInnerEvalParams.
+	ops := TestProg(t, "int 1", 5)
+	ledger.NewApp(basics.Address{0x01}, 56, basics.AppParams{ApprovalProgram: ops.Program})
+	ledger.NewAccount(appAddr(56), 50_000)
+
+	call56 := `
+itxn_begin
+int appl;    itxn_field TypeEnum;
+int 56;      itxn_field ApplicationID;
+itxn_submit
+itxn Fee; int ` + strconv.Itoa(customBaseFee) + `; ==
+`
+	TestApp(t, call56, ep) // this app is being called, which in turns calls call56
+
+	ledger.NewApp(basics.Address{0x01}, 111, basics.AppParams{ApprovalProgram: TestProg(t, call56, 6).Program})
+	ledger.NewAccount(appAddr(111), 100_000)
+
+	call111 := `
+itxn_begin
+int appl;   itxn_field TypeEnum;
+int 111;    itxn_field ApplicationID;
+int 56;     itxn_field Applications; // need to be able to call 56
+itxn_submit
+itxn Fee; int ` + strconv.Itoa(customBaseFee) + `; ==
+`
+	TestApp(t, call111, ep) // this app calls 111, which calls 56, which returns 1
+	// The fee check in 56 would fail if the basefee were not properly passed down in NewInnerEvalParams
 }
 
 // TestApplCreation is only determining what appl transactions can be

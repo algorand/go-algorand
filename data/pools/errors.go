@@ -18,9 +18,6 @@ package pools
 
 import (
 	"errors"
-	"fmt"
-
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 // ErrStaleBlockAssemblyRequest returned by AssembleBlock when requested block number is older than the current transaction pool round
@@ -32,16 +29,3 @@ var ErrPendingQueueReachedMaxCap = errors.New("TransactionPool.checkPendingQueue
 
 // ErrNoPendingBlockEvaluator indicates there is no pending block evaluator to accept a new tx group
 var ErrNoPendingBlockEvaluator = errors.New("TransactionPool.ingest: no pending block evaluator")
-
-// ErrTxPoolFeeError is an error type for txpool fee escalation checks
-type ErrTxPoolFeeError struct {
-	fee           basics.MicroAlgos
-	feeThreshold  uint64
-	feePerByte    uint64
-	encodedLength int
-}
-
-func (e *ErrTxPoolFeeError) Error() string {
-	return fmt.Sprintf("fee %d below threshold %d (%d per byte * %d bytes)",
-		e.fee, e.feeThreshold, e.feePerByte, e.encodedLength)
-}

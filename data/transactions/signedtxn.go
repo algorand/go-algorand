@@ -142,3 +142,25 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	}
 	return txgroupad
 }
+
+// SummarizeFees takes a group and returns required fees and the total amount
+// paid. The returned `factor` expresses how many base fees must be paid by the
+// group.
+func SummarizeFees(txgroup []SignedTxnWithAD) (factor basics.Micros, paid basics.MicroAlgos) {
+	for _, txad := range txgroup {
+		factor = basics.AddSaturate(factor, txad.SignedTxn.Txn.FeeFactor())
+		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
+	}
+	return
+}
+
+// SummarizeTxnFees should be _exactly_ like SummarizeFees, and exists so that
+// pointless SignedTxnWithAD objects need not be created, nor slices coerced
+// into an interface.
+func SummarizeTxnFees(txgroup []SignedTxn) (factor basics.Micros, paid basics.MicroAlgos) {
+	for _, stx := range txgroup {
+		factor = basics.AddSaturate(factor, stx.Txn.FeeFactor())
+		paid = paid.AddSaturate(stx.Txn.Fee)
+	}
+	return
+}

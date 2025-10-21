@@ -225,9 +225,9 @@ func verifyProposer(p unauthenticatedProposal, ledger LedgerReader) error {
 	if err != nil {
 		return fmt.Errorf("failed to determine incentive eligibility %w", err)
 	}
-	if !eligible && p.ProposerPayout().Raw > 0 {
-		return fmt.Errorf("proposer payout (%d) for ineligible Proposer %v",
-			p.ProposerPayout().Raw, p.Proposer())
+	if !eligible && !p.ProposerPayout().IsZero() {
+		return fmt.Errorf("proposer payout (%s) for ineligible Proposer %v",
+			p.ProposerPayout(), p.Proposer())
 	}
 
 	var alpha crypto.Digest

@@ -3745,12 +3745,10 @@ func TestUnfundedSenders(t *testing.T) {
 			},
 		}
 
-		// v34 enabled UnfundedSenders
-		var problem string
-		// In the old days, balances.Move would try to increase the rewardsState on the unfunded account
-		if ver < 28 {
-			problem = "transaction had fee 0, which is less than the minimum 1000"
-		} else if ver < 34 {
+		// v34 enabled UnfundedSenders, so no problem
+		problem := ""
+		// pre-v34, balances.Move would try to increase the rewardsState
+		if ver < 34 {
 			problem = "balance 0 below min"
 		}
 		for i, e := range ephemeral {

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"maps"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -31,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -55,19 +55,15 @@ type TransactionPool struct {
 	// const
 	logProcessBlockStats bool
 	logAssembleStats     bool
-	expFeeFactor         uint64
 	txPoolMaxSize        int
 	ledger               *ledger.Ledger
 
-	mu                     deadlock.Mutex
-	cond                   sync.Cond
-	expiredTxCount         map[basics.Round]int
-	pendingBlockEvaluator  BlockEvaluator
-	evalTracer             logic.EvalTracer
-	numPendingWholeBlocks  basics.Round
-	feePerByte             atomic.Uint64
-	feeThresholdMultiplier uint64
-	statusCache            *statusCache
+	mu                    deadlock.Mutex
+	cond                  sync.Cond
+	expiredTxCount        map[basics.Round]int
+	pendingBlockEvaluator BlockEvaluator
+	evalTracer            logic.EvalTracer
+	statusCache           *statusCache
 
 	assemblyMu       deadlock.Mutex
 	assemblyCond     sync.Cond
@@ -125,9 +121,6 @@ var errPoolShutdown = errors.New("transaction pool is shutting down")
 
 // MakeTransactionPool makes a transaction pool.
 func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, vac VotingAccountSupplier) *TransactionPool {
-	if cfg.TxPoolExponentialIncreaseFactor < 1 {
-		cfg.TxPoolExponentialIncreaseFactor = 1
-	}
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
@@ -136,7 +129,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
 		logProcessBlockStats: cfg.EnableProcessBlockStats,
 		logAssembleStats:     cfg.EnableAssembleStats,
-		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        cfg.TxPoolSize,
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
@@ -196,7 +188,6 @@ func (pool *TransactionPool) Reset() {
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 	pool.rememberedTxGroups = nil
 	pool.expiredTxCount = make(map[basics.Round]int)
-	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
 	pool.recomputeBlockEvaluator(nil, 0)
@@ -315,77 +306,23 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 	return nil
 }
 
-// FeePerByte returns the current minimum microalgos per byte a transaction
-// needs to pay in order to get into the pool.
-func (pool *TransactionPool) FeePerByte() uint64 {
-	return pool.feePerByte.Load()
-}
-
-// computeFeePerByte computes and returns the current minimum microalgos per byte a transaction
-// needs to pay in order to get into the pool. It also updates the atomic counter that holds
-// the current fee per byte
-func (pool *TransactionPool) computeFeePerByte() uint64 {
-	// The baseline threshold fee per byte is 1, the smallest fee we can
-	// represent.  This amounts to a fee of 100 for a 100-byte txn, which
-	// is well below MinTxnFee (1000).  This means that, when the pool
-	// is not under load, the total MinFee dominates for small txns,
-	// but once the pool comes under load, the fee-per-byte will quickly
-	// come to dominate.
-	feePerByte := uint64(1)
-
-	// The threshold is multiplied by the feeThresholdMultiplier that
-	// tracks the load on the transaction pool over time.  If the pool
-	// is mostly idle, feeThresholdMultiplier will be 0, and all txns
-	// are accepted (assuming the BlockEvaluator approves them, which
-	// requires a flat MinTxnFee).
-	feePerByte = feePerByte * pool.feeThresholdMultiplier
-
-	// The feePerByte should be bumped to 1 to make the exponentially
-	// threshold growing valid.
-	if feePerByte == 0 && pool.numPendingWholeBlocks > 1 {
-		feePerByte = uint64(1)
-	}
-
-	// The threshold grows exponentially if there are multiple blocks
-	// pending in the pool.
-	// golang has no convenient integer exponentiation, so we just
-	// do this in a loop
-	for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
-		feePerByte *= pool.expFeeFactor
-	}
-
-	// Update the counter for fast reads
-	pool.feePerByte.Store(feePerByte)
-
-	return feePerByte
-}
-
-// checkSufficientFee take a set of signed transactions and verifies that each transaction has
-// sufficient fee to get into the transaction pool
+// checkSufficientFee take a set of signed transactions and verifies that each
+// transaction has sufficient fee to get into the transaction pool. If we reject
+// a transaction unjustly, the caller will be sad, but it is not a protocol
+// violation.  Similarly, if we allow a transaction in, the fee will be further
+// checked in the evaluation of the transaction.
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
-	// Special case: the state proof transaction, if issued from the
-	// special state-proof-sender address, in a singleton group, pays
-	// no fee.
-	if len(txgroup) == 1 {
-		t := txgroup[0].Txn
-		if t.Type == protocol.StateProofTx && t.Sender == transactions.StateProofSender && t.Fee.IsZero() {
-			return nil
-		}
+	// get the most recent base fee
+	latest := pool.ledger.Latest()
+	hdr, err := pool.ledger.BlockHdr(latest)
+	if err != nil {
+		return fmt.Errorf("couldn't fetch latest block header: %w", err)
 	}
+	base := hdr.CongestionFee
 
-	// get the current fee per byte
-	feePerByte := pool.computeFeePerByte()
-
-	for _, t := range txgroup {
-		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
-		if t.Txn.Fee.Raw < feeThreshold {
-			return &ErrTxPoolFeeError{
-				fee:           t.Txn.Fee,
-				feeThreshold:  feeThreshold,
-				feePerByte:    feePerByte,
-				encodedLength: t.GetEncodedLength(),
-			}
-		}
+	required, feesPaid := transactions.SummarizeTxnFees(txgroup)
+	if err := verify.CheckGroupFees(feesPaid, required, base); err != nil {
+		return err
 	}
 
 	return nil
@@ -462,13 +399,14 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 			}
 		}
 
-		err := pool.checkSufficientFee(txgroup)
-		if err != nil {
-			return err
-		}
 	}
 
-	err := pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats)
+	err := pool.checkSufficientFee(txgroup)
+	if err != nil {
+		return err
+	}
+
+	err = pool.addToPendingBlockEvaluator(txgroup, params.recomputing, params.stats)
 	if err != nil {
 		return err
 	}
@@ -554,28 +492,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 
 	defer pool.cond.Broadcast()
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
-		// Adjust the pool fee threshold.  The rules are:
-		// - If there was less than one full block in the pool, reduce
-		//   the multiplier by 2x.  It will eventually go to 0, so that
-		//   only the flat MinTxnFee matters if the pool is idle.
-		// - If there were less than two full blocks in the pool, keep
-		//   the multiplier as-is.
-		// - If there were two or more full blocks in the pool, grow
-		//   the multiplier by 2x (or increment by 1, if 0).
-		switch pool.numPendingWholeBlocks {
-		case 0:
-			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / pool.expFeeFactor
-
-		case 1:
-			// Keep the fee multiplier the same.
-
-		default:
-			if pool.feeThresholdMultiplier == 0 {
-				pool.feeThresholdMultiplier = 1
-			} else {
-				pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * pool.expFeeFactor
-			}
-		}
 
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
@@ -613,18 +529,6 @@ func (pool *TransactionPool) isAssemblyTimedOut() bool {
 }
 
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
-	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
-	for _, tx := range txgroup {
-		if tx.Txn.LastValid < r {
-			return &bookkeeping.TxnDeadError{
-				Round:      r,
-				FirstValid: tx.Txn.FirstValid,
-				LastValid:  tx.Txn.LastValid,
-				Early:      false,
-			}
-		}
-	}
-
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
 
 	transactionGroupStartsTime := time.Time{}
@@ -681,7 +585,6 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
 	err := pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	if err == ledgercore.ErrNoSpace {
-		pool.numPendingWholeBlocks++
 		pool.pendingBlockEvaluator.ResetTxnBytes()
 		err = pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	}
@@ -730,7 +633,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 	pool.assemblyMu.Unlock()
 
 	next := bookkeeping.MakeBlock(prev)
-	pool.numPendingWholeBlocks = 0
 	hint := pendingCount - int(knownCommitted)
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
@@ -787,10 +689,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				stats.ExpiredCount++
 			case *ledgercore.LeaseInLedgerError:
 				asmStats.LeaseErrorCount++
-				stats.RemovedInvalidCount++
-				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
-			case *transactions.MinFeeError:
-				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case logic.EvalError:

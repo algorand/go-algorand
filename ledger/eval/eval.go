@@ -677,6 +677,7 @@ type BlockEvaluator struct {
 	prevHeader  bookkeeping.BlockHeader // cached
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
+	baseFee     basics.MicroAlgos // cached sum of proto.MinTxnFee + hdr.CongestionFee
 
 	block        bookkeeping.Block
 	blockTxBytes int
@@ -764,6 +765,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 			RewardsPool: hdr.RewardsPool,
 		},
 		proto:               proto,
+		baseFee:             hdr.CongestionFee.AddSaturate(basics.MicroAlgos{Raw: proto.MinTxnFee}),
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
@@ -1044,14 +1046,17 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	var txibs []transactions.SignedTxnInBlock
-	var group transactions.TxGroup
-	var groupTxBytes int
+	// Validate group fees against baseFee (it was previously checked against MinFee)
+	required, feesPaid := transactions.SummarizeFees(txgroup)
+	if err := verify.CheckGroupFees(feesPaid, required, eval.baseFee); err != nil {
+		return err
+	}
 
 	cow := eval.state.child(len(txgroup))
 	defer cow.recycle()
 
-	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials)
+	baseFee := eval.block.BlockHeader.CongestionFee.AddSaturate(basics.MicroAlgos{Raw: eval.proto.MinTxnFee})
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, baseFee)
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -1064,7 +1069,9 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	}
 
 	// Evaluate each transaction in the group
-	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	var groupTxBytes int
+	var group transactions.TxGroup
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -1319,7 +1326,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
 	case protocol.HeartbeatTx:
-		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
+		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round(), eval.block.BlockHeader.CongestionFee)
 
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
@@ -1406,6 +1413,11 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 			}
 		}
 
+		// Calculate and set the Load field for on-chain congestion measurement
+		if eval.proto.CongestionFees {
+			eval.block.BlockHeader.Load = ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
+		}
+
 		eval.generateKnockOfflineAccountsList(participating)
 
 		if eval.proto.StateProofInterval > 0 {
@@ -1480,7 +1492,7 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 					highWeight = expectedVotersWeight
 					lowWeight = actualVotersWeight
 				}
-				const stakeDiffusionFactor = 1
+				const stakeDiffusionFactor = uint64(1)
 				allowedDelta, overflowed := basics.Muldiv(expectedVotersWeight.Raw, stakeDiffusionFactor, 100)
 				if overflowed {
 					return fmt.Errorf("StateProofOnlineTotalWeight overflow: %v != %v", actualVotersWeight, expectedVotersWeight)
@@ -1517,6 +1529,13 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 	}
 
 	return nil
+}
+
+// ComputeLoad determines the load for the block based on block utilization.
+func ComputeLoad(blockSize int, maxSize int) basics.Micros {
+	// Load is expressed as a fixed-point integer with 6 digits of precision
+	// 1,000,000 represents a completely full block
+	return basics.Micros(blockSize * 1e6 / maxSize)
 }
 
 func (eval *BlockEvaluator) validateForPayouts() error {
@@ -1779,7 +1798,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 	}
 }
 
-const absentFactor = 20
+const absentFactor = uint64(20)
 
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// Don't consider accounts that were online when payouts went into effect as
@@ -2207,6 +2226,13 @@ transactionGroupLoop:
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
+		// Validate Load field for on-chain congestion measurement
+		if eval.proto.CongestionFees {
+			expectedLoad := ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
+			if eval.block.BlockHeader.Load != expectedLoad {
+				return ledgercore.StateDelta{}, fmt.Errorf("bad load: %d != %d", eval.block.BlockHeader.Load, expectedLoad)
+			}
+		}
 		// wait for the signature validation to complete.
 		select {
 		case <-ctx.Done():
