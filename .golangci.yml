@@ -2,6 +2,7 @@ version: "2"
 run:
   tests: true
 linters:
+  # default: deadcode, errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, varcheck
   default: none
   enable:
     - copyloopvar
@@ -18,14 +19,18 @@ linters:
   settings:
     errcheck:
       exclude-functions:
+        # We do this 121 times and never check the error.
         - (*github.com/spf13/cobra.Command).MarkFlagRequired
         - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
         - (*github.com/spf13/pflag.FlagSet).MarkShorthandDeprecated
     govet:
+      # Enables these linters in addition to the default ones.
       enable:
         - shadow
       settings:
         printf:
+          # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).
+          # Default: []
           funcs:
             - (github.com/algorand/go-algorand/logging.Logger).Debugf
             - (github.com/algorand/go-algorand/logging.Logger).Infof
@@ -54,10 +59,14 @@ linters:
             - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorf
             - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorln
         shadow:
+          # explanation of strict vs non-strict:
+          # https://github.com/golang/tools/blob/v0.7.0/go/analysis/passes/shadow/shadow.go#L104-L122
           strict: false
     nolintlint:
-      require-explanation: true
+      # require naming a specific linter X using //nolint:X
       require-specific: true
+      # require comments like "//nolint:errcheck // Explanation of why we are ignoring linter here..."
+      require-explanation: true
   exclusions:
     generated: lax
     rules:
@@ -98,10 +107,12 @@ linters:
       - linters:
           - staticcheck
         text: 'SA1019: rand*'
+      # allow shadowing in test code
       - linters:
           - govet
         path: _test\.go
         text: shadows declaration at line
+      # Ignore missing parallel tests in existing packages
       - linters:
           - paralleltest
         path: ^agreement.*_test\.go
@@ -153,6 +164,7 @@ linters:
       - linters:
           - paralleltest
         path: ^util.*_test\.go
+      # Add all linters here -- Comment this block out for testing linters
       - linters:
           - errcheck
           - govet
@@ -161,18 +173,27 @@ linters:
           - revive
           - unused
         path: test/linttest/lintissues\.go
+      # ignore govet false positive fixed in https://github.com/golang/go/issues/45043
       - path: (.+)\.go$
         text: 'sigchanyzer: misuse of unbuffered os.Signal channel as argument to signal.Notify'
+      # ignore golint false positive fixed in https://github.com/golang/lint/pull/487
       - path: (.+)\.go$
         text: exported method (.*).Unwrap` should have comment or be unexported
+      # ignore issues about the way we use _struct fields to define encoding settings
       - path: (.+)\.go$
         text: '`_struct` is unused'
+
+      # Enable some golangci-lint default exception rules:
+      # "EXC0001 errcheck: Almost all programs ignore errors on these functions and in most cases it's ok"
       - path: (.+)\.go$
         text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
+      # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
       - path: (.+)\.go$
         text: ineffective break statement. Did you mean to break out of the outer loop
+      # revive: irrelevant error about naming
       - path: (.+)\.go$
         text: '^var-naming: don''t use leading k in Go names'
+      # revive: ignore unused-paramter, package-comments, unexported-return, redefines-builtin-id, var-declaration, empty-block, superfluous-else
       - path: (.+)\.go$
         text: '^unused-parameter: parameter'
       - path: (.+)\.go$
@@ -192,9 +213,16 @@ linters:
       - builtin$
       - examples$
 issues:
-  max-issues-per-linter: 0
-  max-same-issues: 0
+  # Work our way back over time to be clean against all these
+  # checkers.  If you'd like to contribute, raise the number after ~,
+  # run the linter and dig in.
   new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57~25
+
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 0
 severity:
   default: error
 formatters:
