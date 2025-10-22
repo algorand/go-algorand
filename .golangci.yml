@@ -2,7 +2,6 @@ version: "2"
 run:
   tests: true
 linters:
-  # default: deadcode, errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, varcheck
   default: none
   enable:
     - copyloopvar
@@ -107,6 +106,28 @@ linters:
       - linters:
           - staticcheck
         text: 'SA1019: rand*'
+      # QF1008: suggests removing embedded field names from selectors (e.g., txn.SignedTxn.Txn -> txn.Txn)
+      # We prefer explicit embedded field access for clarity with transaction types and other embedded structs
+      - linters:
+          - staticcheck
+        text: 'QF1008:'
+      # ST1005: error strings should not be capitalized
+      - linters:
+          - staticcheck
+        text: 'ST1005:'
+      # QF1001: De Morgan's law suggestions
+      - linters:
+          - staticcheck
+        text: 'QF1001:'
+      # QF1003: tagged switch suggestions
+      - linters:
+          - staticcheck
+        text: 'QF1003:'
+      # revive: util is an acceptable package name in this codebase
+      - linters:
+          - revive
+        path: util/
+        text: 'var-naming: avoid meaningless package names'
       # allow shadowing in test code
       - linters:
           - govet
@@ -133,8 +154,9 @@ linters:
         text: exported method (.*).Unwrap` should have comment or be unexported
       # ignore issues about the way we use _struct fields to define encoding settings
       - path: (.+)\.go$
-        text: '`_struct` is unused'
-
+        text: 'field _struct is unused'
+        linters:
+          - unused
       # Enable some golangci-lint default exception rules:
       # "EXC0001 errcheck: Almost all programs ignore errors on these functions and in most cases it's ok"
       - path: (.+)\.go$

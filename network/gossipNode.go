@@ -257,5 +257,5 @@ func Propagate(msg IncomingMessage) OutgoingMessage {
 
 // SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 func SubstituteGenesisID(net GossipNode, rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", net.GetGenesisID(), -1)
+	return strings.ReplaceAll(rawURL, "{genesisID}", net.GetGenesisID())
 }
