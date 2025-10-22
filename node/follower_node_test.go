@@ -309,12 +309,13 @@ func TestSimulate(t *testing.T) {
 
 	round := node.ledger.LastRound()
 
+	proto := config.Consensus[protocol.ConsensusFuture]
 	stxn := txntest.Txn{
 		Type:        protocol.PaymentTx,
 		Sender:      testAddr,
 		Receiver:    poolAddr,
 		Amount:      1,
-		Fee:         1000,
+		Fee:         proto.MinTxnFee,
 		FirstValid:  round,
 		LastValid:   round + 1000,
 		GenesisHash: node.ledger.GenesisHash(),

@@ -2,15 +2,15 @@ module github.com/algorand/go-algorand/tools/block-generator
 
 replace github.com/algorand/go-algorand => ../..
 
-go 1.23.0
+go 1.25.0
 
-toolchain go1.23.9
+toolchain go1.25.3
 
 require (
 	github.com/algorand/avm-abi v0.2.0
 	github.com/algorand/go-algorand v0.0.0
 	github.com/algorand/go-codec/codec v1.1.10
-	github.com/algorand/go-deadlock v0.2.4
+	github.com/algorand/go-deadlock v0.2.5
 	github.com/lib/pq v1.10.9
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.10.0
@@ -22,7 +22,7 @@ require (
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/algorand/falcon v0.1.0 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
-	github.com/algorand/msgp v1.1.60 // indirect
+	github.com/algorand/msgp v1.1.61 // indirect
 	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
 	github.com/aws/aws-sdk-go v1.34.0 // indirect
@@ -128,7 +128,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.20.2 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
-	github.com/petermattis/goid v0.0.0-20241025130422-66cb2e6d7274 // indirect
+	github.com/petermattis/goid v0.0.0-20250813065127-a731cc31b4fe // indirect
 	github.com/pion/datachannel v1.5.9 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
 	github.com/pion/ice/v2 v2.3.36 // indirect

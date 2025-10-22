@@ -67,10 +67,12 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	const grace = 10
 	const mask = 0x80
 
+	consensusVersion := protocol.ConsensusFuture
+
 	var fixture fixtures.RestClientFixture
 	// Speed up rounds, keep lookback > 2 * grace period
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
-	fixture.AlterConsensus(protocol.ConsensusFuture,
+	fixture.FasterConsensus(consensusVersion, time.Second, lookback)
+	fixture.AlterConsensus(consensusVersion,
 		func(cp config.ConsensusParams) config.ConsensusParams {
 			cp.Payouts.ChallengeInterval = 50
 			cp.Payouts.ChallengeGracePeriod = 10
@@ -95,13 +97,14 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	err := fixture.WaitForRoundWithTimeout(interval - lookback) // Make all LastHeartbeats > interval, < 2*interval
 	a.NoError(err)
 
+	proto := config.Consensus[consensusVersion]
 	// eligible accounts1 will get challenged with node offline, and suspended
 	for _, account := range accounts1 {
-		rekeyreg(a, c1, account.Address, eligible(account.Address))
+		rekeyreg(a, c1, proto, account.Address, eligible(account.Address))
 	}
 	// eligible accounts2 will get challenged, but node2 will heartbeat for them
 	for _, account := range accounts2 {
-		rekeyreg(a, c2, account.Address, eligible(account.Address))
+		rekeyreg(a, c2, proto, account.Address, eligible(account.Address))
 	}
 
 	// turn off node 1, so it can't heartbeat
