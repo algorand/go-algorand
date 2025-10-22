@@ -20,6 +20,7 @@ import (
 	"go/ast"
 	"strings"
 
+	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 )
 
@@ -30,10 +31,10 @@ const functionNamePrefix string = "Test"
 const parameterType string = "T"
 const parameterName string = "t"
 
-// Analyzer initilization
+// Analyzer initialization
 var Analyzer = &analysis.Analyzer{
-	Name: "lint",
-	Doc:  "This custom linter checks inside files that end in '_test.go', and inside functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'",
+	Name: "partitiontest",
+	Doc:  "This custom linter checks inside files that end in '_test.go', and inside functions that start with 'Test' and have testing argument, for a line 'partitiontest.PartitionTest(<testing arg>)'",
 	Run:  run,
 }
 
@@ -130,4 +131,25 @@ func doesParameterNameMatch(call *ast.CallExpr, fn *ast.FuncDecl) bool {
 		}
 	}
 	return false
+}
+
+// V2 module plugin registration
+
+func init() {
+	register.Plugin("partitiontest", New)
+}
+
+// PartitionTestPlugin implements the golangci-lint v2 module plugin interface
+type PartitionTestPlugin struct{}
+
+func New(_ any) (register.LinterPlugin, error) {
+	return &PartitionTestPlugin{}, nil
+}
+
+func (p *PartitionTestPlugin) BuildAnalyzers() ([]*analysis.Analyzer, error) {
+	return []*analysis.Analyzer{Analyzer}, nil
+}
+
+func (p *PartitionTestPlugin) GetLoadMode() string {
+	return register.LoadModeSyntax
 }
