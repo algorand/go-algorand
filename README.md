@@ -171,3 +171,5 @@ Please see the [COPYING_FAQ](COPYING_FAQ) for details on how to apply our licens
 
 Copyright (C) 2019-2025, Algorand Inc.
 
+<br>## Welcome to PPoS Consensus<br>Algorand's PPoS ensures fast finality—new contributors, start with the algod tutorial for your first node sync. Tip: Use goal CLI for transactions! <br>
+
