@@ -12,9 +12,8 @@ linters:
       excludes: [G101, G103, G104, G107, G115, G202, G301, G302, G303, G304, G306, G307, G404, G601]
     custom:
       partitiontest:
-        path: cmd/partitiontest_linter/plugin.so
+        type: "module"
         description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
-        original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
   exclusions:
     generated: lax
     rules:
