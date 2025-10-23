@@ -195,22 +195,26 @@ func signerGrpTxn(
 
 // create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 func Test5MAssetsScenario1(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 1)
 }
 
 // create 6M unique assets, all created by a single account.
 func Test5MAssetsScenario2(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 2)
 }
 
 // create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them.
 // Make an app call to each of them, and make sure the app store some information into the local storage.
 func Test5MAssetsScenario3(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 3)
 }
 
 // create 6M unique apps by a single account. Opt-into all the applications and make sure the app stores information to both the local and global storage.
 func Test5MAssetsScenario4(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 4)
 }
 

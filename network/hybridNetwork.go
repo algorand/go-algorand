@@ -49,8 +49,8 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	p2pcfg.IncomingConnectionsLimit = cfg.P2PHybridIncomingConnectionsLimit
 	identityTracker := NewIdentityTracker()
 
-	var childWsNetMeshCreator MeshCreator = meshCreator
-	var childP2PNetMeshCreator MeshCreator = meshCreator
+	var childWsNetMeshCreator = meshCreator
+	var childP2PNetMeshCreator = meshCreator
 	var hybridMeshCreator MeshCreator = noopMeshCreator{}
 	_, isHybridMeshCreator := meshCreator.(hybridRelayMeshCreator)
 	if meshCreator == nil && cfg.IsHybridServer() || isHybridMeshCreator {

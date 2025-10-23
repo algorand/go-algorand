@@ -148,6 +148,8 @@ func TestBatchVerifierLibsodiumTestData(t *testing.T) {
 // based on TestEd25519Vectors from go/src/crypto/ed25519/ed25519vectors_test.go
 // which uses test vectors from filippo.io/mostly-harmless/ed25519vectors
 func TestBatchVerifierFilippoVectors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var vectors []struct {
 		A, R, S, M string
 		Flags      []string

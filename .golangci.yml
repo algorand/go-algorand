@@ -1,15 +1,12 @@
+version: "2"
 run:
-  timeout: 5m
   tests: true
-  
+
 linters:
-  # default: deadcode, errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, varcheck
-  disable-all: true
+  default: none
   enable:
-    - errcheck
     - copyloopvar
-    - gofmt
-    - gosimple
+    - errcheck
     - govet
     - ineffassign
     - misspell
@@ -18,63 +15,126 @@ linters:
     - paralleltest
     - revive
     - staticcheck
-    - typecheck
     - unused
-
-severity:
-  default-severity: error
-
-linters-settings:
-  nolintlint:
-    # require naming a specific linter X using //nolint:X
-    require-specific: true
-    # require comments like "//nolint:errcheck // Explanation of why we are ignoring linter here..."
-    require-explanation: true
-  errcheck:
-    exclude-functions:
-    # We do this 121 times and never check the error.
-    - (*github.com/spf13/cobra.Command).MarkFlagRequired
-    - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
-    - (*github.com/spf13/pflag.FlagSet).MarkShorthandDeprecated
-  govet:
-    # Enables these linters in addition to the default ones.
-    enable:
+  
+  settings:
+    errcheck:
+      exclude-functions:
+        # We do this 121 times and never check the error.
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+        - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
+        - (*github.com/spf13/pflag.FlagSet).MarkShorthandDeprecated
+    govet:
+      # Enables these linters in addition to the default ones.
+      enable:
         - shadow
-    settings:
-      shadow:
-        # explanation of strict vs non-strict:
-        # https://github.com/golang/tools/blob/v0.7.0/go/analysis/passes/shadow/shadow.go#L104-L122
-        strict: false
-      printf:
-        # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).
-        # Default: []
-        funcs:
-          - (github.com/algorand/go-algorand/logging.Logger).Debugf
-          - (github.com/algorand/go-algorand/logging.Logger).Infof
-          - (github.com/algorand/go-algorand/logging.Logger).Warnf
-          - (github.com/algorand/go-algorand/logging.Logger).Errorf
-          - (github.com/algorand/go-algorand/logging.Logger).Fatalf
-          - (github.com/algorand/go-algorand/logging.Logger).Panicf
-          - (github.com/algorand/go-algorand/logging.Logger).Debugln
-          - (github.com/algorand/go-algorand/logging.Logger).Infoln
-          - (github.com/algorand/go-algorand/logging.Logger).Warnln
-          - (github.com/algorand/go-algorand/logging.Logger).Errorln
-          - (github.com/algorand/go-algorand/logging.Logger).Fatalln
-          - (github.com/algorand/go-algorand/logging.Logger).Panicln
-          - (github.com/algorand/go-algorand/logging.Logger).Debug
-          - (github.com/algorand/go-algorand/logging.Logger).Info
-          - (github.com/algorand/go-algorand/logging.Logger).Warn
-          - (github.com/algorand/go-algorand/logging.Logger).Error
-          - (github.com/algorand/go-algorand/logging.Logger).Fatal
-          - (github.com/algorand/go-algorand/logging.Logger).Panic
-          - (github.com/algorand/go-algorand/cmd/goal/main).reportInfof
-          - (github.com/algorand/go-algorand/cmd/goal/main).reportInfoln
-          - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnf
-          - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnln
-          - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnRawf
-          - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnRawln
-          - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorf
-          - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorln
+      settings:
+        printf:
+          # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).
+          # Default: []
+          funcs:
+            - (github.com/algorand/go-algorand/logging.Logger).Debugf
+            - (github.com/algorand/go-algorand/logging.Logger).Infof
+            - (github.com/algorand/go-algorand/logging.Logger).Warnf
+            - (github.com/algorand/go-algorand/logging.Logger).Errorf
+            - (github.com/algorand/go-algorand/logging.Logger).Fatalf
+            - (github.com/algorand/go-algorand/logging.Logger).Panicf
+            - (github.com/algorand/go-algorand/logging.Logger).Debugln
+            - (github.com/algorand/go-algorand/logging.Logger).Infoln
+            - (github.com/algorand/go-algorand/logging.Logger).Warnln
+            - (github.com/algorand/go-algorand/logging.Logger).Errorln
+            - (github.com/algorand/go-algorand/logging.Logger).Fatalln
+            - (github.com/algorand/go-algorand/logging.Logger).Panicln
+            - (github.com/algorand/go-algorand/logging.Logger).Debug
+            - (github.com/algorand/go-algorand/logging.Logger).Info
+            - (github.com/algorand/go-algorand/logging.Logger).Warn
+            - (github.com/algorand/go-algorand/logging.Logger).Error
+            - (github.com/algorand/go-algorand/logging.Logger).Fatal
+            - (github.com/algorand/go-algorand/logging.Logger).Panic
+            - (github.com/algorand/go-algorand/cmd/goal/main).reportInfof
+            - (github.com/algorand/go-algorand/cmd/goal/main).reportInfoln
+            - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnf
+            - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnln
+            - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnRawf
+            - (github.com/algorand/go-algorand/cmd/goal/main).reportWarnRawln
+            - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorf
+            - (github.com/algorand/go-algorand/cmd/goal/main).reportErrorln
+        shadow:
+          # explanation of strict vs non-strict:
+          # https://github.com/golang/tools/blob/v0.7.0/go/analysis/passes/shadow/shadow.go#L104-L122
+          strict: false
+    nolintlint:
+      # require naming a specific linter X using //nolint:X
+      require-specific: true
+      # require comments like "//nolint:errcheck // Explanation of why we are ignoring linter here..."
+      require-explanation: true
+    staticcheck:
+      checks:
+        - all
+        - '-ST1000' # don't require package comments
+        - '-ST1003' # don't require currentDBRound vs currentDbRound
+        - '-ST1016' # OK to have mismatched receiver names
+        - '-SA3001' # we assign to b.N in several benchmarks
+        - '-SA1019' # TODO should fix, in Go 1.24 rand.Seed() is a no-op
+        - '-QF1008' # ignore suggestions to remove embedded fields (e.g., txn.SignedTxn.Txn -> txn.Txn)
+        - '-ST1005' # ignore "error strings should not be capitalized"
+        - '-QF1001' # ignore De Morgan's law suggestions
+        - '-QF1003' # ignore suggestions to replace if/else chain with switch
+
+  exclusions:
+    generated: lax
+    rules:
+      # exclude all issues from several linters from test code (TODO should fix these issues)
+      - path: _test\.go
+        linters:
+          - errcheck
+          - ineffassign
+          - misspell
+          - nolintlint
+          - staticcheck
+          - unused
+      - linters: govet
+        path: _test\.go
+        text: shadows declaration at line # allow shadowing in test code
+      - linters: paralleltest # Ignore missing t.Parallel calls in the following packages
+        path: ^(agreement|catchup|config|crypto|daemon|data|gen|ledger|logging|network|node|protocol|rpcs|stateproof|test|tools|util).*_test\.go
+
+        # Enable default golangci-lint exclusion: "Almost all programs ignore errors on these functions and in most cases it's ok"
+      - linters: errcheck
+        text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
+      - linters: revive
+        path: _test\.go
+        text: 'dot-imports: should not use dot imports' # dot imports OK for tests
+      - linters: revive
+        path: util/
+        text: 'var-naming: avoid meaningless package names' # util package is OK
+      - linters: unused
+        text: 'field _struct is unused' # we use _struct field tags for msgp/json encoding settings
+      - linters: revive
+        text: '^unused-parameter: parameter'
+      - linters: revive
+        text: '^package-comments: should have a package comment'
+      - linters: revive
+        text: '^unexported-return: exported func .* returns unexported type .*, which can be annoying'
+      - linters: revive
+        text: '^redefines-builtin-id: redefinition of the built-in (func|type)'
+      - linters: revive
+        text: '^var-declaration: should omit type .* from declaration of var .*; it will be inferred from the right-hand side'
+      - linters: revive
+        text: '^var-declaration: should drop .* from declaration of var .*; it is the zero value'
+      - linters: revive
+        text: '^empty-block: this block is empty, you can remove it'
+      - linters: revive
+        text: '^superfluous-else: if block ends with .* so drop this else and outdent its block'
+      # Comment this block out for testing linters
+      - linters:
+          - errcheck
+          - govet
+          - ineffassign
+          - misspell
+          - revive
+          - unused
+        path: test/linttest/lintissues\.go
 
 issues:
   # Work our way back over time to be clean against all these
@@ -82,142 +142,18 @@ issues:
   # run the linter and dig in.
   new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57~25
 
-  # Disable default exclude rules listed in `golangci-lint run --help` (selectively re-enable some below)
-  exclude-use-default: false
-
   # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
   max-issues-per-linter: 0
 
   # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
   max-same-issues: 0
+severity:
+  default: error
 
-  exclude:
-    # ignore govet false positive fixed in https://github.com/golang/go/issues/45043
-    - "sigchanyzer: misuse of unbuffered os.Signal channel as argument to signal.Notify"
-    # ignore golint false positive fixed in https://github.com/golang/lint/pull/487
-    - "exported method (.*).Unwrap` should have comment or be unexported"
-    # ignore issues about the way we use _struct fields to define encoding settings
-    - "`_struct` is unused"
-
-    # Enable some golangci-lint default exception rules:
-    # "EXC0001 errcheck: Almost all programs ignore errors on these functions and in most cases it's ok"
-    - Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
-    # "EXC0005 staticcheck: Developers tend to write in C-style with an explicit 'break' in a 'switch', so it's ok to ignore"
-    - ineffective break statement. Did you mean to break out of the outer loop
-    # revive: irrelevant error about naming
-    - "^var-naming: don't use leading k in Go names"
-    # revive: ignore unused-paramter, package-comments, unexported-return, redefines-builtin-id, var-declaration, empty-block, superfluous-else
-    - "^unused-parameter: parameter"
-    - "^package-comments: should have a package comment"
-    - "^unexported-return: "
-    - "^redefines-builtin-id: redefinition of"
-    - "^var-declaration: should"
-    - "^empty-block: this block is empty, you can remove it"
-    - "^superfluous-else: if block ends with"
-
-  exclude-rules:
-    - path: cmd/algofix/
-      linters: unused
-    - path: cmd/algocfg/
-      linters: unused
-    - path: cmd/catchpointdump/
-      linters: unused
-    - path: tools/
-      linters: unused
-    - path: daemon/kmd/lib/kmdapi/
-      linters: unused
-    - path: _test\.go
-      linters:
-        - errcheck
-        # - gofmt
-        - gosimple
-        # - govet
-        - ineffassign
-        - misspell
-        # - nilerr
-        - nolintlint
-        # - revive
-        # - staticcheck
-        - typecheck
-        - unused
-    - path: _test\.go
-      linters:
-        - staticcheck
-      text: "SA4006: this value" # of X is never used
-    - linters:
-        - staticcheck
-      text: "(SA3001|SA1019):"
-    - path: _test\.go
-      linters:
-        - revive
-      text: "dot-imports: should not use dot imports"
-    - linters:
-        - staticcheck
-      text: "SA1019: rand*"
-    # allow shadowing in test code
-    - path: _test\.go
-      linters:
-        - govet
-      text: "shadows declaration at line"
-    # Ignore missing parallel tests in existing packages
-    - path: ^agreement.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^catchup.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^config.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^crypto.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^daemon.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^data.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^gen.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^ledger.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^logging.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^network.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^node.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^protocol.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^rpcs.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^stateproof.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^test.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^tools.*_test\.go
-      linters:
-        - paralleltest
-    - path: ^util.*_test\.go
-      linters:
-        - paralleltest
-    # Add all linters here -- Comment this block out for testing linters
-    - path: test/linttest/lintissues\.go
-      linters:
-        - errcheck
-        - gofmt
-        - revive
-        - govet
-        - ineffassign
-        - misspell
-        - unused
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - test/linttest/lintissues\.go
