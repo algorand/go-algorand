@@ -68,6 +68,18 @@ linters:
       require-specific: true
       # require comments like "//nolint:errcheck // Explanation of why we are ignoring linter here..."
       require-explanation: true
+    staticcheck:
+      checks:
+        - all
+        - '-ST1000' # don't require package comments
+        - '-ST1003' # don't require currentDBRound vs currentDbRound
+        - '-ST1016' # OK to have mismatched receiver names
+        - '-SA3001' # we assign to b.N in several benchmarks
+        - '-SA1019' # TODO should fix, in Go 1.24 rand.Seed() is a no-op
+        - '-QF1008' # ignore suggestions to remove embedded fields (e.g., txn.SignedTxn.Txn -> txn.Txn)
+        - '-ST1005' # ignore "error strings should not be capitalized"
+        - '-QF1001' # ignore De Morgan's law suggestions
+        - '-QF1003' # ignore suggestions to replace if/else chain with switch
 
   exclusions:
     generated: lax
@@ -81,27 +93,9 @@ linters:
           - unused
         path: _test\.go
       - linters:
-          - staticcheck
-        text: 'SA3001:' # we assign to b.N in several benchmarks
-      - linters:
           - revive
         path: _test\.go
         text: 'dot-imports: should not use dot imports' # dot imports OK for tests
-      - linters:
-          - staticcheck
-        text: 'SA1019: rand*' # XXX should fix, in Go 1.24 rand.Seed() is a no-op
-      - linters:
-          - staticcheck
-        text: 'QF1008:' # ignore suggestions to remove embedded fields (e.g., txn.SignedTxn.Txn -> txn.Txn)
-      - linters:
-          - staticcheck
-        text: 'ST1005:' # ignore "error strings should not be capitalized"
-      - linters:
-          - staticcheck
-        text: 'QF1001:' # ignore De Morgan's law suggestions
-      - linters:
-          - staticcheck
-        text: 'QF1003:' # ignore suggestions to replace if/else chain with switch
       - linters:
           - revive
         path: util/
