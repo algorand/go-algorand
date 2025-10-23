@@ -2032,7 +2032,7 @@ func (t *HTTPPAddressBoundTransport) RoundTrip(req *http.Request) (*http.Respons
 	return t.InnerTransport.RoundTrip(req)
 }
 
-// filterASCII filter out the non-ascii printable characters out of the given input string and
+// filterASCII filter out the non-ascii printable characters out of the given input string
 // and replace these with unprintableCharacterGlyph.
 // It's used as a security qualifier before logging a network-provided data.
 // The function allows only characters in the range of [32..126], which excludes all the

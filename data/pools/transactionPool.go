@@ -640,7 +640,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 			pool.assemblyMu.Lock()
 			defer pool.assemblyMu.Unlock()
 			if evalRnd := pool.pendingBlockEvaluator.Round(); pool.assemblyRound > evalRnd {
-				// the block we're assembling now isn't the one the the AssembleBlock is waiting for. While it would be really cool
+				// the block we're assembling now isn't the one the AssembleBlock is waiting for. While it would be really cool
 				// to finish generating the block, it would also be pointless to spend time on it.
 				// we're going to set the ok and assemblyCompletedOrAbandoned to "true" so we can complete this loop asap
 				pool.assemblyResults.ok = true
