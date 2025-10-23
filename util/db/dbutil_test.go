@@ -481,11 +481,13 @@ func TestReadingWhileWriting(t *testing.T) {
 
 // using Write-Ahead Logging (WAL)
 func TestLockingTableWhileWritingWAL(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside testLockingTableWhileWriting
 	testLockingTableWhileWriting(t, true)
 }
 
 // using the default Rollback Journal
 func TestLockingTableWhileWritingJournal(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside testLockingTableWhileWriting
 	testLockingTableWhileWriting(t, false)
 }
 
