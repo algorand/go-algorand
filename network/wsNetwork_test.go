@@ -4068,7 +4068,7 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	// Confirm that we successfuly received a message of interest
+	// Confirm that we successfully received a message of interest
 	assert.Len(t, netA.peers, 1)
 	fmt.Printf("MI Message Count: %v\n", netA.peers[0].miMessageCount.Load())
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount.Load())

@@ -1603,7 +1603,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 
 	secondStageRound := basics.Round(36)
 
-	// Add blocks that preceed the first catchpoint round.
+	// Add blocks that precede the first catchpoint round.
 	for i := basics.Round(1); i < secondStageRound; i++ {
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{

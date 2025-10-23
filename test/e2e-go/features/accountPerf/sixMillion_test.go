@@ -600,7 +600,7 @@ func scenarioA(
 	require.NoError(t, err)
 
 	log.Infof("Verifying assets...")
-	// Verify the assets are transfered here
+	// Verify the assets are transferred here
 	tAssetAmt := uint64(0)
 	for nai, nacc := range keys {
 		if nacc == ownAllAccount {

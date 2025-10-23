@@ -96,7 +96,6 @@ linters:
         linters:
           - errcheck
           - ineffassign
-          - misspell
           - nolintlint
           - staticcheck
           - unused

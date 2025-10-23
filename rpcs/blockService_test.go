@@ -309,7 +309,7 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	var blk bookkeeping.Block
 	var l2Failed bool
 	xDone := 1000
-	// Keep on sending 4 simultanious requests to the first node, to force it to redirect to node 2
+	// Keep on sending 4 simultaneous requests to the first node, to force it to redirect to node 2
 	// then check the timestamp from the block header to confirm the redirection took place
 	var x int
 forloop:

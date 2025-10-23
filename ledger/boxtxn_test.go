@@ -346,7 +346,7 @@ func TestBoxCreateAvailability(t *testing.T) {
              itxn_field TypeEnum
             itxn_submit
 
-            // Now invoke it, so it can intialize (and create the "hello" box)
+            // Now invoke it, so it can initialize (and create the "hello" box)
             itxn_begin
              itxn_field ApplicationID
              int appl

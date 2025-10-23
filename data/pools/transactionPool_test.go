@@ -1546,7 +1546,7 @@ func TestStateProofLogging(t *testing.T) {
 	_, err = transactionPool.AssembleBlock(514, time.Time{})
 	require.NoError(t, err)
 
-	// parse the log messages and retreive the Metrics for SP in assmbe block
+	// parse the log messages and retrieve the Metrics for SP in assmbe block
 	scanner := bufio.NewScanner(strings.NewReader(buf.String()))
 	lines := make([]string, 0)
 	for scanner.Scan() {
