@@ -118,7 +118,7 @@ func procWait(cmd *exec.Cmd, cause string) {
 	}
 }
 
-// Write ensures the the underlying file can store an additional len(p) bytes. If there is not enough room left it seeks
+// Write ensures the underlying file can store an additional len(p) bytes. If there is not enough room left it seeks
 // to the beginning of the file.
 func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 	cyclic.mu.Lock()

@@ -75,7 +75,7 @@ func CustomTestTransaction(t *customT) {
 	})
 	require.NoError(t, err)
 
-	// read the updated record outside the transaction to make sure it was commited
+	// read the updated record outside the transaction to make sure it was committed
 	padA, err := aor.LookupAccount(addrA)
 	require.NoError(t, err)
 	require.Equal(t, uint64(98287), padA.AccountData.RewardsBase) // same updated data

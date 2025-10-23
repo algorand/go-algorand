@@ -1117,7 +1117,7 @@ func TestKVCache(t *testing.T) {
 			require.False(t, has)
 		}
 
-		// verify commited kvs appear in the kv cache
+		// verify committed kvs appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
 			startKV := (currentDBRound - 1) * basics.Round(kvsPerBlock)
 			for j := 0; j < kvsPerBlock; j++ {
@@ -1161,7 +1161,7 @@ func TestKVCache(t *testing.T) {
 			}
 		}
 
-		// verify commited updated kv values appear in the kv cache
+		// verify committed updated kv values appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
 			lookback := basics.Round(kvCnt/kvsPerBlock + int(conf.MaxAcctLookback) + 1)
 			if currentDBRound < lookback {
@@ -1213,7 +1213,7 @@ func TestKVCache(t *testing.T) {
 			}
 		}
 
-		// verify commited updated kv values appear in the kv cache
+		// verify committed updated kv values appear in the kv cache
 		for ; currentDBRound <= au.cachedDBRound; currentDBRound++ {
 			lookback := basics.Round(2*(kvCnt/kvsPerBlock+int(conf.MaxAcctLookback)) + 1)
 			if currentDBRound < lookback {
@@ -1946,7 +1946,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
 		}
 
-		// test 2: send back to creator creator
+		// test 2: send back to creator
 		// expect matching balances at the end
 		creatorParams := ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
 		if i == 4 {

@@ -3560,7 +3560,7 @@ add:
 		exp(3, "Cannot create label with same name as macro: coolLabel"),
 	)
 	testProg(t, `#define 👩 123`, AssemblerMaxVersion, exp(1, "👩 character not allowed in macro name"))
-	// These two tests are just for coverage, they really really can't happen
+	// These two tests are just for coverage, they really can't happen
 	ops := newOpStream(AssemblerMaxVersion)
 	err := define(&ops, []token{{str: "not#define"}})
 	require.EqualError(t, err, "0: invalid syntax: not#define")

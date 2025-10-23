@@ -103,7 +103,7 @@ func (m *migrator) Migrate(ctx context.Context) error {
 	if m.currentVersion > m.targetVersion {
 		return nil
 	}
-	// upgrade the db one version at at time
+	// upgrade the db one version at a time
 	for m.currentVersion < m.targetVersion {
 		// run next version upgrade
 		switch m.currentVersion {
