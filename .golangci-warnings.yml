@@ -8,7 +8,7 @@ linters:
     - partitiontest
   settings:
     gosec:
-      excludes: [G101, G103, G104, G107, G115, G202, G301, G302, G303, G304, G306, G307, G404]
+      excludes: [G101, G103, G104, G107, G112, G114, G115, G202, G204, G301, G302, G303, G304, G306, G307, G404]
     custom:
       partitiontest:
         type: "module"

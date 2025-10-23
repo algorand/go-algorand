@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package tar
+package main
 
 import (
 	"archive/tar"
@@ -65,7 +65,7 @@ func Uncompress(r io.Reader, dst string) error {
 		}
 
 		// the target location where the dir/file should be created
-		target := filepath.Join(dst, header.Name)
+		target := filepath.Join(dst, header.Name) //nolint:gosec // only used with trusted testing config data
 
 		// the following switch could also be done using fi.Mode(), not sure if there
 		// a benefit of using one vs. the other.
@@ -90,7 +90,7 @@ func Uncompress(r io.Reader, dst string) error {
 			}
 
 			// copy over contents
-			if _, err := io.Copy(f, tr); err != nil {
+			if _, err := io.Copy(f, tr); err != nil { //nolint:gosec // only used with trusted testing config data
 				return err
 			}
 
