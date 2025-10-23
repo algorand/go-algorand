@@ -407,7 +407,7 @@ func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest
 		})}})
 	// send a message with an invalid tag which is in defaultSendMessageTags.
 	// it should not go through because the defaultSendMessageTags should not be accepted
-	// and the connection should be dropped dropped
+	// and the connection should be dropped
 	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
 	for p := 0; p < 100; p++ {
 		if strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from") {

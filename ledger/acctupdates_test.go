@@ -1946,7 +1946,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 			updates.UpsertAssetResource(addr1, aidx, ledgercore.AssetParamsDelta{}, ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 200}})
 		}
 
-		// test 2: send back to creator creator
+		// test 2: send back to creator
 		// expect matching balances at the end
 		creatorParams := ledgercore.AssetParamsDelta{Params: &basics.AssetParams{Total: 1000}}
 		if i == 4 {

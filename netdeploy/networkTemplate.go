@@ -48,7 +48,7 @@ type NetworkTemplate struct {
 
 // TemplateKMDConfig is a subset of the kmd configuration that can be overridden in the network template
 // by using OverrideKmdConfig TemplateOverride opts.
-// The reason why config.KMDConfig cannot be used directly is that it contains DataDir field which is
+// The reason why config.KMDConfig cannot be used directly is that it contains DataDir field which
 // is not known until the template instantiation.
 type TemplateKMDConfig struct {
 	SessionLifetimeSecs uint64

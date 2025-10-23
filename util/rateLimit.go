@@ -507,7 +507,7 @@ func (cm *redCongestionManager) arrivalRateFor(arrivals *[]time.Time) float64 {
 // client1 will be throttled proportional to its usage of the service rate.
 // over time, client2 will fall in line with the appropriate service rate, while other clients will be able to use the newly freed capacity
 // The net effect is that clients who are disproportionately noisy are dropped more often,
-// while quieter ones are are dropped less often.
+// while quieter ones are dropped less often.
 // The reason this works is that the serviceRate represents the ability for the given resource to be serviced (ie, the rate at which work is dequeued).
 // When congestion management is required, the service should attempt a fair distribution of servicing to all clients.
 // clients who are making requests in excess of our known ability to fairly service requests should be reduced.

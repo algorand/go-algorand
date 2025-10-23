@@ -250,7 +250,7 @@ int 1`
 			expectedAddr2 := genesisBalance + 1_000_000
 
 			// addrs[3]: received CloseRemainderTo from addrs[1]
-			// addrs[1] started with genesisBalance, paid 1 fee (payTxn), sent 1_000_000, remainder to addrs[3]
+			// addrs[1]: started with genesisBalance, paid 1 fee (payTxn), sent 1_000_000, remainder to addrs[3]
 			expectedAddr3 := genesisBalance + (genesisBalance - proto.MinTxnFee - 1_000_000)
 
 			// innerAppAddress: started with 1_000_000, spawned 3 inner txns (1 app call + 2 payments)

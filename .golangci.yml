@@ -6,6 +6,7 @@ linters:
   default: none
   enable:
     - copyloopvar
+    - dupword
     - errcheck
     - govet
     - ineffassign
@@ -18,6 +19,10 @@ linters:
     - unused
   
   settings:
+    dupword:
+      comments-only: true
+      ignore:
+        - long # "long long" is OK
     errcheck:
       exclude-functions:
         # We do this 121 times and never check the error.
@@ -28,6 +33,8 @@ linters:
       # Enables these linters in addition to the default ones.
       enable:
         - shadow
+      disable:
+        - buildtag
       settings:
         printf:
           # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).

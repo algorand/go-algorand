@@ -344,8 +344,7 @@ forloop:
 				require.Equal(t, "3", responses[p].Header["Retry-After"][0])
 				continue
 			}
-			// parse the block to get the header timestamp
-			// timestamp is needed to know which node served the block
+			// parse the block to get the header timestamp which is needed to know which node served the block
 			require.Equal(t, http.StatusOK, responses[p].StatusCode)
 			bodyData, err := io.ReadAll(responses[p].Body)
 			require.NoError(t, err)
