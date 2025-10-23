@@ -1,6 +1,6 @@
 name: "ReviewDog workflow"
 env:
-  GOLANGCI_LINT_VERSION: "v2.5.0"
+  GOLANGCI_LINT_VERSION: "v2.5.1-0.20251021235302-b99da877a247"
 on:
   push:
     branches:
@@ -23,17 +23,39 @@ jobs:
       # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make libsodium && sudo mv /usr/bin/go.bak /usr/bin/go
-      - name: reviewdog-golangci-lint
-        uses: reviewdog/action-golangci-lint@v2.8.0
-        with:
-          go_version_file: go.mod
-          golangci_lint_version: ${{ env.GOLANGCI_LINT_VERSION }}
-          golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
-          reporter: "github-pr-check"
-          tool_name: "Lint Errors"
-          level: "error"
-          fail_level: any
-          filter_mode: "nofilter"
+      - name: Add bin to PATH
+        run: |
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+          echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+          golangci-lint --version
+      - name: Install reviewdog
+        run: |
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.0/install.sh | sh -s -- v0.21.0
+          reviewdog --version
+      - name: Run golangci-lint with reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          golangci-lint run \
+          --output.text.path stdout \
+          -c .golangci.yml \
+          --issues-exit-code 0 \
+          --allow-parallel-runners > temp_golangci-lint-errors.txt
+
+          cat temp_golangci-lint-errors.txt | reviewdog \
+          -f=golangci-lint \
+          -name="Lint Errors" \
+          -reporter=github-pr-check \
+          -filter-mode=nofilter \
+          -fail-level=any \
+          -level=error
   # Non-Blocking Warnings Section
   reviewdog-warnings:
     runs-on: ubuntu-latest
