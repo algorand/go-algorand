@@ -12,7 +12,7 @@ linters:
     custom:
       partitiontest:
         type: "module"
-        description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
+        description: This custom linter ensures test functions call 'partitiontest.PartitionTest(t)'
   exclusions:
     generated: lax
     rules:

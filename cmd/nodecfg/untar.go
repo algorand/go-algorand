@@ -19,9 +19,11 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // UncompressFile takes the name of a tar/gz archive file and expands
@@ -45,6 +47,7 @@ func Uncompress(r io.Reader, dst string) error {
 	defer gzr.Close()
 
 	tr := tar.NewReader(gzr)
+	baseDir := filepath.Clean(dst)
 
 	for {
 		header, err := tr.Next()
@@ -65,7 +68,10 @@ func Uncompress(r io.Reader, dst string) error {
 		}
 
 		// the target location where the dir/file should be created
-		target := filepath.Join(dst, header.Name) //nolint:gosec // only used with trusted testing config data
+		target, err := resolveEntryPath(baseDir, header.Name)
+		if err != nil {
+			return err
+		}
 
 		// the following switch could also be done using fi.Mode(), not sure if there
 		// a benefit of using one vs. the other.
@@ -99,4 +105,25 @@ func Uncompress(r io.Reader, dst string) error {
 			f.Close()
 		}
 	}
+}
+
+func resolveEntryPath(destination, headerName string) (string, error) {
+	cleanDest := filepath.Clean(destination)
+	cleanName := filepath.Clean(headerName)
+
+	if filepath.IsAbs(cleanName) {
+		return "", fmt.Errorf("tar entry %q: absolute paths are not supported", headerName)
+	}
+
+	target := filepath.Join(cleanDest, cleanName)
+	rel, err := filepath.Rel(cleanDest, target)
+	if err != nil {
+		return "", fmt.Errorf("tar entry %q: %w", headerName, err)
+	}
+
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("tar entry %q: invalid path", headerName)
+	}
+
+	return target, nil
 }
