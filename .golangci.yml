@@ -84,53 +84,47 @@ linters:
   exclusions:
     generated: lax
     rules:
-      - linters:
+      # exclude all issues from several linters from test code (TODO should fix these issues)
+      - path: _test\.go
+        linters:
           - errcheck
           - ineffassign
           - misspell
           - nolintlint
           - staticcheck
           - unused
-        path: _test\.go
-      - linters:
-          - revive
-        path: _test\.go
-        text: 'dot-imports: should not use dot imports' # dot imports OK for tests
-      - linters:
-          - revive
-        path: util/
-        text: 'var-naming: avoid meaningless package names' # util package is OK
-      - linters:
-          - govet
+      - linters: govet
         path: _test\.go
         text: shadows declaration at line # allow shadowing in test code
-      - linters:
-          - paralleltest # Ignore missing t.Parallel calls in the following packages
+      - linters: paralleltest # Ignore missing t.Parallel calls in the following packages
         path: ^(agreement|catchup|config|crypto|daemon|data|gen|ledger|logging|network|node|protocol|rpcs|stateproof|test|tools|util).*_test\.go
-      - linters:
-          - unused
-        text: 'field _struct is unused' # we use _struct field tags for msgp/json encoding settings
 
-      # Enable some golangci-lint default exception rules:
-      # "EXC0001 errcheck: Almost all programs ignore errors on these functions and in most cases it's ok"
-      - path: (.+)\.go$
+        # Enable default golangci-lint exclusion: "Almost all programs ignore errors on these functions and in most cases it's ok"
+      - linters: errcheck
         text: Error return value of .((os\.)?std(out|err)\..*|.*Close|.*Flush|os\.Remove(All)?|.*print(f|ln)?|os\.(Un)?Setenv). is not checked
-      # revive: ignore unused-paramter, package-comments, unexported-return, redefines-builtin-id, var-declaration, empty-block, superfluous-else
-      - path: (.+)\.go$
+      - linters: revive
+        path: _test\.go
+        text: 'dot-imports: should not use dot imports' # dot imports OK for tests
+      - linters: revive
+        path: util/
+        text: 'var-naming: avoid meaningless package names' # util package is OK
+      - linters: unused
+        text: 'field _struct is unused' # we use _struct field tags for msgp/json encoding settings
+      - linters: revive
         text: '^unused-parameter: parameter'
-      - path: (.+)\.go$
+      - linters: revive
         text: '^package-comments: should have a package comment'
-      - path: (.+)\.go$
+      - linters: revive
         text: '^unexported-return: exported func .* returns unexported type .*, which can be annoying'
-      - path: (.+)\.go$
+      - linters: revive
         text: '^redefines-builtin-id: redefinition of the built-in (func|type)'
-      - path: (.+)\.go$
+      - linters: revive
         text: '^var-declaration: should omit type .* from declaration of var .*; it will be inferred from the right-hand side'
-      - path: (.+)\.go$
+      - linters: revive
         text: '^var-declaration: should drop .* from declaration of var .*; it is the zero value'
-      - path: (.+)\.go$
+      - linters: revive
         text: '^empty-block: this block is empty, you can remove it'
-      - path: (.+)\.go$
+      - linters: revive
         text: '^superfluous-else: if block ends with .* so drop this else and outdent its block'
       # Comment this block out for testing linters
       - linters:
