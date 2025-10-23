@@ -78,7 +78,7 @@ jobs:
           set -e
 
           ./custom-golangci-lint run \
-          --out-format line-number \
+          --output.text.path stdout \
           -c .golangci-warnings.yml \
           --issues-exit-code 0 \
           --allow-parallel-runners > temp_golangci-lint-warnings.txt
