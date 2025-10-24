@@ -157,18 +157,7 @@ print:
 
 	// Store message if enabled
 	if *storeDir != "" {
-		dh.storeMutex.Lock()
-		dh.storeBuffer = append(dh.storeBuffer, StoredMessage{Tag: msg.Tag, Data: msg.Data})
-		dh.storeSize += len(msg.Data)
-
-		// Flush if we've exceeded batch size
-		if dh.storeSize >= *storeBatchSize {
-			err := dh.flushMessages()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error flushing messages: %v\n", err)
-			}
-		}
-		dh.storeMutex.Unlock()
+		dh.storeMessages(msg.Tag, msg.Data)
 	}
 
 	return network.OutgoingMessage{Action: network.Ignore}
@@ -315,15 +304,37 @@ func setupBasicSignalHandler(dh *dumpHandler) {
 		<-c
 		// Flush any remaining messages
 		if *storeDir != "" {
-			dh.storeMutex.Lock()
-			err := dh.flushMessages()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error flushing messages: %v\n", err)
-			}
-			dh.storeMutex.Unlock()
+			dh.storeFlush()
 		}
 		os.Exit(0)
 	}()
+}
+
+// storeMessages adds a message to the store buffer and flushes if needed
+func (dh *dumpHandler) storeMessages(tag protocol.Tag, data []byte) {
+	dh.storeMutex.Lock()
+	defer dh.storeMutex.Unlock()
+
+	dh.storeBuffer = append(dh.storeBuffer, StoredMessage{Tag: tag, Data: data})
+	dh.storeSize += len(data)
+
+	if dh.storeSize >= *storeBatchSize {
+		err := dh.flushMessages()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error flushing messages: %v\n", err)
+		}
+	}
+}
+
+// storeFlush flushes any remaining messages to disk
+func (dh *dumpHandler) storeFlush() {
+	dh.storeMutex.Lock()
+	defer dh.storeMutex.Unlock()
+
+	err := dh.flushMessages()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error flushing messages: %v\n", err)
+	}
 }
 
 func (dh *dumpHandler) flushMessages() error {

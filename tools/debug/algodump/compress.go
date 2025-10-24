@@ -144,12 +144,7 @@ func setupCompressSignalHandler(dh *compressDumpHandler) {
 		<-c
 		// Flush any remaining messages
 		if *storeDir != "" {
-			dh.storeMutex.Lock()
-			err := dh.flushMessages()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error flushing messages: %v\n", err)
-			}
-			dh.storeMutex.Unlock()
+			dh.storeFlush()
 		}
 		// Print compression stats on exit
 		dh.printStats()
@@ -397,20 +392,9 @@ compress:
 		}
 	}
 
-	// Store message if enabled - use the base handler's store functionality
+	// Store message if enabled
 	if *storeDir != "" {
-		dh.storeMutex.Lock()
-		dh.storeBuffer = append(dh.storeBuffer, StoredMessage{Tag: msg.Tag, Data: msg.Data})
-		dh.storeSize += len(msg.Data)
-
-		// Flush if we've exceeded batch size
-		if dh.storeSize >= *storeBatchSize {
-			err := dh.flushMessages()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error flushing messages: %v\n", err)
-			}
-		}
-		dh.storeMutex.Unlock()
+		dh.storeMessages(msg.Tag, msg.Data)
 	}
 
 	return network.OutgoingMessage{Action: network.Ignore}
