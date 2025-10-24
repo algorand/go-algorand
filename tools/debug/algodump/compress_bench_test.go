@@ -357,48 +357,6 @@ func parseLevelWindowList(keys []string, defaults []levelWindow) []levelWindow {
 	return defaults
 }
 
-type tagWindowConfig struct {
-	level      int
-	avWindow   int
-	txppWindow int
-}
-
-func parseTagWindowConfigs(keys []string, defaults []tagWindowConfig) []tagWindowConfig {
-	for _, key := range keys {
-		if key == "" {
-			continue
-		}
-		val := strings.TrimSpace(os.Getenv(key))
-		if val == "" {
-			continue
-		}
-		var result []tagWindowConfig
-		seen := make(map[tagWindowConfig]struct{})
-		for _, part := range strings.Split(val, ",") {
-			fields := strings.Split(part, ":")
-			if len(fields) != 3 {
-				continue
-			}
-			level, err1 := strconv.Atoi(strings.TrimSpace(fields[0]))
-			avWindow, err2 := strconv.Atoi(strings.TrimSpace(fields[1]))
-			txppWindow, err3 := strconv.Atoi(strings.TrimSpace(fields[2]))
-			if err1 != nil || err2 != nil || err3 != nil {
-				continue
-			}
-			cfg := tagWindowConfig{level: level, avWindow: avWindow, txppWindow: txppWindow}
-			if _, ok := seen[cfg]; ok {
-				continue
-			}
-			seen[cfg] = struct{}{}
-			result = append(result, cfg)
-		}
-		if len(result) > 0 {
-			return result
-		}
-	}
-	return defaults
-}
-
 var (
 	defaultGozstdLevels    = []int{1, 3, 7, 11}
 	defaultZstdLevels      = []int{1, 3, 7, 11}
@@ -435,12 +393,6 @@ var (
 		{level: 2, window: 1 << 20},
 		{level: 3, window: 1 << 18},
 		{level: 3, window: 1 << 20},
-	}
-	defaultTagContextConfigs = []tagWindowConfig{
-		{level: 1, avWindow: 1 << 18, txppWindow: 1 << 15},
-		{level: 1, avWindow: 1 << 17, txppWindow: 1 << 15},
-		{level: 2, avWindow: 1 << 18, txppWindow: 1 << 15},
-		{level: 3, avWindow: 1 << 18, txppWindow: 1 << 15},
 	}
 )
 
@@ -694,98 +646,6 @@ func benchmarkKlauspostStream(b *testing.B, level int, windowSize int) {
 		return append(dst[:0], buf.Bytes()...), nil
 	}
 	runCompressionLoop(b, filtered, compress)
-}
-
-// benchmarkTagSpecificContexts benchmarks a simulated algodump scenario with different
-// window sizes for different message types, mimicking the tag-specific contexts
-func benchmarkTagSpecificContexts(b *testing.B, level int, avWindow, txppWindow int) {
-	corpus := loadTestCorpus(b)
-
-	// Get a list of all the messages we need to process - we need both AV and TX/PP
-	// We'll categorize them later rather than filtering here
-	if len(corpus.messages) == 0 {
-		b.Fatal("No messages to benchmark")
-	}
-
-	// Create a reproducible sequence of messages to process
-	// Group messages by type so we can process them in a deterministic pattern
-	var avMessages []StoredMessage
-	var txppMessages []StoredMessage
-
-	for _, msg := range corpus.messages {
-		if msg.Tag == "AV" {
-			avMessages = append(avMessages, msg)
-		} else if msg.Tag == "TX" || msg.Tag == "PP" {
-			txppMessages = append(txppMessages, msg)
-		}
-	}
-
-	if len(avMessages) == 0 {
-		b.Fatal("No AV messages to benchmark")
-	}
-
-	if len(txppMessages) == 0 {
-		b.Fatal("No TX/PP messages to benchmark")
-	}
-
-	// For real-world simulation, we want to process a mix of messages in each benchmark iteration
-	// Let's use a fixed number of each message type per iteration
-	messagesPerType := 5 // Process 5 of each type per iteration
-	if len(avMessages) < messagesPerType {
-		messagesPerType = len(avMessages)
-	}
-	if len(txppMessages) < messagesPerType {
-		messagesPerType = len(txppMessages)
-	}
-
-	// Setup encoders for the different tag groups
-	avEnc, _ := kzstd.NewWriter(nil,
-		kzstd.WithEncoderLevel(kzstd.EncoderLevel(level)),
-		kzstd.WithWindowSize(avWindow))
-	defer avEnc.Close()
-
-	txppEnc, _ := kzstd.NewWriter(nil,
-		kzstd.WithEncoderLevel(kzstd.EncoderLevel(level)),
-		kzstd.WithWindowSize(txppWindow))
-	defer txppEnc.Close()
-
-	// Pre-allocate a buffer that we'll reuse
-	compressed := make([]byte, 0, 4096)
-
-	b.ResetTimer()
-	var totalCompressed int64
-	var origBytes int64
-	for i := 0; i < b.N; i++ {
-		// Process a fixed number of each message type with the appropriate encoder
-		// Starting from positions based on the iteration (i)
-		avBaseIdx := (i * messagesPerType) % len(avMessages)
-		txppBaseIdx := (i * messagesPerType) % len(txppMessages)
-
-		// Process AV messages
-		for j := 0; j < messagesPerType; j++ {
-			msgIdx := (avBaseIdx + j) % len(avMessages)
-			msg := avMessages[msgIdx]
-
-			compressed = avEnc.EncodeAll(msg.Data, compressed[:0])
-			totalCompressed += int64(len(compressed))
-			origBytes += int64(len(msg.Data))
-		}
-
-		// Process TX/PP messages
-		for j := 0; j < messagesPerType; j++ {
-			msgIdx := (txppBaseIdx + j) % len(txppMessages)
-			msg := txppMessages[msgIdx]
-
-			compressed = txppEnc.EncodeAll(msg.Data, compressed[:0])
-			totalCompressed += int64(len(compressed))
-			origBytes += int64(len(msg.Data))
-		}
-	}
-	b.StopTimer()
-
-	b.ReportMetric(float64(origBytes)/float64(totalCompressed), "ratio")
-	b.ReportMetric(100-float64(totalCompressed)/float64(origBytes)*100, "%smaller")
-	b.SetBytes(origBytes / int64(b.N)) // For MB/s calculation, use per-iteration bytes
 }
 
 // BenchmarkVPackDynamicCompression benchmarks the stateful vpack compression implementation
@@ -1060,16 +920,6 @@ func BenchmarkKlauspostStream(b *testing.B) {
 	for _, cfg := range configs {
 		b.Run(fmt.Sprintf("klauspost/stream/level=%d/window=%d", cfg.level, cfg.window), func(b *testing.B) {
 			benchmarkKlauspostStream(b, cfg.level, cfg.window)
-		})
-	}
-}
-
-func BenchmarkTagSpecificContexts(b *testing.B) {
-	configs := parseTagWindowConfigs([]string{"ALGODUMP_TAG_CONTEXTS", "ALGODUMP_BENCH_TAG_CONTEXTS"}, defaultTagContextConfigs)
-	for _, cfg := range configs {
-		name := fmt.Sprintf("klauspost/tag-specific/level=%d/av=%d/txpp=%d", cfg.level, cfg.avWindow, cfg.txppWindow)
-		b.Run(name, func(b *testing.B) {
-			benchmarkTagSpecificContexts(b, cfg.level, cfg.avWindow, cfg.txppWindow)
 		})
 	}
 }
