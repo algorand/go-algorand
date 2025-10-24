@@ -25,6 +25,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,6 +46,70 @@ type testCorpus struct {
 
 // Global cache for test corpus
 var cachedCorpus *testCorpus
+
+func TestVPackMemoryUsage(t *testing.T) {
+	windowSizes := []uint{256, 512, 1024, 2048, 4096, 8192}
+
+	t.Log("Measuring VPack StatefulEncoder memory usage:")
+	t.Log("")
+	t.Log("Memory breakdown per table (N entries = N/2 buckets):")
+	t.Log("  - sndTable:  (N/2 buckets) × 64 bytes  + (N/16 MRU bytes) = N × 32 bytes")
+	t.Log("  - pkTable:   (N/2 buckets) × 192 bytes + (N/16 MRU bytes) = N × 96 bytes")
+	t.Log("  - pk2Table:  (N/2 buckets) × 192 bytes + (N/16 MRU bytes) = N × 96 bytes")
+	t.Log("  Total: N × 224 bytes")
+	t.Log("")
+	t.Log("Window Size | Measured Memory | Expected (N×224) | Buckets | Ratio")
+	t.Log("----------- | --------------- | ---------------- | ------- | -----")
+
+	for _, windowSize := range windowSizes {
+		var m1, m2 runtime.MemStats
+
+		// Force GC and get baseline
+		runtime.GC()
+		runtime.ReadMemStats(&m1)
+
+		// Create encoder
+		enc, err := vpack.NewStatefulEncoder(windowSize)
+		if err != nil {
+			t.Fatalf("Failed to create encoder with size %d: %v", windowSize, err)
+		}
+
+		// Measure after creation
+		runtime.ReadMemStats(&m2)
+
+		// Calculate actual memory increase
+		actualBytes := int64(m2.HeapAlloc - m1.HeapAlloc)
+		expectedBytes := int64(windowSize) * 224 // N × (32 + 96 + 96)
+		numBuckets := windowSize / 2
+		ratio := float64(actualBytes) / float64(expectedBytes)
+
+		t.Logf("%11d | %12s | %13s | %7d | %.2f",
+			windowSize,
+			formatBytes(actualBytes),
+			formatBytes(expectedBytes),
+			numBuckets,
+			ratio)
+
+		// Keep encoder alive
+		_ = enc
+	}
+
+	t.Log("")
+	t.Log("Verified with unsafe.Sizeof in network/vpack/memory_test.go:")
+	t.Log("  - addressValue:             32 bytes ✓")
+	t.Log("  - pkSigPair:                96 bytes ✓")
+	t.Log("  - twoSlotBucket[address]:   64 bytes ✓")
+	t.Log("  - twoSlotBucket[pkSigPair]: 192 bytes ✓")
+}
+
+func formatBytes(b int64) string {
+	if b < 1024 {
+		return fmt.Sprintf("%d B", b)
+	} else if b < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(b)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(b)/(1024*1024))
+}
 
 func TestPrintTestCorpus(t *testing.T) {
 	corpus := loadTestCorpus(t)
@@ -630,73 +695,59 @@ func benchmarkKlauspostStream(b *testing.B, level int, windowSize int) {
 	runCompressionLoop(b, filtered, compress)
 }
 
-// BenchmarkVPackDynamicCompression benchmarks the stateful vpack compression implementation
-// This uses the two-layer compression: StatelessEncoder → StatefulEncoder
-func BenchmarkVPackDynamicCompression(b *testing.B) {
+func benchmarkVPackDynamicHelper(b *testing.B, windowSize int) {
 	corpus := loadTestCorpus(b)
-
-	// Filter messages to only include AV votes
 	filtered := filterMessages(b, corpus, true)
 
-	b.Logf("Number of messages: %d", len(filtered))
-
-	// Create both encoder types - stateless for first layer, stateful for second
 	stEnc := vpack.NewStatelessEncoder()
-	dynEnc, err := vpack.NewStatefulEncoder(1024)
+	dynEnc, err := vpack.NewStatefulEncoder(uint(windowSize))
 	if err != nil {
 		b.Fatalf("Failed to create StatefulEncoder: %v", err)
 	}
 
-	// Buffers for intermediate and final compression results
 	statelessBuf := make([]byte, 0, 4096)
 	compressed := make([]byte, 0, 4096)
-
-	// For measuring stateless vs. stateful sizes
 	var statelessTotalSize, statefulTotalSize int64
 
 	b.ResetTimer()
 	var totalCompressed int64
 	var origBytes int64
 	for i := 0; i < b.N; i++ {
-		// Process one message per iteration, cycling through messages
 		msg := filtered[i%len(filtered)]
-
-		// First layer: stateless compression
-		var err error
 		statelessBuf, err = stEnc.CompressVote(statelessBuf[:0], msg.Data)
 		if err != nil {
 			b.Fatalf("StatelessEncoder failed: %v", err)
 		}
-
-		// Track total stateless size
 		statelessTotalSize += int64(len(statelessBuf))
 
-		// Second layer: stateful compression
 		compressed, err = dynEnc.Compress(compressed[:0], statelessBuf)
 		if err != nil {
 			b.Fatalf("StatefulEncoder failed: %v", err)
 		}
-
-		// Track total stateful size
 		statefulTotalSize += int64(len(compressed))
-
 		totalCompressed += int64(len(compressed))
 		origBytes += int64(len(msg.Data))
 	}
 	b.StopTimer()
 
-	// Report compression ratio and other metrics
 	b.ReportMetric(float64(origBytes)/float64(totalCompressed), "ratio")
 	b.ReportMetric(100-float64(totalCompressed)/float64(origBytes)*100, "%smaller")
 	b.SetBytes(origBytes / int64(b.N))
 
 	if statelessTotalSize > 0 && statefulTotalSize > 0 {
-		b.Logf("Stateless size: %d bytes, Stateful size: %d bytes",
-			statelessTotalSize, statefulTotalSize)
-		b.Logf("Additional compression ratio: %.2fx",
-			float64(statelessTotalSize)/float64(statefulTotalSize))
-		b.Logf("Additional space reduction: %.2f%%",
-			(1.0-float64(statefulTotalSize)/float64(statelessTotalSize))*100)
+		b.ReportMetric(float64(statelessTotalSize)/float64(statefulTotalSize), "addl_ratio")
+		b.ReportMetric((1.0-float64(statefulTotalSize)/float64(statelessTotalSize))*100, "%addl_smaller")
+	}
+}
+
+// BenchmarkVPackDynamicCompression benchmarks the stateful vpack compression implementation
+// This uses the two-layer compression: StatelessEncoder → StatefulEncoder
+func BenchmarkVPackDynamicCompression(b *testing.B) {
+	windowSizes := parseIntListFromEnv([]string{"ALGODUMP_VPACK_WINDOWS"}, []int{1024})
+	for _, windowSize := range windowSizes {
+		b.Run(fmt.Sprintf("window=%d", windowSize), func(b *testing.B) {
+			benchmarkVPackDynamicHelper(b, windowSize)
+		})
 	}
 }
 

@@ -86,17 +86,9 @@ func NewGozstdWriterAdapter(buf *bytes.Buffer, level, windowLog int, cd *gozstd.
 	}
 }
 
-func (a *GozstdWriterAdapter) Write(p []byte) (n int, err error) {
-	return a.writer.Write(p)
-}
-
-func (a *GozstdWriterAdapter) Flush() error {
-	return a.writer.Flush()
-}
-
-func (a *GozstdWriterAdapter) Close() error {
-	return a.writer.Close()
-}
+func (a *GozstdWriterAdapter) Write(p []byte) (n int, err error) { return a.writer.Write(p) }
+func (a *GozstdWriterAdapter) Flush() error                      { return a.writer.Flush() }
+func (a *GozstdWriterAdapter) Close() error                      { return a.writer.Close() }
 
 // CompressionContext holds the state for a compression context, which can use either
 // klauspost/zstd (pure Go) or valyala/gozstd (C-based) implementation
