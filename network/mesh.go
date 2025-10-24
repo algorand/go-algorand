@@ -239,7 +239,7 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 
 	out := make(chan meshRequest, 5)
 	var wg sync.WaitGroup
-	var prevP2PConnections int = -1 // -1 means not initialized
+	var prevP2PConnections = -1 // -1 means not initialized
 
 	meshFn := func(targetConnCount int) int {
 		wsTarget := targetConnCount

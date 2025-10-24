@@ -569,7 +569,7 @@ func (n *P2PNetwork) refreshPeerStoreAddresses() {
 // It returns the number of peers connected.
 func (n *P2PNetwork) meshThreadInner(targetConnCount int) int {
 	n.refreshPeerStoreAddresses()
-	for {
+	for { //nolint:staticcheck // easier to read
 		if n.service.DialPeersUntilTargetCount(targetConnCount) {
 			break
 		}
