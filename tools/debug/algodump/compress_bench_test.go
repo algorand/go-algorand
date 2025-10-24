@@ -282,47 +282,13 @@ type levelWindowLog struct {
 	windowLog int
 }
 
-func parseLevelWindowLogList(keys []string, defaults []levelWindowLog) []levelWindowLog {
-	for _, key := range keys {
-		if key == "" {
-			continue
-		}
-		val := strings.TrimSpace(os.Getenv(key))
-		if val == "" {
-			continue
-		}
-		var result []levelWindowLog
-		seen := make(map[levelWindowLog]struct{})
-		for _, part := range strings.Split(val, ",") {
-			fields := strings.Split(part, ":")
-			if len(fields) != 2 {
-				continue
-			}
-			level, err1 := strconv.Atoi(strings.TrimSpace(fields[0]))
-			windowLog, err2 := strconv.Atoi(strings.TrimSpace(fields[1]))
-			if err1 != nil || err2 != nil {
-				continue
-			}
-			cfg := levelWindowLog{level: level, windowLog: windowLog}
-			if _, ok := seen[cfg]; ok {
-				continue
-			}
-			seen[cfg] = struct{}{}
-			result = append(result, cfg)
-		}
-		if len(result) > 0 {
-			return result
-		}
-	}
-	return defaults
-}
-
 type levelWindow struct {
 	level  int
 	window int
 }
 
-func parseLevelWindowList(keys []string, defaults []levelWindow) []levelWindow {
+// parseConfigFromEnv parses configuration from environment variables with a generic two-field struct
+func parseConfigFromEnv[T comparable](keys []string, defaults []T, parse func(field1, field2 string) (T, error)) []T {
 	for _, key := range keys {
 		if key == "" {
 			continue
@@ -331,19 +297,17 @@ func parseLevelWindowList(keys []string, defaults []levelWindow) []levelWindow {
 		if val == "" {
 			continue
 		}
-		var result []levelWindow
-		seen := make(map[levelWindow]struct{})
+		var result []T
+		seen := make(map[T]struct{})
 		for _, part := range strings.Split(val, ",") {
 			fields := strings.Split(part, ":")
 			if len(fields) != 2 {
 				continue
 			}
-			level, err1 := strconv.Atoi(strings.TrimSpace(fields[0]))
-			window, err2 := strconv.Atoi(strings.TrimSpace(fields[1]))
-			if err1 != nil || err2 != nil {
+			cfg, err := parse(strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1]))
+			if err != nil {
 				continue
 			}
-			cfg := levelWindow{level: level, window: window}
 			if _, ok := seen[cfg]; ok {
 				continue
 			}
@@ -357,11 +321,41 @@ func parseLevelWindowList(keys []string, defaults []levelWindow) []levelWindow {
 	return defaults
 }
 
+func parseLevelWindowLogList(keys []string, defaults []levelWindowLog) []levelWindowLog {
+	return parseConfigFromEnv(keys, defaults, func(f1, f2 string) (levelWindowLog, error) {
+		level, err1 := strconv.Atoi(f1)
+		windowLog, err2 := strconv.Atoi(f2)
+		if err1 != nil {
+			return levelWindowLog{}, err1
+		}
+		if err2 != nil {
+			return levelWindowLog{}, err2
+		}
+		return levelWindowLog{level: level, windowLog: windowLog}, nil
+	})
+}
+
+func parseLevelWindowList(keys []string, defaults []levelWindow) []levelWindow {
+	return parseConfigFromEnv(keys, defaults, func(f1, f2 string) (levelWindow, error) {
+		level, err1 := strconv.Atoi(f1)
+		window, err2 := strconv.Atoi(f2)
+		if err1 != nil {
+			return levelWindow{}, err1
+		}
+		if err2 != nil {
+			return levelWindow{}, err2
+		}
+		return levelWindow{level: level, window: window}, nil
+	})
+}
+
 var (
-	defaultGozstdLevels    = []int{1, 3, 7, 11}
-	defaultZstdLevels      = []int{1, 3, 7, 11}
-	defaultKlauspostLevels = []int{1, 3}
-	defaultGozstdWindowLog = []levelWindowLog{
+	// Default compression levels for benchmarks
+	defaultLevels       = []int{1, 3}
+	defaultLevelsExtend = []int{1, 3, 7, 11}
+
+	// Default window configurations for benchmarks
+	defaultWindowLog = []levelWindowLog{
 		{level: 1, windowLog: 15},
 		{level: 1, windowLog: 18},
 		{level: 1, windowLog: 20},
@@ -371,19 +365,7 @@ var (
 		{level: 7, windowLog: 18},
 		{level: 11, windowLog: 18},
 	}
-	defaultKlauspostWindows = []levelWindow{
-		{level: 1, window: 1 << 12},
-		{level: 1, window: 1 << 15},
-		{level: 1, window: 1 << 16},
-		{level: 1, window: 1 << 18},
-		{level: 1, window: 1 << 20},
-		{level: 2, window: 1 << 15},
-		{level: 2, window: 1 << 18},
-		{level: 2, window: 1 << 20},
-		{level: 3, window: 1 << 18},
-		{level: 3, window: 1 << 20},
-	}
-	defaultKlauspostStreamConfigs = []levelWindow{
+	defaultWindows = []levelWindow{
 		{level: 1, window: 1 << 12},
 		{level: 1, window: 1 << 15},
 		{level: 1, window: 1 << 18},
@@ -795,7 +777,7 @@ func BenchmarkVPackDynamicDecompression(b *testing.B) {
 
 func BenchmarkGozstdSimple(b *testing.B) {
 	corpus := loadTestCorpus(b)
-	levels := parseIntListFromEnv([]string{"ALGODUMP_GOZSTD_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultGozstdLevels)
+	levels := parseIntListFromEnv([]string{"ALGODUMP_GOZSTD_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultLevelsExtend)
 	filters := parseFilterOptions([]string{"ALGODUMP_GOZSTD_FILTERS", "ALGODUMP_BENCH_FILTERS"})
 	runSimpleCompressionMatrix(b, "gozstd/simple", corpus, levels, filters, func(level int) (simpleCompressor, func(), error) {
 		return func(dst, src []byte) ([]byte, error) {
@@ -806,7 +788,7 @@ func BenchmarkGozstdSimple(b *testing.B) {
 
 func BenchmarkZstdSimple(b *testing.B) {
 	corpus := loadTestCorpus(b)
-	levels := parseIntListFromEnv([]string{"ALGODUMP_ZSTD_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultZstdLevels)
+	levels := parseIntListFromEnv([]string{"ALGODUMP_ZSTD_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultLevelsExtend)
 	filters := parseFilterOptions([]string{"ALGODUMP_ZSTD_FILTERS", "ALGODUMP_BENCH_FILTERS"})
 	runSimpleCompressionMatrix(b, "zstd/simple", corpus, levels, filters, func(level int) (simpleCompressor, func(), error) {
 		return func(dst, src []byte) ([]byte, error) {
@@ -817,7 +799,7 @@ func BenchmarkZstdSimple(b *testing.B) {
 
 func BenchmarkKlauspostSimple(b *testing.B) {
 	corpus := loadTestCorpus(b)
-	levels := parseIntListFromEnv([]string{"ALGODUMP_KLAUSPOST_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultKlauspostLevels)
+	levels := parseIntListFromEnv([]string{"ALGODUMP_KLAUSPOST_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultLevels)
 	filters := parseFilterOptions([]string{"ALGODUMP_KLAUSPOST_FILTERS", "ALGODUMP_BENCH_FILTERS"})
 	runSimpleCompressionMatrix(b, "klauspost/simple", corpus, levels, filters, func(level int) (simpleCompressor, func(), error) {
 		enc, err := kzstd.NewWriter(nil, kzstd.WithEncoderLevel(kzstd.EncoderLevel(level)))
@@ -834,7 +816,7 @@ func BenchmarkKlauspostSimple(b *testing.B) {
 
 func BenchmarkGozstdDecompress(b *testing.B) {
 	corpus := loadTestCorpus(b)
-	levels := parseIntListFromEnv([]string{"ALGODUMP_GOZSTD_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultGozstdLevels)
+	levels := parseIntListFromEnv([]string{"ALGODUMP_GOZSTD_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultLevelsExtend)
 	filters := parseFilterOptions([]string{"ALGODUMP_GOZSTD_FILTERS", "ALGODUMP_BENCH_FILTERS"})
 	runSimpleDecompressionMatrix(b, "gozstd/decompress", corpus, levels, filters, func(level int, msgs []StoredMessage) ([][]byte, simpleDecompressor, func(), error) {
 		compressed := make([][]byte, len(msgs))
@@ -850,7 +832,7 @@ func BenchmarkGozstdDecompress(b *testing.B) {
 
 func BenchmarkZstdDecompress(b *testing.B) {
 	corpus := loadTestCorpus(b)
-	levels := parseIntListFromEnv([]string{"ALGODUMP_ZSTD_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultZstdLevels)
+	levels := parseIntListFromEnv([]string{"ALGODUMP_ZSTD_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultLevelsExtend)
 	filters := parseFilterOptions([]string{"ALGODUMP_ZSTD_FILTERS", "ALGODUMP_BENCH_FILTERS"})
 	runSimpleDecompressionMatrix(b, "zstd/decompress", corpus, levels, filters, func(level int, msgs []StoredMessage) ([][]byte, simpleDecompressor, func(), error) {
 		compressed := make([][]byte, len(msgs))
@@ -870,7 +852,7 @@ func BenchmarkZstdDecompress(b *testing.B) {
 
 func BenchmarkKlauspostDecompress(b *testing.B) {
 	corpus := loadTestCorpus(b)
-	levels := parseIntListFromEnv([]string{"ALGODUMP_KLAUSPOST_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultKlauspostLevels)
+	levels := parseIntListFromEnv([]string{"ALGODUMP_KLAUSPOST_LEVELS", "ALGODUMP_BENCH_LEVELS"}, defaultLevels)
 	filters := parseFilterOptions([]string{"ALGODUMP_KLAUSPOST_FILTERS", "ALGODUMP_BENCH_FILTERS"})
 	runSimpleDecompressionMatrix(b, "klauspost/decompress", corpus, levels, filters, func(level int, msgs []StoredMessage) ([][]byte, simpleDecompressor, func(), error) {
 		enc, err := kzstd.NewWriter(nil, kzstd.WithEncoderLevel(kzstd.EncoderLevel(level)))
@@ -898,7 +880,7 @@ func BenchmarkKlauspostDecompress(b *testing.B) {
 }
 
 func BenchmarkGozstdWindow(b *testing.B) {
-	configs := parseLevelWindowLogList([]string{"ALGODUMP_GOZSTD_WINDOW_LOGS", "ALGODUMP_BENCH_WINDOW_LOGS"}, defaultGozstdWindowLog)
+	configs := parseLevelWindowLogList([]string{"ALGODUMP_GOZSTD_WINDOW_LOGS", "ALGODUMP_BENCH_WINDOW_LOGS"}, defaultWindowLog)
 	for _, cfg := range configs {
 		b.Run(fmt.Sprintf("gozstd/window/level=%d/windowLog=%d", cfg.level, cfg.windowLog), func(b *testing.B) {
 			benchmarkGozstdWindow(b, cfg.level, cfg.windowLog)
@@ -907,7 +889,7 @@ func BenchmarkGozstdWindow(b *testing.B) {
 }
 
 func BenchmarkKlauspostWindow(b *testing.B) {
-	configs := parseLevelWindowList([]string{"ALGODUMP_KLAUSPOST_WINDOWS", "ALGODUMP_BENCH_WINDOWS"}, defaultKlauspostWindows)
+	configs := parseLevelWindowList([]string{"ALGODUMP_KLAUSPOST_WINDOWS", "ALGODUMP_BENCH_WINDOWS"}, defaultWindows)
 	for _, cfg := range configs {
 		b.Run(fmt.Sprintf("klauspost/window/level=%d/window=%d", cfg.level, cfg.window), func(b *testing.B) {
 			benchmarkKlauspostWindow(b, cfg.level, cfg.window)
@@ -916,7 +898,7 @@ func BenchmarkKlauspostWindow(b *testing.B) {
 }
 
 func BenchmarkKlauspostStream(b *testing.B) {
-	configs := parseLevelWindowList([]string{"ALGODUMP_KLAUSPOST_STREAM_WINDOWS", "ALGODUMP_BENCH_STREAM_WINDOWS"}, defaultKlauspostStreamConfigs)
+	configs := parseLevelWindowList([]string{"ALGODUMP_KLAUSPOST_STREAM_WINDOWS", "ALGODUMP_BENCH_STREAM_WINDOWS"}, defaultWindows)
 	for _, cfg := range configs {
 		b.Run(fmt.Sprintf("klauspost/stream/level=%d/window=%d", cfg.level, cfg.window), func(b *testing.B) {
 			benchmarkKlauspostStream(b, cfg.level, cfg.window)
