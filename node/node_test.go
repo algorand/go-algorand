@@ -868,7 +868,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// subtract out the two smaller signature sizes (logicsig is biggest, it can *contain* the others)
 	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + crypto.MultisigSigMaxSize())
 	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
-	// the logicsig args can both be up to to MaxLogicSigMaxSize, but that's the max for
+	// the logicsig args can both be up to MaxLogicSigMaxSize, but that's the max for
 	// them combined, so it double counts and we have to subtract one.
 	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
 
@@ -1297,7 +1297,7 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 			Sender:      addr2,
 			FirstValid:  1,
 			LastValid:   100,
-			Fee:         basics.MicroAlgos{Raw: 1000},
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
 			GenesisID:   nodes[2].genesisID,
 			GenesisHash: nodes[2].genesisHash,
 		},

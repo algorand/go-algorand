@@ -1,0 +1,6 @@
+version: v2.5.0
+name: custom-golangci-lint
+plugins:
+  # partitiontest plugin from local source
+  - module: 'github.com/algorand/go-algorand/cmd/partitiontest_linter'
+    path: ./cmd/partitiontest_linter

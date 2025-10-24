@@ -34,6 +34,6 @@ func (wn *WebsocketNetwork) addrToGossipAddr(a string) (string, error) {
 	if parsedURL.Scheme == "" {
 		parsedURL.Scheme = "ws"
 	}
-	parsedURL.Path = strings.Replace(path.Join(parsedURL.Path, GossipNetworkPath), "{genesisID}", wn.GetGenesisID(), -1)
+	parsedURL.Path = strings.ReplaceAll(path.Join(parsedURL.Path, GossipNetworkPath), "{genesisID}", wn.GetGenesisID())
 	return parsedURL.String(), nil
 }

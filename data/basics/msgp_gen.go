@@ -6153,8 +6153,6 @@ func (z *TealValue) MsgIsZero() bool {
 func TealValueMaxSize() (s int) {
 	s = 1 + 3 + msgp.Uint64Size + 3
 	panic("Unable to determine max size: String type z.Bytes is unbounded")
-	s += 3 + msgp.Uint64Size
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler

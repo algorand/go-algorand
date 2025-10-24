@@ -323,7 +323,7 @@ func TestIdentityTrackerRemoveIdentity(t *testing.T) {
 	require.True(t, exists)
 
 	// check that removing a peer who does not exist in the map (but whos identity does)
-	// not not result in the wrong peer being removed
+	// not result in the wrong peer being removed
 	tracker.removeIdentity(&p2)
 	_, exists = tracker.peersByID[p.identity]
 	require.True(t, exists)

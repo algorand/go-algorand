@@ -1051,8 +1051,6 @@ func (z *ConsensusVersionView) MsgIsZero() bool {
 func ConsensusVersionViewMaxSize() (s int) {
 	s = 1 + 4
 	panic("Unable to determine max size: String type string(*z.Err) is unbounded")
-	s += 8 + protocol.ConsensusVersionMaxSize()
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1585,7 +1583,6 @@ func BlockAssemblerMaxSize() (s int) {
 	s = 1 + 9 + UnauthenticatedProposalMaxSize() + 7 + msgp.BoolSize + 8 + ProposalMaxSize() + 10 + msgp.BoolSize + 15
 	// Calculating size of slice: z.Authenticators
 	panic("Slice z.Authenticators is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2252,17 +2249,6 @@ func (z *diskState) MsgIsZero() bool {
 func DiskStateMaxSize() (s int) {
 	s = 1 + 7
 	panic("Unable to determine max size: Byteslice type z.Router is unbounded")
-	s += 7
-	panic("Unable to determine max size: Byteslice type z.Player is unbounded")
-	s += 6
-	panic("Unable to determine max size: Byteslice type z.Clock is unbounded")
-	s += 12
-	// Calculating size of slice: z.ActionTypes
-	panic("Slice z.ActionTypes is unbounded")
-	s += 8
-	// Calculating size of slice: z.Actions
-	panic("Slice z.Actions is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3727,10 +3713,6 @@ func (z *messageEvent) MsgIsZero() bool {
 func MessageEventMaxSize() (s int) {
 	s = 1 + 2 + msgp.Uint8Size + 6 + MessageMaxSize() + 4
 	panic("Unable to determine max size: String type string(*z.Err) is unbounded")
-	s += 10 + msgp.Uint64Size + 5
-	s += MessageEventMaxSize()
-	s += 10 + msgp.BoolSize + 6 + ConsensusVersionViewMaxSize()
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -4175,7 +4157,6 @@ func PeriodRouterMaxSize() (s int) {
 	s = 1 + 16 + ProposalTrackerMaxSize() + 18 + VoteTrackerPeriodMaxSize() + 24 + ProposalTrackerContractMaxSize() + 9
 	s += msgp.MapHeaderSize
 	panic("Map z.Children is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -6123,10 +6104,6 @@ func ProposalStoreMaxSize() (s int) {
 	s = 1 + 9
 	s += msgp.MapHeaderSize
 	panic("Map z.Relevant is unbounded")
-	s += 7 + ProposalValueMaxSize() + 11
-	s += msgp.MapHeaderSize
-	panic("Map z.Assemblers is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -6371,8 +6348,6 @@ func ProposalTableMaxSize() (s int) {
 	s = 1 + 8
 	s += msgp.MapHeaderSize
 	panic("Map z.Pending is unbounded")
-	s += 12 + msgp.Uint64Size
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -6585,8 +6560,6 @@ func ProposalTrackerMaxSize() (s int) {
 	s = 1 + 10
 	s += msgp.MapHeaderSize
 	panic("Map z.Duplicate is unbounded")
-	s += 8 + ProposalSeekerMaxSize() + 8 + ProposalValueMaxSize()
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -7137,7 +7110,6 @@ func ProposalVoteCounterMaxSize() (s int) {
 	s = 1 + 6 + msgp.Uint64Size + 6
 	s += msgp.MapHeaderSize
 	panic("Map z.Votes is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -7879,7 +7851,6 @@ func RootRouterMaxSize() (s int) {
 	s = 1 + 16 + 1 + 15 + 1 + 9
 	s += msgp.MapHeaderSize
 	panic("Map z.Children is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -8256,7 +8227,6 @@ func RoundRouterMaxSize() (s int) {
 	s = 1 + 14 + ProposalStoreMaxSize() + 17 + 1 + 9 + ThresholdEventMaxSize() + 3 + msgp.BoolSize + 9
 	s += msgp.MapHeaderSize
 	panic("Map z.Children is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -8616,7 +8586,6 @@ func (z serializableError) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func SerializableErrorMaxSize() (s int) {
 	panic("Unable to determine max size: String type string(z) is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -13011,14 +12980,6 @@ func VoteTrackerMaxSize() (s int) {
 	s = 1 + 7
 	s += msgp.MapHeaderSize
 	panic("Map z.Voters is unbounded")
-	s += 7
-	s += msgp.MapHeaderSize
-	panic("Map z.Counts is unbounded")
-	s += 13
-	s += msgp.MapHeaderSize
-	panic("Map z.Equivocators is unbounded")
-	s += 18 + msgp.Uint64Size
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler

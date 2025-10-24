@@ -178,10 +178,8 @@ func (m *lruResources) prune(newSize int) (removed int) {
 	if m.resources == nil {
 		return
 	}
-	for {
-		if len(m.resources) <= newSize {
-			break
-		}
+	for len(m.resources) > newSize {
+
 		back := m.resourcesList.Back()
 		delete(m.resources, accountCreatable{address: back.Value.address, index: back.Value.Aidx})
 		m.resourcesList.Remove(back)

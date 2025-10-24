@@ -16,7 +16,7 @@
 
 // Package pingpong provides a transaction generating utility for performance testing.
 //
-//nolint:unused,structcheck,deadcode,varcheck // ignore unused pingpong code
+//nolint:unused // ignore unused pingpong code
 package pingpong
 
 import (
@@ -327,10 +327,8 @@ func (pps *WorkerState) schedule(n int) {
 	if n > 1 {
 		nextSendTime = nextSendTime.Add(timePerStep * time.Duration(n-1))
 	}
-	for {
-		if now.After(nextSendTime) {
-			break
-		}
+	for !now.After(nextSendTime) {
+
 		dur := nextSendTime.Sub(now)
 		if dur < durationEpsilon {
 			break

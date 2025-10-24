@@ -326,7 +326,7 @@ type Local struct {
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
-	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in in the header and always uses the last value
+	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in the header and always uses the last value
 	// from the last X-Forwarded-For HTTP header that corresponds to a single reverse proxy (even if it received the request from another reverse proxy or adversary node).
 	//
 	// WARNING: By enabling this option, you are trusting peers to provide accurate forwarding addresses.

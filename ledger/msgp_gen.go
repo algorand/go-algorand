@@ -5,7 +5,6 @@ package ledger
 import (
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -471,8 +470,6 @@ func (z *CatchpointFileHeader) MsgIsZero() bool {
 func CatchpointFileHeaderMaxSize() (s int) {
 	s = 1 + 8 + msgp.Uint64Size + 14 + basics.RoundMaxSize() + 12 + basics.RoundMaxSize() + 14 + ledgercore.AccountTotalsMaxSize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 20 + msgp.Uint64Size + 23 + msgp.Uint64Size + 11
 	panic("Unable to determine max size: String type z.Catchpoint is unbounded")
-	s += 18 + crypto.DigestMaxSize()
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
