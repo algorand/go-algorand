@@ -198,7 +198,7 @@ var catchupCmd = &cobra.Command{
 					fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
 					reader := bufio.NewReader(os.Stdin)
 					text, _ := reader.ReadString('\n')
-					text = strings.Replace(text, "\n", "", -1)
+					text = strings.ReplaceAll(text, "\n", "")
 					if text != "yes" {
 						reportErrorf(errorAbortedPerUserRequest)
 					}

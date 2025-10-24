@@ -42,6 +42,7 @@ import (
 )
 
 func TestLoadMultiRootKeyConcurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
 	tempDir := t.TempDir()
@@ -81,6 +82,7 @@ func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 }
 
 func TestLoadSingleRootKeyConcurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
 	tempDir := t.TempDir()

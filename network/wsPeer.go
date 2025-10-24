@@ -386,7 +386,7 @@ func (wp *wsPeer) RoutingAddr() []byte {
 // (Implements TCPInfoUnicastPeer)
 func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
 	// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
-	var uconn net.Conn = wp.conn.UnderlyingConn()
+	var uconn = wp.conn.UnderlyingConn()
 	for i := 0; i < 10; i++ {
 		wconn, ok := uconn.(wrappedConn)
 		if !ok {

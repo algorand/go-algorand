@@ -22,7 +22,7 @@ import (
 )
 
 // V1Routes contains all routes for v1
-// v1 algod paths will route to the sunset message, resulting in a 410 Gone response.
+// These algod paths will route to the sunset message, resulting in a 410 Gone response.
 var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "status",

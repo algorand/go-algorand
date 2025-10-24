@@ -141,7 +141,7 @@ func TestMimc(t *testing.T) {
 	// output does not change under the hood with new versions.
 	//
 	// We test that malformed inputs panic, in particular we test malfornmed inputs of:
-	// 0 length, lenghts not multiple of 32 bytes, chunks representing values greater than the modulus.
+	// 0 length, lengths not multiple of 32 bytes, chunks representing values greater than the modulus.
 	// We test that well formed inputs hash correctly, testing both single chunk inputs (32-byte) and
 	// multiple chunk inputs (96 bytes).
 	partitiontest.PartitionTest(t)

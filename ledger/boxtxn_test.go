@@ -346,7 +346,7 @@ func TestBoxCreateAvailability(t *testing.T) {
              itxn_field TypeEnum
             itxn_submit
 
-            // Now invoke it, so it can intialize (and create the "hello" box)
+            // Now invoke it, so it can initialize (and create the "hello" box)
             itxn_begin
              itxn_field ApplicationID
              int appl
@@ -773,7 +773,7 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 		// transaction counter, so it can know what the later create will be,
 		// and compute it's app address.
 
-		// 2) a) Use the the predicted appID to name the box ref.
+		// 2) a) Use the predicted appID to name the box ref.
 		// or b) Use 0 as the app in the box ref, meaning "this app"
 		// or c) EnableUnnamedBoxCreate will allow such a creation if there are empty box refs.
 
@@ -800,7 +800,7 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 
 			// doubleSrc tries to create TWO boxes. The second is always named by ApplicationArgs 1
 			doubleSrc := createSrcVer + `txn ApplicationArgs 1; int 24; box_create; pop;` // return result of FIRST box_create
-			// need to call one inner txn, and have have mbr for itself and inner created app
+			// need to call one inner txn, and have mbr for itself and inner created app
 			passID := dl.fundedApp(addrs[0], 200_000+proto.MinTxnFee, passThruCreator) // Will be used to show inners have same power
 
 			// Since we used fundedApp, the next app created would be passID+2.

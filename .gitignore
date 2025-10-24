@@ -24,6 +24,9 @@ cmd/algod/algod
 cmd/goal/goal
 cmd/updater/updater
 
+# custom golangci-lint binary with plugins
+custom-golangci-lint
+
 # Exclude our local temp directory
 tmp/
 

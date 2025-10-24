@@ -1,6 +1,6 @@
 name: "ReviewDog workflow"
 env:
-  GOLANGCI_LINT_VERSION: "v1.64.8"
+  GOLANGCI_LINT_VERSION: "v2.5.1-0.20251021235302-b99da877a247"
 on:
   push:
     branches:
@@ -29,27 +29,13 @@ jobs:
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
       - name: Set up Go
         uses: ./.github/actions/setup-go
-      - name: Create folders for golangci-lint
-        run: mkdir -p cicdtmp/golangci-lint
-      - name: Check if custom golangci-lint is already built
-        id: cache-golangci-lint
-        uses: actions/cache@v4
-        with:
-          path: cicdtmp/golangci-lint/golangci-lint-cgo
-          key: cicd-golangci-lint-cgo-v0.0.3-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}
-
-      - name: Build custom golangci-lint with CGO_ENABLED
-        if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
+      - name: Install golangci-lint
         run: |
-          cd cicdtmp/golangci-lint
-          git clone https://github.com/golangci/golangci-lint.git .
-          git checkout tags/${GOLANGCI_LINT_VERSION}
-          CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
-          ./golangci-lint-cgo --version
-          cd ../../
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+          golangci-lint --version
       - name: Install reviewdog
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.20.3/install.sh | sh -s -- v0.20.3
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.0/install.sh | sh -s -- v0.21.0
           reviewdog --version
       - name: Run golangci-lint with reviewdog
         env:
@@ -57,9 +43,10 @@ jobs:
         run: |
           set -e
 
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run \
-          --out-format line-number \
+          golangci-lint run \
+          --output.text.path stdout \
           -c .golangci.yml \
+          --issues-exit-code 0 \
           --allow-parallel-runners > temp_golangci-lint-errors.txt
 
           cat temp_golangci-lint-errors.txt | reviewdog \
@@ -91,47 +78,34 @@ jobs:
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
       - name: Set up Go
         uses: ./.github/actions/setup-go
-      - name: Create folders for golangci-lint
-        run: mkdir -p cicdtmp/golangci-lint
-      - name: Check if custom golangci-lint is already built
-        id: cache-golangci-lint
+      - name: Check if custom golangci-lint with partitiontest plugin is already built
+        id: cache-custom-golangci-lint
         uses: actions/cache@v4
         with:
-          path: cicdtmp/golangci-lint/golangci-lint-cgo
-          key: cicd-golangci-lint-cgo-v0.0.3-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}
-
-      - name: Build custom golangci-lint with CGO_ENABLED
-        if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
+          path: custom-golangci-lint
+          key: custom-golangci-lint-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('cmd/partitiontest_linter/**', '.custom-gcl.yml') }}
+      - name: Build custom golangci-lint with partitiontest plugin
+        if: steps.cache-custom-golangci-lint.outputs.cache-hit != 'true'
         run: |
-          cd cicdtmp/golangci-lint
-          git clone https://github.com/golangci/golangci-lint.git .
-          git checkout tags/${GOLANGCI_LINT_VERSION}
-          CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
-          ./golangci-lint-cgo --version
-          cd ../../
+          go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }} custom -v
+          ./custom-golangci-lint --version
       - name: Install reviewdog
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.20.3/install.sh | sh -s -- v0.20.3
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.0/install.sh | sh -s -- v0.21.0
           reviewdog --version
-      - name: Build custom linters
-        run: |
-          cd cmd/partitiontest_linter/
-          CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
-          cd ../../
-          ls -la cmd/partitiontest_linter/
       - name: Run golangci-lint with reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
 
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run \
-          --out-format line-number \
+          ./custom-golangci-lint run \
+          --output.text.path stdout \
           -c .golangci-warnings.yml \
           --issues-exit-code 0 \
-          --allow-parallel-runners > temp_golangci-lint-cgo.txt
+          --allow-parallel-runners > temp_golangci-lint-warnings.txt
 
-          cat temp_golangci-lint-cgo.txt | reviewdog \
+          cat temp_golangci-lint-warnings.txt | reviewdog \
           -f=golangci-lint \
           -name="Lint Warnings" \
           -reporter=github-pr-check \

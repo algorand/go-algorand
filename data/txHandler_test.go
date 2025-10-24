@@ -2491,7 +2491,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 
 	inputGoodTxnCount := len(signedTransactionGroups) - len(badTxnGroups)
 	tp := handler.txPool
-	// Wait untill all the expected transactions are in the pool
+	// Wait until all the expected transactions are in the pool
 	for x := 0; x < 100; x++ {
 		if len(tp.PendingTxGroups()) == inputGoodTxnCount {
 			break
@@ -2918,7 +2918,7 @@ func TestTxHandlerErlClientMapper(t *testing.T) {
 // TestTxHandlerERLIPClient checks that ERL properly handles sender with the same and different addresses:
 // Configure ERL in following way:
 // 1. Small maxCapacity=10 fully shared by two IP senders (TxBacklogReservedCapacityPerPeer=5, IncomingConnectionsLimit=0)
-// 2. Submit one from both IP senders to initalize per peer-queues and exhaust shared capacity
+// 2. Submit one from both IP senders to initialize per peer-queues and exhaust shared capacity
 // 3. Make sure the third peer does not come through
 // 4. Make sure extra messages from the first peer and second peer are accepted
 func TestTxHandlerERLIPClient(t *testing.T) {

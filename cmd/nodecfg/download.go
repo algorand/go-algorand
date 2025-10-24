@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/util/s3"
-	"github.com/algorand/go-algorand/util/tar"
 )
 
 func downloadAndExtractConfigPackage(channel string, targetDir string, configBucket string) (err error) {
@@ -74,7 +73,7 @@ func downloadConfigPackage(channelName string, targetDir string, configBucket st
 }
 
 func extractConfigPackage(packageFile string, targetDir string) (err error) {
-	err = tar.UncompressFile(packageFile, targetDir)
+	err = UncompressFile(packageFile, targetDir)
 	if err != nil {
 		return
 	}
