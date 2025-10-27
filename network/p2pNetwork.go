@@ -728,7 +728,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				n.log.Debugf("Relay node(s) from peerstore: %v", addrs)
 			}
 		case PeersPhonebookArchivalNodes:
-			// query known archival nodes that came from from DHT if enabled (or DNS if configured)
+			// query known archival nodes that came from DHT if enabled (or DNS if configured)
 			addrInfos := n.pstore.GetAddresses(numArchivalPeersToFind, phonebook.ArchivalRole)
 			for _, peerInfo := range addrInfos {
 				if peerInfo.ID == n.service.ID() {

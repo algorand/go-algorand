@@ -1604,11 +1604,8 @@ func (wn *WebsocketNetwork) meshThreadInner() bool {
 
 	// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
 	// kick off the creation of new connections.
-	for {
-		if wn.checkNewConnectionsNeeded() {
-			// new connections were created.
-			break
-		}
+	for !wn.checkNewConnectionsNeeded() {
+
 		if !wn.checkExistingConnectionsNeedDisconnecting() {
 			// no connection were removed.
 			break
@@ -2089,7 +2086,7 @@ func (t *HTTPPAddressBoundTransport) RoundTrip(req *http.Request) (*http.Respons
 	return t.InnerTransport.RoundTrip(req)
 }
 
-// filterASCII filter out the non-ascii printable characters out of the given input string and
+// filterASCII filter out the non-ascii printable characters out of the given input string
 // and replace these with unprintableCharacterGlyph.
 // It's used as a security qualifier before logging a network-provided data.
 // The function allows only characters in the range of [32..126], which excludes all the

@@ -54,7 +54,7 @@ func (e *SError) Error() string {
 	}
 	// imperfect because we replace \%A as well
 	if strings.Contains(e.Msg, "%A") {
-		return strings.Replace(e.Msg, "%A", e.AttributesAsString(), -1)
+		return strings.ReplaceAll(e.Msg, "%A", e.AttributesAsString())
 	}
 	return e.Msg
 }

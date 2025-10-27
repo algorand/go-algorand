@@ -194,7 +194,7 @@ func (ps *PeerStore) UpdateConnectionTime(addrOrPeerID string, provisionalTime t
 	// Find the provisionalTime and update it
 	entry := ad.recentConnectionTimes
 	for indx, val := range entry {
-		if provisionalTime == val {
+		if provisionalTime.Equal(val) {
 			entry[indx] = time.Now()
 			return true
 		}

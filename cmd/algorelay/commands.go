@@ -42,10 +42,10 @@ type exitError struct {
 	errorMessage string
 }
 
-func makeExitError(exitCode int, errMsg string, errArgs ...interface{}) exitError {
+func makeExitError(exitCode int, errMsg string) exitError {
 	ee := exitError{
 		exitCode:     exitCode,
-		errorMessage: fmt.Sprintf(errMsg, errArgs...),
+		errorMessage: errMsg,
 	}
 	return ee
 }

@@ -258,7 +258,7 @@ type MsgpDecoderBytes struct {
 	pos int
 }
 
-// Decode an objptr from from a byte stream
+// Decode an objptr from a byte stream
 func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
 	if !objptr.CanUnmarshalMsg(objptr) {
 		return fmt.Errorf("object %T cannot be msgp-unmashalled", objptr)

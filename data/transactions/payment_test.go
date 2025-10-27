@@ -156,7 +156,7 @@ func TestWellFormedPaymentErrors(t *testing.T) {
 				},
 			},
 			proto:         protoV27,
-			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, curProto.MinTxnFee),
+			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, protoV27.MinTxnFee),
 		},
 		{
 			tx: Transaction{
