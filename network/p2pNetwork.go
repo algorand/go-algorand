@@ -357,7 +357,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 
 func (n *P2PNetwork) setup() error {
 	// Validate and normalize vote compression table size
-	n.voteCompressionDynamicTableSize = config.NormalizeVoteCompressionTableSize(n.config.VoteCompressionDynamicTableSize, n.log)
+	n.voteCompressionDynamicTableSize = n.config.NormalizedVoteCompressionTableSize(n.log)
 
 	if n.broadcaster.slowWritingPeerMonitorInterval == 0 {
 		n.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval

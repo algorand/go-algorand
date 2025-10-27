@@ -562,7 +562,7 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.dialer = limitcaller.MakeRateLimitingDialer(wn.phonebook, preferredResolver)
 
 	// Validate and normalize vote compression table size
-	wn.voteCompressionDynamicTableSize = config.NormalizeVoteCompressionTableSize(wn.config.VoteCompressionDynamicTableSize, wn.log)
+	wn.voteCompressionDynamicTableSize = wn.config.NormalizedVoteCompressionTableSize(wn.log)
 
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
