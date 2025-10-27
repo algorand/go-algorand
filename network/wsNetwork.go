@@ -1558,7 +1558,9 @@ func (wn *WebsocketNetwork) meshThreadInner(targetConnCount int) int {
 
 	// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
 	// kick off the creation of new connections.
-	for { //nolint:staticcheck // easier to read
+
+	//nolint:staticcheck // easier to read
+	for {
 		if wn.checkNewConnectionsNeeded(targetConnCount) {
 			// new connections were created.
 			break
