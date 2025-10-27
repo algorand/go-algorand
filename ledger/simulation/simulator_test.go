@@ -67,7 +67,7 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	}
 
 	methodExistsInEvalLedger := func(methodName string) bool {
-		evalLedgerType := reflect.TypeOf((*eval.LedgerForEvaluator)(nil)).Elem()
+		evalLedgerType := reflect.TypeFor[eval.LedgerForEvaluator]()
 		for i := 0; i < evalLedgerType.NumMethod(); i++ {
 			if evalLedgerType.Method(i).Name == methodName {
 				return true
@@ -78,14 +78,14 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 
 	methodHasRoundParameter := func(methodType reflect.Type) bool {
 		for i := 0; i < methodType.NumIn(); i++ {
-			if methodType.In(i) == reflect.TypeOf(basics.Round(0)) {
+			if methodType.In(i) == reflect.TypeFor[basics.Round]() {
 				return true
 			}
 		}
 		return false
 	}
 
-	ledgerType := reflect.TypeOf(env.Ledger)
+	ledgerType := reflect.TypeFor[*data.Ledger]()
 	for i := 0; i < ledgerType.NumMethod(); i++ {
 		method := ledgerType.Method(i)
 		if methodExistsInEvalLedger(method.Name) && !methodIsSkipped(method.Name) {

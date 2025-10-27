@@ -107,7 +107,7 @@ fix: build
 	$(GOBIN)/algofix */
 
 modernize:
-	GOTOOLCHAIN=auto go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest -category minmax,slicescontains,sortslice,stringscutprefix,mapsloop -fix -test ./...
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
 
 lint: deps
 	$(GOBIN)/golangci-lint run -c .golangci.yml

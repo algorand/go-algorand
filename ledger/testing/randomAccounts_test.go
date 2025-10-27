@@ -30,7 +30,7 @@ func TestAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	accountDataType := reflect.TypeOf(basics.AccountData{})
+	accountDataType := reflect.TypeFor[basics.AccountData]()
 
 	referencedAccountTypes := make([]reflectionhelpers.TypePath, 0)
 	reflectionhelpers.IterateReferencedTypes(accountDataType, func(path reflectionhelpers.TypePath, stack []reflect.Type) bool {

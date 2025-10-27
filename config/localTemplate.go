@@ -669,8 +669,8 @@ func (cfg Local) ValidateDNSBootstrapArray(networkID protocol.NetworkID) ([]*DNS
 func (cfg Local) internalValidateDNSBootstrapArray(networkID protocol.NetworkID) (
 	bootstrapArray []*DNSBootstrap, err error) {
 
-	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
-	for _, bootstrapString := range bootstrapStringArray {
+	bootstrapStringArray := strings.SplitSeq(cfg.DNSBootstrapID, ";")
+	for bootstrapString := range bootstrapStringArray {
 		if len(strings.TrimSpace(bootstrapString)) == 0 {
 			continue
 		}

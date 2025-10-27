@@ -54,7 +54,7 @@ func migrate(cfg Local) (newCfg Local, migrations []MigrationResult, err error) 
 			break
 		}
 		defaultCurrentConfig := GetVersionedDefaultLocalConfig(newCfg.Version)
-		localType := reflect.TypeOf(Local{})
+		localType := reflect.TypeFor[Local]()
 		nextVersion := newCfg.Version + 1
 		for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {
 			field := localType.Field(fieldNum)
@@ -163,7 +163,7 @@ func migrate(cfg Local) (newCfg Local, migrations []MigrationResult, err error) 
 }
 
 func getLatestConfigVersion() uint32 {
-	localType := reflect.TypeOf(Local{})
+	localType := reflect.TypeFor[Local]()
 	versionField, found := localType.FieldByName("Version")
 	if !found {
 		return 0
@@ -184,7 +184,7 @@ func GetVersionedDefaultLocalConfig(version uint32) (local Local) {
 		local = GetVersionedDefaultLocalConfig(version - 1)
 	}
 	// apply version specific changes.
-	localType := reflect.TypeOf(local)
+	localType := reflect.TypeFor[Local]()
 	for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {
 		field := localType.Field(fieldNum)
 		versionDefaultValue, hasTag := reflect.StructTag(field.Tag).Lookup(fmt.Sprintf("version[%d]", version))
