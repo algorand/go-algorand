@@ -212,16 +212,6 @@ func processFile(filename string, useStdin bool) error {
 	return os.WriteFile(f.Name(), newSrc, 0)
 }
 
-var gofmtBuf bytes.Buffer
-
-func gofmt(n interface{}) string {
-	gofmtBuf.Reset()
-	if err := format.Node(&gofmtBuf, fset, n); err != nil {
-		return "<" + err.Error() + ">"
-	}
-	return gofmtBuf.String()
-}
-
 func report(err error) {
 	scanner.PrintError(os.Stderr, err)
 	exitCode = 2
