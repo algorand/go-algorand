@@ -17,7 +17,6 @@
 package restapi
 
 import (
-	"context"
 	"flag"
 	"math"
 	"os"
