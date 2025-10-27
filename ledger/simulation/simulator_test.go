@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -42,8 +43,6 @@ import (
 func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-
-	env := simulationtesting.PrepareSimulatorTest(t)
 
 	// methods overridden by `simulatorLedger``
 	overriddenMethods := []string{
