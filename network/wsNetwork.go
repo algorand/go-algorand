@@ -229,12 +229,9 @@ type WebsocketNetwork struct {
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
 
-	// lastNetworkAdvanceMu synchronized the access to lastNetworkAdvance
-	lastNetworkAdvanceMu deadlock.Mutex
-
-	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
-	// it used as a watchdog to help us detect connectivity issues ( such as cliques )
-	lastNetworkAdvance time.Time
+	// outgoingConnsCloser used to check number of outgoing connections and disconnect as needed.
+	// it is also used as a watchdog to help us detect connectivity issues ( such as cliques ) so that it monitors agreement protocol progress.
+	outgoingConnsCloser *outgoingConnsCloser
 
 	// number of throttled outgoing connections "slots" needed to be populated.
 	throttledOutgoingConnections atomic.Int32
@@ -605,6 +602,7 @@ func (wn *WebsocketNetwork) setup() error {
 	var err error
 	wn.mesher, err = meshCreator.create(
 		withContext(wn.ctx),
+		withTargetConnCount(wn.config.GossipFanout),
 		withMeshNetMeshFn(wn.meshThreadInner),
 		withMeshPeerStatReporter(func() {
 			wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
@@ -637,7 +635,7 @@ func (wn *WebsocketNetwork) setup() error {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
 	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
-	wn.lastNetworkAdvance = time.Now().UTC()
+	wn.outgoingConnsCloser = makeOutgoingConnsCloser(wn.log, wn, wn.connPerfMonitor, cliqueResolveInterval)
 
 	// set our supported versions
 	if wn.config.NetworkProtocolVersion != "" {
@@ -666,7 +664,7 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
-	if wn.config.IsGossipServer() || wn.config.ForceRelayMessages {
+	if wn.relayMessages {
 		listener, err := net.Listen("tcp", wn.config.NetAddress)
 		if err != nil {
 			wn.log.Errorf("network could not listen %v: %s", wn.config.NetAddress, err)
@@ -1555,19 +1553,26 @@ type meshRequest struct {
 	done chan struct{}
 }
 
-func (wn *WebsocketNetwork) meshThreadInner() bool {
+func (wn *WebsocketNetwork) meshThreadInner(targetConnCount int) int {
 	wn.refreshRelayArchivePhonebookAddresses()
 
 	// as long as the call to checkExistingConnectionsNeedDisconnecting is deleting existing connections, we want to
 	// kick off the creation of new connections.
-	for !wn.checkNewConnectionsNeeded() {
 
-		if !wn.checkExistingConnectionsNeedDisconnecting() {
+	//nolint:staticcheck // easier to read
+	for {
+		if wn.checkNewConnectionsNeeded(targetConnCount) {
+			// new connections were created.
+			break
+		}
+		if !wn.outgoingConnsCloser.checkExistingConnectionsNeedDisconnecting(targetConnCount) {
 			// no connection were removed.
 			break
 		}
 	}
-	return true
+
+	currentConnections := wn.numOutgoingPeers() + wn.numOutgoingPending()
+	return currentConnections
 }
 
 func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
@@ -1609,15 +1614,14 @@ func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiv
 // it returns false if no connections are needed, and true otherwise.
 // note that the determination of needed connection could be inaccurate, and it might return false while
 // more connection should be created.
-func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
-	desired := wn.config.GossipFanout
+func (wn *WebsocketNetwork) checkNewConnectionsNeeded(targetConnCount int) bool {
 	numOutgoingTotal := wn.numOutgoingPeers() + wn.numOutgoingPending()
-	need := desired - numOutgoingTotal
+	need := targetConnCount - numOutgoingTotal
 	if need <= 0 {
 		return false
 	}
 	// get more than we need so that we can ignore duplicates
-	newAddrs := wn.phonebook.GetAddresses(desired+numOutgoingTotal, phonebook.RelayRole)
+	newAddrs := wn.phonebook.GetAddresses(targetConnCount+numOutgoingTotal, phonebook.RelayRole)
 	for _, na := range newAddrs {
 		if na == wn.config.PublicAddress {
 			// filter out self-public address, so we won't try to connect to ourselves.
@@ -1636,89 +1640,12 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 	return true
 }
 
-// checkExistingConnectionsNeedDisconnecting check to see if existing connection need to be dropped due to
-// performance issues and/or network being stalled.
-func (wn *WebsocketNetwork) checkExistingConnectionsNeedDisconnecting() bool {
-	// we already connected ( or connecting.. ) to  GossipFanout peers.
-	// get the actual peers.
-	outgoingPeers := wn.outgoingPeers()
-	if len(outgoingPeers) < wn.config.GossipFanout {
-		// reset the performance monitor.
-		wn.connPerfMonitor.Reset([]Peer{})
-		return wn.checkNetworkAdvanceDisconnect()
-	}
-
-	if !wn.connPerfMonitor.ComparePeers(outgoingPeers) {
-		// different set of peers. restart monitoring.
-		wn.connPerfMonitor.Reset(outgoingPeers)
-	}
-
-	// same set of peers.
-	peerStat := wn.connPerfMonitor.GetPeersStatistics()
-	if peerStat == nil {
-		// performance metrics are not yet ready.
-		return wn.checkNetworkAdvanceDisconnect()
-	}
-
-	// update peers with the performance metrics we've gathered.
-	var leastPerformingPeer *wsPeer = nil
-	for _, stat := range peerStat.peerStatistics {
-		wsPeer := stat.peer.(*wsPeer)
-		wsPeer.peerMessageDelay = stat.peerDelay
-		wn.log.Infof("network performance monitor - peer '%s' delay %d first message portion %d%%", wsPeer.GetAddress(), stat.peerDelay, int(stat.peerFirstMessage*100))
-		if wsPeer.throttledOutgoingConnection && leastPerformingPeer == nil {
-			leastPerformingPeer = wsPeer
-		}
-	}
-	if leastPerformingPeer == nil {
-		return wn.checkNetworkAdvanceDisconnect()
-	}
-	wn.disconnect(leastPerformingPeer, disconnectLeastPerformingPeer)
-	wn.connPerfMonitor.Reset([]Peer{})
-
-	return true
-}
-
-// checkNetworkAdvanceDisconnect is using the lastNetworkAdvance indicator to see if the network is currently "stuck".
-// if it's seems to be "stuck", a randomally picked peer would be disconnected.
-func (wn *WebsocketNetwork) checkNetworkAdvanceDisconnect() bool {
-	lastNetworkAdvance := wn.getLastNetworkAdvance()
-	if time.Now().UTC().Sub(lastNetworkAdvance) < cliqueResolveInterval {
-		return false
-	}
-	outgoingPeers := wn.outgoingPeers()
-	if len(outgoingPeers) == 0 {
-		return false
-	}
-	if wn.numOutgoingPending() > 0 {
-		// we're currently trying to extend the list of outgoing connections. no need to
-		// disconnect any existing connection to free up room for another connection.
-		return false
-	}
-	var peer *wsPeer
-	disconnectPeerIdx := crypto.RandUint63() % uint64(len(outgoingPeers))
-	peer = outgoingPeers[disconnectPeerIdx].(*wsPeer)
-
-	wn.disconnect(peer, disconnectCliqueResolve)
-	wn.connPerfMonitor.Reset([]Peer{})
-	wn.OnNetworkAdvance()
-	return true
-}
-
-func (wn *WebsocketNetwork) getLastNetworkAdvance() time.Time {
-	wn.lastNetworkAdvanceMu.Lock()
-	defer wn.lastNetworkAdvanceMu.Unlock()
-	return wn.lastNetworkAdvance
-}
-
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
 // this is the only indication that we have that we haven't formed a clique, where all incoming messages
 // arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
 // characteristics as with a watchdog timer.
 func (wn *WebsocketNetwork) OnNetworkAdvance() {
-	wn.lastNetworkAdvanceMu.Lock()
-	defer wn.lastNetworkAdvanceMu.Unlock()
-	wn.lastNetworkAdvance = time.Now().UTC()
+	wn.outgoingConnsCloser.updateLastAdvance()
 	if wn.nodeInfo != nil && !wn.relayMessages && !wn.config.ForceFetchTransactions {
 		select {
 		case wn.messagesOfInterestRefresh <- struct{}{}:

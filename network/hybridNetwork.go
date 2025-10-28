@@ -52,13 +52,14 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	var childWsNetMeshCreator = meshCreator
 	var childP2PNetMeshCreator = meshCreator
 	var hybridMeshCreator MeshCreator = noopMeshCreator{}
+	noMeshCreatorAndHybridServer := meshCreator == nil && cfg.IsHybridServer()
 	_, isHybridMeshCreator := meshCreator.(hybridRelayMeshCreator)
-	if meshCreator == nil && cfg.IsHybridServer() || isHybridMeshCreator {
+	if noMeshCreatorAndHybridServer || isHybridMeshCreator {
 		// no mesh creator provided and this node is a listening/relaying node
 		// then override and use hybrid relay meshing
 		// or, if a hybrid relay meshing requested explicitly, do the same
 		childWsNetMeshCreator = noopMeshCreator{}
-		childP2PNetMeshCreator = noopMeshPubSubFilteredCreator{}
+		childP2PNetMeshCreator = noopMeshCreator{}
 		hybridMeshCreator = hybridRelayMeshCreator{}
 	}
 
@@ -77,6 +78,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	}
 
 	hybridMesh, err := hybridMeshCreator.create(
+		withTargetConnCount(cfg.GossipFanout),
 		withWebsocketNetwork(wsnet),
 		withP2PNetwork(p2pnet))
 	if err != nil {
@@ -187,7 +189,12 @@ func (n *HybridP2PNetwork) RegisterHTTPHandlerFunc(path string, handlerFunc func
 }
 
 // RequestConnectOutgoing implements GossipNode
-func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
+func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
+	_ = n.runParallel(func(net GossipNode) error {
+		net.RequestConnectOutgoing(replace, quit)
+		return nil
+	})
+}
 
 // GetPeers implements GossipNode
 func (n *HybridP2PNetwork) GetPeers(options ...PeerOption) []Peer {

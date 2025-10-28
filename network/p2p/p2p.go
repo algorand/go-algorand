@@ -64,7 +64,7 @@ type Service interface {
 	NetworkNotify(network.Notifiee)
 	NetworkStopNotify(network.Notifiee)
 
-	DialPeersUntilTargetCount(targetConnCount int)
+	DialPeersUntilTargetCount(targetConnCount int) bool
 	ClosePeer(peer.ID) error
 
 	Conns() []network.Conn
@@ -76,9 +76,15 @@ type Service interface {
 	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
+// subset of config.Local needed here
+type nodeSubConfig interface {
+	IsHybridServer() bool
+}
+
 // serviceImpl manages integration with libp2p and implements the Service interface
 type serviceImpl struct {
 	log        logging.Logger
+	subcfg     nodeSubConfig
 	listenAddr string
 	host       host.Host
 	streams    *streamManager
@@ -98,6 +104,8 @@ const AlgorandWsProtocolV1 = "/algorand-ws/1.0.0"
 const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 const dialTimeout = 30 * time.Second
+
+const psmdkDialed = "dialed"
 
 // MakeHost creates a libp2p host but does not start listening.
 // Use host.Network().Listen() on the returned address to start listening.
@@ -220,7 +228,7 @@ func SetPubSubPeerFilter(filter func(checker pstore.RoleChecker, pid peer.ID) bo
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
+	sm := makeStreamManager(ctx, log, cfg, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
 
 	for _, pair := range wsStreamHandlers {
@@ -232,12 +240,13 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 		opt(&pubsubOpts)
 	}
 
-	ps, err := makePubSub(ctx, cfg, h, pubsubOpts...)
+	ps, err := makePubSub(ctx, h, cfg.GossipFanout, pubsubOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return &serviceImpl{
 		log:        log,
+		subcfg:     cfg,
 		listenAddr: listenAddr,
 		host:       h,
 		streams:    sm,
@@ -280,20 +289,29 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 }
 
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
-func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
+func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
 	addrInfos := ps.GetAddresses(targetConnCount, phonebook.RelayRole)
 	conns := s.host.Network().Conns()
 	var numOutgoingConns int
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
-			numOutgoingConns++
+			if s.subcfg.IsHybridServer() {
+				remotePeer := conn.RemotePeer()
+				val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
+				if err == nil && val != nil && val.(bool) {
+					numOutgoingConns++
+				}
+			} else {
+				numOutgoingConns++
+			}
 		}
 	}
+	preExistingConns := numOutgoingConns
 	for _, peerInfo := range addrInfos {
 		// if we are at our target count stop trying to connect
 		if numOutgoingConns >= targetConnCount {
-			return
+			return numOutgoingConns > preExistingConns
 		}
 		// if we are already connected to this peer, skip it
 		if len(s.host.Network().ConnsToPeer(peerInfo.ID)) > 0 {
@@ -302,8 +320,11 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 		err := s.dialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {
 			s.log.Warnf("failed to connect to peer %s: %v", peerInfo.ID, err)
+		} else {
+			numOutgoingConns++
 		}
 	}
+	return numOutgoingConns > preExistingConns
 }
 
 // dialNode attempts to establish a connection to the provided peer
@@ -314,6 +335,11 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
+	if s.subcfg.IsHybridServer() {
+		if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
+			return err
+		}
+	}
 	return s.host.Connect(ctx, *peer)
 }
 

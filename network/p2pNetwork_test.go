@@ -72,6 +72,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -162,6 +163,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -256,6 +258,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -352,7 +355,8 @@ func (s *mockService) AddrInfo() peer.AddrInfo {
 	}
 }
 
-func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) {
+func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) bool {
+	return false
 }
 
 func (s *mockService) ClosePeer(peer peer.ID) error {
@@ -595,6 +599,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = "127.0.0.1:0"
 	cfg.EnableDHTProviders = true
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 
@@ -695,7 +700,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 					// it appears there are artificial peers because of listening on localhost and on a real network interface
 					// so filter out and save only unique peers by their IDs
 					net := nets[idx]
-					net.meshThreadInner() // update peerstore with DHT peers
+					net.meshThreadInner(cfg.GossipFanout) // update peerstore with DHT peers
 					peers := net.GetPeers(PeersPhonebookArchivalNodes)
 					uniquePeerIDs := make(map[peer.ID]struct{})
 					for _, p := range peers {
@@ -1061,11 +1066,13 @@ func TestP2PWantTXGossip(t *testing.T) {
 	peerID := peer.ID("myPeerID")
 	mockService := &mockSubPService{mockService: mockService{id: peerID}, shouldNextFail: true}
 	net := &P2PNetwork{
-		service:  mockService,
-		log:      logging.TestingLog(t),
-		ctx:      ctx,
-		nodeInfo: &nopeNodeInfo{},
+		service:         mockService,
+		log:             logging.TestingLog(t),
+		ctx:             ctx,
+		nodeInfo:        &nopeNodeInfo{},
+		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag}),
 	}
+	net.outgoingConnsCloser = makeOutgoingConnsCloser(logging.TestingLog(t), net, net.connPerfMonitor, cliqueResolveInterval)
 
 	// ensure wantTXGossip from false to false is noop
 	net.wantTXGossip.Store(false)
