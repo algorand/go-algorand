@@ -2,6 +2,9 @@
 
 date '+keyreg-teal-test start %Y%m%d_%H%M%S'
 
+my_dir="$(dirname "$0")"
+source "$my_dir/rest.sh" "$@"
+
 set -e
 set -x
 set -o pipefail
@@ -11,6 +14,10 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
+# Get network's minimum fee
+MIN_FEE=$(get_min_fee)
+echo "Network MinFee: $MIN_FEE"
+
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 ACCOUNTA=$(${gcmd} account new|awk '{ print $6 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
@@ -19,7 +26,8 @@ LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
 DUR=8
 PERIOD=8
 EXPIRE=10000
-FEE=100000
+# Use a high fee for delegation (allows multiple transactions)
+FEE=$((MIN_FEE * 6))
 
 echo "generating new delegate and participation keys for newly-funded account ${ACCOUNTA}"
 ${gcmd} clerk send --from ${ACCOUNT} --to ${ACCOUNTA} -a 1000000
@@ -96,7 +104,8 @@ if [[ $REGOK != 1 ]]; then
 fi
 
 echo "replay keyreg transaction with different fee"
-${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx --fee 100000
+# Use a fee within the allowed range (MIN_FEE * 2 <= MIN_FEE * 6) to ensure we test the lease check, not the fee check
+${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstvalid ${PBOUND} --validrounds `expr ${DUR} + 1` --txfile ${TEMPDIR}/keyreg.tx --fee $((MIN_FEE * 2))
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx || true)
@@ -111,7 +120,8 @@ echo "generating new delegate and participation keys for newly-funded account ${
 DUR=8
 PERIOD=8
 EXPIRE=10
-FEE=100000
+# Use a high fee for delegation (allows multiple transactions)
+FEE=$((MIN_FEE * 6))
 
 ${gcmd} clerk send --from ${ACCOUNT} --to ${ACCOUNTB} -a 1000000
 DELKEY=$(algokey generate -f ${TEMPDIR}/delegate.keyregkey | grep "Public key" | awk '{ print $3 }')

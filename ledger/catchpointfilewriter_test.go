@@ -943,7 +943,7 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 	var onlineExcludeBefore basics.Round
 	// we added so many blocks that lowestRound is stuck at first state proof, round 240?
 	if normalHorizon := catchpointLookbackHorizonForNextRound(genDBRound, params); normalHorizon <= genLowestRound {
-		t.Logf("subtest is exercising case where lowestRound from votersTracker is satsified by the existing history")
+		t.Logf("subtest is exercising case where lowestRound from votersTracker is satisfied by the existing history")
 		require.EqualValues(t, genLowestRound, params.StateProofInterval-params.StateProofVotersLookback)
 		onlineExcludeBefore = 0
 		require.False(t, longHistory)
@@ -1238,7 +1238,7 @@ assert
 	var onlineExcludeBefore basics.Round
 	normalOnlineHorizon := catchpointLookbackHorizonForNextRound(genDBRound, config.Consensus[proto])
 	if normalOnlineHorizon <= genLowestRound {
-		t.Logf("lowestRound from votersTracker is satsified by the existing history")
+		t.Logf("lowestRound from votersTracker is satisfied by the existing history")
 		onlineExcludeBefore = 0
 		require.False(t, longHistory)
 	} else if normalOnlineHorizon > genLowestRound {

@@ -8,9 +8,6 @@ date "+${scriptname} start %Y%m%d_%H%M%S"
 
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"
-function rest() {
-    curl -q -s -H "Authorization: Bearer $PUB_TOKEN" "$NET$1"
-}
 
 set -e
 set -x
@@ -24,18 +21,61 @@ TEAL=test/scripts/e2e_subs/tealprogs
 gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
-# Create a smaller account so rewards won't change balances.
+
+# Get network's minimum fee
+MIN_FEE=$(get_min_fee)
+echo "Network MinFee: $MIN_FEE"
+
+# This test uses approximately 24 transactions from SMALL account (similar to app-assets.sh)
+NUM_TXNS=24
+NEEDED_FOR_FEES=$((MIN_FEE * NUM_TXNS))
+
+# SMALL's minimum balance at peak:
+# - Base: 100000
+# - App opt-in (with 1 local int): 128500 (100000 + 25000 + 3500 for schema)
+# - 2 created assets (each with auto opt-in): 400000 (2 * 200000)
+# - Total: 628500
+MAX_MIN_BALANCE=628500
+
+# Total amount needed: fees + min balance
+TOTAL_NEEDED=$((NEEDED_FOR_FEES + MAX_MIN_BALANCE + MIN_FEE * 3))
+
+# Fund with at least 2 Algos to ensure enough for high MIN_FEE scenarios
+# Note: Account will earn rewards (RewardUnit = 1,000,000), so balance checks must be tolerant
+SMALL_FUNDING=$((TOTAL_NEEDED > 2000000 ? TOTAL_NEEDED : 2000000))
+
+# Tolerance for balance checks (to account for rewards earned)
+# Allow up to 5000 microAlgos tolerance per balance check
+BALANCE_TOLERANCE=5000
 SMALL=$(${gcmd} account new | awk '{ print $6 }')
-# Under one algo receives no rewards
-${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$SMALL"
+${gcmd} clerk send -a $SMALL_FUNDING -f "$ACCOUNT" -t "$SMALL"
 
 function balance {
     acct=$1; shift
     goal account balance -a "$acct" | awk '{print $1}'
 }
 
-[ "$(balance "$ACCOUNT")" = 999999000000 ]
-[ "$(balance "$SMALL")" =        999000 ]
+# Check if balance is within tolerance of expected value
+# Usage: check_balance <account> <expected_balance>
+# Allows BALANCE_TOLERANCE above expected (for rewards) but exact match below
+function check_balance {
+    local acct=$1
+    local expected=$2
+    local actual
+    actual=$(balance "$acct")
+    local diff=$((actual - expected))
+
+    if [ $diff -lt 0 ] || [ $diff -gt $BALANCE_TOLERANCE ]; then
+        echo "ERROR: Balance check failed for $acct"
+        echo "  Expected: $expected (tolerance: +0 to +$BALANCE_TOLERANCE)"
+        echo "  Actual:   $actual (diff: $diff)"
+        return 1
+    fi
+    return 0
+}
+
+check_balance "$ACCOUNT" $((1000000000000 - $SMALL_FUNDING - MIN_FEE))
+check_balance "$SMALL"        $SMALL_FUNDING
 
 function created_assets {
     acct=$1;
@@ -63,7 +103,7 @@ function assets {
 }
 
 APPID=$(${gcmd} app create --creator "${SMALL}" --approval-prog=${TEAL}/assets-escrow9.teal --global-byteslices 4 --global-ints 0 --local-byteslices 0 --local-ints 1  --clear-prog=<(printf '#pragma version 9\nint 1') | grep Created | awk '{ print $6 }')
-[ "$(balance "$SMALL")" = 998000 ] # 1000 fee
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE))
 
 # Use --access on all app calls
 function appl {
@@ -121,16 +161,16 @@ function sign {
 TXID=$(${gcmd} app optin --app-id "$APPID" --from "${SMALL}" | app-txid)
 # Rest succeeds, no stray inner-txn array
 [ "$(rest "/v2/transactions/pending/$TXID" | jq '.["inner-txn"]')" == null ]
-[ "$(balance "$SMALL")" = 997000 ] # 1000 fee
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE * 2))
 
 ASSETID=$(asset-create 1000000  --name "e2e" --unitname "e" | asset-id)
-[ "$(balance "$SMALL")" = 996000 ] # 1000 fee
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE * 3))
 
 ${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$APPACCT"
 ! appl "optin(uint64):void" --app-arg "int:$ASSETID" --foreign-asset="$ASSETID" --from="$SMALL" || exit 1
 appl "optin(uint64):void" --app-arg "int:$ASSETID" --foreign-asset="$ASSETID" --from="$SMALL" --holding "$ASSETID+app($APPID)"
-[ "$(balance "$APPACCT")" = 998000 ] # 1000 fee
-[ "$(balance "$SMALL")" = 995000 ]
+check_balance "$APPACCT" $((999000 - MIN_FEE))
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE * 4))
 
 # Deposit is exactly like app-assets.sh only sender's local state is accessed
 appl "deposit():void" -o "$T/deposit.tx" --from="$SMALL"
@@ -143,8 +183,8 @@ ${gcmd} clerk rawsend -f "$T/group.stx"
 [ "$(asset_bal "$SMALL")" = 999000 ]  # asset balance
 [ "$(asset_ids "$APPACCT")" = $ASSETID ]
 [ "$(asset_bal "$APPACCT")" = 1000 ]
-[ "$(balance "$SMALL")" = 993000 ] # 2 fees
-[ "$(balance "$APPACCT")" = 998000 ]
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE * 6))
+check_balance "$APPACCT" $((999000 - MIN_FEE))
 
 # Withdraw 100 in app. Confirm that inner txn is visible to transaction API.
 ! appl "withdraw(uint64,uint64):void" --app-arg="int:$ASSETID" --app-arg="int:100" --foreign-asset="$ASSETID" --from="$SMALL" || exit 1
@@ -160,28 +200,28 @@ rest "/v2/blocks/$ROUND" | jq .block.txns[0].dt.itx
 
 [ "$(asset_bal "$SMALL")" = 999100 ] # 100 asset withdrawn
 [ "$(asset_bal "$APPACCT")" = 900 ]  # 100 asset withdrawn
-[ "$(balance "$SMALL")" = 992000 ]   # 1 fee
-[ "$(balance "$APPACCT")" = 997000 ] # fee paid by app
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE * 7))
+check_balance "$APPACCT" $((999000 - MIN_FEE * 2))
 
-appl "${WITHDRAW[@]}" --app-arg="int:100" --fee 2000
+appl "${WITHDRAW[@]}" --app-arg="int:100" --fee $((MIN_FEE * 2))
 [ "$(asset_bal "$SMALL")" = 999200 ] # 100 asset withdrawn
 [ "$(asset_bal "$APPACCT")" = 800 ]  # 100 asset withdrawn
-[ "$(balance "$SMALL")" = 990000 ]   # 2000 fee
-[ "$(balance "$APPACCT")" = 997000 ] # fee credit used
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE * 9))
+check_balance "$APPACCT" $((999000 - MIN_FEE * 2))
 
 # Try to withdraw too much
 ! appl "${WITHDRAW[@]}" --app-arg="int:1000" || exit 1
 [ "$(asset_bal "$SMALL")" = 999200 ] # no changes
 [ "$(asset_bal "$APPACCT")" = 800 ]
-[ "$(balance "$SMALL")" = 990000 ]
-[ "$(balance "$APPACCT")" = 997000 ]
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE * 9))
+check_balance "$APPACCT" $((999000 - MIN_FEE * 2))
 
 # Show that it works AT exact asset balance
 appl "${WITHDRAW[@]}" --app-arg="int:800"
 [ "$(asset_bal "$SMALL")" = 1000000 ]
 [ "$(asset_bal "$APPACCT")" = 0 ]
-[ "$(balance "$SMALL")" = 989000 ]
-[ "$(balance "$APPACCT")" = 996000 ] # app paid the fee for inner axfer
+check_balance "$SMALL" $((SMALL_FUNDING - MIN_FEE * 10))
+check_balance "$APPACCT" $((999000 - MIN_FEE * 3))
 
 USER=$(${gcmd} account new | awk '{ print $6 }') #new account
 ${gcmd} clerk send -a 999000 -f "$ACCOUNT" -t "$USER" #fund account

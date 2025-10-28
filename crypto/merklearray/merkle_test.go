@@ -485,7 +485,7 @@ func TestSizeLimitsMerkle(t *testing.T) {
 	for depth := uint64(0); depth < uint64(18); depth = depth + increment {
 		size := uint64(1) << depth
 
-		// eltCoefficient is the coefficent to determine how many elements are in the proof.
+		// eltCoefficient is the coefficient to determine how many elements are in the proof.
 		// There will be 1/eltCoefficient elements of all possible element (2^treeDepth)
 		// numElts = 2^(depth-eltCoefficient)
 

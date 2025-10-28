@@ -38,7 +38,7 @@ type reqContext struct {
 	sm *session.Manager
 }
 
-// errorResponse sets the specified status code (should != 200), and fills in the
+// errorResponse sets the specified status code (should != 200), and fills in
 // the response envelope by setting Error to true and a Message to the passed
 // user-readable error message.
 func errorResponse(w http.ResponseWriter, status int, err error) {

@@ -77,7 +77,8 @@ ${gcmd} clerk send --amount 100000 --from ${ACCOUNT_MSIG} --to ${ACCOUNT_A} -L $
 echo "Auto-detection correctly used new mode on future consensus"
 
 # Verify auto-detection used new mode (LMsig field)
-if ! cat ${TEMPDIR}/auto2.lsig | msgpacktool -d | grep -q '"lmsig"'; then
+msgpacktool -d < ${TEMPDIR}/auto2.lsig > ${TEMPDIR}/auto2.json
+if ! grep -q '"lmsig"' ${TEMPDIR}/auto2.json; then
     echo "ERROR: Auto-detection did not use new mode (LMsig field not found)"
     exit 1
 fi

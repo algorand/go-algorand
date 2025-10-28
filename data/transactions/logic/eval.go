@@ -3956,7 +3956,7 @@ func opGetBit(cx *EvalContext) error {
 	var bit uint64
 	if target.avmType() == avmUint64 {
 		if idx > 63 {
-			return errors.New("getbit index > 63 with with Uint")
+			return errors.New("getbit index > 63 with Uint")
 		}
 		mask := uint64(1) << idx
 		bit = (target.Uint & mask) >> idx
@@ -4686,7 +4686,7 @@ func opAppGlobalDel(cx *EvalContext) error {
 }
 
 // We have a difficult naming problem here. Some opcodes allow (and used to
-// require) ASAs and Apps to to be referenced by their "index" in an app call
+// require) ASAs and Apps to be referenced by their "index" in an app call
 // txn's foreign-apps or foreign-assets arrays.  That was a small integer, no
 // more than 2 or so, and was often called an "index".  But it was not a
 // basics.AssetIndex or basics.ApplicationIndex.

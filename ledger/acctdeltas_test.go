@@ -1806,7 +1806,7 @@ func compactResourcesDeltasPermutations(a *require.Assertions, crd compactResour
 // Investigation shown there was another account YF5GJTPPMOUPU2GRGGVP2PGJTQZWGSWZISFHNIKDJSZ2CDPPWN4KKKYVQE
 // opted in into the same app 22045503. During the commit range the following happened:
 // at 16541783 YF5 made a payment txn (one acct delta)
-// at 16541785 RGJ has been funded and and opted in into app 22045503 (one acct delta, one res delta)
+// at 16541785 RGJ has been funded and opted in into app 22045503 (one acct delta, one res delta)
 // at 16541788 YF5 address had clear state txn for 22045503, and close out txn for the entire account (one acct delta, one res delta)
 // Because YF5 had modifications before RGJ, all its acct deltas were compacted into a single entry before RGJ (delete, create)
 // In the same time, the order in resources delta remained the same (opt-in, delete).
@@ -2776,6 +2776,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 // onlineAccountsDelete(2): A online
 // onlineAccountsDelete(3): A offline, B online
 // etc
+//
+//nolint:dupword // ignore
 func TestOnlineAccountsDeletion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

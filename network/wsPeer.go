@@ -294,10 +294,6 @@ type HTTPPeer interface {
 // It is possible that we can only initiate a connection to a peer over websockets.
 type UnicastPeer interface {
 	GetAddress() string
-	// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
-	Unicast(ctx context.Context, data []byte, tag protocol.Tag) error
-	// Version returns the matching version from network.SupportedProtocolVersions
-	Version() string
 	Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error)
 	Respond(ctx context.Context, reqMsg IncomingMessage, outMsg OutgoingMessage) (e error)
 }
@@ -335,11 +331,6 @@ func (wp *wsPeerCore) GetHTTPClient() *http.Client {
 
 func (wp *wsPeerCore) GetNetwork() GossipNode {
 	return wp.net
-}
-
-// Version returns the matching version from network.SupportedProtocolVersions
-func (wp *wsPeer) Version() string {
-	return wp.version
 }
 
 func (wp *wsPeer) ipAddr() []byte {
@@ -390,35 +381,12 @@ func (wp *wsPeer) RoutingAddr() []byte {
 	return ip[0:8]
 }
 
-// Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
-// (Implements UnicastPeer)
-func (wp *wsPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
-	var err error
-
-	tbytes := []byte(tag)
-	mbytes := make([]byte, len(tbytes)+len(msg))
-	copy(mbytes, tbytes)
-	copy(mbytes[len(tbytes):], msg)
-	var digest crypto.Digest
-	if tag != protocol.MsgDigestSkipTag && len(msg) >= messageFilterSize {
-		digest = crypto.Hash(mbytes)
-	}
-
-	ok := wp.writeNonBlock(ctx, mbytes, false, digest, time.Now())
-	if !ok {
-		networkBroadcastsDropped.Inc(nil)
-		err = fmt.Errorf("wsPeer failed to unicast: %v", wp.GetAddress())
-	}
-
-	return err
-}
-
 // GetUnderlyingConnTCPInfo unwraps the connection and returns statistics about it on supported underlying implementations
 //
 // (Implements TCPInfoUnicastPeer)
 func (wp *wsPeer) GetUnderlyingConnTCPInfo() (*util.TCPInfo, error) {
 	// unwrap websocket.Conn, requestTrackedConnection, rejectingLimitListenerConn
-	var uconn net.Conn = wp.conn.UnderlyingConn()
+	var uconn = wp.conn.UnderlyingConn()
 	for i := 0; i < 10; i++ {
 		wconn, ok := uconn.(wrappedConn)
 		if !ok {
@@ -1076,9 +1044,10 @@ func (wp *wsPeer) setPeerData(key string, value interface{}) {
 }
 
 func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, messagesOfInterestEnc []byte) {
-	err := wp.Unicast(wp.netCtx, messagesOfInterestEnc, protocol.MsgOfInterestTag)
-	if err != nil {
-		wp.log.Errorf("ws send msgOfInterest: %v", err)
+	mbytes := append([]byte(protocol.MsgOfInterestTag), messagesOfInterestEnc...)
+	ok := wp.writeNonBlock(wp.netCtx, mbytes, true, crypto.Digest{}, time.Now())
+	if !ok {
+		wp.log.Errorf("ws send msgOfInterest: failed to send to %v", wp.GetAddress())
 	} else {
 		wp.messagesOfInterestGeneration.Store(messagesOfInterestGeneration)
 	}
