@@ -505,8 +505,8 @@ func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (
 	if customFallbackEndpoints == "" {
 		return
 	}
-	endpoints := strings.Split(customFallbackEndpoints, ",")
-	for _, ep := range endpoints {
+	endpoints := strings.SplitSeq(customFallbackEndpoints, ",")
+	for ep := range endpoints {
 		if addr.IsMultiaddr(ep) {
 			fe.endpoints = append(fe.endpoints, ep)
 		} else {

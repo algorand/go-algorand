@@ -90,7 +90,7 @@ func MakeVoteFilter(voteFilterConfig *VoteFilterConfig) *VoteFilter {
 	}
 }
 func (n *VoteFilter) Eval(tag protocol.Tag, data []byte, direction string) bool {
-	msgDecoder := n.fuzzer.facades[n.nodeID].GetFilterByType(reflect.TypeOf(&MessageDecoderFilter{})).(*MessageDecoderFilter)
+	msgDecoder := n.fuzzer.facades[n.nodeID].GetFilterByType(reflect.TypeFor[*MessageDecoderFilter]()).(*MessageDecoderFilter)
 	if msgDecoder == nil {
 		return true
 	}

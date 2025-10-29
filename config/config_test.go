@@ -525,7 +525,7 @@ func TestLocal_StructTags(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	localType := reflect.TypeOf(Local{})
+	localType := reflect.TypeFor[Local]()
 
 	versionField, ok := localType.FieldByName("Version")
 	require.True(t, ok)
@@ -580,7 +580,7 @@ func TestLocal_VersionField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	localType := reflect.TypeOf(Local{})
+	localType := reflect.TypeFor[Local]()
 	field, ok := localType.FieldByName("Version")
 	require.True(t, true, ok)
 	ver := 0
