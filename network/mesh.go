@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 )
@@ -43,10 +44,11 @@ type baseMesher struct {
 
 type meshConfig struct {
 	parentCtx          context.Context
+	targetConnCount    int
 	meshUpdateRequests chan meshRequest
 	meshThreadInterval time.Duration
 	backoff            backoff.BackoffStrategy
-	netMeshFn          func() bool
+	netMeshFn          func(int) int
 	peerStatReporter   func()
 	closer             func()
 
@@ -68,7 +70,7 @@ func withMeshExpJitterBackoff() meshOption {
 		cfg.backoff = eb
 	}
 }
-func withMeshNetMeshFn(netMeshFn func() bool) meshOption {
+func withMeshNetMeshFn(netMeshFn func(int) int) meshOption {
 	return func(cfg *meshConfig) {
 		cfg.netMeshFn = netMeshFn
 	}
@@ -102,6 +104,12 @@ func withContext(ctx context.Context) meshOption {
 	}
 }
 
+func withTargetConnCount(targetConnCount int) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.targetConnCount = targetConnCount
+	}
+}
+
 func withWebsocketNetwork(wsnet *WebsocketNetwork) meshOption {
 	return func(cfg *meshConfig) {
 		cfg.wsnet = wsnet
@@ -127,6 +135,9 @@ func newBaseMesher(opts ...meshOption) (*baseMesher, error) {
 	}
 	if cfg.meshUpdateRequests == nil {
 		return nil, errors.New("mesh update requests channel is not set")
+	}
+	if cfg.targetConnCount == 0 {
+		logging.Base().Warn("target connection count not set, not connecting to any peers")
 	}
 	if cfg.meshThreadInterval == 0 {
 		cfg.meshThreadInterval = meshThreadInterval
@@ -155,9 +166,9 @@ func (m *baseMesher) meshThread() {
 			return
 		}
 
-		hasPeers := m.netMeshFn()
+		numOutgoing := m.netMeshFn(m.targetConnCount)
 		if m.backoff != nil {
-			if hasPeers {
+			if numOutgoing > 0 {
 				// found something, reset timer to the configured value
 				timer.Reset(m.meshThreadInterval)
 				m.backoff.Reset()
@@ -228,11 +239,35 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 
 	out := make(chan meshRequest, 5)
 	var wg sync.WaitGroup
+	var prevP2PConnections = -1 // -1 means not initialized
 
-	ctx := cfg.wsnet.ctx
+	meshFn := func(targetConnCount int) int {
+		wsTarget := targetConnCount
+		// skip p2p mesh for the first time to give wsnet to establish connections
+		if prevP2PConnections != -1 && targetConnCount > prevP2PConnections {
+			wsTarget = targetConnCount - prevP2PConnections
+		}
+		wsConnections := cfg.wsnet.meshThreadInner(wsTarget)
+
+		var p2pConnections int
+		p2pTarget := 0 // even if p2pTarget is zero it makes sense to call p2p meshThreadInner to fetch DHT peers
+		if wsConnections < targetConnCount {
+			p2pTarget = targetConnCount - wsConnections
+		}
+		p2pConnections = cfg.p2pnet.meshThreadInner(p2pTarget)
+
+		if cfg.wsnet.log.GetLevel() >= logging.Debug && p2pTarget > 0 {
+			cfg.wsnet.log.Debugf("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d (prev=%d), target=%d",
+				wsConnections, p2pConnections, prevP2PConnections, targetConnCount)
+		}
+		prevP2PConnections = p2pConnections
+		return wsConnections + p2pConnections
+	}
+
 	mesh, err := newBaseMesher(
-		withContext(ctx),
-		withMeshNetMeshFn(cfg.wsnet.meshThreadInner),
+		withContext(cfg.wsnet.ctx),
+		withTargetConnCount(cfg.wsnet.config.GossipFanout),
+		withMeshNetMeshFn(meshFn),
 		withMeshPeerStatReporter(func() {
 			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.wsnet)
 			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.p2pnet)
@@ -251,21 +286,25 @@ func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			return
-		case req := <-cfg.wsnet.meshUpdateRequests:
-			out <- req
+		for {
+			select {
+			case <-mesh.ctx.Done():
+				return
+			case req := <-cfg.wsnet.meshUpdateRequests:
+				out <- req
+			}
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		select {
-		case <-ctx.Done():
-			return
-		case req := <-cfg.p2pnet.meshUpdateRequests:
-			out <- req
+		for {
+			select {
+			case <-mesh.ctx.Done():
+				return
+			case req := <-cfg.p2pnet.meshUpdateRequests:
+				out <- req
+			}
 		}
 	}()
 
@@ -289,17 +328,3 @@ type noopMesh struct{}
 
 func (m *noopMesh) start() {}
 func (m *noopMesh) stop()  {}
-
-type noopMeshPubSubFilteredCreator struct{}
-
-func (c noopMeshPubSubFilteredCreator) create(opts ...meshOption) (mesher, error) {
-	return &noopMesh{}, nil
-}
-func (c noopMeshPubSubFilteredCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
-	return networkConfig{
-		pubsubOpts: []p2p.PubSubOption{
-			p2p.DisablePubSubPeerExchange(),
-			p2p.SetPubSubPeerFilter(p2pnet.p2pRelayPeerFilter, p2pnet.pstore),
-		},
-	}
-}
