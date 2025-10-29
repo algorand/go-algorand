@@ -58,7 +58,7 @@ func makeTypeCheckFunction(t *testing.T, exceptions []reflectionhelpers.TypePath
 func TestBlockFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	typeToCheck := reflect.TypeOf(bookkeeping.Block{})
+	typeToCheck := reflect.TypeFor[bookkeeping.Block]()
 
 	// These exceptions are for pre-existing usages of string. Only add to this list if you really need to use string.
 	exceptions := []reflectionhelpers.TypePath{
@@ -84,7 +84,7 @@ func TestBlockFields(t *testing.T) {
 func TestAccountDataFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	typeToCheck := reflect.TypeOf(basics.AccountData{})
+	typeToCheck := reflect.TypeFor[basics.AccountData]()
 
 	// These exceptions are for pre-existing usages of string. Only add to this list if you really need to use string.
 	exceptions := []reflectionhelpers.TypePath{

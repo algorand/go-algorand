@@ -1111,8 +1111,8 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 	}
 
 	var features peerFeatureFlag
-	parts := strings.Split(announcedFeatures, ",")
-	for _, part := range parts {
+	parts := strings.SplitSeq(announcedFeatures, ",")
+	for part := range parts {
 		part = strings.TrimSpace(part)
 		if part == PeerFeatureProposalCompression {
 			features |= pfCompressedProposal

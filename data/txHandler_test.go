@@ -542,8 +542,7 @@ func BenchmarkTxHandlerIncDeDup(b *testing.B) {
 			numPoolWorkers := runtime.NumCPU()
 			dupFactor := test.dupFactor
 			avgDelay := test.workerDelay / time.Duration(numPoolWorkers)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := b.Context()
 
 			var handler *TxHandler
 			if test.firstLevelOnly {
@@ -922,8 +921,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 
 	t.Run("scheduled", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
-		ctx, cancelFunc := context.WithCancel(context.Background())
-		defer cancelFunc()
+		ctx := t.Context()
 
 		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
 
@@ -944,8 +942,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 
 	t.Run("manual", func(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
-		ctx, cancelFunc := context.WithCancel(context.Background())
-		defer cancelFunc()
+		ctx := t.Context()
 
 		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
 

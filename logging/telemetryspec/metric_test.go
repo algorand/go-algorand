@@ -68,7 +68,7 @@ func TestAssembleBlockStatsString(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var abs AssembleBlockStats
-	localType := reflect.TypeOf(abs)
+	localType := reflect.TypeFor[AssembleBlockStats]()
 
 	// Empty StateProofStats will not be reported. Set a filed to check it printed
 	abs.StateProofStats.ProvenWeight = 1

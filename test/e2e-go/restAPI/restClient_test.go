@@ -17,7 +17,6 @@
 package restapi
 
 import (
-	"context"
 	"flag"
 	"math"
 	"os"
@@ -455,8 +454,7 @@ func TestClientCanGetGoRoutines(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.AlgodClient
-	ctx, ctxCancel := context.WithCancel(context.Background())
-	defer ctxCancel()
+	ctx := t.Context()
 	goRoutines, err := testClient.GetGoRoutines(ctx)
 	a.NoError(err)
 	a.NotEmpty(goRoutines)
