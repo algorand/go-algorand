@@ -24,7 +24,7 @@ linters:
           check-is: true
           unchecked-assert: false
           check-unused: true
-  Exclusions:
+  exclusions:
     generated: lax
     rules:
       # be more lenient with test code
