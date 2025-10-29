@@ -4,3 +4,7 @@ plugins:
   # partitiontest plugin from local source
   - module: 'github.com/algorand/go-algorand/cmd/partitiontest_linter'
     path: ./cmd/partitiontest_linter
+  # errortype plugin for error handling consistency
+  - module: fillmore-labs.com/errortype
+    import: fillmore-labs.com/errortype/gclplugin
+    version: v0.0.7
