@@ -43,8 +43,8 @@ const voteCompressionAbortMessage byte = 0xFF
 // This error type signals that an abort message should be sent to the peer.
 type voteCompressionError struct{ err error }
 
-func (e voteCompressionError) Error() string { return e.err.Error() }
-func (e voteCompressionError) Unwrap() error { return e.err }
+func (e *voteCompressionError) Error() string { return e.err.Error() }
+func (e *voteCompressionError) Unwrap() error { return e.err }
 
 // zstdCompressMsg returns a concatenation of a tag and compressed data
 func zstdCompressMsg(tbytes []byte, d []byte) ([]byte, string) {

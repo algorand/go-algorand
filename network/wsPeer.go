@@ -585,7 +585,8 @@ func (wp *wsPeer) readLoop() {
 		msg.Data, err = wp.msgCodec.decompress(msg.Tag, msg.Data)
 		if err != nil {
 			// Handle VP errors by sending abort message and continuing
-			if errors.As(err, &voteCompressionError{}) {
+			var vcErr *voteCompressionError
+			if errors.As(err, &vcErr) {
 				if close, reason := wp.handleVPError(err); close {
 					cleanupCloseError = reason
 					return
@@ -831,7 +832,8 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		compressed, err := wp.msgCodec.compress(tag, msg.data)
 		if err != nil {
 			// VP compression error - send abort message then continue with original AV
-			if errors.As(err, &voteCompressionError{}) {
+			var vcErr *voteCompressionError
+			if errors.As(err, &vcErr) {
 				networkVPAbortMessagesSent.Inc(nil)
 				abortMsg := append([]byte(protocol.VotePackedTag), voteCompressionAbortMessage)
 				_ = wp.conn.WriteMessage(websocket.BinaryMessage, abortMsg)

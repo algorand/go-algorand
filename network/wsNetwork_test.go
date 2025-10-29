@@ -697,17 +697,22 @@ func TestWebsocketVoteDynamicCompressionAbortMessage(t *testing.T) {
 	require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(), "VP encoding not established on B->A")
 	require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(), "VP decoding not established on B->A")
 
-	// Send VP abort message from A to B
-	abortMsg := append([]byte(protocol.VotePackedTag), voteCompressionAbortMessage)
-	sent := peerAtoB.writeNonBlock(context.Background(), abortMsg, true, crypto.Digest{}, time.Now())
-	require.True(t, sent, "failed to send abort message")
+	// Send a malformed VP message from B to A to trigger decoder failure and abort handshake.
+	malformedVP := append([]byte(protocol.VotePackedTag), []byte{0x01, 0xFF, 0x42}...)
+	sent := peerBtoA.writeNonBlock(context.Background(), malformedVP, true, crypto.Digest{}, time.Now())
+	require.True(t, sent, "failed to enqueue malformed VP message")
 
-	// Wait for abort to be processed - verify B disabled its encoder (can't send VP to A anymore)
+	// Decoder on A should disable itself after the malformed vote.
+	require.Eventually(t, func() bool {
+		return !peerAtoB.msgCodec.statefulVoteDecEnabled.Load()
+	}, 2*time.Second, 50*time.Millisecond, "VP decoding not disabled on A->B after malformed VP")
+
+	// Encoder on B should see the abort and disable as well.
 	require.Eventually(t, func() bool {
 		return !peerBtoA.msgCodec.statefulVoteEncEnabled.Load()
-	}, 2*time.Second, 50*time.Millisecond, "VP encoding not disabled on B->A after receiving abort message")
+	}, 2*time.Second, 50*time.Millisecond, "VP encoding not disabled on B->A after decoder abort")
 
-	// Verify connection is still up after abort
+	// Verify connection is still up after abort handshake.
 	require.Equal(t, 1, len(netB.peers), "connection should still be alive after abort")
 	require.Equal(t, 1, len(netA.peers), "connection should still be alive after abort")
 }
