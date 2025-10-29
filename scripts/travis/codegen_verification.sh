@@ -36,6 +36,9 @@ make generate
 echo "Running fixcheck"
 "$GOPATH"/bin/algofix -error */
 
+echo "Running modernize checks"
+make modernize
+
 echo "Running expect linter"
 make expectlint
 

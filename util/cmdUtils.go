@@ -42,7 +42,6 @@ func RunFuncWithSpinningCursor(asyncFunc func()) {
 		case <-doneChan:
 			finished = true
 			ticker.Stop()
-			break
 		case <-ticker.C:
 			fmt.Print(progressStrings[i])
 			fmt.Print("\b")

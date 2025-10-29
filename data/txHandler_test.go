@@ -176,8 +176,8 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 // vtCache is a noop VerifiedTransactionCache
 type vtCache struct{}
 
-func (vtCache) Add(txgroup []transactions.SignedTxn, groupCtx *verify.GroupContext) {}
-func (vtCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*verify.GroupContext) {
+func (vtCache) Add(groupCtx *verify.GroupContext) {}
+func (vtCache) AddPayset(groupCtxs []*verify.GroupContext) {
 	return
 }
 func (vtCache) GetUnverifiedTransactionGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
@@ -1361,10 +1361,7 @@ func getTransactionGroups(N, numUsers, maxGroupSize int, addresses []basics.Addr
 	txnGrps := make([][]transactions.Transaction, N)
 	protoMaxGrpSize := proto.MaxTxGroupSize
 	for u := 0; u < N; u++ {
-		grpSize := rand.Intn(protoMaxGrpSize-1) + 1
-		if grpSize > maxGroupSize {
-			grpSize = maxGroupSize
-		}
+		grpSize := min(rand.Intn(protoMaxGrpSize-1)+1, maxGroupSize)
 		var txGroup transactions.TxGroup
 		txns := make([]transactions.Transaction, 0, grpSize)
 		for g := 0; g < grpSize; g++ {
@@ -1794,10 +1791,7 @@ func runHandlerBenchmarkWithBacklog(b *testing.B, txGen txGenIf, tps int, useBac
 	}
 
 	// Prepare 1000 transactions
-	genTCount := 1000
-	if b.N < genTCount {
-		genTCount = b.N
-	}
+	genTCount := min(b.N, 1000)
 	signedTransactionGroups, badTxnGroups := txGen.createSignedTxGroups(b, genTCount)
 	var encStxns []network.IncomingMessage
 	if useBacklogWorker {
@@ -2497,7 +2491,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 
 	inputGoodTxnCount := len(signedTransactionGroups) - len(badTxnGroups)
 	tp := handler.txPool
-	// Wait untill all the expected transactions are in the pool
+	// Wait until all the expected transactions are in the pool
 	for x := 0; x < 100; x++ {
 		if len(tp.PendingTxGroups()) == inputGoodTxnCount {
 			break
@@ -2924,7 +2918,7 @@ func TestTxHandlerErlClientMapper(t *testing.T) {
 // TestTxHandlerERLIPClient checks that ERL properly handles sender with the same and different addresses:
 // Configure ERL in following way:
 // 1. Small maxCapacity=10 fully shared by two IP senders (TxBacklogReservedCapacityPerPeer=5, IncomingConnectionsLimit=0)
-// 2. Submit one from both IP senders to initalize per peer-queues and exhaust shared capacity
+// 2. Submit one from both IP senders to initialize per peer-queues and exhaust shared capacity
 // 3. Make sure the third peer does not come through
 // 4. Make sure extra messages from the first peer and second peer are accepted
 func TestTxHandlerERLIPClient(t *testing.T) {

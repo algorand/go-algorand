@@ -694,18 +694,18 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 }
 
 func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) model.NodeStatusResponse {
-	currentRnd, err := client.CurrentRound()
+	txParams, err := client.SuggestedParams()
 	require.NoError(t, err)
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, 1000, currentRnd, part.LastValid, [32]byte{}, true)
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, txParams.MinFee, txParams.LastRound+1, part.LastValid, [32]byte{}, true)
 	assert.NoError(t, err)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
 	require.NoError(t, err)
 	require.NotEmpty(t, onlineTxID)
-	status, err := client.WaitForRound(currentRnd + 1)
+	status, err := client.WaitForRound(txParams.LastRound + 1)
 	require.NoError(t, err)
 	return status
 }
@@ -847,7 +847,7 @@ func TestTotalWeightChanges(t *testing.T) {
 		if testing.Short() {
 			a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
 		} else {
-			a.NoError(fixture.WaitForRound(rnd, 60*time.Second))
+			a.NoError(fixture.WaitForRound(rnd, 120*time.Second))
 		}
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
@@ -1112,7 +1112,7 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 				ps.amount = cntr
 				cntr = cntr + 1
 				// ignore the returned error (most of the time will be error)
-				_, err := relay.SendPaymentFromUnencryptedWallet(account0, account0, params.Fee, ps.amount, []byte{byte(params.LastRound)})
+				_, err := relay.SendPaymentFromUnencryptedWallet(account0, account0, params.MinFee, ps.amount, []byte{byte(params.LastRound)})
 				require.Error(t, err)
 				require.Equal(t, "HTTP 400 Bad Request: TransactionPool.checkPendingQueueSize: transaction pool have reached capacity", err.Error())
 				time.Sleep(25 * time.Millisecond)

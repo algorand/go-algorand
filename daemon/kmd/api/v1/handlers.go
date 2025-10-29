@@ -38,7 +38,7 @@ type reqContext struct {
 	sm *session.Manager
 }
 
-// errorResponse sets the specified status code (should != 200), and fills in the
+// errorResponse sets the specified status code (should != 200), and fills in
 // the response envelope by setting Error to true and a Message to the passed
 // user-readable error message.
 func errorResponse(w http.ResponseWriter, status int, err error) {
@@ -1185,8 +1185,8 @@ func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Sign the transaction
-	msig, err := wallet.MultisigSignProgram(req.Program, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword))
+	// Sign the program
+	msig, err := wallet.MultisigSignProgram(req.Program, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword), req.UseLegacyMsig)
 	if err != nil {
 		errorResponse(w, http.StatusBadRequest, err)
 		return

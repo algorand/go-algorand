@@ -1169,7 +1169,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteLast:        10000,
 	}
 
-	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	// depends on what the consensus is need to generate correct KeyregTxnFields.
 	if proto.EnableStateProofKeyregCheck {
 		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
 		store, err := db.MakeAccessor("test-DB", false, true)
@@ -2268,7 +2268,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 }
 
 func resetAccountDBToV6(t *testing.T, l *Ledger) {
-	// reset tables and re-init again, similary to the catchpount apply code
+	// reset tables and re-init again, similarly to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err := l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsWriter()
@@ -2328,7 +2328,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		l.Close()
 	}()
 
-	// reset tables and re-init again, similary to the catchpount apply code
+	// reset tables and re-init again, similarly to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsWriter()

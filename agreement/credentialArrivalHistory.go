@@ -17,7 +17,7 @@
 package agreement
 
 import (
-	"sort"
+	"slices"
 	"time"
 )
 
@@ -78,6 +78,6 @@ func (history *credentialArrivalHistory) orderStatistics(idx int) time.Duration 
 	// the linear time order statistics algorithm.
 	sortedArrivals := make([]time.Duration, len(history.history))
 	copy(sortedArrivals[:], history.history[:])
-	sort.Slice(sortedArrivals, func(i, j int) bool { return sortedArrivals[i] < sortedArrivals[j] })
+	slices.Sort(sortedArrivals)
 	return sortedArrivals[idx]
 }

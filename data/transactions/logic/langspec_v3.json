@@ -1,6 +1,6 @@
 {
   "Version": 3,
-  "LogicSigVersion": 11,
+  "LogicSigVersion": 12,
   "NamedTypes": [
     {
       "Name": "[]byte",

@@ -19,9 +19,12 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestMetricsFetcher(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// this test function was meant for local development test and not as an official unit test.
 	t.Skip()
 	//host := "3.81.68.74"

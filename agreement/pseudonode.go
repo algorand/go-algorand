@@ -415,23 +415,25 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	for _, result := range verifiedResults {
 		totalWeight += result.v.Cred.Weight
 	}
-	if t.node.log.IsLevelEnabled(logging.Info) {
+	if t.node.log.IsLevelEnabled(logging.Info) || t.node.log.GetTelemetryEnabled() {
 		for _, result := range verifiedResults {
 			vote := result.v
-			logEvent := logspec.AgreementEvent{
-				Type:         logspec.VoteBroadcast,
-				Sender:       vote.R.Sender.String(),
-				Hash:         vote.R.Proposal.BlockDigest.String(),
-				Round:        uint64(t.round),
-				Period:       uint64(t.period),
-				Step:         uint64(t.step),
-				ObjectRound:  uint64(vote.R.Round),
-				ObjectPeriod: uint64(vote.R.Period),
-				ObjectStep:   uint64(vote.R.Step),
-				Weight:       vote.Cred.Weight,
-				WeightTotal:  totalWeight,
+			if t.node.log.IsLevelEnabled(logging.Info) {
+				logEvent := logspec.AgreementEvent{
+					Type:         logspec.VoteBroadcast,
+					Sender:       vote.R.Sender.String(),
+					Hash:         vote.R.Proposal.BlockDigest.String(),
+					Round:        uint64(t.round),
+					Period:       uint64(t.period),
+					Step:         uint64(t.step),
+					ObjectRound:  uint64(vote.R.Round),
+					ObjectPeriod: uint64(vote.R.Period),
+					ObjectStep:   uint64(vote.R.Step),
+					Weight:       vote.Cred.Weight,
+					WeightTotal:  totalWeight,
+				}
+				t.node.log.with(logEvent).Infof("vote created for broadcast (weight %d, total weight %d)", vote.Cred.Weight, totalWeight)
 			}
-			t.node.log.with(logEvent).Infof("vote created for broadcast (weight %d, total weight %d)", vote.Cred.Weight, totalWeight)
 			if !t.node.log.GetTelemetryEnabled() {
 				continue
 			}
@@ -445,7 +447,9 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 				// Recovered: false,
 			})
 		}
-		t.node.log.Infof("pseudonode.makeVotes: %v votes created for %v at (%v, %v, %v), total weight %v", len(verifiedResults), t.prop, t.round, t.period, t.step, totalWeight)
+		if t.node.log.IsLevelEnabled(logging.Info) {
+			t.node.log.Infof("pseudonode.makeVotes: %v votes created for %v at (%v, %v, %v), total weight %v", len(verifiedResults), t.prop, t.round, t.period, t.step, totalWeight)
+		}
 	}
 	if len(verifiedResults) > 0 {
 		// wait until the persist state is flushed, as we don't want to send any vote unless we've completed flushing it to disk.

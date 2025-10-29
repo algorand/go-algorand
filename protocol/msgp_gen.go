@@ -207,7 +207,6 @@ func (z Error) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func ErrorMaxSize() (s int) {
 	panic("Unable to determine max size: String type string(z) is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -267,7 +266,6 @@ func (z HashID) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func HashIDMaxSize() (s int) {
 	panic("Unable to determine max size: String type string(z) is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -327,7 +325,6 @@ func (z NetworkID) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func NetworkIDMaxSize() (s int) {
 	panic("Unable to determine max size: String type string(z) is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -447,7 +444,6 @@ func (z Tag) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func TagMaxSize() (s int) {
 	panic("Unable to determine max size: String type string(z) is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler

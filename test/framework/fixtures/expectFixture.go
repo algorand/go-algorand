@@ -140,7 +140,6 @@ func skipExpectTests() bool {
 // Run Process all expect script files with suffix Test.exp within the current directory
 func (ef *ExpectFixture) Run() {
 	disabledTest := map[string]string{
-		"pingpongTest.exp":                    "broken",
 		"listExpiredParticipationKeyTest.exp": "flaky",
 	}
 	for testName := range ef.expectFiles {
@@ -194,7 +193,7 @@ func (ef *ExpectFixture) Run() {
 					syncTest.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, outBuf, stderr)
 					syncTest.Fail()
 				} else {
-					// t.Logf("stdout: %s", string(outBuf.Bytes()))
+					syncTest.Logf("stdout: %s", outBuf.String())
 					ef.removeTestDir(workingDir)
 				}
 			})

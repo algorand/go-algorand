@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -37,15 +38,15 @@ import (
 
 // We want to be careful that the Algod ledger does not move on to another round
 // so we confirm here that all ledger methods which implicitly access the current round
-// are overriden within the `simulatorLedger`.
+// are overridden within the `simulatorLedger`.
 func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	env := simulationtesting.PrepareSimulatorTest(t)
 
-	// methods overriden by `simulatorLedger``
-	overridenMethods := []string{
+	// methods overridden by `simulatorLedger``
+	overriddenMethods := []string{
 		"Latest",
 		"LookupLatest",
 		"LatestTotals",
@@ -59,17 +60,10 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	}
 
 	methodIsSkipped := func(methodName string) bool {
-		for _, overridenMethod := range overridenMethods {
-			if overridenMethod == methodName {
-				return true
-			}
+		if slices.Contains(overriddenMethods, methodName) {
+			return true
 		}
-		for _, excludedMethod := range excludedMethods {
-			if excludedMethod == methodName {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(excludedMethods, methodName)
 	}
 
 	methodExistsInEvalLedger := func(methodName string) bool {

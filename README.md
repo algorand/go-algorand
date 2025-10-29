@@ -13,7 +13,7 @@ Algorand is a permissionless, pure proof-of-stake blockchain that delivers decen
 
 ## Getting Started
 
-Visit our [developer website](https://developer.algorand.org/) for the most up-to-date information about using and installing the Algorand platform.
+Visit our [developer website](https://dev.algorand.co/) for the most up-to-date information about using and installing the Algorand platform.
 
 ## Building from Source
 

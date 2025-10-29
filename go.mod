@@ -1,18 +1,18 @@
 module github.com/algorand/go-algorand
 
-go 1.23.0
+go 1.25.0
 
-toolchain go1.23.9
+toolchain go1.25.3
 
 require (
 	github.com/DataDog/zstd v1.5.2
 	github.com/algorand/avm-abi v0.2.0
 	github.com/algorand/falcon v0.1.0
 	github.com/algorand/go-codec/codec v1.1.10
-	github.com/algorand/go-deadlock v0.2.4
+	github.com/algorand/go-deadlock v0.2.5
 	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.1.0
-	github.com/algorand/msgp v1.1.60
+	github.com/algorand/msgp v1.1.61
 	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.34.0
@@ -28,6 +28,7 @@ require (
 	github.com/google/go-querystring v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
+	github.com/hdevalence/ed25519consensus v0.2.0
 	github.com/ipfs/go-log v1.0.5
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/jmoiron/sqlx v1.2.0
@@ -63,6 +64,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.0.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -154,7 +156,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
-	github.com/petermattis/goid v0.0.0-20241025130422-66cb2e6d7274 // indirect
+	github.com/petermattis/goid v0.0.0-20250813065127-a731cc31b4fe // indirect
 	github.com/pion/datachannel v1.5.9 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
 	github.com/pion/ice/v2 v2.3.36 // indirect

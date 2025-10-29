@@ -241,7 +241,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		return
 	}
 	defer decompressedGzip.Close()
-	written, err := io.Copy(response, decompressedGzip)
+	written, err := io.Copy(response, decompressedGzip) //nolint:gosec // writing to the network from a local file, no "decompression bomb"
 	if err != nil {
 		logging.Base().Infof("LedgerService.ServeHTTP : unable to write decompressed catchpoint file for round %d, written bytes %d : %v", round, written, err)
 	} else {

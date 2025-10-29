@@ -820,7 +820,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig")
+	require.Contains(t, err.Error(), "only have one of Sig, Msig, or LMsig")
 
 }
 
@@ -833,10 +833,7 @@ func generateTransactionGroups(maxGroupSize int, signedTxns []transactions.Signe
 
 	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxns))
 	for i := 0; i < len(signedTxns); {
-		txnsInGroup := rand.Intn(protoMaxGroupSize-1) + 1
-		if txnsInGroup > maxGroupSize {
-			txnsInGroup = maxGroupSize
-		}
+		txnsInGroup := min(rand.Intn(protoMaxGroupSize-1)+1, maxGroupSize)
 		if i+txnsInGroup > len(signedTxns) {
 			txnsInGroup = len(signedTxns) - i
 		}
@@ -1058,7 +1055,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		signedTxn[i].Txn.Sender = multiAddress[s]
 		signedTxn[i].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
 		signedTxn[i].Lsig.Logic = op.Program
-		program := logic.Program(op.Program)
+		program := logic.MultisigProgram{Addr: crypto.Digest(multiAddress[s]), Program: op.Program}
 
 		// create multi sig that 2 out of 3 has signed the txn
 		var sigs [2]crypto.MultisigSig
@@ -1069,7 +1066,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		}
 		msig, err := crypto.MultisigAssemble(sigs[:])
 		require.NoError(t, err)
-		signedTxn[i].Lsig.Msig = msig
+		signedTxn[i].Lsig.LMsig = msig
 	}
 
 	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
@@ -1079,10 +1076,10 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.Msig.Subsigs[0].Sig[0]++
+		txn.Lsig.LMsig.Subsigs[0].Sig[0]++
 	}
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.Msig.Subsigs[0].Sig[0]--
+		txn.Lsig.LMsig.Subsigs[0].Sig[0]--
 	}
 
 	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())

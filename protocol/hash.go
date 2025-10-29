@@ -48,6 +48,7 @@ const (
 	MerkleArrayNode                  HashID = "MA"
 	MerkleVectorCommitmentBottomLeaf HashID = "MB"
 	Message                          HashID = "MX"
+	MultisigProgram                  HashID = "MsigProgram"
 	NetIdentityChallenge             HashID = "NIC"
 	NetIdentityChallengeResponse     HashID = "NIR"
 	NetIdentityVerificationMessage   HashID = "NIV"

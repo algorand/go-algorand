@@ -67,7 +67,7 @@ In order to maintain existing semantics for previously written
 programs, AVM code is versioned.  When new opcodes are introduced, or
 behavior is changed, a new version is introduced.  Programs carrying
 old versions are executed with their original semantics. In the AVM
-bytecode, the version is an incrementing integer, currently 6, and
+bytecode, the version is an incrementing integer, currently 12, and
 denoted vX throughout this document.
 
 ## Execution Modes

@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -257,9 +258,7 @@ func (f *flushOp) apply(db *participationDB) error {
 	if err != nil {
 		// put back what we didn't finish with
 		db.mutex.Lock()
-		for id, v := range dirty {
-			db.dirty[id] = v
-		}
+		maps.Copy(db.dirty, dirty)
 		db.mutex.Unlock()
 	}
 

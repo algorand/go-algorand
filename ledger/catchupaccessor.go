@@ -454,7 +454,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 
 	// the following fields are now going to be ignored. We could add these to the database and validate these
 	// later on:
-	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
+	// TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
 	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
