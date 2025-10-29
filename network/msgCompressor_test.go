@@ -280,8 +280,6 @@ func makeP2PVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet, *vote
 }
 
 func testVoteDynamicCompressionAbortMessage(t *testing.T, factory voteNetFactory) {
-	partitiontest.PartitionTest(t)
-
 	cfgA := defaultConfig
 	cfgA.GossipFanout = 1
 	cfgA.EnableVoteCompression = true
@@ -437,6 +435,8 @@ func testVoteDynamicVoteCompressionNegotiation(t *testing.T, msgs [][]byte, expe
 }
 
 func TestVoteDynamicCompressionAbortMessage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	factories := []struct {
 		name    string
 		factory voteNetFactory
@@ -451,6 +451,8 @@ func TestVoteDynamicCompressionAbortMessage(t *testing.T) {
 }
 
 func TestVoteDynamicVoteCompressionNegotiation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	vote := map[string]any{
 		"cred": map[string]any{"pf": crypto.VrfProof{1}},
 		"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
