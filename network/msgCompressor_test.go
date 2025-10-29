@@ -374,7 +374,6 @@ func testVoteDynamicVoteCompressionNegotiation(t *testing.T, msgs [][]byte, expe
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			cfgA := defaultConfig
 			cfgA.GossipFanout = 1
@@ -447,7 +446,6 @@ func TestVoteDynamicCompressionAbortMessage(t *testing.T) {
 	}
 
 	for _, f := range factories {
-		f := f
 		t.Run(f.name, func(t *testing.T) { testVoteDynamicCompressionAbortMessage(t, f.factory) })
 	}
 }
@@ -488,10 +486,8 @@ func TestVoteDynamicVoteCompressionNegotiation(t *testing.T) {
 	}
 
 	for _, f := range factories {
-		f := f
 		t.Run(f.name, func(t *testing.T) {
 			for _, scenario := range scenarios {
-				scenario := scenario
 				t.Run(scenario.name, func(t *testing.T) {
 					testVoteDynamicVoteCompressionNegotiation(t, scenario.msgs, !scenario.expectCompressionOff, f.factory)
 				})
