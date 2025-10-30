@@ -721,8 +721,7 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 	var badSigResultCounter int
 	var goodSigResultCounter int
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cache := MakeVerifiedTransactionCache(50)
 
 	txBacklogSizeMod := txBacklogSize / 20

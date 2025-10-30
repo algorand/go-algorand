@@ -144,7 +144,7 @@ func testGoFmt(fset *token.FileSet, node interface{}) (out string, err error) {
 	var buf bytes.Buffer
 	err = format.Node(&buf, fset, node)
 	if err == nil {
-		out = string(buf.Bytes())
+		out = buf.String()
 	}
 	return
 }

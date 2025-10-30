@@ -225,7 +225,7 @@ func TestStatefulEncodeRef(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var id lruTableReferenceID
 	require.Equal(t, uintptr(2), unsafe.Sizeof(id), "lruTableReferenceID should occupy 2 bytes (uint16)")
-	require.Equal(t, reflect.Uint16, reflect.TypeOf(id).Kind(), "lruTableReferenceID underlying kind should be uint16")
+	require.Equal(t, reflect.Uint16, reflect.TypeFor[lruTableReferenceID]().Kind(), "lruTableReferenceID underlying kind should be uint16")
 	// Maximum table size we support is 2048 (1024 buckets, 2 slots each)
 	// Last bucket would be 1023, last slot would be 1, so maxID = (1023<<1)|1 = 2047
 	maxTableSize := uint32(2048)
