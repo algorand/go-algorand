@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -154,11 +155,11 @@ func TestMakeWsPeerMsgCodec_StatefulRequiresStateless(t *testing.T) {
 	codec := makeWsPeerMsgCodec(wp)
 
 	// Stateless should not be enabled (no pfCompressedVoteVpack)
-	require.False(t, codec.avdec.enabled, "Stateless decompression should not be enabled when pfCompressedVoteVpack is not advertised")
+	assert.False(t, codec.avdec.enabled, "Stateless decompression should not be enabled when pfCompressedVoteVpack is not advertised")
 
 	// Stateful should not be enabled even though stateful features are advertised
-	// because stateful requires stateless to work (VP → stateless → raw)
-	require.False(t, codec.statefulVoteEnabled.Load(), "Stateful compression should not be enabled without stateless support")
+	// because stateful requires stateless to work (VP -> stateless -> raw)
+	assert.False(t, codec.statefulVoteEnabled.Load(), "Stateful compression should not be enabled without stateless support")
 
 	// Now test with both stateless AND stateful enabled
 	wp.features = pfCompressedVoteVpack | pfCompressedVoteVpackStateful512
@@ -166,8 +167,8 @@ func TestMakeWsPeerMsgCodec_StatefulRequiresStateless(t *testing.T) {
 	codec = makeWsPeerMsgCodec(wp)
 
 	// Both stateless and stateful should be enabled
-	require.True(t, codec.avdec.enabled, "Stateless decompression should be enabled when pfCompressedVoteVpack is advertised")
-	require.True(t, codec.statefulVoteEnabled.Load(), "Stateful compression should be enabled when both stateless and stateful features are supported")
+	assert.True(t, codec.avdec.enabled, "Stateless decompression should be enabled when pfCompressedVoteVpack is advertised")
+	assert.True(t, codec.statefulVoteEnabled.Load(), "Stateful compression should be enabled when both stateless and stateful features are supported")
 }
 
 type voteCompressionNetwork interface {
