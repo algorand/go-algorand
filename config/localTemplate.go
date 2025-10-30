@@ -1085,15 +1085,8 @@ func (cfg Local) NormalizedVoteCompressionTableSize(log logger) uint {
 		log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid (minimum 16). Stateful vote compression disabled.", configured)
 		return 0
 	}
-	if configured >= 1024 {
-		if configured != 1024 {
-			log.Infof("StatefulVoteCompressionTableSize configured as %d, using nearest supported value: 1024", configured)
-		}
-		return 1024
-	}
-
-	// Round down to nearest power of 2 within supported range [16, 512]
-	supportedSizes := []uint{512, 256, 128, 64, 32, 16}
+	// Round down to nearest power of 2 within supported range [16, 1024]
+	supportedSizes := []uint{1024, 512, 256, 128, 64, 32, 16}
 	for _, size := range supportedSizes {
 		if configured >= size {
 			if configured != size {
