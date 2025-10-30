@@ -905,8 +905,10 @@ func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvide
 		// Announce our maximum supported vote compression table size
 		// Both sides will independently calculate min(ourSize, theirSize)
 		// Only advertise stateful features if stateless compression is also enabled
-		// Supported values: 16, 32, 64, 128, 256, 512, 1024 (or higher, which advertises 1024)
+		// Supported values: 16, 32, 64, 128, 256, 512, 1024, 2048 (or higher, which advertises 2048)
 		switch dtSize := uint32(meta.StatefulVoteCompressionTableSize()); {
+		case dtSize >= 2048:
+			features = append(features, peerFeatureVoteVpackStateful2048)
 		case dtSize >= 1024:
 			features = append(features, peerFeatureVoteVpackStateful1024)
 		case dtSize >= 512:
@@ -1918,6 +1920,7 @@ const peerFeatureVoteVpackCompression = "avvpack"
 
 // peerFeatureVoteVpackStateful* are values for PeerFeaturesHeader indicating peer
 // supports specific table sizes for stateful vpack compression
+const peerFeatureVoteVpackStateful2048 = "avvpack2048"
 const peerFeatureVoteVpackStateful1024 = "avvpack1024"
 const peerFeatureVoteVpackStateful512 = "avvpack512"
 const peerFeatureVoteVpackStateful256 = "avvpack256"

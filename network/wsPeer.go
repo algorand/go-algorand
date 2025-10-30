@@ -1135,7 +1135,8 @@ func (wp *wsPeer) vpackVoteCompressionSupported() bool {
 }
 
 func (wp *wsPeer) vpackStatefulCompressionSupported() bool {
-	return wp.features&(pfCompressedVoteVpackStateful1024|
+	return wp.features&(pfCompressedVoteVpackStateful2048|
+		pfCompressedVoteVpackStateful1024|
 		pfCompressedVoteVpackStateful512|
 		pfCompressedVoteVpackStateful256|
 		pfCompressedVoteVpackStateful128|
@@ -1155,21 +1156,24 @@ func (wp *wsPeer) getBestVpackTableSize() uint {
 
 	// Get peer's max size from their features
 	var peerMaxSize uint
-	if wp.features&pfCompressedVoteVpackStateful1024 != 0 {
+	switch {
+	case wp.features&pfCompressedVoteVpackStateful2048 != 0:
+		peerMaxSize = 2048
+	case wp.features&pfCompressedVoteVpackStateful1024 != 0:
 		peerMaxSize = 1024
-	} else if wp.features&pfCompressedVoteVpackStateful512 != 0 {
+	case wp.features&pfCompressedVoteVpackStateful512 != 0:
 		peerMaxSize = 512
-	} else if wp.features&pfCompressedVoteVpackStateful256 != 0 {
+	case wp.features&pfCompressedVoteVpackStateful256 != 0:
 		peerMaxSize = 256
-	} else if wp.features&pfCompressedVoteVpackStateful128 != 0 {
+	case wp.features&pfCompressedVoteVpackStateful128 != 0:
 		peerMaxSize = 128
-	} else if wp.features&pfCompressedVoteVpackStateful64 != 0 {
+	case wp.features&pfCompressedVoteVpackStateful64 != 0:
 		peerMaxSize = 64
-	} else if wp.features&pfCompressedVoteVpackStateful32 != 0 {
+	case wp.features&pfCompressedVoteVpackStateful32 != 0:
 		peerMaxSize = 32
-	} else if wp.features&pfCompressedVoteVpackStateful16 != 0 {
+	case wp.features&pfCompressedVoteVpackStateful16 != 0:
 		peerMaxSize = 16
-	} else {
+	default:
 		return 0 // Peer doesn't support stateful vote compression
 	}
 
@@ -1182,6 +1186,7 @@ type peerFeatureFlag int
 const (
 	pfCompressedProposal peerFeatureFlag = 1 << iota
 	pfCompressedVoteVpack
+	pfCompressedVoteVpackStateful2048
 	pfCompressedVoteVpackStateful1024
 	pfCompressedVoteVpackStateful512
 	pfCompressedVoteVpackStateful256
@@ -1233,6 +1238,8 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 			features |= pfCompressedProposal
 		case peerFeatureVoteVpackCompression:
 			features |= pfCompressedVoteVpack
+		case peerFeatureVoteVpackStateful2048:
+			features |= pfCompressedVoteVpackStateful2048
 		case peerFeatureVoteVpackStateful1024:
 			features |= pfCompressedVoteVpackStateful1024
 		case peerFeatureVoteVpackStateful512:

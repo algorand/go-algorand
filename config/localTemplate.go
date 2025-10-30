@@ -648,11 +648,12 @@ type Local struct {
 
 	// StatefulVoteCompressionTableSize controls the size of the per-peer tables used for vote compression.
 	// If 0, stateful vote compression is disabled (but stateless vote compression will still be used if
-	// EnableVoteCompression is true).
-	// This value should be a power of 2 between 16 and 1024, inclusive.
-	// The per-peer overhead for stateful compression is 224 bytes times this value, plus 800 bytes of
-	// fixed overhead, so the default value of 512 requires 115,488 bytes of memory per peer.
-	StatefulVoteCompressionTableSize uint `version[37]:"512"`
+	// EnableVoteCompression is true). This value should be a power of 2 between 16 and 2048, inclusive.
+	// The per-peer overhead for stateful compression in one direction (from peer A => B) is 224 bytes times
+	// this value, plus 800 bytes of fixed overhead; it is twice that if votes are also being sent from B => A.
+	// So the default value of 2048 requires 459,552 bytes of memory per peer for stateful vote compression
+	// in one direction, or 919,104 bytes if both directions are used.
+	StatefulVoteCompressionTableSize uint `version[37]:"2048"`
 
 	// EnableBatchVerification controls whether ed25519 batch verification is enabled
 	EnableBatchVerification bool `version[37]:"true"`
@@ -1070,8 +1071,8 @@ func (cfg *Local) TracksCatchpoints() bool {
 }
 
 // NormalizedVoteCompressionTableSize validates and normalizes the VoteCompressionDynamicTableSize config value.
-// Supported values are powers of 2 in the range [16, 1024].
-// Values >= 1024 clamp to 1024.
+// Supported values are powers of 2 in the range [16, 2048].
+// Values >= 2048 clamp to 2048.
 // Values 1-15 are below the minimum and return 0 (disabled).
 // Values between supported powers of 2 round down to the nearest supported value.
 // Logs a message if the configured value is adjusted.
@@ -1085,8 +1086,8 @@ func (cfg Local) NormalizedVoteCompressionTableSize(log logger) uint {
 		log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid (minimum 16). Stateful vote compression disabled.", configured)
 		return 0
 	}
-	// Round down to nearest power of 2 within supported range [16, 1024]
-	supportedSizes := []uint{1024, 512, 256, 128, 64, 32, 16}
+	// Round down to nearest power of 2 within supported range [16, 2048]
+	supportedSizes := []uint{2048, 1024, 512, 256, 128, 64, 32, 16}
 	for _, size := range supportedSizes {
 		if configured >= size {
 			if configured != size {
