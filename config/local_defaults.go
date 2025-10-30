@@ -140,6 +140,7 @@ var defaultLocal = Local{
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
+	StatefulVoteCompressionTableSize:           512,
 	StateproofDir:                              "",
 	StorageEngine:                              "sqlite",
 	SuggestedFeeBlockHistory:                   3,
@@ -166,5 +167,4 @@ var defaultLocal = Local{
 	TxSyncTimeoutSeconds:                       30,
 	UseXForwardedForAddressField:               "",
 	VerifiedTranscationsCacheSize:              150000,
-	VoteCompressionDynamicTableSize:            512,
 }

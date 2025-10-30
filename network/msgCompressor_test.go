@@ -115,25 +115,25 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 func TestMakeWsPeerMsgCodec_StatefulRequiresStateless(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Create a mock wsPeer with dynamic compression features but WITHOUT stateless
+	// Create a mock wsPeer with stateful compression features but WITHOUT stateless
 	wp := &wsPeer{}
 	wp.wsPeerCore.log = logging.TestingLog(t)
 	wp.wsPeerCore.originAddress = "test-peer"
 	wp.enableVoteCompression = true
 	wp.voteCompressionTableSize = 512
-	wp.features = pfCompressedVoteVpackDynamic512 // Dynamic enabled but NOT pfCompressedVoteVpack
+	wp.features = pfCompressedVoteVpackStateful512 // stateful enabled but NOT pfCompressedVoteVpack
 
 	codec := makeWsPeerMsgCodec(wp)
 
 	// Stateless should not be enabled (no pfCompressedVoteVpack)
 	require.False(t, codec.avdec.enabled, "Stateless decompression should not be enabled when pfCompressedVoteVpack is not advertised")
 
-	// Stateful should not be enabled even though dynamic features are advertised
+	// Stateful should not be enabled even though stateful features are advertised
 	// because stateful requires stateless to work (VP → stateless → raw)
 	require.False(t, codec.statefulVoteEnabled.Load(), "Stateful compression should not be enabled without stateless support")
 
-	// Now test with both stateless AND dynamic enabled
-	wp.features = pfCompressedVoteVpack | pfCompressedVoteVpackDynamic512
+	// Now test with both stateless AND stateful enabled
+	wp.features = pfCompressedVoteVpack | pfCompressedVoteVpackStateful512
 
 	codec = makeWsPeerMsgCodec(wp)
 
@@ -297,7 +297,7 @@ func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory)
 	cfgA := defaultConfig
 	cfgA.GossipFanout = 1
 	cfgA.EnableVoteCompression = true
-	cfgA.VoteCompressionDynamicTableSize = 256
+	cfgA.StatefulVoteCompressionTableSize = 256
 
 	cfgB := cfgA
 
@@ -444,12 +444,12 @@ func testStatefulVoteCompression(t *testing.T, msgs [][]byte, expectCompressionA
 			cfgA := defaultConfig
 			cfgA.GossipFanout = 1
 			cfgA.EnableVoteCompression = true
-			cfgA.VoteCompressionDynamicTableSize = tc.netATableSize
+			cfgA.StatefulVoteCompressionTableSize = tc.netATableSize
 
 			cfgB := defaultConfig
 			cfgB.GossipFanout = 1
 			cfgB.EnableVoteCompression = true
-			cfgB.VoteCompressionDynamicTableSize = tc.netBTableSize
+			cfgB.StatefulVoteCompressionTableSize = tc.netBTableSize
 
 			netA, netB := factory(t, cfgA, cfgB)
 			defer netA.stop()

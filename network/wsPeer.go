@@ -1134,13 +1134,13 @@ func (wp *wsPeer) vpackVoteCompressionSupported() bool {
 }
 
 func (wp *wsPeer) vpackStatefulCompressionSupported() bool {
-	return wp.features&(pfCompressedVoteVpackDynamic1024|
-		pfCompressedVoteVpackDynamic512|
-		pfCompressedVoteVpackDynamic256|
-		pfCompressedVoteVpackDynamic128|
-		pfCompressedVoteVpackDynamic64|
-		pfCompressedVoteVpackDynamic32|
-		pfCompressedVoteVpackDynamic16) != 0
+	return wp.features&(pfCompressedVoteVpackStateful1024|
+		pfCompressedVoteVpackStateful512|
+		pfCompressedVoteVpackStateful256|
+		pfCompressedVoteVpackStateful128|
+		pfCompressedVoteVpackStateful64|
+		pfCompressedVoteVpackStateful32|
+		pfCompressedVoteVpackStateful16) != 0
 }
 
 // getBestVpackTableSize returns the negotiated table size.
@@ -1154,22 +1154,22 @@ func (wp *wsPeer) getBestVpackTableSize() uint {
 
 	// Get peer's max size from their features
 	var peerMaxSize uint
-	if wp.features&pfCompressedVoteVpackDynamic1024 != 0 {
+	if wp.features&pfCompressedVoteVpackStateful1024 != 0 {
 		peerMaxSize = 1024
-	} else if wp.features&pfCompressedVoteVpackDynamic512 != 0 {
+	} else if wp.features&pfCompressedVoteVpackStateful512 != 0 {
 		peerMaxSize = 512
-	} else if wp.features&pfCompressedVoteVpackDynamic256 != 0 {
+	} else if wp.features&pfCompressedVoteVpackStateful256 != 0 {
 		peerMaxSize = 256
-	} else if wp.features&pfCompressedVoteVpackDynamic128 != 0 {
+	} else if wp.features&pfCompressedVoteVpackStateful128 != 0 {
 		peerMaxSize = 128
-	} else if wp.features&pfCompressedVoteVpackDynamic64 != 0 {
+	} else if wp.features&pfCompressedVoteVpackStateful64 != 0 {
 		peerMaxSize = 64
-	} else if wp.features&pfCompressedVoteVpackDynamic32 != 0 {
+	} else if wp.features&pfCompressedVoteVpackStateful32 != 0 {
 		peerMaxSize = 32
-	} else if wp.features&pfCompressedVoteVpackDynamic16 != 0 {
+	} else if wp.features&pfCompressedVoteVpackStateful16 != 0 {
 		peerMaxSize = 16
 	} else {
-		return 0 // Peer doesn't support dynamic compression
+		return 0 // Peer doesn't support stateful vote compression
 	}
 
 	return min(ourMaxSize, peerMaxSize)
@@ -1181,13 +1181,13 @@ type peerFeatureFlag int
 const (
 	pfCompressedProposal peerFeatureFlag = 1 << iota
 	pfCompressedVoteVpack
-	pfCompressedVoteVpackDynamic1024
-	pfCompressedVoteVpackDynamic512
-	pfCompressedVoteVpackDynamic256
-	pfCompressedVoteVpackDynamic128
-	pfCompressedVoteVpackDynamic64
-	pfCompressedVoteVpackDynamic32
-	pfCompressedVoteVpackDynamic16
+	pfCompressedVoteVpackStateful1024
+	pfCompressedVoteVpackStateful512
+	pfCompressedVoteVpackStateful256
+	pfCompressedVoteVpackStateful128
+	pfCompressedVoteVpackStateful64
+	pfCompressedVoteVpackStateful32
+	pfCompressedVoteVpackStateful16
 )
 
 // versionPeerFeatures defines protocol version when peer features were introduced
@@ -1235,26 +1235,26 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 		if part == peerFeatureVoteVpackCompression {
 			features |= pfCompressedVoteVpack
 		}
-		if part == peerFeatureVoteVpackDynamic1024 {
-			features |= pfCompressedVoteVpackDynamic1024
+		if part == peerFeatureVoteVpackStateful1024 {
+			features |= pfCompressedVoteVpackStateful1024
 		}
-		if part == peerFeatureVoteVpackDynamic512 {
-			features |= pfCompressedVoteVpackDynamic512
+		if part == peerFeatureVoteVpackStateful512 {
+			features |= pfCompressedVoteVpackStateful512
 		}
-		if part == peerFeatureVoteVpackDynamic256 {
-			features |= pfCompressedVoteVpackDynamic256
+		if part == peerFeatureVoteVpackStateful256 {
+			features |= pfCompressedVoteVpackStateful256
 		}
-		if part == peerFeatureVoteVpackDynamic128 {
-			features |= pfCompressedVoteVpackDynamic128
+		if part == peerFeatureVoteVpackStateful128 {
+			features |= pfCompressedVoteVpackStateful128
 		}
-		if part == peerFeatureVoteVpackDynamic64 {
-			features |= pfCompressedVoteVpackDynamic64
+		if part == peerFeatureVoteVpackStateful64 {
+			features |= pfCompressedVoteVpackStateful64
 		}
-		if part == peerFeatureVoteVpackDynamic32 {
-			features |= pfCompressedVoteVpackDynamic32
+		if part == peerFeatureVoteVpackStateful32 {
+			features |= pfCompressedVoteVpackStateful32
 		}
-		if part == peerFeatureVoteVpackDynamic16 {
-			features |= pfCompressedVoteVpackDynamic16
+		if part == peerFeatureVoteVpackStateful16 {
+			features |= pfCompressedVoteVpackStateful16
 		}
 	}
 	return features

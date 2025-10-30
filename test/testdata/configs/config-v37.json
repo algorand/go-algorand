@@ -119,6 +119,7 @@
     "RestReadTimeoutSeconds": 15,
     "RestWriteTimeoutSeconds": 120,
     "RunHosted": false,
+    "StatefulVoteCompressionTableSize": 512,
     "StateproofDir": "",
     "StorageEngine": "sqlite",
     "SuggestedFeeBlockHistory": 3,
@@ -144,6 +145,5 @@
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30,
     "UseXForwardedForAddressField": "",
-    "VerifiedTranscationsCacheSize": 150000,
-    "VoteCompressionDynamicTableSize": 512
+    "VerifiedTranscationsCacheSize": 150000
 }

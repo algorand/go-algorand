@@ -646,9 +646,13 @@ type Local struct {
 	// EnableVoteCompression controls whether vote compression is enabled for websocket networks
 	EnableVoteCompression bool `version[36]:"true"`
 
-	// VoteCompressionDynamicTableSize controls the size of the dynamic table used for vote compression.
-	// If 0, dynamic vote compression is disabled.
-	VoteCompressionDynamicTableSize uint `version[37]:"512"`
+	// StatefulVoteCompressionTableSize controls the size of the per-peer tables used for vote compression.
+	// If 0, stateful vote compression is disabled (but stateless vote compression will still be used if
+	// EnableVoteCompression is true).
+	// This value should be a power of 2 between 16 and 1024, inclusive.
+	// The per-peer overhead for stateful compression is 224 bytes times this value, plus 800 bytes of
+	// fixed overhead, so the default value of 512 requires 115,488 bytes of memory per peer.
+	StatefulVoteCompressionTableSize uint `version[37]:"512"`
 
 	// EnableBatchVerification controls whether ed25519 batch verification is enabled
 	EnableBatchVerification bool `version[37]:"true"`
@@ -1073,17 +1077,17 @@ func (cfg *Local) TracksCatchpoints() bool {
 // Logs a message if the configured value is adjusted.
 // Returns the normalized size.
 func (cfg Local) NormalizedVoteCompressionTableSize(log logger) uint {
-	configured := cfg.VoteCompressionDynamicTableSize
+	configured := cfg.StatefulVoteCompressionTableSize
 	if configured == 0 {
 		return 0
 	}
 	if configured < 16 {
-		log.Warnf("VoteCompressionDynamicTableSize configured as %d is invalid (minimum 16). Dynamic vote compression disabled.", configured)
+		log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid (minimum 16). Stateful vote compression disabled.", configured)
 		return 0
 	}
 	if configured >= 1024 {
 		if configured != 1024 {
-			log.Infof("VoteCompressionDynamicTableSize configured as %d, using nearest supported value: 1024", configured)
+			log.Infof("StatefulVoteCompressionTableSize configured as %d, using nearest supported value: 1024", configured)
 		}
 		return 1024
 	}
@@ -1100,6 +1104,6 @@ func (cfg Local) NormalizedVoteCompressionTableSize(log logger) uint {
 	}
 
 	// Should never reach here given the checks above
-	log.Warnf("VoteCompressionDynamicTableSize configured as %d is invalid. Dynamic vote compression disabled.", configured)
+	log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid. Stateful vote compression disabled.", configured)
 	return 0
 }

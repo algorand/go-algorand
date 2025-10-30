@@ -512,7 +512,7 @@ func TestWebsocketVoteCompression(t *testing.T) {
 			cfgA := defaultConfig
 			cfgA.GossipFanout = 1
 			cfgA.EnableVoteCompression = test.netAEnableCompression
-			cfgA.VoteCompressionDynamicTableSize = 0 // Disable stateful compression
+			cfgA.StatefulVoteCompressionTableSize = 0 // Disable stateful compression
 			netA := makeTestWebsocketNodeWithConfig(t, cfgA)
 			netA.Start()
 			defer netStop(t, netA, "A")
@@ -520,7 +520,7 @@ func TestWebsocketVoteCompression(t *testing.T) {
 			cfgB := defaultConfig
 			cfgB.GossipFanout = 1
 			cfgB.EnableVoteCompression = test.netBEnableCompression
-			cfgB.VoteCompressionDynamicTableSize = 0 // Disable stateful compression
+			cfgB.StatefulVoteCompressionTableSize = 0 // Disable stateful compression
 			netB := makeTestWebsocketNodeWithConfig(t, cfgB)
 
 			addrA, postListen := netA.Address()
