@@ -72,8 +72,8 @@ When stateful compression is used, byte 1 encodes which values have been replace
 
 The stateful layer uses:
 - **Round delta encoding**: Most votes reference the same round or adjacent rounds, so 2 bits can encode common cases.
-- **Proposal sliding window**: A 7-entry HPACK-style window tracks recent proposal values. Usually all votes in a round vote for the same proposal.
-- **LRU tables**: Three 2-way set-associative hash tables cache recently seen values for `snd` (sender addresses), `pk` (public key + signature pairs), and `pk2` (second-tier key + signature pairs).
+- **Proposal sliding window**: A 7-entry HPACK-style window tracks recent proposal values. In a typical round, all votes should be for the same proposal value, compressing previously-seen proposal values from ~96 bytes down to a 3-bit reference.
+- **LRU tables**: Three 2-way set-associative hash tables cache recently seen values for `snd` (sender addresses), `pk` (public key + signature pairs), and `pk2` (second-tier key + signature pairs). Since some consensus participants (and their associated public keys) will appear more often than others based on the distribution of stake, a larger table can capture participant-related data and replace them with LRU references. For each participant, the `snd` field is re-used across all votes; the `pk` reference is re-used across all votes in the same round; and the `pk2` reference is re-used across all votes in a batch (typically >=1000 rounds).
 
 When stateful compression is not used, byte 1 must be zero.
 

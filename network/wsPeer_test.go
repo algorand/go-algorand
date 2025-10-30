@@ -238,8 +238,6 @@ func TestPeerReadLoopSwitchAllTags(t *testing.T) {
 	allTags = slices.DeleteFunc(allTags, func(tag string) bool { return tag == "VotePackedTag" })
 	sort.Strings(allTags)
 	sort.Strings(foundTags)
-	t.Logf("All tags: %v", allTags)
-	t.Logf("Found tags: %v", foundTags)
 	require.Equal(t, allTags, foundTags)
 }
 

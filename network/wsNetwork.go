@@ -847,7 +847,7 @@ type peerMetadataProvider interface {
 	PublicAddress() string
 	RandomID() string
 	SupportedProtoVersions() []string
-	EnableVoteCompression() bool
+	VoteCompressionEnabled() bool
 	StatefulVoteCompressionTableSize() uint
 }
 
@@ -881,8 +881,8 @@ func (wn *WebsocketNetwork) StatefulVoteCompressionTableSize() uint {
 	return wn.voteCompressionTableSize
 }
 
-// EnableVoteCompression returns whether vote compression is enabled for this node.
-func (wn *WebsocketNetwork) EnableVoteCompression() bool {
+// VoteCompressionEnabled returns whether vote compression is enabled for this node.
+func (wn *WebsocketNetwork) VoteCompressionEnabled() bool {
 	return wn.config.EnableVoteCompression
 }
 
@@ -899,7 +899,7 @@ func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvide
 
 	// set the features header (comma-separated list)
 	features := []string{peerFeatureProposalCompression}
-	if meta.EnableVoteCompression() {
+	if meta.VoteCompressionEnabled() {
 		features = append(features, peerFeatureVoteVpackCompression)
 
 		// Announce our maximum supported vote compression table size

@@ -893,8 +893,8 @@ func (n *P2PNetwork) StatefulVoteCompressionTableSize() uint {
 	return n.voteCompressionTableSize
 }
 
-// EnableVoteCompression returns whether vote compression is enabled for this node.
-func (n *P2PNetwork) EnableVoteCompression() bool {
+// VoteCompressionEnabled returns whether vote compression is enabled for this node.
+func (n *P2PNetwork) VoteCompressionEnabled() bool {
 	return n.config.EnableVoteCompression
 }
 
