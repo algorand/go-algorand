@@ -101,21 +101,17 @@ type wsPeerMsgCodec struct {
 	ppdec zstdProposalDecompressor
 	avdec vpackVoteDecompressor
 
-	// stateful vote compression (if enabled)
-	// Encoder and decoder can fail independently, so we track them separately.
-	// When encoder fails, we send abort message and disable encoding; peer will switch to AV.
-	// When decoder fails, we send abort message and disable decoding; we'll receive AV from peer.
-	// When we receive abort message from peer, we disable encoding (they can't decode our VP).
-	statefulVoteEncEnabled atomic.Bool
-	statefulVoteDecEnabled atomic.Bool
-	statefulVoteTableSize  uint
-	statefulVoteEnc        *vpack.StatefulEncoder
-	statefulVoteDec        *vpack.StatefulDecoder
+	// stateful vote compression (if enabled).
+	// If either side encounters an error, or if we receive an abort, we disable
+	// stateful compression entirely and fall back to stateless AV traffic.
+	statefulVoteEnabled   atomic.Bool
+	statefulVoteTableSize uint
+	statefulVoteEnc       *vpack.StatefulEncoder
+	statefulVoteDec       *vpack.StatefulDecoder
 }
 
 func (c *wsPeerMsgCodec) switchOffStatefulVoteCompression() {
-	c.statefulVoteEncEnabled.Store(false)
-	c.statefulVoteDecEnabled.Store(false)
+	c.statefulVoteEnabled.Store(false)
 }
 
 type zstdProposalDecompressor struct{}
@@ -162,7 +158,7 @@ func (dec zstdProposalDecompressor) convert(data []byte) ([]byte, error) {
 // (nil, nil) if compression is not applicable,
 // (nil, vpError) if stateful compression fails (caller should send abort message).
 func (c *wsPeerMsgCodec) compress(tag protocol.Tag, data []byte) ([]byte, error) {
-	if tag == protocol.AgreementVoteTag && c.statefulVoteEncEnabled.Load() {
+	if tag == protocol.AgreementVoteTag && c.statefulVoteEnabled.Load() {
 		// Skip the tag bytes (first 2 bytes are the AV tag)
 		if len(data) < 2 {
 			return nil, nil
@@ -241,7 +237,7 @@ func (c *wsPeerMsgCodec) decompress(tag protocol.Tag, data []byte) ([]byte, erro
 			return nil, nil
 		}
 
-		if !c.statefulVoteDecEnabled.Load() {
+		if !c.statefulVoteEnabled.Load() {
 			c.log.Debugf("dropping VP message from %s: stateful decompression disabled", c.origin)
 			return nil, nil
 		}
@@ -302,8 +298,7 @@ func makeWsPeerMsgCodec(wp *wsPeer) *wsPeerMsgCodec {
 		wp.vpackVoteCompressionSupported() && wp.vpackStatefulCompressionSupported() {
 		tableSize := wp.getBestVpackTableSize()
 		if tableSize > 0 {
-			c.statefulVoteEncEnabled.Store(true)
-			c.statefulVoteDecEnabled.Store(true)
+			c.statefulVoteEnabled.Store(true)
 			c.statefulVoteTableSize = tableSize
 			wp.log.Debugf("Stateful compression negotiated with table size %d (our max: %d)", tableSize, wp.voteCompressionTableSize)
 		}

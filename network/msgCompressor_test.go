@@ -130,8 +130,7 @@ func TestMakeWsPeerMsgCodec_StatefulRequiresStateless(t *testing.T) {
 
 	// Stateful should not be enabled even though dynamic features are advertised
 	// because stateful requires stateless to work (VP → stateless → raw)
-	require.False(t, codec.statefulVoteEncEnabled.Load(), "Stateful encoding should not be enabled without stateless support")
-	require.False(t, codec.statefulVoteDecEnabled.Load(), "Stateful decoding should not be enabled without stateless support")
+	require.False(t, codec.statefulVoteEnabled.Load(), "Stateful compression should not be enabled without stateless support")
 
 	// Now test with both stateless AND dynamic enabled
 	wp.features = pfCompressedVoteVpack | pfCompressedVoteVpackDynamic512
@@ -140,8 +139,7 @@ func TestMakeWsPeerMsgCodec_StatefulRequiresStateless(t *testing.T) {
 
 	// Both stateless and stateful should be enabled
 	require.True(t, codec.avdec.enabled, "Stateless decompression should be enabled when pfCompressedVoteVpack is advertised")
-	require.True(t, codec.statefulVoteEncEnabled.Load(), "Stateful encoding should be enabled when both stateless and dynamic are supported")
-	require.True(t, codec.statefulVoteDecEnabled.Load(), "Stateful decoding should be enabled when both stateless and dynamic are supported")
+	require.True(t, codec.statefulVoteEnabled.Load(), "Stateful compression should be enabled when both stateless and stateful features are supported")
 }
 
 type voteCompressionNetwork interface {
@@ -279,6 +277,22 @@ func makeP2PVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet, *vote
 		}
 }
 
+func TestVoteStatefulCompressionAbortMessage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	factories := []struct {
+		name    string
+		factory voteNetFactory
+	}{
+		{"Websocket", makeWebsocketVoteNets},
+		{"P2P", makeP2PVoteNets},
+	}
+
+	for _, f := range factories {
+		t.Run(f.name, func(t *testing.T) { testVoteStaticCompressionAbortMessage(t, f.factory) })
+	}
+}
+
 func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory) {
 	cfgA := defaultConfig
 	cfgA.GossipFanout = 1
@@ -293,6 +307,9 @@ func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory)
 
 	peerAtoB := waitForSinglePeer(t, netA)
 	peerBtoA := waitForSinglePeer(t, netB)
+	// Allow the test to inject VP-tagged messages directly despite MOI not advertising them.
+	peerAtoB.sendMessageTag[protocol.VotePackedTag] = true
+	peerBtoA.sendMessageTag[protocol.VotePackedTag] = true
 
 	vote := map[string]any{
 		"cred": map[string]any{"pf": crypto.VrfProof{1}},
@@ -316,31 +333,79 @@ func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory)
 		require.Fail(t, "timeout waiting for initial vote")
 	}
 
-	require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(), "VP encoding not established on A->B")
-	require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(), "VP decoding not established on A->B")
-	require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(), "VP encoding not established on B->A")
-	require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(), "VP decoding not established on B->A")
+	require.True(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression not established on A->B")
+	require.True(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression not established on B->A")
 
-	malformedVP := append([]byte(protocol.VotePackedTag), []byte{0x01, 0xFF, 0x42}...)
+	// Send an intentionally truncated VP frame (missing the second header byte)
+	// so stateful decompression fails deterministically.
+	malformedVP := append([]byte(protocol.VotePackedTag), byte(0x00))
 	require.True(t, peerBtoA.writeNonBlock(context.Background(), malformedVP, true, crypto.Digest{}, time.Now()),
 		"failed to enqueue malformed VP message")
 
 	require.Eventually(t, func() bool {
-		return !peerAtoB.msgCodec.statefulVoteDecEnabled.Load()
-	}, 2*time.Second, 50*time.Millisecond, "VP decoding not disabled on A->B after malformed VP")
+		return !peerAtoB.msgCodec.statefulVoteEnabled.Load()
+	}, 2*time.Second, 50*time.Millisecond, "Stateful compression not disabled on A->B after malformed VP")
 
 	require.Eventually(t, func() bool {
-		return !peerBtoA.msgCodec.statefulVoteEncEnabled.Load()
-	}, 2*time.Second, 50*time.Millisecond, "VP encoding not disabled on B->A after decoder abort")
-	require.False(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(), "Stateful decoding should be disabled on B->A after abort")
-	require.False(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(), "Stateful encoding should be disabled on A->B after sending abort")
-	require.False(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(), "Stateful decoding should be disabled on A->B after sending abort")
+		return !peerBtoA.msgCodec.statefulVoteEnabled.Load()
+	}, 2*time.Second, 50*time.Millisecond, "Stateful compression not disabled on B->A after decoder abort")
+	require.False(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled on B->A after abort")
+	require.False(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled on A->B after sending abort")
 
 	require.Len(t, netA.network.GetPeers(PeersConnectedIn), 1, "connection should still be alive after abort")
 	require.Len(t, netB.network.GetPeers(PeersConnectedOut), 1, "connection should still be alive after abort")
 }
 
-func testStatefulVoteCompressionNegotiation(t *testing.T, msgs [][]byte, expectCompressionAfter bool, factory voteNetFactory) {
+func TestVoteStatefulVoteCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vote := map[string]any{
+		"cred": map[string]any{"pf": crypto.VrfProof{1}},
+		"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
+		"sig": map[string]any{
+			"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
+			"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
+		},
+	}
+	vote2 := map[string]any{
+		"cred": map[string]any{"pf": crypto.VrfProof{2}},
+		"r":    map[string]any{"rnd": uint64(3), "snd": [32]byte{4}},
+		"sig": map[string]any{
+			"p": [32]byte{5}, "p1s": [64]byte{6}, "p2": [32]byte{7},
+			"p2s": [64]byte{8}, "ps": [64]byte{}, "s": [64]byte{10},
+		},
+	}
+
+	scenarios := []struct {
+		name                 string
+		msgs                 [][]byte
+		expectCompressionOff bool
+	}{
+		{"ValidVotes", [][]byte{protocol.EncodeReflect(vote), protocol.EncodeReflect(vote2)}, false},
+		{"InvalidVotes", [][]byte{[]byte("hello1"), []byte("hello2"), []byte("hello3")}, true},
+	}
+
+	factories := []struct {
+		name    string
+		factory voteNetFactory
+	}{
+		{"Websocket", makeWebsocketVoteNets},
+		{"P2P", makeP2PVoteNets},
+	}
+
+	for _, f := range factories {
+		t.Run(f.name, func(t *testing.T) {
+			for _, scenario := range scenarios {
+				t.Run(scenario.name, func(t *testing.T) {
+					testStatefulVoteCompression(t, scenario.msgs, !scenario.expectCompressionOff, f.factory)
+				})
+			}
+		})
+	}
+}
+
+// test negotiation with different advertised settings on both ends, plus valid and invalid votes propagate correctly
+func testStatefulVoteCompression(t *testing.T, msgs [][]byte, expectCompressionAfter bool, factory voteNetFactory) {
 	type testCase struct {
 		name          string
 		netATableSize uint
@@ -394,17 +459,13 @@ func testStatefulVoteCompressionNegotiation(t *testing.T, msgs [][]byte, expectC
 			peerBtoA := waitForSinglePeer(t, netB)
 
 			if tc.expectDynamic {
-				require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(), "A->B peer should have dynamic encoding enabled")
-				require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(), "A->B peer should have dynamic decoding enabled")
-				require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(), "B->A peer should have dynamic encoding enabled")
-				require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(), "B->A peer should have dynamic decoding enabled")
+				require.True(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "A->B peer should have stateful compression enabled")
+				require.True(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "B->A peer should have stateful compression enabled")
 				require.Equal(t, uint(tc.expectedSize), peerAtoB.getBestVpackTableSize(), "A->B peer should have expected table size")
 				require.Equal(t, uint(tc.expectedSize), peerBtoA.getBestVpackTableSize(), "B->A peer should have expected table size")
 			} else {
-				require.False(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(), "A->B peer should not have dynamic encoding enabled")
-				require.False(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(), "A->B peer should not have dynamic decoding enabled")
-				require.False(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(), "B->A peer should not have dynamic encoding enabled")
-				require.False(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(), "B->A peer should not have dynamic decoding enabled")
+				require.False(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "A->B peer should not have stateful compression enabled")
+				require.False(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "B->A peer should not have stateful compression enabled")
 			}
 
 			matcher := newMessageMatcher(t, msgs)
@@ -425,77 +486,12 @@ func testStatefulVoteCompressionNegotiation(t *testing.T, msgs [][]byte, expectC
 
 			if tc.expectDynamic {
 				if expectCompressionAfter {
-					require.True(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(), "Stateful encoding should still be enabled after sending valid votes")
-					require.True(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(), "Stateful decoding should still be enabled after sending valid votes")
-					require.True(t, peerBtoA.msgCodec.statefulVoteEncEnabled.Load(), "Stateful encoding should still be enabled after receiving valid votes")
-					require.True(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(), "Stateful decoding should still be enabled after receiving valid votes")
+					require.True(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should still be enabled after sending valid votes")
+					require.True(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should still be enabled after receiving valid votes")
 				} else {
-					require.False(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(), "Stateful encoding should be disabled after sending invalid messages")
+					require.False(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled after sending invalid messages")
+					require.False(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled after receiving abort from peer")
 				}
-			}
-		})
-	}
-}
-
-func TestVoteStatefulCompressionAbortMessage(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	factories := []struct {
-		name    string
-		factory voteNetFactory
-	}{
-		{"Websocket", makeWebsocketVoteNets},
-		{"P2P", makeP2PVoteNets},
-	}
-
-	for _, f := range factories {
-		t.Run(f.name, func(t *testing.T) { testVoteStaticCompressionAbortMessage(t, f.factory) })
-	}
-}
-
-func TestVoteStatefulVoteCompressionNegotiation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	vote := map[string]any{
-		"cred": map[string]any{"pf": crypto.VrfProof{1}},
-		"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
-		"sig": map[string]any{
-			"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
-			"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
-		},
-	}
-	vote2 := map[string]any{
-		"cred": map[string]any{"pf": crypto.VrfProof{2}},
-		"r":    map[string]any{"rnd": uint64(3), "snd": [32]byte{4}},
-		"sig": map[string]any{
-			"p": [32]byte{5}, "p1s": [64]byte{6}, "p2": [32]byte{7},
-			"p2s": [64]byte{8}, "ps": [64]byte{}, "s": [64]byte{10},
-		},
-	}
-
-	scenarios := []struct {
-		name                 string
-		msgs                 [][]byte
-		expectCompressionOff bool
-	}{
-		{"ValidVotes", [][]byte{protocol.EncodeReflect(vote), protocol.EncodeReflect(vote2)}, false},
-		{"InvalidVotes", [][]byte{[]byte("hello1"), []byte("hello2"), []byte("hello3")}, true},
-	}
-
-	factories := []struct {
-		name    string
-		factory voteNetFactory
-	}{
-		{"Websocket", makeWebsocketVoteNets},
-		{"P2P", makeP2PVoteNets},
-	}
-
-	for _, f := range factories {
-		t.Run(f.name, func(t *testing.T) {
-			for _, scenario := range scenarios {
-				t.Run(scenario.name, func(t *testing.T) {
-					testStatefulVoteCompressionNegotiation(t, scenario.msgs, !scenario.expectCompressionOff, f.factory)
-				})
 			}
 		})
 	}
