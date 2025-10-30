@@ -752,12 +752,7 @@ func (wp *wsPeer) sendControlMessage(sm sendMessage) (close bool, reason disconn
 func (wp *wsPeer) handleVPError(err error) (close bool, reason disconnectReason) {
 	networkVPAbortMessagesSent.Inc(nil)
 	abortMsg := append([]byte(protocol.VotePackedTag), voteCompressionAbortMessage)
-	sm := sendMessage{
-		data:         abortMsg,
-		enqueued:     time.Now(),
-		peerEnqueued: time.Now(),
-		ctx:          context.Background(),
-	}
+	sm := sendMessage{data: abortMsg, enqueued: time.Now(), peerEnqueued: time.Now(), ctx: context.Background()}
 
 	return wp.sendControlMessage(sm)
 }
@@ -835,6 +830,7 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 			var vcErr *voteCompressionError
 			if errors.As(err, &vcErr) {
 				networkVPAbortMessagesSent.Inc(nil)
+				wp.msgCodec.switchOffStatefulVoteCompression()
 				abortMsg := append([]byte(protocol.VotePackedTag), voteCompressionAbortMessage)
 				_ = wp.conn.WriteMessage(websocket.BinaryMessage, abortMsg)
 				// Fall through to send original AV message below

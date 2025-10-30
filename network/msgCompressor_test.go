@@ -332,6 +332,9 @@ func testVoteDynamicCompressionAbortMessage(t *testing.T, factory voteNetFactory
 	require.Eventually(t, func() bool {
 		return !peerBtoA.msgCodec.statefulVoteEncEnabled.Load()
 	}, 2*time.Second, 50*time.Millisecond, "VP encoding not disabled on B->A after decoder abort")
+	require.False(t, peerBtoA.msgCodec.statefulVoteDecEnabled.Load(), "Stateful decoding should be disabled on B->A after abort")
+	require.False(t, peerAtoB.msgCodec.statefulVoteEncEnabled.Load(), "Stateful encoding should be disabled on A->B after sending abort")
+	require.False(t, peerAtoB.msgCodec.statefulVoteDecEnabled.Load(), "Stateful decoding should be disabled on A->B after sending abort")
 
 	require.Len(t, netA.network.GetPeers(PeersConnectedIn), 1, "connection should still be alive after abort")
 	require.Len(t, netB.network.GetPeers(PeersConnectedOut), 1, "connection should still be alive after abort")
