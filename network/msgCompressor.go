@@ -298,14 +298,14 @@ func makeWsPeerMsgCodec(wp *wsPeer) *wsPeerMsgCodec {
 	// Initialize stateful compression negotiation details if both nodes support it
 	// Stateful compression requires stateless compression to be available since VP messages
 	// decompress in two stages: VP → stateless-compressed → raw vote
-	if wp.enableVoteCompression && wp.voteCompressionDynamicTableSize > 0 &&
-		wp.vpackVoteCompressionSupported() && wp.vpackDynamicCompressionSupported() {
+	if wp.enableVoteCompression && wp.voteCompressionTableSize > 0 &&
+		wp.vpackVoteCompressionSupported() && wp.vpackStatefulCompressionSupported() {
 		tableSize := wp.getBestVpackTableSize()
 		if tableSize > 0 {
 			c.statefulVoteEncEnabled.Store(true)
 			c.statefulVoteDecEnabled.Store(true)
 			c.statefulVoteTableSize = tableSize
-			wp.log.Debugf("Stateful compression negotiated with table size %d (our max: %d)", tableSize, wp.voteCompressionDynamicTableSize)
+			wp.log.Debugf("Stateful compression negotiated with table size %d (our max: %d)", tableSize, wp.voteCompressionTableSize)
 		}
 	}
 

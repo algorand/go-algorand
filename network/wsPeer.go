@@ -242,8 +242,8 @@ type wsPeer struct {
 	// enableCompression specifies whether this node can compress or decompress votes (and whether it has advertised this)
 	enableVoteCompression bool
 
-	// voteCompressionDynamicTableSize is this node's configured dynamic table size (0 means disabled)
-	voteCompressionDynamicTableSize uint
+	// voteCompressionTableSize is this node's configured table size for stateful compression (0 means disabled)
+	voteCompressionTableSize uint
 
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
@@ -1133,7 +1133,7 @@ func (wp *wsPeer) vpackVoteCompressionSupported() bool {
 	return wp.features&pfCompressedVoteVpack != 0
 }
 
-func (wp *wsPeer) vpackDynamicCompressionSupported() bool {
+func (wp *wsPeer) vpackStatefulCompressionSupported() bool {
 	return wp.features&(pfCompressedVoteVpackDynamic1024|
 		pfCompressedVoteVpackDynamic512|
 		pfCompressedVoteVpackDynamic256|
@@ -1147,7 +1147,7 @@ func (wp *wsPeer) vpackDynamicCompressionSupported() bool {
 // This calculates the minimum between our max size and the peer's advertised max size.
 func (wp *wsPeer) getBestVpackTableSize() uint {
 	// Get our max size
-	ourMaxSize := wp.voteCompressionDynamicTableSize
+	ourMaxSize := wp.voteCompressionTableSize
 	if ourMaxSize == 0 {
 		return 0
 	}

@@ -120,7 +120,7 @@ func TestMakeWsPeerMsgCodec_StatefulRequiresStateless(t *testing.T) {
 	wp.wsPeerCore.log = logging.TestingLog(t)
 	wp.wsPeerCore.originAddress = "test-peer"
 	wp.enableVoteCompression = true
-	wp.voteCompressionDynamicTableSize = 512
+	wp.voteCompressionTableSize = 512
 	wp.features = pfCompressedVoteVpackDynamic512 // Dynamic enabled but NOT pfCompressedVoteVpack
 
 	codec := makeWsPeerMsgCodec(wp)
@@ -279,7 +279,7 @@ func makeP2PVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet, *vote
 		}
 }
 
-func testVoteDynamicCompressionAbortMessage(t *testing.T, factory voteNetFactory) {
+func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory) {
 	cfgA := defaultConfig
 	cfgA.GossipFanout = 1
 	cfgA.EnableVoteCompression = true
@@ -340,7 +340,7 @@ func testVoteDynamicCompressionAbortMessage(t *testing.T, factory voteNetFactory
 	require.Len(t, netB.network.GetPeers(PeersConnectedOut), 1, "connection should still be alive after abort")
 }
 
-func testVoteDynamicVoteCompressionNegotiation(t *testing.T, msgs [][]byte, expectCompressionAfter bool, factory voteNetFactory) {
+func testStatefulVoteCompressionNegotiation(t *testing.T, msgs [][]byte, expectCompressionAfter bool, factory voteNetFactory) {
 	type testCase struct {
 		name          string
 		netATableSize uint
@@ -437,7 +437,7 @@ func testVoteDynamicVoteCompressionNegotiation(t *testing.T, msgs [][]byte, expe
 	}
 }
 
-func TestVoteDynamicCompressionAbortMessage(t *testing.T) {
+func TestVoteStatefulCompressionAbortMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	factories := []struct {
@@ -449,11 +449,11 @@ func TestVoteDynamicCompressionAbortMessage(t *testing.T) {
 	}
 
 	for _, f := range factories {
-		t.Run(f.name, func(t *testing.T) { testVoteDynamicCompressionAbortMessage(t, f.factory) })
+		t.Run(f.name, func(t *testing.T) { testVoteStaticCompressionAbortMessage(t, f.factory) })
 	}
 }
 
-func TestVoteDynamicVoteCompressionNegotiation(t *testing.T) {
+func TestVoteStatefulVoteCompressionNegotiation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	vote := map[string]any{
@@ -494,7 +494,7 @@ func TestVoteDynamicVoteCompressionNegotiation(t *testing.T) {
 		t.Run(f.name, func(t *testing.T) {
 			for _, scenario := range scenarios {
 				t.Run(scenario.name, func(t *testing.T) {
-					testVoteDynamicVoteCompressionNegotiation(t, scenario.msgs, !scenario.expectCompressionOff, f.factory)
+					testStatefulVoteCompressionNegotiation(t, scenario.msgs, !scenario.expectCompressionOff, f.factory)
 				})
 			}
 		})

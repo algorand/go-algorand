@@ -1146,20 +1146,20 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	client, _ := wn.GetHTTPClient(trackedRequest.remoteAddress())
 	peer := &wsPeer{
-		wsPeerCore:                      makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
-		conn:                            wsPeerWebsocketConnImpl{conn},
-		outgoing:                        false,
-		InstanceName:                    trackedRequest.otherInstanceName,
-		incomingMsgFilter:               wn.incomingMsgFilter,
-		prioChallenge:                   challenge,
-		createTime:                      trackedRequest.created,
-		version:                         matchingVersion,
-		identity:                        peerID,
-		identityChallenge:               peerIDChallenge,
-		identityVerified:                atomic.Uint32{},
-		features:                        decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
-		enableVoteCompression:           wn.config.EnableVoteCompression,
-		voteCompressionDynamicTableSize: wn.voteCompressionDynamicTableSize,
+		wsPeerCore:               makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
+		conn:                     wsPeerWebsocketConnImpl{conn},
+		outgoing:                 false,
+		InstanceName:             trackedRequest.otherInstanceName,
+		incomingMsgFilter:        wn.incomingMsgFilter,
+		prioChallenge:            challenge,
+		createTime:               trackedRequest.created,
+		version:                  matchingVersion,
+		identity:                 peerID,
+		identityChallenge:        peerIDChallenge,
+		identityVerified:         atomic.Uint32{},
+		features:                 decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression:    wn.config.EnableVoteCompression,
+		voteCompressionTableSize: wn.voteCompressionDynamicTableSize,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	wn.log.Debugf("Server: client features '%s', decoded %x, our response '%s'", request.Header.Get(PeerFeaturesHeader), peer.features, responseHeader.Get(PeerFeaturesHeader))
@@ -2142,18 +2142,18 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 
 	client, _ := wn.GetHTTPClient(netAddr)
 	peer := &wsPeer{
-		wsPeerCore:                      makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
-		conn:                            wsPeerWebsocketConnImpl{conn},
-		outgoing:                        true,
-		incomingMsgFilter:               wn.incomingMsgFilter,
-		createTime:                      time.Now(),
-		connMonitor:                     wn.connPerfMonitor,
-		throttledOutgoingConnection:     throttledConnection,
-		version:                         matchingVersion,
-		identity:                        peerID,
-		features:                        decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
-		enableVoteCompression:           wn.config.EnableVoteCompression,
-		voteCompressionDynamicTableSize: wn.voteCompressionDynamicTableSize,
+		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
+		conn:                        wsPeerWebsocketConnImpl{conn},
+		outgoing:                    true,
+		incomingMsgFilter:           wn.incomingMsgFilter,
+		createTime:                  time.Now(),
+		connMonitor:                 wn.connPerfMonitor,
+		throttledOutgoingConnection: throttledConnection,
+		version:                     matchingVersion,
+		identity:                    peerID,
+		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression:       wn.config.EnableVoteCompression,
+		voteCompressionTableSize:    wn.voteCompressionDynamicTableSize,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 	wn.log.Debugf("Client: server features '%s', decoded %x", response.Header.Get(PeerFeaturesHeader), peer.features)

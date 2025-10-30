@@ -991,16 +991,16 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	}
 	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
-		wsPeerCore:                      peerCore,
-		conn:                            &wsPeerConnP2P{stream: stream},
-		outgoing:                        !incoming,
-		identity:                        netIdentPeerID,
-		peerType:                        peerTypeP2P,
-		TelemetryGUID:                   pmi.telemetryID,
-		InstanceName:                    pmi.instanceName,
-		features:                        decodePeerFeatures(pmi.version, pmi.features),
-		enableVoteCompression:           n.config.EnableVoteCompression,
-		voteCompressionDynamicTableSize: n.voteCompressionDynamicTableSize,
+		wsPeerCore:               peerCore,
+		conn:                     &wsPeerConnP2P{stream: stream},
+		outgoing:                 !incoming,
+		identity:                 netIdentPeerID,
+		peerType:                 peerTypeP2P,
+		TelemetryGUID:            pmi.telemetryID,
+		InstanceName:             pmi.instanceName,
+		features:                 decodePeerFeatures(pmi.version, pmi.features),
+		enableVoteCompression:    n.config.EnableVoteCompression,
+		voteCompressionTableSize: n.voteCompressionDynamicTableSize,
 	}
 	if !incoming {
 		throttledConnection := false
