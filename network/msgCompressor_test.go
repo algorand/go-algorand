@@ -373,12 +373,14 @@ func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory,
 		protocol.EncodeReflect(sampleVote2),
 		protocol.EncodeReflect(sampleVote3),
 	}
+	// some subtests might expect extra messages to appear to test "pass through" error handling
 	allVotes := append([][]byte{voteData}, extraMessages...)
 	allVotes = append(allVotes, fallbackVotes...)
 	matcher := newMessageMatcher(t, allVotes)
 	allDone := matcher.done
 	netB.network.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: matcher}})
 
+	// send first (valid) vote
 	require.NoError(t, netA.network.Broadcast(context.Background(), protocol.AgreementVoteTag, voteData, true, nil))
 
 	require.Eventually(t, func() bool {
@@ -387,11 +389,13 @@ func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory,
 		return len(matcher.received) >= 1
 	}, 2*time.Second, 50*time.Millisecond, "timeout waiting for initial vote")
 
-	require.True(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression not established on A->B")
-	require.True(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression not established on B->A")
+	assert.True(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression not established on A->B")
+	assert.True(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression not established on B->A")
 
+	// induce some kind of error
 	induce(t, peerAtoB, peerBtoA)
 
+	// stateful should be disabled on both sides after abort, but connection should stay up
 	require.Eventually(t, func() bool {
 		return !peerAtoB.msgCodec.statefulVoteEnabled.Load()
 	}, 2*time.Second, 50*time.Millisecond, "Stateful compression not disabled on A->B after abort trigger")
@@ -399,16 +403,18 @@ func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory,
 	require.Eventually(t, func() bool {
 		return !peerBtoA.msgCodec.statefulVoteEnabled.Load()
 	}, 2*time.Second, 50*time.Millisecond, "Stateful compression not disabled on B->A after abort trigger")
-	require.False(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled on B->A after abort")
-	require.False(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled on A->B after sending abort")
+	assert.False(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled on B->A after abort")
+	assert.False(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled on A->B after sending abort")
 
 	require.Len(t, netA.network.GetPeers(PeersConnectedIn), 1, "connection should still be alive after abort")
 	require.Len(t, netB.network.GetPeers(PeersConnectedOut), 1, "connection should still be alive after abort")
 
+	// send through some more votes, just to show they still get through
 	for _, msg := range fallbackVotes {
 		require.NoError(t, netA.network.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil))
 	}
 
+	// assert the whole sequence was received on the other side
 	select {
 	case <-allDone:
 	case <-time.After(2 * time.Second):
