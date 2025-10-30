@@ -1227,34 +1227,25 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 	}
 
 	var features peerFeatureFlag
-	parts := strings.SplitSeq(announcedFeatures, ",")
-	for part := range parts {
-		part = strings.TrimSpace(part)
-		if part == peerFeatureProposalCompression {
+	for f := range strings.SplitSeq(announcedFeatures, ",") {
+		switch strings.TrimSpace(f) {
+		case peerFeatureProposalCompression:
 			features |= pfCompressedProposal
-		}
-		if part == peerFeatureVoteVpackCompression {
+		case peerFeatureVoteVpackCompression:
 			features |= pfCompressedVoteVpack
-		}
-		if part == peerFeatureVoteVpackStateful1024 {
+		case peerFeatureVoteVpackStateful1024:
 			features |= pfCompressedVoteVpackStateful1024
-		}
-		if part == peerFeatureVoteVpackStateful512 {
+		case peerFeatureVoteVpackStateful512:
 			features |= pfCompressedVoteVpackStateful512
-		}
-		if part == peerFeatureVoteVpackStateful256 {
+		case peerFeatureVoteVpackStateful256:
 			features |= pfCompressedVoteVpackStateful256
-		}
-		if part == peerFeatureVoteVpackStateful128 {
+		case peerFeatureVoteVpackStateful128:
 			features |= pfCompressedVoteVpackStateful128
-		}
-		if part == peerFeatureVoteVpackStateful64 {
+		case peerFeatureVoteVpackStateful64:
 			features |= pfCompressedVoteVpackStateful64
-		}
-		if part == peerFeatureVoteVpackStateful32 {
+		case peerFeatureVoteVpackStateful32:
 			features |= pfCompressedVoteVpackStateful32
-		}
-		if part == peerFeatureVoteVpackStateful16 {
+		case peerFeatureVoteVpackStateful16:
 			features |= pfCompressedVoteVpackStateful16
 		}
 	}
