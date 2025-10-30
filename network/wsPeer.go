@@ -78,7 +78,6 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 	protocol.TxnTag:               true,
 	protocol.UniEnsBlockReqTag:    true,
 	protocol.VoteBundleTag:        true,
-	protocol.VotePackedTag:        true, // Statefully compressed votes
 }
 
 // interface allows substituting debug implementation for *websocket.Conn
