@@ -344,7 +344,6 @@ func TestVoteStatefulCompressionAbortMessage(t *testing.T) {
 	for _, f := range factories {
 		t.Run(f.name, func(t *testing.T) {
 			for _, scenario := range scenarios {
-				scenario := scenario
 				t.Run(scenario.name, func(t *testing.T) {
 					testVoteStaticCompressionAbortMessage(t, f.factory, scenario.induce, scenario.extraMessages)
 				})
