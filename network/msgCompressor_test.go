@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,33 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	sampleVote1 = map[string]any{
+		"cred": map[string]any{"pf": crypto.VrfProof{1}},
+		"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
+		"sig": map[string]any{
+			"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
+			"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
+		},
+	}
+	sampleVote2 = map[string]any{
+		"cred": map[string]any{"pf": crypto.VrfProof{2}},
+		"r":    map[string]any{"rnd": uint64(3), "snd": [32]byte{4}},
+		"sig": map[string]any{
+			"p": [32]byte{5}, "p1s": [64]byte{6}, "p2": [32]byte{7},
+			"p2s": [64]byte{8}, "ps": [64]byte{}, "s": [64]byte{10},
+		},
+	}
+	sampleVote3 = map[string]any{
+		"cred": map[string]any{"pf": crypto.VrfProof{3}},
+		"r":    map[string]any{"rnd": uint64(4), "snd": [32]byte{5}},
+		"sig": map[string]any{
+			"p": [32]byte{6}, "p1s": [64]byte{7}, "p2": [32]byte{8},
+			"p2s": [64]byte{9}, "ps": [64]byte{}, "s": [64]byte{11},
+		},
+	}
 )
 
 func TestZstdDecompress(t *testing.T) {
@@ -196,10 +224,7 @@ func makeWebsocketVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet,
 				if len(peers) != 1 {
 					return nil
 				}
-				if wp, ok := peers[0].(*wsPeer); ok {
-					return wp
-				}
-				return nil
+				return peers[0].(*wsPeer)
 			},
 		}, &voteTestNet{
 			name:    "websocket-B",
@@ -210,10 +235,7 @@ func makeWebsocketVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet,
 				if len(peers) != 1 {
 					return nil
 				}
-				if wp, ok := peers[0].(*wsPeer); ok {
-					return wp
-				}
-				return nil
+				return peers[0].(*wsPeer)
 			},
 		}
 }
@@ -280,6 +302,36 @@ func makeP2PVoteNets(t *testing.T, cfgA, cfgB config.Local) (*voteTestNet, *vote
 func TestVoteStatefulCompressionAbortMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	scenarios := []struct {
+		name          string
+		induce        func(t *testing.T, peerAtoB, peerBtoA *wsPeer)
+		extraMessages [][]byte
+	}{{
+		name: "decoder_abort",
+		induce: func(t *testing.T, peerAtoB, peerBtoA *wsPeer) {
+			malformedVP := append([]byte(protocol.VotePackedTag), byte(0x00))
+			require.True(t, peerBtoA.writeNonBlock(context.Background(), malformedVP, true, crypto.Digest{}, time.Now()),
+				"failed to enqueue malformed VP message")
+		},
+	}, {
+		name: "encoder_abort",
+		induce: func(t *testing.T, peerAtoB, peerBtoA *wsPeer) {
+			// pretend to VP abort w/out a message
+			peerAtoB.msgCodec.switchOffStatefulVoteCompression()
+			close, _ := peerAtoB.handleVPError(&voteCompressionError{err: errors.New("forced encoder failure")})
+			require.False(t, close, "encoder abort should not close connection")
+		},
+	}, {
+		name: "encoder_hello",
+		induce: func(t *testing.T, peerAtoB, peerBtoA *wsPeer) {
+			// send a bad AV message that triggers VP abort, but passes through anyway to the other side
+			helloAV := append([]byte(protocol.AgreementVoteTag), "hello"...)
+			require.True(t, peerAtoB.writeNonBlock(context.Background(), helloAV, true, crypto.Digest{}, time.Now()),
+				"failed to enqueue malformed AV message")
+		},
+		extraMessages: [][]byte{[]byte("hello")},
+	}}
+
 	factories := []struct {
 		name    string
 		factory voteNetFactory
@@ -289,11 +341,18 @@ func TestVoteStatefulCompressionAbortMessage(t *testing.T) {
 	}
 
 	for _, f := range factories {
-		t.Run(f.name, func(t *testing.T) { testVoteStaticCompressionAbortMessage(t, f.factory) })
+		t.Run(f.name, func(t *testing.T) {
+			for _, scenario := range scenarios {
+				scenario := scenario
+				t.Run(scenario.name, func(t *testing.T) {
+					testVoteStaticCompressionAbortMessage(t, f.factory, scenario.induce, scenario.extraMessages)
+				})
+			}
+		})
 	}
 }
 
-func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory) {
+func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory, induce func(t *testing.T, peerAtoB, peerBtoA *wsPeer), extraMessages [][]byte) {
 	cfgA := defaultConfig
 	cfgA.GossipFanout = 1
 	cfgA.EnableVoteCompression = true
@@ -307,81 +366,65 @@ func testVoteStaticCompressionAbortMessage(t *testing.T, factory voteNetFactory)
 
 	peerAtoB := waitForSinglePeer(t, netA)
 	peerBtoA := waitForSinglePeer(t, netB)
-	// Allow the test to inject VP-tagged messages directly despite MOI not advertising them.
-	peerAtoB.sendMessageTag[protocol.VotePackedTag] = true
-	peerBtoA.sendMessageTag[protocol.VotePackedTag] = true
 
-	vote := map[string]any{
-		"cred": map[string]any{"pf": crypto.VrfProof{1}},
-		"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
-		"sig": map[string]any{
-			"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
-			"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
-		},
+	voteData := protocol.EncodeReflect(sampleVote1)
+	fallbackVotes := [][]byte{
+		protocol.EncodeReflect(sampleVote2),
+		protocol.EncodeReflect(sampleVote3),
 	}
-	voteData := protocol.EncodeReflect(vote)
-
-	counter := newMessageCounter(t, 1)
-	counterDone := counter.done
-	netB.network.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: counter}})
+	allVotes := append([][]byte{voteData}, extraMessages...)
+	allVotes = append(allVotes, fallbackVotes...)
+	matcher := newMessageMatcher(t, allVotes)
+	allDone := matcher.done
+	netB.network.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: matcher}})
 
 	require.NoError(t, netA.network.Broadcast(context.Background(), protocol.AgreementVoteTag, voteData, true, nil))
 
-	select {
-	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		require.Fail(t, "timeout waiting for initial vote")
-	}
+	require.Eventually(t, func() bool {
+		matcher.lock.Lock()
+		defer matcher.lock.Unlock()
+		return len(matcher.received) >= 1
+	}, 2*time.Second, 50*time.Millisecond, "timeout waiting for initial vote")
 
 	require.True(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression not established on A->B")
 	require.True(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression not established on B->A")
 
-	// Send an intentionally truncated VP frame (missing the second header byte)
-	// so stateful decompression fails deterministically.
-	malformedVP := append([]byte(protocol.VotePackedTag), byte(0x00))
-	require.True(t, peerBtoA.writeNonBlock(context.Background(), malformedVP, true, crypto.Digest{}, time.Now()),
-		"failed to enqueue malformed VP message")
+	induce(t, peerAtoB, peerBtoA)
 
 	require.Eventually(t, func() bool {
 		return !peerAtoB.msgCodec.statefulVoteEnabled.Load()
-	}, 2*time.Second, 50*time.Millisecond, "Stateful compression not disabled on A->B after malformed VP")
+	}, 2*time.Second, 50*time.Millisecond, "Stateful compression not disabled on A->B after abort trigger")
 
 	require.Eventually(t, func() bool {
 		return !peerBtoA.msgCodec.statefulVoteEnabled.Load()
-	}, 2*time.Second, 50*time.Millisecond, "Stateful compression not disabled on B->A after decoder abort")
+	}, 2*time.Second, 50*time.Millisecond, "Stateful compression not disabled on B->A after abort trigger")
 	require.False(t, peerBtoA.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled on B->A after abort")
 	require.False(t, peerAtoB.msgCodec.statefulVoteEnabled.Load(), "Stateful compression should be disabled on A->B after sending abort")
 
 	require.Len(t, netA.network.GetPeers(PeersConnectedIn), 1, "connection should still be alive after abort")
 	require.Len(t, netB.network.GetPeers(PeersConnectedOut), 1, "connection should still be alive after abort")
+
+	for _, msg := range fallbackVotes {
+		require.NoError(t, netA.network.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil))
+	}
+
+	select {
+	case <-allDone:
+	case <-time.After(2 * time.Second):
+		require.Fail(t, "timeout waiting for fallback votes after abort")
+	}
+	require.True(t, matcher.Match(), "received votes mismatch after abort")
 }
 
 func TestVoteStatefulVoteCompression(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	vote := map[string]any{
-		"cred": map[string]any{"pf": crypto.VrfProof{1}},
-		"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
-		"sig": map[string]any{
-			"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
-			"p2s": [64]byte{7}, "ps": [64]byte{}, "s": [64]byte{9},
-		},
-	}
-	vote2 := map[string]any{
-		"cred": map[string]any{"pf": crypto.VrfProof{2}},
-		"r":    map[string]any{"rnd": uint64(3), "snd": [32]byte{4}},
-		"sig": map[string]any{
-			"p": [32]byte{5}, "p1s": [64]byte{6}, "p2": [32]byte{7},
-			"p2s": [64]byte{8}, "ps": [64]byte{}, "s": [64]byte{10},
-		},
-	}
 
 	scenarios := []struct {
 		name                 string
 		msgs                 [][]byte
 		expectCompressionOff bool
 	}{
-		{"ValidVotes", [][]byte{protocol.EncodeReflect(vote), protocol.EncodeReflect(vote2)}, false},
+		{"ValidVotes", [][]byte{protocol.EncodeReflect(sampleVote1), protocol.EncodeReflect(sampleVote2)}, false},
 		{"InvalidVotes", [][]byte{[]byte("hello1"), []byte("hello2"), []byte("hello3")}, true},
 	}
 
