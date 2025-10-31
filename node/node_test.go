@@ -404,9 +404,8 @@ func TestSimpleUpgrade(t *testing.T) {
 		t.Skip("Test takes ~50 seconds.")
 	}
 
-	if (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" && runtime.GOOS != "darwin") &&
-		strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
-		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
+	if runtime.GOOS == "darwin" && strings.ToUpper(os.Getenv("GITHUB_ACTIONS")) == "TRUE" {
+		t.Skip("Test is too heavy for macOS builder running in parallel with other packages")
 	}
 
 	// ConsensusTest0 is a version of ConsensusV0 used for testing
