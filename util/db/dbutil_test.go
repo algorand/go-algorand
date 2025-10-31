@@ -417,8 +417,8 @@ func TestSetSynchronousMode(t *testing.T) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	cancelFunc()
 
-	require.Error(t, context.Canceled, setSynchrounousModeHelper(true, ctx, SynchronousModeOff, false))
-	require.Error(t, context.Canceled, setSynchrounousModeHelper(false, ctx, SynchronousModeOff, false))
+	require.ErrorIs(t, context.Canceled, setSynchrounousModeHelper(true, ctx, SynchronousModeOff, false))
+	require.ErrorIs(t, context.Canceled, setSynchrounousModeHelper(false, ctx, SynchronousModeOff, false))
 
 	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeOff-1, false).Error(), "invalid value")
 	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeExtra+1, false).Error(), "invalid value")
