@@ -19,7 +19,6 @@ package ledger
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1761,7 +1760,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	_, err = l.BlockHdr(basics.Round(proto.StateProofInterval))
 	require.Error(t, err)
 	expectedErr := &ledgercore.ErrNoEntry{}
-	require.True(t, errors.As(err, expectedErr), fmt.Sprintf("got error %s", err))
+	require.ErrorAs(t, err, expectedErr, fmt.Sprintf("got error %s", err))
 
 	l.acctsOnline.voters.votersMu.Lock()
 	for k := range l.acctsOnline.voters.votersForRoundCache {

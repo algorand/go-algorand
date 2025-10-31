@@ -20,7 +20,9 @@ linters:
     - paralleltest
     - reassign
     - revive
+    #- sqlclosecheck
     - staticcheck
+    - testifylint
     - unused
   
   settings:
@@ -95,6 +97,10 @@ linters:
         - '-ST1005' # ignore "error strings should not be capitalized"
         - '-QF1001' # ignore De Morgan's law suggestions
         - '-QF1003' # ignore suggestions to replace if/else chain with switch
+    testifylint:
+      enable:
+        - error-is-as
+      disable-all: true
 
   exclusions:
     generated: lax

@@ -2345,13 +2345,13 @@ func TestMakeTxHandlerErrors(t *testing.T) {
 		nil, nil, nil, &mocks.MockNetwork{}, config.Local{},
 	}
 	_, err := MakeTxHandler(opts)
-	require.Error(t, err, ErrInvalidTxPool)
+	require.ErrorIs(t, err, ErrInvalidTxPool)
 
 	opts = TxHandlerOpts{
 		&pools.TransactionPool{}, nil, nil, &mocks.MockNetwork{}, config.Local{},
 	}
 	_, err = MakeTxHandler(opts)
-	require.Error(t, err, ErrInvalidLedger)
+	require.ErrorIs(t, err, ErrInvalidLedger)
 
 	// it is not possible to test MakeStreamVerifier returning an error, because it is not possible to
 	// get the ledger to return an error for returining the header of its latest round
