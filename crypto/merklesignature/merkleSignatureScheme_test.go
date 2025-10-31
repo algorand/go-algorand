@@ -18,7 +18,6 @@ package merklesignature
 
 import (
 	"crypto/rand"
-	"errors"
 	"math"
 	"testing"
 
@@ -329,7 +328,7 @@ func TestBadRound(t *testing.T) {
 	err = signer.GetVerifier().VerifyBytes(start+2, msg, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
-	a.True(errors.Is(err, ErrSignatureSchemeVerificationFailed))
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {

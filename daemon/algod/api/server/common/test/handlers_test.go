@@ -17,7 +17,6 @@
 package test
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,11 +33,11 @@ import (
 
 func mockNodeStatusInRangeHelper(
 	t *testing.T, statusCode MockNodeCatchupStatus,
-	expectedErr error, expectedStatus node.StatusReport) {
+	expectedErr string, expectedStatus node.StatusReport) {
 	mockNodeInstance := makeMockNode(statusCode)
 	status, err := mockNodeInstance.Status()
-	if expectedErr != nil {
-		require.Error(t, err, expectedErr)
+	if expectedErr != "" {
+		require.EqualError(t, err, expectedErr)
 	} else {
 		require.Equal(t, expectedStatus, status)
 	}
@@ -48,13 +47,13 @@ func TestMockNodeStatus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	mockNodeStatusInRangeHelper(
-		t, CaughtUpAndReady, nil, cannedStatusReportCaughtUpAndReadyGolden)
+		t, CaughtUpAndReady, "", cannedStatusReportCaughtUpAndReadyGolden)
 	mockNodeStatusInRangeHelper(
-		t, CatchingUpFast, nil, cannedStatusReportCatchingUpFastGolden)
+		t, CatchingUpFast, "", cannedStatusReportCatchingUpFastGolden)
 	mockNodeStatusInRangeHelper(
-		t, StoppedAtUnsupported, nil, cannedStatusReportStoppedAtUnsupportedGolden)
+		t, StoppedAtUnsupported, "", cannedStatusReportStoppedAtUnsupportedGolden)
 	mockNodeStatusInRangeHelper(
-		t, 399, fmt.Errorf("catchup status out of scope error"), node.StatusReport{})
+		t, 399, "catchup status out of scope error", node.StatusReport{})
 }
 
 func readyEndpointTestHelper(

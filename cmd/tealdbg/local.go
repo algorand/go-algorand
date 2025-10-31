@@ -90,12 +90,8 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, err
 
 	// if conversion failed report all intermediate decoding errors
 	if err != nil {
-		if err1 != nil {
-			log.Printf("Decoding as JSON txn failed: %s", err1.Error())
-		}
-		if err2 != nil {
-			log.Printf("Decoding as JSON txn group failed: %s", err2.Error())
-		}
+		log.Printf("Decoding as JSON txn failed: %v", err1)
+		log.Printf("Decoding as JSON txn group failed: %v", err2)
 	}
 
 	return
@@ -141,12 +137,8 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 
 	// if conversion failed report all intermediate decoding errors
 	if err != nil {
-		if err1 != nil {
-			log.Printf("Decoding as JSON record failed: %s", err1.Error())
-		}
-		if err2 != nil {
-			log.Printf("Decoding as JSON array of records failed: %s", err2.Error())
-		}
+		log.Printf("Decoding as JSON record failed: %v", err1)
+		log.Printf("Decoding as JSON array of records failed: %v", err2)
 	}
 
 	return
