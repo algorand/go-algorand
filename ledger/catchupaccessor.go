@@ -253,10 +253,10 @@ const (
 	CatchpointCatchupStateBlocksDownload
 	// CatchpointCatchupStateSwitch indicates that we're switching to use the downloaded ledger/blocks content
 	CatchpointCatchupStateSwitch
-
-	// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
-	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 )
+
+// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
+const catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 
 // CatchupAccessorClientLedger represents ledger interface needed for catchpoint accessor clients
 type CatchupAccessorClientLedger interface {
