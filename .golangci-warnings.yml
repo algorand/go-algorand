@@ -6,6 +6,7 @@ linters:
   enable:
     - gosec
     - partitiontest
+    - errortype
   settings:
     gosec:
       excludes: [G101, G103, G104, G107, G112, G114, G115, G202, G204, G301, G302, G303, G304, G306, G307, G404]
@@ -13,6 +14,16 @@ linters:
       partitiontest:
         type: "module"
         description: This custom linter ensures test functions call 'partitiontest.PartitionTest(t)'
+      errortype:
+        type: module
+        description: "errortype helps prevent subtle bugs in error handling."
+        original-url: "https://fillmore-labs.com/errortype"
+        settings:
+          style-check: false
+          deep-is-check: true
+          check-is: true
+          unchecked-assert: false
+          check-unused: true
   exclusions:
     generated: lax
     rules:

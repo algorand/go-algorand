@@ -27,6 +27,17 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
+// Verify each custom error type implements the error interface, and declare which are pointer/value receivers.
+var (
+	_ error = (*TxnNotWellFormedError)(nil)
+	_ error = (*TransactionInLedgerError)(nil)
+	_ error = (*LeaseInLedgerError)(nil)
+	_ error = BlockInLedgerError{}
+	_ error = ErrNoEntry{}
+	_ error = ErrNonSequentialBlockEval{}
+	_ error = (*TxGroupMalformedError)(nil)
+)
+
 // TxnNotWellFormedError indicates a transaction was not well-formed when evaluated by the BlockEvaluator
 //
 //msgp:ignore TxnNotWellFormedError
@@ -44,7 +55,7 @@ type TransactionInLedgerError struct {
 }
 
 // Error satisfies builtin interface `error`
-func (tile TransactionInLedgerError) Error() string {
+func (tile *TransactionInLedgerError) Error() string {
 	return fmt.Sprintf("transaction already in ledger: %v", tile.Txid)
 }
 
