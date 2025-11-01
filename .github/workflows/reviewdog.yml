@@ -1,6 +1,6 @@
 name: "ReviewDog workflow"
 env:
-  GOLANGCI_LINT_VERSION: "v2.5.1-0.20251021235302-b99da877a247"
+  GOLANGCI_LINT_VERSION: "v2.6.0"
 on:
   push:
     branches:

@@ -347,8 +347,8 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	if cfg.EnableDHTProviders {
 		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, net.genesisInfo.NetworkID, net.log, bootstrapper.BootstrapFunc)
 		if err0 != nil {
-			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
-			return nil, err
+			log.Errorf("Failed to create dht node capabilities discovery: %v", err0)
+			return nil, err0
 		}
 		net.capabilitiesDiscovery = disc
 	}

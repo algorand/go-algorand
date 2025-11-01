@@ -5,17 +5,24 @@ run:
 linters:
   default: none
   enable:
+    - asciicheck
+    - bidichk
     - copyloopvar
     - dupword
     - errcheck
     - govet
     - ineffassign
+    - iotamixing
     - misspell
     - nilerr
+    - nilnesserr
     - nolintlint
     - paralleltest
+    - reassign
     - revive
+    #- sqlclosecheck
     - staticcheck
+    - testifylint
     - unused
   
   settings:
@@ -32,13 +39,16 @@ linters:
     govet:
       # Enables these linters in addition to the default ones.
       enable:
+        - nilness
+        - reflectvaluecompare
         - shadow
+        - sortslice
+        - waitgroup
       disable:
         - buildtag
       settings:
         printf:
           # Comma-separated list of print function names to check (in addition to default, see `go tool vet help printf`).
-          # Default: []
           funcs:
             - (github.com/algorand/go-algorand/logging.Logger).Debugf
             - (github.com/algorand/go-algorand/logging.Logger).Infof
@@ -87,6 +97,10 @@ linters:
         - '-ST1005' # ignore "error strings should not be capitalized"
         - '-QF1001' # ignore De Morgan's law suggestions
         - '-QF1003' # ignore suggestions to replace if/else chain with switch
+    testifylint:
+      enable:
+        - error-is-as
+      disable-all: true
 
   exclusions:
     generated: lax
@@ -132,15 +146,6 @@ linters:
         text: '^empty-block: this block is empty, you can remove it'
       - linters: revive
         text: '^superfluous-else: if block ends with .* so drop this else and outdent its block'
-      # Comment this block out for testing linters
-      - linters:
-          - errcheck
-          - govet
-          - ineffassign
-          - misspell
-          - revive
-          - unused
-        path: test/linttest/lintissues\.go
 
 issues:
   # Work our way back over time to be clean against all these

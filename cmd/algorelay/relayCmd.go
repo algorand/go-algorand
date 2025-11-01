@@ -524,9 +524,6 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 // Returns an array of names starting with the target ip/name and ending with the outermost reference
 func getTargetDNSChain(nameEntries map[string]string, target string) (names []string, err error) {
 	target = strings.ToLower(target)
-	if err != nil {
-		return
-	}
 
 	names = append(names, target)
 	for {

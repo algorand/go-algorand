@@ -439,15 +439,17 @@ func (p *puppet) collectMetrics() {
 				fmt.Fprintf(os.Stderr, "Failed to read '%s' : %v\n", telemetryHostFile, err)
 			} else {
 				metricFetcher := makePromMetricFetcher(string(hostNameBytes))
-				var err error
-				if results, err1 := metricFetcher.getMetric(metric.Query); err1 == nil {
-					if result, err1 := metricFetcher.getSingleValue(results); err1 == nil {
-						p.metrics[metric.Name] = result
-					}
-				}
+				results, err := metricFetcher.getMetric(metric.Query)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to read metric '%s' : %v\n", metric.Name, err)
+					continue
 				}
+				result, err := metricFetcher.getSingleValue(results)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to parse metric '%s' : %v\n", metric.Name, err)
+					continue
+				}
+				p.metrics[metric.Name] = result
 			}
 		default:
 			if verbose {
