@@ -839,6 +839,8 @@ func TestMaxSizesCorrect(t *testing.T) {
 	 */ ////////////////////////////////////////////////
 	avSize := uint64(agreement.UnauthenticatedVoteMaxSize())
 	require.Equal(t, avSize, protocol.AgreementVoteTag.MaxMessageSize())
+	// VP tag should have the same max size as AV tag
+	require.Equal(t, avSize, protocol.VotePackedTag.MaxMessageSize())
 	miSize := uint64(network.MessageOfInterestMaxSize())
 	require.Equal(t, miSize, protocol.MsgOfInterestTag.MaxMessageSize())
 	npSize := uint64(NetPrioResponseSignedMaxSize())

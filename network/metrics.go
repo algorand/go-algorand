@@ -117,6 +117,15 @@ var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricNa
 
 // var networkP2PGossipSubSentMsgs = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_message_sent", Description: "Number of complete messages that were sent to the network through gossipsub"})
 
+var networkVoteBroadcastCompressedBytes = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vote_compressed_bytes_broadcast_total", Description: "Total AV message bytes broadcast after applying stateless compression"})
+var networkVoteBroadcastUncompressedBytes = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vote_uncompressed_bytes_broadcast_total", Description: "Total AV message bytes broadcast before applying stateless compression"})
+var networkVPCompressionErrors = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_compression_errors_total", Description: "Total number of stateful vote compression errors"})
+var networkVPDecompressionErrors = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_decompression_errors_total", Description: "Total number of stateful vote decompression errors"})
+var networkVPAbortMessagesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_abort_messages_sent_total", Description: "Total number of vpack abort messages sent to peers"})
+var networkVPAbortMessagesReceived = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_abort_messages_received_total", Description: "Total number of vpack abort messages received from peers"})
+var networkVPCompressedBytesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_compressed_bytes_sent_total", Description: "Total VP message bytes sent, after compressing AV to VP messages"})
+var networkVPUncompressedBytesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_uncompressed_bytes_sent_total", Description: "Total VP message bytes sent, before compressing AV to VP messages"})
+
 var _ = pubsub.RawTracer(pubsubMetricsTracer{})
 
 // pubsubMetricsTracer is a tracer for pubsub events used to track metrics.

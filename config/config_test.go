@@ -861,6 +861,10 @@ func (l tLogger) Infof(fmts string, args ...interface{}) {
 	l.t.Logf(fmts, args...)
 }
 
+func (l tLogger) Warnf(fmts string, args ...interface{}) {
+	l.t.Logf(fmts, args...)
+}
+
 // TestEnsureAndResolveGenesisDirs confirms that paths provided in the config are resolved to absolute paths and are created if relevant
 func TestEnsureAndResolveGenesisDirs(t *testing.T) {
 	partitiontest.PartitionTest(t)

@@ -56,10 +56,13 @@ type P2PNetwork struct {
 	log         logging.Logger
 	config      config.Local
 	genesisInfo GenesisInfo
-	ctx         context.Context
-	ctxCancel   context.CancelFunc
-	peerStats   map[peer.ID]*p2pPeerStats
-	peerStatsMu deadlock.Mutex
+	// voteCompressionTableSize is the validated/normalized table size for VP compression.
+	// It is set during setup() by validating config.StatefulVoteCompressionTableSize.
+	voteCompressionTableSize uint
+	ctx                      context.Context
+	ctxCancel                context.CancelFunc
+	peerStats                map[peer.ID]*p2pPeerStats
+	peerStatsMu              deadlock.Mutex
 
 	wg sync.WaitGroup
 
@@ -363,6 +366,9 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 }
 
 func (n *P2PNetwork) setup() error {
+	// Validate and normalize vote compression table size
+	n.voteCompressionTableSize = n.config.NormalizedVoteCompressionTableSize(n.log)
+
 	if n.broadcaster.slowWritingPeerMonitorInterval == 0 {
 		n.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
@@ -882,6 +888,16 @@ func (n *P2PNetwork) Config() config.Local {
 	return n.config
 }
 
+// StatefulVoteCompressionTableSize returns the validated/normalized vote compression table size.
+func (n *P2PNetwork) StatefulVoteCompressionTableSize() uint {
+	return n.voteCompressionTableSize
+}
+
+// VoteCompressionEnabled returns whether vote compression is enabled for this node.
+func (n *P2PNetwork) VoteCompressionEnabled() bool {
+	return n.config.EnableVoteCompression
+}
+
 // wsStreamHandler is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
 // TODO: remove after consensus v41 takes effect.
@@ -975,15 +991,16 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	}
 	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
-		wsPeerCore:            peerCore,
-		conn:                  &wsPeerConnP2P{stream: stream},
-		outgoing:              !incoming,
-		identity:              netIdentPeerID,
-		peerType:              peerTypeP2P,
-		TelemetryGUID:         pmi.telemetryID,
-		InstanceName:          pmi.instanceName,
-		features:              decodePeerFeatures(pmi.version, pmi.features),
-		enableVoteCompression: n.config.EnableVoteCompression,
+		wsPeerCore:               peerCore,
+		conn:                     &wsPeerConnP2P{stream: stream},
+		outgoing:                 !incoming,
+		identity:                 netIdentPeerID,
+		peerType:                 peerTypeP2P,
+		TelemetryGUID:            pmi.telemetryID,
+		InstanceName:             pmi.instanceName,
+		features:                 decodePeerFeatures(pmi.version, pmi.features),
+		enableVoteCompression:    n.config.EnableVoteCompression,
+		voteCompressionTableSize: n.voteCompressionTableSize,
 	}
 	if !incoming {
 		throttledConnection := false

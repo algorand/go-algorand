@@ -44,6 +44,7 @@ const (
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
 	//UniCatchupResTag   Tag = "UT" was used for wsfetcherservice
 	VoteBundleTag Tag = "VB"
+	VotePackedTag Tag = "VP" // Statefully compressed votes
 )
 
 // The following constants are overestimates in some cases but are reasonable upper bounds
@@ -54,7 +55,7 @@ const (
 const AgreementVoteTagMaxSize = 1228
 
 // MsgOfInterestTagMaxSize is the maximum size of a MsgOfInterestTag message
-const MsgOfInterestTagMaxSize = 45
+const MsgOfInterestTagMaxSize = 48
 
 // MsgDigestSkipTagMaxSize is the maximum size of a MsgDigestSkipTag message
 const MsgDigestSkipTagMaxSize = 69
@@ -103,6 +104,10 @@ const UniEnsBlockReqTagMaxSize = 67
 // Matches current network.MaxMessageLength
 const VoteBundleTagMaxSize = 6 * 1024 * 1024
 
+// VotePackedTagMaxSize is the maximum size of a VotePackedTag message (statefully compressed vote)
+// This is smaller than AgreementVoteTagMaxSize due to compression
+const VotePackedTagMaxSize = AgreementVoteTagMaxSize
+
 // MaxMessageSize returns the maximum size of a message for a given tag
 func (tag Tag) MaxMessageSize() uint64 {
 	switch tag {
@@ -128,6 +133,8 @@ func (tag Tag) MaxMessageSize() uint64 {
 		return UniEnsBlockReqTagMaxSize
 	case VoteBundleTag:
 		return VoteBundleTagMaxSize
+	case VotePackedTag:
+		return VotePackedTagMaxSize
 	default:
 		return 0 // Unknown tag
 	}
@@ -146,6 +153,7 @@ var TagList = []Tag{
 	TxnTag,
 	UniEnsBlockReqTag,
 	VoteBundleTag,
+	VotePackedTag,
 }
 
 // DeprecatedTagList contains tags that are no longer used, but may still show up in MsgOfInterest messages.
