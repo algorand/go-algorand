@@ -3123,6 +3123,11 @@
           "description": "\\[v\\] the number of updates to the application programs",
           "type": "integer",
           "x-go-type": "uint64"
+        },
+        "size-sponsor": {
+          "description": "\\[ss\\] the account responsible for extra pages and global state MBR",
+          "type": "string",
+          "x-algorand-format": "Address"
         }
       }
     },
@@ -3403,7 +3408,7 @@
     "Box": {
       "description": "Box name and its content.",
       "type": "object",
-      "required": ["round","name","value"],
+      "required": ["round", "name", "value"],
       "properties": {
         "round": {
           "description": "The round for which this information is relevant",
@@ -3425,9 +3430,7 @@
     "BoxDescriptor": {
       "description": "Box descriptor describes a Box.",
       "type": "object",
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "properties": {
         "name": {
           "description": "Base64 encoded box name",

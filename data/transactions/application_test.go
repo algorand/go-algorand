@@ -37,8 +37,7 @@ func TestResourceRefEmpty(t *testing.T) {
 	t.Parallel()
 
 	assert.True(t, ResourceRef{}.Empty())
-	for _, nz := range basics_testing.NearZeros(t, ResourceRef{}) {
-		rr := nz.(ResourceRef)
+	for _, rr := range basics_testing.NearZeros(t, ResourceRef{}) {
 		assert.False(t, rr.Empty(), "Empty is disregarding a non-zero field in %+v", rr)
 	}
 }
@@ -52,8 +51,7 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 	ac := ApplicationCallTxnFields{}
 	a.True(ac.Empty())
 
-	for _, nz := range basics_testing.NearZeros(t, ac) {
-		fields := nz.(ApplicationCallTxnFields)
+	for _, fields := range basics_testing.NearZeros(t, ac) {
 		a.False(fields.Empty(), "Empty is disregarding a non-zero field in %+v", fields)
 	}
 }
@@ -553,7 +551,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
 			},
-			expectedError: "tx.GlobalStateSchema is immutable",
+			expectedError: "inappropriate non-zero tx.GlobalStateSchema",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -563,7 +561,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				LocalStateSchema: basics.StateSchema{NumUint: 1},
 			},
-			expectedError: "tx.LocalStateSchema is immutable",
+			expectedError: "inappropriate non-zero tx.LocalStateSchema",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -597,7 +595,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				ExtraProgramPages: 1,
 			},
-			expectedError: "tx.ExtraProgramPages is immutable",
+			expectedError: "inappropriate non-zero tx.ExtraProgramPages",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -719,6 +717,39 @@ func TestWellFormedErrors(t *testing.T) {
 		{
 			ac: ApplicationCallTxnFields{
 				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				ExtraProgramPages: 0,
+				// Since we are updating the size, that includes epp, so programs are too big.
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+				OnCompletion:      UpdateApplicationOC,
+			},
+			expectedError: "app programs too long. max total len 2048 bytes",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				ExtraProgramPages: 1,
+				// Since we are updating epp, size is checked, but is big enough
+				OnCompletion: UpdateApplicationOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 2048)),
+				ClearStateProgram: []byte(strings.Repeat("X", 2049)),
+				ExtraProgramPages: 1,
+				// Now we update epp, but not big enough for programs in txn
+				OnCompletion: UpdateApplicationOC,
+			},
+			expectedError: "app programs too long. max total len 4096 bytes",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
 				ApprovalProgram:   v5,
 				ClearStateProgram: v5,
 				ApplicationArgs: [][]byte{
@@ -728,7 +759,45 @@ func TestWellFormedErrors(t *testing.T) {
 				OnCompletion:      UpdateApplicationOC,
 			},
 			cv:            cv28,
-			expectedError: "tx.ExtraProgramPages is immutable",
+			expectedError: "inappropriate non-zero tx.ExtraProgramPages",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+				OnCompletion:      UpdateApplicationOC,
+			},
+			cv:            cv28,
+			expectedError: "inappropriate non-zero tx.GlobalStateSchema",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 1,
+				OnCompletion:      UpdateApplicationOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+				OnCompletion:      UpdateApplicationOC,
+			},
 		},
 		{
 			ac: ApplicationCallTxnFields{

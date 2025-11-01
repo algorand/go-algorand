@@ -379,6 +379,9 @@ type ApplicationParams struct {
 	// LocalStateSchema Specifies maximums on the number of each type that may be stored.
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
 
+	// SizeSponsor \[ss\] the account responsible for extra pages and global state MBR
+	SizeSponsor *string `json:"size-sponsor,omitempty"`
+
 	// Version \[v\] the number of updates to the application programs
 	Version *uint64 `json:"version,omitempty"`
 }

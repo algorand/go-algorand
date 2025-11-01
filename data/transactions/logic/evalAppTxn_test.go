@@ -1308,7 +1308,43 @@ func TestApplSubmission(t *testing.T) {
 	// Can't set epp when app id is given
 	tx.ForeignApps = append(tx.ForeignApps, basics.AppIndex(7))
 	TestApp(t, p+`int 1; itxn_field ExtraProgramPages;
-                  int 7; itxn_field ApplicationID`+s, ep, "immutable")
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Extra")
+	// nor can global schema be set
+	TestApp(t, p+`int 1; itxn_field GlobalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Global")
+	// nor can local schema be set
+	TestApp(t, p+`int 1; itxn_field LocalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Local")
+
+	// When performing an update, we can set epp and (global only) schema
+	ledger.NewApp(tx.Receiver, 7, basics.AppParams{
+		ApprovalProgram: ops.Program, // which is "int 1"
+	})
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field ExtraProgramPages;
+                  int 7; itxn_field ApplicationID`+s, ep)
+	// global schema can be set
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field GlobalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep)
+	// but local schema still cannot be set
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field LocalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Local")
+
+	// Even when performing an update, they cannot be set (in old consensus)
+	ep.Proto.AppSizeUpdates = false
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field ExtraProgramPages;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Extra")
+	// global schema can be set
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field GlobalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Global")
+	// but local schema still cannot be set
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field LocalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Local")
 
 	TestApp(t, p+a+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice"+s,
 		ep, "too large")
@@ -1316,7 +1352,9 @@ func TestApplSubmission(t *testing.T) {
 		ep, "too large")
 }
 
-func TestInnerApplCreate(t *testing.T) {
+// TestInnerApplLifecycle tests creation, update, and deletion of apps with
+// inner transactions.
+func TestInnerApplLifecycle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1345,6 +1383,7 @@ itxn_submit
 int 1
 `)
 
+		// Can't examine it without ForeignApps
 		test("int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert",
 			"unavailable App 5000")
 
@@ -1358,7 +1397,8 @@ int 1
 		// Can't call it either
 		test(call, "unavailable App 5000")
 
-		tx.ForeignApps = []basics.AppIndex{basics.AppIndex(5000)}
+		// Add to ForeignApps, then we can examine and call it.
+		tx.ForeignApps = []basics.AppIndex{5000}
 		test(`
 int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
 int 5000; app_params_get AppGlobalNumUint;      assert; int 1; ==; assert
@@ -1387,10 +1427,33 @@ int 1
 		test(update)
 
 		if v >= 12 {
-			// Version starts at 0
+			// Version is up to 1
 			test(`int 5000; app_params_get AppVersion; assert; int 1; ==`)
 		}
 
+		updateSchema := `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 5000;    itxn_field ApplicationID
+` + approve + `; itxn_field ApprovalProgram
+` + approve + `; itxn_field ClearStateProgram
+int 2;       itxn_field GlobalNumUint
+int UpdateApplication; itxn_field OnCompletion
+itxn_submit
+int 1
+`
+		test(updateSchema)
+		if v >= 12 {
+			// Version is up to 2
+			test(`int 5000; app_params_get AppVersion; assert; int 2; ==`)
+		}
+
+		test(`
+int 5000; app_params_get AppGlobalNumUint;      assert; int 2; ==; assert
+int 1
+`)
+
+		// Delete it
 		test(`
 itxn_begin
 int appl;              itxn_field TypeEnum
@@ -1405,7 +1468,6 @@ int 1
 
 		// Can't call it either
 		test(call, "no app 5000")
-
 	})
 }
 

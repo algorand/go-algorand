@@ -1358,13 +1358,13 @@ func testEvalAppPoolingGroup(t *testing.T, schema basics.StateSchema, approvalPr
 	appcall2 := txntest.Txn{
 		Sender:        addrs[0],
 		Type:          protocol.ApplicationCallTx,
-		ApplicationID: basics.AppIndex(1),
+		ApplicationID: 1,
 	}
 
 	appcall3 := txntest.Txn{
 		Sender:        addrs[1],
 		Type:          protocol.ApplicationCallTx,
-		ApplicationID: basics.AppIndex(1),
+		ApplicationID: 1,
 	}
 
 	return txgroup(t, l, eval, &appcall1, &appcall2, &appcall3)
