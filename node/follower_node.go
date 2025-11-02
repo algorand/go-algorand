@@ -297,9 +297,9 @@ func (node *AlgorandFollowerNode) GenesisHash() crypto.Digest {
 	return node.genesisHash
 }
 
-// CongestionFee returns 0 in follower mode.
-func (node *AlgorandFollowerNode) CongestionFee() basics.MicroAlgos {
-	return basics.MicroAlgos{}
+// CongestionTax returns 0 in follower mode.
+func (node *AlgorandFollowerNode) CongestionTax() basics.Micros {
+	return 0
 }
 
 // GetPendingTxnsFromPool returns an empty array in follower mode.

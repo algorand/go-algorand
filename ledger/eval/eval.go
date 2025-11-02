@@ -660,7 +660,6 @@ type BlockEvaluator struct {
 	prevHeader  bookkeeping.BlockHeader // cached
 	proto       config.ConsensusParams
 	genesisHash crypto.Digest
-	baseFee     basics.MicroAlgos // cached sum of proto.MinTxnFee + hdr.CongestionFee
 
 	block        bookkeeping.Block
 	blockTxBytes int
@@ -748,7 +747,6 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 			RewardsPool: hdr.RewardsPool,
 		},
 		proto:               proto,
-		baseFee:             hdr.CongestionFee.AddSaturate(basics.MicroAlgos{Raw: proto.MinTxnFee}),
 		genesisHash:         l.GenesisHash(),
 		l:                   l,
 		maxTxnBytesPerBlock: evalOpts.MaxTxnBytesPerBlock,
@@ -933,10 +931,22 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var group transactions.TxGroup
+	var tip basics.Micros
 	for gi, txn := range txgroup {
 		err := eval.TestTransaction(txn)
 		if err != nil {
 			return err
+		}
+
+		// Ensure at most one transactions specifies a Tip
+		if txn.Txn.Tip != 0 {
+			if tip != 0 {
+				return &ledgercore.TxGroupMalformedError{
+					Msg: fmt.Sprintf("transactionGroup: multiple tip values: %v != %v",
+						tip, txn.Txn.Tip),
+					Reason: ledgercore.TxGroupMalformedErrorReasonMultipleIncrements,
+				}
+			}
 		}
 
 		// Make sure all transactions in group have the same group value
@@ -972,6 +982,39 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		}
 	}
 
+	// We check against the group's expressed willingness to pay, which shows up
+	// in `usage`, not the current congestion level
+	usage, feesPaid := transactions.SummarizeTxnFees(txgroup)
+	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CheckGroupFees validates that a transaction group has paid sufficient fees.
+// This is a very superficial check, since it can't determine the dynamic costs
+// associated with inner transactions.  Those costs are monitored during app
+// calls in the logic package.
+func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, feePerTxn basics.MicroAlgos) error {
+	feeNeeded, overflow := feePerTxn.MulMicros(usage)
+	if overflow {
+		return &ledgercore.TxGroupMalformedError{
+			Msg:    "txgroup required fee overflow",
+			Reason: ledgercore.TxGroupErrorReasonInvalidFee,
+		}
+	}
+	// feesPaid may have saturated. That's ok. Since we know
+	// feeNeeded did not overflow, simple comparison tells us
+	// feesPaid was enough.
+	if feesPaid.LessThan(feeNeeded) {
+		return &ledgercore.TxGroupMalformedError{
+			Msg: fmt.Sprintf(
+				"txgroup with %s fees is less than %s (usage=%s * base=%s)",
+				feesPaid, feeNeeded, usage, feePerTxn),
+			Reason: ledgercore.TxGroupErrorReasonInvalidFee,
+		}
+	}
 	return nil
 }
 
@@ -1029,17 +1072,10 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	// Validate group fees against baseFee (it was previously checked against MinFee)
-	required, feesPaid := transactions.SummarizeFees(txgroup)
-	if err := verify.CheckGroupFees(feesPaid, required, eval.baseFee); err != nil {
-		return err
-	}
-
 	cow := eval.state.child(len(txgroup))
 	defer cow.recycle()
 
-	baseFee := eval.block.BlockHeader.CongestionFee.AddSaturate(basics.MicroAlgos{Raw: eval.proto.MinTxnFee})
-	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, baseFee)
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, eval.block.BlockHeader.CongestionTax)
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -1055,6 +1091,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	var groupTxBytes int
 	var group transactions.TxGroup
+	var tip basics.Micros
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -1078,6 +1115,17 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
 				return ledgercore.ErrNoSpace
+			}
+		}
+
+		// Ensure at most one transactions specifies a Tip
+		if txad.Txn.Tip != 0 {
+			if tip != 0 {
+				return &ledgercore.TxGroupMalformedError{
+					Msg: fmt.Sprintf("transactionGroup: multiple tip values: %v != %v",
+						tip, txad.Txn.Tip),
+					Reason: ledgercore.TxGroupMalformedErrorReasonMultipleIncrements,
+				}
 			}
 		}
 
@@ -1112,6 +1160,13 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 				Reason: ledgercore.TxGroupMalformedErrorReasonIncompleteGroup,
 			}
 		}
+	}
+
+	// We check against the group's expressed willingness to pay, which shows up
+	// in `usage`, not the current congestion level
+	usage, feesPaid := transactions.SummarizeFees(txgroup)
+	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
+		return err
 	}
 
 	eval.block.Payset = append(eval.block.Payset, txibs...)
@@ -1309,7 +1364,7 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
 	case protocol.HeartbeatTx:
-		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round(), eval.block.BlockHeader.CongestionFee)
+		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
 
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)

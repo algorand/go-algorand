@@ -21,8 +21,6 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -106,7 +104,7 @@ func TestCongestion(t *testing.T) {
 			r := require.New(t)
 
 			vb := dl.fullBlock()
-			r.Zero(vb.Block().BlockHeader.CongestionFee)
+			r.Zero(vb.Block().BlockHeader.CongestionTax)
 
 			// A pay should cause some load, construct with a note so we can
 			// make two more in the next block that are exactly the same size
@@ -150,7 +148,7 @@ func TestCongestion(t *testing.T) {
 
 			// Having a load under 500_000 does not raise the congestion fee
 			vb = dl.fullBlock()
-			r.Zero(vb.Block().BlockHeader.CongestionFee)
+			r.Zero(vb.Block().BlockHeader.CongestionTax)
 
 			vb = manyPays(txnsOverCongestion)
 			// The error should be no more that 0.5 * #txns
@@ -158,42 +156,69 @@ func TestCongestion(t *testing.T) {
 
 			// Having a load over 500_000 does raise it
 			vb = dl.fullBlock()
-			r.Positive(vb.Block().BlockHeader.CongestionFee.Raw)
+			r.Positive(vb.Block().BlockHeader.CongestionTax)
 
-			// But after a block with nothing, it's back to zero
+			// But after another block with nothing, it's back to zero
 			vb = dl.fullBlock()
-			r.Zero(vb.Block().BlockHeader.CongestionFee)
+			r.Zero(vb.Block().BlockHeader.CongestionTax)
 
-			// Now, raise raise base fee again, and show effect of transaction
+			// Now, raise congestion again, and show effect of transaction
 			// acceptance.
 			vb = manyPays(txnsOverCongestion)
+			// as we saw above, the next block is going to have a congestion tax after `manyPays`
+
+			// There is no effect!  For now, evaluation doesn't care what the
+			// congestion level is. Only the transactionPool ingress functions
+			// checks that transactions have enough tip to pay for the
+			// congestion tax.
 			dl.txn(&txntest.Txn{
 				Type:     "pay",
 				Sender:   addrs[1],
 				Receiver: addrs[0],
 				Amount:   1_000_000,
 				Fee:      1_000,
-			}, "txgroup with 1mA fees is less")
-			dl.txn(&txntest.Txn{ // running twice to show we didn't make an empty block
+			})
+
+			// To be admitted, txns need a high enough tip to pay the tax.  This
+			// shows that even if the tax is 0, a txn with a Tip needs to pay
+			// it.
+			vb = dl.fullBlock()
+			r.Zero(vb.Block().BlockHeader.CongestionTax)
+
+			dl.txn(&txntest.Txn{
 				Type:     "pay",
 				Sender:   addrs[1],
 				Receiver: addrs[0],
 				Amount:   1_000_000,
-				Fee:      1_000,
+				Fee:      1000,
+				Tip:      100_000, //txn says it will tip, so the fee needs to be bigger
 			}, "txgroup with 1mA fees is less")
 
-			// Figure out how much to pay
-			proto := config.Consensus[cv]
-			biggerFee := bookkeeping.NextCongestionFee(
-				vb.Block().BlockHeader.Load,
-				vb.Block().BlockHeader.CongestionFee,
-				&dl.generator.genesisProto).AddSaturate(basics.MicroAlgos{Raw: proto.MinTxnFee})
 			dl.txn(&txntest.Txn{
 				Type:     "pay",
 				Sender:   addrs[1],
 				Receiver: addrs[0],
 				Amount:   1_000_000,
-				Fee:      biggerFee,
+				Fee:      1000,
+				Tip:      999, // tipping at less than 1/1000, so it rounds down
+			})
+
+			dl.txn(&txntest.Txn{
+				Type:     "pay",
+				Sender:   addrs[1],
+				Receiver: addrs[0],
+				Amount:   1_000_000,
+				Fee:      1000,
+				Tip:      1000, // tipping at 1/1000, so it requires 1 extra uAlgo
+			}, "txgroup with 1mA fees is less than 1.001mA")
+
+			dl.txn(&txntest.Txn{
+				Type:     "pay",
+				Sender:   addrs[1],
+				Receiver: addrs[0],
+				Amount:   1_000_000,
+				Fee:      1100, // sufficient for the 10% tax
+				Tip:      100_000,
 			})
 		})
 }

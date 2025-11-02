@@ -668,6 +668,11 @@ type BonusPlan struct {
 	DecayInterval uint64
 }
 
+// MinFee simply returns the MinTxnFee as a basics.MicroAlgos
+func (proto ConsensusParams) MinFee() basics.MicroAlgos {
+	return basics.MicroAlgos{Raw: proto.MinTxnFee}
+}
+
 // EffectiveKeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
 func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {

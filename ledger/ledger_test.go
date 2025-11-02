@@ -154,7 +154,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// UpgradeVote: empty,
-		CongestionFee: bookkeeping.NextCongestionFee(lastBlock.Load, lastBlock.CongestionFee, &proto),
+		CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
 		Load:          0, // Begins empty
 	}
 
@@ -291,7 +291,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 			RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 			UpgradeState: lastBlock.UpgradeState,
 			// UpgradeVote: empty,
-			CongestionFee: bookkeeping.NextCongestionFee(lastBlock.Load, lastBlock.CongestionFee, &proto),
+			CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
 		}
 		if proto.Payouts.Enabled {
 			correctHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
@@ -579,7 +579,7 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send with zero fee")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee - 1}
@@ -1335,7 +1335,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
 				// UpgradeVote: empty,
-				CongestionFee: bookkeeping.NextCongestionFee(lastBlock.Load, lastBlock.CongestionFee, &proto),
+				CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
 			}
 			correctHeader.RewardsPool = testPoolAddr
 			correctHeader.FeeSink = testSinkAddr

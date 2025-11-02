@@ -24,22 +24,22 @@ import (
 )
 
 // Heartbeat applies a Heartbeat transaction using the Balances interface.
-func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, balances Balances, provider hdrProvider, round basics.Round, baseFee basics.MicroAlgos) error {
+func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, balances Balances, provider hdrProvider, round basics.Round) error {
 	// Get the account's balance entry
 	account, err := balances.Get(hb.HbAddress, false)
 	if err != nil {
 		return err
 	}
 
-	// In txnGroupBatchPrep, we do not charge for singleton (Group.IsZero)
-	// heartbeats. But we only _want_ to allow free heartbeats if the account is
-	// under challenge. If this is an underpaid singleton heartbeat, reject it
-	// unless the account is under challenge.
+	// In txnGroupBatchPrep, we do not charge for singleton (Group.IsZero),
+	// untipped heartbeats. But we only _want_ to allow cheap heartbeats if the
+	// account is under challenge. If this is an underpaid singleton heartbeat,
+	// reject it unless the account is under challenge.
 
 	proto := balances.ConsensusParams()
-	if header.Fee.Raw < baseFee.Raw && header.Group.IsZero() {
+	if header.Fee.LessThan(proto.MinFee()) && header.Group.IsZero() {
 		kind := "free"
-		if header.Fee.Raw > 0 {
+		if !header.Fee.IsZero() {
 			kind = "cheap"
 		}
 

@@ -533,7 +533,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 			txgroup = append(txgroup, sample)
 		}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), proto, &transactions.SpecialAddresses{}, basics.MicroAlgos{Raw: proto.MinTxnFee})
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), proto, &transactions.SpecialAddresses{}, 0)
 	ep.Tracer = EvalErrorDetailsTracer{}
 	if ledger == nil {
 		ledger = NewLedger(nil)
@@ -4038,7 +4038,7 @@ itxn_submit
 		})
 		// We're testing if this can recur forever. It's hard to fund all these
 		// apps, but we can put a huge credit in the ep.
-		*ep.FeeCredit = 1_000_000_000
+		*ep.FeeCredit = basics.MicroAlgos{Raw: 1_000_000_000}
 
 		testApp(t, source, ep, "appl depth (8) exceeded")
 

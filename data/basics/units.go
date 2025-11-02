@@ -206,3 +206,12 @@ type Micros uint64
 func (m Micros) String() string {
 	return fmt.Sprintf("%d.%06d", m/1e6, m%1e6)
 }
+
+// Mul multiplies Micros. It saturates and reports overflow.
+func (m Micros) Mul(m2 Micros) (Micros, bool) {
+	u64, o := Muldiv(m, m2, 1e6)
+	if o {
+		u64 = math.MaxUint64
+	}
+	return Micros(u64), o
+}

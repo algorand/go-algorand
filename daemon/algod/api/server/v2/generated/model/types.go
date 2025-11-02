@@ -1412,8 +1412,8 @@ type TransactionGroupLedgerStateDeltasForRoundResponse struct {
 // TransactionParametersResponse TransactionParams contains the parameters that help a client construct
 // a new transaction.
 type TransactionParametersResponse struct {
-	// CongestionFee The current extra fee beyond min-fee required for the txn to validate with the current congestion conditions.
-	CongestionFee *uint64 `json:"congestion-fee,omitempty"`
+	// CongestionTax The current amount beyond min-fee required for the txn to validate with the current congestion conditions. Expressed as fixed-point number with 6 digits of precision.
+	CongestionTax *basics.Micros `json:"congestion-tax,omitempty"`
 
 	// ConsensusVersion ConsensusVersion indicates the consensus protocol version
 	// as of LastRound.

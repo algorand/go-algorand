@@ -80,7 +80,6 @@ type GroupContext struct {
 	evalParams      *logic.EvalParams
 }
 
-var errTxGroupInvalidFee = errors.New("txgroup fee requirement overflow")
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
 var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
@@ -94,8 +93,6 @@ const (
 	TxGroupErrorReasonGeneric TxGroupErrorReason = iota
 	// TxGroupErrorReasonNotWellFormed is txn.WellFormed failure or malformed logic signature
 	TxGroupErrorReasonNotWellFormed
-	// TxGroupErrorReasonInvalidFee is invalid fee pooling in transaction group
-	TxGroupErrorReasonInvalidFee
 	// TxGroupErrorReasonHasNoSig is for transaction without any signature
 	TxGroupErrorReasonHasNoSig
 	// TxGroupErrorReasonSigNotWellFormed defines signature format errors
@@ -164,7 +161,7 @@ func (g *GroupContext) Equal(other *GroupContext) bool {
 // It is the caller responsibility to call batchVerifier.Verify().
 func txnBatchPrep(gi int, groupCtx *GroupContext, verifier crypto.BatchVerifier) *TxGroupError {
 	s := &groupCtx.signedGroupTxns[gi]
-	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
+	if !groupCtx.consensusParams.SupportRekeying && !s.AuthAddr.IsZero() {
 		return &TxGroupError{err: errRekeyingNotSupported, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
 	}
 
@@ -232,38 +229,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		}
 	}
 
-	// This is just a first pass check, since it uses MinTxnFee. It use
-	// BaseFee, because we don't know what block the group will end up in.
-	required, feesPaid := transactions.SummarizeTxnFees(stxs)
-	minFee := basics.MicroAlgos{Raw: groupCtx.consensusParams.MinTxnFee}
-	if err := CheckGroupFees(feesPaid, required, minFee); err != nil {
-		return nil, err
-	}
-
 	return groupCtx, nil
-}
-
-// CheckGroupFees validates that a transaction group has paid sufficient fees.
-// feesPaid is the total fees paid by the group, required is the number of
-// base fees required, and feePerTxn is the minimum fee per transaction.
-func CheckGroupFees(feesPaid basics.MicroAlgos, required basics.Micros, feePerTxn basics.MicroAlgos) *TxGroupError {
-	feeNeeded, overflow := basics.MulAM(feePerTxn, required)
-	if overflow {
-		return &TxGroupError{err: errTxGroupInvalidFee, GroupIndex: -1, Reason: TxGroupErrorReasonInvalidFee}
-	}
-	// feesPaid may have saturated. That's ok. Since we know
-	// feeNeeded did not overflow, simple comparison tells us
-	// feesPaid was enough.
-	if feesPaid.LessThan(feeNeeded) {
-		return &TxGroupError{
-			err: fmt.Errorf(
-				"txgroup with %s fees is less than %s (usage=%s * base=%s)",
-				feesPaid, feeNeeded, required, feePerTxn),
-			GroupIndex: -1,
-			Reason:     TxGroupErrorReasonInvalidFee,
-		}
-	}
-	return nil
 }
 
 type sigOrTxnType int
