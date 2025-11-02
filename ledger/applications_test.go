@@ -1561,7 +1561,7 @@ app_global_del
 			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
 			mbr(addrs[1]))
 
-		// call with two args can now suceed
+		// call with two args can now succeed
 		dl.txn(&txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[0],
