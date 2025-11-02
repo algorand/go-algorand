@@ -633,17 +633,17 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	}
 
 	if fee == 0 {
-		tx.Fee = suggestedFee(tx, params)
+		tx.Fee, tx.Tip = suggestedFee(tx, params)
 	}
 
 	return tx, nil
 }
 
-func suggestedFee(tx transactions.Transaction, suggested model.TransactionParametersResponse) basics.MicroAlgos {
-	// Default to the suggested fee, if the caller didn't supply it
-	// Fee should taken done last since it can depend on the final transaction size
-	pbf := basics.MulSaturate(suggested.Fee, uint64(tx.EstimateEncodedSize()))
-	return basics.MicroAlgos{Raw: max(pbf, basics.AddSaturate(suggested.MinFee, nilToZero(suggested.CongestionFee)))}
+// suggestFee returns the amount to use for the fee field of a transaction and
+// the tip to specify to allow entry into a congestion algod.
+func suggestedFee(tx transactions.Transaction, suggested model.TransactionParametersResponse) (basics.MicroAlgos, basics.Micros) {
+	// Default to the suggested tax rate, if the caller didn't supply it
+	return basics.MicroAlgos{Raw: suggested.MinFee}, nilToZero(suggested.CongestionTax)
 }
 
 /* Algod Wrappers */
@@ -900,13 +900,14 @@ func (c Client) CurrentRound() (basics.Round, error) {
 }
 
 // SuggestedFee returns the base txn fee and per byte fee
-func (c *Client) SuggestedFee() (base uint64, fpb uint64, err error) {
+func (c *Client) SuggestedFee() (base uint64, tax basics.Micros, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		params, err := algod.SuggestedParams()
 		if err == nil {
-			base := basics.AddSaturate(params.MinFee, nilToZero(params.CongestionFee))
-			return base, params.Fee, nil
+			tax := nilToZero(params.CongestionTax)
+			base, _ := basics.MicroAlgos{Raw: params.MinFee}.MulMicros(1e6 + tax)
+			return base.Raw, tax, nil
 		}
 	}
 	return

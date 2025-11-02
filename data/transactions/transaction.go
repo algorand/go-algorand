@@ -56,8 +56,14 @@ type Header struct {
 
 	Sender basics.Address `codec:"snd"`
 
-	Fee           basics.MicroAlgos `codec:"fee"`
-	CostIncrement basics.Micros     `codec:"ci"` // All costs are multiplied by 1 + CostIncrement
+	Fee basics.MicroAlgos `codec:"fee"`
+	// Tip represents a multiplier for all costs in the same group. Only one
+	// transaction per group may specify a tip. The Tip does not multiply the
+	// Fee, rather it promises that, with the tip applied, the Fees specified
+	// will still be sufficient.  When congested, `algod` will begin to drop
+	// groups with insifficient tips to cover the block's CongestionTax. Future
+	// versions may prioritize groups with larger tips.
+	Tip basics.Micros `codec:"tp"` // All costs are multiplied by 1 + Tip
 
 	FirstValid basics.Round `codec:"fv"`
 	LastValid  basics.Round `codec:"lv"`
@@ -486,7 +492,7 @@ func (tx Transaction) IsFree() bool {
 		return true
 	}
 
-	if tx.Type == protocol.HeartbeatTx && tx.Group.IsZero() {
+	if tx.Type == protocol.HeartbeatTx && tx.Group.IsZero() && tx.Tip == 0 {
 		return true
 	}
 

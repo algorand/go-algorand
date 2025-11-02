@@ -168,20 +168,24 @@ func MinA(a, b MicroAlgos) MicroAlgos {
 }
 
 // Muldiv computes a*b/c.  The overflow flag indicates that the result was 2^64
-// or greater. `c` is not generic, because most call sites use a constant. Make
+// or greater. `c` is not generic, because most call sites use a constant. Making
 // `c` generic forced casting it to uint64, as Go makes it an int.
-func Muldiv[A ~uint64, B ~uint64](a A, b B, c uint64) (uint64, bool) {
+func Muldiv[A ~uint64, B ~uint64](a A, b B, c uint64) (A, bool) {
 	hi, lo := bits.Mul64(uint64(a), uint64(b))
 	if c <= hi {
 		return 0, true
 	}
 	quo, _ := bits.Div64(hi, lo, c)
-	return quo, false
+	return A(quo), false
 }
 
-// MulAM multiplies a MicroAlgos value by a Micros value.
-func MulAM(a MicroAlgos, m Micros) (MicroAlgos, bool) {
+// MulMicros multiplies a MicroAlgos amount by a Micros amount. It saturates AND
+// reports overflow.
+func (a MicroAlgos) MulMicros(m Micros) (MicroAlgos, bool) {
 	res, overflowed := Muldiv(a.Raw, m, 1e6)
+	if overflowed {
+		res = math.MaxUint64
+	}
 	return MicroAlgos{Raw: res}, overflowed
 }
 

@@ -348,7 +348,8 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid ba
 	}
 
 	if fee == 0 {
-		goOnlineTransaction.Fee = suggestedFee(goOnlineTransaction, params)
+		goOnlineTransaction.Fee, goOnlineTransaction.Tip =
+			suggestedFee(goOnlineTransaction, params)
 	}
 	return goOnlineTransaction, nil
 }
@@ -393,7 +394,8 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid b
 	}
 
 	if fee == 0 {
-		goOfflineTransaction.Fee = suggestedFee(goOfflineTransaction, params)
+		goOfflineTransaction.Fee, goOfflineTransaction.Tip =
+			suggestedFee(goOfflineTransaction, params)
 	}
 
 	return goOfflineTransaction, nil
@@ -439,7 +441,8 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 	becomeNonparticipatingTransaction.KeyregTxnFields.Nonparticipation = true
 
 	if fee == 0 {
-		becomeNonparticipatingTransaction.Fee = suggestedFee(becomeNonparticipatingTransaction, params)
+		becomeNonparticipatingTransaction.Fee, becomeNonparticipatingTransaction.Tip =
+			suggestedFee(becomeNonparticipatingTransaction, params)
 	}
 	return becomeNonparticipatingTransaction, nil
 }
@@ -479,7 +482,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid bas
 	}
 
 	if fee == 0 {
-		tx.Fee = suggestedFee(tx, params)
+		tx.Fee, tx.Tip = suggestedFee(tx, params)
 	}
 
 	return tx, nil

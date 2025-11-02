@@ -852,15 +852,15 @@ func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
 	return node.genesisHash
 }
 
-// CongestionFee returns the suggested fee recommended to ensure a basic transaction is processed in a timely fashion.
-// It is the the current CongestionFee from the latest block header.
-func (node *AlgorandFullNode) CongestionFee() basics.MicroAlgos {
+// CongestionTax returns the suggested tax recommended to ensure a basic transaction is processed in a timely fashion.
+// It is the current CongestionTax from the latest block header.
+func (node *AlgorandFullNode) CongestionTax() basics.Micros {
 	latest := node.ledger.Latest()
 	latestHdr, err := node.ledger.BlockHdr(latest)
 	if err != nil {
-		return basics.MicroAlgos{}
+		return 0
 	}
-	return latestHdr.CongestionFee
+	return latestHdr.CongestionTax
 }
 
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.

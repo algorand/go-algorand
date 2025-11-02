@@ -18,7 +18,6 @@ package bookkeeping
 
 import (
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -152,10 +151,9 @@ type BlockHeader struct {
 	// 1,000,000 is a completely full block.
 	Load basics.Micros `codec:"ld"`
 
-	// CongestionFee is the fee required, beyond the MinFee, for "normal"
-	// transactions in this block.  It scales upward/downward when the Load is
-	// more/less than half full (500,000).
-	CongestionFee basics.MicroAlgos `codec:"cf"`
+	// CongestionTax fee required, beyond the MinFee, for "normal"
+	// transactions in this block.
+	CongestionTax basics.Micros `codec:"ct"`
 }
 
 // TxnCommitments represents the commitments computed from the transactions in the block.
@@ -615,27 +613,35 @@ func computeBonus(current uint64, prevBonus basics.MicroAlgos, curPlan config.Bo
 	return prevBonus
 }
 
-// NextCongestionFee calculates the congestion fee for the next block based on
-// the previous block's load and congestion fee.
-func NextCongestionFee(prevLoad basics.Micros, prevConFee basics.MicroAlgos, params *config.ConsensusParams) basics.MicroAlgos {
-	if !params.CongestionFees {
-		return basics.MicroAlgos{}
-	}
+// NextCongestionTax calculates the congestion tax for the next block based on
+// the previous block's load and congestion tax.
+func NextCongestionTax(prevLoad basics.Micros, prevConTax basics.Micros) basics.Micros {
+	const perBlockMaxChange basics.Micros = 100_000 // 10%
+	const half = 500_000                            // 50%
+	// Target load is half full (500,000)
+	// At 0% load: multiply tax by (1-perBlockMaxChange)
+	// At 100% load: multiply tax by (1+perBlockMaxChange)
+	if prevLoad <= half {
+		// Decrease congestion tax (or maintain, if 500_000 exactly)
 
-	minFee := basics.MicroAlgos{Raw: params.MinTxnFee}
-	prevFee := minFee.AddSaturate(prevConFee)
+		// We can't overflow because prevLoad <= half
+		downFactor, _ := basics.Muldiv(perBlockMaxChange, half-prevLoad, half)
+		// downFactor is ensured to be less than 1 because pbmc is 0.1, and p/h < 1
 
-	// Target is 50% load (500,000)
-	// Scale factor: 0.5 + load/1,000,000
-	// At 0% load: 0.5x, at 50% load: 1.0x, at 100% load: 1.5x
-	scaleFactor := 500_000 + prevLoad // 0.5 to 1.5 in fixed point (with 6 digits precision)
-	scaledFee, o := basics.MulAM(prevFee, scaleFactor)
-	if o {
-		// seems impossible, who could have paid the fees in previous blocks
-		// to drive it so high?
-		scaledFee = basics.MicroAlgos{Raw: math.MaxUint64}
+		// For an empty block, downFactor is perBlockMaxChange (10%)
+
+		// overflow impossible in subtraction because df < 1, in Mul because factor < 1
+		taxDecrease, _ := prevConTax.Mul(1e6 - downFactor)
+		return basics.SubSaturate(taxDecrease, downFactor)
 	}
-	return scaledFee.SubSaturate(minFee)
+	// Increase congestion tax
+
+	// We can't overflow because prevLoad-half <= half (since Load < 1)
+	upFactor, _ := basics.Muldiv(perBlockMaxChange, prevLoad-half, half)
+
+	// overflow is _possible_, but Mul saturates, which is what we want
+	taxIncrease, _ := prevConTax.Mul(1e6 + upFactor)
+	return basics.AddSaturate(taxIncrease, upFactor)
 }
 
 // MakeBlock constructs a new valid block with an empty payset and an unset Seed.
@@ -670,7 +676,7 @@ func MakeBlock(prev BlockHeader) Block {
 			UpgradeVote:   upgradeVote,
 			UpgradeState:  upgradeState,
 			Bonus:         NextBonus(prev, &params),
-			CongestionFee: NextCongestionFee(prev.Load, prev.CongestionFee, &params),
+			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
 		},
 	}
 	if params.EnableSha512BlockHash {
@@ -824,15 +830,15 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 
 	// check base fee for on-chain congestion measurement
 	if params.CongestionFees {
-		expectedConFee := NextCongestionFee(prev.Load, prev.CongestionFee, &params)
-		if bh.CongestionFee != expectedConFee {
-			return fmt.Errorf("bad congestion fee: %s != %s", bh.CongestionFee, expectedConFee)
+		expectedConFee := NextCongestionTax(prev.Load, prev.CongestionTax)
+		if bh.CongestionTax != expectedConFee {
+			return fmt.Errorf("bad congestion fee: %s != %s", bh.CongestionTax, expectedConFee)
 		}
 		// bh.Load will need to be checked in endOfBlock as we accumulate the payset byte length
 	} else {
 		// When congestion measurement is disabled, these fields should be empty
-		if !bh.CongestionFee.IsZero() {
-			return fmt.Errorf("congestion fee should be zero when congestion measurement is disabled, got %s", bh.CongestionFee)
+		if bh.CongestionTax != 0 {
+			return fmt.Errorf("congestion fee should be zero when congestion measurement is disabled, got %s", bh.CongestionTax)
 		}
 		if bh.Load != 0 {
 			return fmt.Errorf("load should be zero when congestion measurement is disabled, got %s", bh.Load)

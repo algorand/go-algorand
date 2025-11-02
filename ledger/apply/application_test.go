@@ -337,7 +337,7 @@ func TestAppCallAddressByIndex(t *testing.T) {
 
 func makeTestEp(proto *config.ConsensusParams) *logic.EvalParams {
 	stads := []transactions.SignedTxnWithAD{{}}
-	return logic.NewAppEvalParams(stads, proto, nil, basics.MicroAlgos{Raw: proto.MinTxnFee})
+	return logic.NewAppEvalParams(stads, proto, nil, 0)
 }
 
 func TestAppCallCheckProgramCosts(t *testing.T) {

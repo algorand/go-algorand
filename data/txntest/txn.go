@@ -43,6 +43,7 @@ type Txn struct {
 
 	Sender      basics.Address
 	Fee         any // basics.MicroAlgos, uint64, int, or nil
+	Tip         basics.Micros
 	FirstValid  basics.Round
 	LastValid   basics.Round
 	Note        any // []byte or string
@@ -278,6 +279,7 @@ func (tx Txn) Txn() transactions.Transaction {
 		Header: transactions.Header{
 			Sender:      tx.Sender,
 			Fee:         tx.Fee.(basics.MicroAlgos),
+			Tip:         tx.Tip,
 			FirstValid:  tx.FirstValid,
 			LastValid:   tx.LastValid,
 			Note:        tx.Note.([]byte),

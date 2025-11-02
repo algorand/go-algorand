@@ -289,3 +289,15 @@ func TestNewMuldiv(t *testing.T) {
 	test(math.MaxUint64, math.MaxUint64, math.MaxUint64)
 	test(math.MaxUint64, math.MaxUint64, 5)
 }
+
+func TestMuldivOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := uint64(1) << 63
+	b := uint64(1) << 63
+	c := uint64(1)
+
+	_, overflowed := Muldiv(a, b, c)
+	require.True(t, overflowed)
+}

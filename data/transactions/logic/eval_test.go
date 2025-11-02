@@ -188,7 +188,7 @@ func defaultAppParamsWithVersion(version uint64, txns ...transactions.SignedTxn)
 		}}
 	}
 	proto := makeTestProtoV(version)
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), proto, &transactions.SpecialAddresses{}, basics.MicroAlgos{Raw: proto.MinTxnFee})
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), proto, &transactions.SpecialAddresses{}, 0)
 	if ep != nil { // If supplied no apps, ep is nil.
 		ep.Trace = &strings.Builder{}
 		ledger := NewLedger(nil)

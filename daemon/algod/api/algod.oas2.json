@@ -4738,10 +4738,10 @@
             "type": "integer",
             "x-go-type": "uint64"
           },
-          "congestion-fee": {
-            "description": "The current extra fee beyond min-fee required for the txn to validate with the current congestion conditions.",
+          "congestion-tax": {
+            "description": "The current amount beyond min-fee required for the txn to validate with the current congestion conditions. Expressed as fixed-point number with 6 digits of precision.",
             "type": "integer",
-            "x-go-type": "uint64"
+            "x-go-type": "basics.Micros"
           }
         }
       }
