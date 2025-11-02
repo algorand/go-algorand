@@ -559,7 +559,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	return nil
 }
 
-// UpdatingSizes returns true if the transaction is has non-zero sizing fields.
+// UpdatingSizes returns true if the transaction has non-zero sizing fields.
 func (ac ApplicationCallTxnFields) UpdatingSizes() bool {
 	return ac.OnCompletion == UpdateApplicationOC &&
 		(ac.ExtraProgramPages != 0 || !ac.GlobalStateSchema.Empty())
