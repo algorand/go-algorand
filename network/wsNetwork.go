@@ -167,6 +167,10 @@ type WebsocketNetwork struct {
 
 	config config.Local
 
+	// voteCompressionTableSize is the validated/normalized table size for VP compression.
+	// It is set during setup() by validating config.StatefulVoteCompressionTableSize.
+	voteCompressionTableSize uint
+
 	log logging.Logger
 
 	wg sync.WaitGroup
@@ -554,6 +558,9 @@ func (wn *WebsocketNetwork) setup() error {
 	}
 	wn.dialer = limitcaller.MakeRateLimitingDialer(wn.phonebook, preferredResolver)
 
+	// Validate and normalize vote compression table size
+	wn.voteCompressionTableSize = wn.config.NormalizedVoteCompressionTableSize(wn.log)
+
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
@@ -840,7 +847,8 @@ type peerMetadataProvider interface {
 	PublicAddress() string
 	RandomID() string
 	SupportedProtoVersions() []string
-	Config() config.Local
+	VoteCompressionEnabled() bool
+	StatefulVoteCompressionTableSize() uint
 }
 
 // TelemetryGUID returns the telemetry GUID of this node.
@@ -868,6 +876,16 @@ func (wn *WebsocketNetwork) Config() config.Local {
 	return wn.config
 }
 
+// StatefulVoteCompressionTableSize returns the validated/normalized vote compression table size.
+func (wn *WebsocketNetwork) StatefulVoteCompressionTableSize() uint {
+	return wn.voteCompressionTableSize
+}
+
+// VoteCompressionEnabled returns whether vote compression is enabled for this node.
+func (wn *WebsocketNetwork) VoteCompressionEnabled() bool {
+	return wn.config.EnableVoteCompression
+}
+
 func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvider) {
 	header.Set(TelemetryIDHeader, meta.TelemetryGUID())
 	header.Set(InstanceNameHeader, meta.InstanceName())
@@ -880,10 +898,32 @@ func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvide
 	header.Set(GenesisHeader, meta.GetGenesisID())
 
 	// set the features header (comma-separated list)
-	header.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
-	features := []string{PeerFeatureProposalCompression}
-	if meta.Config().EnableVoteCompression {
-		features = append(features, PeerFeatureVoteVpackCompression)
+	features := []string{peerFeatureProposalCompression}
+	if meta.VoteCompressionEnabled() {
+		features = append(features, peerFeatureVoteVpackCompression)
+
+		// Announce our maximum supported vote compression table size
+		// Both sides will independently calculate min(ourSize, theirSize)
+		// Only advertise stateful features if stateless compression is also enabled
+		// Supported values: 16, 32, 64, 128, 256, 512, 1024, 2048 (or higher, which advertises 2048)
+		switch dtSize := uint32(meta.StatefulVoteCompressionTableSize()); {
+		case dtSize >= 2048:
+			features = append(features, peerFeatureVoteVpackStateful2048)
+		case dtSize >= 1024:
+			features = append(features, peerFeatureVoteVpackStateful1024)
+		case dtSize >= 512:
+			features = append(features, peerFeatureVoteVpackStateful512)
+		case dtSize >= 256:
+			features = append(features, peerFeatureVoteVpackStateful256)
+		case dtSize >= 128:
+			features = append(features, peerFeatureVoteVpackStateful128)
+		case dtSize >= 64:
+			features = append(features, peerFeatureVoteVpackStateful64)
+		case dtSize >= 32:
+			features = append(features, peerFeatureVoteVpackStateful32)
+		case dtSize >= 16:
+			features = append(features, peerFeatureVoteVpackStateful16)
+		}
 	}
 	header.Set(PeerFeaturesHeader, strings.Join(features, ","))
 
@@ -1108,21 +1148,23 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	client, _ := wn.GetHTTPClient(trackedRequest.remoteAddress())
 	peer := &wsPeer{
-		wsPeerCore:            makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
-		conn:                  wsPeerWebsocketConnImpl{conn},
-		outgoing:              false,
-		InstanceName:          trackedRequest.otherInstanceName,
-		incomingMsgFilter:     wn.incomingMsgFilter,
-		prioChallenge:         challenge,
-		createTime:            trackedRequest.created,
-		version:               matchingVersion,
-		identity:              peerID,
-		identityChallenge:     peerIDChallenge,
-		identityVerified:      atomic.Uint32{},
-		features:              decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
-		enableVoteCompression: wn.config.EnableVoteCompression,
+		wsPeerCore:               makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
+		conn:                     wsPeerWebsocketConnImpl{conn},
+		outgoing:                 false,
+		InstanceName:             trackedRequest.otherInstanceName,
+		incomingMsgFilter:        wn.incomingMsgFilter,
+		prioChallenge:            challenge,
+		createTime:               trackedRequest.created,
+		version:                  matchingVersion,
+		identity:                 peerID,
+		identityChallenge:        peerIDChallenge,
+		identityVerified:         atomic.Uint32{},
+		features:                 decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression:    wn.config.EnableVoteCompression,
+		voteCompressionTableSize: wn.voteCompressionTableSize,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
+	wn.log.Debugf("Server: client features '%s', decoded %x, our response '%s'", request.Header.Get(PeerFeaturesHeader), peer.features, responseHeader.Get(PeerFeaturesHeader))
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 	wn.log.With("event", "ConnectedIn").With("remote", trackedRequest.remoteAddress()).With("local", localAddr).Infof("Accepted incoming connection from peer %s", trackedRequest.remoteAddr)
@@ -1426,10 +1468,14 @@ func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) (
 	}
 	// Optionally compress votes: only supporting peers will receive it.
 	if prio && request.tag == protocol.AgreementVoteTag && wn.enableVoteCompression {
+		networkVoteBroadcastUncompressedBytes.AddUint64(uint64(len(request.data)), nil)
 		var logMsg string
 		compressedData, logMsg = vpackCompressVote(tbytes, request.data)
 		if len(logMsg) > 0 {
 			wn.log.Warn(logMsg)
+		} else {
+			// Track compressed size only on success (compressedData includes tag)
+			networkVoteBroadcastCompressedBytes.AddUint64(uint64(len(compressedData)), nil)
 		}
 	}
 	return mbytes, compressedData, digest
@@ -1864,13 +1910,24 @@ const UserAgentHeader = "User-Agent"
 // PeerFeaturesHeader is the HTTP header listing features
 const PeerFeaturesHeader = "X-Algorand-Peer-Features"
 
-// PeerFeatureProposalCompression is a value for PeerFeaturesHeader indicating peer
+// peerFeatureProposalCompression is a value for PeerFeaturesHeader indicating peer
 // supports proposal payload compression with zstd
-const PeerFeatureProposalCompression = "ppzstd"
+const peerFeatureProposalCompression = "ppzstd"
 
-// PeerFeatureVoteVpackCompression is a value for PeerFeaturesHeader indicating peer
+// peerFeatureVoteVpackCompression is a value for PeerFeaturesHeader indicating peer
 // supports agreement vote message compression with vpack
-const PeerFeatureVoteVpackCompression = "avvpack"
+const peerFeatureVoteVpackCompression = "avvpack"
+
+// peerFeatureVoteVpackStateful* are values for PeerFeaturesHeader indicating peer
+// supports specific table sizes for stateful vpack compression
+const peerFeatureVoteVpackStateful2048 = "avvpack2048"
+const peerFeatureVoteVpackStateful1024 = "avvpack1024"
+const peerFeatureVoteVpackStateful512 = "avvpack512"
+const peerFeatureVoteVpackStateful256 = "avvpack256"
+const peerFeatureVoteVpackStateful128 = "avvpack128"
+const peerFeatureVoteVpackStateful64 = "avvpack64"
+const peerFeatureVoteVpackStateful32 = "avvpack32"
+const peerFeatureVoteVpackStateful16 = "avvpack16"
 
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
@@ -2099,8 +2156,10 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		identity:                    peerID,
 		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
 		enableVoteCompression:       wn.config.EnableVoteCompression,
+		voteCompressionTableSize:    wn.voteCompressionTableSize,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
+	wn.log.Debugf("Client: server features '%s', decoded %x", response.Header.Get(PeerFeaturesHeader), peer.features)
 
 	// if there is a final verification message to send, it means this peer has a verified identity,
 	// attempt to set the peer and identityTracker
