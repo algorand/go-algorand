@@ -219,7 +219,7 @@ func (l *Ledger) NoLocal(addr basics.Address, appID basics.AppIndex, key string)
 	delete(l.balances[addr].locals[appID], key)
 }
 
-// NewGlobal sets a global value for an app incrmementing the schema to accomodate it
+// NewGlobal sets a global value for an app incrmementing the schema to accommodate it
 func (l *Ledger) NewGlobal(appID basics.AppIndex, key string, value any) {
 	tv := toTealValue(value)
 	app := l.applications[appID]
