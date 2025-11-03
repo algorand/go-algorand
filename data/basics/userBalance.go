@@ -194,7 +194,7 @@ type AccountData struct {
 	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=bounds.EncodedMaxAssetsPerAccount"`
 
 	// AuthAddr is the address against which signatures/multisigs/logicsigs should be checked.
-	// If empty, the address of the account whose AccountData this is is used.
+	// If empty, the address of the account whose AccountData this is used.
 	// A transaction may change an account's AuthAddr to "re-key" the account.
 	// This allows key rotation, changing the members in a multisig, etc.
 	AuthAddr Address `codec:"spend"`

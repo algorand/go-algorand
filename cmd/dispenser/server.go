@@ -136,7 +136,7 @@ func dispense(w http.ResponseWriter, r *http.Request) {
 	targets := r.Form["target"]
 	if len(targets) != 1 {
 		log.Printf("Corrupted target argument\n")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Corrupted target argument", http.StatusBadRequest)
 		return
 	}
 

@@ -203,7 +203,6 @@ func (z *BalanceRecordV5) MsgIsZero() bool {
 func BalanceRecordV5MaxSize() (s int) {
 	s = 1 + 3 + basics.AddressMaxSize() + 3
 	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -472,15 +471,6 @@ func (z *BalanceRecordV6) MsgIsZero() bool {
 func BalanceRecordV6MaxSize() (s int) {
 	s = 1 + 2 + basics.AddressMaxSize() + 2
 	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
-	s += 2
-	s += msgp.MapHeaderSize
-	// Adding size of map keys for z.Resources
-	s += resourcesPerCatchpointFileChunkBackwardCompatible * (msgp.Uint64Size)
-	// Adding size of map values for z.Resources
-	s += resourcesPerCatchpointFileChunkBackwardCompatible
-	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
-	s += 2 + msgp.BoolSize
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -876,7 +866,6 @@ func (z *OnlineAccountRecordV6) MsgIsZero() bool {
 func OnlineAccountRecordV6MaxSize() (s int) {
 	s = 1 + 5 + basics.AddressMaxSize() + 4 + basics.RoundMaxSize() + 4 + msgp.Uint64Size + 4 + basics.RoundMaxSize() + 5
 	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1020,5 +1009,4 @@ func (z *OnlineRoundParamsRecordV6) MsgIsZero() bool {
 func OnlineRoundParamsRecordV6MaxSize() (s int) {
 	s = 1 + 4 + basics.RoundMaxSize() + 5
 	panic("Unable to determine max size: MaxSize() not implemented for Raw type")
-	return
 }

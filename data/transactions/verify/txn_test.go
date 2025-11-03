@@ -820,7 +820,35 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "only have one of Sig, Msig, or LMsig")
+	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	txnGroups[0][0].Lsig.Msig.Subsigs = nil
+
+	/////  logic with sig and LMsig
+	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
+	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
+
+	/////  logic with Msig and LMsig
+	txnGroups[0][0].Lsig.Msig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.Msig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x1},
+		Sig: crypto.Signature{0x2},
+	}
+	txnGroups[0][0].Lsig.LMsig.Subsigs = make([]crypto.MultisigSubsig, 1)
+	txnGroups[0][0].Lsig.LMsig.Subsigs[0] = crypto.MultisigSubsig{
+		Key: crypto.PublicKey{0x3},
+		Sig: crypto.Signature{0x4},
+	}
+	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
 
 }
 
@@ -1029,8 +1057,18 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 func TestTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	testVersions := []protocol.ConsensusVersion{protocol.ConsensusV40, protocol.ConsensusFuture}
+	for _, consensusVer := range testVersions {
+		t.Run(string(consensusVer), func(t *testing.T) {
+			useLMsig := config.Consensus[consensusVer].LogicSigLMsig
+			testTxnGroupCacheUpdateLogicWithMultiSig(t, consensusVer, useLMsig)
+		})
+	}
+}
+
+func testTxnGroupCacheUpdateLogicWithMultiSig(t *testing.T, consensusVer protocol.ConsensusVersion, useLMsig bool) {
 	secrets, _, pks, multiAddress := generateMultiSigAccounts(t, 30)
-	blkHdr := createDummyBlockHeader()
+	blkHdr := createDummyBlockHeader(consensusVer)
 
 	const numOfTxn = 20
 	signedTxn := make([]transactions.SignedTxn, numOfTxn)
@@ -1055,8 +1093,12 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		signedTxn[i].Txn.Sender = multiAddress[s]
 		signedTxn[i].Lsig.Args = [][]byte{[]byte("=0\x97S\x85H\xe9\x91B\xfd\xdb;1\xf5Z\xaec?\xae\xf2I\x93\x08\x12\x94\xaa~\x06\x08\x849b")}
 		signedTxn[i].Lsig.Logic = op.Program
-		program := logic.MultisigProgram{Addr: crypto.Digest(multiAddress[s]), Program: op.Program}
-
+		var program crypto.Hashable
+		if useLMsig {
+			program = logic.MultisigProgram{Addr: crypto.Digest(multiAddress[s]), Program: op.Program}
+		} else {
+			program = logic.Program(op.Program)
+		}
 		// create multi sig that 2 out of 3 has signed the txn
 		var sigs [2]crypto.MultisigSig
 		for j := 0; j < 2; j++ {
@@ -1066,7 +1108,11 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		}
 		msig, err := crypto.MultisigAssemble(sigs[:])
 		require.NoError(t, err)
-		signedTxn[i].Lsig.LMsig = msig
+		if useLMsig {
+			signedTxn[i].Lsig.LMsig = msig
+		} else {
+			signedTxn[i].Lsig.Msig = msig
+		}
 	}
 
 	txnGroups := make([][]transactions.SignedTxn, len(signedTxn))
@@ -1076,10 +1122,18 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	}
 
 	breakSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.LMsig.Subsigs[0].Sig[0]++
+		if useLMsig {
+			txn.Lsig.LMsig.Subsigs[0].Sig[0]++
+		} else {
+			txn.Lsig.Msig.Subsigs[0].Sig[0]++
+		}
 	}
 	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
-		txn.Lsig.LMsig.Subsigs[0].Sig[0]--
+		if useLMsig {
+			txn.Lsig.LMsig.Subsigs[0].Sig[0]--
+		} else {
+			txn.Lsig.Msig.Subsigs[0].Sig[0]--
+		}
 	}
 
 	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
@@ -1211,4 +1265,269 @@ func BenchmarkTxn(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+}
+
+// TestLogicSigMultisigValidation verifies that signatures are properly validated
+// in different contexts (single-sig vs multisig, different multisig addresses).
+func TestLogicSigMultisigValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Run("v40", func(t *testing.T) { testLogicSigMultisigValidation(t, protocol.ConsensusV40, false) })
+	t.Run("v41", func(t *testing.T) { testLogicSigMultisigValidation(t, protocol.ConsensusV41, true) })
+	t.Run("future", func(t *testing.T) { testLogicSigMultisigValidation(t, protocol.ConsensusFuture, true) })
+}
+
+func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.ConsensusVersion, useLMsig bool) {
+	ops, err := logic.AssembleString("int 1")
+	require.NoError(t, err)
+	program := ops.Program
+
+	// Generate test keys
+	secrets := make([]*crypto.SignatureSecrets, 3)
+	for i := range secrets {
+		var seed crypto.Seed
+		crypto.RandBytes(seed[:])
+		secrets[i] = crypto.GenerateSignatureSecrets(seed)
+	}
+
+	// Helper to create a test transaction
+	makeTestTxn := func(sender basics.Address) transactions.SignedTxn {
+		return transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:      sender,
+					Fee:         basics.MicroAlgos{Raw: 1000},
+					FirstValid:  1,
+					LastValid:   100,
+					GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: basics.Address{},
+					Amount:   basics.MicroAlgos{Raw: 1000},
+				},
+			},
+		}
+	}
+
+	// Helper to verify a logic sig
+	verifyLogicSig := func(t *testing.T, stxn transactions.SignedTxn) error {
+		blkHdr := createDummyBlockHeader(consensusVer)
+		dummyLedger := DummyLedgerForSignature{}
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, &blkHdr, &dummyLedger, nil)
+		require.NoError(t, err)
+		return logicSigVerify(0, groupCtx)
+	}
+
+	t.Run("MultisigToSingleSig", func(t *testing.T) {
+		pks := []crypto.PublicKey{secrets[0].SignatureVerifier}
+		msigAddr, err := crypto.MultisigAddrGen(1, 1, pks)
+		require.NoError(t, err)
+
+		// Sign in multisig context
+		var msig crypto.MultisigSig
+		if useLMsig { // >=v41: use MultisigProgram with address binding
+			msig, err = crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 1, pks, *secrets[0])
+		} else { // v40: use Program directly
+			msig, err = crypto.MultisigSign(logic.Program(program), msigAddr, 1, 1, pks, *secrets[0])
+		}
+		require.NoError(t, err)
+
+		// Try to use multisig signature as single sig
+		stxn := makeTestTxn(basics.Address(secrets[0].SignatureVerifier))
+		stxn.Lsig = transactions.LogicSig{
+			Logic: program,
+			Sig:   msig.Subsigs[0].Sig,
+		}
+
+		err = verifyLogicSig(t, stxn)
+		if useLMsig {
+			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+		} else {
+			require.NoError(t, err)
+		}
+	})
+
+	t.Run("SingleSigToMultisig", func(t *testing.T) {
+		// Sign as single sig
+		singleSig := secrets[0].Sign(logic.Program(program))
+
+		// Create multisig with same key
+		pks := []crypto.PublicKey{secrets[0].SignatureVerifier}
+		msigAddr, err := crypto.MultisigAddrGen(1, 1, pks)
+		require.NoError(t, err)
+
+		// Try to use single sig in multisig
+		stxn := makeTestTxn(basics.Address(msigAddr))
+		msigWithSingleSig := crypto.MultisigSig{Version: 1, Threshold: 1,
+			Subsigs: []crypto.MultisigSubsig{{Key: secrets[0].SignatureVerifier, Sig: singleSig}},
+		}
+
+		if useLMsig { // >=v41: use LMsig field
+			stxn.Lsig = transactions.LogicSig{Logic: program, LMsig: msigWithSingleSig}
+			err = verifyLogicSig(t, stxn)
+			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+		} else { // v40: use Msig field
+			stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msigWithSingleSig}
+			err = verifyLogicSig(t, stxn)
+			require.NoError(t, err)
+		}
+	})
+
+	t.Run("CrossMultisigValidation", func(t *testing.T) {
+		// Create two different 1-of-2 multisigs
+		pks1 := []crypto.PublicKey{secrets[0].SignatureVerifier, secrets[1].SignatureVerifier, secrets[2].SignatureVerifier}
+		pks2 := []crypto.PublicKey{secrets[0].SignatureVerifier, secrets[1].SignatureVerifier}
+
+		msigAddr1, err := crypto.MultisigAddrGen(1, 2, pks1)
+		require.NoError(t, err)
+		msigAddr2, err := crypto.MultisigAddrGen(1, 2, pks2)
+		require.NoError(t, err)
+
+		// Sign for each multisig
+		var sig1, sig2 crypto.MultisigSig
+		if useLMsig { // >=v41: use MultisigProgram with address binding
+			sig1, err = crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr1, Program: program}, msigAddr1, 1, 2, pks1, *secrets[0])
+			require.NoError(t, err)
+			sig2, err = crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr2, Program: program}, msigAddr2, 1, 2, pks2, *secrets[1])
+			require.NoError(t, err)
+		} else { // v40: use Program directly
+			sig1, err = crypto.MultisigSign(logic.Program(program), msigAddr1, 1, 2, pks1, *secrets[0])
+			require.NoError(t, err)
+			sig2, err = crypto.MultisigSign(logic.Program(program), msigAddr2, 1, 2, pks2, *secrets[1])
+			require.NoError(t, err)
+		}
+
+		// Try to mix signatures from different multisigs
+		stxn := makeTestTxn(basics.Address(msigAddr2))
+		mixedMsig := crypto.MultisigSig{Version: 1, Threshold: 2,
+			Subsigs: []crypto.MultisigSubsig{
+				{Key: secrets[0].SignatureVerifier, Sig: sig1.Subsigs[0].Sig}, // from msigAddr1
+				{Key: secrets[1].SignatureVerifier, Sig: sig2.Subsigs[1].Sig}, // from msigAddr2
+			},
+		}
+
+		if useLMsig { // >=v41: use LMsig field
+			stxn.Lsig = transactions.LogicSig{Logic: program, LMsig: mixedMsig}
+			err = verifyLogicSig(t, stxn)
+			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+		} else { // v40: use Msig field
+			stxn.Lsig = transactions.LogicSig{Logic: program, Msig: mixedMsig}
+			err = verifyLogicSig(t, stxn)
+			require.NoError(t, err)
+		}
+	})
+
+	t.Run("DisableMsig", func(t *testing.T) {
+		// Run on consensus when Msig is disabled, only LMsig allowed
+		if config.Consensus[consensusVer].LogicSigMsig || !config.Consensus[consensusVer].LogicSigLMsig {
+			t.Skip("requires LogicSigMsig=false and LogicSigLMsig=true")
+		}
+
+		pks := []crypto.PublicKey{secrets[0].SignatureVerifier, secrets[1].SignatureVerifier}
+		msigAddr, err := crypto.MultisigAddrGen(1, 2, pks)
+		require.NoError(t, err)
+
+		// Sign with address binding
+		sig1, err := crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 2, pks, *secrets[0])
+		require.NoError(t, err)
+		sig2, err := crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 2, pks, *secrets[1])
+		require.NoError(t, err)
+
+		msig, err := crypto.MultisigAssemble([]crypto.MultisigSig{sig1, sig2})
+		require.NoError(t, err)
+
+		// Create a transaction
+		stxn := makeTestTxn(basics.Address(msigAddr))
+
+		// Test with Msig field - should be rejected
+		stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig}
+		err = verifyLogicSig(t, stxn)
+		require.ErrorContains(t, err, "LogicSig Msig field not supported in this consensus version")
+
+		// Test with LMsig field - should work
+		stxn.Lsig = transactions.LogicSig{Logic: program, LMsig: msig}
+		err = verifyLogicSig(t, stxn)
+		require.NoError(t, err)
+
+		// Test with both fields - should fail
+		stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: msig}
+		err = verifyLogicSig(t, stxn)
+		require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+	})
+}
+
+func TestLogicSigMsigBothFlags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Create a test consensus version with both flags enabled
+	consensusVer := protocol.ConsensusCurrentVersion
+	testConsensus := config.Consensus[consensusVer]
+	testConsensus.LogicSigMsig = true
+	testConsensus.LogicSigLMsig = true
+	config.Consensus["test-lmsig-flags"] = testConsensus
+	defer delete(config.Consensus, "test-lmsig-flags")
+
+	// Simple test program that always approves
+	ops, err := logic.AssembleString("int 1")
+	require.NoError(t, err)
+	program := ops.Program
+
+	// Create test keys
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	secret := crypto.GenerateSignatureSecrets(seed)
+	pks := []crypto.PublicKey{secret.SignatureVerifier}
+
+	msigAddr, err := crypto.MultisigAddrGen(1, 1, pks)
+	require.NoError(t, err)
+
+	// Sign with both methods
+	msig, err := crypto.MultisigSign(logic.Program(program), msigAddr, 1, 1, pks, *secret)
+	require.NoError(t, err)
+
+	lmsig, err := crypto.MultisigSign(logic.MultisigProgram{Addr: msigAddr, Program: program}, msigAddr, 1, 1, pks, *secret)
+	require.NoError(t, err)
+
+	// Create test transaction
+	stxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      basics.Address(msigAddr),
+				Fee:         basics.MicroAlgos{Raw: 1000},
+				FirstValid:  1,
+				LastValid:   100,
+				GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: basics.Address{},
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		},
+	}
+
+	// Helper to verify a logic sig
+	verifyLogicSig := func() error {
+		blkHdr := createDummyBlockHeader("test-lmsig-flags")
+		dummyLedger := DummyLedgerForSignature{}
+		groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, &blkHdr, &dummyLedger, nil)
+		require.NoError(t, err)
+		return logicSigVerify(0, groupCtx)
+	}
+
+	// Test with Msig field only - should work
+	stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig}
+	err = verifyLogicSig()
+	require.NoError(t, err)
+
+	// Test with LMsig field only - should work
+	stxn.Lsig = transactions.LogicSig{Logic: program, LMsig: lmsig}
+	err = verifyLogicSig()
+	require.NoError(t, err)
+
+	// Test with both fields - should fail
+	stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: lmsig}
+	err = verifyLogicSig()
+	require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
 }

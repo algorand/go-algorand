@@ -463,7 +463,7 @@ func printDumpingCatchpointProgressLine(progress int, barLength int, dld int64) 
 	if dld > 0 {
 		outString = fmt.Sprintf(outString+" %d", dld)
 	}
-	fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
+	fmt.Print(escapeCursorUp + escapeDeleteLine + outString + "\n")
 }
 
 func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader ledger.CatchpointFileHeader, outFile *os.File, excludeFields []string) error {

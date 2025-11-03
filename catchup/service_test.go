@@ -1088,7 +1088,7 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 	require.Less(t, local.LastRound(), remote.LastRound())
 }
 
-// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not avaialble
+// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not available
 func TestServiceNoBlockForRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

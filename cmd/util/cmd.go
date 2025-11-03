@@ -106,8 +106,8 @@ func (c *CobraStringSliceValue) IsSet() bool { return c.isSet }
 
 // Set sets a value and fails if it is not allowed
 func (c *CobraStringSliceValue) Set(values string) error {
-	others := strings.Split(values, ",")
-	for _, other := range others {
+	others := strings.SplitSeq(values, ",")
+	for other := range others {
 		other = strings.TrimSpace(other)
 		if _, ok := c.allowedMap[other]; ok {
 			c.value = append(c.value, other)

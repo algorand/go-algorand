@@ -69,7 +69,7 @@ func collectPaths(typ reflect.Type, prefix []int, pathStack []reflect.Type) [][]
 
 	case reflect.Struct:
 		// Special case: skip known value-type structs like time.Time
-		if typ == reflect.TypeOf(time.Time{}) {
+		if typ == reflect.TypeFor[time.Time]() {
 			return [][]int{prefix}
 		}
 

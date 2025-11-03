@@ -69,8 +69,8 @@ func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return
 	}
-	lines := strings.Split(string(body), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(body), "\n")
+	for line := range lines {
 		if len(line) < 5 {
 			continue
 		}

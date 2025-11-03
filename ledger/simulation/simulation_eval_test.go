@@ -9331,7 +9331,7 @@ func TestFixSigners(t *testing.T) {
 			})
 			txgroup := txntest.Group(&noBalPay1, &appCall, &noBalPay2)
 
-			// Testing that our ledger lookup of accounts to retreive their AuthAddr does not crash
+			// Testing that our ledger lookup of accounts to retrieve their AuthAddr does not crash
 			// and burn when the account is empty.
 
 			return simulationTestCase{

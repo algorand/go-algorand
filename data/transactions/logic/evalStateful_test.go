@@ -668,7 +668,7 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 // that something STOPS working as of a particular version. Note that this does
 // *not* use different consensus versions. It is tempting to make it find the
 // lowest possible consensus version in the loop in order to support the `v` it
-// it working on.  For super confidence, one might argue this should be a nested
+// is working on.  For super confidence, one might argue this should be a nested
 // loop over all of the consensus versions that work with the `v`, from the
 // first possible, to vFuture.
 func testLogicRange(t *testing.T, start, stop int, test func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger)) {
@@ -1115,7 +1115,7 @@ int 4141
 ==
 `
 	// check that even during application creation (Txn.ApplicationID == 0)
-	// we will use the the kvCow if the exact application ID (100) is
+	// we will use the kvCow if the exact application ID (100) is
 	// specified in the transaction
 	now.TxnGroup[0].Txn.ApplicationID = 0
 	now.TxnGroup[0].Txn.ForeignApps = []basics.AppIndex{100}

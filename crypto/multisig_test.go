@@ -310,7 +310,7 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	}
 
 	msig, err := MultisigAssemble(sigs)
-	require.NoError(t, err, "Multisig: error assmeble multisig")
+	require.NoError(t, err, "Multisig: error assemble multisig")
 	err = MultisigVerify(txid, addr, msig)
 	require.Error(t, err, "Multisig: did not return error as expected")
 	br := MakeBatchVerifier()
@@ -346,7 +346,7 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 	}
 
 	msig, err := MultisigAssemble(sigs)
-	require.NoError(t, err, "Multisig: error assmeble multisig")
+	require.NoError(t, err, "Multisig: error assemble multisig")
 	msig.Subsigs[0].Sig = Signature{}
 	err = MultisigVerify(txid, addr, msig)
 	require.Error(t, err, "Multisig: did not return error as expected")
@@ -386,7 +386,7 @@ func TestOneSignatureIsInvalid(t *testing.T) {
 
 	sigs[1].Subsigs[1].Sig[5] = sigs[1].Subsigs[1].Sig[5] + 1
 	msig, err := MultisigAssemble(sigs)
-	require.NoError(t, err, "Multisig: error assmeble multisig")
+	require.NoError(t, err, "Multisig: error assemble multisig")
 	err = MultisigVerify(txid, addr, msig)
 	require.Error(t, err, "Multisig: did not return error as expected")
 	br := MakeBatchVerifier()

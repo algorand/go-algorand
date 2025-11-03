@@ -120,10 +120,8 @@ func (m *lruOnlineAccounts) prune(newSize int) (removed int) {
 	if m.accounts == nil {
 		return
 	}
-	for {
-		if len(m.accounts) <= newSize {
-			break
-		}
+	for len(m.accounts) > newSize {
+
 		back := m.accountsList.Back()
 		delete(m.accounts, back.Value.Addr)
 		m.accountsList.Remove(back)

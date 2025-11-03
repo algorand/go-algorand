@@ -88,7 +88,7 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 
 		// With the addition of itxn_field, itxn_submit, which rely on
 		// machinery outside logic package for validity checking, we
-		// need a more realistic set of consensus paramaters.
+		// need a more realistic set of consensus parameters.
 		Asset:                 true,
 		MaxAssetNameBytes:     12,
 		MaxAssetUnitNameBytes: 6,

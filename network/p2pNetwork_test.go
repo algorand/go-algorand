@@ -72,6 +72,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -162,6 +163,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -256,6 +258,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
@@ -352,7 +355,8 @@ func (s *mockService) AddrInfo() peer.AddrInfo {
 	}
 }
 
-func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) {
+func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) bool {
+	return false
 }
 
 func (s *mockService) ClosePeer(peer peer.ID) error {
@@ -398,8 +402,8 @@ func TestP2PNetworkAddress(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
 	netA, err := NewP2PNetwork(log, cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
-	defer netA.Stop()
 	require.NoError(t, err)
+	defer netA.Stop()
 	addrInfo := netA.service.AddrInfo()
 	// close the real service since we will substitute a mock one
 	netA.service.Close()
@@ -595,6 +599,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = "127.0.0.1:0"
 	cfg.EnableDHTProviders = true
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 
@@ -695,7 +700,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 					// it appears there are artificial peers because of listening on localhost and on a real network interface
 					// so filter out and save only unique peers by their IDs
 					net := nets[idx]
-					net.meshThreadInner() // update peerstore with DHT peers
+					net.meshThreadInner(cfg.GossipFanout) // update peerstore with DHT peers
 					peers := net.GetPeers(PeersPhonebookArchivalNodes)
 					uniquePeerIDs := make(map[peer.ID]struct{})
 					for _, p := range peers {
@@ -801,6 +806,8 @@ func TestP2PHTTPHandler(t *testing.T) {
 	// zero clients allowed, rate limiting window (10s) is greater than queue deadline (1s)
 	netB, err := NewP2PNetwork(log, cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
 	require.NoError(t, err)
+	defer netB.Stop() // even though netB.Start is not called, NewP2PNetwork creates goroutines to stop
+
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
 	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.RelayRole)
@@ -1059,11 +1066,13 @@ func TestP2PWantTXGossip(t *testing.T) {
 	peerID := peer.ID("myPeerID")
 	mockService := &mockSubPService{mockService: mockService{id: peerID}, shouldNextFail: true}
 	net := &P2PNetwork{
-		service:  mockService,
-		log:      logging.TestingLog(t),
-		ctx:      ctx,
-		nodeInfo: &nopeNodeInfo{},
+		service:         mockService,
+		log:             logging.TestingLog(t),
+		ctx:             ctx,
+		nodeInfo:        &nopeNodeInfo{},
+		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag}),
 	}
+	net.outgoingConnsCloser = makeOutgoingConnsCloser(logging.TestingLog(t), net, net.connPerfMonitor, cliqueResolveInterval)
 
 	// ensure wantTXGossip from false to false is noop
 	net.wantTXGossip.Store(false)
@@ -1426,6 +1435,7 @@ func TestP2PTxTopicValidator_NoWsPeer(t *testing.T) {
 
 	net, err := NewP2PNetwork(log, cfg, "", nil, GenesisInfo{genesisID, config.Devtestnet}, &nopeNodeInfo{}, nil, nil)
 	require.NoError(t, err)
+	defer net.Stop()
 
 	peerID := peer.ID("12345678") // must be 8+ in size
 	msg := pubsub.Message{Message: &pb.Message{}, ID: string(peerID)}
@@ -1455,6 +1465,7 @@ func TestGetPeersFiltersSelf(t *testing.T) {
 
 	net, err := NewP2PNetwork(log, cfg, t.TempDir(), []string{}, GenesisInfo{"test-genesis", "test-network"}, &nopeNodeInfo{}, nil, nil)
 	require.NoError(t, err)
+	defer net.Stop()
 	selfID := net.service.ID()
 
 	// Create and add self

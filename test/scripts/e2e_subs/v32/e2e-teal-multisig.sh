@@ -65,7 +65,8 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "Auto-detection correctly used legacy mode on v32"
-if ! cat ${TEMPDIR}/auto2.lsig | msgpacktool -d | grep -q '"msig"'; then
+msgpacktool -d < ${TEMPDIR}/auto2.lsig > ${TEMPDIR}/auto2.json
+if ! grep -q '"msig"' ${TEMPDIR}/auto2.json; then
     echo "ERROR: Auto-detection did not use legacy mode (Msig field not found)"
     exit 1
 fi
