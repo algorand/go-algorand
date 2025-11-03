@@ -1335,3 +1335,14 @@ func TestCopyFunctions(t *testing.T) {
 	}
 
 }
+
+func TestIsEmptyAppFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, nz := range basics_testing.NearZeros(t, basics.AppParams{}) {
+		var rd ResourcesData
+		rd.SetAppParams(nz, false)
+		assert.False(t, rd.IsEmptyAppFields(), nz)
+	}
+}

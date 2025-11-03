@@ -556,7 +556,8 @@ func (rd *ResourcesData) IsEmptyAppFields() bool {
 		rd.GlobalStateSchemaNumUint == 0 &&
 		rd.GlobalStateSchemaNumByteSlice == 0 &&
 		rd.ExtraProgramPages == 0 &&
-		rd.Version == 0
+		rd.Version == 0 &&
+		rd.SizeSponsor.IsZero()
 }
 
 // IsApp returns true if the flag is ResourceFlagsEmptyApp and the fields are not empty.
