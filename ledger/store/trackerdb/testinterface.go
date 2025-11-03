@@ -26,7 +26,7 @@ import (
 )
 
 // testinterface.go contains interface extensions specific to testing
-// testing interfaces should be made accessible by calling the Testing() method
+// Testing interfaces should be made accessible by calling the Testing() method
 // on the related interface. Example:
 // 		testTx := tx.Testing()
 // these can also be inlined:

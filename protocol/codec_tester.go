@@ -42,7 +42,7 @@ type msgpMarshalUnmarshal interface {
 	msgp.Unmarshaler
 }
 
-var rawMsgpType = reflect.TypeOf(msgp.Raw{})
+var rawMsgpType = reflect.TypeFor[msgp.Raw]()
 var errSkipRawMsgpTesting = fmt.Errorf("skipping msgp.Raw serializing, since it won't be the same across go-codec and msgp")
 
 func oneOf(n int) bool {
@@ -122,7 +122,7 @@ func RandomizeObjectField(template interface{}, opts ...RandomizeObjectOption) (
 func parseStructTags(structTag string) map[string]string {
 	tagsMap := map[string]string{}
 
-	for _, tag := range strings.Split(reflect.StructTag(structTag).Get("codec"), ",") {
+	for tag := range strings.SplitSeq(reflect.StructTag(structTag).Get("codec"), ",") {
 		elements := strings.Split(tag, "=")
 		if len(elements) != 2 {
 			continue

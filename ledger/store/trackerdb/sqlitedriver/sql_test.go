@@ -19,7 +19,6 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -102,7 +101,7 @@ func TestWrapIOError(t *testing.T) {
 	require.ErrorAs(t, wrapIOError(err), &trackerIOErr)
 
 	err = sqlite3.Error{Code: sqlite3.ErrSchema}
-	require.False(t, errors.As(wrapIOError(err), &trackerIOErr))
+	require.NotErrorAs(t, wrapIOError(err), &trackerIOErr)
 
 	// confirm that double wrapping only applies once
 	err = sqlite3.Error{Code: sqlite3.ErrIoErr}

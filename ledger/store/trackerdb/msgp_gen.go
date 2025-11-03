@@ -9,7 +9,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
@@ -2504,15 +2503,6 @@ func (z *ResourcesData) MsgIsZero() bool {
 func ResourcesDataMaxSize() (s int) {
 	s = 3 + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.BoolSize + 2
 	panic("Unable to determine max size: String type z.UnitName is unbounded")
-	s += 2
-	panic("Unable to determine max size: String type z.AssetName is unbounded")
-	s += 2
-	panic("Unable to determine max size: String type z.URL is unbounded")
-	s += 2
-	// Calculating size of array: z.MetadataHash
-	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
-	s += 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.BytesPrefixSize + bounds.MaxAvailableAppProgramLen + 2 + msgp.BytesPrefixSize + bounds.MaxAvailableAppProgramLen + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2832,14 +2822,6 @@ func TxTailRoundMaxSize() (s int) {
 	s = 1 + 2
 	// Calculating size of slice: z.TxnIDs
 	panic("Slice z.TxnIDs is unbounded")
-	s += 2
-	// Calculating size of slice: z.LastValid
-	panic("Slice z.LastValid is unbounded")
-	s += 2
-	// Calculating size of slice: z.Leases
-	panic("Slice z.Leases is unbounded")
-	s += 2 + bookkeeping.BlockHeaderMaxSize()
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler

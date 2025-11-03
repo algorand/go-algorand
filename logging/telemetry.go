@@ -115,7 +115,7 @@ func ReadTelemetryConfigOrDefault(dataDir string, globalDir string) (cfg Telemet
 		// Create an ephemeral config
 		cfg = createTelemetryConfig()
 
-		// If the error was that the the config wasn't there then it wasn't really an error
+		// If the error was that the config wasn't there then it wasn't really an error
 		if os.IsNotExist(err) {
 			err = nil
 		} else {

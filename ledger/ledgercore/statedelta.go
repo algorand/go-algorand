@@ -33,7 +33,7 @@ const (
 	stateDeltaTargetOptimizationThreshold = uint64(50000000)
 )
 
-// ModifiedCreatable defines the changes to a single single creatable state
+// ModifiedCreatable defines the changes to a single creatable state
 type ModifiedCreatable struct {
 	// Type of the creatable: app or asset
 	Ctype basics.CreatableType
