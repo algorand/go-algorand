@@ -1498,8 +1498,8 @@ txna ApplicationArgs 0
 app_global_del
 `)
 		appID := dl.createApp(addrs[0], setter,
-			basics.StateSchema{NumUint: 2},      // Set, but won't allow bytes
-			basics.StateSchema{NumByteSlice: 3}) // Set, but won't allow globals
+			basics.StateSchema{NumUint: 2},      // globals, won't allow bytes
+			basics.StateSchema{NumByteSlice: 3}) // locals, won't allow ints
 
 		// call with no args, passes fine
 		dl.txn(&txntest.Txn{
@@ -1561,7 +1561,7 @@ app_global_del
 			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
 			mbr(addrs[1]))
 
-		// call with two args can now suceed
+		// call with two args can now succeed
 		dl.txn(&txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          addrs[0],
