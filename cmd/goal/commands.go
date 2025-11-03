@@ -438,7 +438,7 @@ func ensurePassword() []byte {
 }
 
 func reportInfoln(args ...interface{}) {
-	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Println(infoNonPrintableCharacters)
@@ -454,7 +454,7 @@ func reportInfof(format string, args ...interface{}) {
 // reportWarnRawln prints a warning message to stderr. Only use this function if that warning
 // message already indicates that it's a warning. Otherwise, use reportWarnln
 func reportWarnRawln(args ...interface{}) {
-	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Fprintln(os.Stderr, infoNonPrintableCharacters)
@@ -484,7 +484,7 @@ func reportWarnf(format string, args ...interface{}) {
 
 func reportErrorln(args ...interface{}) {
 	outStr := fmt.Sprint(args...)
-	for _, line := range strings.Split(outStr, "\n") {
+	for line := range strings.SplitSeq(outStr, "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Fprintln(os.Stderr, errorNonPrintableCharacters)

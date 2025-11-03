@@ -919,6 +919,11 @@ func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
 }
 
+// ConsensusParams returns the consensus parameters for the block being evaluated.
+func (eval *BlockEvaluator) ConsensusParams() config.ConsensusParams {
+	return eval.proto
+}
+
 // ResetTxnBytes resets the number of bytes tracked by the BlockEvaluator to
 // zero.  This is a specialized operation used by the transaction pool to
 // simulate the effect of putting pending transactions in multiple blocks.
@@ -1182,6 +1187,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		err = eval.block.Alive(txn.Txn.Header)
 		if err != nil {
 			return err
+		}
+
+		err = txn.Txn.WellFormed(eval.specials, eval.proto)
+		if err != nil {
+			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
+			return &txnErr
 		}
 
 		// Transaction already in the ledger?

@@ -391,25 +391,11 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 }
 
 func (v OneTimeSignatureVerifier) batchVerify(batchID OneTimeSignatureSubkeyBatchID, offsetID OneTimeSignatureSubkeyOffsetID, message Hashable, sig OneTimeSignature) bool {
-	// serialize encoded batchID, offsetID, message into a continuous memory buffer with the layout
-	// hashRep(batchID)... hashRep(offsetID)... hashRep(message)...
-	const estimatedSize = 256
-	messageBuffer := make([]byte, 0, estimatedSize)
-
-	messageBuffer = HashRepToBuff(batchID, messageBuffer)
-	batchIDLen := uint64(len(messageBuffer))
-	messageBuffer = HashRepToBuff(offsetID, messageBuffer)
-	offsetIDLen := uint64(len(messageBuffer)) - batchIDLen
-	messageBuffer = HashRepToBuff(message, messageBuffer)
-	messageLen := uint64(len(messageBuffer)) - offsetIDLen - batchIDLen
-	msgLengths := []uint64{batchIDLen, offsetIDLen, messageLen}
-	allValid, _ := cgoBatchVerificationImpl(
-		messageBuffer,
-		msgLengths,
-		[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
-		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
-	)
-	return allValid
+	bv := MakeBatchVerifierWithHint(3)
+	bv.EnqueueSignature(PublicKey(v), batchID, Signature(sig.PK2Sig))
+	bv.EnqueueSignature(PublicKey(batchID.SubKeyPK), offsetID, Signature(sig.PK1Sig))
+	bv.EnqueueSignature(PublicKey(offsetID.SubKeyPK), message, Signature(sig.Sig))
+	return bv.Verify() == nil
 }
 
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.
@@ -423,10 +409,7 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 	// subkeys.
 	if current.Batch+1 == s.FirstBatch {
 		if current.Offset > s.FirstOffset {
-			jump := current.Offset - s.FirstOffset
-			if jump > uint64(len(s.Offsets)) {
-				jump = uint64(len(s.Offsets))
-			}
+			jump := min(current.Offset-s.FirstOffset, uint64(len(s.Offsets)))
 
 			s.FirstOffset += jump
 			s.Offsets = s.Offsets[jump:]

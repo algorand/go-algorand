@@ -46,7 +46,7 @@ func unmarshallMessageOfInterest(data []byte) (map[protocol.Tag]bool, error) {
 	}
 	// convert the tags into a tags map.
 	msgTagsMap := make(map[protocol.Tag]bool, len(tags))
-	for _, tag := range strings.Split(string(tags), topicsEncodingSeparator) {
+	for tag := range strings.SplitSeq(string(tags), topicsEncodingSeparator) {
 		if len(tag) != protocol.TagLength {
 			return nil, errInvalidMessageOfInterestInvalidTag
 		}

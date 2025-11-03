@@ -408,12 +408,16 @@ func _() {
 	_ = x[BlkProtocol-7]
 	_ = x[BlkTxnCounter-8]
 	_ = x[BlkProposerPayout-9]
-	_ = x[invalidBlockField-10]
+	_ = x[BlkBranch512-10]
+	_ = x[BlkSha512_256TxnCommitment-11]
+	_ = x[BlkSha256TxnCommitment-12]
+	_ = x[BlkSha512TxnCommitment-13]
+	_ = x[invalidBlockField-14]
 }
 
-const _BlockField_name = "BlkSeedBlkTimestampBlkProposerBlkFeesCollectedBlkBonusBlkBranchBlkFeeSinkBlkProtocolBlkTxnCounterBlkProposerPayoutinvalidBlockField"
+const _BlockField_name = "BlkSeedBlkTimestampBlkProposerBlkFeesCollectedBlkBonusBlkBranchBlkFeeSinkBlkProtocolBlkTxnCounterBlkProposerPayoutBlkBranch512BlkSha512_256TxnCommitmentBlkSha256TxnCommitmentBlkSha512TxnCommitmentinvalidBlockField"
 
-var _BlockField_index = [...]uint8{0, 7, 19, 30, 46, 54, 63, 73, 84, 97, 114, 131}
+var _BlockField_index = [...]uint8{0, 7, 19, 30, 46, 54, 63, 73, 84, 97, 114, 126, 152, 174, 196, 213}
 
 func (i BlockField) String() string {
 	if i < 0 || i >= BlockField(len(_BlockField_index)-1) {

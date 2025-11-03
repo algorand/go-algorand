@@ -148,10 +148,7 @@ func (s *LimitedReaderSlurper) Bytes() []byte {
 // allocateNextBuffer allocates the next buffer and places it in the buffers array.
 func (s *LimitedReaderSlurper) allocateNextBuffer() {
 	s.lastBuffer++
-	allocationSize := allocationStep
-	if allocationSize > s.remainedUnallocatedSpace {
-		allocationSize = s.remainedUnallocatedSpace
-	}
+	allocationSize := min(allocationStep, s.remainedUnallocatedSpace)
 	s.buffers[s.lastBuffer] = make([]byte, 0, allocationSize)
 	s.remainedUnallocatedSpace -= allocationSize
 }

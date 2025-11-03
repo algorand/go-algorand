@@ -68,7 +68,7 @@ func TestMetricGauge(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created 3 separate gauges
+	// in the loop above we've created 3 separate gauges
 	// let's see if we received all 3 metrics
 	require.Equal(t, 3, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 

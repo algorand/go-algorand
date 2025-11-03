@@ -391,7 +391,7 @@ func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, ou
 	if errorOutput.output != "" {
 		fmt.Fprintf(os.Stdout, "errorOutput.output: `%s`\n", errorOutput.output)
 		errorCondition = true
-		fmt.Fprintf(os.Stderr, errorOutput.output)
+		fmt.Fprint(os.Stderr, errorOutput.output)
 		details := telemetryspec.ErrorOutputEventDetails{
 			Error:  errorOutput.output,
 			Output: output.output,

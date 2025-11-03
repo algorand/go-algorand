@@ -253,10 +253,10 @@ const (
 	CatchpointCatchupStateBlocksDownload
 	// CatchpointCatchupStateSwitch indicates that we're switching to use the downloaded ledger/blocks content
 	CatchpointCatchupStateSwitch
-
-	// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
-	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 )
+
+// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
+const catchpointCatchupStateLast = CatchpointCatchupStateSwitch
 
 // CatchupAccessorClientLedger represents ledger interface needed for catchpoint accessor clients
 type CatchupAccessorClientLedger interface {
@@ -454,7 +454,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 
 	// the following fields are now going to be ignored. We could add these to the database and validate these
 	// later on:
-	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
+	// TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
 	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {

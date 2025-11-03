@@ -407,7 +407,7 @@ func TestWebsocketNetworkBasicInvalidTags(t *testing.T) { // nolint:paralleltest
 		})}})
 	// send a message with an invalid tag which is in defaultSendMessageTags.
 	// it should not go through because the defaultSendMessageTags should not be accepted
-	// and the connection should be dropped dropped
+	// and the connection should be dropped
 	netA.Broadcast(context.Background(), "XX", []byte("foo"), false, nil)
 	for p := 0; p < 100; p++ {
 		if strings.Contains(logOutput.String(), "wsPeer handleMessageOfInterest: could not unmarshall message from") {
@@ -512,6 +512,7 @@ func TestWebsocketVoteCompression(t *testing.T) {
 			cfgA := defaultConfig
 			cfgA.GossipFanout = 1
 			cfgA.EnableVoteCompression = test.netAEnableCompression
+			cfgA.StatefulVoteCompressionTableSize = 0 // Disable stateful compression
 			netA := makeTestWebsocketNodeWithConfig(t, cfgA)
 			netA.Start()
 			defer netStop(t, netA, "A")
@@ -519,6 +520,7 @@ func TestWebsocketVoteCompression(t *testing.T) {
 			cfgB := defaultConfig
 			cfgB.GossipFanout = 1
 			cfgB.EnableVoteCompression = test.netBEnableCompression
+			cfgB.StatefulVoteCompressionTableSize = 0 // Disable stateful compression
 			netB := makeTestWebsocketNodeWithConfig(t, cfgB)
 
 			addrA, postListen := netA.Address()
@@ -585,29 +587,6 @@ func TestWebsocketVoteCompression(t *testing.T) {
 			require.Equal(t, test.netAEnableCompression, peer.vpackVoteCompressionSupported())
 
 		})
-	}
-}
-
-// Repeat basic, but test a unicast
-func TestWebsocketNetworkUnicast(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 2)
-	defer closeFunc()
-	counterDone := counter.done
-
-	require.Equal(t, 1, len(netA.peers))
-	require.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
-	peerB := netA.peers[0]
-	err := peerB.Unicast(context.Background(), []byte("foo"), protocol.TxnTag)
-	assert.NoError(t, err)
-	err = peerB.Unicast(context.Background(), []byte("bar"), protocol.TxnTag)
-	assert.NoError(t, err)
-
-	select {
-	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 2", counter.count)
 	}
 }
 
@@ -4091,7 +4070,7 @@ func TestTryConnectEarlyWrite(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	// Confirm that we successfuly received a message of interest
+	// Confirm that we successfully received a message of interest
 	assert.Len(t, netA.peers, 1)
 	fmt.Printf("MI Message Count: %v\n", netA.peers[0].miMessageCount.Load())
 	assert.Equal(t, uint64(1), netA.peers[0].miMessageCount.Load())

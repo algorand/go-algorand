@@ -2653,17 +2653,6 @@ func (z *Genesis) MsgIsZero() bool {
 func GenesisMaxSize() (s int) {
 	s = 1 + 3
 	panic("Unable to determine max size: String type z.SchemaID is unbounded")
-	s += 8 + protocol.NetworkIDMaxSize() + 6 + protocol.ConsensusVersionMaxSize() + 6
-	// Calculating size of slice: z.Allocation
-	s += msgp.ArrayHeaderSize + ((MaxInitialGenesisAllocationSize) * (GenesisAllocationMaxSize()))
-	s += 4
-	panic("Unable to determine max size: String type z.RewardsPool is unbounded")
-	s += 5
-	panic("Unable to determine max size: String type z.FeeSink is unbounded")
-	s += 10 + msgp.Int64Size + 8
-	panic("Unable to determine max size: String type z.Comment is unbounded")
-	s += 8 + msgp.BoolSize
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3087,10 +3076,6 @@ func (z *GenesisAllocation) MsgIsZero() bool {
 func GenesisAllocationMaxSize() (s int) {
 	s = 1 + 5
 	panic("Unable to determine max size: String type z.Address is unbounded")
-	s += 8
-	panic("Unable to determine max size: String type z.Comment is unbounded")
-	s += 6 + GenesisAccountDataMaxSize()
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler

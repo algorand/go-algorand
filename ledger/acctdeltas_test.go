@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
 	"os"
@@ -188,9 +189,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates l
 
 func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.AccountDeltas) map[basics.Address]basics.AccountData {
 	result := make(map[basics.Address]basics.AccountData, len(base)+deltas.Len())
-	for addr, ad := range base {
-		result[addr] = ad
-	}
+	maps.Copy(result, base)
 
 	for i := 0; i < deltas.Len(); i++ {
 		addr, _ := deltas.GetByIdx(i)
@@ -475,10 +474,7 @@ func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	iteration-- // 0-based here
 
 	delSegmentEnd := iteration * numElementsPerSegement
-	delSegmentStart := delSegmentEnd - numElementsPerSegement
-	if delSegmentStart < 0 {
-		delSegmentStart = 0
-	}
+	delSegmentStart := max(delSegmentEnd-numElementsPerSegement, 0)
 
 	newSample := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	stop := delSegmentEnd + numElementsPerSegement
@@ -707,10 +703,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		b.StopTimer()
 		balancesLoopStart := time.Now()
 		// generate a chunk;
-		chunkSize := targetAccountsCount - accountsLoaded
-		if chunkSize > BalancesPerCatchpointFileChunk {
-			chunkSize = BalancesPerCatchpointFileChunk
-		}
+		chunkSize := min(targetAccountsCount-accountsLoaded, BalancesPerCatchpointFileChunk)
 		last64KSize += chunkSize
 		if accountsLoaded >= targetAccountsCount-64*1024 && last64KStart.IsZero() {
 			last64KStart = time.Now()
@@ -1484,18 +1477,10 @@ func (m mockAccountWriter) clone() (m2 mockAccountWriter) {
 	m2.resources = make(map[mockResourcesKey]ledgercore.AccountResource, len(m.resources))
 	m2.addresses = make(map[basics.Address]trackerdb.AccountRef, len(m.resources))
 	m2.rowids = make(map[trackerdb.AccountRef]basics.Address, len(m.rowids))
-	for k, v := range m.accounts {
-		m2.accounts[k] = v
-	}
-	for k, v := range m.resources {
-		m2.resources[k] = v
-	}
-	for k, v := range m.addresses {
-		m2.addresses[k] = v
-	}
-	for k, v := range m.rowids {
-		m2.rowids[k] = v
-	}
+	maps.Copy(m2.accounts, m.accounts)
+	maps.Copy(m2.resources, m.resources)
+	maps.Copy(m2.addresses, m.addresses)
+	maps.Copy(m2.rowids, m.rowids)
 	m2.lastAcctRef = m.lastAcctRef
 	m2.availAcctRefs = m.availAcctRefs
 	return m2
@@ -1821,7 +1806,7 @@ func compactResourcesDeltasPermutations(a *require.Assertions, crd compactResour
 // Investigation shown there was another account YF5GJTPPMOUPU2GRGGVP2PGJTQZWGSWZISFHNIKDJSZ2CDPPWN4KKKYVQE
 // opted in into the same app 22045503. During the commit range the following happened:
 // at 16541783 YF5 made a payment txn (one acct delta)
-// at 16541785 RGJ has been funded and and opted in into app 22045503 (one acct delta, one res delta)
+// at 16541785 RGJ has been funded and opted in into app 22045503 (one acct delta, one res delta)
 // at 16541788 YF5 address had clear state txn for 22045503, and close out txn for the entire account (one acct delta, one res delta)
 // Because YF5 had modifications before RGJ, all its acct deltas were compacted into a single entry before RGJ (delete, create)
 // In the same time, the order in resources delta remained the same (opt-in, delete).
@@ -2791,6 +2776,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 // onlineAccountsDelete(2): A online
 // onlineAccountsDelete(3): A offline, B online
 // etc
+//
+//nolint:dupword // ignore
 func TestOnlineAccountsDeletion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

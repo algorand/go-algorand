@@ -437,10 +437,7 @@ func accountAssetInformationResourceLimitsTest(t *testing.T, handlers v2.Handler
 	assert.Equal(t, maxResults, len(*ret.AssetHoldings))
 
 	// Asset holdings should match the first limit assets from the account data
-	minForResults := 0
-	if inputNextToken > 0 {
-		minForResults = inputNextToken
-	}
+	minForResults := max(inputNextToken, 0)
 	for i := minForResults; i < minForResults+maxResults; i++ {
 		expectedIndex := basics.AssetIndex(i + 1)
 

@@ -19,7 +19,6 @@ package main
 import (
 	"archive/tar"
 	"compress/bzip2"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -224,5 +223,4 @@ func (tbf *tarBlockFile) getBlock(round uint64) (data []byte, err error) {
 			return
 		}
 	}
-	return nil, errors.New("this should be unreachable")
 }

@@ -230,7 +230,7 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC).UnixNano() // 11 sec => 1 sec into the interval
 
 	// fill 80% of the current interval
-	// switch to the next next interval
+	// switch to the next interval
 	// ensure all capacity is available
 
 	for i := 0; i < int(0.8*float64(rate)); i++ {

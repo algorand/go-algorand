@@ -23,7 +23,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	_ "net/http/pprof" // net/http/pprof is for registering the pprof URLs with the web server, so http://localhost:8080/debug/pprof/ works.
+	_ "net/http/pprof" //nolint:gosec // registers handlers on http.DefaultServeMux, but we only route to it when Config.EnableProfiler is true
 	"net/url"
 	"os"
 	"os/signal"

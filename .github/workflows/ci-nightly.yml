@@ -119,6 +119,14 @@ jobs:
           job-type: "Test"
           build-type: "Nightly Build"
           details: "• Partition: `${{ matrix.partition_id }}` of ${{ env.PARTITION_TOTAL }}\n• Failed Step: `${{ steps.run_tests.name }}`"
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          path: |
+            **/*.log
+          retention-days: 30
       - name: Upload test artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
@@ -271,6 +279,12 @@ jobs:
       CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
       S3_TESTDATA: ${{ secrets.S3_TESTDATA }}
     steps:
+      - name: Set CI_E2E_FILENAME for e2e test data publishing
+        run: |
+          # Set CI_E2E_FILENAME based on branch name, replacing '/' with '-' - used when publishing e2e test data to S3 (e2e.sh) for indexer tests
+          BRANCH_NAME="${{ github.event.inputs.branch || github.ref_name }}"
+          MODIFIED_BRANCH_NAME="${BRANCH_NAME//\//-}"
+          echo "CI_E2E_FILENAME=${MODIFIED_BRANCH_NAME}" >> $GITHUB_ENV
       - name: Download workspace archive
         uses: actions/download-artifact@v4
         with:

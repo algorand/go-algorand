@@ -114,8 +114,11 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ba
 
 	cparams := config.Consensus[ver]
 
+	prms, err := client.SuggestedParams()
+	a.NoError(err)
+
 	tx := partKey.GenerateRegistrationTransaction(
-		basics.MicroAlgos{Raw: 1000},
+		basics.MicroAlgos{Raw: prms.MinFee},
 		0,
 		100,
 		[32]byte{},
@@ -123,9 +126,6 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ba
 	)
 
 	if cparams.SupportGenesisHash {
-		prms, err := client.SuggestedParams()
-		a.NoError(err)
-
 		var genHash crypto.Digest
 		copy(genHash[:], prms.GenesisHash)
 		tx.GenesisHash = genHash

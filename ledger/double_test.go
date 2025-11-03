@@ -72,6 +72,10 @@ func (dl *DoubleLedger) beginBlock() *eval.BlockEvaluator {
 	return dl.eval
 }
 
+// txn will add a transaction to the current block. If no block is
+// currently being built, it will start one, and end it after the
+// transaction is added. If a problem is specified, it will be
+// expected to fail, and the block will not be ended.
 func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) (stib *transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {

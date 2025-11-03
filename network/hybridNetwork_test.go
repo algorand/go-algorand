@@ -39,6 +39,7 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableP2PHybridMode = true
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 	const p2pKeyDir = ""
 
@@ -208,6 +209,7 @@ func TestHybridNetwork_HybridRelayStrategy(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableP2PHybridMode = true
+	cfg.DNSBootstrapID = ""
 	log := logging.TestingLog(t)
 
 	genesisInfo := GenesisInfo{genesisID, "net"}
@@ -215,7 +217,7 @@ func TestHybridNetwork_HybridRelayStrategy(t *testing.T) {
 	startNewRelayNode := func(name string, phonebook []string) (*HybridP2PNetwork, []string) {
 		relayCfg := cfg
 		relayCfg.ForceRelayMessages = true
-		// no phonebook addresses since we start and and stop it to collect the ws address
+		// no phonebook addresses since we start and stop it to collect the ws address
 		net, err := NewHybridP2PNetwork(log.With("node", name), relayCfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil)
 		require.NoError(t, err)
 

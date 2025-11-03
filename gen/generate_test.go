@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -41,6 +42,7 @@ import (
 )
 
 func TestLoadMultiRootKeyConcurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
 	tempDir := t.TempDir()
@@ -80,6 +82,7 @@ func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 }
 
 func TestLoadSingleRootKeyConcurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
 	tempDir := t.TempDir()
@@ -171,12 +174,7 @@ func TestGenesisJsonCreation(t *testing.T) {
 		deterministicAddresses := []string{"FeeSink", "RewardsPool"}
 
 		isNondeterministicAddress := func(name string) bool {
-			for _, address := range deterministicAddresses {
-				if name == address {
-					return false
-				}
-			}
-			return true
+			return !slices.Contains(deterministicAddresses, name)
 		}
 
 		for i := range as {

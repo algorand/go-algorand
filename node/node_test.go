@@ -404,9 +404,8 @@ func TestSimpleUpgrade(t *testing.T) {
 		t.Skip("Test takes ~50 seconds.")
 	}
 
-	if (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" && runtime.GOOS != "darwin") &&
-		strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
-		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
+	if runtime.GOOS == "darwin" && strings.ToUpper(os.Getenv("GITHUB_ACTIONS")) == "TRUE" {
+		t.Skip("Test is too heavy for macOS builder running in parallel with other packages")
 	}
 
 	// ConsensusTest0 is a version of ConsensusV0 used for testing
@@ -840,6 +839,8 @@ func TestMaxSizesCorrect(t *testing.T) {
 	 */ ////////////////////////////////////////////////
 	avSize := uint64(agreement.UnauthenticatedVoteMaxSize())
 	require.Equal(t, avSize, protocol.AgreementVoteTag.MaxMessageSize())
+	// VP tag should have the same max size as AV tag
+	require.Equal(t, avSize, protocol.VotePackedTag.MaxMessageSize())
 	miSize := uint64(network.MessageOfInterestMaxSize())
 	require.Equal(t, miSize, protocol.MsgOfInterestTag.MaxMessageSize())
 	npSize := uint64(NetPrioResponseSignedMaxSize())
@@ -868,7 +869,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// subtract out the two smaller signature sizes (logicsig is biggest, it can *contain* the others)
 	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + crypto.MultisigSigMaxSize())
 	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
-	// the logicsig args can both be up to to MaxLogicSigMaxSize, but that's the max for
+	// the logicsig args can both be up to MaxLogicSigMaxSize, but that's the max for
 	// them combined, so it double counts and we have to subtract one.
 	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
 
@@ -1019,6 +1020,10 @@ func TestNodeHybridTopology(t *testing.T) {
 		}
 		return node0Conn && node1Conn && node2Conn
 	}, 60*time.Second, 500*time.Millisecond)
+
+	// node 0 has GossipFanout=0 but we still want to run all the machinery to update phonebooks
+	// (it this particular case to update peerstore with DHT nodes)
+	nodes[0].net.RequestConnectOutgoing(false, nil)
 
 	initialRound := nodes[0].ledger.NextRound()
 	targetRound := initialRound + 10
@@ -1293,7 +1298,7 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 			Sender:      addr2,
 			FirstValid:  1,
 			LastValid:   100,
-			Fee:         basics.MicroAlgos{Raw: 1000},
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
 			GenesisID:   nodes[2].genesisID,
 			GenesisHash: nodes[2].genesisHash,
 		},

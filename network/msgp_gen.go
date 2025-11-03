@@ -169,7 +169,6 @@ func (z disconnectReason) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func DisconnectReasonMaxSize() (s int) {
 	panic("Unable to determine max size: String type string(z) is unbounded")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1390,12 +1389,6 @@ func PeerMetaHeadersMaxSize() (s int) {
 	// Adding size of map keys for z
 	s += maxHeaderKeys
 	panic("Unable to determine max size: String type za0006 is unbounded")
-	// Adding size of map values for z
-	s += maxHeaderKeys
-	// Calculating size of slice: za0007
-	s += msgp.ArrayHeaderSize
-	panic("Unable to determine max size: String type is unbounded for za0007[za0008]")
-	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1484,5 +1477,4 @@ func PeerMetaValuesMaxSize() (s int) {
 	// Calculating size of slice: z
 	s += msgp.ArrayHeaderSize
 	panic("Unable to determine max size: String type is unbounded for z[za0001]")
-	return
 }
