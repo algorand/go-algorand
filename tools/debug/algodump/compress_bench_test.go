@@ -50,14 +50,17 @@ var cachedCorpus *testCorpus
 func TestVPackMemoryUsage(t *testing.T) {
 	windowSizes := []uint{256, 512, 1024, 2048, 4096, 8192}
 
-	t.Log("Measuring VPack StatefulEncoder memory usage:")
-	t.Log("Memory breakdown per table (N entries = N/2 buckets):")
-	t.Log("  - sndTable:  (N/2 buckets) × 64 bytes  + (N/16 MRU bytes) = N × 32 bytes")
-	t.Log("  - pkTable:   (N/2 buckets) × 192 bytes + (N/16 MRU bytes) = N × 96 bytes")
-	t.Log("  - pk2Table:  (N/2 buckets) × 192 bytes + (N/16 MRU bytes) = N × 96 bytes")
-	t.Log("  Total: N × 224 bytes")
-	t.Log("Window Size | Measured Memory | Expected (N×224) | Buckets | Ratio")
-	t.Log("----------- | --------------- | ---------------- | ------- | -----")
+	t.Log("Measuring VPack StatefulEncoder/Decoder memory usage:")
+	t.Log("Memory breakdown per direction (encoder OR decoder):")
+	t.Log("  - sndTable:  (N/2 buckets) × (2 slots) × (32 bytes/slot) + (N/16 MRU bytes)")
+	t.Log("  - pkTable:   (N/2 buckets) × (2 slots) × (96 bytes/slot) + (N/16 MRU bytes)")
+	t.Log("  - pk2Table:  (N/2 buckets) × (2 slots) × (96 bytes/slot) + (N/16 MRU bytes)")
+	t.Log("  - Fixed overhead (propWindow + pointers + lastRnd) = 800 bytes")
+	t.Log("  Per direction: (N × 224) + 800 bytes")
+	t.Log("  Per bidirectional connection: 2 × [(N × 224) + 800] bytes")
+	t.Log("")
+	t.Log("Window Size | Measured | Expected | Buckets | Ratio | Per-Connection")
+	t.Log("----------- | -------- | -------- | ------- | ----- | --------------")
 
 	for _, windowSize := range windowSizes {
 		var m1, m2 runtime.MemStats
@@ -77,16 +80,18 @@ func TestVPackMemoryUsage(t *testing.T) {
 
 		// Calculate actual memory increase
 		actualBytes := int64(m2.HeapAlloc - m1.HeapAlloc)
-		expectedBytes := int64(windowSize) * 224 // N × (32 + 96 + 96)
+		expectedBytes := int64(windowSize)*224 + 800 // (N × 224) + fixed overhead per direction
+		bidirectionalBytes := expectedBytes * 2      // Both encoder and decoder
 		numBuckets := windowSize / 2
 		ratio := float64(actualBytes) / float64(expectedBytes)
 
-		t.Logf("%11d | %12s | %13s | %7d | %.2f",
+		t.Logf("%11d | %8s | %8s | %7d | %.2f | %s",
 			windowSize,
 			formatBytes(actualBytes),
 			formatBytes(expectedBytes),
 			numBuckets,
-			ratio)
+			ratio,
+			formatBytes(bidirectionalBytes))
 
 		// Keep encoder alive
 		_ = enc
