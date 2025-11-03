@@ -581,7 +581,6 @@ func (wp *wsPeer) readLoop() {
 			networkP2PReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
 			networkP2PMessageReceivedByTag.Add(string(tag[:]), 1)
 		}
-		originalTag := msg.Tag
 		msg.Data, err = wp.msgCodec.decompress(msg.Tag, msg.Data)
 		if err != nil {
 			// Handle VP errors by sending abort message and continuing
@@ -607,7 +606,7 @@ func (wp *wsPeer) readLoop() {
 		} else {
 			networkP2PReceivedUncompressedBytesByTag.Add(string(msg.Tag), uint64(len(msg.Data)+2))
 		}
-		if originalTag == protocol.VotePackedTag {
+		if msg.Tag == protocol.VotePackedTag { // re-tag decompressed VP as AV
 			msg.Tag = protocol.AgreementVoteTag
 		}
 		msg.Sender = wp
@@ -1148,12 +1147,6 @@ func (wp *wsPeer) vpackStatefulCompressionSupported() bool {
 // getBestVpackTableSize returns the negotiated table size.
 // This calculates the minimum between our max size and the peer's advertised max size.
 func (wp *wsPeer) getBestVpackTableSize() uint {
-	// Get our max size
-	ourMaxSize := wp.voteCompressionTableSize
-	if ourMaxSize == 0 {
-		return 0
-	}
-
 	// Get peer's max size from their features
 	var peerMaxSize uint
 	switch {
@@ -1174,10 +1167,11 @@ func (wp *wsPeer) getBestVpackTableSize() uint {
 	case wp.features&pfCompressedVoteVpackStateful16 != 0:
 		peerMaxSize = 16
 	default:
-		return 0 // Peer doesn't support stateful vote compression
+		peerMaxSize = 0 // Peer doesn't support stateful vote compression
 	}
 
-	return min(ourMaxSize, peerMaxSize)
+	// Return the minimum between our max size and peer's max size
+	return min(wp.voteCompressionTableSize, peerMaxSize)
 }
 
 //msgp:ignore peerFeatureFlag

@@ -1070,7 +1070,7 @@ func (cfg *Local) TracksCatchpoints() bool {
 	return false
 }
 
-// NormalizedVoteCompressionTableSize validates and normalizes the VoteCompressionDynamicTableSize config value.
+// NormalizedVoteCompressionTableSize validates and normalizes the StatefulVoteCompressionTableSize config value.
 // Supported values are powers of 2 in the range [16, 2048].
 // Values >= 2048 clamp to 2048.
 // Values 1-15 are below the minimum and return 0 (disabled).
@@ -1091,7 +1091,7 @@ func (cfg Local) NormalizedVoteCompressionTableSize(log logger) uint {
 	for _, size := range supportedSizes {
 		if configured >= size {
 			if configured != size {
-				log.Infof("VoteCompressionDynamicTableSize configured as %d, using nearest supported value: %d", configured, size)
+				log.Infof("StatefulVoteCompressionTableSize configured as %d, using nearest supported value: %d", configured, size)
 			}
 			return size
 		}
