@@ -318,7 +318,7 @@ $ASSETID3"
 appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID" \
      --holding="$ASSETID+$APPACCT,$ASSETID+$SMALL"
 appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID3" \
-     --holding="$ASSETID3+$APPACCT,$ASSETID3+$SMALL"
+     --holding="$ASSETID3+$APPACCT" --holding="$ASSETID3+$SMALL"
 [[ "$(asset_ids "$APPACCT")" = "" ]] || exit 1 # account has no assets
 
 # app creates asset
