@@ -188,7 +188,7 @@ check_balance "$APPACCT" $((999000 - MIN_FEE))
 
 # Withdraw 100 in app. Confirm that inner txn is visible to transaction API.
 ! appl "withdraw(uint64,uint64):void" --app-arg="int:$ASSETID" --app-arg="int:100" --foreign-asset="$ASSETID" --from="$SMALL" || exit 1
-WITHDRAW=("withdraw(uint64,uint64):void" --app-arg="int:$ASSETID" --from="$SMALL" --holding "$ASSETID+app($APPID)" --holding "$ASSETID+$SMALL")
+WITHDRAW=("withdraw(uint64,uint64):void" --app-arg="int:$ASSETID" --from="$SMALL" --holding "$ASSETID+app($APPID),$ASSETID+$SMALL")
 TXID=$(appl "${WITHDRAW[@]}" --app-arg="int:100" | app-txid)
 [ "$(rest "/v2/transactions/pending/$TXID" \
         | jq '.["inner-txns"][0].txn.txn.aamt')" = 100 ]
@@ -311,12 +311,12 @@ RES=$(appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" --hold
 [[ $RES == *"unavailable Holding $ASSETID2+$SMALL"* ]] || exit 1   # app closes to sender, so needs that holding too
 
 appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID2" \
-     --holding="$ASSETID2+$APPACCT" --holding="$ASSETID2+$SMALL"
+     --holding="$ASSETID2+$APPACCT,$ASSETID2+$SMALL"
 IDs="$ASSETID
 $ASSETID3"
 [[ "$(asset_ids "$APPACCT")" = $IDs ]] || exit 1 # account has 2 assets
 appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID" \
-     --holding="$ASSETID+$APPACCT" --holding="$ASSETID+$SMALL"
+     --holding="$ASSETID+$APPACCT,$ASSETID+$SMALL"
 appl "close(uint64):void" --from="$SMALL" --app-arg "int:$ASSETID3" \
      --holding="$ASSETID3+$APPACCT" --holding="$ASSETID3+$SMALL"
 [[ "$(asset_ids "$APPACCT")" = "" ]] || exit 1 # account has no assets
