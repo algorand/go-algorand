@@ -38,12 +38,12 @@ type lruTable[K comparable] struct {
 // newLRUTable creates a new LRU table with the given size N.
 // The size N is the total number of entries in the table.
 // The number of buckets is N/2, and each bucket contains 2 slots.
-func newLRUTable[K comparable](N uint) (*lruTable[K], error) {
+func newLRUTable[K comparable](n uint) (*lruTable[K], error) {
 	// enforce size is a power of 2 and at least 16
-	if N < 16 || N&(N-1) != 0 {
+	if n < 16 || n&(n-1) != 0 {
 		return nil, errors.New("lruTable size must be a power of 2 and at least 16")
 	}
-	numBuckets := N / 2
+	numBuckets := n / 2
 	return &lruTable[K]{
 		numBuckets: numBuckets,
 		buckets:    make([]twoSlotBucket[K], numBuckets),
