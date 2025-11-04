@@ -473,13 +473,13 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 	}
 }
 
-func convertTxnResult(txnResult simulation.TxnResult, simplify bool) PreEncodedSimulateTxnResult {
+func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
 	result := PreEncodedSimulateTxnResult{
 		Txn:                      ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
 		TransactionTrace:         convertTxnTrace(txnResult.Trace),
-		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed, simplify),
+		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
 	}
 
 	if !txnResult.FixedSigner.IsZero() {
@@ -490,13 +490,11 @@ func convertTxnResult(txnResult simulation.TxnResult, simplify bool) PreEncodedS
 	return result
 }
 
-func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker, simplify bool) *model.SimulateUnnamedResourcesAccessed {
+func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *model.SimulateUnnamedResourcesAccessed {
 	if resources == nil {
 		return nil
 	}
-	if simplify {
-		resources.Simplify()
-	}
+	resources.Simplify()
 	return &model.SimulateUnnamedResourcesAccessed{
 		Accounts: sliceOrNil(stringSlice(slices.Collect(maps.Keys(resources.Accounts)))),
 		Assets:   sliceOrNil(slices.Collect(maps.Keys(resources.Assets))),
@@ -568,18 +566,15 @@ func convertSimulateInitialStates(initialStates *simulation.ResourcesInitialStat
 	}
 }
 
-func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult, simplify bool) PreEncodedSimulateTxnGroupResult {
-	txnResults := make([]PreEncodedSimulateTxnResult, len(txnGroupResult.Txns))
-	for i, txnResult := range txnGroupResult.Txns {
-		txnResults[i] = convertTxnResult(txnResult, simplify)
-	}
+func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
+	txnResults := util.Map(txnGroupResult.Txns, convertTxnResult)
 
 	encoded := PreEncodedSimulateTxnGroupResult{
 		Txns:                     txnResults,
 		FailureMessage:           omitEmpty(txnGroupResult.FailureMessage),
 		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
 		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
-		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed, simplify),
+		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
@@ -590,7 +585,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult, simplify bo
 	return encoded
 }
 
-func convertSimulationResult(result simulation.Result, simplify bool) PreEncodedSimulateResponse {
+func convertSimulationResult(result simulation.Result) PreEncodedSimulateResponse {
 	var evalOverrides *model.SimulationEvalOverrides
 	if result.EvalOverrides != (simulation.ResultEvalOverrides{}) {
 		evalOverrides = &model.SimulationEvalOverrides{
@@ -604,11 +599,9 @@ func convertSimulationResult(result simulation.Result, simplify bool) PreEncoded
 	}
 
 	return PreEncodedSimulateResponse{
-		Version:   result.Version,
-		LastRound: result.LastRound,
-		TxnGroups: util.Map(result.TxnGroups, func(tg simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
-			return convertTxnGroupResult(tg, simplify)
-		}),
+		Version:         result.Version,
+		LastRound:       result.LastRound,
+		TxnGroups:       util.Map(result.TxnGroups, convertTxnGroupResult),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,
 		InitialStates:   convertSimulateInitialStates(result.InitialStates),

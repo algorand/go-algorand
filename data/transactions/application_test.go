@@ -203,9 +203,32 @@ func TestAppCallAccessWellFormed(t *testing.T) {
 			},
 		},
 		{
-			expectedError: "locals App reference 0 outside tx.Access",
+			// eliminate this test after AllowZeroAppInLocalsRef is removed
+			expectedError: "0 App in LocalsRef is not supported",
 			ac: ApplicationCallTxnFields{
 				ApplicationID: 1,
+				Access: []ResourceRef{
+					{Address: basics.Address{0xaa}},
+					{Locals: LocalsRef{Address: 1}},
+				},
+			},
+			cv: protocol.ConsensusV41,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access: []ResourceRef{
+					{Address: basics.Address{0xaa}},
+					{Locals: LocalsRef{Address: 1}},
+				},
+			},
+		},
+		{
+			expectedError: "0 App in LocalsRef during app create is not allowed or necessary",
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   []byte{0x05},
+				ClearStateProgram: []byte{0x05},
 				Access: []ResourceRef{
 					{Address: basics.Address{0xaa}},
 					{Locals: LocalsRef{Address: 1}},
