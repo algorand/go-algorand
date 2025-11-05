@@ -1468,6 +1468,8 @@ return
 
 }
 
+const resizingAllowed = 42
+
 // TestSchemaUpdates tests that apps can get new global schemas
 func TestSchemaUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1545,12 +1547,11 @@ app_global_del
 			GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
 		}
 		// update the global schema to allow 1 byteslice
-		if ver >= 42 {
-			dl.txn(&update)
-		} else {
+		if ver < resizingAllowed {
 			dl.txn(&update, "inappropriate non-zero tx.GlobalStateSchema")
 			return // no more tests, growing is disallowed
 		}
+		dl.txn(&update)
 		a.EqualValues(1, app().GlobalStateSchema.NumByteSlice)
 		a.Zero(app().GlobalStateSchema.NumUint)                              // cleared
 		a.Equal(basics.StateSchema{NumByteSlice: 3}, app().LocalStateSchema) // unchanged
@@ -1717,12 +1718,11 @@ func TestExtraPagesUpdate(t *testing.T) {
 		}
 
 		// update the apps to have 3 extra pages
-		if ver >= 42 {
-			dl.txn(&update)
-		} else {
+		if ver < resizingAllowed {
 			dl.txn(&update, "inappropriate non-zero tx.ExtraProgramPages (1)")
 			return // no more tests, growing is disallowed
 		}
+		dl.txn(&update)
 		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
 		// addr[1] is now the sponsor for the small app, which now has 1 epp
 		a.Equal(proto.MinBalance+4*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
@@ -1765,8 +1765,8 @@ func TestExtraPagesUpdate(t *testing.T) {
 	})
 }
 
-// TestExtraPagesInnerUpdate shows that apps can be crown with inner transactions
-func TestExtraPagesInnerUpdate(t *testing.T) {
+// TestInnerUpdateResizing shows that apps can be grown (programs and globals) with inner transactions
+func TestInnerUpdateResizing(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1836,7 +1836,7 @@ itxn_submit
 			ApplicationID: updaterID,
 			ForeignApps:   []basics.AppIndex{smallID},
 		}
-		if ver < 42 {
+		if ver < resizingAllowed {
 			dl.txn(&innerUpdate, "inappropriate non-zero tx.GlobalStateSchema")
 			return // no more tests, growing is disallowed
 		}
