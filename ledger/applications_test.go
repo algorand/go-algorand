@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -1464,4 +1466,394 @@ return
 	err = l2.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{})
 	a.NoError(err)
 
+}
+
+const resizingAllowed = 42
+
+// TestSchemaUpdates tests that apps can get new global schemas
+func TestSchemaUpdates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 24, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+		a := require.New(t)
+
+		// app sets a global based on its args, if they are there
+		setter := main(`
+txn NumAppArgs
+int 2
+==
+bz maybe_del
+txna ApplicationArgs 0
+txna ApplicationArgs 1
+app_global_put
+maybe_del:
+txn NumAppArgs
+int 1
+==
+bz end							// "main" puts in "end" label
+txna ApplicationArgs 0
+app_global_del
+`)
+		appID := dl.createApp(addrs[0], setter,
+			basics.StateSchema{NumUint: 2},      // globals, won't allow bytes
+			basics.StateSchema{NumByteSlice: 3}) // locals, won't allow ints
+
+		// call with no args, passes fine
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{},
+		})
+
+		app := func() basics.AppParams {
+			ap, err := dl.generator.LookupApplication(dl.generator.Latest(), addrs[0], appID)
+			a.NoError(err)
+			return *ap.AppParams
+		}
+
+		mbr := func(addr basics.Address) uint64 {
+			acct := lookup(t, dl.generator, addr)
+			return acct.MinBalance(proto.BalanceRequirements()).Raw
+		}
+		a.Equal(basics.StateSchema{NumUint: 2}, app().GlobalStateSchema)
+		a.Equal(basics.StateSchema{NumByteSlice: 3}, app().LocalStateSchema)
+		a.Zero(app().GlobalState)
+		a.Equal(proto.MinBalance+
+			proto.AppFlatParamsMinBalance+
+			2*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[0]))
+		a.Equal(proto.MinBalance, mbr(addrs[1]))
+
+		// call with two args, fails from lack of globals
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'A'}, {'B'}},
+		}, "store bytes count 1 exceeds schema bytes count 0")
+
+		update := txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[1], // Use another sender, to follow MBR changes
+			ApplicationID:     appID,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			ApprovalProgram:   app().ApprovalProgram, // keep it
+			GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+		}
+		// update the global schema to allow 1 byteslice
+		if ver < resizingAllowed {
+			dl.txn(&update, "inappropriate non-zero tx.GlobalStateSchema")
+			return // no more tests, growing is disallowed
+		}
+		dl.txn(&update)
+		a.EqualValues(1, app().GlobalStateSchema.NumByteSlice)
+		a.Zero(app().GlobalStateSchema.NumUint)                              // cleared
+		a.Equal(basics.StateSchema{NumByteSlice: 3}, app().LocalStateSchema) // unchanged
+		a.Empty(app().GlobalState)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+
+			1*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance)+
+			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[1]))
+
+		// call with two args can now succeed
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'A'}, {'B'}},
+		})
+		a.EqualValues(1, app().GlobalStateSchema.NumByteSlice)
+		a.Len(app().GlobalState, 1) // 'A' has been added
+
+		// same global ('A') can be changed
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'A'}, {'C'}},
+		})
+
+		// new global ('X') is too many
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'X'}, {'Y'}},
+		}, "store bytes count 2 exceeds schema bytes count 1")
+
+		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 2}
+		dl.txn(&update)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+
+			2*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance)+
+			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[1]))
+		// ok now
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'X'}, {'Y'}},
+		})
+
+		// Now that we're using 2 globals, we can't go back
+		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 1}
+		update.FirstValid = 0 // So it changes when set to default
+		dl.txn(&update, "unable to change global schema: store bytes count 2 exceeds schema bytes count 1")
+
+		// Show that the size change goes into effect during group evaluation by
+		// updating in txn0 and using the global in tx1.
+
+		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 3}
+		dl.txgroup("", // no problem
+			&update,
+			&txntest.Txn{
+				Type:            protocol.ApplicationCallTx,
+				Sender:          addrs[0],
+				ApplicationID:   appID,
+				ApplicationArgs: [][]byte{{'J'}, {'1'}},
+			},
+		)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+
+			3*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance)+
+			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[1]))
+
+		// Show that the size change goes into effect across groups in a block
+		// by doing txns separately. This shows that maxCounts are properly
+		// propagated to parent cows.
+		update.GlobalStateSchema = basics.StateSchema{NumByteSlice: 4}
+		update.Group = crypto.Digest{} // was filled above when part of a group
+		dl.beginBlock()
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'J'}, {'2'}}, // allocates storageDelta
+		})
+		dl.txn(&update) // schema change must propagate into existing storageDelta
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'K'}, {'1'}}, // confirms new schema is available
+		})
+		dl.endBlock()
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+
+			4*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance)+
+			0*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance),
+			mbr(addrs[1]))
+
+		// Fail to delete it, because we tried to use another global
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[2],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{'L'}, {'1'}},
+			OnCompletion:    transactions.DeleteApplicationOC,
+		}, "exceeds schema bytes count 4")
+
+		// Delete it so we can check MBR reductions
+		dl.txn(&txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[2],
+			ApplicationID: appID,
+			OnCompletion:  transactions.DeleteApplicationOC,
+		})
+		a.Equal(proto.MinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance, mbr(addrs[1]))
+	})
+}
+
+// TestExtraPagesUpdate tests how apps can change their extra pages allocation
+func TestExtraPagesUpdate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, 28, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+		a := require.New(t)
+
+		app := func(id basics.AppIndex) basics.AppParams {
+			c, _, err := dl.generator.GetCreator(basics.CreatableIndex(id), basics.AppCreatable)
+			a.NoError(err)
+			ap, err := dl.generator.LookupApplication(dl.generator.Latest(), c, id)
+			a.NoError(err)
+			return *ap.AppParams
+		}
+
+		mbr := func(addr basics.Address) uint64 {
+			acct := lookup(t, dl.generator, addr)
+			return acct.MinBalance(proto.BalanceRequirements()).Raw
+		}
+
+		small := "int 1000; return"
+		big := strings.Repeat(small+"\n", 1500)
+		smallID := dl.createApp(addrs[0], small)
+		bigID := dl.createApp(addrs[1], big)
+		a.EqualValues(0, app(smallID).ExtraProgramPages)
+		a.EqualValues(2, app(bigID).ExtraProgramPages)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance+3*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
+
+		update := txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[1],
+			ApplicationID:     smallID,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			ApprovalProgram:   app(smallID).ApprovalProgram, // keep it
+			ExtraProgramPages: 1,
+		}
+
+		// update the apps to have 3 extra pages
+		if ver < resizingAllowed {
+			dl.txn(&update, "inappropriate non-zero tx.ExtraProgramPages (1)")
+			return // no more tests, growing is disallowed
+		}
+		dl.txn(&update)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		// addr[1] is now the sponsor for the small app, which now has 1 epp
+		a.Equal(proto.MinBalance+4*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
+
+		dl.txn(&txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            addrs[2],
+			ApplicationID:     bigID,
+			OnCompletion:      transactions.UpdateApplicationOC,
+			ApprovalProgram:   app(bigID).ApprovalProgram, // keep it
+			ExtraProgramPages: 3,
+		})
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		// addr[1] is still the sponsor for the small appp, which now has 1 epp (and big creator)
+		a.Equal(proto.MinBalance+2*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
+		// but addr[2] has taken over rent for the big app (which is now 3)
+		a.Equal(proto.MinBalance+3*proto.AppFlatParamsMinBalance, mbr(addrs[2]))
+
+		dl.txn(&txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[3],
+			ApplicationID: bigID,
+			OnCompletion:  transactions.DeleteApplicationOC,
+		})
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		// addr[1] is only the sponsor for the small app, which now has 1 epp
+		a.Equal(proto.MinBalance+1*proto.AppFlatParamsMinBalance, mbr(addrs[1]))
+		// addr[2] responsibility for big app is gone
+		a.Equal(proto.MinBalance, mbr(addrs[2]))
+
+		dl.txn(&txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[1],
+			ApplicationID: smallID,
+			OnCompletion:  transactions.DeleteApplicationOC,
+		})
+		a.Equal(proto.MinBalance, mbr(addrs[0]))
+		a.Equal(proto.MinBalance, mbr(addrs[1]))
+		a.Equal(proto.MinBalance, mbr(addrs[2]))
+	})
+}
+
+// TestInnerUpdateResizing shows that apps can be grown (programs and globals) with inner transactions
+func TestInnerUpdateResizing(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	const innerAppls = 31
+	ledgertesting.TestConsensusRange(t, innerAppls, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+		a := require.New(t)
+
+		app := func(id basics.AppIndex) basics.AppParams {
+			c, _, err := dl.generator.GetCreator(basics.CreatableIndex(id), basics.AppCreatable)
+			a.NoError(err)
+			ap, err := dl.generator.LookupApplication(dl.generator.Latest(), c, id)
+			a.NoError(err)
+			return *ap.AppParams
+		}
+
+		mbr := func(addr basics.Address) uint64 {
+			acct := lookup(t, dl.generator, addr)
+			return acct.MinBalance(proto.BalanceRequirements()).Raw
+		}
+
+		// if we give an app arg, the app will use another global
+		small := main(`txn NumAppArgs; bz end; txn ApplicationArgs 0; byte "X"; app_global_put;`)
+		smallID := dl.createApp(addrs[0], small)
+		a.Zero(0, app(smallID).ExtraProgramPages)
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+
+		dl.txn(&txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addrs[0],
+			ApplicationID:   smallID,
+			ApplicationArgs: [][]byte{{'A'}},
+		}, "store bytes count 1 exceeds schema bytes count 0")
+
+		// An app that will update another app with 1 epp, 2 ints, 3 byteslices
+		updater := main(`
+itxn_begin
+int appl;              itxn_field TypeEnum
+txn Applications 1;    itxn_field ApplicationID
+int UpdateApplication; itxn_field OnCompletion
+txn Applications 1; app_params_get AppApprovalProgram;     assert; itxn_field ApprovalProgram
+txn Applications 1; app_params_get AppClearStateProgram;   assert; itxn_field ClearStateProgram
+int 2; itxn_field ExtraProgramPages
+int 3; itxn_field GlobalNumUint
+int 4; itxn_field GlobalNumByteSlice
+itxn_next						// right after updating, try call again, schema should be ok
+int appl;              itxn_field TypeEnum
+txn Applications 1;    itxn_field ApplicationID
+byte "A";              itxn_field ApplicationArgs
+itxn_submit
+// for good measure, do it again in another inner group
+itxn_begin
+int appl;              itxn_field TypeEnum
+txn Applications 1;    itxn_field ApplicationID
+byte "B";              itxn_field ApplicationArgs
+itxn_submit
+`)
+		updaterID := dl.fundedApp(addrs[2], 3_000_000, updater)
+
+		// call the updater on smallID
+		innerUpdate := txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        addrs[3],
+			ApplicationID: updaterID,
+			ForeignApps:   []basics.AppIndex{smallID},
+		}
+		if ver < resizingAllowed {
+			dl.txn(&innerUpdate, "inappropriate non-zero tx.GlobalStateSchema")
+			return // no more tests, growing is disallowed
+		}
+		dl.txn(&innerUpdate)
+		// no extra MBR on the original creator
+		a.Equal(proto.MinBalance+proto.AppFlatParamsMinBalance, mbr(addrs[0]))
+		// the app account is now the sponsor for the app, which now has 2,3,4
+		a.Equal(proto.MinBalance+
+			2*proto.AppFlatParamsMinBalance+ // epp
+			3*(proto.SchemaMinBalancePerEntry+proto.SchemaUintMinBalance)+
+			4*(proto.SchemaMinBalancePerEntry+proto.SchemaBytesMinBalance),
+			mbr(updaterID.Address()))
+		a.Equal(app(smallID).GlobalState["A"], basics.TealValue{
+			Type: basics.TealBytesType, Bytes: "X",
+		})
+		a.Equal(app(smallID).GlobalState["B"], basics.TealValue{
+			Type: basics.TealBytesType, Bytes: "X",
+		})
+	})
 }

@@ -392,10 +392,10 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.Access != nil {
 		return false
 	}
-	if ac.LocalStateSchema != (basics.StateSchema{}) {
+	if !ac.LocalStateSchema.Empty() {
 		return false
 	}
-	if ac.GlobalStateSchema != (basics.StateSchema{}) {
+	if !ac.GlobalStateSchema.Empty() {
 		return false
 	}
 	if ac.ApprovalProgram != nil {
@@ -446,20 +446,33 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		}
 	}
 
+	if ac.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
+		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
+	}
+
 	effectiveEPP := ac.ExtraProgramPages
 	// Schemas and ExtraProgramPages may only be set during application creation
-	if ac.ApplicationID != 0 {
-		if ac.GlobalStateSchema != (basics.StateSchema{}) {
-			return fmt.Errorf("tx.GlobalStateSchema is immutable")
+	// and explicit attempts to change size during updates.
+	if ac.ApplicationID != 0 && !(proto.AppSizeUpdates && ac.UpdatingSizes()) {
+		if !ac.GlobalStateSchema.Empty() {
+			return fmt.Errorf("inappropriate non-zero tx.GlobalStateSchema (%v)",
+				ac.GlobalStateSchema)
 		}
-		if ac.LocalStateSchema != (basics.StateSchema{}) {
-			return fmt.Errorf("tx.LocalStateSchema is immutable")
+		if !ac.LocalStateSchema.Empty() {
+			return fmt.Errorf("inappropriate non-zero tx.LocalStateSchema (%v)",
+				ac.LocalStateSchema)
 		}
 		if ac.ExtraProgramPages != 0 {
-			return fmt.Errorf("tx.ExtraProgramPages is immutable")
+			return fmt.Errorf("inappropriate non-zero tx.ExtraProgramPages (%d)",
+				ac.ExtraProgramPages)
 		}
-
+		// allow maximimum size programs for now, since we have not checked the
+		// app params to know the actual epp.
 		effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
+	}
+
+	if err := ac.WellSizedPrograms(effectiveEPP, proto); err != nil {
+		return err
 	}
 
 	// Limit total number of arguments
@@ -523,14 +536,6 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		}
 	}
 
-	if ac.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
-		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
-	}
-
-	if err := ac.WellSizedPrograms(effectiveEPP, proto); err != nil {
-		return err
-	}
-
 	for i, br := range ac.Boxes {
 		// recall 0 is the current app so indexes are shifted, thus test is for greater than, not gte.
 		if br.Index > uint64(len(ac.ForeignApps)) {
@@ -552,6 +557,12 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	}
 
 	return nil
+}
+
+// UpdatingSizes returns true if this is an application update transaction that has non-zero sizing fields.
+func (ac ApplicationCallTxnFields) UpdatingSizes() bool {
+	return ac.OnCompletion == UpdateApplicationOC &&
+		(ac.ExtraProgramPages != 0 || !ac.GlobalStateSchema.Empty())
 }
 
 // WellSizedPrograms checks the sizes of the programs in ac, based on the

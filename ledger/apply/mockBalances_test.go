@@ -148,6 +148,13 @@ func (b *mockCreatableBalances) GetAppLocalState(addr basics.Address, aidx basic
 	ret, ok = acct.AppLocalStates[aidx]
 	return
 }
+
+// SetAppGlobalSchema is supposed set the running schema limits in the
+// evaluation, but the mockCreatableBalances does not enforce those limits.
+func (b *mockCreatableBalances) SetAppGlobalSchema(addr basics.Address, aidx basics.AppIndex, limits basics.StateSchema) error {
+	return nil
+}
+
 func (b *mockCreatableBalances) GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (ret basics.AssetHolding, ok bool, err error) {
 	acct, err := b.access.getAccount(addr, false)
 	if err != nil {

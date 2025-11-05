@@ -87,6 +87,16 @@ type StateSchema struct {
 	NumByteSlice uint64 `codec:"nbs"`
 }
 
+// String returns a string representation of a StateSchema
+func (sm StateSchema) String() string {
+	return fmt.Sprintf("{NumUint:%d NumByteSlice:%d}", sm.NumUint, sm.NumByteSlice)
+}
+
+// Empty returns true if the StateSchema has no entries
+func (sm StateSchema) Empty() bool {
+	return sm.NumUint == 0 && sm.NumByteSlice == 0
+}
+
 // AddSchema adds two StateSchemas together
 func (sm StateSchema) AddSchema(osm StateSchema) (out StateSchema) {
 	out.NumUint = AddSaturate(sm.NumUint, osm.NumUint)
@@ -102,10 +112,13 @@ func (sm StateSchema) SubSchema(osm StateSchema) (out StateSchema) {
 }
 
 // NumEntries counts the total number of values that may be stored for particular schema
-func (sm StateSchema) NumEntries() (tot uint64) {
-	tot = AddSaturate(tot, sm.NumUint)
-	tot = AddSaturate(tot, sm.NumByteSlice)
-	return tot
+func (sm StateSchema) NumEntries() uint64 {
+	return AddSaturate(sm.NumUint, sm.NumByteSlice)
+}
+
+// Allows determines if `other` "fits" within this schema.
+func (sm StateSchema) Allows(other StateSchema) bool {
+	return other.NumUint <= sm.NumUint && other.NumByteSlice <= sm.NumByteSlice
 }
 
 // MinBalance computes the MinBalance requirements for a StateSchema based on

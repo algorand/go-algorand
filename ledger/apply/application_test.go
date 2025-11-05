@@ -18,15 +18,14 @@ package apply
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"maps"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -36,14 +35,10 @@ import (
 )
 
 func getRandomAddress(a *require.Assertions) basics.Address {
-	const rl = 16
-	b := make([]byte, rl)
-	n, err := rand.Read(b)
+	address := basics.Address{}
+	_, err := rand.Read(address[:])
 	a.NoError(err)
-	a.Equal(rl, n)
-
-	address := crypto.Hash(b)
-	return basics.Address(address)
+	return address
 }
 
 type testBalances struct {
@@ -1201,7 +1196,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(appIdx, b.deAllocatedAppIdx)
-	a.Equal(1, b.put)
+	a.Equal(2, b.put) // creator + sponsor (who happen to be the same here)
 	a.Zero(b.putAppParams)
 	a.Equal(1, b.deleteAppParams)
 	br = b.balances[creator]
@@ -1233,7 +1228,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 		err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 		a.NoError(err)
 		a.Equal(appIdx, b.deAllocatedAppIdx)
-		a.Equal(1, b.put)
+		a.Equal(2, b.put) // creator + sponsor (who happen to be the same here)
 		a.Zero(b.putAppParams)
 		a.Equal(1, b.deleteAppParams)
 		br = b.balances[creator]

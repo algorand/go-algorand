@@ -86,8 +86,8 @@ type Txn struct {
 	Access            []transactions.ResourceRef
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
-	ApprovalProgram   interface{} // string, nil, or []bytes if already compiled
-	ClearStateProgram interface{} // string, nil or []bytes if already compiled
+	ApprovalProgram   any // string, nil, or []bytes if already compiled
+	ClearStateProgram any // string, nil or []bytes if already compiled
 	ExtraProgramPages uint32
 
 	StateProofType protocol.StateProofType
@@ -193,7 +193,11 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 			case []byte:
 			}
 		}
-
+		if tx.ApplicationID == 0 && tx.ExtraProgramPages == 0 {
+			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
+			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
+			tx.ExtraProgramPages = uint32(totalPages - 1)
+		}
 	}
 }
 
