@@ -1186,18 +1186,21 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 	messagesOfInterestGeneration := wn.messagesOfInterestGeneration.Load()
 	peerMessagesOfInterestGeneration := peer.messagesOfInterestGeneration.Load()
 	if peerMessagesOfInterestGeneration != messagesOfInterestGeneration {
-		wn.messagesOfInterestMu.Lock()
 		if messagesOfInterestEnc == nil {
+			wn.messagesOfInterestMu.Lock()
 			messagesOfInterestEnc = wn.messagesOfInterestEnc
+			wn.messagesOfInterestMu.Unlock()
 		}
-		if !peer.vpackStatefulCompressionSupported() && wn.messagesOfInterest[protocol.VotePackedTag] {
-			// filter VP tag for peers lacking stateful compression support
-			// older nodes (<= v4.3) treat unknown tags as protocol violations and disconnect.
-			perPeerTags := maps.Clone(wn.messagesOfInterest)
-			delete(perPeerTags, protocol.VotePackedTag)
-			messagesOfInterestEnc = marshallMessageOfInterestMap(perPeerTags)
+
+		// Filter VP tag for peers lacking stateful compression support
+		// older nodes (<= v4.3) treat unknown tags as protocol violations and disconnect.
+		if messagesOfInterestEnc != nil && !peer.vpackStatefulCompressionSupported() {
+			tags, err := unmarshallMessageOfInterest(messagesOfInterestEnc)
+			if err == nil && tags[protocol.VotePackedTag] {
+				delete(tags, protocol.VotePackedTag)
+				messagesOfInterestEnc = marshallMessageOfInterestMap(tags)
+			}
 		}
-		wn.messagesOfInterestMu.Unlock()
 
 		if messagesOfInterestEnc != nil {
 			peer.sendMessagesOfInterest(messagesOfInterestGeneration, messagesOfInterestEnc)
