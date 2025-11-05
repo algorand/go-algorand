@@ -4776,6 +4776,7 @@ func TestPeerComparisonInBroadcast(t *testing.T) {
 }
 
 func TestMaybeSendMessagesOfInterestLegacyPeer(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	makePeer := func(wn *WebsocketNetwork, features peerFeatureFlag) (*wsPeer, chan sendMessage) {
