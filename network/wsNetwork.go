@@ -1186,30 +1186,26 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 	messagesOfInterestGeneration := wn.messagesOfInterestGeneration.Load()
 	peerMessagesOfInterestGeneration := peer.messagesOfInterestGeneration.Load()
 	if peerMessagesOfInterestGeneration != messagesOfInterestGeneration {
-		peerSupportsStatefulCompression := peer.vpackStatefulCompressionSupported()
-		sendEnc := messagesOfInterestEnc
-		var perPeerTags map[protocol.Tag]bool
-		if sendEnc == nil || !peerSupportsStatefulCompression {
-			wn.messagesOfInterestMu.Lock()
-			if sendEnc == nil {
-				sendEnc = wn.messagesOfInterestEnc
-			}
-			if !peerSupportsStatefulCompression && wn.messagesOfInterest[protocol.VotePackedTag] {
-				// Filter VP tag for peers lacking stateful compression support; older nodes (<= v4.3)
-				// treat unknown tags as protocol violations and disconnect.
-				perPeerTags = make(map[protocol.Tag]bool, len(wn.messagesOfInterest))
-				for tag, flag := range wn.messagesOfInterest {
-					if tag == protocol.VotePackedTag {
-						continue
-					}
-					perPeerTags[tag] = flag
-				}
-				sendEnc = marshallMessageOfInterestMap(perPeerTags)
-			}
-			wn.messagesOfInterestMu.Unlock()
+		wn.messagesOfInterestMu.Lock()
+		if messagesOfInterestEnc == nil {
+			messagesOfInterestEnc = wn.messagesOfInterestEnc
 		}
-		if sendEnc != nil {
-			peer.sendMessagesOfInterest(messagesOfInterestGeneration, sendEnc)
+		if !peer.vpackStatefulCompressionSupported() && wn.messagesOfInterest[protocol.VotePackedTag] {
+			// filter VP tag for peers lacking stateful compression support
+			// older nodes (<= v4.3) treat unknown tags as protocol violations and disconnect.
+			perPeerTags := make(map[protocol.Tag]bool, len(wn.messagesOfInterest))
+			for tag, flag := range wn.messagesOfInterest {
+				if tag == protocol.VotePackedTag {
+					continue
+				}
+				perPeerTags[tag] = flag
+			}
+			messagesOfInterestEnc = marshallMessageOfInterestMap(perPeerTags)
+		}
+		wn.messagesOfInterestMu.Unlock()
+
+		if messagesOfInterestEnc != nil {
+			peer.sendMessagesOfInterest(messagesOfInterestGeneration, messagesOfInterestEnc)
 		} else {
 			wn.log.Infof("msgOfInterest Enc=nil, MOIGen=%d", messagesOfInterestGeneration)
 		}
