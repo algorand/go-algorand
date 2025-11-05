@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net"
 	"net/http"
@@ -4777,54 +4778,62 @@ func TestPeerComparisonInBroadcast(t *testing.T) {
 func TestMaybeSendMessagesOfInterestLegacyPeer(t *testing.T) {
 	t.Parallel()
 
-	wn := &WebsocketNetwork{
-		log: logging.TestingLog(t),
-	}
-	wn.messagesOfInterestGeneration.Store(1)
-	wn.messagesOfInterest = map[protocol.Tag]bool{
-		protocol.AgreementVoteTag: true,
-		protocol.VotePackedTag:    true,
-	}
-	wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
-
-	makePeer := func(features peerFeatureFlag) (*wsPeer, chan sendMessage) {
+	makePeer := func(wn *WebsocketNetwork, features peerFeatureFlag) (*wsPeer, chan sendMessage) {
 		ch := make(chan sendMessage, 1)
 		return &wsPeer{
-			log:                logging.TestingLog(t),
+			wsPeerCore:         makePeerCore(wn.ctx, wn, wn.log, nil, "test-addr", nil, ""),
 			features:           features,
 			sendBufferHighPrio: ch,
 			sendBufferBulk:     make(chan sendMessage, 1),
 			closing:            make(chan struct{}),
-			netCtx:             context.Background(),
+			processed:          make(chan struct{}, 1),
 		}, ch
 	}
 
-	t.Run("drops VP for peers without stateful support", func(t *testing.T) {
-		peer, ch := makePeer(pfCompressedProposal | pfCompressedVoteVpack)
+	newTestNetwork := func(tags map[protocol.Tag]bool) *WebsocketNetwork {
+		wn := &WebsocketNetwork{
+			log: logging.TestingLog(t),
+		}
+		wn.ctx = context.Background()
+		cloned := maps.Clone(tags)
+		wn.messagesOfInterest = cloned
+		wn.messagesOfInterestEnc = marshallMessageOfInterestMap(cloned)
+		wn.messagesOfInterestGeneration.Store(1)
+		return wn
+	}
 
+	t.Run("filters VP for peers without stateful support", func(t *testing.T) {
+		wn := newTestNetwork(map[protocol.Tag]bool{
+			protocol.AgreementVoteTag: true,
+			protocol.VotePackedTag:    true,
+		})
+
+		peer, ch := makePeer(wn, pfCompressedProposal|pfCompressedVoteVpack)
 		wn.maybeSendMessagesOfInterest(peer, nil)
 
 		select {
 		case msg := <-ch:
-			require.Len(t, msg.data, len(protocol.MsgOfInterestTag)+len(msg.data[2:]))
 			require.Equal(t, protocol.MsgOfInterestTag, protocol.Tag(msg.data[:2]))
 
-			topics, err := UnmarshallTopics(msg.data[2:])
+			decoded, err := unmarshallMessageOfInterest(msg.data[2:])
 			require.NoError(t, err)
 
-			tags, ok := topics.GetValue("tags")
-			require.True(t, ok)
-
-			for _, tag := range strings.Split(string(tags), ",") {
-				require.NotEqual(t, string(protocol.VotePackedTag), tag)
-			}
+			require.Contains(t, decoded, protocol.AgreementVoteTag)
+			require.True(t, decoded[protocol.AgreementVoteTag])
+			_, hasVP := decoded[protocol.VotePackedTag]
+			require.False(t, hasVP, "VP tag should be filtered for legacy peers")
 		default:
 			t.Fatal("expected MOI message for legacy peer")
 		}
 	})
 
 	t.Run("retains VP for peers with stateful support", func(t *testing.T) {
-		peer, ch := makePeer(pfCompressedProposal | pfCompressedVoteVpack | pfCompressedVoteVpackStateful256)
+		wn := newTestNetwork(map[protocol.Tag]bool{
+			protocol.AgreementVoteTag: true,
+			protocol.VotePackedTag:    true,
+		})
+
+		peer, ch := makePeer(wn, pfCompressedProposal|pfCompressedVoteVpack|pfCompressedVoteVpackStateful256)
 
 		wn.maybeSendMessagesOfInterest(peer, nil)
 
@@ -4832,22 +4841,57 @@ func TestMaybeSendMessagesOfInterestLegacyPeer(t *testing.T) {
 		case msg := <-ch:
 			require.Equal(t, protocol.MsgOfInterestTag, protocol.Tag(msg.data[:2]))
 
-			topics, err := UnmarshallTopics(msg.data[2:])
+			decoded, err := unmarshallMessageOfInterest(msg.data[2:])
 			require.NoError(t, err)
 
-			tags, ok := topics.GetValue("tags")
-			require.True(t, ok)
-
-			foundVP := false
-			for _, tag := range strings.Split(string(tags), ",") {
-				if tag == string(protocol.VotePackedTag) {
-					foundVP = true
-					break
-				}
-			}
-			require.True(t, foundVP, "expected VP tag for peer with stateful support")
+			require.Contains(t, decoded, protocol.AgreementVoteTag)
+			require.True(t, decoded[protocol.AgreementVoteTag])
+			require.Contains(t, decoded, protocol.VotePackedTag)
+			require.True(t, decoded[protocol.VotePackedTag], "expected VP tag for peer with stateful support")
 		default:
 			t.Fatal("expected MOI message for stateful peer")
+		}
+	})
+
+	t.Run("gracefully handles configuration without VP tag", func(t *testing.T) {
+		wn := newTestNetwork(map[protocol.Tag]bool{
+			protocol.AgreementVoteTag: true,
+		})
+
+		peer, ch := makePeer(wn, pfCompressedProposal|pfCompressedVoteVpack)
+		wn.maybeSendMessagesOfInterest(peer, nil)
+
+		select {
+		case msg := <-ch:
+			require.Equal(t, protocol.MsgOfInterestTag, protocol.Tag(msg.data[:2]))
+
+			decoded, err := unmarshallMessageOfInterest(msg.data[2:])
+			require.NoError(t, err)
+
+			require.Contains(t, decoded, protocol.AgreementVoteTag)
+			require.True(t, decoded[protocol.AgreementVoteTag])
+			_, hasVP := decoded[protocol.VotePackedTag]
+			require.False(t, hasVP)
+		default:
+			t.Fatal("expected MOI message when VP is absent from configuration")
+		}
+	})
+
+	t.Run("skips sending when peer generation matches", func(t *testing.T) {
+		wn := newTestNetwork(map[protocol.Tag]bool{
+			protocol.AgreementVoteTag: true,
+			protocol.VotePackedTag:    true,
+		})
+
+		peer, ch := makePeer(wn, pfCompressedProposal|pfCompressedVoteVpack)
+		peer.messagesOfInterestGeneration.Store(wn.messagesOfInterestGeneration.Load())
+
+		wn.maybeSendMessagesOfInterest(peer, nil)
+
+		select {
+		case <-ch:
+			t.Fatal("did not expect MOI message when generations already match")
+		default:
 		}
 	})
 }
