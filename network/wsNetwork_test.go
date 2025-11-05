@@ -4773,3 +4773,81 @@ func TestPeerComparisonInBroadcast(t *testing.T) {
 	require.Equal(t, 1, len(testPeer.sendBufferBulk))
 	require.Equal(t, 0, len(exceptPeer.sendBufferBulk))
 }
+
+func TestMaybeSendMessagesOfInterestLegacyPeer(t *testing.T) {
+	t.Parallel()
+
+	wn := &WebsocketNetwork{
+		log: logging.TestingLog(t),
+	}
+	wn.messagesOfInterestGeneration.Store(1)
+	wn.messagesOfInterest = map[protocol.Tag]bool{
+		protocol.AgreementVoteTag: true,
+		protocol.VotePackedTag:    true,
+	}
+	wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
+
+	makePeer := func(features peerFeatureFlag) (*wsPeer, chan sendMessage) {
+		ch := make(chan sendMessage, 1)
+		return &wsPeer{
+			log:                logging.TestingLog(t),
+			features:           features,
+			sendBufferHighPrio: ch,
+			sendBufferBulk:     make(chan sendMessage, 1),
+			closing:            make(chan struct{}),
+			netCtx:             context.Background(),
+		}, ch
+	}
+
+	t.Run("drops VP for peers without stateful support", func(t *testing.T) {
+		peer, ch := makePeer(pfCompressedProposal | pfCompressedVoteVpack)
+
+		wn.maybeSendMessagesOfInterest(peer, nil)
+
+		select {
+		case msg := <-ch:
+			require.Len(t, msg.data, len(protocol.MsgOfInterestTag)+len(msg.data[2:]))
+			require.Equal(t, protocol.MsgOfInterestTag, protocol.Tag(msg.data[:2]))
+
+			topics, err := UnmarshallTopics(msg.data[2:])
+			require.NoError(t, err)
+
+			tags, ok := topics.GetValue("tags")
+			require.True(t, ok)
+
+			for _, tag := range strings.Split(string(tags), ",") {
+				require.NotEqual(t, string(protocol.VotePackedTag), tag)
+			}
+		default:
+			t.Fatal("expected MOI message for legacy peer")
+		}
+	})
+
+	t.Run("retains VP for peers with stateful support", func(t *testing.T) {
+		peer, ch := makePeer(pfCompressedProposal | pfCompressedVoteVpack | pfCompressedVoteVpackStateful256)
+
+		wn.maybeSendMessagesOfInterest(peer, nil)
+
+		select {
+		case msg := <-ch:
+			require.Equal(t, protocol.MsgOfInterestTag, protocol.Tag(msg.data[:2]))
+
+			topics, err := UnmarshallTopics(msg.data[2:])
+			require.NoError(t, err)
+
+			tags, ok := topics.GetValue("tags")
+			require.True(t, ok)
+
+			foundVP := false
+			for _, tag := range strings.Split(string(tags), ",") {
+				if tag == string(protocol.VotePackedTag) {
+					foundVP = true
+					break
+				}
+			}
+			require.True(t, foundVP, "expected VP tag for peer with stateful support")
+		default:
+			t.Fatal("expected MOI message for stateful peer")
+		}
+	})
+}
