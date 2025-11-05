@@ -1194,23 +1194,19 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 			if sendEnc == nil {
 				sendEnc = wn.messagesOfInterestEnc
 			}
-			if !peerSupportsStatefulCompression {
+			if !peerSupportsStatefulCompression && wn.messagesOfInterest[protocol.VotePackedTag] {
 				// Filter VP tag for peers lacking stateful compression support; older nodes (<= v4.3)
 				// treat unknown tags as protocol violations and disconnect.
-				if wn.messagesOfInterest[protocol.VotePackedTag] {
-					perPeerTags = make(map[protocol.Tag]bool, len(wn.messagesOfInterest))
-					for tag, flag := range wn.messagesOfInterest {
-						if tag == protocol.VotePackedTag {
-							continue
-						}
-						perPeerTags[tag] = flag
+				perPeerTags = make(map[protocol.Tag]bool, len(wn.messagesOfInterest))
+				for tag, flag := range wn.messagesOfInterest {
+					if tag == protocol.VotePackedTag {
+						continue
 					}
+					perPeerTags[tag] = flag
 				}
+				sendEnc = marshallMessageOfInterestMap(perPeerTags)
 			}
 			wn.messagesOfInterestMu.Unlock()
-		}
-		if perPeerTags != nil {
-			sendEnc = marshallMessageOfInterestMap(perPeerTags)
 		}
 		if sendEnc != nil {
 			peer.sendMessagesOfInterest(messagesOfInterestGeneration, sendEnc)
