@@ -195,7 +195,7 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 		}
 		if tx.ApplicationID == 0 && tx.ExtraProgramPages == 0 {
 			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
-			totalPages := basics.DivCeil(totalLength, params.MaxAppProgramLen)
+			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
 			tx.ExtraProgramPages = uint32(totalPages - 1)
 		}
 	}
