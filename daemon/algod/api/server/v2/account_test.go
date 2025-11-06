@@ -25,10 +25,30 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// makeAccountConverters creates conversion functions for round-trip testing between
+// basics.AccountData and model.Account.
+func makeAccountConverters(t *testing.T, addrStr string, round basics.Round, proto *config.ConsensusParams, withoutRewards basics.MicroAlgos) (
+	toModel func(basics.AccountData) model.Account,
+	toBasics func(model.Account) basics.AccountData,
+) {
+	toModel = func(ad basics.AccountData) model.Account {
+		converted, err := AccountDataToAccount(addrStr, &ad, round, proto, withoutRewards)
+		require.NoError(t, err)
+		return converted
+	}
+	toBasics = func(acc model.Account) basics.AccountData {
+		converted, err := AccountToAccountData(&acc)
+		require.NoError(t, err)
+		return converted
+	}
+	return toModel, toBasics
+}
 
 func TestAccount(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -106,8 +126,9 @@ func TestAccount(t *testing.T) {
 	b := a.WithUpdatedRewards(proto.RewardUnit, 100)
 
 	addr := basics.Address{}.String()
-	conv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
-	require.NoError(t, err)
+	toModel, toBasics := makeAccountConverters(t, addr, round, &proto, a.MicroAlgos)
+
+	conv := toModel(b)
 	require.Equal(t, addr, conv.Address)
 	require.Equal(t, b.MicroAlgos.Raw, conv.Amount)
 	require.Equal(t, a.MicroAlgos.Raw, conv.AmountWithoutPendingRewards)
@@ -144,6 +165,21 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, 2, len(*conv.CreatedApps))
 	verifyCreatedApp(0, appIdx1, appParams1)
 	verifyCreatedApp(1, appIdx2, appParams2)
+
+	appRoundTrip := func(idx basics.AppIndex, params basics.AppParams) {
+		require.True(t, roundtrip.Check(t, params,
+			func(ap basics.AppParams) model.Application {
+				return AppParamsToApplication(addr, idx, &ap)
+			},
+			func(app model.Application) basics.AppParams {
+				converted, err := ApplicationParamsToAppParams(&app.Params)
+				require.NoError(t, err)
+				return converted
+			}))
+	}
+
+	appRoundTrip(appIdx1, appParams1)
+	appRoundTrip(appIdx2, appParams2)
 
 	makeTKV := func(k string, v interface{}) model.TealKeyValue {
 		value := model.TealValue{}
@@ -198,9 +234,7 @@ func TestAccount(t *testing.T) {
 	verifyCreatedAsset(0, assetIdx1, assetParams1)
 	verifyCreatedAsset(1, assetIdx2, assetParams2)
 
-	c, err := AccountToAccountData(&conv)
-	require.NoError(t, err)
-	require.Equal(t, b, c)
+	require.True(t, roundtrip.Check(t, b, toModel, toBasics))
 
 	t.Run("IsDeterministic", func(t *testing.T) {
 		// convert the same account a few more times to make sure we always
@@ -223,11 +257,91 @@ func TestAccountRandomRoundTrip(t *testing.T) {
 		for addr, acct := range accts {
 			round := basics.Round(2)
 			proto := config.Consensus[protocol.ConsensusFuture]
-			conv, err := AccountDataToAccount(addr.String(), &acct, round, &proto, acct.MicroAlgos)
-			require.NoError(t, err)
-			c, err := AccountToAccountData(&conv)
-			require.NoError(t, err)
-			require.Equal(t, acct, c)
+			toModel, toBasics := makeAccountConverters(t, addr.String(), round, &proto, acct.MicroAlgos)
+			// AccountData has constraints (Status field must be valid), and this test
+			// already uses RandomAccounts to generate valid random accounts
+			require.True(t, roundtrip.Check(t, acct, toModel, toBasics, roundtrip.NoRandomCases()))
 		}
+	}
+}
+
+func TestConvertTealKeyValueRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("nil input", func(t *testing.T) {
+		require.Nil(t, convertTKVToGenerated(nil))
+		result, err := convertGeneratedTKV(nil)
+		require.NoError(t, err)
+		require.Nil(t, result)
+	})
+
+	t.Run("empty map treated as nil", func(t *testing.T) {
+		empty := basics.TealKeyValue{}
+		require.Nil(t, convertTKVToGenerated(&empty))
+		result, err := convertGeneratedTKV(convertTKVToGenerated(&empty))
+		require.NoError(t, err)
+		require.Nil(t, result)
+	})
+
+	t.Run("round-trip non-empty map", func(t *testing.T) {
+		kv := basics.TealKeyValue{
+			"alpha": {Type: basics.TealUintType, Uint: 17},
+			"beta":  {Type: basics.TealBytesType, Bytes: "\x00\x01binary"},
+		}
+
+		toGenerated := func(val basics.TealKeyValue) *model.TealKeyValueStore {
+			return convertTKVToGenerated(&val)
+		}
+		toBasics := func(store *model.TealKeyValueStore) basics.TealKeyValue {
+			converted, err := convertGeneratedTKV(store)
+			require.NoError(t, err)
+			return converted
+		}
+
+		require.True(t, roundtrip.Check(t, kv, toGenerated, toBasics))
+	})
+}
+
+func TestAppLocalStateRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	appIdx := basics.AppIndex(42)
+	cases := map[string]basics.AppLocalState{
+		"empty kv": {
+			Schema:   basics.StateSchema{NumUint: 1, NumByteSlice: 0},
+			KeyValue: nil,
+		},
+		"mixed kv": {
+			Schema: basics.StateSchema{NumUint: 2, NumByteSlice: 3},
+			KeyValue: basics.TealKeyValue{
+				"counter": {Type: basics.TealUintType, Uint: 99},
+				"note":    {Type: basics.TealBytesType, Bytes: "hello world"},
+			},
+		},
+	}
+
+	for name, state := range cases {
+		state := state
+		t.Run(name, func(t *testing.T) {
+			modelState := AppLocalState(state, appIdx)
+			modelStates := []model.ApplicationLocalState{modelState}
+
+			acc := model.Account{
+				Status:         basics.Offline.String(),
+				Amount:         0,
+				AppsLocalState: &modelStates,
+			}
+
+			ad, err := AccountToAccountData(&acc)
+			require.NoError(t, err)
+
+			require.NotNil(t, ad.AppLocalStates)
+			got, ok := ad.AppLocalStates[appIdx]
+			require.True(t, ok)
+			require.Equal(t, state.Schema, got.Schema)
+			require.Equal(t, state.KeyValue, got.KeyValue)
+		})
 	}
 }

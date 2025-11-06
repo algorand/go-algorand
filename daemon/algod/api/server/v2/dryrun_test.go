@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -1086,6 +1087,30 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 	}
 	gsd := globalDeltaToStateDelta(sd)
 	require.Equal(t, 3, len(gsd))
+
+	decode := func(msd model.StateDelta) basics.StateDelta {
+		if len(msd) == 0 {
+			return nil
+		}
+		result := make(basics.StateDelta, len(msd))
+		for _, kv := range msd {
+			keyBytes, err := base64.StdEncoding.DecodeString(kv.Key)
+			require.NoError(t, err)
+			vd := basics.ValueDelta{Action: basics.DeltaAction(kv.Value.Action)}
+			if kv.Value.Bytes != nil {
+				decoded, err := base64.StdEncoding.DecodeString(*kv.Value.Bytes)
+				require.NoError(t, err)
+				vd.Bytes = string(decoded)
+			}
+			if kv.Value.Uint != nil {
+				vd.Uint = *kv.Value.Uint
+			}
+			result[string(keyBytes)] = vd
+		}
+		return result
+	}
+
+	require.True(t, roundtrip.Check(t, sd, globalDeltaToStateDelta, decode))
 
 	var keys []string
 	// test with a loop because sd is a map and iteration order is random

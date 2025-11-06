@@ -20,9 +20,36 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 
+	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// genTealValue generates a valid TealValue with proper Type/field correspondence.
+func genTealValue() *rapid.Generator[TealValue] {
+	return rapid.Custom(func(t *rapid.T) TealValue {
+		tealType := rapid.OneOf(rapid.Just(TealUintType), rapid.Just(TealBytesType)).Draw(t, "type")
+
+		if tealType == TealUintType {
+			return TealValue{Type: TealUintType, Uint: rapid.Uint64().Draw(t, "uint")}
+		}
+		return TealValue{Type: TealBytesType, Bytes: rapid.String().Draw(t, "bytes")}
+	})
+}
+
+// genValueDelta generates a valid ValueDelta with proper Action/field correspondence.
+// Note: DeleteAction is excluded as it doesn't round-trip to TealValue.
+func genValueDelta() *rapid.Generator[ValueDelta] {
+	return rapid.Custom(func(t *rapid.T) ValueDelta {
+		action := rapid.OneOf(rapid.Just(SetUintAction), rapid.Just(SetBytesAction)).Draw(t, "action")
+
+		if action == SetUintAction {
+			return ValueDelta{Action: SetUintAction, Uint: rapid.Uint64().Draw(t, "uint")}
+		}
+		return ValueDelta{Action: SetBytesAction, Bytes: rapid.String().Draw(t, "bytes")}
+	})
+}
 
 func TestStateDeltaEqual(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -59,4 +86,46 @@ func TestStateDeltaEqual(t *testing.T) {
 
 	d2 = StateDelta{"test": {Action: SetBytesAction, Bytes: "val1"}}
 	a.False(d1.Equal(d2))
+}
+
+func TestTealValueRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Test with a simple example value
+	example := TealValue{Type: TealUintType, Uint: 17}
+
+	// Use roundtrip.Check with WithRapid for property-based testing
+	require.True(t, roundtrip.Check(t, example,
+		func(tv TealValue) ValueDelta { return tv.ToValueDelta() },
+		func(vd ValueDelta) TealValue {
+			tv, ok := vd.ToTealValue()
+			require.True(t, ok)
+			return tv
+		},
+		roundtrip.WithRapid(genTealValue())))
+}
+
+func TestValueDeltaRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Test with a simple example value
+	example := ValueDelta{Action: SetUintAction, Uint: 42}
+
+	// Use roundtrip.Check with WithRapid for property-based testing
+	require.True(t, roundtrip.Check(t, example,
+		func(vd ValueDelta) TealValue {
+			tv, ok := vd.ToTealValue()
+			require.True(t, ok)
+			return tv
+		},
+		func(tv TealValue) ValueDelta { return tv.ToValueDelta() },
+		roundtrip.WithRapid(genValueDelta())))
+}
+
+func TestValueDeltaDeleteDoesNotRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vd := ValueDelta{Action: DeleteAction}
+	_, ok := vd.ToTealValue()
+	require.False(t, ok)
 }

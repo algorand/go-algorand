@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -138,6 +141,17 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID.Batch++ does not verify")
 	}
+}
+
+func TestHeartbeatProofRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	toOTS := func(h HeartbeatProof) OneTimeSignature { return h.ToOneTimeSignature() }
+	toProof := func(ots OneTimeSignature) HeartbeatProof { return ots.ToHeartbeatProof() }
+
+	// Test with an empty proof as the example, RandomizeObject will generate 100 random variants
+	var emptyProof HeartbeatProof
+	require.True(t, roundtrip.Check(t, emptyProof, toOTS, toProof))
 }
 
 func BenchmarkOneTimeSigBatchVerification(b *testing.B) {

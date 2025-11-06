@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
+	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -1292,7 +1293,7 @@ func TestCopyFunctions(t *testing.T) {
 		return rd.GetAssetParams()
 	}
 	for _, nz := range basics_testing.NearZeros(t, basics.AssetParams{}) {
-		assert.True(t, basics_testing.RoundTrip(t, nz, assetToRD, rdToAsset), nz)
+		assert.True(t, roundtrip.Check(t, nz, assetToRD, rdToAsset), nz)
 	}
 
 	// Asset holdings are copied into and out of ResourceData losslessly
@@ -1305,7 +1306,7 @@ func TestCopyFunctions(t *testing.T) {
 		return rd.GetAssetHolding()
 	}
 	for _, nz := range basics_testing.NearZeros(t, basics.AssetHolding{}) {
-		assert.True(t, basics_testing.RoundTrip(t, nz, holdingToRD, rdToHolding), nz)
+		assert.True(t, roundtrip.Check(t, nz, holdingToRD, rdToHolding), nz)
 	}
 
 	// AppParams are copied into and out of ResourceData losslessly
@@ -1318,7 +1319,7 @@ func TestCopyFunctions(t *testing.T) {
 		return rd.GetAppParams()
 	}
 	for _, nz := range basics_testing.NearZeros(t, basics.AppParams{}) {
-		assert.True(t, basics_testing.RoundTrip(t, nz, apToRD, rdToAP), nz)
+		assert.True(t, roundtrip.Check(t, nz, apToRD, rdToAP), nz)
 	}
 
 	// AppLocalStates are copied into and out of ResourceData losslessly
@@ -1331,7 +1332,7 @@ func TestCopyFunctions(t *testing.T) {
 		return rd.GetAppLocalState()
 	}
 	for _, nz := range basics_testing.NearZeros(t, basics.AppLocalState{}) {
-		assert.True(t, basics_testing.RoundTrip(t, nz, localsToRD, rdToLocals), nz)
+		assert.True(t, roundtrip.Check(t, nz, localsToRD, rdToLocals), nz)
 	}
 
 }

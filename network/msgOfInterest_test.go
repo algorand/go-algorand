@@ -17,10 +17,12 @@
 package network
 
 import (
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -69,4 +71,22 @@ func TestMarshallMessageOfInterest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, tags[protocol.AgreementVoteTag], true)
 	require.Equal(t, 1, len(tags))
+}
+
+func TestDefaultSendMessageTagsMarshalRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cloned := maps.Clone(defaultSendMessageTags)
+
+	toBytes := func(tags map[protocol.Tag]bool) []byte {
+		return marshallMessageOfInterestMap(tags)
+	}
+	toTags := func(data []byte) map[protocol.Tag]bool {
+		tags, err := unmarshallMessageOfInterest(data)
+		require.NoError(t, err)
+		return tags
+	}
+
+	// map[protocol.Tag]bool has constraints (Tag must be valid), so disable random testing
+	require.True(t, roundtrip.Check(t, cloned, toBytes, toTags, roundtrip.NoRandomCases()), "default messages of interest should round-trip")
 }
