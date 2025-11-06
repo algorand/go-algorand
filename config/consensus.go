@@ -577,6 +577,12 @@ type ConsensusParams struct {
 	// available. This parameters can be removed and assumed true after the
 	// first consensus release in which it is set true.
 	EnableInnerClawbackWithoutSenderHolding bool
+
+	// AppSizeUpdates allows application update transactions to change
+	// the extra-program-pages and global schema sizes. Since it enables newly
+	// legal transactions, this parameter can be removed and assumed true after
+	// the first consensus release in which it is set true.
+	AppSizeUpdates bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1461,6 +1467,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.AppSizeUpdates = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

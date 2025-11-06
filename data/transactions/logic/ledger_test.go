@@ -138,6 +138,12 @@ func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params ba
 	}
 }
 
+func (l *Ledger) SetAppGlobalSchema(appID basics.AppIndex, schema basics.StateSchema) {
+	app := l.applications[appID]
+	app.GlobalStateSchema = schema
+	l.applications[appID] = app
+}
+
 // NewAsset adds an asset with the given id and params to the ledger.
 func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, params basics.AssetParams) {
 	l.assets[assetID] = asaParams{
@@ -187,9 +193,25 @@ func (l *Ledger) NewLocals(addr basics.Address, appID basics.AppIndex) {
 	l.balances[addr].locals[appID] = basics.TealKeyValue{}
 }
 
+func toTealValue(value any) basics.TealValue {
+	switch v := value.(type) {
+	case int:
+		return basics.TealValue{Type: basics.TealUintType, Uint: uint64(v)}
+	case uint64:
+		return basics.TealValue{Type: basics.TealUintType, Uint: v}
+	case string:
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: v}
+	case []byte:
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(v)}
+	case basics.TealValue:
+		return v
+	}
+	panic(value)
+}
+
 // NewLocal sets a local value of an app on an address
-func (l *Ledger) NewLocal(addr basics.Address, appID basics.AppIndex, key string, value basics.TealValue) {
-	l.balances[addr].locals[appID][key] = value
+func (l *Ledger) NewLocal(addr basics.Address, appID basics.AppIndex, key string, value any) {
+	l.balances[addr].locals[appID][key] = toTealValue(value)
 }
 
 // NoLocal removes a key from an address locals for an app.
@@ -197,9 +219,17 @@ func (l *Ledger) NoLocal(addr basics.Address, appID basics.AppIndex, key string)
 	delete(l.balances[addr].locals[appID], key)
 }
 
-// NewGlobal sets a global value for an app
-func (l *Ledger) NewGlobal(appID basics.AppIndex, key string, value basics.TealValue) {
-	l.applications[appID].GlobalState[key] = value
+// NewGlobal sets a global value for an app incrmementing the schema to accommodate it
+func (l *Ledger) NewGlobal(appID basics.AppIndex, key string, value any) {
+	tv := toTealValue(value)
+	app := l.applications[appID]
+	app.GlobalState[key] = tv
+	if tv.Type == basics.TealBytesType {
+		app.GlobalStateSchema.NumByteSlice++
+	} else {
+		app.GlobalStateSchema.NumUint++
+	}
+	l.applications[appID] = app
 }
 
 // NoGlobal removes a global key for an app
@@ -398,11 +428,38 @@ func (l *Ledger) SetGlobal(appIdx basics.AppIndex, key string, value basics.Teal
 		return fmt.Errorf("no app %d", appIdx)
 	}
 
-	// if writing the same value, return
-	// this simulates real ledger behavior for tests
-	val, ok := params.GlobalState[key]
-	if ok && val == value {
+	// Populate globals from the app object, then add in the mods
+	globals := params.GlobalState.Clone() // this does not contain the running changes in mods
+	for k, vd := range l.mods[appIdx] {
+		tv, exists := vd.ToTealValue()
+		if exists {
+			globals[k] = tv
+		} else {
+			delete(globals, k)
+		}
+	}
+
+	// if writing the same value, return to simulate real ledger behavior for
+	// tests
+	val, present := globals[key]
+	if present && val == value {
 		return nil
+	}
+
+	delete(globals, key) // remove before getting schema, since type may change
+	required, err := globals.ToStateSchema()
+	if err != nil {
+		return err
+	}
+	// now add it back in, possibly with new type
+	if value.Type == basics.TealBytesType {
+		required.NumByteSlice++
+	} else {
+		required.NumUint++
+	}
+	if !params.GlobalStateSchema.Allows(required) {
+		return fmt.Errorf("app %d global schema %s does not allow %s",
+			appIdx, params.GlobalStateSchema, required)
 	}
 
 	// write to deltas
@@ -919,7 +976,19 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 		}
 		app.ApprovalProgram = appl.ApprovalProgram
 		app.ClearStateProgram = appl.ClearStateProgram
-		app.Version++
+		if ep.Proto.EnableAppVersioning {
+			app.Version++
+		}
+		if appl.UpdatingSizes() {
+			if ep.Proto.AppSizeUpdates {
+				app.ExtraProgramPages = appl.ExtraProgramPages
+				app.GlobalStateSchema = appl.GlobalStateSchema
+				app.SizeSponsor = from
+			} else {
+				return fmt.Errorf("Tried to update size epp=%v gs=%v",
+					appl.ExtraProgramPages, appl.GlobalStateSchema)
+			}
+		}
 		l.applications[aid] = app
 	}
 	return nil

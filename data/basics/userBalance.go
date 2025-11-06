@@ -250,6 +250,10 @@ type AppParams struct {
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
 	Version           uint64 `codec:"v"`
+
+	// SizeSponsor, if non-zero, is the account that must hold MBR for
+	// extra program pages, and the global schema.
+	SizeSponsor Address `codec:"ss"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the

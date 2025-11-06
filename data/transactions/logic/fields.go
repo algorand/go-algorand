@@ -1350,6 +1350,9 @@ const (
 	// AppVersion begins at 0 and increasing each time either program changes
 	AppVersion
 
+	// AppSizeSponsor is responsible for extra pages and global state balance requirement.
+	AppSizeSponsor
+
 	invalidAppParamsField // compile-time constant for number of fields
 )
 
@@ -1389,6 +1392,7 @@ var appParamsFieldSpecs = [...]appParamsFieldSpec{
 	{AppCreator, StackAddress, 5, "Creator address"},
 	{AppAddress, StackAddress, 5, "Address for which this application has authority"},
 	{AppVersion, StackUint64, 12, "Version of the app, incremented each time the approval or clear program changes"},
+	{AppSizeSponsor, StackAddress, 13, "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {

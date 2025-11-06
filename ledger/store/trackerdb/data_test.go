@@ -26,10 +26,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1274,4 +1276,73 @@ func TestBaseAccountDataDecodeEmpty(t *testing.T) {
 
 	err = protocol.Decode([]byte{0x80}, &b)
 	require.NoError(t, err)
+}
+
+func TestCopyFunctions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// AssetParams are copied into and out of ResourceData losslessly
+	assetToRD := func(ap basics.AssetParams) ResourcesData {
+		var rd ResourcesData
+		rd.SetAssetParams(ap, false)
+		return rd
+	}
+	rdToAsset := func(rd ResourcesData) basics.AssetParams {
+		return rd.GetAssetParams()
+	}
+	for _, nz := range basics_testing.NearZeros(t, basics.AssetParams{}) {
+		assert.True(t, basics_testing.RoundTrip(t, nz, assetToRD, rdToAsset), nz)
+	}
+
+	// Asset holdings are copied into and out of ResourceData losslessly
+	holdingToRD := func(ap basics.AssetHolding) ResourcesData {
+		var rd ResourcesData
+		rd.SetAssetHolding(ap)
+		return rd
+	}
+	rdToHolding := func(rd ResourcesData) basics.AssetHolding {
+		return rd.GetAssetHolding()
+	}
+	for _, nz := range basics_testing.NearZeros(t, basics.AssetHolding{}) {
+		assert.True(t, basics_testing.RoundTrip(t, nz, holdingToRD, rdToHolding), nz)
+	}
+
+	// AppParams are copied into and out of ResourceData losslessly
+	apToRD := func(ap basics.AppParams) ResourcesData {
+		var rd ResourcesData
+		rd.SetAppParams(ap, false)
+		return rd
+	}
+	rdToAP := func(rd ResourcesData) basics.AppParams {
+		return rd.GetAppParams()
+	}
+	for _, nz := range basics_testing.NearZeros(t, basics.AppParams{}) {
+		assert.True(t, basics_testing.RoundTrip(t, nz, apToRD, rdToAP), nz)
+	}
+
+	// AppLocalStates are copied into and out of ResourceData losslessly
+	localsToRD := func(ap basics.AppLocalState) ResourcesData {
+		var rd ResourcesData
+		rd.SetAppLocalState(ap)
+		return rd
+	}
+	rdToLocals := func(rd ResourcesData) basics.AppLocalState {
+		return rd.GetAppLocalState()
+	}
+	for _, nz := range basics_testing.NearZeros(t, basics.AppLocalState{}) {
+		assert.True(t, basics_testing.RoundTrip(t, nz, localsToRD, rdToLocals), nz)
+	}
+
+}
+
+func TestIsEmptyAppFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, nz := range basics_testing.NearZeros(t, basics.AppParams{}) {
+		var rd ResourcesData
+		rd.SetAppParams(nz, false)
+		assert.False(t, rd.IsEmptyAppFields(), nz)
+	}
 }

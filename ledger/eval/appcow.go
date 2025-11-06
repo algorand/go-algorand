@@ -151,6 +151,19 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 	return lsd, nil
 }
 
+// SetAppGlobalSchema sets the maximum allowed counts for app globals. It can
+// be changed during evaluation by an app update.
+func (cb *roundCowState) SetAppGlobalSchema(addr basics.Address, aidx basics.AppIndex, limits basics.StateSchema) error {
+	// Obtain a storageDelta to record the schema change
+	lsd, err := cb.ensureStorageDelta(addr, aidx, true, remainAllocAction, 0)
+	if err != nil {
+		return err
+	}
+
+	lsd.maxCounts = limits
+	return lsd.checkCounts()
+}
+
 // getStorageCounts returns current storage usage for a given {addr, aidx, global} as basics.StateSchema
 func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
 	// If we haven't allocated storage, then our used storage count is zero
@@ -600,33 +613,29 @@ func (lsd *storageDelta) applyChild(child *storageDelta) {
 		// completely overwrite those of the parent.
 		lsd.action = child.action
 		lsd.kvCow = child.kvCow
-		lsd.counts = child.counts
-		lsd.maxCounts = child.maxCounts
 	} else {
-		// Otherwise, the child's deltas get merged with those of the
-		// parent, and we keep whatever the parent's state was.
-		for key := range child.kvCow {
+		// Otherwise, the child's new values get merged into the delta of the
+		// parent, but we keep the parent's old/oldExists values.
+		for key, childVal := range child.kvCow {
 			delta, ok := lsd.kvCow[key]
 			if !ok {
-				lsd.kvCow[key] = child.kvCow[key]
+				lsd.kvCow[key] = childVal
 				continue
 			}
 
-			delta.new = child.kvCow[key].new
-			delta.newExists = child.kvCow[key].newExists
+			delta.new = childVal.new
+			delta.newExists = childVal.newExists
 			lsd.kvCow[key] = delta
 		}
-
-		// counts can just get overwritten because they are absolute
-		// see ensureStorageDelta: child.counts is initialized from parent cow
-		lsd.counts = child.counts
 	}
+	// counts can just get overwritten because they are absolute
+	// see ensureStorageDelta: counts are initialized from parent cow
+	lsd.counts = child.counts       // propagate addition/deletion of globals
+	lsd.maxCounts = child.maxCounts // propagate updates to global schema
 
 	// sanity checks
-	if lsd.action == deallocAction {
-		if len(lsd.kvCow) > 0 {
-			panic("dealloc state delta, but nonzero kv change")
-		}
+	if lsd.action == deallocAction && len(lsd.kvCow) > 0 {
+		panic("dealloc state delta, but nonzero kv change")
 	}
 }
 

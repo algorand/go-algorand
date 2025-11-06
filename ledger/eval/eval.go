@@ -470,13 +470,8 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	var err error
-	count := basics.StateSchema{}
-	exist := false
-	kv := basics.TealKeyValue{}
 	if global {
-		var app ledgercore.AppParamsDelta
-		app, exist, err = x.lookupAppParams(addr, aidx, false)
+		app, exist, err := x.lookupAppParams(addr, aidx, false)
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
@@ -484,11 +479,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 		}
 		if exist {
-			kv = app.Params.GlobalState
+			return app.Params.GlobalState.ToStateSchema()
 		}
 	} else {
-		var ls ledgercore.AppLocalStateDelta
-		ls, exist, err = x.lookupAppLocalState(addr, aidx, false)
+		ls, exist, err := x.lookupAppLocalState(addr, aidx, false)
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
@@ -496,21 +490,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 		}
 		if exist {
-			kv = ls.LocalState.KeyValue
+			return ls.LocalState.KeyValue.ToStateSchema()
 		}
 	}
-	if !exist {
-		return count, nil
-	}
-
-	for _, v := range kv {
-		if v.Type == basics.TealUintType {
-			count.NumUint++
-		} else {
-			count.NumByteSlice++
-		}
-	}
-	return count, nil
+	return basics.StateSchema{}, nil
 }
 
 func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {

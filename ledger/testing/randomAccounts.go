@@ -193,6 +193,13 @@ func RandomAppParams() basics.AppParams {
 		ap.ClearStateProgram = nil
 	}
 
+	// The can only be a sponsor if there's extra storage
+	if ap.ExtraProgramPages > 0 && !ap.StateSchemas.GlobalStateSchema.Empty() {
+		if crypto.RandUint63()%2 == 0 {
+			crypto.RandBytes(ap.SizeSponsor[:])
+		}
+	}
+
 	for i := uint64(0); i < ap.StateSchemas.GlobalStateSchema.NumUint; i++ {
 		var keyName string
 		if crypto.RandUint64()%5 != 0 {
