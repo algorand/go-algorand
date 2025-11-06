@@ -234,7 +234,7 @@ func TestAccount(t *testing.T) {
 	verifyCreatedAsset(0, assetIdx1, assetParams1)
 	verifyCreatedAsset(1, assetIdx2, assetParams2)
 
-	require.True(t, roundtrip.Check(t, b, toModel, toBasics, roundtrip.NoRandomCases()))
+	require.True(t, roundtrip.Check(t, b, toModel, toBasics, roundtrip.NoRandomCases(), roundtrip.NoNearZeros()))
 
 	t.Run("IsDeterministic", func(t *testing.T) {
 		// convert the same account a few more times to make sure we always
@@ -258,7 +258,7 @@ func TestAccountRandomRoundTrip(t *testing.T) {
 			round := basics.Round(2)
 			proto := config.Consensus[protocol.ConsensusFuture]
 			toModel, toBasics := makeAccountConverters(t, addr.String(), round, &proto, acct.MicroAlgos)
-			require.True(t, roundtrip.Check(t, acct, toModel, toBasics, roundtrip.NoRandomCases()))
+			require.True(t, roundtrip.Check(t, acct, toModel, toBasics, roundtrip.NoRandomCases(), roundtrip.NoNearZeros()))
 		}
 	}
 }
@@ -297,7 +297,7 @@ func TestConvertTealKeyValueRoundTrip(t *testing.T) {
 			return converted
 		}
 
-		require.True(t, roundtrip.Check(t, kv, toGenerated, toBasics))
+		require.True(t, roundtrip.Check(t, kv, toGenerated, toBasics, roundtrip.NoNearZeros()))
 	})
 }
 

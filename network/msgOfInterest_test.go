@@ -88,5 +88,5 @@ func TestDefaultSendMessageTagsMarshalRoundTrip(t *testing.T) {
 	}
 
 	// map[protocol.Tag]bool has constraints (Tag must be valid), so disable random testing
-	require.True(t, roundtrip.Check(t, cloned, toBytes, toTags, roundtrip.NoRandomCases()), "default messages of interest should round-trip")
+	require.True(t, roundtrip.Check(t, cloned, toBytes, toTags, roundtrip.NoRandomCases(), roundtrip.NoNearZeros()), "default messages of interest should round-trip")
 }

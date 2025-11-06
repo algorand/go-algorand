@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -1292,9 +1291,8 @@ func TestCopyFunctions(t *testing.T) {
 	rdToAsset := func(rd ResourcesData) basics.AssetParams {
 		return rd.GetAssetParams()
 	}
-	for _, nz := range basics_testing.NearZeros(t, basics.AssetParams{}) {
-		assert.True(t, roundtrip.Check(t, nz, assetToRD, rdToAsset), nz)
-	}
+	// roundtrip.Check now automatically tests NearZeros + 100 random variants
+	assert.True(t, roundtrip.Check(t, basics.AssetParams{}, assetToRD, rdToAsset))
 
 	// Asset holdings are copied into and out of ResourceData losslessly
 	holdingToRD := func(ap basics.AssetHolding) ResourcesData {
@@ -1305,9 +1303,7 @@ func TestCopyFunctions(t *testing.T) {
 	rdToHolding := func(rd ResourcesData) basics.AssetHolding {
 		return rd.GetAssetHolding()
 	}
-	for _, nz := range basics_testing.NearZeros(t, basics.AssetHolding{}) {
-		assert.True(t, roundtrip.Check(t, nz, holdingToRD, rdToHolding), nz)
-	}
+	assert.True(t, roundtrip.Check(t, basics.AssetHolding{}, holdingToRD, rdToHolding))
 
 	// AppParams are copied into and out of ResourceData losslessly
 	apToRD := func(ap basics.AppParams) ResourcesData {
@@ -1318,9 +1314,7 @@ func TestCopyFunctions(t *testing.T) {
 	rdToAP := func(rd ResourcesData) basics.AppParams {
 		return rd.GetAppParams()
 	}
-	for _, nz := range basics_testing.NearZeros(t, basics.AppParams{}) {
-		assert.True(t, roundtrip.Check(t, nz, apToRD, rdToAP), nz)
-	}
+	assert.True(t, roundtrip.Check(t, basics.AppParams{}, apToRD, rdToAP))
 
 	// AppLocalStates are copied into and out of ResourceData losslessly
 	localsToRD := func(ap basics.AppLocalState) ResourcesData {
@@ -1331,9 +1325,7 @@ func TestCopyFunctions(t *testing.T) {
 	rdToLocals := func(rd ResourcesData) basics.AppLocalState {
 		return rd.GetAppLocalState()
 	}
-	for _, nz := range basics_testing.NearZeros(t, basics.AppLocalState{}) {
-		assert.True(t, roundtrip.Check(t, nz, localsToRD, rdToLocals), nz)
-	}
+	assert.True(t, roundtrip.Check(t, basics.AppLocalState{}, localsToRD, rdToLocals))
 
 }
 
@@ -1341,7 +1333,7 @@ func TestIsEmptyAppFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	for _, nz := range basics_testing.NearZeros(t, basics.AppParams{}) {
+	for _, nz := range roundtrip.NearZeros(t, basics.AppParams{}) {
 		var rd ResourcesData
 		rd.SetAppParams(nz, false)
 		assert.False(t, rd.IsEmptyAppFields(), nz)
