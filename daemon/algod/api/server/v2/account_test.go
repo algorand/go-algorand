@@ -323,7 +323,6 @@ func TestAppLocalStateRoundTrip(t *testing.T) {
 	}
 
 	for name, state := range cases {
-		state := state
 		t.Run(name, func(t *testing.T) {
 			modelState := AppLocalState(state, appIdx)
 			modelStates := []model.ApplicationLocalState{modelState}
