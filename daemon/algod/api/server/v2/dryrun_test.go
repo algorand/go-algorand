@@ -1110,7 +1110,7 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 		return result
 	}
 
-	require.True(t, roundtrip.Check(t, sd, globalDeltaToStateDelta, decode))
+	require.True(t, roundtrip.Check(t, sd, globalDeltaToStateDelta, decode, roundtrip.NoNearZeros()))
 
 	var keys []string
 	// test with a loop because sd is a map and iteration order is random
