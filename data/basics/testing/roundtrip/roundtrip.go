@@ -33,11 +33,11 @@ type CheckOption interface {
 }
 
 type checkConfig struct {
-	randomCount    *int
-	randomOpts     []protocol.RandomizeObjectOption
-	rapidGen       interface{} // *rapid.Generator[A], stored as interface{} to avoid type parameters
-	useRapid       bool
-	skipNearZeros  bool
+	randomCount   *int
+	randomOpts    []protocol.RandomizeObjectOption
+	rapidGen      any // *rapid.Generator[A], stored as any to avoid type parameters
+	useRapid      bool
+	skipNearZeros bool
 }
 
 type randomCountOption int
@@ -54,7 +54,7 @@ func (opts randomOptsOption) apply(cfg *checkConfig) {
 }
 
 type rapidGenOption struct {
-	gen interface{}
+	gen any
 }
 
 func (r rapidGenOption) apply(cfg *checkConfig) {
@@ -72,21 +72,15 @@ func Opts(count int, opts ...protocol.RandomizeObjectOption) CheckOption {
 // NoRandomCases disables RandomizeObject testing (but still runs NearZeros).
 // Use this when RandomizeObject generates invalid values for constrained types.
 // Combine with NoNearZeros() to disable all automatic testing.
-func NoRandomCases() CheckOption {
-	return randomCountOption(0)
-}
+func NoRandomCases() CheckOption { return randomCountOption(0) }
 
 type skipNearZerosOption struct{}
 
-func (skipNearZerosOption) apply(cfg *checkConfig) {
-	cfg.skipNearZeros = true
-}
+func (skipNearZerosOption) apply(cfg *checkConfig) { cfg.skipNearZeros = true }
 
 // NoNearZeros disables NearZeros testing, only using RandomizeObject for random variants.
 // Use this for non-struct types (maps, slices) where NearZeros doesn't apply.
-func NoNearZeros() CheckOption {
-	return skipNearZerosOption{}
-}
+func NoNearZeros() CheckOption { return skipNearZerosOption{} }
 
 // WithRapid specifies a rapid.Generator to use for property-based testing.
 // If provided, rapid.Check will be used instead of protocol.RandomizeObject (runs 100 tests).
