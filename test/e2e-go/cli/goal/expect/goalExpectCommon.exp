@@ -526,19 +526,47 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
     return $TRANSACTION_ID
 }
 
+# Get the network's suggested minimum fee via REST API
+# Returns the fee value
+proc ::AlgorandGoal::GetSuggestedFee { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
+    if { [catch {
+        set TOKEN_FILE [open $TEST_PRIMARY_NODE_DIR/algod.token]
+        set ALGOD_TOKEN [string trim [read $TOKEN_FILE]]
+        close $TOKEN_FILE
+
+        set NET_FILE [open $TEST_PRIMARY_NODE_DIR/algod.net]
+        set ALGOD_NET [string trim [read $NET_FILE]]
+        close $NET_FILE
+
+        set SUGGESTED_FEE [exec curl -q -s -H "Authorization: Bearer $ALGOD_TOKEN" "http://$ALGOD_NET/v2/transactions/params" | jq -r {.["min-fee"]}]
+
+        if { $SUGGESTED_FEE == "" || $SUGGESTED_FEE == "null" } {
+            ::AlgorandGoal::Abort "Failed to get min fee from network REST API"
+        }
+    } EXCEPTION ] } {
+        ::AlgorandGoal::Abort "ERROR in GetSuggestedFee: $EXCEPTION"
+    }
+    return $SUGGESTED_FEE
+}
+
 # Account Transfer ( with optional wait flag)
 proc ::AlgorandGoal::AccountTransferWait { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT TEST_PRIMARY_NODE_DIR OUT_FILE WAIT} {
     set timeout 60
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
+        # Build fee argument - if FEE_AMOUNT is 0, omit --fee flag to use suggested fee
+        set FEE_ARG ""
+        if { $FEE_AMOUNT != 0 } {
+            set FEE_ARG "--fee $FEE_AMOUNT"
+        }
         if { $OUT_FILE == "" } {
              if { $WAIT == "" } {
-                 spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --no-wait
+                 spawn goal clerk send {*}$FEE_ARG --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --no-wait
              } else {
-                 spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+                 spawn goal clerk send {*}$FEE_ARG --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
              }
         } else {
-            spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --out $OUT_FILE
+            spawn goal clerk send {*}$FEE_ARG --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --out $OUT_FILE
         }
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out transferring funds"  }
@@ -1408,12 +1436,35 @@ proc ::AlgorandGoal::InspectTransactionFile { TRX_FILE } {
 proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DIR} {
     set timeout [expr $DURATION + 60]
     if { [ catch {
-        set pingpong_base "pingpong run --duration $DURATION -d $TEST_PRIMARY_NODE_DIR --quiet "
+        set pingpong_base "pingpong run --duration $DURATION -d $TEST_PRIMARY_NODE_DIR "
         set pingpong_command [concat $pingpong_base $PINGPONG_OPTIONS]
         puts "starting pingpong test with command:  $pingpong_command"
+
+        # Track whether we're expecting app calls
+        set expecting_apps 0
+        if {[string match "*--numapp*" $PINGPONG_OPTIONS]} {
+            set expecting_apps 1
+            set saw_app_calls 0
+            puts "Test expects app calls since --numapp is specified"
+        }
+
         eval spawn $pingpong_command
         expect {
-            timeout { puts "pingpong test interrupted by timeout, terminating after $timeout seconds" }
+            timeout { ::AlgorandGoal::Abort "pingpong test interrupted by timeout after $timeout seconds" }
+            "no acct" {::AlgorandGoal::Abort "pingpong failed with 'no acct' error - likely sender not set in constructAppTxn"}
+            -re {(?i)error[ :]} {
+                ::AlgorandGoal::Abort "pingpong encountered error: $expect_out(0,string)"
+            }
+            -re {(?i)panic} {
+                ::AlgorandGoal::Abort "pingpong panicked: $expect_out(0,string)"
+            }
+            "Calling app" {
+                if {$expecting_apps} {
+                    set saw_app_calls 1
+                    puts "Saw app call"
+                }
+                exp_continue
+            }
             -re {Sent (\d+) transactions \((\d+) attempted\).} {
                     set actual $expect_out(1,string) ;
                     set attempted $expect_out(2,string) ;
@@ -1421,7 +1472,12 @@ proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DI
                     if { $actual != $attempted } then { ::AlgorandGoal::Abort "Pingpong attempted to send $attempted transactions, but actual was $actual"; break;}
                     exp_continue
                 }
-            "Terminating after max run time of" {puts "end of ping pong test"}
+            "Terminating after max run time of" {
+                puts "end of ping pong test"
+                if {$expecting_apps && !$saw_app_calls} {
+                    ::AlgorandGoal::Abort "Test with --numapp expected app calls but saw none - possible constructAppTxn bug"
+                }
+            }
             eof {::AlgorandGoal::Abort "pingpong terminated unexpectedly: $expect_out(buffer)"}
             "Error" {::AlgorandGoal::Abort "error running pingpong: $expect_out(buffer)"}
         }

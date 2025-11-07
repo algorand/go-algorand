@@ -657,6 +657,7 @@ var OpSpecs = []OpSpec{
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), 7, costly(1900)},
 	{0x85, "falcon_verify", opFalconVerify, proto("bb{1232}b{1793}:T"), 12, costly(1700)}, // dynamic for internal hash?
 	{0x86, "sumhash512", opSumhash512, proto("b:b{64}"), sumhashVersion, costByLength(150, 7, 4, 0)},
+	{0x87, "sha512", opSHA512, proto("b:b{64}"), 13, costByLength(15, 32, 2, 0)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},

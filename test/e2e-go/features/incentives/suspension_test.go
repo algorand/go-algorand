@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -40,6 +41,7 @@ func TestBasicSuspension(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
+	consensusVersion := protocol.ConsensusFuture
 	// Overview of this test:
 	// Start a three-node network (70,20,10), all online
 	// Wait for 10 and 20% nodes to propose (we never suspend accounts with lastProposed=lastHeartbeat=0)
@@ -54,7 +56,7 @@ func TestBasicSuspension(t *testing.T) {
 	// get back online after being suspended. (0.8^32 is very small)
 
 	const lookback = 32
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
+	fixture.FasterConsensus(consensusVersion, time.Second, lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Suspension.json"))
 	defer fixture.Shutdown()
 
@@ -70,8 +72,9 @@ func TestBasicSuspension(t *testing.T) {
 	c10, account10 := clientAndAccount("Node10")
 	c20, account20 := clientAndAccount("Node20")
 
-	rekeyreg(a, c10, account10.Address, true)
-	rekeyreg(a, c20, account20.Address, true)
+	proto := config.Consensus[consensusVersion]
+	rekeyreg(a, c10, proto, account10.Address, true)
+	rekeyreg(a, c20, proto, account20.Address, true)
 
 	// Accounts are now suspendable whether they have proposed yet or not
 	// because keyreg sets LastHeartbeat. Stop c20 which means account20 will be

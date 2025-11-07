@@ -107,7 +107,7 @@ func parseDNSBootstrap(dnsBootstrapID string, network protocol.NetworkID, defaul
 	}
 
 	// Normalize the dnsBootstrapID and insert the network
-	dnsBootstrapID = strings.Replace(strings.TrimSpace(strings.ToLower(dnsBootstrapID)), "<network>", string(network), -1)
+	dnsBootstrapID = strings.ReplaceAll(strings.TrimSpace(strings.ToLower(dnsBootstrapID)), "<network>", string(network))
 
 	if dnsBootstrapID == "" {
 		return nil, errors.New(bootstrapErrorEmpty)

@@ -19,7 +19,6 @@ package agreement
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -520,21 +519,21 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
 		ch, err = pb.MakeProposals(context.Background(), startRound, period(i))
 		if err != nil {
-			require.ErrorAs(t, errPseudonodeBacklogFull, &err)
+			require.ErrorIs(t, err, errPseudonodeBacklogFull)
 			break
 		}
 		channels = append(channels, ch)
 	}
 	enqueuedProposals := len(channels)
 	require.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
-	require.True(t, errors.Is(err, errPseudonodeBacklogFull))
+	require.ErrorIs(t, err, errPseudonodeBacklogFull)
 
 	persist := make(chan error)
 	close(persist)
 	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
 		ch, err = pb.MakeVotes(context.Background(), startRound, period(i), step(i%5), makeProposalValue(period(i), accounts[0].Address()), persist)
 		if err != nil {
-			require.ErrorAs(t, errPseudonodeBacklogFull, &err)
+			require.ErrorIs(t, err, errPseudonodeBacklogFull)
 			break
 		}
 		channels = append(channels, ch)

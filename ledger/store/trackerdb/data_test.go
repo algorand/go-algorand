@@ -1249,14 +1249,14 @@ func TestBaseOnlineAccountDataReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, 7, reflect.TypeOf(BaseOnlineAccountData{}).NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
+	require.Equal(t, 7, reflect.TypeFor[BaseOnlineAccountData]().NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
 }
 
 func TestBaseVotingDataReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, 7, reflect.TypeOf(BaseVotingData{}).NumField(), "update all getters and setters for baseVotingData and change the field count")
+	require.Equal(t, 7, reflect.TypeFor[BaseVotingData]().NumField(), "update all getters and setters for baseVotingData and change the field count")
 }
 
 // TestBaseAccountDataDecodeEmpty ensures no surprises when decoding nil/empty data.

@@ -106,6 +106,9 @@ fmt:
 fix: build
 	$(GOBIN)/algofix */
 
+modernize:
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
+
 lint: deps
 	$(GOBIN)/golangci-lint run -c .golangci.yml
 
@@ -129,7 +132,7 @@ tidy: check_go_version
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
 
-sanity: fix lint fmt tidy
+sanity: fix lint fmt tidy modernize
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
@@ -299,7 +302,7 @@ build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	@mkdir -p $(GOBIN)-race
 	# Build regular binaries (kmd, algod, goal) and race binaries in parallel
 	$(GO_INSTALL) -trimpath $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./cmd/kmd ./cmd/algod ./cmd/goal & \
-	GOBIN=$(GOBIN)-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/tealdbg ./cmd/msgpacktool ./cmd/algokey ./tools/teal/algotmpl ./test/e2e-go/cli/tealdbg/cdtmock & \
+	GOBIN=$(GOBIN)-race go install -trimpath $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./cmd/goal ./cmd/algod ./cmd/algoh ./cmd/tealdbg ./cmd/msgpacktool ./cmd/algokey ./cmd/pingpong ./tools/teal/algotmpl ./test/e2e-go/cli/tealdbg/cdtmock & \
 	wait
 	cp $(GOBIN)/kmd $(GOBIN)-race
 
@@ -412,7 +415,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOBIN)
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build build-race build-e2e test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium
+.PHONY: default fmt lint check_shell sanity cover prof deps build build-race build-e2e test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium modernize
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
@@ -421,5 +424,5 @@ archive:
 	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/$(CHANNEL)/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*$(FULLBUILDNUMBER)*"
 
 build_custom_linters:
-	cd $(SRCPATH)/cmd/partitiontest_linter/ && go build -buildmode=plugin -trimpath plugin/plugin.go && ls plugin.so
-	cd $(SRCPATH)
+	golangci-lint custom -v
+	./custom-golangci-lint --version

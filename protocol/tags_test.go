@@ -289,6 +289,7 @@ func TestLockdownTagList(t *testing.T) {
 		TxnTag,
 		UniEnsBlockReqTag,
 		VoteBundleTag,
+		VotePackedTag,
 	}
 	require.Equal(t, len(tagList), len(TagList))
 	tagMap := make(map[Tag]bool)

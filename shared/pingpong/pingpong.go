@@ -16,7 +16,7 @@
 
 // Package pingpong provides a transaction generating utility for performance testing.
 //
-//nolint:unused,structcheck,deadcode,varcheck // ignore unused pingpong code
+//nolint:unused // ignore unused pingpong code
 package pingpong
 
 import (
@@ -327,10 +327,8 @@ func (pps *WorkerState) schedule(n int) {
 	if n > 1 {
 		nextSendTime = nextSendTime.Add(timePerStep * time.Duration(n-1))
 	}
-	for {
-		if now.After(nextSendTime) {
-			break
-		}
+	for !now.After(nextSendTime) {
+
 		dur := nextSendTime.Sub(now)
 		if dur < durationEpsilon {
 			break
@@ -1205,12 +1203,10 @@ func (pps *WorkerState) constructAppTxn(from string, fee uint64, client *libgoal
 	}
 
 	appOptIns := pps.cinfo.OptIns[aidx]
+	sender = from
 	if len(appOptIns) > 0 {
 		indices := rand.Perm(len(appOptIns))
-		limit := 5
-		if len(indices) < limit {
-			limit = len(indices)
-		}
+		limit := min(len(indices), 5)
 		for i := 0; i < limit; i++ {
 			idx := indices[i]
 			accounts = append(accounts, appOptIns[idx])
@@ -1219,6 +1215,7 @@ func (pps *WorkerState) constructAppTxn(from string, fee uint64, client *libgoal
 		if pps.cinfo.AppParams[aidx].Creator != from &&
 			!slices.Contains(appOptIns, from) {
 			from = accounts[0]
+			sender = from
 		}
 		accounts = accounts[1:]
 	}

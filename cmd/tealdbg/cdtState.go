@@ -600,8 +600,8 @@ func decodeNestedObjID(objID string) (string, []int, bool) {
 	}
 
 	groupIDs := objID[len(prefix)+1:]
-	parts := strings.Split(groupIDs, "_")
-	for _, id := range parts {
+	parts := strings.SplitSeq(groupIDs, "_")
+	for id := range parts {
 		if val, err := strconv.ParseInt(id, 10, 32); err == nil {
 			parsedIDs = append(parsedIDs, int(val))
 		} else {

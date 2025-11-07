@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"testing"
 
@@ -48,12 +49,6 @@ import (
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
-var minFee basics.MicroAlgos
-
-func init() {
-	params := config.Consensus[protocol.ConsensusCurrentVersion]
-	minFee = basics.MicroAlgos{Raw: params.MinTxnFee}
-}
 
 func TestBlockEvaluatorFeeSink(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -117,7 +112,7 @@ ok:
 	genHash := l.GenesisHash()
 	header := transactions.Header{
 		Sender:      addrs[0],
-		Fee:         minFee,
+		Fee:         basics.MicroAlgos{Raw: eval.proto.MinTxnFee},
 		FirstValid:  newBlock.Round(),
 		LastValid:   newBlock.Round(),
 		GenesisHash: genHash,
@@ -300,6 +295,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			eval.validate = true
 			eval.generate = true
 
+			minFee := basics.MicroAlgos{Raw: eval.proto.MinTxnFee}
 			genHash := l.GenesisHash()
 
 			var basicAppCallReturn string
@@ -659,7 +655,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
 			Sender:      addrs[0],
-			Fee:         minFee,
+			Fee:         basics.MicroAlgos{Raw: eval.proto.MinTxnFee},
 			FirstValid:  newBlock.Round(),
 			LastValid:   newBlock.Round(),
 			GenesisHash: testnetGenesisHash,
@@ -886,9 +882,7 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	newBalances := make(map[basics.Address]basics.AccountData)
 
 	// copy the previous balances.
-	for k, v := range ledger.roundBalances[vb.Block().Round()-1] {
-		newBalances[k] = v
-	}
+	maps.Copy(newBalances, ledger.roundBalances[vb.Block().Round()-1])
 
 	// update
 	deltas := vb.Delta()
@@ -1410,7 +1404,8 @@ func TestAbsenteeChecks(t *testing.T) {
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender:      addrs[i],
-				Fee:         minFee,
+				Fee:         basics.MicroAlgos{Raw: blkEval.proto.MinTxnFee},
+				FirstValid:  blkEval.Round().SubSaturate(1000),
 				LastValid:   blkEval.Round(),
 				GenesisHash: l.GenesisHash(),
 			},

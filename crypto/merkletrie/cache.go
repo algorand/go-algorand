@@ -256,9 +256,7 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 		mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
 	} else {
 		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[page])
-		for nodeID, pnode := range decodedNodes {
-			mtc.pageToNIDsPtr[page][nodeID] = pnode
-		}
+		maps.Copy(mtc.pageToNIDsPtr[page], decodedNodes)
 		mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
 	}
 
@@ -485,9 +483,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 		delete(createdPages, page)
 	}
 
-	for pageID, page := range mtc.reallocatedPages {
-		createdPages[pageID] = page
-	}
+	maps.Copy(createdPages, mtc.reallocatedPages)
 
 	for _, nodeIDs := range createdPages {
 		for _, node := range nodeIDs {

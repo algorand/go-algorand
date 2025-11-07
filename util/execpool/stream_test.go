@@ -308,8 +308,7 @@ func TestErrors(t *testing.T) {
 		asyncDelay:   make(chan struct{}, 10),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	inputChan := make(chan InputJob)
 	mbp := mockBatchProcessor{}

@@ -476,17 +476,11 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	maxParallelRequests := s.parallelBlocks
-	if maxParallelRequests < seedLookback {
-		maxParallelRequests = seedLookback
-	}
+	maxParallelRequests := max(s.parallelBlocks, seedLookback)
 	minParallelRequests := seedLookback
 
 	// Start the limited requests at max(1, 'seedLookback')
-	limitedParallelRequests := uint64(1)
-	if limitedParallelRequests < seedLookback {
-		limitedParallelRequests = seedLookback
-	}
+	limitedParallelRequests := max(1, seedLookback)
 
 	completed := make(map[basics.Round]chan bool)
 	var wg sync.WaitGroup

@@ -132,7 +132,7 @@ func setDumpHandlers(n network.GossipNode) {
 		dh.tags = make(map[protocol.Tag]bool)
 	} else {
 		dh.tags = make(map[protocol.Tag]bool)
-		for _, t := range strings.Split(*tags, ",") {
+		for t := range strings.SplitSeq(*tags, ",") {
 			dh.tags[protocol.Tag(t)] = true
 			fmt.Printf("TAG <%s>\n", t)
 		}

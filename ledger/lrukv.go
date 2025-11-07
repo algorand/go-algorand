@@ -131,10 +131,8 @@ func (m *lruKV) prune(newSize int) (removed int) {
 	if m.kvs == nil {
 		return
 	}
-	for {
-		if len(m.kvs) <= newSize {
-			break
-		}
+	for len(m.kvs) > newSize {
+
 		back := m.kvList.Back()
 		delete(m.kvs, back.Value.key)
 		m.kvList.Remove(back)

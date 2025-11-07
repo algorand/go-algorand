@@ -111,7 +111,7 @@ func (a byFieldName) Less(i, j int) bool {
 }
 
 func prettyPrint(c config.Local, format string) (out string) {
-	localType := reflect.TypeOf(c)
+	localType := reflect.TypeFor[config.Local]()
 
 	fields := []reflect.StructField{}
 	for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {

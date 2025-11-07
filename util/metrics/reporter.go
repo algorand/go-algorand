@@ -206,7 +206,7 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 	var err error
 	if nil == reporter.neSync {
 		// try to create it.
-		if reporter.neSync, err = net.Listen("tcp", nodeExporterSyncAddr); err != nil {
+		if reporter.neSync, err = net.Listen("tcp", nodeExporterSyncAddr); err != nil { //nolint:gosec // OK to bind to all interfaces
 			// we couldn't get a hold of this port number; that's an expected behaviour for any algod instance that isn't the first one..
 			return
 		}

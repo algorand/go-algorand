@@ -298,24 +298,6 @@ func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMe
 	return nil
 }
 
-func (p *testUnicastPeer) Version() string {
-	return p.version
-}
-
-func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
-	ps := p.gn.(*httpTestPeerSource)
-	var dispather network.MessageHandler
-	for _, v := range ps.dispatchHandlers {
-		if v.Tag == tag {
-			dispather = v.MessageHandler
-			break
-		}
-	}
-	require.NotNil(p.t, dispather)
-	dispather.Handle(network.IncomingMessage{Tag: tag, Data: msg, Sender: p, Net: p.gn})
-	return nil
-}
-
 func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
 	return makeTestUnicastPeerWithResponseOverride(gn, t, nil)
 }

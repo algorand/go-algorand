@@ -43,7 +43,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34" version[35]:"35" version[36]:"36"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34" version[35]:"35" version[36]:"36" version[37]:"37"`
 
 	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes.  If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only affects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
 	Archival bool `version[0]:"false"`
@@ -326,7 +326,7 @@ type Local struct {
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
-	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in in the header and always uses the last value
+	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in the header and always uses the last value
 	// from the last X-Forwarded-For HTTP header that corresponds to a single reverse proxy (even if it received the request from another reverse proxy or adversary node).
 	//
 	// WARNING: By enabling this option, you are trusting peers to provide accurate forwarding addresses.
@@ -645,6 +645,18 @@ type Local struct {
 
 	// EnableVoteCompression controls whether vote compression is enabled for websocket networks
 	EnableVoteCompression bool `version[36]:"true"`
+
+	// StatefulVoteCompressionTableSize controls the size of the per-peer tables used for vote compression.
+	// If 0, stateful vote compression is disabled (but stateless vote compression will still be used if
+	// EnableVoteCompression is true). This value should be a power of 2 between 16 and 2048, inclusive.
+	// The per-peer overhead for stateful compression in one direction (from peer A => B) is 224 bytes times
+	// this value, plus 800 bytes of fixed overhead; it is twice that if votes are also being sent from B => A.
+	// So the default value of 2048 requires 459,552 bytes of memory per peer for stateful vote compression
+	// in one direction, or 919,104 bytes if both directions are used.
+	StatefulVoteCompressionTableSize uint `version[37]:"2048"`
+
+	// EnableBatchVerification controls whether ed25519 batch verification is enabled
+	EnableBatchVerification bool `version[37]:"true"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -666,8 +678,8 @@ func (cfg Local) ValidateDNSBootstrapArray(networkID protocol.NetworkID) ([]*DNS
 func (cfg Local) internalValidateDNSBootstrapArray(networkID protocol.NetworkID) (
 	bootstrapArray []*DNSBootstrap, err error) {
 
-	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
-	for _, bootstrapString := range bootstrapStringArray {
+	bootstrapStringArray := strings.SplitSeq(cfg.DNSBootstrapID, ";")
+	for bootstrapString := range bootstrapStringArray {
 		if len(strings.TrimSpace(bootstrapString)) == 0 {
 			continue
 		}
@@ -868,6 +880,7 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 
 type logger interface {
 	Infof(format string, args ...interface{})
+	Warnf(format string, args ...interface{})
 }
 
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
@@ -1055,4 +1068,36 @@ func (cfg *Local) TracksCatchpoints() bool {
 		return true
 	}
 	return false
+}
+
+// NormalizedVoteCompressionTableSize validates and normalizes the StatefulVoteCompressionTableSize config value.
+// Supported values are powers of 2 in the range [16, 2048].
+// Values >= 2048 clamp to 2048.
+// Values 1-15 are below the minimum and return 0 (disabled).
+// Values between supported powers of 2 round down to the nearest supported value.
+// Logs a message if the configured value is adjusted.
+// Returns the normalized size.
+func (cfg Local) NormalizedVoteCompressionTableSize(log logger) uint {
+	configured := cfg.StatefulVoteCompressionTableSize
+	if configured == 0 {
+		return 0
+	}
+	if configured < 16 {
+		log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid (minimum 16). Stateful vote compression disabled.", configured)
+		return 0
+	}
+	// Round down to nearest power of 2 within supported range [16, 2048]
+	supportedSizes := []uint{2048, 1024, 512, 256, 128, 64, 32, 16}
+	for _, size := range supportedSizes {
+		if configured >= size {
+			if configured != size {
+				log.Infof("StatefulVoteCompressionTableSize configured as %d, using nearest supported value: %d", configured, size)
+			}
+			return size
+		}
+	}
+
+	// Should never reach here given the checks above
+	log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid. Stateful vote compression disabled.", configured)
+	return 0
 }

@@ -525,10 +525,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	// 2. replay starts from X-CatchpointLookback+1
 	// 3. transaction evaluation at Y requires block up to MaxTxnLife+DeeperBlockHeaderHistory back from Y
 	proto := config.Consensus[topBlock.CurrentProtocol]
-	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory + proto.CatchpointLookback
-	if lookback < proto.MaxBalLookback {
-		lookback = proto.MaxBalLookback
-	}
+	lookback := max(proto.MaxTxnLife+proto.DeeperBlockHeaderHistory+proto.CatchpointLookback, proto.MaxBalLookback)
 
 	lookbackForStateProofSupport := lookbackForStateproofsSupport(&topBlock)
 	if lookback < lookbackForStateProofSupport {

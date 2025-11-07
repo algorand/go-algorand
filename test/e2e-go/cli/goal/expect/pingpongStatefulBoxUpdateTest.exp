@@ -1,0 +1,5 @@
+#!/usr/bin/expect -f
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+source pingpongCommon.exp
+pingpongTestMain "StatefulBoxUpdate" "stateful_box_update" "--numapp 10 --tps 200 --refresh 10 --numaccounts 50 --minaccount 100000000 --numboxupdate 5"

@@ -275,7 +275,7 @@ func (p *player) issueFastVote(r routerHandle) (actions []action) {
 
 func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []action {
 	return []action{
-		checkpointAction{ //nolint:gosimple // explicit assignment for clarity
+		checkpointAction{ //nolint:staticcheck // explicit assignment for clarity
 			Round:  e.Round,
 			Period: e.Period,
 			Step:   e.Step,
@@ -331,13 +331,7 @@ func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *t
 	dynamicTimeout := p.lowestCredentialArrivals.orderStatistics(dynamicFilterTimeoutCredentialArrivalHistoryIdx) + dynamicFilterTimeoutGraceInterval
 
 	// Make sure the dynamic filter timeout is not too small nor too large
-	clampedTimeout := dynamicTimeout
-	if clampedTimeout < dynamicFilterTimeoutLowerBound {
-		clampedTimeout = dynamicFilterTimeoutLowerBound
-	}
-	if clampedTimeout > defaultTimeout {
-		clampedTimeout = defaultTimeout
-	}
+	clampedTimeout := min(max(dynamicTimeout, dynamicFilterTimeoutLowerBound), defaultTimeout)
 	tracer.log.Debugf("round %d, period %d: dynamicTimeout = %d, clamped timeout = %d", p.Round, p.Period, dynamicTimeout, clampedTimeout)
 	// store dynamicFilterTimeout on the player for debugging & reporting
 	p.dynamicFilterTimeout = dynamicTimeout

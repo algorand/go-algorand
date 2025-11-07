@@ -17,6 +17,7 @@
 package config
 
 import (
+	"maps"
 	"time"
 
 	"github.com/algorand/go-algorand/config/bounds"
@@ -768,13 +769,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	staticConsensus := make(ConsensusProtocols)
 	for consensusVersion, consensusParams := range cp {
 		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
-		if consensusParams.ApprovedUpgrades != nil {
-			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
-			for ver, when := range consensusParams.ApprovedUpgrades {
-				newApprovedUpgrades[ver] = when
-			}
-			consensusParams.ApprovedUpgrades = newApprovedUpgrades
-		}
+		consensusParams.ApprovedUpgrades = maps.Clone(consensusParams.ApprovedUpgrades)
 		staticConsensus[consensusVersion] = consensusParams
 	}
 	return staticConsensus
