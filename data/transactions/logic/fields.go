@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {

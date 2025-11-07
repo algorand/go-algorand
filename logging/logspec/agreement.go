@@ -24,7 +24,7 @@ import (
 // AgreementType is an enum identifying a specific type of AgreementEvent
 // TODO Maybe this should be called AgreementEventType, since these are not actually types of agreements
 //
-//go:generate stringer -type=AgreementType
+//go:generate go tool -modfile=../../tool.mod stringer -type=AgreementType
 type AgreementType int
 
 const (

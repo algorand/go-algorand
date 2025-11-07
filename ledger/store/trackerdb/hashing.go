@@ -29,7 +29,7 @@ import (
 // By encoding HashKind at a known-offset, it's possible for hash readers to
 // disambiguate the hashed resource.
 //
-//go:generate stringer -type=HashKind
+//go:generate go tool -modfile=../../../tool.mod stringer -type=HashKind
 //msgp:ignore HashKind
 type HashKind byte
 
