@@ -60,7 +60,7 @@ import (
 // txHandler uses config values to determine backlog size. Tests should use a static value
 var txBacklogSize = config.GetDefaultLocal().TxBacklogSize
 
-// mock sender is used to implement OnClose, since TXHandlers expect to use Senders and ERL Clients
+// mockSender is used to implement OnClose, since TXHandlers expect to use Senders and ERL Clients
 type mockSender struct{}
 
 func (m mockSender) OnClose(func())                 {}

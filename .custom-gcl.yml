@@ -10,4 +10,4 @@ plugins:
     version: v0.0.7
   - module: github.com/cce/docnamecheck
     import: github.com/cce/docnamecheck/gclplugin
-    version: main
+    version: v0.0.3

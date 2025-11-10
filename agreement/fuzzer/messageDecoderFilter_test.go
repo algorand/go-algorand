@@ -19,6 +19,7 @@ package fuzzer
 import (
 	"bytes"
 	"encoding/json"
+
 	"github.com/algorand/go-deadlock"
 
 	//"github.com/algorand/go-algorand/agreement"
@@ -107,7 +108,7 @@ type (
 		EquivocationVotes []equivocationVote `codec:"eqv"`
 	}
 
-	// voteAuthenticators omit the Round, Period, Step, and Proposal for compression
+	// voteAuthenticator omits the Round, Period, Step, and Proposal for compression
 	// and to simplify checking logic.
 	voteAuthenticator struct {
 		Sender basics.Address                      `codec:"snd"`

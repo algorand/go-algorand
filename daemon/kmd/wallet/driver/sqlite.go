@@ -118,7 +118,7 @@ func init() {
 	codecHandle.PositiveIntUnsigned = true
 }
 
-// interface{} => msgpack blob
+// encode interface{} => msgpack blob
 func msgpackEncode(obj interface{}) []byte {
 	var b []byte
 	enc := codec.NewEncoderBytes(&b, codecHandle)
@@ -126,7 +126,7 @@ func msgpackEncode(obj interface{}) []byte {
 	return b
 }
 
-// msgpack blob => interface{}
+// decode msgpack blob => interface{}
 func msgpackDecode(b []byte, objptr interface{}) error {
 	dec := codec.NewDecoderBytes(b, codecHandle)
 	return dec.Decode(objptr)

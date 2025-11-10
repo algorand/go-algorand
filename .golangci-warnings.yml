@@ -20,6 +20,7 @@ linters:
           include-exported: true
           include-types: true
           include-generated: false
+          allowed-prefixes: asm,op
       errortype:
         type: module
         description: "errortype helps prevent subtle bugs in error handling."
