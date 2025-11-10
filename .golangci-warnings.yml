@@ -4,16 +4,22 @@ run:
 linters:
   default: none
   enable:
+    - docnamecheck
+    - errortype
     - gosec
     - partitiontest
-    - errortype
   settings:
     gosec:
       excludes: [G101, G103, G104, G107, G112, G114, G115, G202, G204, G301, G302, G303, G304, G306, G307, G404]
     custom:
-      partitiontest:
-        type: "module"
-        description: This custom linter ensures test functions call 'partitiontest.PartitionTest(t)'
+      docnamecheck:
+        type: module
+        description: "docnamecheck catches doc comments with mismatched function names"
+        original-url: "https://github.com/cce/docnamecheck"
+        settings:
+          include-exported: true
+          include-types: true
+          include-generated: false
       errortype:
         type: module
         description: "errortype helps prevent subtle bugs in error handling."
@@ -24,6 +30,9 @@ linters:
           check-is: true
           unchecked-assert: false
           check-unused: true
+      partitiontest:
+        type: "module"
+        description: This custom linter ensures test functions call 'partitiontest.PartitionTest(t)'
   exclusions:
     generated: lax
     rules:
