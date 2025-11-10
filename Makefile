@@ -43,12 +43,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
-# If available, use gotestsum instead of 'go test'.
-ifeq (, $(shell which gotestsum))
-export GOTESTCOMMAND=go test
-else
-export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
-endif
+GOTESTCOMMAND := go tool -modfile=tool.mod gotestsum --format pkgname --jsonfile testresults.json --
 
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew

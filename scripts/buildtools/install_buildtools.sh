@@ -88,4 +88,3 @@ if [[ "${BUILDTOOLS_INSTALL}" != "ALL" ]]; then
 fi
 
 install_go_module github.com/algorand/go-swagger github.com/algorand/go-swagger/cmd/swagger
-install_go_module gotest.tools/gotestsum
