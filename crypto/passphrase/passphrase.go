@@ -198,7 +198,7 @@ func indexOf(arr []string, s string) int {
 	return -1
 }
 
-// Checksum returns a word that represents the 11 bit checksum of the data
+// checksum returns a word that represents the 11 bit checksum of the data
 func checksum(data []byte) string {
 	// Compute the full hash of the data to checksum
 	fullHash := sha512.Sum512_256(data)

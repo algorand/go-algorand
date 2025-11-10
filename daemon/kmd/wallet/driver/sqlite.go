@@ -263,7 +263,7 @@ func (swd *SQLiteWalletDriver) ListWalletMetadatas() (metadatas []wallet.Metadat
 	return metadatas, nil
 }
 
-// findDBPathsById returns the paths to wallets with the specified id
+// findDBPathsByID returns the paths to wallets with the specified id
 func (swd *SQLiteWalletDriver) findDBPathsByID(id []byte) (paths []string, err error) {
 	return swd.findDBPathsByField("ID", id)
 }

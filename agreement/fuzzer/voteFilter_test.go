@@ -139,7 +139,7 @@ func (n *VoteFilter) Eval(tag protocol.Tag, data []byte, direction string) bool 
 	return true
 }
 
-// Unmarshall VoteFilter
+// Unmarshal VoteFilter
 func (n *VoteFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type voteFilterJSON struct {
 		Name             string

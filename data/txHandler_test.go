@@ -1536,7 +1536,7 @@ func BenchmarkHandleMsigTxns(b *testing.B) {
 	}
 }
 
-// BenchmarkHandleTxnGroups sends signed transaction groups directly to the verifier
+// BenchmarkHandleMsigTxnGroups sends signed transaction groups directly to the verifier
 func BenchmarkHandleMsigTxnGroups(b *testing.B) {
 	maxGroupSize := proto.MaxTxGroupSize / 2
 	msigSizes := []int{64, 16, 8, 4}
@@ -1583,7 +1583,7 @@ func BenchmarkHandleBLWTxnGroups(b *testing.B) {
 	}
 }
 
-// BenchmarkHandleTxnGroups sends signed transaction groups directly to the verifier
+// BenchmarkHandleLsigTxnGroups sends signed transaction groups directly to the verifier
 func BenchmarkHandleLsigTxnGroups(b *testing.B) {
 	maxGroupSize := proto.MaxTxGroupSize / 2
 	invalidRates := []float32{0.5, 0.001}

@@ -100,7 +100,7 @@ func MakeNodeCrashFilterFactory(config *NodeCrashFilterConfig) *NodeCrashFilter 
 	}
 }
 
-// Unmarshall NodeCrashFilter
+// Unmarshal NodeCrashFilter
 func (n *NodeCrashFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type catchupFilterJSON struct {
 		Name string

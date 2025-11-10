@@ -324,7 +324,7 @@ func (n *MessageDecoderFilter) getDecodedMessageCounts(tag protocol.Tag) int {
 	return -1
 }
 
-// Unmarshall MessageDecoderFilter
+// Unmarshal MessageDecoderFilter
 func (n *MessageDecoderFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type messageDecoderFilterJSON struct {
 		Name string

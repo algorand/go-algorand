@@ -898,7 +898,7 @@ func (n *P2PNetwork) VoteCompressionEnabled() bool {
 	return n.config.EnableVoteCompression
 }
 
-// wsStreamHandler is a callback that the p2p package calls when a new peer connects and establishes a
+// wsStreamHandlerV1 is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
 // TODO: remove after consensus v41 takes effect.
 func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) {

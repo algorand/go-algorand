@@ -575,7 +575,7 @@ func TestLocal_GetVersionedDefaultLocalConfig(t *testing.T) {
 	}
 }
 
-// TestLocalVersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
+// TestLocal_VersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
 func TestLocal_VersionField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

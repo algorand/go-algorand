@@ -70,7 +70,7 @@ var ErrNotInCowCache = errors.New("can't find object in cow cache")
 // is considerably slower.
 const averageEncodedTxnSizeHint = 150
 
-// Creatable represent a single creatable object.
+// creatable represent a single creatable object.
 type creatable struct {
 	cindex basics.CreatableIndex
 	ctype  basics.CreatableType

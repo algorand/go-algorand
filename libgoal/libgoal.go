@@ -135,7 +135,7 @@ func MakeClientFromConfig(config ClientConfig, clientType ClientType) (c Client,
 	return
 }
 
-// Init takes data directory path or an empty string if $ALGORAND_DATA is defined and initializes Client
+// init takes data directory path or an empty string if $ALGORAND_DATA is defined and initializes Client
 func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	// check and assign dataDir
 	dataDir, err := getDataDir(config.AlgodDataDir)

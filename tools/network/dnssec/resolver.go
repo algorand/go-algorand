@@ -169,7 +169,7 @@ func (r *Resolver) lookupCnameAware(ctx context.Context, name string, qt uint16)
 	return
 }
 
-// LookupIPAddr resolves a given hostname to ipv4 or ipv6 address following CNAME aliaces
+// lookupIPAddr resolves a given hostname to ipv4 or ipv6 address following CNAME aliaces
 func (r *Resolver) lookupIPAddr(ctx context.Context, hostname string) (cname string, addrs []net.IPAddr, err error) {
 	var rrSet []dns.RR
 	nextName := hostname

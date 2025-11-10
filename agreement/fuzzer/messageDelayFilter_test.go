@@ -188,7 +188,7 @@ func (n *MessageDelayFilter) processUpstreamBuffer() bool {
 	return received
 }
 
-// Unmarshall MessageDelayFilter
+// Unmarshal MessageDelayFilter
 func (n *MessageDelayFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type messageDelayFilterJSON struct {
 		Name                string

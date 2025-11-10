@@ -199,7 +199,7 @@ func (e *phonebookImpl) popNElements(n int, addr string) {
 	e.data[addr] = entry
 }
 
-// AppendTime adds the current time to recentConnectionTimes in
+// appendTime adds the current time to recentConnectionTimes in
 // addressData of addr
 func (e *phonebookImpl) appendTime(addr string, t time.Time) {
 	entry := e.data[addr]

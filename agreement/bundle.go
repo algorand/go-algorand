@@ -52,7 +52,7 @@ type bundle struct {
 	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
-// voteAuthenticators omit the Round, Period, Step, and Proposal for compression
+// voteAuthenticator omit the Round, Period, Step, and Proposal for compression
 // and to simplify checking logic.
 type voteAuthenticator struct {
 	_struct struct{} `codec:""` // not omitempty

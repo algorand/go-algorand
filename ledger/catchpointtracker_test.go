@@ -1882,7 +1882,7 @@ func TestHashContract(t *testing.T) {
 	}
 }
 
-// TestCatchpoint_FastUpdates tests catchpoint label writing data race
+// TestCatchpointFastUpdates tests catchpoint label writing data race
 func TestCatchpointFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1978,7 +1978,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	require.NotEmpty(t, ct.GetLastCatchpointLabel())
 }
 
-// TestCatchpoint_LargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
+// TestCatchpointLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
 // and attempts to have the catchpoint tracker create the associated catchpoint. It's designed precisely around setting an
 // environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
 func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {

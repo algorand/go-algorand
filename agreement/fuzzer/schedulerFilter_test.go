@@ -187,7 +187,7 @@ func (n *SchedulerFilterSchedule) Evaluate(timepoint int, nodeID int) bool {
 	}
 }
 
-// Unmarshall SchedulerFilter
+// Unmarshal SchedulerFilter
 func (n *SchedulerFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type schedulerFilterConfigJSON struct {
 		Name         string

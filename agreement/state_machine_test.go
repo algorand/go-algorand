@@ -391,7 +391,7 @@ func (blackhole) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
-// deterministicTraceTestCase encapsulates a traditional unit test case.
+// determisticTraceTestCase encapsulates a traditional unit test case.
 type determisticTraceTestCase struct {
 	inputs          []event
 	expectedOutputs []event

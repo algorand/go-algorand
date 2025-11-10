@@ -65,7 +65,7 @@ func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, echo.Context)) ech
 	}
 }
 
-// registerHandler registers a set of Routes to the given router.
+// registerHandlers registers a set of Routes to the given router.
 func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext, m ...echo.MiddlewareFunc) {
 	for _, route := range routes {
 		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc), m...)

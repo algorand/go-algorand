@@ -3085,7 +3085,7 @@ func hexProgram(t *testing.T, source string, v uint64) string {
 	return "0x" + hex.EncodeToString(TestProg(t, source, v).Program)
 }
 
-// TestCreateAndSeeApp checks that an app can be created in an inner txn, and then
+// TestCreateSeeApp checks that an app can be created in an inner txn, and then
 // the address for it can be looked up.
 func TestCreateSeeApp(t *testing.T) {
 	partitiontest.PartitionTest(t)
