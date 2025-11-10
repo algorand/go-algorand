@@ -158,7 +158,7 @@ func makeProposalTrackerZero() listener {
 }
 
 func (s *proposalTrackerTestShadow) execute(t *testing.T, errstr string) {
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          s.inputs,
 		expectedOutputs: s.outputs,
 	}

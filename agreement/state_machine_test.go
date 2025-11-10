@@ -391,8 +391,8 @@ func (blackhole) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
-// determisticTraceTestCase encapsulates a traditional unit test case.
-type determisticTraceTestCase struct {
+// deterministicTraceTestCase encapsulates a traditional unit test case.
+type deterministicTraceTestCase struct {
 	inputs          []event
 	expectedOutputs []event
 	safetyProps     []ioSafetyProp
@@ -400,13 +400,13 @@ type determisticTraceTestCase struct {
 
 // Validate takes a given automata at zero state, drives it with the test case input,
 // and validates the output.
-func (testCase *determisticTraceTestCase) Validate(automaton ioAutomata) (invalidErr error, runtimeErr error) {
+func (testCase *deterministicTraceTestCase) Validate(automaton ioAutomata) (invalidErr error, runtimeErr error) {
 	return testCase.ValidateAsExtension(automaton)
 }
 
 // ValidateAsExtension takes a given automata that is already in some state, drives it
 // with some addition input (an "extension"), and validates the output.
-func (testCase *determisticTraceTestCase) ValidateAsExtension(automaton ioAutomata) (invalidErr error, runtimeErr error) {
+func (testCase *deterministicTraceTestCase) ValidateAsExtension(automaton ioAutomata) (invalidErr error, runtimeErr error) {
 	// suppress error logging from contract-checkers
 	logging.Base().SetOutput(blackhole{})
 	defer func() {
@@ -502,8 +502,8 @@ type testCaseBuilder struct {
 	safetyProps     []ioSafetyProp
 }
 
-func (b *testCaseBuilder) Build() *determisticTraceTestCase {
-	return &determisticTraceTestCase{b.inputs, b.expectedOutputs, b.safetyProps}
+func (b *testCaseBuilder) Build() *deterministicTraceTestCase {
+	return &deterministicTraceTestCase{b.inputs, b.expectedOutputs, b.safetyProps}
 }
 
 func (b *testCaseBuilder) AddInOutPair(input event, output event) {

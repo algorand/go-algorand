@@ -43,7 +43,7 @@ func TestVoteTrackerNoOp(t *testing.T) {
 	helper.Setup()
 
 	voteAcceptEvent := helper.MakeValidVoteAccepted(t, 0, soft)
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs: []event{
 			voteAcceptEvent,
 		},
@@ -77,7 +77,7 @@ func TestVoteTrackerSoftQuorum(t *testing.T) {
 	}
 	// given quorum of soft votes, we expect to see soft threshold
 	expectedOutputs[len(expectedOutputs)-1] = thresholdEvent{T: softThreshold, Proposal: *helper.proposal}
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -91,7 +91,7 @@ func TestVoteTrackerSoftQuorum(t *testing.T) {
 	// now, do the same thing, but have one less vote, so expect no threshold
 	inputVotes = inputVotes[:len(inputVotes)-1]
 	expectedOutputs = expectedOutputs[:len(expectedOutputs)-1]
-	testCaseNoThreshold := determisticTraceTestCase{
+	testCaseNoThreshold := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -120,7 +120,7 @@ func TestVoteTrackerCertQuorum(t *testing.T) {
 		expectedOutputs[i] = thresholdEvent{T: none}
 	}
 	expectedOutputs[len(expectedOutputs)-1] = thresholdEvent{T: certThreshold, Proposal: *helper.proposal}
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -134,7 +134,7 @@ func TestVoteTrackerCertQuorum(t *testing.T) {
 	// now, do the same thing, but have one less vote
 	inputVotes = inputVotes[:len(inputVotes)-1]
 	expectedOutputs = expectedOutputs[:len(expectedOutputs)-1]
-	testCaseNoThreshold := determisticTraceTestCase{
+	testCaseNoThreshold := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -163,7 +163,7 @@ func TestVoteTrackerNextQuorum(t *testing.T) {
 		expectedOutputs[i] = thresholdEvent{T: none}
 	}
 	expectedOutputs[len(expectedOutputs)-1] = thresholdEvent{T: nextThreshold, Proposal: *helper.proposal}
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -177,7 +177,7 @@ func TestVoteTrackerNextQuorum(t *testing.T) {
 	// now, do the same thing, but have one less vote
 	inputVotes = inputVotes[:len(inputVotes)-1]
 	expectedOutputs = expectedOutputs[:len(expectedOutputs)-1]
-	testCaseNoThreshold := determisticTraceTestCase{
+	testCaseNoThreshold := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -204,7 +204,7 @@ func TestVoteTrackerProposeNoOp(t *testing.T) {
 
 	// here, each input is a separate test-case
 	for i := 0; i < NumUpperBound; i++ {
-		testCase := determisticTraceTestCase{
+		testCase := deterministicTraceTestCase{
 			inputs:          inputVotes[i : i+1],
 			expectedOutputs: nil, // we expect the input to panic
 		}
@@ -235,7 +235,7 @@ func TestVoteTrackerEquivocatorWeightCountedOnce(t *testing.T) {
 	inputVotes[NumThreshold-1] = helper.MakeValidVoteAccepted(t, 0, soft)
 	expectedOutputs[NumThreshold-1] = thresholdEvent{T: none}
 
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -274,7 +274,7 @@ func TestVoteTrackerEquivDoesntReemitThreshold(t *testing.T) {
 	inputVotes[NumThreshold+1] = helper.MakeValidVoteAccepted(t, int(NumThreshold+1), soft)
 	expectedOutputs[NumThreshold+1] = thresholdEvent{T: none}
 
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -322,7 +322,7 @@ func TestVoteTrackerEquivocationsCount(t *testing.T) {
 	}
 	expectedOutputs[TotalThreshold-1] = thresholdEvent{T: certThreshold, Proposal: equivVal1}
 
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -375,7 +375,7 @@ func TestVoteTrackerSuperEquivocationsCount(t *testing.T) {
 	}
 	expectedOutputs[TotalThreshold-1] = thresholdEvent{T: certThreshold, Proposal: equivVal1}
 
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -418,7 +418,7 @@ func TestVoteTrackerPanicsOnTwoSoftQuorums(t *testing.T) {
 	// the last output should be a panic. Express this by shortening expected outputs
 	expectedOutputs = expectedOutputs[:2*NumThreshold-1]
 
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -451,7 +451,7 @@ func TestVoteTrackerPanicsOnSoftBotQuorum(t *testing.T) {
 	// the last output should be a panic. Express this by shortening expected outputs
 	expectedOutputs = expectedOutputs[:NumThreshold-1]
 
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -492,7 +492,7 @@ func TestVoteTrackerPanicsOnTwoNextQuorums(t *testing.T) {
 	// the last output should be a panic. Express this by shortening expected outputs
 	expectedOutputs = expectedOutputs[:2*NumThreshold-1]
 
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -520,7 +520,7 @@ func TestVoteTrackerRejectsTooManyEquivocators(t *testing.T) {
 	// We should now have threshold many equivocators... should have panicked when the last equivocation was seen.
 	expectedOutputs[2*Num-2] = thresholdEvent{T: softThreshold, Proposal: inputVotes[2*Num-2].(voteAcceptedEvent).Vote.R.Proposal}
 	expectedOutputs = expectedOutputs[:2*Num-1]
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -554,7 +554,7 @@ func TestVoteTrackerFiltersDuplicateVoteOnce(t *testing.T) {
 			expectedOutputs[i] = filteredStepEvent{T: voteFilteredStep}
 		}
 	}
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -623,7 +623,7 @@ func TestVoteTrackerForwardsFirstEquivocation(t *testing.T) {
 			expectedOutputs[i] = filteredStepEvent{T: voteFilteredStep}
 		}
 	}
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -668,7 +668,7 @@ func TestVoteTrackerFiltersFutureEquivocations(t *testing.T) {
 			expectedOutputs[i] = filteredStepEvent{T: voteFilteredStep}
 		}
 	}
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -685,7 +685,7 @@ func TestVoteTrackerFiltersFutureEquivocations(t *testing.T) {
 func TestVoteTrackerRejectsUnknownEvent(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs: []event{
 			emptyEvent{},
 		},
