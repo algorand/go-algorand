@@ -109,8 +109,8 @@ fix: build
 modernize:
 	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
 
-lint: deps
-	$(GOBIN)/golangci-lint run -c .golangci.yml
+lint:
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.1 run -c .golangci.yml
 
 expectlint:
 	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
@@ -151,13 +151,13 @@ api:
 logic:
 	make -C data/transactions/logic
 
-
-%/msgp_gen.go: deps ALWAYS
+MSGP := go run github.com/algorand/msgp@v1.1.61
+%/msgp_gen.go: ALWAYS
 		@set +e; \
-		printf "msgp: $(@D)..."; \
-		$(GOBIN)/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
+		printf "$(MSGP) $(@D)..."; \
+		$(MSGP) -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
 		if [ "$$?" != "0" ]; then \
-			printf "failed:\n$(GOBIN)/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
+			printf "failed:\n$(MSGP) -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
 			cat ./$@.out; \
 			rm ./$@.out; \
 			exit 1; \
