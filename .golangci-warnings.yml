@@ -4,7 +4,7 @@ run:
 linters:
   default: none
   enable:
-    - docnamecheck
+    - docnametypo
     - errortype
     - gosec
     - partitiontest
@@ -12,10 +12,10 @@ linters:
     gosec:
       excludes: [G101, G103, G104, G107, G112, G114, G115, G202, G204, G301, G302, G303, G304, G306, G307, G404]
     custom:
-      docnamecheck:
+      docnametypo:
         type: module
-        description: "docnamecheck catches doc comments with mismatched function names"
-        original-url: "https://github.com/cce/docnamecheck"
+        description: "docnametypo catches doc comments with mismatched function names"
+        original-url: "https://github.com/cce/docnametypo"
         settings:
           include-exported: true
           include-types: true
