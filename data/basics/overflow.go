@@ -173,9 +173,35 @@ func MinA(a, b MicroAlgos) MicroAlgos {
 func Muldiv[A ~uint64, B ~uint64](a A, b B, c uint64) (A, bool) {
 	hi, lo := bits.Mul64(uint64(a), uint64(b))
 	if c <= hi {
+		// It would often be useful if we returned math.MaxUint64 in case of
+		// overflow, but before changing it, we need to inspect current users
+		// carefully.
 		return 0, true
 	}
 	quo, _ := bits.Div64(hi, lo, c)
+	return A(quo), false
+}
+
+// Mul2div computes a*b*c/d. On overflow, the returned A is saturated.
+func Mul2div[A ~uint64, B ~uint64, C ~uint64](a A, b B, c C, d uint64) (A, bool) {
+	hi, lo := bits.Mul64(uint64(a), uint64(b))
+	// 0, 1
+
+	hi2, lo := bits.Mul64(lo, uint64(c))
+	// 0, 1
+
+	tooHi, hi3 := bits.Mul64(hi, uint64(c))
+	if tooHi > 0 {
+		return math.MaxUint64, true
+	}
+	// 0, 0
+
+	hi = AddSaturate(hi2, hi3)
+	if d <= hi {
+		return math.MaxInt64, true
+	}
+
+	quo, _ := bits.Div64(hi, lo, d)
 	return A(quo), false
 }
 
@@ -183,6 +209,18 @@ func Muldiv[A ~uint64, B ~uint64](a A, b B, c uint64) (A, bool) {
 // reports overflow.
 func (a MicroAlgos) MulMicros(m Micros) (MicroAlgos, bool) {
 	res, overflowed := Muldiv(a.Raw, m, 1e6)
+	if overflowed {
+		res = math.MaxUint64
+	}
+	return MicroAlgos{Raw: res}, overflowed
+}
+
+// Mul2Micros multiplies a MicroAlgos amount by two Micros amounts. It exists so
+// that more precision is preserved.  If MulMicros we used to multiply
+// 0.001001*1.5*2, we would have 0.001501*2 = 0.003002. But the correct answer
+// is 0.003003.
+func (a MicroAlgos) Mul2Micros(m1 Micros, m2 Micros) (MicroAlgos, bool) {
+	res, overflowed := Mul2div(a.Raw, m1, m2, 1e12)
 	if overflowed {
 		res = math.MaxUint64
 	}

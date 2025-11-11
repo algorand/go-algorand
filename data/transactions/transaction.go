@@ -193,15 +193,25 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
-// FeeFactor is the factor by which the base transaction fee is multiplied
-// because the transaction uses advanced features, particularly large fields.
-// It is expressed as in fixed-point integer with 6 digits of precision. So 1e6
-// is a normal base fee transaction.
+// FeeFactor is the factor by which the base transaction fee is multiplied. Some
+// transactions are free, others might cost more (none do yet) because they use
+// extra expensive features.  It is expressed as in fixed-point integer with 6 digits
+// of precision. So 1e6 is a normal base fee transaction.
 func (tx Transaction) FeeFactor() basics.Micros {
-	if tx.IsFree() {
+	switch tx.Type {
+	case protocol.StateProofTx:
 		return 0
+	case protocol.HeartbeatTx:
+		if tx.Group.IsZero() {
+			// Not every singleton heartbeat is actually free. We confirm a
+			// low/no fee heartbeat is legal in heartbeat's wellFormed() and in
+			// apply/heartbeat.go (for the dynamic check for challenge).
+			return 0
+		}
+		return 1e6
+	default:
+		return 1e6
 	}
-	return 1e6
 }
 
 // txAllocSize returns the max possible size of a transaction without state proof fields.
@@ -483,20 +493,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
 	}
 	return nil
-}
-
-// IsFree returns true if the transaction is free, i.e., no required fee.
-func (tx Transaction) IsFree() bool {
-	// If the transaction is a state proof transaction, it is free
-	if tx.Type == protocol.StateProofTx {
-		return true
-	}
-
-	if tx.Type == protocol.HeartbeatTx && tx.Group.IsZero() && tx.Tip == 0 {
-		return true
-	}
-
-	return false
 }
 
 // TxAmount returns the amount paid to the recipient in this payment

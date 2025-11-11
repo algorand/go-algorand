@@ -45,6 +45,7 @@ var proto3 = protocol.ConsensusVersion("Test3")
 var protoUnsupported = protocol.ConsensusVersion("TestUnsupported")
 var protoDelay = protocol.ConsensusVersion("TestDelay")
 var protoCongestion = protocol.ConsensusVersion("TestCongestion")
+var protoNoCongestion = protocol.ConsensusVersion("TestNoCongestion")
 
 func init() {
 	verBeforeBonus := protocol.ConsensusV39
@@ -79,9 +80,13 @@ func init() {
 	config.Consensus[protoDelay] = paramsDelay
 
 	paramsCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
-	paramsCongestion.CongestionFees = true
+	paramsCongestion.CongestionTracking = true
 	paramsCongestion.MinTxnFee = 1000
 	config.Consensus[protoCongestion] = paramsCongestion
+
+	paramsNoCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
+	paramsNoCongestion.CongestionTracking = false
+	config.Consensus[protoNoCongestion] = paramsNoCongestion
 }
 
 func TestUpgradeVote(t *testing.T) {
@@ -1255,12 +1260,12 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 		current.CurrentProtocol = protoCongestion
 		require.EqualValues(t, 2_150_000, current.CongestionTax) // 75% load causes 5% growth of the minFee+conFee sum
 
-		// Should pass with correct CongestionFee
+		// Should pass with correct CongestionTax
 		require.NoError(t, current.PreCheck(prev))
 
-		// Should fail with incorrect CongestionFee
-		current.CongestionTax = 10 // Even a small tax should cause error
-		require.ErrorContains(t, current.PreCheck(prev), "bad congestion fee")
+		// Should fail with incorrect CongestionTax
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
 	})
 
 	// Test with congestion fees disabled
@@ -1272,7 +1277,7 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			Load:          0,
 			CongestionTax: 0,
 		}
-		prev.CurrentProtocol = protocol.ConsensusCurrentVersion
+		prev.CurrentProtocol = protoNoCongestion
 
 		current := BlockHeader{
 			Round:         prev.Round + 1,
@@ -1283,14 +1288,14 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			Load:          0,
 			CongestionTax: 0,
 		}
-		current.CurrentProtocol = protocol.ConsensusCurrentVersion
+		current.CurrentProtocol = protoNoCongestion
 
 		// Should pass with zero values
 		require.NoError(t, current.PreCheck(prev))
 
 		// Should fail with non-zero CongestionTax
 		current.CongestionTax = 1
-		require.ErrorContains(t, current.PreCheck(prev), "congestion fee should be zero when congestion measurement is disabled")
+		require.ErrorContains(t, current.PreCheck(prev), "congestion tax should be zero when congestion measurement is disabled")
 
 		// Should fail with non-zero Load
 		current.CongestionTax = 0
@@ -1316,8 +1321,9 @@ func TestMakeBlockCongestionFields(t *testing.T) {
 
 		block := MakeBlock(prev)
 
-		// BaseFee should be calculated from previous load
+		// tax should be calculated from previous load
 		expectedTax := NextCongestionTax(prev.Load, prev.CongestionTax)
+		require.EqualValues(t, 122_000, expectedTax) // 1.100 * 1.02 - 1 = 1.22
 		require.Equal(t, expectedTax, block.CongestionTax)
 
 		// Load should be 0 for empty block (will be set during block evaluation)
@@ -1332,9 +1338,7 @@ func TestMakeBlockCongestionFields(t *testing.T) {
 			Load:          0,
 			CongestionTax: 0,
 		}
-		// If/when ConsensusCurrentVersion has Congestion enabled, switch this for an older version
-		prev.CurrentProtocol = protocol.ConsensusCurrentVersion
-		require.False(t, config.Consensus[prev.CurrentProtocol].CongestionFees)
+		prev.CurrentProtocol = protoNoCongestion
 
 		block := MakeBlock(prev)
 		require.Zero(t, block.CongestionTax)
@@ -1342,35 +1346,7 @@ func TestMakeBlockCongestionFields(t *testing.T) {
 	})
 }
 
-func TestLoadCalculation(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	// Test the Load calculation logic (from eval package)
-	tests := []struct {
-		name      string
-		blockSize int
-		maxSize   int
-		expected  uint64
-	}{
-		{"empty_block", 0, 1000, 0},
-		{"quarter_full", 250, 1000, 250_000},
-		{"half_full", 500, 1000, 500_000},
-		{"three_quarter_full", 750, 1000, 750_000},
-		{"full_block", 1000, 1000, 1_000_000},
-		{"realistic_size", 512_000, 1_024_000, 500_000},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// Simulate the ComputeLoad function from eval package
-			load := uint64(test.blockSize * 1_000_000 / test.maxSize)
-			require.Equal(t, test.expected, load)
-		})
-	}
-}
-
-func TestMextCongestionTax(t *testing.T) {
+func TestNextCongestionTax(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 

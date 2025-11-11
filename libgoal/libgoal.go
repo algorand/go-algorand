@@ -639,7 +639,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	return tx, nil
 }
 
-// suggestFee returns the amount to use for the fee field of a transaction and
+// suggestedFee returns the amount to use for the fee field of a transaction and
 // the tip to specify to allow entry into a congestion algod.
 func suggestedFee(tx transactions.Transaction, suggested model.TransactionParametersResponse) (basics.MicroAlgos, basics.Micros) {
 	// Default to the suggested tax rate, if the caller didn't supply it
@@ -899,7 +899,7 @@ func (c Client) CurrentRound() (basics.Round, error) {
 	return resp.LastRound, nil
 }
 
-// SuggestedFee returns the base txn fee and per byte fee
+// SuggestedFee returns the base txn fee and congestion tax
 func (c *Client) SuggestedFee() (base uint64, tax basics.Micros, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {

@@ -301,3 +301,75 @@ func TestMuldivOverflow(t *testing.T) {
 	_, overflowed := Muldiv(a, b, c)
 	require.True(t, overflowed)
 }
+
+func TestMul2div(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	test := func(a, b, c, d uint64, result uint64) {
+		t.Helper()
+		r, o := Mul2div(a, b, c, d)
+		assert.False(t, o)
+		assert.Equal(t, r, result, "%d != %d", r, result)
+	}
+	test(1, 1, 1, 1, 1)
+	test(2, 1, 1, 1, 2)
+	test(1, 2, 1, 1, 2)
+	test(1, 1, 2, 1, 2)
+	test(1, 1, 2, 2, 1)
+	test(10, 20, 5, 2, 500)
+	test(100, 200, 50, 2000, 500)
+	test(1, math.MaxUint64, 1, math.MaxUint64, 1)
+	test(math.MaxUint64, math.MaxUint64, 1, math.MaxUint64, math.MaxUint64)
+	test((math.MaxUint64-1)/2, (math.MaxUint64-1)/2, 4, math.MaxUint64-1, math.MaxUint64-1)
+
+	// Zero handling
+	test(0, 1, 1, 1, 0)
+	test(1, 0, 1, 1, 0)
+	test(1, 1, 0, 1, 0)
+	test(0, 0, 0, 1, 0)
+	test(math.MaxUint64, 0, math.MaxUint64, 1, 0)
+
+	// Division by 1
+	test(100, 200, 50, 1, 1000000)
+	test(1000, 1000, 1000, 1, 1000000000)
+
+	// Intermediate overflow but final result fits
+	// (2^32 * 2^32 * 2) / 2^63 = 2^65 / 2^63 = 4
+	test(1<<32, 1<<32, 2, 1<<63, 4)
+
+	// Near-overflow: result is just under 2^64
+	test(math.MaxUint64, 1, 1, 1, math.MaxUint64)
+	test(1, math.MaxUint64, 1, 1, math.MaxUint64)
+	test(1, 1, math.MaxUint64, 1, math.MaxUint64)
+
+	// Large values that don't overflow
+	test(1<<32, 1<<20, 1<<10, 1<<32, 1<<30)
+
+	// Rounding behavior: ensure truncation, not rounding
+	test(5, 5, 5, 7, 17) // 125/7 = 17.857... -> 17
+	test(3, 3, 3, 10, 2) // 27/10 = 2.7 -> 2
+
+	// Edge case where denominator is just large enough to prevent overflow
+	test(1<<63, 10, 10, 100, 1<<63)
+}
+
+func TestMul2divOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testOverflowMaxUint64 := func(a, b, c, d uint64) {
+		t.Helper()
+		r, o := Mul2div(a, b, c, d)
+		assert.True(t, o, "expected overflow for %d*%d*%d/%d", a, b, c, d)
+		assert.Equal(t, uint64(math.MaxUint64), r, "overflow should saturate to MaxUint64")
+	}
+
+	// tooHi > 0 case: when a*b*c needs more than 128 bits (saturates to MaxUint64)
+	testOverflowMaxUint64(math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64)
+	testOverflowMaxUint64(math.MaxUint64, math.MaxUint64, math.MaxUint64, 1)
+	testOverflowMaxUint64(math.MaxUint64, math.MaxUint64, math.MaxUint64/2+1, 1)
+	testOverflowMaxUint64(math.MaxUint64, math.MaxUint64, 2, 1)
+	testOverflowMaxUint64(math.MaxUint64, math.MaxUint64, 2, math.MaxUint64)
+	testOverflowMaxUint64(1<<43, 1<<43, 1<<43, 1<<63)
+}

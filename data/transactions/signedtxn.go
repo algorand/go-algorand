@@ -19,7 +19,6 @@ package transactions
 import (
 	"crypto/sha256"
 	"errors"
-	"fmt"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -144,40 +143,20 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	return txgroupad
 }
 
-// SummarizeFees takes a group and returns required fees and the total amount
-// paid. The returned `usage` expresses how many base fees must be paid by the
-// group.  It takes into account the
-func SummarizeFees(txgroup []SignedTxnWithAD) (usage basics.Micros, paid basics.MicroAlgos) {
-	tip := basics.Micros(1e6)
+// SummarizeFees takes a group and returns required fees, the total amount paid,
+// and the tip promised. The returned `usage` expresses how many basic
+// transaction fees must be paid by the group.
+func SummarizeFees(txgroup []SignedTxnWithAD) (usage basics.Micros, paid basics.MicroAlgos, tip basics.Micros) {
+	// TODO: We want to prevent the 2A fee paid to become incentive eligible
+	// from being reused for inners. Since that is expressed as a fixed fee, the
+	// best way to do it might be to not count it in `paid`.  The "obvious" way
+	// to do it (by adjusting the KeyReg's FeeFactor() is more difficult because
+	// the 2A fee is not defined in unites of MinFee().
 	for _, txad := range txgroup {
 		usage = basics.AddSaturate(usage, txad.SignedTxn.Txn.FeeFactor())
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 		// TestTransactionGroup confirms there is only one Tip per group
-		basics.AddSaturate(tip, txad.Txn.Tip)
+		tip = max(tip, txad.Txn.Tip)
 	}
-	// Mul saturates, so no need for error, good luck paying for that usage!
-	usage, _ = usage.Mul(tip)
-	return
-}
-
-// SummarizeTxnFees should be _exactly_ like SummarizeFees, and exists so that
-// pointless SignedTxnWithAD objects need not be created, nor slices coerced
-// into an interface.
-func SummarizeTxnFees(txgroup []SignedTxn) (usage basics.Micros, paid basics.MicroAlgos) {
-	tip := basics.Micros(1e6)
-	for _, stx := range txgroup {
-		usage = basics.AddSaturate(usage, stx.Txn.FeeFactor())
-		paid = paid.AddSaturate(stx.Txn.Fee)
-		// TestTransactionGroup previously confirms there is only one Tip per group
-		tip = basics.AddSaturate(tip, stx.Txn.Tip)
-		if stx.Txn.Tip > 0 {
-			fmt.Printf("tip %s\n", stx.Txn.Tip)
-		}
-	}
-	// Mul saturates, so no need for error, good luck paying for that usage!
-	usage, _ = usage.Mul(tip)
-	if usage > 1e6 {
-		fmt.Printf("usage %s\n", usage)
-	}
-	return
+	return usage, paid, tip
 }

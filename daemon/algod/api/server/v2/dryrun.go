@@ -433,7 +433,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
 	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
 	specials := transactions.SpecialAddresses{}
-	ep := logic.NewAppEvalParams(txgroup, &proto, &specials, 0)
+	ep := logic.NewAppEvalParams(txgroup, &proto, &specials)
 	sep := logic.NewSigEvalParams(dr.Txns, &proto, &dl)
 
 	origEnableAppCostPooling := proto.EnableAppCostPooling

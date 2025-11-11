@@ -213,6 +213,7 @@ func TestAppPay(t *testing.T) {
 	// v5 added inners
 	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
 		test := func(source string, problem ...string) {
+			t.Helper()
 			TestApp(t, source, ep, problem...)
 		}
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
@@ -230,8 +231,9 @@ func TestAppPay(t *testing.T) {
 		// of each "top-level" transaction.
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100" + pay)
 
-		// 100 of 1000000 spent, plus MinTxnFee in our fake protocol is 1001
-		test("global CurrentApplicationAddress; balance; int 998899; ==")
+		// 100 of 1000000 spent, plus MinTxnFee in our test protocol is 1001
+		const leftOver = 1000000 - 100 - (1001 - 401) // 401 fee credit
+		test("global CurrentApplicationAddress; balance; int " + strconv.Itoa(leftOver) + "; ==")
 		test("txn Receiver; balance; int 100; ==")
 
 		close := `
@@ -243,8 +245,9 @@ func TestAppPay(t *testing.T) {
 `
 		test(close)
 		test("global CurrentApplicationAddress; balance; !")
-		// Receiver got most of the algos (except 1001 for fee)
-		test("txn Receiver; balance; int 997998; ==")
+		// Receiver got most of the algos (except 1001-401 for fee)
+		const transferred = leftOver - 600
+		test("txn Receiver; balance; int " + strconv.Itoa(100+transferred) + "; ==")
 	})
 }
 
@@ -419,9 +422,10 @@ func TestDefaultSender(t *testing.T) {
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		tx.Accounts = append(tx.Accounts, appAddr(888))
 		TestApp(t, "txn Accounts 1; int 100"+pay, ep, "insufficient balance")
-		ledger.NewAccount(appAddr(888), 1000000)
+		ledger.NewAccount(appAddr(888), 1_000_000)
 		TestApp(t, "txn Accounts 1; int 100"+pay+"int 1", ep)
-		TestApp(t, "global CurrentApplicationAddress; balance; int 998899; ==", ep)
+		left := 1_000_000 - 100 - int(ep.Proto.MinTxnFee) + 401
+		TestApp(t, "global CurrentApplicationAddress; balance; int "+strconv.Itoa(left)+"; ==", ep)
 	})
 }
 
@@ -1037,11 +1041,11 @@ func TestInnerGroup(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	ep.FeeCredit = nil // default sample env starts at 401
+	// default sample env starts at 401 (1337+1066-2*1001)
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-	// Need both fees and both payments
-	ledger.NewAccount(appAddr(888), 999+2*MakeTestProto().MinTxnFee)
+	// Need both fees and both payments, 999<1000
+	ledger.NewAccount(appAddr(888), 999+2*MakeTestProto().MinTxnFee-401) // 401 is fee credit
 	pay := `
 int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
@@ -1051,12 +1055,47 @@ txn Sender; itxn_field Receiver;
 		"insufficient balance")
 
 	// NewAccount overwrites the existing balance
-	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee)
+	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee-401)
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
+	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee-401) // replenish
 	TestApp(t, "itxn_begin; itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
 		"itxn_begin without itxn_submit")
 	TestApp(t, "itxn_next"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
 		"itxn_next without itxn_begin")
+}
+
+// TestInnerGroupSurcharge tests that inner transaction groups pay extra if the top-level group specifies a tip.
+func TestInnerGroupSurcharge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := MakeSampleEnv()
+	tx.Tip = 500_000 // pay 50% extra
+	// default sample env has fees = 1337+1066, cost=2*1001*1.5 = 3003
+	// need to bump outer fees for this test to make sense
+	tx.Fee = basics.MicroAlgos{Raw: 2000} // now fees = 3066, surplus = 63
+
+	// Quick confirmation that ep.reset() is happening and calculating the right values
+	TestApp(t, "int 1", ep)
+	require.EqualValues(t, 1.5e6, ep.CostMultiplier)
+	const expCredit = 63
+	require.EqualValues(t, expCredit, ep.FeeCredit.Raw)
+
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	// Need both fees and both payments, 999<1000 (2 fees now costs 3 min fees)
+	ledger.NewAccount(appAddr(888), 999+3*MakeTestProto().MinTxnFee-expCredit)
+	pay := `
+int pay;    itxn_field TypeEnum;
+int 500;    itxn_field Amount;
+txn Sender; itxn_field Receiver;
+`
+
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
+		"499 < 500")
+
+	// NewAccount overwrites the existing balance
+	ledger.NewAccount(appAddr(888), 1000+3*MakeTestProto().MinTxnFee-expCredit)
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
 }
 
 func TestInnerFeePooling(t *testing.T) {
@@ -1064,7 +1103,6 @@ func TestInnerFeePooling(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	ep.FeeCredit = nil // default sample env starts at 401
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
@@ -1073,13 +1111,13 @@ int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
 txn Sender; itxn_field Receiver;
 `
-	// Force the first fee to 3, but the second will default to 2*fee-3 = 2002-3
+	// Force the first fee to 3, so the second will be high to "catchup" (recall we start with 401uA credit)
 	TestApp(t, "itxn_begin"+
 		pay+
 		"int 3; itxn_field Fee;"+
 		"itxn_next"+
 		pay+
-		"itxn_submit; itxn Fee; int 1999; ==", ep)
+		"itxn_submit; itxn Fee; int 1598; ==", ep) // 2*1001-3-401=1598
 
 	// Same as first, but force the second too low
 	TestApp(t, "itxn_begin"+
@@ -1087,36 +1125,35 @@ txn Sender; itxn_field Receiver;
 		"int 3; itxn_field Fee;"+
 		"itxn_next"+
 		pay+
-		"int 1998; itxn_field Fee;"+
-		"itxn_submit; int 1", ep, "group fee 2.001mA too small")
+		"int 1597; itxn_field Fee;"+
+		"itxn_submit; int 1", ep, "group fee 1.600mA too small")
 
 	// Overpay in first itxn, the second will default to less
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2000; itxn_field Fee;"+
+		"int 1500; itxn_field Fee;"+
 		"itxn_next"+
 		pay+
-		"itxn_submit; itxn Fee; int 2; ==", ep)
+		"itxn_submit; itxn Fee; int 101; ==", ep) // 2*1001-1500-401=101
 
-	// Same first, but force the second too low
+	// Same, but force the second too low
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2000; itxn_field Fee;"+
+		"int 1500; itxn_field Fee;"+
 		"itxn_next"+
 		pay+
 		"int 1; itxn_field Fee;"+
-		"itxn_submit; itxn Fee; int 1", ep, "group fee 2.001mA too small")
+		"itxn_submit; itxn Fee; int 100", ep, "group fee 1.501mA too small")
 
-	// Test that overpay in first inner group is available in second inner group
-	// also ensure only exactly the _right_ amount of credit is available.
+	// since FeeCredit != nil, ep is reset, leaving 401uA in Surplus
 	TestApp(t, "itxn_begin"+
 		pay+
-		"int 2002; itxn_field Fee;"+ // double pay
+		"int 1601; itxn_field Fee;"+ // 600 mAlgo extra pay
 		"itxn_next"+
 		pay+
 		"int 1001; itxn_field Fee;"+ // regular pay
 		"itxn_submit;"+
-		// At beginning of second group, we should have 1 minfee of credit
+		// At beginning of second group, we should have 1001uA credit available
 		"itxn_begin"+
 		pay+
 		"int 0; itxn_field Fee;"+ // free, due to credit
@@ -1134,11 +1171,16 @@ func TestInnerFeeHandling(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	ep.FeeCredit = nil
+	// Multiply costs by 3x (200% tip)
+	tx.Tip = 2e6
+	tx.Fee = basics.MicroAlgos{Raw: 5 * ep.Proto.MinTxnFee} // cover the new cost
+	// Quick confirmation that ep.reset() is happening and calculating the right values
+	TestApp(t, "int 1", ep)
+	require.EqualValues(t, 3e6, ep.CostMultiplier)
+	const expCredit = 65
+	require.EqualValues(t, expCredit, ep.FeeCredit.Raw)
 
-	// Multiply costs by 3x
-	ep.CostMultiplier = 3e6
-	multiplied, o := ep.Proto.MinFee().MulMicros(ep.CostMultiplier)
+	multiplied, o := ep.Proto.MinFee().MulMicros(3e6)
 	require.False(t, o)
 	baseFee := int(multiplied.Raw)
 
@@ -1151,16 +1193,20 @@ int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
 txn Sender; itxn_field Receiver;
 `
-	// since there's no FeeCredit at top-level, the inner pays full base fee
-	TestApp(t, "itxn_begin"+pay+"itxn_submit; itxn Fee; int "+strconv.Itoa(baseFee)+"; ==", ep)
+	TestApp(t, "itxn_begin"+pay+"itxn_submit; itxn Fee; int "+strconv.Itoa(baseFee-expCredit)+"; ==", ep)
 
-	// and if it tries not to pay, it fails
+	// and if it tries not to pay, it fails because expCredit won't cover it
 	TestApp(t, "itxn_begin"+pay+"int 0; itxn_field Fee; itxn_submit; int 1", ep, "group fee 0.0A too small")
 
-	// Test that fee credit from overpayment allows 0 fees but still validates against BaseFee
-	TestApp(t, "itxn_begin"+pay+"int "+strconv.Itoa(2*baseFee)+"; itxn_field Fee; itxn_submit; "+
+	// Test that fee credit from overpayment in one inner allows 0 fees (overpayment must be using big base fee)
+	TestApp(t, "itxn_begin"+pay+"int "+strconv.Itoa(2*baseFee-expCredit)+"; itxn_field Fee; itxn_submit; "+
 		"itxn_begin"+pay+"int 0; itxn_field Fee; itxn_submit; "+
-		"itxn Fee; !", ep) // Second inner, with explicit 0 fee works because first paid for both
+		"itxn Fee; !", ep) // Second inner, with explicit 0 fee works because paid enough for both
+
+	// (overpayment must be using big base fee, not the default 1001)
+	TestApp(t, "itxn_begin"+pay+"int "+strconv.Itoa(2*1001-expCredit)+"; itxn_field Fee; itxn_submit; "+
+		"itxn_begin"+pay+"int 0; itxn_field Fee; itxn_submit; "+
+		"itxn Fee; !", ep, "group fee 1.937mA too small")
 
 	// Test that fee credit from overpayment allows 0 fees but still validates against BaseFee
 	TestApp(t, "itxn_begin"+pay+"int "+strconv.Itoa(2*baseFee)+"; itxn_field Fee; itxn_submit; "+
@@ -1183,7 +1229,7 @@ itxn_begin
 int appl;    itxn_field TypeEnum;
 int 56;      itxn_field ApplicationID;
 itxn_submit
-itxn Fee; int ` + strconv.Itoa(baseFee) + `; ==
+itxn Fee; int ` + strconv.Itoa(baseFee-expCredit) + `; ==
 `
 	TestApp(t, call56, ep) // this app is being called, which in turns calls call56
 
@@ -1195,8 +1241,10 @@ itxn_begin
 int appl;   itxn_field TypeEnum;
 int 111;    itxn_field ApplicationID;
 int 56;     itxn_field Applications; // need to be able to call 56
+// pay full basefee here, which maintains the 401 surplus for app 111
+int ` + strconv.Itoa(baseFee) + `; itxn_field Fee;
 itxn_submit
-itxn Fee; int ` + strconv.Itoa(baseFee) + `; ==
+int 1
 `
 	TestApp(t, call111, ep) // this app calls 111, which calls 56, which returns 1
 	// The fee check in 56 would fail if the basefee were not properly passed down in NewInnerEvalParams

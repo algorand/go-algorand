@@ -528,7 +528,7 @@ func (r *LocalRunner) RunAll() error {
 	start := time.Now()
 
 	sep := logic.NewSigEvalParams(r.txnGroup, &r.proto, &logic.NoHeaderLedger{})
-	aep := logic.NewAppEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{}, 0)
+	aep := logic.NewAppEvalParams(txngroup, &r.proto, &transactions.SpecialAddresses{})
 	if r.debugger != nil {
 		t := logic.MakeEvalTracerDebuggerAdaptor(r.debugger)
 		sep.Tracer = t

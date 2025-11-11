@@ -1628,3 +1628,30 @@ func TestIsAbsent(t *testing.T) {
 	a.False(absent(1000, 10, 0, 2001))
 	a.True(absent(1000, 10, 1, 2002))
 }
+
+func TestComputeLoad(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tests := []struct {
+		blockSize int
+		maxSize   int
+		expected  basics.Micros
+	}{
+		{0, 1000, 0},
+		{250, 1000, 250_000},
+		{500, 1000, 500_000},
+		{750, 1000, 750_000},
+		{1000, 1000, 1_000_000},
+		{1500, 1000, 1_000_000}, // overfull capped at max
+		{1, 10, 100_000},
+		{50000, 100000, 500_000},
+		{1, 1000000, 1},
+		{999, 1000, 999_000},
+	}
+
+	for _, tt := range tests {
+		result := ComputeLoad(tt.blockSize, tt.maxSize)
+		require.Equal(t, tt.expected, result)
+	}
+}

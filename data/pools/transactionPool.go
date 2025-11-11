@@ -109,6 +109,7 @@ type BlockEvaluator interface {
 	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
 	GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error)
 	ResetTxnBytes()
+	CongestionTax() basics.Micros
 }
 
 // VotingAccountSupplier provides a list of possible participating account addresses valid for a given round.
@@ -308,12 +309,6 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 // checkFeeAtIngress take a group of signed transactions and verifies that they
 // are willing to pay the current congestion fee.
 func (pool *TransactionPool) checkFeeAtIngress(txgroup []transactions.SignedTxn) error {
-	latest := pool.ledger.Latest()
-	hdr, err := pool.ledger.BlockHdr(latest)
-	if err != nil {
-		return fmt.Errorf("couldn't fetch latest block header: %w", err)
-	}
-
 	var tip basics.Micros
 	for _, stxn := range txgroup {
 		if stxn.Txn.Tip != 0 {
@@ -321,9 +316,10 @@ func (pool *TransactionPool) checkFeeAtIngress(txgroup []transactions.SignedTxn)
 			break
 		}
 	}
-	if hdr.CongestionTax > tip {
-		return fmt.Errorf("group has not tip to cover %s congestion fee",
-			hdr.CongestionTax)
+	tax := pool.pendingBlockEvaluator.CongestionTax()
+	if tax > tip {
+		return fmt.Errorf("group has insufficient extra fees to cover %s congestion tax",
+			tax)
 	}
 	return nil
 }

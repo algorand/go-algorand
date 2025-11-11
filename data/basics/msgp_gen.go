@@ -4869,7 +4869,7 @@ func (z Micros) MsgIsZero() bool {
 	return z == 0
 }
 
-// MaxSize returns a maximum valid message size for this message type
+// MicrosMaxSize returns a maximum valid message size for this message type
 func MicrosMaxSize() (s int) {
 	s = msgp.Uint64Size
 	return

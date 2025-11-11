@@ -828,17 +828,16 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 		return fmt.Errorf("bad bonus: %s != %s ", bh.Bonus, expectedBonus)
 	}
 
-	// check base fee for on-chain congestion measurement
-	if params.CongestionFees {
-		expectedConFee := NextCongestionTax(prev.Load, prev.CongestionTax)
-		if bh.CongestionTax != expectedConFee {
-			return fmt.Errorf("bad congestion fee: %s != %s", bh.CongestionTax, expectedConFee)
+	if params.CongestionTracking {
+		expectedConTax := NextCongestionTax(prev.Load, prev.CongestionTax)
+		if bh.CongestionTax != expectedConTax {
+			return fmt.Errorf("bad congestion tax: %s != %s", bh.CongestionTax, expectedConTax)
 		}
-		// bh.Load will need to be checked in endOfBlock as we accumulate the payset byte length
+		// bh.Load is checked in endOfBlock after we accumulate the payset byte length
 	} else {
 		// When congestion measurement is disabled, these fields should be empty
 		if bh.CongestionTax != 0 {
-			return fmt.Errorf("congestion fee should be zero when congestion measurement is disabled, got %s", bh.CongestionTax)
+			return fmt.Errorf("congestion tax should be zero when congestion measurement is disabled, got %s", bh.CongestionTax)
 		}
 		if bh.Load != 0 {
 			return fmt.Errorf("load should be zero when congestion measurement is disabled, got %s", bh.Load)

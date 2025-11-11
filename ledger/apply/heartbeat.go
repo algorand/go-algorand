@@ -31,10 +31,9 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 		return err
 	}
 
-	// In txnGroupBatchPrep, we do not charge for singleton (Group.IsZero),
-	// untipped heartbeats. But we only _want_ to allow cheap heartbeats if the
-	// account is under challenge. If this is an underpaid singleton heartbeat,
-	// reject it unless the account is under challenge.
+	// In SummarizeFees, we do not charge for singleton (Group.IsZero)
+	// heartbeats. But we only _want_ to allow cheap heartbeats if the account
+	// is under challenge.
 
 	proto := balances.ConsensusParams()
 	if header.Fee.LessThan(proto.MinFee()) && header.Group.IsZero() {
