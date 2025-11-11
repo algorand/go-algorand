@@ -260,9 +260,9 @@ func BenchmarkNewMuldiv(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		u64 := uint64(i + 1)
 		Muldiv(u64, u64, u64)
-		Muldiv(math.MaxUint64, u64, u64)
-		Muldiv(u64, math.MaxUint64, u64)
-		Muldiv(math.MaxInt64, math.MaxInt64, u64)
+		Muldiv(uint64(math.MaxUint64), u64, u64)
+		Muldiv(u64, uint64(math.MaxUint64), u64)
+		Muldiv(uint64(math.MaxInt64), uint64(math.MaxInt64), u64)
 	}
 }
 
@@ -288,4 +288,16 @@ func TestNewMuldiv(t *testing.T) {
 	test(4, math.MaxUint64, 3)
 	test(math.MaxUint64, math.MaxUint64, math.MaxUint64)
 	test(math.MaxUint64, math.MaxUint64, 5)
+}
+
+func TestMuldivOverflow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := uint64(1) << 63
+	b := uint64(1) << 63
+	c := uint64(1)
+
+	_, overflowed := Muldiv(a, b, c)
+	require.True(t, overflowed)
 }

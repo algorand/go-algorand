@@ -931,10 +931,22 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var group transactions.TxGroup
+	var tip basics.Micros
 	for gi, txn := range txgroup {
 		err := eval.TestTransaction(txn)
 		if err != nil {
 			return err
+		}
+
+		// Ensure at most one transactions specifies a Tip
+		if txn.Txn.Tip != 0 {
+			if tip != 0 {
+				return &ledgercore.TxGroupMalformedError{
+					Msg: fmt.Sprintf("transactionGroup: multiple tip values: %v != %v",
+						tip, txn.Txn.Tip),
+					Reason: ledgercore.TxGroupMalformedErrorReasonMultipleIncrements,
+				}
+			}
 		}
 
 		// Make sure all transactions in group have the same group value
@@ -970,6 +982,39 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		}
 	}
 
+	// We check against the group's expressed willingness to pay, which shows up
+	// in `usage`, not the current congestion level
+	usage, feesPaid := transactions.SummarizeTxnFees(txgroup)
+	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CheckGroupFees validates that a transaction group has paid sufficient fees.
+// This is a very superficial check, since it can't determine the dynamic costs
+// associated with inner transactions.  Those costs are monitored during app
+// calls in the logic package.
+func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, feePerTxn basics.MicroAlgos) error {
+	feeNeeded, overflow := feePerTxn.MulMicros(usage)
+	if overflow {
+		return &ledgercore.TxGroupMalformedError{
+			Msg:    "txgroup required fee overflow",
+			Reason: ledgercore.TxGroupErrorReasonInvalidFee,
+		}
+	}
+	// feesPaid may have saturated. That's ok. Since we know
+	// feeNeeded did not overflow, simple comparison tells us
+	// feesPaid was enough.
+	if feesPaid.LessThan(feeNeeded) {
+		return &ledgercore.TxGroupMalformedError{
+			Msg: fmt.Sprintf(
+				"txgroup with %s fees is less than %s (usage=%s * base=%s)",
+				feesPaid, feeNeeded, usage, feePerTxn),
+			Reason: ledgercore.TxGroupErrorReasonInvalidFee,
+		}
+	}
 	return nil
 }
 
@@ -1027,14 +1072,10 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
-	var txibs []transactions.SignedTxnInBlock
-	var group transactions.TxGroup
-	var groupTxBytes int
-
 	cow := eval.state.child(len(txgroup))
 	defer cow.recycle()
 
-	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials)
+	evalParams := logic.NewAppEvalParams(txgroup, &eval.proto, &eval.specials, eval.block.BlockHeader.CongestionTax)
 	evalParams.Tracer = eval.Tracer
 
 	if eval.Tracer != nil {
@@ -1047,7 +1088,10 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	}
 
 	// Evaluate each transaction in the group
-	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	var groupTxBytes int
+	var group transactions.TxGroup
+	var tip basics.Micros
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -1071,6 +1115,17 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 			groupTxBytes += txib.GetEncodedLength()
 			if eval.blockTxBytes+groupTxBytes > eval.maxTxnBytesPerBlock {
 				return ledgercore.ErrNoSpace
+			}
+		}
+
+		// Ensure at most one transactions specifies a Tip
+		if txad.Txn.Tip != 0 {
+			if tip != 0 {
+				return &ledgercore.TxGroupMalformedError{
+					Msg: fmt.Sprintf("transactionGroup: multiple tip values: %v != %v",
+						tip, txad.Txn.Tip),
+					Reason: ledgercore.TxGroupMalformedErrorReasonMultipleIncrements,
+				}
 			}
 		}
 
@@ -1105,6 +1160,13 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 				Reason: ledgercore.TxGroupMalformedErrorReasonIncompleteGroup,
 			}
 		}
+	}
+
+	// We check against the group's expressed willingness to pay, which shows up
+	// in `usage`, not the current congestion level
+	usage, feesPaid := transactions.SummarizeFees(txgroup)
+	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
+		return err
 	}
 
 	eval.block.Payset = append(eval.block.Payset, txibs...)
@@ -1389,6 +1451,11 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 			}
 		}
 
+		// Calculate and set the Load field for on-chain congestion measurement
+		if eval.proto.CongestionFees {
+			eval.block.BlockHeader.Load = ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
+		}
+
 		eval.generateKnockOfflineAccountsList(participating)
 
 		if eval.proto.StateProofInterval > 0 {
@@ -1463,7 +1530,7 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 					highWeight = expectedVotersWeight
 					lowWeight = actualVotersWeight
 				}
-				const stakeDiffusionFactor = 1
+				const stakeDiffusionFactor = uint64(1)
 				allowedDelta, overflowed := basics.Muldiv(expectedVotersWeight.Raw, stakeDiffusionFactor, 100)
 				if overflowed {
 					return fmt.Errorf("StateProofOnlineTotalWeight overflow: %v != %v", actualVotersWeight, expectedVotersWeight)
@@ -1500,6 +1567,13 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 	}
 
 	return nil
+}
+
+// ComputeLoad determines the load for the block based on block utilization.
+func ComputeLoad(blockSize int, maxSize int) basics.Micros {
+	// Load is expressed as a fixed-point integer with 6 digits of precision
+	// 1,000,000 represents a completely full block
+	return basics.Micros(blockSize * 1e6 / maxSize)
 }
 
 func (eval *BlockEvaluator) validateForPayouts() error {
@@ -1762,7 +1836,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 	}
 }
 
-const absentFactor = 20
+const absentFactor = uint64(20)
 
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// Don't consider accounts that were online when payouts went into effect as
@@ -2190,6 +2264,13 @@ transactionGroupLoop:
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
+		// Validate Load field for on-chain congestion measurement
+		if eval.proto.CongestionFees {
+			expectedLoad := ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
+			if eval.block.BlockHeader.Load != expectedLoad {
+				return ledgercore.StateDelta{}, fmt.Errorf("bad load: %d != %d", eval.block.BlockHeader.Load, expectedLoad)
+			}
+		}
 		// wait for the signature validation to complete.
 		select {
 		case <-ctx.Done():

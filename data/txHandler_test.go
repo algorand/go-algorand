@@ -2041,13 +2041,13 @@ func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // 
 	defer func() {
 		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 			"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-			txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+			txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 			txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 		)
 	}()
 	transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 		"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-		txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+		txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 		txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 	)
 
@@ -2073,12 +2073,6 @@ func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // 
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
 	require.Equal(t, 2, getMetricCounter(txPoolRememberTagNoSpace))
 
-	feeErr := pools.ErrTxPoolFeeError{}
-	wrapped = fmt.Errorf("wrap: %w", &feeErr) // simulate wrapping
-	txh.rememberReportErrors(wrapped)
-
-	transactionMessageTxPoolRememberCounter.AddMetric(result)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagFee))
 }
 
 func makeBlockTicker() *blockTicker {
@@ -2113,7 +2107,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	defer func() {
 		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 			"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-			txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+			txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 			txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 		)
 		transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
@@ -2124,7 +2118,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	}()
 	transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 		"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-		txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+		txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 		txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 	)
 	transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(

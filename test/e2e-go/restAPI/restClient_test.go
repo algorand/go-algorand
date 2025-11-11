@@ -108,9 +108,9 @@ func TestClientCanGetSuggestedFee(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
-	suggestedFeeResponse, err := testClient.SuggestedFee()
+	base, _, err := testClient.SuggestedFee()
 	a.NoError(err)
-	_ = suggestedFeeResponse // per-byte-fee is allowed to be zero
+	a.Positive(base)
 }
 
 func TestClientCanGetMinTxnFee(t *testing.T) {

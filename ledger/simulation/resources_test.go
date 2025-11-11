@@ -35,7 +35,7 @@ func TestAppAccounts(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusFuture]
 	txns := make([]transactions.SignedTxnWithAD, 1)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
-	ep := logic.NewAppEvalParams(txns, &proto, nil)
+	ep := logic.NewAppEvalParams(txns, &proto, nil, 0)
 
 	appID := basics.AppIndex(12345)
 	appAccount := appID.Address()
@@ -88,7 +88,7 @@ func TestGlobalVsLocalResources(t *testing.T) {
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 	txns[1].Txn.Type = protocol.ApplicationCallTx
 	txns[2].Txn.Type = protocol.ApplicationCallTx
-	ep := logic.NewAppEvalParams(txns, &proto, nil)
+	ep := logic.NewAppEvalParams(txns, &proto, nil, 0)
 
 	// For this test, we assume only the txn at index 1 supports group sharing.
 
