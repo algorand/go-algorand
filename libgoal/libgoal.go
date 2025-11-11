@@ -899,7 +899,7 @@ func (c Client) CurrentRound() (basics.Round, error) {
 	return resp.LastRound, nil
 }
 
-// SuggestedFee returns the base txn fee and per byte fee
+// SuggestedFee returns the base txn fee and congestion tax
 func (c *Client) SuggestedFee() (base uint64, tax basics.Micros, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {

@@ -579,9 +579,9 @@ type ConsensusParams struct {
 	// the first consensus release in which it is set true.
 	AppSizeUpdates bool
 
-	// CongestionFees enables header values that track Load and a running
-	// CongestionFee that grows/shrinks when blocks are more/less than half full
-	CongestionFees bool
+	// CongestionTracking enables header values that track Load and a running
+	// CongestionTax that grows/shrinks when blocks are more/less than half full
+	CongestionTracking bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1471,7 +1471,7 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.AppSizeUpdates = true
-	vFuture.CongestionFees = true
+	vFuture.CongestionTracking = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

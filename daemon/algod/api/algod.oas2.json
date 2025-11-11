@@ -4739,7 +4739,7 @@
             "x-go-type": "uint64"
           },
           "congestion-tax": {
-            "description": "The current amount beyond min-fee required for the txn to validate with the current congestion conditions. Expressed as fixed-point number with 6 digits of precision.",
+            "description": "The extra fee per transaction for algod to admit the transaction under the current congestion conditions. Expressed as fixed-point number with 6 digits of precision, transaction fees must be (1 + congestion-tax) * min-fee.",
             "type": "integer",
             "x-go-type": "basics.Micros"
           }

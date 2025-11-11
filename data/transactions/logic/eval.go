@@ -4027,7 +4027,7 @@ func opSetBit(cx *EvalContext) error {
 		// being big endian. So this looks "reversed"
 		mask := byte(0x80) >> bitIdx
 		// Copy to avoid modifying shared slice
-		scratch := append([]byte(nil), target.Bytes...)
+		scratch := slices.Clone(target.Bytes)
 		if bit == uint64(1) {
 			scratch[byteIdx] |= mask
 		} else {
@@ -4066,7 +4066,7 @@ func opSetByte(cx *EvalContext) error {
 		return errors.New("setbyte index beyond array length")
 	}
 	// Copy to avoid modifying shared slice
-	cx.Stack[pprev].Bytes = append([]byte(nil), cx.Stack[pprev].Bytes...)
+	cx.Stack[pprev].Bytes = slices.Clone(cx.Stack[pprev].Bytes)
 	cx.Stack[pprev].Bytes[cx.Stack[prev].Uint] = byte(cx.Stack[last].Uint)
 	cx.Stack = cx.Stack[:prev]
 	return nil

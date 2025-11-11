@@ -914,6 +914,14 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.blockTxBytes = 0
 }
 
+// CongestionTax reports the congestion tax that an incoming transaction will
+// observe.  It currently reports the header's congestion tax, but if `eval` has
+// more than a block's worth of transactions, it should probably report a higher
+// value. (simulate the growth of the tax that NextCongestionTax would produce.)
+func (eval BlockEvaluator) CongestionTax() basics.Micros {
+	return eval.block.BlockHeader.CongestionTax
+}
+
 // TestTransactionGroup performs basic duplicate detection and well-formedness checks
 // on a transaction group, but does not actually add the transactions to the block
 // evaluator, or modify the block evaluator state in any other visible way.
@@ -1452,7 +1460,7 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 		}
 
 		// Calculate and set the Load field for on-chain congestion measurement
-		if eval.proto.CongestionFees {
+		if eval.proto.CongestionTracking {
 			eval.block.BlockHeader.Load = ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
 		}
 
@@ -1573,7 +1581,11 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 func ComputeLoad(blockSize int, maxSize int) basics.Micros {
 	// Load is expressed as a fixed-point integer with 6 digits of precision
 	// 1,000,000 represents a completely full block
-	return basics.Micros(blockSize * 1e6 / maxSize)
+	load, o := basics.Muldiv(basics.Micros(1e6), uint64(blockSize), uint64(maxSize))
+	if o {
+		return 1e6 // can't happen, but we'll say "fully loaded"
+	}
+	return min(load, 1e6) // again, there's no way load can exceed 1.
 }
 
 func (eval *BlockEvaluator) validateForPayouts() error {
@@ -2265,7 +2277,7 @@ transactionGroupLoop:
 	// If validating, do final block checks that depend on our new state
 	if validate {
 		// Validate Load field for on-chain congestion measurement
-		if eval.proto.CongestionFees {
+		if eval.proto.CongestionTracking {
 			expectedLoad := ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
 			if eval.block.BlockHeader.Load != expectedLoad {
 				return ledgercore.StateDelta{}, fmt.Errorf("bad load: %d != %d", eval.block.BlockHeader.Load, expectedLoad)
