@@ -135,7 +135,7 @@ cover:
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
 
-generate: deps
+generate:
 	PATH=$(GOBIN):$$PATH go generate ./...
 
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
@@ -226,9 +226,6 @@ else
 	echo "OS_TYPE must be darwin for universal builds, skipping"
 endif
 
-deps:
-	./scripts/check_deps.sh
-
 # artifacts
 
 # Regenerate kmd swagger spec files
@@ -255,7 +252,7 @@ $(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/lib
 		touch $@; \
 	fi
 
-$(KMD_API_SWAGGER_INJECT): deps $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
+$(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 	./daemon/kmd/lib/kmdapi/bundle_swagger_json.sh
 
 # generated files we should make sure we clean
@@ -263,7 +260,7 @@ GENERATED_FILES := \
 	$(KMD_API_SWAGGER_INJECT) \
 	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 
-rebuild_kmd_swagger: deps
+rebuild_kmd_swagger:
 	rm -f $(GENERATED_FILES)
 	# we need to invoke the make here since we want to ensure that the deletion and re-creating are sequential
 	make $(KMD_API_SWAGGER_INJECT)
@@ -410,7 +407,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOBIN)
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build build-race build-e2e test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium modernize
+.PHONY: default fmt lint check_shell sanity cover prof build build-race build-e2e test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium modernize
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
