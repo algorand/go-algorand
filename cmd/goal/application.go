@@ -27,7 +27,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -84,8 +83,7 @@ var (
 	// controls whether all these refs put into the old-style "foreign arrays" or the new-style tx.Access
 	appUseAccess bool
 
-	appArgs          []string
-	appInputFilename string
+	appArgs []string
 
 	fetchLocal  bool
 	fetchGlobal bool
@@ -114,7 +112,6 @@ func init() {
 	appCmd.PersistentFlags().StringSliceVar(&appStrHoldings, "holding", nil, "A Holding that may be accessed from application logic. An asset-id followed by a plus sign and an address")
 	appCmd.PersistentFlags().StringSliceVar(&appStrLocals, "local", nil, "A Local State that may be accessed from application logic. An optional app-id and a plus sign, followed by an address. Zero or omitted app-id indicates the local state for app being called.")
 	appCmd.PersistentFlags().BoolVar(&appUseAccess, "access", false, "Put references into the transaction's access list, instead of foreign arrays.")
-	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg, app-account, foreign-app, foreign-asset, local, holding, and box)")
 
 	appCmd.PersistentFlags().StringVar(&approvalProgFile, "approval-prog", "", "(Uncompiled) TEAL assembly program filename for approving/rejecting transactions")
 	appCmd.PersistentFlags().StringVar(&clearProgFile, "clear-prog", "", "(Uncompiled) TEAL assembly program filename for updating application state when a user clears their local state")
@@ -387,26 +384,6 @@ func cliAddress(acct string) basics.Address {
 	return addr
 }
 
-func getAppInputsFromFile() appCallInputs {
-	reportWarnf("Using a JSON app input file is deprecated and will be removed soon. Please speak up if the feature matters to you.")
-	time.Sleep(5 * time.Second)
-
-	var inputs appCallInputs
-	f, err := os.Open(appInputFilename)
-	if err != nil {
-		reportErrorf("Could not open app input JSON file: %v", err)
-	}
-	defer f.Close()
-
-	dec := protocol.NewJSONDecoder(f)
-	err = dec.Decode(&inputs)
-	if err != nil {
-		reportErrorf("Could not decode app input JSON file: %v", err)
-	}
-
-	return inputs
-}
-
 func getAppInputsFromCLI() appCallInputs {
 	// we need to ignore empty strings from appArgs because app-arg was
 	// previously a StringSliceVar, which also does that, and some test depend
@@ -436,19 +413,7 @@ func getAppInputsFromCLI() appCallInputs {
 }
 
 func getAppInputs() ([][]byte, libgoal.RefBundle) {
-	var inputs appCallInputs
-	if appInputFilename != "" {
-		if appArgs != nil || appStrAccounts != nil ||
-			foreignApps != nil || foreignAssets != nil || appStrBoxes != nil ||
-			appStrHoldings != nil || appStrLocals != nil {
-			reportErrorf("Cannot specify both command-line arguments/resources and JSON input filename")
-		}
-		inputs = getAppInputsFromFile()
-	} else {
-		inputs = getAppInputsFromCLI()
-	}
-
-	return parseAppInputs(inputs)
+	return parseAppInputs(getAppInputsFromCLI())
 }
 
 var appCmd = &cobra.Command{
