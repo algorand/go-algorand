@@ -52,7 +52,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	// we don't have to go to the disk. but we only allow one such access for
 	// each spare (empty) box ref. that way, we can't end up needing to write
 	// many separate newly created boxes.
-	if !ok && cx.Proto.EnableUnnamedBoxAccessInNewApps {
+	if !ok {
 		if _, newAppAccess = cx.available.createdApps[cx.appID]; newAppAccess {
 			if cx.available.unnamedAccess > 0 {
 				ok = true                    // allow it

@@ -252,11 +252,9 @@ func (cx *EvalContext) requireLocals(acct basics.Address, id basics.AppIndex) er
 }
 
 func (cx *EvalContext) allowsAssetTransfer(hdr *transactions.Header, tx *transactions.AssetTransferTxnFields) error {
-	// After EnableInnerClawbackWithoutSenderHolding appears in a consensus
-	// update, we should remove it from consensus params and assume it's true in
-	// the next release. It only needs to be in there so that it gates the
-	// behavior change in the release it first appears.
-	if !cx.Proto.EnableInnerClawbackWithoutSenderHolding || tx.AssetSender.IsZero() {
+	// When AssetSender is set (we're doing a clawback) we don't need the
+	// Sender's holding. The Sender/ClawbackAddress may not even have the asset.
+	if tx.AssetSender.IsZero() {
 		err := cx.requireHolding(hdr.Sender, tx.XferAsset)
 		if err != nil {
 			return fmt.Errorf("axfer Sender: %w", err)
@@ -323,17 +321,14 @@ func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.
 			r.shareHolding(address, asset)
 		case !rr.Locals.Empty():
 			// ApplicationCallTxnFields.wellFormed ensures no error here.
-			address, app, _ := rr.Locals.Resolve(tx.Access, hdr.Sender)
+			address, app, _ := rr.Locals.Resolve(tx.Access, hdr.Sender, tx.ApplicationID)
 			r.shareLocal(address, app)
 		case !rr.Box.Empty():
 			// ApplicationCallTxnFields.wellFormed ensures no error here.
 			app, name, _ := rr.Box.Resolve(tx.Access)
 			r.shareBox(basics.BoxRef{App: app, Name: name}, tx.ApplicationID)
 		default:
-			// all empty equals an "empty boxref" which allows one unnamed access
-			if ep.Proto.EnableUnnamedBoxAccessInNewApps {
-				r.unnamedAccess++
-			}
+			r.unnamedAccess++
 		}
 	}
 }
@@ -374,7 +369,7 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 	}
 
 	for _, br := range tx.Boxes {
-		if ep.Proto.EnableUnnamedBoxAccessInNewApps && br.Empty() {
+		if br.Empty() {
 			r.unnamedAccess++
 		}
 		var app basics.AppIndex
