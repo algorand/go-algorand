@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestSerializableErrorBackwardCompatible ensures Err field of type serializableError can be
+// TestSerializableErrorBackwardCompatibility ensures Err field of type serializableError can be
 // properly decoded from ConsensusVersionView.
 // This test is only needed for agreement state serialization switch from reflection to msgp.
 func TestSerializableErrorBackwardCompatibility(t *testing.T) {

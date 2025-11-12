@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// OpImmediateNote returns a short string about immediate data which follows the op byte
+// opImmediateNoteSyntaxMarkdown returns a short string about immediate data which follows the op byte
 func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails) string {
 	if len(oids) == 0 {
 		return ""

@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// TestPubsubTracer_TagList makes sure pubsubMetricsTracer traces pubsub messages
+// TestMetrics_PubsubTracer_TagList makes sure pubsubMetricsTracer traces pubsub messages
 // by counting switch cases in SendRPC and ValidateMessage
 func TestMetrics_PubsubTracer_TagList(t *testing.T) {
 	t.Parallel()

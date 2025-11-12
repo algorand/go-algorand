@@ -46,7 +46,7 @@ type roundRequestsContext struct {
 	periods map[cryptoRequestCtxKey]periodRequestsContext
 }
 
-// pendingRequests keeps the context for all pending requests
+// pendingRequestsContext keeps the context for all pending requests
 //
 //msgp:ignore pendingRequestsContext
 type pendingRequestsContext map[round]roundRequestsContext

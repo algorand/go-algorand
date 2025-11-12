@@ -10,4 +10,4 @@ plugins:
     version: v0.0.7
   - module: github.com/cce/docnametypo
     import: github.com/cce/docnametypo/gclplugin
-    version: v0.1.1
+    version: v0.2.0
