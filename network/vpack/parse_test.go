@@ -187,3 +187,66 @@ func TestParseVoteTrailingDataErr(t *testing.T) {
 	_, err := se.CompressVote(nil, buf)
 	assert.ErrorContains(t, err, "unexpected trailing data")
 }
+
+// TestUncompressedMsgpackDetection tests that decompression errors on uncompressed
+// msgpack data get wrapped with ErrLikelyUncompressed, while corrupted vpack data does not.
+func TestUncompressedMsgpackDetection(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Create a vote structure shared by both subtests
+	vote := map[string]any{
+		"cred": map[string]any{"pf": crypto.VrfProof{7, 8, 9}},
+		"r": map[string]any{
+			"rnd":  uint64(1000),
+			"per":  uint64(5),
+			"step": uint64(2),
+			"snd":  [32]byte{1, 2, 3},
+			"prop": map[string]any{
+				"dig": [32]byte{4, 5, 6},
+			},
+		},
+		"sig": map[string]any{
+			"s":   [64]byte{10, 11, 12},
+			"p":   [32]byte{13, 14, 15},
+			"p2":  [32]byte{16, 17, 18},
+			"p1s": [64]byte{22, 23, 24},
+			"p2s": [64]byte{25, 26, 27},
+			"ps":  [64]byte{},
+		},
+	}
+
+	t.Run("uncompressed_detected", func(t *testing.T) {
+		msgpackData := protocol.EncodeReflect(vote)
+
+		// Verify it starts with the uncompressed msgpack pattern
+		assert.GreaterOrEqual(t, len(msgpackData), 6)
+		assert.Equal(t, byte(0x83), msgpackData[0], "uncompressed vote should start with fixmap(3)")
+		assert.Equal(t, byte(0xa4), msgpackData[1], "followed by fixstr(4)")
+		assert.Equal(t, "cred", string(msgpackData[2:6]), "field name should be 'cred'")
+
+		// Try to decompress as vpack - should fail with ErrLikelyUncompressed
+		var dec StatelessDecoder
+		_, err := dec.DecompressVote(nil, msgpackData)
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrLikelyUncompressed, "should detect uncompressed msgpack pattern")
+		assert.ErrorContains(t, err, "data appears to be uncompressed msgpack")
+	})
+
+	t.Run("corrupted_vpack_not_detected", func(t *testing.T) {
+		msgpackData := protocol.EncodeReflect(vote)
+		var enc StatelessEncoder
+		compressed, err := enc.CompressVote(nil, msgpackData)
+		assert.NoError(t, err)
+
+		// Corrupt the compressed data by truncating it
+		corrupted := compressed[:len(compressed)/2]
+
+		// Try to decompress - should fail but NOT with ErrLikelyUncompressed
+		var dec StatelessDecoder
+		_, err = dec.DecompressVote(nil, corrupted)
+
+		assert.Error(t, err)
+		assert.NotErrorIs(t, err, ErrLikelyUncompressed, "corrupted vpack should not be detected as uncompressed msgpack")
+	})
+}
