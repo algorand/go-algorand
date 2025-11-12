@@ -27,7 +27,7 @@ import (
 //msgp:ignore stateMachineTag
 type stateMachineTag int
 
-//go:generate stringer -type=stateMachineTag
+//go:generate go tool -modfile=../tool.mod stringer -type=stateMachineTag
 const (
 	demultiplexer stateMachineTag = iota // type demux
 
