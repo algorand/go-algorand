@@ -717,7 +717,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	}
 }
 
-// TestMultiaddrConversionToFrom ensures Multiaddr can be serialized back to an address without losing information
+// TestP2PMultiaddrConversionToFrom ensures Multiaddr can be serialized back to an address without losing information
 func TestP2PMultiaddrConversionToFrom(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

@@ -288,7 +288,7 @@ func TestEmptyProgram(t *testing.T) {
 	testLogicBytes(t, nil, nil, "invalid", "invalid program (empty)")
 }
 
-// TestMinAvmVersionParamEval tests eval/check reading the minAvmVersion from the param
+// TestMinAvmVersionParamEvalCheckSignature tests eval/check reading the minAvmVersion from the param
 func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

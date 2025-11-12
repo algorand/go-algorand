@@ -257,7 +257,7 @@ func createElasticHookContext(ctx context.Context, cfg TelemetryConfig) (hook lo
 	return hook, err
 }
 
-// createTelemetryHook creates the Telemetry log hook, or returns nil if remote logging is not enabled
+// createTelemetryHookContext creates the Telemetry log hook, or returns nil if remote logging is not enabled
 func createTelemetryHookContext(ctx context.Context, cfg TelemetryConfig, history *logBuffer, hookFactory hookFactory) (hook logrus.Hook, err error) {
 	if !cfg.Enable {
 		return nil, fmt.Errorf("createTelemetryHook called when telemetry not enabled")

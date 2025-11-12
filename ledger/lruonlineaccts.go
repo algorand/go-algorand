@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
-// lruAccounts provides a storage class for the most recently used accounts data.
+// lruOnlineAccounts provides a storage class for the most recently used accounts data.
 // It doesn't have any synchronization primitive on its own and so is required to be
 // synchronized by the caller.
 type lruOnlineAccounts struct {

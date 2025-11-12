@@ -219,7 +219,7 @@ func MakeMessageReorderingFilter(config MessageReorderingFilterConfig) *MessageR
 	}
 }
 
-// Unmarshall MessageReorderingFilter
+// Unmarshal MessageReorderingFilter
 func (n *MessageReorderingFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type messageReorderingFilterJSON struct {
 		Name string

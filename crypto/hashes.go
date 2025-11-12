@@ -141,7 +141,7 @@ func hashBytes(hash hash.Hash, m []byte) []byte {
 	return outhash
 }
 
-// InvalidHash is used to identify errors on the factory.
+// invalidHash is used to identify errors on the factory.
 // this function will return nil slice
 type invalidHash struct {
 }

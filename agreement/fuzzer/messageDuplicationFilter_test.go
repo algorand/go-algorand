@@ -185,7 +185,7 @@ func (n *MessageDuplicationFilter) processUpstreamBuffer() bool {
 	return received
 }
 
-// Unmarshall MessageDuplicationFilter
+// Unmarshal MessageDuplicationFilter
 func (n *MessageDuplicationFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type messageDuplicationFilterJSON struct {
 		Name                  string

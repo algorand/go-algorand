@@ -104,7 +104,7 @@ func MakeCatchupFilterFactory(config *CatchupFilterConfig) *CatchupFilter {
 	}
 }
 
-// Unmarshall CatchupFilter
+// Unmarshal CatchupFilter
 func (n *CatchupFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type catchupFilterJSON struct {
 		Name string

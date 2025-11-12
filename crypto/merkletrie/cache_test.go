@@ -209,7 +209,7 @@ func TestCacheEvictionFuzzer(t *testing.T) {
 	}
 }
 
-// TestCacheEvictionFuzzer generates bursts of random Add/Delete operations on the trie, and
+// TestCacheEvictionFuzzer2 generates bursts of random Add/Delete operations on the trie, and
 // testing the correctness of the cache internal buffers priodically.
 func TestCacheEvictionFuzzer2(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -396,7 +396,7 @@ func TestCacheDeleteNodeMidTransaction(t *testing.T) {
 	}
 }
 
-// TestCachePageLoading ensures that during page loading, the number of cachedNodeCount is not
+// TestCachePageReloading ensures that during page loading, the number of cachedNodeCount is not
 // increased if the page was already loaded previously into memory.
 func TestCachePageReloading(t *testing.T) {
 	partitiontest.PartitionTest(t)

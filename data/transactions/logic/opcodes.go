@@ -339,7 +339,7 @@ func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	return d
 }
 
-// immType describes the immediate arguments to an opcode
+// immKind describes the immediate arguments to an opcode
 type immKind byte
 
 const (

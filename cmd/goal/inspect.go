@@ -50,7 +50,7 @@ type inspectMultisigSig struct {
 	Subsigs   []inspectMultisigSubsig `codec:"subsig"`
 }
 
-// inspectMultisigSig is isomorphic to MultisigSig but uses different
+// inspectMultisigSubsig is isomorphic to MultisigSig but uses different
 // types to print public keys using algorand's address format in JSON.
 type inspectMultisigSubsig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

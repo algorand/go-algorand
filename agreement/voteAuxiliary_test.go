@@ -85,7 +85,7 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 	}
 	// this is just piped up from the vote tracker... (for now)
 	expectedOutputs[len(expectedOutputs)-1] = thresholdEvent{T: nextThreshold, Proposal: bottom}
-	testCase := determisticTraceTestCase{
+	testCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}
@@ -117,7 +117,7 @@ func TestVoteTrackerPeriodStepCachedThresholdPrivate(t *testing.T) {
 		expectedOutputs[i] = thresholdEvent{T: none}
 	}
 	expectedOutputs[len(expectedOutputs)-1] = thresholdEvent{T: nextThreshold, Proposal: fixedPVal}
-	extensionTestCase := determisticTraceTestCase{
+	extensionTestCase := deterministicTraceTestCase{
 		inputs:          inputVotes,
 		expectedOutputs: expectedOutputs,
 	}

@@ -112,6 +112,9 @@ modernize:
 lint: deps
 	$(GOBIN)/golangci-lint run -c .golangci.yml
 
+warninglint: custom-golangci-lint
+	./custom-golangci-lint run -c .golangci-warnings.yml
+
 expectlint:
 	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
 
@@ -423,6 +426,5 @@ include ./scripts/release/mule/Makefile.mule
 archive:
 	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/$(CHANNEL)/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*$(FULLBUILDNUMBER)*"
 
-build_custom_linters:
+custom-golangci-lint: .custom-gcl.yml
 	golangci-lint custom -v
-	./custom-golangci-lint --version

@@ -446,7 +446,7 @@ func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClien
 	return stateProofMessage, nextStateProofBlock
 }
 
-// TestStateProofRecoveryDuringRecoveryInterval simulates a situation where the stateproof chain is lagging after the main chain.
+// TestStateProofRecoveryDuringRecoveryPeriod simulates a situation where the stateproof chain is lagging after the main chain.
 // If the missing data is being accepted before  StateProofMaxRecoveryIntervals * StateProofInterval rounds have passed, nodes should
 // be able to produce stateproofs and continue as normal
 func TestStateProofRecoveryDuringRecoveryPeriod(t *testing.T) {

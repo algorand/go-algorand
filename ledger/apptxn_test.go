@@ -633,7 +633,7 @@ func TestDuplicatePayAction(t *testing.T) {
 	})
 }
 
-// TestInnerTxCount ensures that inner transactions increment the TxnCounter
+// TestInnerTxnCount ensures that inner transactions increment the TxnCounter
 func TestInnerTxnCount(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

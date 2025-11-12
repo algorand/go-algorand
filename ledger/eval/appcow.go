@@ -239,7 +239,7 @@ func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) e
 	return fmt.Errorf("%v has already opted in to app %d", addr, aidx)
 }
 
-// Allocate creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
+// AllocateApp creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
 func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	// Check that account is not already opted in
 	allocated, err := cb.allocated(addr, aidx, global)
@@ -269,7 +269,7 @@ func (cb *roundCowState) AllocateApp(addr basics.Address, aidx basics.AppIndex, 
 	return nil
 }
 
-// Deallocate clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
+// DeallocateApp clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
 func (cb *roundCowState) DeallocateApp(addr basics.Address, aidx basics.AppIndex, global bool) error {
 	// Check that account has allocated storage
 	allocated, err := cb.allocated(addr, aidx, global)

@@ -190,7 +190,7 @@ func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	}
 }
 
-// PopEarliestTime removes the earliest time from recentConnectionTimes in
+// popNElements removes the earliest time from recentConnectionTimes in
 // addressData for addr
 // It is expected to be later than ConnectionsRateLimitingWindow
 func (e *phonebookImpl) popNElements(n int, addr string) {
@@ -199,7 +199,7 @@ func (e *phonebookImpl) popNElements(n int, addr string) {
 	e.data[addr] = entry
 }
 
-// AppendTime adds the current time to recentConnectionTimes in
+// appendTime adds the current time to recentConnectionTimes in
 // addressData of addr
 func (e *phonebookImpl) appendTime(addr string, t time.Time) {
 	entry := e.data[addr]
