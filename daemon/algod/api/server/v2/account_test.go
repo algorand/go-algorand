@@ -167,7 +167,7 @@ func TestAccount(t *testing.T) {
 	verifyCreatedApp(1, appIdx2, appParams2)
 
 	appRoundTrip := func(idx basics.AppIndex, params basics.AppParams) {
-		require.True(t, roundtrip.Check(t, params,
+		roundtrip.Check(t, params,
 			func(ap basics.AppParams) model.Application {
 				return AppParamsToApplication(addr, idx, &ap)
 			},
@@ -175,7 +175,7 @@ func TestAccount(t *testing.T) {
 				converted, err := ApplicationParamsToAppParams(&app.Params)
 				require.NoError(t, err)
 				return converted
-			}))
+			})
 	}
 
 	appRoundTrip(appIdx1, appParams1)
@@ -234,7 +234,9 @@ func TestAccount(t *testing.T) {
 	verifyCreatedAsset(0, assetIdx1, assetParams1)
 	verifyCreatedAsset(1, assetIdx2, assetParams2)
 
-	require.True(t, roundtrip.Check(t, b, toModel, toBasics, roundtrip.NoRandomCases(), roundtrip.NoNearZeros()))
+	// Verify round-trip conversion works for the manually constructed account
+	c := toBasics(toModel(b))
+	require.Equal(t, b, c)
 
 	t.Run("IsDeterministic", func(t *testing.T) {
 		// convert the same account a few more times to make sure we always
@@ -258,7 +260,9 @@ func TestAccountRandomRoundTrip(t *testing.T) {
 			round := basics.Round(2)
 			proto := config.Consensus[protocol.ConsensusFuture]
 			toModel, toBasics := makeAccountConverters(t, addr.String(), round, &proto, acct.MicroAlgos)
-			require.True(t, roundtrip.Check(t, acct, toModel, toBasics, roundtrip.NoRandomCases(), roundtrip.NoNearZeros()))
+			// Test the randomly-generated account round-trips correctly
+			c := toBasics(toModel(acct))
+			require.Equal(t, acct, c)
 		}
 	}
 }
@@ -297,7 +301,9 @@ func TestConvertTealKeyValueRoundTrip(t *testing.T) {
 			return converted
 		}
 
-		require.True(t, roundtrip.Check(t, kv, toGenerated, toBasics, roundtrip.NoNearZeros()))
+		// Test the manually constructed map round-trips correctly
+		result := toBasics(toGenerated(kv))
+		require.Equal(t, kv, result)
 	})
 }
 

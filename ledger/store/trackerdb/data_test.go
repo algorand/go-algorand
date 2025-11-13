@@ -1291,8 +1291,8 @@ func TestCopyFunctions(t *testing.T) {
 	rdToAsset := func(rd ResourcesData) basics.AssetParams {
 		return rd.GetAssetParams()
 	}
-	// roundtrip.Check now automatically tests NearZeros + 100 random variants
-	assert.True(t, roundtrip.Check(t, basics.AssetParams{}, assetToRD, rdToAsset))
+	// roundtrip.Check automatically tests the example plus NearZeros variants
+	roundtrip.Check(t, basics.AssetParams{}, assetToRD, rdToAsset)
 
 	// Asset holdings are copied into and out of ResourceData losslessly
 	holdingToRD := func(ap basics.AssetHolding) ResourcesData {
@@ -1303,7 +1303,7 @@ func TestCopyFunctions(t *testing.T) {
 	rdToHolding := func(rd ResourcesData) basics.AssetHolding {
 		return rd.GetAssetHolding()
 	}
-	assert.True(t, roundtrip.Check(t, basics.AssetHolding{}, holdingToRD, rdToHolding))
+	roundtrip.Check(t, basics.AssetHolding{}, holdingToRD, rdToHolding)
 
 	// AppParams are copied into and out of ResourceData losslessly
 	apToRD := func(ap basics.AppParams) ResourcesData {
@@ -1314,7 +1314,7 @@ func TestCopyFunctions(t *testing.T) {
 	rdToAP := func(rd ResourcesData) basics.AppParams {
 		return rd.GetAppParams()
 	}
-	assert.True(t, roundtrip.Check(t, basics.AppParams{}, apToRD, rdToAP))
+	roundtrip.Check(t, basics.AppParams{}, apToRD, rdToAP)
 
 	// AppLocalStates are copied into and out of ResourceData losslessly
 	localsToRD := func(ap basics.AppLocalState) ResourcesData {
@@ -1325,7 +1325,7 @@ func TestCopyFunctions(t *testing.T) {
 	rdToLocals := func(rd ResourcesData) basics.AppLocalState {
 		return rd.GetAppLocalState()
 	}
-	assert.True(t, roundtrip.Check(t, basics.AppLocalState{}, localsToRD, rdToLocals))
+	roundtrip.Check(t, basics.AppLocalState{}, localsToRD, rdToLocals)
 
 }
 

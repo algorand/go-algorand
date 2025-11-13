@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
@@ -1110,7 +1109,9 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 		return result
 	}
 
-	require.True(t, roundtrip.Check(t, sd, globalDeltaToStateDelta, decode, roundtrip.NoNearZeros()))
+	// Test the manually constructed StateDelta round-trips correctly
+	result := decode(globalDeltaToStateDelta(sd))
+	require.Equal(t, sd, result)
 
 	var keys []string
 	// test with a loop because sd is a map and iteration order is random

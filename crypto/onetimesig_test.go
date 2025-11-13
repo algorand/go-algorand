@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -149,9 +147,9 @@ func TestHeartbeatProofRoundTrip(t *testing.T) {
 	toOTS := func(h HeartbeatProof) OneTimeSignature { return h.ToOneTimeSignature() }
 	toProof := func(ots OneTimeSignature) HeartbeatProof { return ots.ToHeartbeatProof() }
 
-	// Test with an empty proof as the example, RandomizeObject will generate 100 random variants
+	// Test with an empty proof as example, NearZeros will test each field
 	var emptyProof HeartbeatProof
-	require.True(t, roundtrip.Check(t, emptyProof, toOTS, toProof))
+	roundtrip.Check(t, emptyProof, toOTS, toProof)
 }
 
 func BenchmarkOneTimeSigBatchVerification(b *testing.B) {

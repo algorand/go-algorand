@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -87,6 +86,7 @@ func TestDefaultSendMessageTagsMarshalRoundTrip(t *testing.T) {
 		return tags
 	}
 
-	// map[protocol.Tag]bool has constraints (Tag must be valid), so disable random testing
-	require.True(t, roundtrip.Check(t, cloned, toBytes, toTags, roundtrip.NoRandomCases(), roundtrip.NoNearZeros()), "default messages of interest should round-trip")
+	// Test that default messages of interest round-trip correctly
+	result := toTags(toBytes(cloned))
+	require.Equal(t, cloned, result, "default messages of interest should round-trip")
 }

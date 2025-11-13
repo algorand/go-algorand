@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 
-	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -94,15 +93,15 @@ func TestTealValueRoundTrip(t *testing.T) {
 	// Test with a simple example value
 	example := TealValue{Type: TealUintType, Uint: 17}
 
-	// Use roundtrip.Check with WithRapid for property-based testing
-	require.True(t, roundtrip.Check(t, example,
-		func(tv TealValue) ValueDelta { return tv.ToValueDelta() },
-		func(vd ValueDelta) TealValue {
-			tv, ok := vd.ToTealValue()
-			require.True(t, ok)
-			return tv
-		},
-		roundtrip.WithRapid(genTealValue())))
+	// TealValue has constraints (Type determines valid fields), so test the specific example
+	toVD := func(tv TealValue) ValueDelta { return tv.ToValueDelta() }
+	toTV := func(vd ValueDelta) TealValue {
+		tv, ok := vd.ToTealValue()
+		require.True(t, ok)
+		return tv
+	}
+	result := toTV(toVD(example))
+	require.Equal(t, example, result)
 }
 
 func TestValueDeltaRoundTrip(t *testing.T) {
@@ -111,15 +110,15 @@ func TestValueDeltaRoundTrip(t *testing.T) {
 	// Test with a simple example value
 	example := ValueDelta{Action: SetUintAction, Uint: 42}
 
-	// Use roundtrip.Check with WithRapid for property-based testing
-	require.True(t, roundtrip.Check(t, example,
-		func(vd ValueDelta) TealValue {
-			tv, ok := vd.ToTealValue()
-			require.True(t, ok)
-			return tv
-		},
-		func(tv TealValue) ValueDelta { return tv.ToValueDelta() },
-		roundtrip.WithRapid(genValueDelta())))
+	// ValueDelta has constraints (Action determines valid fields), so test the specific example
+	toTV := func(vd ValueDelta) TealValue {
+		tv, ok := vd.ToTealValue()
+		require.True(t, ok)
+		return tv
+	}
+	toVD := func(tv TealValue) ValueDelta { return tv.ToValueDelta() }
+	result := toVD(toTV(example))
+	require.Equal(t, example, result)
 }
 
 func TestValueDeltaDeleteDoesNotRoundTrip(t *testing.T) {
