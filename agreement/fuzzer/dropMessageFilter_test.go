@@ -96,7 +96,7 @@ func (n *DropMessageFilter) Marshal() (bytes []byte, err error) {
 
 }
 
-// Unmarshall DropMessageFilter
+// Unmarshal DropMessageFilter
 func (n *DropMessageFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type dropMessageFilterJSON struct {
 		Name               string

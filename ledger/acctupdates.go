@@ -1212,7 +1212,7 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 	}
 }
 
-// lookupAllResources returns all the resources for a given address, solely based on what is persisted to disk. It does not
+// lookupAssetResources returns all the resources for a given address, solely based on what is persisted to disk. It does not
 // take into account any in-memory deltas; the round number returned is the latest round number that is known to the database.
 func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) (data []ledgercore.AssetResourceWithIDs, validThrough basics.Round, err error) {
 	// Look for resources on disk

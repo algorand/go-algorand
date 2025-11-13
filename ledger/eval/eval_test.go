@@ -857,7 +857,7 @@ func (ledger *evalTestLedger) GenesisProto() config.ConsensusParams {
 	return config.Consensus[ledger.genesisProtoVersion]
 }
 
-// GenesisProto returns the genesis consensus version for this ledger.
+// GenesisProtoVersion returns the genesis consensus version for this ledger.
 func (ledger *evalTestLedger) GenesisProtoVersion() protocol.ConsensusVersion {
 	return ledger.genesisProtoVersion
 }

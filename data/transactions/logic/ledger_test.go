@@ -245,7 +245,7 @@ func (l *Ledger) Rekey(addr basics.Address, auth basics.Address) {
 	}
 }
 
-// LatestTimestamp gives a uint64, chosen randomly.  It should
+// PrevTimestamp gives a uint64, chosen randomly.  It should
 // probably increase monotonically, but no tests care yet.
 func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)

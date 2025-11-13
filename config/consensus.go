@@ -539,11 +539,6 @@ type ConsensusParams struct {
 	// EnableBoxRefNameError specifies that box ref names should be validated early
 	EnableBoxRefNameError bool
 
-	// EnableUnnamedBoxAccessInNewApps allows newly created (in this group) apps to
-	// create boxes that were not named in a box ref. Each empty box ref in the
-	// group allows one such creation.
-	EnableUnnamedBoxAccessInNewApps bool
-
 	// ExcludeExpiredCirculation excludes expired stake from the total online stake
 	// used by agreement for Circulation, and updates the calculation of StateProofOnlineTotalWeight used
 	// by state proofs to use the same method (rather than excluding stake from the top N stakeholders as before).
@@ -572,17 +567,16 @@ type ConsensusParams struct {
 	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
 	EnableSha512BlockHash bool
 
-	// EnableInnerClawbackWithoutSenderHolding allows an inner clawback (axfer
-	// w/ AssetSender) even if the Sender holding of the asset is not
-	// available. This parameters can be removed and assumed true after the
-	// first consensus release in which it is set true.
-	EnableInnerClawbackWithoutSenderHolding bool
-
 	// AppSizeUpdates allows application update transactions to change
 	// the extra-program-pages and global schema sizes. Since it enables newly
 	// legal transactions, this parameter can be removed and assumed true after
 	// the first consensus release in which it is set true.
 	AppSizeUpdates bool
+
+	// AllowZeroLocalAppRef allows for a 0 in a LocalRef of the access list to
+	// specify the current app. This parameter can be removed and assumed true
+	// after the first consensus release in which it is set true.
+	AllowZeroLocalAppRef bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1444,13 +1438,10 @@ func initConsensusProtocols() {
 	v41.EnableAppVersioning = true
 	v41.EnableSha512BlockHash = true
 
-	v41.EnableUnnamedBoxAccessInNewApps = true
-
 	// txn.Access work
 	v41.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
 	v41.MaxAppAccess = 16           // Twice as many, though cross products are explicit
 	v41.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
-	v41.EnableInnerClawbackWithoutSenderHolding = true
 	v41.LogicSigMsig = false
 	v41.LogicSigLMsig = true
 
@@ -1469,6 +1460,7 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
 
 	vFuture.AppSizeUpdates = true
+	vFuture.AllowZeroLocalAppRef = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

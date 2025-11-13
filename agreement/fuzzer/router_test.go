@@ -78,7 +78,7 @@ func (r *Router) GetDownstreamFilter() DownstreamFilter {
 	return nil
 }
 
-// SendMessage routes messages sent to message received.
+// sendMessageToNode routes messages sent to message received.
 func (r *Router) sendMessageToNode(sourceNode, targetNode int, tag protocol.Tag, data []byte) {
 	upstreamFilter := r.getUpstreamFilter(targetNode)
 	if upstreamFilter == nil {

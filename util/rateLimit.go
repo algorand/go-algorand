@@ -59,7 +59,7 @@ type ErlClient interface {
 type capacity struct {
 }
 
-// Capacity Queue wraps and maintains a channel of opaque capacity structs
+// capacityQueue wraps and maintains a channel of opaque capacity structs
 type capacityQueue chan capacity
 
 // ErlCapacityGuard is the structure returned to clients so they can release the capacity when needed

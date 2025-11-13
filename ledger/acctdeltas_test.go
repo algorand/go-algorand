@@ -2156,7 +2156,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 	}
 }
 
-// TestAccountTopOnline ensures accountsOnlineTop return a right subset of accounts
+// TestAccountOnlineQueries ensures accountsOnlineTop return a right subset of accounts
 // from the history table.
 // Start with two online accounts A, B at round 1
 // At round 2 make A offline.

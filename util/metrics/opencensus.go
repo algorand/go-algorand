@@ -94,7 +94,7 @@ func (st *statCounter) AddMetric(values map[string]float64) {
 	counter.AddMetric(values)
 }
 
-// statCounter stores single float64 sun value per stat with labels
+// statDistribution stores single float64 sun value per stat with labels
 type statDistribution struct {
 	name        string
 	description string

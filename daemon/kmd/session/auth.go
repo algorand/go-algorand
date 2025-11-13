@@ -96,7 +96,7 @@ func generateHandleIDAndSecret() ([]byte, []byte, error) {
 	return hexID, hexSecret, nil
 }
 
-// cleanUpExpiredHandlesLocked periodically calls deleteExpiredHandles until
+// cleanUpExpiredHandles periodically calls deleteExpiredHandles until
 // sm.ctx is canceled.
 func (sm *Manager) cleanUpExpiredHandles() {
 	ticker := time.NewTicker(handleCleanupSeconds * time.Second)

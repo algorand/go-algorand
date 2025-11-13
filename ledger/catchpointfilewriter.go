@@ -483,7 +483,7 @@ type catchpointOnlineAccountsIterWrapper struct {
 	params                 config.ConsensusParams
 }
 
-// makeCatchpointOrderedOnlineAccountsIter wraps the MakeOrderedOnlineAccountsIter iterator to deterministically set
+// makeCatchpointOrderedOnlineAccountsIterFactory wraps the MakeOrderedOnlineAccountsIter iterator to deterministically set
 // the UpdateRound number to zero for online accounts beyond the "horizon" of online history of 320 rounds (defined by
 // MaxBalLookback).
 func makeCatchpointOrderedOnlineAccountsIterFactory(

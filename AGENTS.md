@@ -50,8 +50,6 @@ To verify that this wasn't missed, we run verification steps, which can be found
 ### Development Setup
 ```bash
 ./scripts/configure_dev.sh                    # Initial environment setup
-./scripts/buildtools/install_buildtools.sh   # Install build tools
-make deps                                     # Check/install dependencies
 ```
 
 ### Single Test Execution

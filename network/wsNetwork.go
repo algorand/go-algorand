@@ -440,7 +440,7 @@ func (wn *WebsocketNetwork) Disconnect(node DisconnectablePeer) {
 	wn.disconnect(node, disconnectBadData)
 }
 
-// Disconnect from a peer, probably due to protocol errors.
+// disconnect from a peer, probably due to protocol errors.
 func (wn *WebsocketNetwork) disconnect(badnode Peer, reason disconnectReason) {
 	if badnode == nil {
 		return
@@ -1081,7 +1081,7 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 	return http.StatusOK
 }
 
-// ServerHTTP handles the gossip network functions over websockets
+// ServeHTTP handles the gossip network functions over websockets
 func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if !wn.config.EnableGossipService {
 		response.WriteHeader(http.StatusNotFound)

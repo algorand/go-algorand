@@ -184,7 +184,7 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	require.True(t, drop)
 }
 
-// TestAppRateLimiter_IntervalFull checks the cur counter accounts only admitted requests
+// TestAppRateLimiter_IntervalAdmitted checks the cur counter accounts only admitted requests
 func TestAppRateLimiter_IntervalAdmitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

@@ -258,7 +258,7 @@ func TestVrfVerify(t *testing.T) {
 	testLogic(t, source, LogicVersion, ep)
 }
 
-// BenchMarkVerify is useful to see relative speeds of various crypto verify functions
+// BenchmarkVerify is useful to see relative speeds of various crypto verify functions
 func BenchmarkVerify(b *testing.B) {
 	benches := [][]string{
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},

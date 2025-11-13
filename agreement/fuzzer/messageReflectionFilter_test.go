@@ -192,7 +192,7 @@ func (n *MessageReflectionFilter) processUpstreamBuffer() bool {
 	return received
 }
 
-// Unmarshall MessageReflectionFilter
+// Unmarshal MessageReflectionFilter
 func (n *MessageReflectionFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type messageReflectionFilterJSON struct {
 		Name                 string

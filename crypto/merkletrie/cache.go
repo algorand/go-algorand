@@ -689,7 +689,7 @@ func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err erro
 	return nodesMap, nil
 }
 
-// decodePage encodes a page contents into a byte array
+// encodePage encodes a page contents into a byte array
 func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node, serializedBuffer []byte) []byte {
 	version := binary.PutUvarint(serializedBuffer[:], nodePageVersion)
 	length := binary.PutVarint(serializedBuffer[version:], int64(len(nodeIDs)))

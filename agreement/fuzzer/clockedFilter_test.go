@@ -86,7 +86,7 @@ func (n *ClockedFilter) Tick(newClockTime int) bool {
 	return n.upstream.Tick(int(n.localClock))
 }
 
-// Unmarshall ClockedFilter
+// Unmarshal ClockedFilter
 func (n *ClockedFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type clockedFilterJSON struct {
 		Name             string

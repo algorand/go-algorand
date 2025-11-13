@@ -289,7 +289,7 @@ func proposalUsefulForCredentialHistory(curRound round, vote unauthenticatedVote
 	return false
 }
 
-// voteFresh determines whether a proposal satisfies freshness rules.
+// proposalFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
 	switch vote.R.Round {
 	case freshData.PlayerRound:

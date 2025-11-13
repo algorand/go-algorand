@@ -141,7 +141,7 @@ func (i ledgerImpl) ConsensusParams(r basics.Round) (config.ConsensusParams, err
 	return i.l.ConsensusParams(r)
 }
 
-// ConsensusParams implements Ledger.ConsensusVersion.
+// ConsensusVersion implements Ledger.ConsensusVersion.
 func (i ledgerImpl) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, error) {
 	return i.l.ConsensusVersion(r)
 }

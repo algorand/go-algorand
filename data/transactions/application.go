@@ -66,7 +66,7 @@ const (
 // OnCompletion is an enum representing some layer 1 side effect that an
 // ApplicationCall transaction will have if it is included in a block.
 //
-//go:generate stringer -type=OnCompletion -output=application_string.go
+//go:generate go tool -modfile=../../tool.mod stringer -type=OnCompletion -output=application_string.go
 type OnCompletion uint64
 
 const (
@@ -210,7 +210,7 @@ func (rr ResourceRef) Empty() bool {
 // wellFormed checks that a ResourceRef is a proper member of `access. `rr` is
 // either empty a single kind of resource. Any internal indices point to proper
 // locations inside `access`.
-func (rr ResourceRef) wellFormed(access []ResourceRef, proto config.ConsensusParams) error {
+func (rr ResourceRef) wellFormed(access []ResourceRef, inCreate bool, proto config.ConsensusParams) error {
 	// Count the number of non-empty fields
 	count := 0
 	// The "basic" resources are inherently wellFormed
@@ -231,7 +231,13 @@ func (rr ResourceRef) wellFormed(access []ResourceRef, proto config.ConsensusPar
 		count++
 	}
 	if !rr.Locals.Empty() {
-		if _, _, err := rr.Locals.Resolve(access, basics.Address{}); err != nil {
+		if !proto.AllowZeroLocalAppRef && rr.Locals.App == 0 {
+			return errors.New("0 App in LocalsRef is not supported")
+		}
+		if inCreate && rr.Locals.App == 0 {
+			return errors.New("0 App in LocalsRef during app create is not allowed or necessary")
+		}
+		if _, _, err := rr.Locals.Resolve(access, basics.Address{}, 0); err != nil {
 			return err
 		}
 		count++
@@ -309,9 +315,9 @@ func (lr LocalsRef) Empty() bool {
 	return lr == LocalsRef{}
 }
 
-// Resolve looks up the referenced address and app in the access list. 0 is
-// returned if the App index is 0, meaning "current app".
-func (lr LocalsRef) Resolve(access []ResourceRef, sender basics.Address) (basics.Address, basics.AppIndex, error) {
+// Resolve looks up the referenced address and app in the access list. Zero
+// values are translated to the supplied sender or current app.
+func (lr LocalsRef) Resolve(access []ResourceRef, sender basics.Address, current basics.AppIndex) (basics.Address, basics.AppIndex, error) {
 	address := sender // Returned when lr.Address == 0
 	if lr.Address != 0 {
 		if lr.Address > uint64(len(access)) { // recall that Access is 1-based
@@ -322,12 +328,15 @@ func (lr LocalsRef) Resolve(access []ResourceRef, sender basics.Address) (basics
 			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d is not an Address", lr.Address)
 		}
 	}
-	if lr.App == 0 || lr.App > uint64(len(access)) { // 1-based
-		return basics.Address{}, 0, fmt.Errorf("locals App reference %d outside tx.Access", lr.App)
-	}
-	app := access[lr.App-1].App
-	if app == 0 {
-		return basics.Address{}, 0, fmt.Errorf("locals App reference %d is not an App", lr.App)
+	app := current // Returned when lr.App == 0
+	if lr.App != 0 {
+		if lr.App > uint64(len(access)) { // 1-based
+			return basics.Address{}, 0, fmt.Errorf("locals App reference %d outside tx.Access", lr.App)
+		}
+		app = access[lr.App-1].App
+		if app == 0 {
+			return basics.Address{}, 0, fmt.Errorf("locals App reference %d is not an App", lr.App)
+		}
 	}
 	return address, app, nil
 }
@@ -512,7 +521,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		}
 
 		for _, rr := range ac.Access {
-			if err := rr.wellFormed(ac.Access, proto); err != nil {
+			if err := rr.wellFormed(ac.Access, ac.ApplicationID == 0, proto); err != nil {
 				return err
 			}
 		}
