@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/eval/prefetcher"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/statecommit"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
@@ -1945,6 +1946,35 @@ func (eval *BlockEvaluator) suspendAbsentAccounts() error {
 	return nil
 }
 
+// updateCommitment computes the update commitment from the final state delta
+func (eval *BlockEvaluator) updateCommitment() (ledgercore.StateDelta, error) {
+	stateDelta := eval.state.deltas()
+
+	if !eval.proto.EnableUpdateTrie {
+		// If update trie is not enabled, the commitment field must be empty
+		if eval.validate {
+			if eval.block.UpdateCommitment != (crypto.Sha512Digest{}) {
+				return ledgercore.StateDelta{}, fmt.Errorf("update commitment must be empty")
+			}
+		}
+		return stateDelta, nil
+	}
+
+	updateHash := statecommit.StateDeltaCommitment(&stateDelta)
+
+	if eval.generate {
+		eval.block.UpdateCommitment = updateHash
+	}
+
+	if eval.validate {
+		if eval.block.UpdateCommitment != updateHash {
+			return ledgercore.StateDelta{}, fmt.Errorf("update commitment mismatch: expected %v, got %v", eval.block.UpdateCommitment, updateHash)
+		}
+	}
+
+	return stateDelta, nil
+}
+
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
 // used during proposal to get an actual block that will be proposed, after
 // feeding in tentative transactions into this block evaluator.
@@ -2188,6 +2218,12 @@ transactionGroupLoop:
 		return ledgercore.StateDelta{}, err
 	}
 
+	// Generate or validate the update commitment from the final state delta
+	stateDelta, err := eval.updateCommitment()
+	if err != nil {
+		return ledgercore.StateDelta{}, err
+	}
+
 	// If validating, do final block checks that depend on our new state
 	if validate {
 		// wait for the signature validation to complete.
@@ -2204,5 +2240,5 @@ transactionGroupLoop:
 		}
 	}
 
-	return eval.state.deltas(), nil
+	return stateDelta, nil
 }

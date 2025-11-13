@@ -51,6 +51,10 @@ type BlockHeader struct {
 	// TxnCommitments authenticates the set of transactions appearing in the block.
 	TxnCommitments
 
+	// UpdateCommitment is the root hash of the update trie for this block,
+	// committing to the sequence of state changes organized by transaction group.
+	UpdateCommitment crypto.Sha512Digest `codec:"uc"`
+
 	// TimeStamp in seconds since epoch
 	TimeStamp int64 `codec:"ts"`
 
