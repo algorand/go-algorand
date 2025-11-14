@@ -4095,6 +4095,25 @@
           "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256"
         }
       }
+    },
+    "ConnectedPeerStatus": {
+      "description": "The status of a connected peer in the P2P network",
+      "type": "object",
+      "required": ["network-address", "network-type", "connection-type"],
+      "properties": {
+        "network-address": {
+          "description": "Network address of the peer",
+          "type": "string"
+        },
+        "network-type": {
+          "description": "Network type",
+          "type": "string"
+        },
+        "connection-type": {
+          "description": "Connection type",
+          "type": "string"
+        }
+      }
     }
   },
   "parameters": {
