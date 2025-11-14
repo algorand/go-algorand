@@ -15,7 +15,6 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 //go:build linux && !(arm || 386)
-// +build linux,!arm,!386
 
 package util
 
