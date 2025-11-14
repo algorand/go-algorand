@@ -102,7 +102,7 @@ fix: build
 	$(GOBIN)/algofix */
 
 modernize:
-	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.39.0 -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
 
 lint:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.1 run -c .golangci.yml
@@ -149,7 +149,7 @@ api:
 logic:
 	make -C data/transactions/logic
 
-MSGP := go run github.com/algorand/msgp@v1.1.61
+MSGP := go run github.com/algorand/msgp@v1.1.62
 %/msgp_gen.go: ALWAYS
 		@set +e; \
 		printf "$(MSGP) $(@D)..."; \
