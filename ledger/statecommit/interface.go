@@ -24,6 +24,6 @@ import (
 type UpdateCommitter interface {
 	Add(key, val []byte) error
 	Delete(key []byte) error
-	Root() crypto.Sha512Digest
+	Root() (crypto.Sha512Digest, error)
 	Reset()
 }

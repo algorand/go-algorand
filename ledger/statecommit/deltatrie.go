@@ -25,9 +25,9 @@ import (
 
 // stateChange represents any type of state change that can be encoded into a trie update.
 // This interface abstracts over accounts, resources (assets/apps), and key-value pairs.
-type stateChange[T any] interface {
+type stateChange interface {
 	isDeleted() bool
-	getValue() *T
+	hasNewValue() bool
 	encodeKey() []byte
 	encodeValue() []byte
 }
@@ -38,13 +38,8 @@ type stateChange[T any] interface {
 //msgp:ignore accountUpdate
 type accountUpdate ledgercore.BalanceRecord
 
-func (u *accountUpdate) isDeleted() bool { return u.AccountData.IsZero() }
-func (u *accountUpdate) getValue() *ledgercore.AccountData {
-	if u.AccountData.IsZero() {
-		return nil
-	}
-	return &u.AccountData
-}
+func (u *accountUpdate) isDeleted() bool   { return u.AccountData.IsZero() }
+func (u *accountUpdate) hasNewValue() bool { return !u.AccountData.IsZero() }
 func (u *accountUpdate) encodeKey() []byte { return EncodeAccountKey(u.Addr) }
 func (u *accountUpdate) encodeValue() []byte {
 	// encode using codec tags on basics.AccountData
@@ -60,69 +55,66 @@ type kvUpdate struct {
 }
 
 func (u *kvUpdate) isDeleted() bool     { return u.delta.Data == nil }
-func (u *kvUpdate) getValue() *[]byte   { return &u.delta.Data }
+func (u *kvUpdate) hasNewValue() bool   { return u.delta.Data != nil }
 func (u *kvUpdate) encodeKey() []byte   { return EncodeKvPairKey(*u.key) }
 func (u *kvUpdate) encodeValue() []byte { return u.delta.Data } // XXX need to distinguish between nil and empty?
 
 //msgp:ignore assetHoldingUpdate
 type assetHoldingUpdate ledgercore.AssetResourceRecord
 
-func (u *assetHoldingUpdate) isDeleted() bool                { return u.Holding.Deleted }
-func (u *assetHoldingUpdate) getValue() *basics.AssetHolding { return u.Holding.Holding }
-func (u *assetHoldingUpdate) encodeKey() []byte              { return EncodeAssetHoldingKey(u.Addr, u.Aidx) }
-func (u *assetHoldingUpdate) encodeValue() []byte            { return protocol.Encode(u.Holding.Holding) }
+func (u *assetHoldingUpdate) isDeleted() bool     { return u.Holding.Deleted }
+func (u *assetHoldingUpdate) hasNewValue() bool   { return u.Holding.Holding != nil }
+func (u *assetHoldingUpdate) encodeKey() []byte   { return EncodeAssetHoldingKey(u.Addr, u.Aidx) }
+func (u *assetHoldingUpdate) encodeValue() []byte { return protocol.Encode(u.Holding.Holding) }
 
 //msgp:ignore assetParamsUpdate
 type assetParamsUpdate ledgercore.AssetResourceRecord
 
-func (u *assetParamsUpdate) isDeleted() bool               { return u.Params.Deleted }
-func (u *assetParamsUpdate) getValue() *basics.AssetParams { return u.Params.Params }
-func (u *assetParamsUpdate) encodeKey() []byte             { return EncodeAssetParamsKey(u.Addr, u.Aidx) }
-func (u *assetParamsUpdate) encodeValue() []byte           { return protocol.Encode(u.Params.Params) }
+func (u *assetParamsUpdate) isDeleted() bool     { return u.Params.Deleted }
+func (u *assetParamsUpdate) hasNewValue() bool   { return u.Params.Params != nil }
+func (u *assetParamsUpdate) encodeKey() []byte   { return EncodeAssetParamsKey(u.Addr, u.Aidx) }
+func (u *assetParamsUpdate) encodeValue() []byte { return protocol.Encode(u.Params.Params) }
 
 //msgp:ignore appLocalStateUpdate
 type appLocalStateUpdate ledgercore.AppResourceRecord
 
-func (u *appLocalStateUpdate) isDeleted() bool                 { return u.State.Deleted }
-func (u *appLocalStateUpdate) getValue() *basics.AppLocalState { return u.State.LocalState }
-func (u *appLocalStateUpdate) encodeKey() []byte               { return EncodeAppLocalStateKey(u.Addr, u.Aidx) }
-func (u *appLocalStateUpdate) encodeValue() []byte             { return protocol.Encode(u.State.LocalState) }
+func (u *appLocalStateUpdate) isDeleted() bool     { return u.State.Deleted }
+func (u *appLocalStateUpdate) hasNewValue() bool   { return u.State.LocalState != nil }
+func (u *appLocalStateUpdate) encodeKey() []byte   { return EncodeAppLocalStateKey(u.Addr, u.Aidx) }
+func (u *appLocalStateUpdate) encodeValue() []byte { return protocol.Encode(u.State.LocalState) }
 
 //msgp:ignore appParamsUpdate
 type appParamsUpdate ledgercore.AppResourceRecord
 
-func (u *appParamsUpdate) isDeleted() bool             { return u.Params.Deleted }
-func (u *appParamsUpdate) getValue() *basics.AppParams { return u.Params.Params }
-func (u *appParamsUpdate) encodeKey() []byte           { return EncodeAppParamsKey(u.Addr, u.Aidx) }
-func (u *appParamsUpdate) encodeValue() []byte         { return protocol.Encode(u.Params.Params) }
+func (u *appParamsUpdate) isDeleted() bool     { return u.Params.Deleted }
+func (u *appParamsUpdate) hasNewValue() bool   { return u.Params.Params != nil }
+func (u *appParamsUpdate) encodeKey() []byte   { return EncodeAppParamsKey(u.Addr, u.Aidx) }
+func (u *appParamsUpdate) encodeValue() []byte { return protocol.Encode(u.Params.Params) }
 
 // maybeCommitUpdate checks if an update has changes and adds it to the committer
-func maybeCommitUpdate[T any](update stateChange[T], committer UpdateCommitter) error {
-	// if there is no deletion or update, skip
-	if !update.isDeleted() && update.getValue() == nil {
-		return nil
-	}
-
-	key := update.encodeKey()
+func maybeCommitUpdate[T stateChange](update T, committer UpdateCommitter) error {
 	if update.isDeleted() {
-		return committer.Delete(key)
+		return committer.Delete(update.encodeKey())
 	}
-	return committer.Add(key, update.encodeValue())
+	if update.hasNewValue() {
+		return committer.Add(update.encodeKey(), update.encodeValue())
+	}
+	return nil
 }
 
 // StateDeltaCommitment computes a cryptographic commitment to all state changes in a StateDelta.
 // This is the primary function for converting ledger state changes into a state commitment.
-func StateDeltaCommitment(sd *ledgercore.StateDelta) crypto.Sha512Digest {
+func StateDeltaCommitment(sd *ledgercore.StateDelta) (crypto.Sha512Digest, error) {
 	return stateDeltaCommitmentWithCommitter(sd, newMerkleArrayCommitter())
 }
 
 // stateDeltaCommitmentWithCommitter computes a cryptographic commitment using the provided UpdateCommitter.
 // This allows flexibility in the commitment scheme used.
-func stateDeltaCommitmentWithCommitter(sd *ledgercore.StateDelta, committer UpdateCommitter) crypto.Sha512Digest {
+func stateDeltaCommitmentWithCommitter(sd *ledgercore.StateDelta, committer UpdateCommitter) (crypto.Sha512Digest, error) {
 	// Process base account data changes
 	for i := range sd.Accts.Accts {
 		if err := maybeCommitUpdate((*accountUpdate)(&sd.Accts.Accts[i]), committer); err != nil {
-			panic(err)
+			return crypto.Sha512Digest{}, err
 		}
 	}
 
@@ -130,10 +122,10 @@ func stateDeltaCommitmentWithCommitter(sd *ledgercore.StateDelta, committer Upda
 	for i := range sd.Accts.AssetResources {
 		rec := &sd.Accts.AssetResources[i]
 		if err := maybeCommitUpdate((*assetHoldingUpdate)(rec), committer); err != nil {
-			panic(err)
+			return crypto.Sha512Digest{}, err
 		}
 		if err := maybeCommitUpdate((*assetParamsUpdate)(rec), committer); err != nil {
-			panic(err)
+			return crypto.Sha512Digest{}, err
 		}
 	}
 
@@ -141,17 +133,17 @@ func stateDeltaCommitmentWithCommitter(sd *ledgercore.StateDelta, committer Upda
 	for i := range sd.Accts.AppResources {
 		rec := &sd.Accts.AppResources[i]
 		if err := maybeCommitUpdate((*appLocalStateUpdate)(rec), committer); err != nil {
-			panic(err)
+			return crypto.Sha512Digest{}, err
 		}
 		if err := maybeCommitUpdate((*appParamsUpdate)(rec), committer); err != nil {
-			panic(err)
+			return crypto.Sha512Digest{}, err
 		}
 	}
 
 	// Process KV modifications
 	for key, kvDelta := range sd.KvMods {
 		if err := maybeCommitUpdate(&kvUpdate{&key, &kvDelta}, committer); err != nil {
-			panic(err)
+			return crypto.Sha512Digest{}, err
 		}
 	}
 

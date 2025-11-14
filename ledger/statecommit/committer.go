@@ -17,6 +17,9 @@
 package statecommit
 
 import (
+	"bytes"
+	"slices"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
@@ -61,22 +64,25 @@ func (m *merkleArrayCommitter) Delete(key []byte) error {
 }
 
 // Root returns the Merkle root commitment of all updates
-func (m *merkleArrayCommitter) Root() crypto.Sha512Digest {
+func (m *merkleArrayCommitter) Root() (crypto.Sha512Digest, error) {
 	if len(m.updates) == 0 {
-		return crypto.Sha512Digest{}
+		return crypto.Sha512Digest{}, nil
 	}
+
+	// Sort updates by key to ensure deterministic commitment (KvMods is a map)
+	slices.SortFunc(m.updates, func(a, b stateUpdate) int { return bytes.Compare(a.Key, b.Key) })
 
 	array := &updateArray{updates: m.updates}
 	// not calling merklearray.BuildVectorCommitmentTree (we don't want proof of position in array)
 	tree, err := merklearray.Build(array, crypto.HashFactory{HashType: crypto.Sha512})
 	if err != nil {
-		panic(err)
+		return crypto.Sha512Digest{}, err
 	}
 
 	rootSlice := tree.Root().ToSlice()
 	var root crypto.Sha512Digest
 	copy(root[:], rootSlice)
-	return root
+	return root, nil
 }
 
 // Reset clears the committer state

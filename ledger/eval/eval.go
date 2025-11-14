@@ -1960,7 +1960,10 @@ func (eval *BlockEvaluator) updateCommitment() (ledgercore.StateDelta, error) {
 		return stateDelta, nil
 	}
 
-	updateHash := statecommit.StateDeltaCommitment(&stateDelta)
+	updateHash, err := statecommit.StateDeltaCommitment(&stateDelta)
+	if err != nil {
+		return ledgercore.StateDelta{}, fmt.Errorf("unable to compute update commitment: %w", err)
+	}
 
 	if eval.generate {
 		eval.block.UpdateCommitment = updateHash
@@ -2015,8 +2018,15 @@ func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledg
 		finalAccounts[participating[i]] = acct
 	}
 
-	vb := ledgercore.MakeUnfinishedBlock(eval.block, eval.state.deltas(), finalAccounts)
+	// Generate the update commitment from the final state delta
+	stateDelta, err := eval.updateCommitment()
+	if err != nil {
+		return nil, err
+	}
+
+	vb := ledgercore.MakeUnfinishedBlock(eval.block, stateDelta, finalAccounts)
 	eval.blockGenerated = true
+
 	proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
 	if !ok {
 		return nil, fmt.Errorf(
