@@ -213,7 +213,7 @@ return`
 	ledger, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
 	defer ledger.Close()
-	l := ledgerTestHelper{ledger, t}
+	l := ledgerTestBlockBuilder{ledger, t}
 
 	txHeader := transactions.Header{
 		Sender:      creator,
@@ -439,7 +439,7 @@ return`
 	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer ledger.Close()
-	l := ledgerTestHelper{ledger, t}
+	l := ledgerTestBlockBuilder{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -607,7 +607,7 @@ return`
 	stx1 := sign(initKeys, appCall1)
 	stx2 := sign(initKeys, appCall2)
 
-	blk = makeNewEmptyBlock(t, l.Ledger, genesisID, genesisInitState.Accounts)
+	blk = l.makeNewEmptyBlock(genesisID, genesisInitState.Accounts)
 	ad1 := transactions.ApplyData{
 		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk1": basics.ValueDelta{
@@ -683,7 +683,7 @@ return`
 	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer ledger.Close()
-	l := ledgerTestHelper{ledger, t}
+	l := ledgerTestBlockBuilder{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -761,7 +761,7 @@ return`
 	stx1 := sign(initKeys, appCall)
 	stx2 := sign(initKeys, payment)
 
-	blk := makeNewEmptyBlock(t, l.Ledger, genesisID, genesisInitState.Accounts)
+	blk := l.makeNewEmptyBlock(genesisID, genesisInitState.Accounts)
 	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{})
 	a.NoError(err)
 	txib2, err := blk.EncodeSignedTxn(stx2, transactions.ApplyData{ClosingAmount: balance})
@@ -838,7 +838,7 @@ return`
 	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer ledger.Close()
-	l := ledgerTestHelper{ledger, t}
+	l := ledgerTestBlockBuilder{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -895,7 +895,7 @@ return`
 	stx1 := sign(initKeys, appCall)
 	stx2 := sign(initKeys, payment)
 
-	blk := makeNewEmptyBlock(t, l.Ledger, genesisID, genesisInitState.Accounts)
+	blk := l.makeNewEmptyBlock(genesisID, genesisInitState.Accounts)
 	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 		GlobalDelta: basics.StateDelta{
 			"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"},
@@ -1035,7 +1035,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer ledger.Close()
-	l := ledgerTestHelper{ledger, t}
+	l := ledgerTestBlockBuilder{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1176,7 +1176,7 @@ int 1
 			ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 			a.NoError(err)
 			defer ledger.Close()
-			l := ledgerTestHelper{ledger, t}
+			l := ledgerTestBlockBuilder{ledger, t}
 
 			genesisID := t.Name()
 			txHeader := transactions.Header{
@@ -1304,7 +1304,7 @@ int 1
 	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
 	defer ledger.Close()
-	l := ledgerTestHelper{ledger, t}
+	l := ledgerTestBlockBuilder{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1386,7 +1386,7 @@ return
 	ledger1, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
 	a.NoError(err)
 	defer ledger1.Close()
-	l1 := ledgerTestHelper{ledger1, t}
+	l1 := ledgerTestBlockBuilder{ledger1, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1432,7 +1432,7 @@ return
 
 	// few empty blocks to reset deltas and flush
 	for i := 0; i < 10; i++ {
-		blk := makeNewEmptyBlock(t, l1.Ledger, genesisID, genesisInitState.Accounts)
+		blk := l1.makeNewEmptyBlock(genesisID, genesisInitState.Accounts)
 		l1.AddBlock(blk, agreement.Certificate{})
 	}
 
@@ -1448,7 +1448,7 @@ return
 	ledger2, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
 	a.NoError(err)
 	defer ledger2.Close()
-	l2 := ledgerTestHelper{ledger2, t}
+	l2 := ledgerTestBlockBuilder{ledger2, t}
 
 	app, err = l2.LookupApplication(l2.Latest(), creator, appIdx)
 	a.NoError(err)

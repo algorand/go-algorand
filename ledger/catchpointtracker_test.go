@@ -893,7 +893,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer ledger.Close()
-	l := ledgerTestHelper{ledger, t}
+	l := ledgerTestBlockBuilder{ledger, t}
 
 	writeStallingTracker := &blockingTracker{
 		postCommitUnlockedEntryLock:   make(chan struct{}),
