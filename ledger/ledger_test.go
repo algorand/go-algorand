@@ -90,7 +90,7 @@ func (h *ledgerTestBlockBuilder) appendUnvalidatedTx(t *testing.T, initAccounts 
 	return h.appendUnvalidatedSignedTx(t, initAccounts, stx, ad)
 }
 
-func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookkeeping.Block, proto config.ConsensusParams) {
+func (h *ledgerTestBlockBuilder) initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookkeeping.Block, proto config.ConsensusParams) {
 	if proto.TxnCounter {
 		correctHeader.TxnCounter = lastBlock.TxnCounter
 	}
@@ -110,7 +110,7 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 
 // endOfBlock is simplified implementation of BlockEvaluator.endOfBlock so that
 // our test blocks can pass validation.
-func endOfBlock(blk *bookkeeping.Block) error {
+func (h *ledgerTestBlockBuilder) endOfBlock(blk *bookkeeping.Block) error {
 	if blk.ConsensusProtocol().Payouts.Enabled {
 		// This won't work for inner fees, and it's not bothering with overflow
 		for _, txn := range blk.Payset {
@@ -177,7 +177,7 @@ func (h *ledgerTestBlockBuilder) makeNewEmptyBlock(GenesisID string, initAccount
 		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(GenesisID))
 	}
 
-	initNextBlockHeader(&blk.BlockHeader, lastBlock, proto)
+	h.initNextBlockHeader(&blk.BlockHeader, lastBlock, proto)
 
 	blk.RewardsPool = testPoolAddr
 	blk.FeeSink = testSinkAddr
@@ -208,7 +208,7 @@ func (h *ledgerTestBlockBuilder) appendUnvalidatedSignedTx(t *testing.T, initAcc
 	if proto.TxnCounter {
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
-	require.NoError(t, endOfBlock(&blk))
+	require.NoError(t, h.endOfBlock(&blk))
 	return h.appendUnvalidated(blk)
 }
 
@@ -310,7 +310,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 			correctHeader.Branch512 = lastBlock.Hash512()
 		}
 
-		initNextBlockHeader(&correctHeader, lastBlock, proto)
+		l.initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 		var badBlock bookkeeping.Block
 
@@ -1350,10 +1350,10 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				correctHeader.Branch512 = lastBlock.Hash512()
 			}
 
-			initNextBlockHeader(&correctHeader, lastBlock, proto)
+			l.initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
-			a.NoError(endOfBlock(&correctBlock))
+			a.NoError(l.endOfBlock(&correctBlock))
 
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 		}
