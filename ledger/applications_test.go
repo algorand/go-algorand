@@ -210,9 +210,10 @@ return`
 	}
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
+	ledger, err := OpenLedger(logging.Base(), "TestAppAccountData", true, genesisInitState, cfg)
 	a.NoError(err)
-	defer l.Close()
+	defer ledger.Close()
+	l := ledgerTestHelper{ledger, t}
 
 	txHeader := transactions.Header{
 		Sender:      creator,
@@ -266,7 +267,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB and write into local state
-	commitRound(3, 0, l)
+	commitRound(3, 0, l.Ledger)
 
 	appCallFields = transactions.ApplicationCallTxnFields{
 		OnCompletion:    0,
@@ -285,7 +286,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB
-	commitRound(1, 3, l)
+	commitRound(1, 3, l.Ledger)
 
 	// dump accounts
 	entryAcc, err := l.accts.accountsq.LookupAccount(creator)
@@ -435,9 +436,10 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
-	defer l.Close()
+	defer ledger.Close()
+	l := ledgerTestHelper{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -502,7 +504,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB and write into local state
-	commitRound(3, 0, l)
+	commitRound(3, 0, l.Ledger)
 
 	// check first write
 	blk, err := l.Block(2)
@@ -556,7 +558,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB
-	commitRound(2, 3, l)
+	commitRound(2, 3, l.Ledger)
 
 	// check first write
 	blk, err = l.Block(4)
@@ -605,7 +607,7 @@ return`
 	stx1 := sign(initKeys, appCall1)
 	stx2 := sign(initKeys, appCall2)
 
-	blk = makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	blk = makeNewEmptyBlock(t, l.Ledger, genesisID, genesisInitState.Accounts)
 	ad1 := transactions.ApplyData{
 		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{0: {"lk1": basics.ValueDelta{
@@ -678,9 +680,10 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
-	defer l.Close()
+	defer ledger.Close()
+	l := ledgerTestHelper{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -758,7 +761,7 @@ return`
 	stx1 := sign(initKeys, appCall)
 	stx2 := sign(initKeys, payment)
 
-	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	blk := makeNewEmptyBlock(t, l.Ledger, genesisID, genesisInitState.Accounts)
 	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{})
 	a.NoError(err)
 	txib2, err := blk.EncodeSignedTxn(stx2, transactions.ApplyData{ClosingAmount: balance})
@@ -774,7 +777,7 @@ return`
 	l.WaitForCommit(3)
 
 	// save data into DB and write into local state
-	commitRound(3, 0, l)
+	commitRound(3, 0, l.Ledger)
 
 	// check first write
 	blk, err = l.Block(2)
@@ -832,9 +835,10 @@ return`
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
-	defer l.Close()
+	defer ledger.Close()
+	l := ledgerTestHelper{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -891,7 +895,7 @@ return`
 	stx1 := sign(initKeys, appCall)
 	stx2 := sign(initKeys, payment)
 
-	blk := makeNewEmptyBlock(t, l, genesisID, genesisInitState.Accounts)
+	blk := makeNewEmptyBlock(t, l.Ledger, genesisID, genesisInitState.Accounts)
 	txib1, err := blk.EncodeSignedTxn(stx1, transactions.ApplyData{EvalDelta: transactions.EvalDelta{
 		GlobalDelta: basics.StateDelta{
 			"gk": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "global"},
@@ -909,7 +913,7 @@ return`
 	a.NoError(err)
 
 	// save data into DB and write into local state
-	commitRound(2, 0, l)
+	commitRound(2, 0, l.Ledger)
 
 	// check first write
 	blk, err = l.Block(1)
@@ -1028,9 +1032,10 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Contains(genesisInitState.Accounts, userLocal)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
-	defer l.Close()
+	defer ledger.Close()
+	l := ledgerTestHelper{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1091,7 +1096,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.NoError(err)
 
 	// save data into DB and write into local state
-	commitRound(2, 0, l)
+	commitRound(2, 0, l.Ledger)
 
 	// check first write
 	blk, err := l.Block(2)
@@ -1168,9 +1173,10 @@ int 1
 			a.Contains(genesisInitState.Accounts, userLocal)
 
 			cfg := config.GetDefaultLocal()
-			l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+			ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 			a.NoError(err)
-			defer l.Close()
+			defer ledger.Close()
+			l := ledgerTestHelper{ledger, t}
 
 			genesisID := t.Name()
 			txHeader := transactions.Header{
@@ -1202,7 +1208,7 @@ int 1
 			a.NoError(err)
 
 			if test.separateBlocks {
-				commitRound(1, 0, l)
+				commitRound(1, 0, l.Ledger)
 			}
 
 			// opt-in
@@ -1220,7 +1226,7 @@ int 1
 			a.NoError(err)
 
 			if test.separateBlocks {
-				commitRound(1, 1, l)
+				commitRound(1, 1, l.Ledger)
 			}
 
 			// run state write transaction
@@ -1255,9 +1261,9 @@ int 1
 			a.NoError(err)
 
 			if test.separateBlocks {
-				commitRound(1, 2, l)
+				commitRound(1, 2, l.Ledger)
 			} else {
-				commitRound(3, 0, l)
+				commitRound(3, 0, l.Ledger)
 			}
 
 			// check first write
@@ -1295,9 +1301,10 @@ int 1
 	a.Contains(genesisInitState.Accounts, funder)
 
 	cfg := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
+	ledger, err := OpenLedger(logging.Base(), t.Name(), true, genesisInitState, cfg)
 	a.NoError(err)
-	defer l.Close()
+	defer ledger.Close()
+	l := ledgerTestHelper{ledger, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1376,9 +1383,10 @@ return
 
 	cfg := config.GetDefaultLocal()
 	cfg.MaxAcctLookback = 2
-	l1, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
+	ledger1, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
 	a.NoError(err)
-	defer l1.Close()
+	defer ledger1.Close()
+	l1 := ledgerTestHelper{ledger1, t}
 
 	genesisID := t.Name()
 	txHeader := transactions.Header{
@@ -1424,7 +1432,7 @@ return
 
 	// few empty blocks to reset deltas and flush
 	for i := 0; i < 10; i++ {
-		blk := makeNewEmptyBlock(t, l1, genesisID, genesisInitState.Accounts)
+		blk := makeNewEmptyBlock(t, l1.Ledger, genesisID, genesisInitState.Accounts)
 		l1.AddBlock(blk, agreement.Certificate{})
 	}
 
@@ -1432,14 +1440,15 @@ return
 	a.NoError(err)
 	a.Greater(len(app.AppParams.ApprovalProgram), 0)
 
-	commitRound(10, 0, l1)
+	commitRound(10, 0, l1.Ledger)
 
 	// restart
 	l1.Close()
 
-	l2, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
+	ledger2, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
 	a.NoError(err)
-	defer l2.Close()
+	defer ledger2.Close()
+	l2 := ledgerTestHelper{ledger2, t}
 
 	app, err = l2.LookupApplication(l2.Latest(), creator, appIdx)
 	a.NoError(err)
