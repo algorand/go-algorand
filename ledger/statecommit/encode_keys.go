@@ -27,7 +27,7 @@ const (
 	keyPrefixAccount       byte = 'a'
 	keyPrefixAssetHolding  byte = 'h'
 	keyPrefixAssetParams   byte = 'p'
-	keyPrefixAppLocalState byte = 'S'
+	keyPrefixAppLocalState byte = 'L'
 	keyPrefixAppParams     byte = 'P'
 	keyPrefixKvPair        byte = 'k'
 )
