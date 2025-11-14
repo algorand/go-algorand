@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -138,6 +139,17 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID.Batch++ does not verify")
 	}
+}
+
+func TestHeartbeatProofRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	toOTS := func(h HeartbeatProof) OneTimeSignature { return h.ToOneTimeSignature() }
+	toProof := func(ots OneTimeSignature) HeartbeatProof { return ots.ToHeartbeatProof() }
+
+	// Test with an empty proof as example, NearZeros will test each field
+	var emptyProof HeartbeatProof
+	roundtrip.Check(t, emptyProof, toOTS, toProof)
 }
 
 func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
