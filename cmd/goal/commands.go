@@ -78,9 +78,6 @@ func init() {
 	// kmd.go
 	rootCmd.AddCommand(kmdCmd)
 
-	// logging.go
-	rootCmd.AddCommand(loggingCmd)
-
 	// network.go
 	rootCmd.AddCommand(networkCmd)
 
