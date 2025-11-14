@@ -39,7 +39,7 @@ func TestAccounts(t *testing.T) {
 			return true
 		}
 		stackTop := stack[len(stack)-1]
-		if path[len(path)-1].FieldName == "_struct" && stackTop == reflect.TypeOf(struct{}{}) {
+		if path[len(path)-1].FieldName == "_struct" && stackTop == reflect.TypeFor[struct{}]() {
 			// Ignore the informational _struct field
 			return true
 		}
