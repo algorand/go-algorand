@@ -4242,6 +4242,7 @@
             }
           }
         }
+      }
     },
     "GetBlockTimeStampOffsetResponse": {
       "description": "Response containing the timestamp offset in seconds",
