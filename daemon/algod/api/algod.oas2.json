@@ -4107,11 +4107,13 @@
         },
         "network-type": {
           "description": "Network type",
-          "type": "string"
+          "type": "string",
+          "enum": ["p2p", "ws"]
         },
         "connection-type": {
           "description": "Connection type",
-          "type": "string"
+          "type": "string",
+          "enum": ["inbound", "outbound"]
         }
       }
     }
