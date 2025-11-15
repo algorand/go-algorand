@@ -4096,7 +4096,7 @@
         }
       }
     },
-    "ConnectedPeerStatus": {
+    "PeerStatus": {
       "description": "The status of a connected peer in the P2P network",
       "type": "object",
       "required": ["network-address", "network-type", "connection-type"],
@@ -4215,6 +4215,20 @@
     }
   },
   "responses": {
+    "GetPeersResponse": {
+      "description": "Response containing the network peers of the node",
+      "schema": {
+        "type": "object",
+        "required": ["Peers"],
+        "properties": {
+          "Peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/PeerStatus"
+            }
+          }
+        }
+    },
     "GetBlockTimeStampOffsetResponse": {
       "description": "Response containing the timestamp offset in seconds",
       "schema": {
