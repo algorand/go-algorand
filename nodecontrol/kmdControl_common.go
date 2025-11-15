@@ -15,7 +15,6 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 //go:build !windows
-// +build !windows
 
 package nodecontrol
 
