@@ -1021,6 +1021,20 @@
         }
       ]
     },
+    "/v2/peers": {
+      "get": {
+        "description": "Get information about connected peers.",
+        "tags": ["private"],
+        "produces": ["application/json"],
+        "schemes": ["http"],
+        "operationId": "GetPeers",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/GetPeersResponse"
+          }
+        }
+      }
+    },
     "/v2/shutdown": {
       "post": {
         "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
