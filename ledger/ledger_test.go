@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -155,7 +156,7 @@ func (h *ledgerTestBlockBuilder) makeNewEmptyBlock(GenesisID string, initAccount
 		Round:  l.Latest() + 1,
 		Branch: lastBlock.Hash(),
 		// Seed:       does not matter,
-		TimeStamp:    0,
+		TimeStamp:    lastBlock.TimeStamp + 1, // Set timestamp to ensure deterministic tests (like simple_test.go:nextBlock)
 		GenesisID:    GenesisID,
 		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
@@ -197,38 +198,63 @@ func (h *ledgerTestBlockBuilder) makeNewEmptyBlock(GenesisID string, initAccount
 	return
 }
 
-func (h *ledgerTestBlockBuilder) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
-	blk := h.makeNewEmptyBlock(t.Name(), initAccounts)
-	proto := config.Consensus[blk.CurrentProtocol]
-	txib, err := blk.EncodeSignedTxn(stx, ad)
+// evaluatorToBlock converts a BlockEvaluator to a validated block and adds it to the ledger.
+// This follows the pattern from simple_test.go:endBlock() - generates the block, sets the proposer,
+// re-validates without signature checks, and adds to the ledger.
+func (h *ledgerTestBlockBuilder) evaluatorToBlock(t testing.TB, eval *eval.BlockEvaluator) error {
+	l := h.Ledger
+
+	// Generate the block using real BlockEvaluator (following simple_test.go:endBlock pattern)
+	ub, err := eval.GenerateBlock(nil)
 	if err != nil {
-		return fmt.Errorf("could not sign txn: %s", err.Error())
+		return err
 	}
-	blk.Payset = append(blk.Payset, txib)
-	if proto.TxnCounter {
-		blk.TxnCounter = blk.TxnCounter + 1
+
+	// Create a ValidatedBlock from UnfinishedBlock and deltas
+	validatedBlock := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
+	gvb := &validatedBlock
+
+	// Set proposer (use feesink as proposer to minimize test disruption)
+	prp := gvb.Block().BlockHeader.FeeSink
+	if l.GenesisProto().Payouts.Enabled {
+		*gvb = ledgercore.MakeValidatedBlock(gvb.Block().WithProposer(committee.Seed(prp), prp, true), gvb.Delta())
+	} else {
+		*gvb = ledgercore.MakeValidatedBlock(gvb.Block().WithProposer(committee.Seed(prp), basics.Address{}, false), gvb.Delta())
 	}
-	require.NoError(t, h.endOfBlock(&blk))
-	return h.appendUnvalidated(blk)
+
+	// Re-validate without signature checks (like simple_test.go does)
+	vvb, err := validateWithoutSignatures(t, l, gvb.Block())
+	if err != nil {
+		return err
+	}
+
+	return l.AddValidatedBlock(*vvb, agreement.Certificate{})
+}
+
+func (h *ledgerTestBlockBuilder) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
+	l := h.Ledger
+
+	eval := nextBlock(t, l)
+	err := eval.Transaction(stx, ad)
+	if err != nil {
+		return err
+	}
+
+	return h.evaluatorToBlock(t, eval)
 }
 
 func (h *ledgerTestBlockBuilder) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
-	blk := h.makeNewEmptyBlock(t.Name(), accounts)
-	proto := config.Consensus[blk.CurrentProtocol]
+	l := h.Ledger
+
+	eval := nextBlock(t, l)
 	for _, stx := range stxns {
-		txib, err := blk.EncodeSignedTxn(stx, ad)
+		err := eval.Transaction(stx, ad)
 		if err != nil {
-			return fmt.Errorf("could not sign txn: %s", err.Error())
+			return err
 		}
-		if proto.TxnCounter {
-			blk.TxnCounter = blk.TxnCounter + 1
-		}
-		blk.Payset = append(blk.Payset, txib)
 	}
-	var err error
-	blk.TxnCommitments, err = blk.PaysetCommit()
-	require.NoError(t, err)
-	return h.Ledger.AddBlock(blk, agreement.Certificate{})
+
+	return h.evaluatorToBlock(t, eval)
 }
 
 func testLedgerBasic(t *testing.T, cfg config.Local) {
@@ -803,16 +829,10 @@ func TestLedgerSingleTxV24(t *testing.T) {
 func (h *ledgerTestBlockBuilder) addEmptyValidatedBlock(initAccounts map[basics.Address]basics.AccountData) {
 	t := h.t
 	l := h.Ledger
-	a := require.New(t)
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
-	blk := h.makeNewEmptyBlock(t.Name(), initAccounts)
-	vb, err := l.Validate(context.Background(), blk, backlogPool)
-	a.NoError(err)
-	err = l.AddValidatedBlock(*vb, agreement.Certificate{})
-	a.NoError(err)
+	eval := nextBlock(t, l)
+	err := h.evaluatorToBlock(t, eval)
+	require.NoError(t, err)
 }
 
 // TestLedgerAppCrossRoundWrites ensures app state writes survive between rounds
@@ -1793,6 +1813,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 
 func (h *ledgerTestBlockBuilder) createBlkWithStateproof(maxBlocks int, proto config.ConsensusParams, genesisInitState ledgercore.InitState, accounts map[basics.Address]basics.AccountData) bookkeeping.Block {
 	t := h.t
+
 	sp := stateproof.StateProof{SignedWeight: 5000000000000000}
 	var stxn transactions.SignedTxn
 	stxn.Txn.Type = protocol.StateProofTx
@@ -1804,6 +1825,7 @@ func (h *ledgerTestBlockBuilder) createBlkWithStateproof(maxBlocks int, proto co
 	stxn.Txn.Message.LastAttestedRound = 512
 	stxn.Txn.StateProof = sp
 
+	// Use old fake method to create invalid state proof blocks for testing validation
 	blk := h.makeNewEmptyBlock(t.Name(), accounts)
 	proto = config.Consensus[blk.CurrentProtocol]
 	for _, stx := range []transactions.SignedTxn{stxn} {
@@ -1818,6 +1840,7 @@ func (h *ledgerTestBlockBuilder) createBlkWithStateproof(maxBlocks int, proto co
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
+
 	return blk
 }
 
