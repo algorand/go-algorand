@@ -893,7 +893,6 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer ledger.Close()
-	l := ledgerTestBlockBuilder{ledger, t}
 
 	writeStallingTracker := &blockingTracker{
 		postCommitUnlockedEntryLock:   make(chan struct{}),
@@ -910,13 +909,13 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	// Create the first `cfg.MaxAcctLookback` blocks for which account updates tracker
 	// will skip committing.
 	for rnd := ledger.Latest() + 1; rnd <= basics.Round(cfg.MaxAcctLookback); rnd++ {
-		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
 	}
 
 	// make sure to get to a first stage catchpoint round, and block the writing there.
 	for {
-		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
 		if (uint64(ledger.Latest())+protoParams.CatchpointLookback)%
 			cfg.CatchpointInterval == 0 {
@@ -933,7 +932,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	}
 
 	// write additional block, so that the block queue would trigger that too
-	err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+	err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
@@ -965,7 +964,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 
 	// make sure to get to a first stage catchpoint round, and block the writing there.
 	for {
-		err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+		err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 		require.NoError(t, err)
 		if (uint64(ledger.Latest())+protoParams.CatchpointLookback)%
 			cfg.CatchpointInterval == 0 {
@@ -975,7 +974,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 		}
 	}
 	// write additional block, so that the block queue would trigger that too
-	err = l.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
+	err = ledger.addBlockTxns(t, genesisInitState.Accounts, []transactions.SignedTxn{}, transactions.ApplyData{})
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
