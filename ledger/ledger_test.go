@@ -191,10 +191,10 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	return
 }
 
-// appendInvalidTxn adds an invalid transaction using the old fake block method that bypasses BlockEvaluator.
+// appendInvalidSignedTx adds an invalid transaction using the old fake block method that bypasses BlockEvaluator.
 // This allows the test to construct blocks with intentionally invalid transactions.
 // The transaction validity is then checked by the final Validate() call, which will return an error for invalid txns.
-func (l *Ledger) appendInvalidTxn(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
+func (l *Ledger) appendInvalidSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
 	blk := makeNewEmptyBlock(t, l, t.Name(), initAccounts)
 	proto := config.Consensus[blk.CurrentProtocol]
 	txib, err := blk.EncodeSignedTxn(stx, ad)
@@ -207,6 +207,11 @@ func (l *Ledger) appendInvalidTxn(t *testing.T, initAccounts map[basics.Address]
 	}
 	require.NoError(t, endOfBlock(&blk))
 	return l.appendUnvalidated(blk)
+}
+
+func (l *Ledger) appendInvalidTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, initSecrets map[basics.Address]*crypto.SignatureSecrets, tx transactions.Transaction, ad transactions.ApplyData) error {
+	stx := sign(initSecrets, tx)
+	return l.appendInvalidSignedTx(t, initAccounts, stx, ad)
 }
 
 // addBlockTxnsInvalid adds multiple potentially invalid transactions using the old fake block method.
@@ -231,7 +236,12 @@ func (l *Ledger) addBlockTxnsInvalid(t *testing.T, accounts map[basics.Address]b
 }
 
 func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
-	return l.addBlockTxns(t, initAccounts, []transactions.SignedTxn{stx}, ad)
+	eval := nextBlock(t, l)
+	err := eval.Transaction(stx, ad)
+	if err != nil {
+		return err
+	}
+	return l.evaluatorToBlock(t, eval)
 }
 
 func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
@@ -633,12 +643,12 @@ func TestLedgerSingleTx(t *testing.T) {
 	badTx = correctPay
 	sbadTx := sign(initSecrets, badTx)
 	sbadTx.Sig = crypto.Signature{}
-	a.Error(l.appendInvalidTxn(t, initAccounts, sbadTx, ad), "added tx with no signature")
+	a.Error(l.appendInvalidSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
 
 	badTx = correctPay
 	sbadTx = sign(initSecrets, badTx)
 	sbadTx.Sig[5]++
-	a.Error(l.appendInvalidTxn(t, initAccounts, sbadTx, ad), "added tx with corrupt signature")
+	a.Error(l.appendInvalidSignedTx(t, initAccounts, sbadTx, ad), "added tx with corrupt signature")
 
 	// TODO set multisig and test
 
@@ -1280,11 +1290,11 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
+	a.Error(l.appendInvalidTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee - 1}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with fee below minimum")
+	a.Error(l.appendInvalidTx(t, initAccounts, initSecrets, badTx, ad), "added tx with fee below minimum")
 
 	badTx = correctKeyreg
 	fee, overflow := basics.OAddA(initAccounts[badTx.Sender].MicroAlgos, basics.MicroAlgos{Raw: 1})
@@ -1297,7 +1307,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	badTx = correctPay
 	sbadTx := sign(initSecrets, badTx)
 	sbadTx.Sig = crypto.Signature{}
-	a.Error(l.appendInvalidTxn(t, initAccounts, sbadTx, ad), "added tx with no signature")
+	a.Error(l.appendInvalidSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
 
 	badTx = correctPay
 	remainder, overflow := basics.OSubA(initAccounts[badTx.Sender].MicroAlgos, badTx.Amount)
@@ -1318,8 +1328,8 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	adCloseWrong.ClosingAmount.Raw++
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not add payment transaction")
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), "closed transaction with wrong ApplyData")
-	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adClose), "could not add close transaction")
+	a.Error(l.appendInvalidTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), "closed transaction with wrong ApplyData")
+	a.NoError(l.appendInvalidTx(t, initAccounts, initSecrets, correctClose, adClose), "could not add close transaction")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "could not add key registration")
 
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
@@ -1359,7 +1369,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				Round:  l.Latest() + 1,
 				Branch: lastBlock.Hash(),
 				// Seed:       does not matter,
-				TimeStamp:    0,
+				TimeStamp:    lastBlock.TimeStamp + 1,
 				GenesisID:    t.Name(),
 				Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
 				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),

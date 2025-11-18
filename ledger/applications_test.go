@@ -1073,7 +1073,7 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCallFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
+	err = l.appendInvalidTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{
 		EvalDelta: transactions.EvalDelta{
 			LocalDeltas: map[uint64]basics.StateDelta{
 				accountIdx: {
