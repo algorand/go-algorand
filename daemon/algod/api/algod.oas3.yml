@@ -523,6 +523,27 @@
         },
         "description": "Response containing the timestamp offset in seconds"
       },
+      "GetPeersResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "Peers": {
+                  "items": {
+                    "$ref": "#/components/schemas/PeerStatus"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "Peers"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the network peers of the node"
+      },
       "GetSyncRoundResponse": {
         "content": {
           "application/json": {
@@ -2224,6 +2245,37 @@
           "address",
           "id",
           "key"
+        ],
+        "type": "object"
+      },
+      "PeerStatus": {
+        "description": "The status of a connected peer in the P2P network",
+        "properties": {
+          "connection-type": {
+            "description": "Connection type",
+            "enum": [
+              "inbound",
+              "outbound"
+            ],
+            "type": "string"
+          },
+          "network-address": {
+            "description": "Network address of the peer",
+            "type": "string"
+          },
+          "network-type": {
+            "description": "Network type",
+            "enum": [
+              "p2p",
+              "ws"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection-type",
+          "network-address",
+          "network-type"
         ],
         "type": "object"
       },
@@ -6284,6 +6336,38 @@
           "participating"
         ],
         "x-codegen-request-body-name": "keymap"
+      }
+    },
+    "/v2/peers": {
+      "get": {
+        "description": "Get information about connected peers.",
+        "operationId": "GetPeers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "Peers": {
+                      "items": {
+                        "$ref": "#/components/schemas/PeerStatus"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "Peers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the network peers of the node"
+          }
+        },
+        "tags": [
+          "private"
+        ]
       }
     },
     "/v2/shutdown": {
