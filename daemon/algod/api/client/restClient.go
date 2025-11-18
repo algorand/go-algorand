@@ -278,6 +278,12 @@ func (client RestClient) post(response interface{}, path string, params interfac
 	return client.submitForm(response, path, params, body, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
+// GetPeers retrieves the node's peers.
+func (client RestClient) GetPeers() (response model.GetPeersResponse, err error) {
+	err = client.get(&response, "/v2/peers", nil)
+	return
+}
+
 // Status retrieves the StatusResponse from the running node
 // the StatusResponse includes data like the consensus version and current round
 // Not supported

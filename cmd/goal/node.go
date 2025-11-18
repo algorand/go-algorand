@@ -77,6 +77,7 @@ func init() {
 	nodeCmd.AddCommand(waitCmd)
 	nodeCmd.AddCommand(createCmd)
 	nodeCmd.AddCommand(catchupCmd)
+	nodeCmd.AddCommand(peersCmd)
 	// Once the server-side implementation of the shutdown command is ready, we should enable this one.
 	//nodeCmd.AddCommand(shutdownCmd)
 	nodeCmd.AddCommand(p2pID)
@@ -413,6 +414,31 @@ var generateTokenCmd = &cobra.Command{
 			reportInfof(infoNodeWroteToken, apiToken)
 		})
 	},
+}
+
+var peersCmd = &cobra.Command{
+	Use:   "peers",
+	Short: "Get peers",
+	Long:  `Show the Algorand node's current peers`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		datadir.OnDataDirs(getPeers)
+	},
+}
+
+func getPeers(dataDir string) {
+
+	client := ensureAlgodClient(dataDir)
+	response, err := client.GetPeers()
+	if err != nil {
+		reportErrorf(errorNodePeers, err)
+	}
+
+	fmt.Printf("CONN TYPE\tNETWORK\tADDRESS\n")
+	for _, peer := range response.Peers {
+		fmt.Printf("%s\t%s\t%s\n", peer.ConnectionType, peer.NetworkType, peer.NetworkAddress)
+	}
+
 }
 
 var statusCmd = &cobra.Command{
