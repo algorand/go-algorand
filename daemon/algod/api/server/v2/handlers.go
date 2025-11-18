@@ -975,7 +975,7 @@ func (v2 *Handlers) GetPeers(ctx echo.Context) error {
 
 func appendPeers(response []model.PeerStatus, peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
 	for _, p := range peers {
-		if wsPeer, validUPeer := p.(network.HTTPPeer); validUPeer {
+		if wsPeer, ok := p.(network.HTTPPeer); ok {
 			addr := wsPeer.GetAddress()
 			network := model.PeerStatusNetworkTypeWs
 			if len(addr) > 0 && addr[0] == '/' {
@@ -986,19 +986,17 @@ func appendPeers(response []model.PeerStatus, peers []network.Peer, connType mod
 				NetworkType:    network,
 				ConnectionType: connType,
 			})
-		} else {
-			if wsPeer, validUPeer := p.(network.UnicastPeer); validUPeer {
-				addr := wsPeer.GetAddress()
-				network := model.PeerStatusNetworkTypeWs
-				if len(addr) > 0 && addr[0] == '/' {
-					network = model.PeerStatusNetworkTypeP2p
-				}
-				response = append(response, model.PeerStatus{
-					NetworkAddress: addr,
-					NetworkType:    network,
-					ConnectionType: connType,
-				})
+		} else if wsPeer, ok := p.(network.UnicastPeer); ok {
+			addr := wsPeer.GetAddress()
+			network := model.PeerStatusNetworkTypeWs
+			if len(addr) > 0 && addr[0] == '/' {
+				network = model.PeerStatusNetworkTypeP2p
 			}
+			response = append(response, model.PeerStatus{
+				NetworkAddress: addr,
+				NetworkType:    network,
+				ConnectionType: connType,
+			})
 		}
 	}
 	return response
