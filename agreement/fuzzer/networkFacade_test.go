@@ -269,9 +269,18 @@ func (n *NetworkFacade) RegisterHandlers(dispatch []network.TaggedMessageHandler
 	n.mux.RegisterHandlers(dispatch)
 }
 
+func (n *NetworkFacade) RegisterValidatorHandlers(dispatch []network.TaggedMessageValidatorHandler) {
+	// n.mux.RegisterValidatorHandlers(dispatch)
+}
+
 // ClearHandlers
 func (n *NetworkFacade) ClearHandlers() {
 	n.mux.ClearHandlers([]network.Tag{})
+}
+
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (n *NetworkFacade) ClearValidatorHandlers() {
+	// n.mux.ClearValidatorHandlers([]network.Tag{})
 }
 
 // SetDownstreamFilter sets the downstream filter.
