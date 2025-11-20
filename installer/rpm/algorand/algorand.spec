@@ -77,7 +77,6 @@ fi
 /usr/bin/algod
 /usr/bin/algoh
 /usr/bin/algokey
-/usr/bin/ddconfig.sh
 /usr/bin/diagcfg
 /usr/bin/goal
 /usr/bin/kmd
