@@ -17,8 +17,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
@@ -29,6 +31,9 @@ import (
 )
 
 func main() {
+	fmt.Println("tealdbg is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+	time.Sleep(3 * time.Second)
+
 	// Hidden command to generate docs in a given directory
 	// tealdbg generate-docs [path]
 	if len(os.Args) == 3 && os.Args[1] == "generate-docs" {
