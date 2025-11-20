@@ -492,7 +492,7 @@ function run_systemd_action() {
 function backup_binaries() {
     echo "Backing up current binary files..."
     mkdir -p "${BINDIR}/backup"
-    BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
+    BACKUPFILES="algod kmd goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
     [ -f "${BINDIR}/node_exporter" ] && BACKUPFILES="${BACKUPFILES} node_exporter"
     # If we have algotmpl, we should back it up too
