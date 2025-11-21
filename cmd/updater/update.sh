@@ -691,6 +691,16 @@ function apply_fixups() {
     # Delete obsolete algorand binary - renamed to 'goal'
     rm "${BINDIR}/algorand" >/dev/null 2>&1
 
+    # Delete obsolete binaries removed in go-algorand
+    rm "${BINDIR}/carpenter" >/dev/null 2>&1
+    rm "${BINDIR}/catchupsrv" >/dev/null 2>&1
+    rm "${BINDIR}/doberman" >/dev/null 2>&1
+    rm "${BINDIR}/ddconfig.sh" >/dev/null 2>&1
+    rm "${BINDIR}/tealcut" >/dev/null 2>&1
+    rm "${BINDIR}/cc_service" >/dev/null 2>&1
+    rm "${BINDIR}/cc_agent" >/dev/null 2>&1
+    rm "${BINDIR}/cc_client" >/dev/null 2>&1
+
     for DD in ${DATADIRS[@]}; do
         clean_legacy_logs "${DD}"
 
