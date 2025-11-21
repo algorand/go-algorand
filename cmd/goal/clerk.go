@@ -1159,6 +1159,8 @@ var dryrunCmd = &cobra.Command{
 	Short: "Test a program offline",
 	Long:  "Test a TEAL program offline under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("goal clerk dryrun is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
 		stxns := decodeTxnsFromFile(txFilename)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
@@ -1220,6 +1222,8 @@ var dryrunRemoteCmd = &cobra.Command{
 	Short: "Test a program with algod's dryrun REST endpoint",
 	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("goal clerk dryrun-remote is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
