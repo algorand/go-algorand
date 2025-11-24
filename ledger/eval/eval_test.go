@@ -327,12 +327,13 @@ int 1`,
 			}
 
 			// a non-app call txn
+			payAmount := basics.MicroAlgos{Raw: 1_000_000}
 			payTxn := txntest.Txn{
 				Type:             protocol.PaymentTx,
 				Sender:           addrs[1],
 				Receiver:         addrs[2],
 				CloseRemainderTo: addrs[3],
-				Amount:           1_000_000,
+				Amount:           payAmount,
 
 				FirstValid:  newBlock.Round(),
 				LastValid:   newBlock.Round() + 1000,
@@ -427,9 +428,9 @@ int 1`,
 			}
 			expectedPayTxnAD :=
 				transactions.ApplyData{
-					ClosingAmount: basics.MicroAlgos{
-						Raw: balances[payTxn.Sender].MicroAlgos.Raw - payTxn.Amount - txgroup[1].Txn.Fee.Raw,
-					},
+					ClosingAmount: balances[payTxn.Sender].MicroAlgos.
+						SubSaturate(payAmount).
+						SubSaturate(txgroup[1].Txn.Fee),
 				}
 
 			expectedFeeSinkData := ledgercore.ToAccountData(balances[testSinkAddr])
@@ -489,7 +490,7 @@ int 1`,
 
 				expectedAcct1Data := ledgercore.AccountData{}
 				expectedAcct2Data := ledgercore.ToAccountData(balances[addrs[2]])
-				expectedAcct2Data.MicroAlgos.Raw += payTxn.Amount
+				expectedAcct2Data.MicroAlgos.Raw += payAmount.Raw
 				expectedAcct3Data := ledgercore.ToAccountData(balances[addrs[3]])
 				expectedAcct3Data.MicroAlgos.Raw += expectedPayTxnAD.ClosingAmount.Raw
 				expectedFeeSinkData.MicroAlgos.Raw += txgroup[1].Txn.Fee.Raw
@@ -1626,4 +1627,31 @@ func TestIsAbsent(t *testing.T) {
 	// not absent if never seen
 	a.False(absent(1000, 10, 0, 2001))
 	a.True(absent(1000, 10, 1, 2002))
+}
+
+func TestComputeLoad(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tests := []struct {
+		blockSize int
+		maxSize   int
+		expected  basics.Micros
+	}{
+		{0, 1000, 0},
+		{250, 1000, 250_000},
+		{500, 1000, 500_000},
+		{750, 1000, 750_000},
+		{1000, 1000, 1_000_000},
+		{1500, 1000, 1_000_000}, // overfull capped at max
+		{1, 10, 100_000},
+		{50000, 100000, 500_000},
+		{1, 1000000, 1},
+		{999, 1000, 999_000},
+	}
+
+	for _, tt := range tests {
+		result := ComputeLoad(tt.blockSize, tt.maxSize)
+		require.Equal(t, tt.expected, result)
+	}
 }

@@ -154,6 +154,8 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// UpgradeVote: empty,
+		CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
+		Load:          0, // Begins empty
 	}
 
 	if proto.Payouts.Enabled {
@@ -201,6 +203,9 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	if proto.TxnCounter {
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
+	if proto.CongestionTracking {
+		blk.Load = eval.ComputeLoad(txib.GetEncodedLength(), proto.MaxTxnBytesPerBlock)
+	}
 	require.NoError(t, endOfBlock(&blk))
 	return l.appendUnvalidated(blk)
 }
@@ -208,15 +213,20 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
 	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
 	proto := config.Consensus[blk.CurrentProtocol]
+	blkSize := 0
 	for _, stx := range stxns {
 		txib, err := blk.EncodeSignedTxn(stx, ad)
 		if err != nil {
 			return fmt.Errorf("could not sign txn: %s", err.Error())
 		}
-		if proto.TxnCounter {
-			blk.TxnCounter = blk.TxnCounter + 1
-		}
+		blkSize += txib.GetEncodedLength()
 		blk.Payset = append(blk.Payset, txib)
+	}
+	if proto.TxnCounter {
+		blk.TxnCounter += uint64(len(stxns))
+	}
+	if proto.CongestionTracking {
+		blk.Load = eval.ComputeLoad(blkSize, proto.MaxTxnBytesPerBlock)
 	}
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -281,6 +291,7 @@ func TestLedgerBlockHeaders(t *testing.T) {
 			RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 			UpgradeState: lastBlock.UpgradeState,
 			// UpgradeVote: empty,
+			CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
 		}
 		if proto.Payouts.Enabled {
 			correctHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
@@ -568,7 +579,7 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send with zero fee")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee - 1}
@@ -1324,6 +1335,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
 				// UpgradeVote: empty,
+				CongestionTax: bookkeeping.NextCongestionTax(lastBlock.Load, lastBlock.CongestionTax),
 			}
 			correctHeader.RewardsPool = testPoolAddr
 			correctHeader.FeeSink = testSinkAddr
