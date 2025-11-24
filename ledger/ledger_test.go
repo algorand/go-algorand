@@ -1329,7 +1329,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not add payment transaction")
 	a.ErrorContains(l.appendInvalidTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), "applyData mismatch", "closed transaction with wrong ApplyData")
-	a.NoError(l.appendInvalidTx(t, initAccounts, initSecrets, correctClose, adClose), "could not add close transaction")
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adClose), "could not add close transaction")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "could not add key registration")
 
 	a.ErrorContains(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "transaction already in ledger", "added duplicate tx")
