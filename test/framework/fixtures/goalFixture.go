@@ -206,10 +206,10 @@ func (f *GoalFixture) ClerkSendNoteb64(from, to string, amount, fee int64, noteb
 
 func parseClerkSendResponse(ret string) (txID string, err error) {
 	if strings.HasPrefix(ret, "Sent ") {
-		txIndex := strings.Index(ret, "ID: ")
-		if txIndex > 0 {
+		_, after, ok := strings.Cut(ret, "ID: ")
+		if ok {
 			// Extract "tx-<txid>" string
-			txID = ret[txIndex+4:]
+			txID = after
 			txID = txID[:52] // 52 is the len of txid
 			return
 		}
