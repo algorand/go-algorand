@@ -577,6 +577,11 @@ type ConsensusParams struct {
 	// specify the current app. This parameter can be removed and assumed true
 	// after the first consensus release in which it is set true.
 	AllowZeroLocalAppRef bool
+
+	// EnableUpdateTrie enables the update trie commitment in block headers.
+	// When enabled, blocks include an UpdateCommitment hash that commits to
+	// the changes in the block.
+	EnableUpdateTrie bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1461,6 +1466,7 @@ func initConsensusProtocols() {
 
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
+	vFuture.EnableUpdateTrie = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

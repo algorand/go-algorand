@@ -73,6 +73,8 @@ const (
 	StateProofSig     HashID = "sps"
 	StateProofVerCtx  HashID = "spv"
 
+	StateUpdateLeaf HashID = "SU"
+
 	TestHashable  HashID = "TE"
 	TxGroup       HashID = "TG"
 	TxnMerkleLeaf HashID = "TL"
