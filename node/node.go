@@ -763,6 +763,7 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	return res, found
 }
 
+// GetPeers returns the node's peers
 func (node *AlgorandFullNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
 	return node.net.GetPeers(network.PeersConnectedIn), node.net.GetPeers(network.PeersConnectedOut), nil
 }
