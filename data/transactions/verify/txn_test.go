@@ -1531,3 +1531,72 @@ func TestLogicSigMsigBothFlags(t *testing.T) {
 	err = verifyLogicSig()
 	require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
 }
+
+func TestAuthAddrSenderDiff(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Run("v41-disabled", func(t *testing.T) { testAuthAddrSenderDiff(t, protocol.ConsensusV41, false) })
+	t.Run("future-enabled", func(t *testing.T) { testAuthAddrSenderDiff(t, protocol.ConsensusFuture, true) })
+}
+
+func testAuthAddrSenderDiff(t *testing.T, consensusVer protocol.ConsensusVersion, enforceEnabled bool) {
+	secrets, addrs, _ := generateAccounts(3)
+	sender := addrs[0]
+	otherAddr := addrs[1]
+
+	blockHeader := createDummyBlockHeader(consensusVer)
+	proto := config.Consensus[consensusVer]
+
+	makeTxn := func() transactions.Transaction {
+		return transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      sender,
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+				FirstValid:  1,
+				LastValid:   100,
+				GenesisHash: blockHeader.GenesisHash,
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addrs[2],
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+	}
+
+	// Test 1: AuthAddr == Sender
+	tx1 := makeTxn()
+	stxn := tx1.Sign(secrets[0])
+	stxn.AuthAddr = sender
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, &blockHeader, nil, nil)
+	require.NoError(t, err)
+	err = verifyTxn(0, groupCtx)
+	if enforceEnabled {
+		require.ErrorContains(t, err, "AuthAddr must be different from Sender",
+			"AuthAddr == Sender should be rejected when enforcement is enabled")
+	} else {
+		require.NoError(t, err,
+			"AuthAddr == Sender should be allowed when enforcement is disabled")
+	}
+
+	// Test 2: Empty AuthAddr should always be allowed
+	tx2 := makeTxn()
+	stxn = tx2.Sign(secrets[0])
+	stxn.AuthAddr = basics.Address{}
+	groupCtx, err = PrepareGroupContext([]transactions.SignedTxn{stxn}, &blockHeader, nil, nil)
+	require.NoError(t, err)
+	err = verifyTxn(0, groupCtx)
+	require.NoError(t, err, "empty AuthAddr should always be allowed")
+
+	// Test 3: AuthAddr != Sender should pass the check
+	tx3 := makeTxn()
+	stxn = tx3.Sign(secrets[0])
+	stxn.AuthAddr = otherAddr
+	groupCtx, err = PrepareGroupContext([]transactions.SignedTxn{stxn}, &blockHeader, nil, nil)
+	require.NoError(t, err)
+	txnErr := txnBatchPrep(0, groupCtx, crypto.MakeBatchVerifier())
+	if txnErr != nil {
+		require.NotContains(t, txnErr.Error(), "AuthAddr must be different from Sender",
+			"AuthAddr != Sender should not trigger error")
+	}
+}
