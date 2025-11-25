@@ -274,6 +274,9 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 		if err != nil {
 			reportErrorf("Signer invalid (%s): %v", signerAddress, err)
 		}
+		if authAddr == tx.Sender {
+			reportErrorf("AuthAddr cannot be the same as the transaction sender")
+		}
 	}
 
 	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, authAddr)
@@ -449,6 +452,9 @@ var sendCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
 			}
+			if authAddr == payment.Sender {
+				reportErrorf("AuthAddr cannot be the same as the transaction sender")
+			}
 		}
 
 		var stx transactions.SignedTxn
@@ -531,7 +537,7 @@ var sendCmd = &cobra.Command{
 
 			// Append the signer since it's a rekey txn
 			if basics.Address(addr) == stx.Txn.Sender {
-				reportWarnln(rekeySenderTargetSameError)
+				reportErrorf("AuthAddr cannot be the same as the transaction sender")
 			}
 			stx.AuthAddr = basics.Address(addr)
 		}
@@ -862,6 +868,9 @@ var signCmd = &cobra.Command{
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
 					if signerAddress != "" {
+						if authAddr == txn.Txn.Sender {
+							reportErrorf("AuthAddr cannot be the same as the transaction sender")
+						}
 						txn.AuthAddr = authAddr
 					}
 				}
