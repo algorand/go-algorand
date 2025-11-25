@@ -280,7 +280,7 @@ func (client RestClient) post(response interface{}, path string, params interfac
 
 // GetPeers retrieves the node's peers.
 func (client RestClient) GetPeers() (response model.GetPeersResponse, err error) {
-	err = client.get(&response, "/v2/peers", nil)
+	err = client.get(&response, "/v2/node/peers", nil)
 	return
 }
 

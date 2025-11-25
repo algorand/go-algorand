@@ -1021,7 +1021,7 @@
         }
       ]
     },
-    "/v2/peers": {
+    "/v2/node/peers": {
       "get": {
         "description": "Get information about connected peers.",
         "tags": ["private"],

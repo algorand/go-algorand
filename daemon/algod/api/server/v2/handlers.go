@@ -955,7 +955,7 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 }
 
 // GetPeers returns the list of connected peers.
-// (GET /v2/peers)
+// (GET /v2/node/peers)
 func (v2 *Handlers) GetPeers(ctx echo.Context) error {
 
 	// Get list of connected peers from the node

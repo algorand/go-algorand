@@ -5825,6 +5825,38 @@
         ]
       }
     },
+    "/v2/node/peers": {
+      "get": {
+        "description": "Get information about connected peers.",
+        "operationId": "GetPeers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "Peers": {
+                      "items": {
+                        "$ref": "#/components/schemas/PeerStatus"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "Peers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the network peers of the node"
+          }
+        },
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/v2/participation": {
       "get": {
         "description": "Return a list of participation keys",
@@ -6336,38 +6368,6 @@
           "participating"
         ],
         "x-codegen-request-body-name": "keymap"
-      }
-    },
-    "/v2/peers": {
-      "get": {
-        "description": "Get information about connected peers.",
-        "operationId": "GetPeers",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "Peers": {
-                      "items": {
-                        "$ref": "#/components/schemas/PeerStatus"
-                      },
-                      "type": "array"
-                    }
-                  },
-                  "required": [
-                    "Peers"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Response containing the network peers of the node"
-          }
-        },
-        "tags": [
-          "private"
-        ]
       }
     },
     "/v2/shutdown": {
