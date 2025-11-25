@@ -169,7 +169,7 @@ func txnBatchPrep(gi int, groupCtx *GroupContext, verifier crypto.BatchVerifier)
 		return &TxGroupError{err: errRekeyingNotSupported, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
 	}
 
-	if groupCtx.consensusParams.EnforceAuthAddrSenderDiff && (s.AuthAddr != basics.Address{}) && s.AuthAddr == s.Txn.Sender {
+	if groupCtx.consensusParams.EnforceAuthAddrSenderDiff && !s.AuthAddr.IsZero() && s.AuthAddr == s.Txn.Sender {
 		return &TxGroupError{err: errAuthAddrEqualssender, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
 	}
 
