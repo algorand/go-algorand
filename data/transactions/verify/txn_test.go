@@ -1588,15 +1588,13 @@ func testAuthAddrSenderDiff(t *testing.T, consensusVer protocol.ConsensusVersion
 	err = verifyTxn(0, groupCtx)
 	require.NoError(t, err, "empty AuthAddr should always be allowed")
 
-	// Test 3: AuthAddr != Sender should pass the check
+	// Test 3: AuthAddr != Sender should pass the check (legitimate rekeying case)
+	// Sign with otherAddr's key to pass signature verification
 	tx3 := makeTxn()
-	stxn = tx3.Sign(secrets[0])
+	stxn = tx3.Sign(secrets[1]) // Sign with secrets[1] which corresponds to otherAddr
 	stxn.AuthAddr = otherAddr
 	groupCtx, err = PrepareGroupContext([]transactions.SignedTxn{stxn}, &blockHeader, nil, nil)
 	require.NoError(t, err)
-	txnErr := txnBatchPrep(0, groupCtx, crypto.MakeBatchVerifier())
-	if txnErr != nil {
-		require.NotContains(t, txnErr.Error(), "AuthAddr must be different from Sender",
-			"AuthAddr != Sender should not trigger error")
-	}
+	err = verifyTxn(0, groupCtx)
+	require.NoError(t, err, "AuthAddr != Sender should pass verification (legitimate rekeying)")
 }
