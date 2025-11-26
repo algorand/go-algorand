@@ -278,6 +278,12 @@ func (client RestClient) post(response interface{}, path string, params interfac
 	return client.submitForm(response, path, params, body, "POST", true /* encodeJSON */, true /* decodeJSON */, expectNoContent)
 }
 
+// GetPeers retrieves the node's peers.
+func (client RestClient) GetPeers() (response model.GetPeersResponse, err error) {
+	err = client.get(&response, "/v2/node/peers", nil)
+	return
+}
+
 // Status retrieves the StatusResponse from the running node
 // the StatusResponse includes data like the consensus version and current round
 // Not supported
@@ -640,7 +646,7 @@ func (client RestClient) EncodedBlockCert(round basics.Round) (blockCert rpcs.En
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil, nil, false)
+	err = client.post(&response, "/v2/node/shutdown", nil, nil, false)
 	return
 }
 

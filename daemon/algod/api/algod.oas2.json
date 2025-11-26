@@ -1021,11 +1021,48 @@
         }
       ]
     },
+    "/v2/node/peers": {
+      "get": {
+        "description": "Get information about connected peers.",
+        "tags": ["private"],
+        "produces": ["application/json"],
+        "schemes": ["http"],
+        "operationId": "GetPeers",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/GetPeersResponse"
+          }
+        }
+      }
+    },
     "/v2/shutdown": {
+      "post": {
+        "deprecated": true,
+        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds. This endpoint is deprecated, use `POST /v2/node/shutdown` instead",
+        "tags": ["private", "nonparticipating"],
+        "operationId": "ShutdownNode",
+        "parameters": [
+          {
+            "type": "integer",
+            "default": 0,
+            "name": "timeout",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "/v2/node/shutdown": {
       "post": {
         "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
         "tags": ["private", "nonparticipating"],
-        "operationId": "ShutdownNode",
+        "operationId": "ShutdownNode2",
         "parameters": [
           {
             "type": "integer",
@@ -4095,6 +4132,27 @@
           "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256"
         }
       }
+    },
+    "PeerStatus": {
+      "description": "The status of a connected peer in the P2P network",
+      "type": "object",
+      "required": ["network-address", "network-type", "connection-type"],
+      "properties": {
+        "network-address": {
+          "description": "Network address of the peer",
+          "type": "string"
+        },
+        "network-type": {
+          "description": "Network type",
+          "type": "string",
+          "enum": ["p2p", "ws"]
+        },
+        "connection-type": {
+          "description": "Connection type",
+          "type": "string",
+          "enum": ["inbound", "outbound"]
+        }
+      }
     }
   },
   "parameters": {
@@ -4194,6 +4252,21 @@
     }
   },
   "responses": {
+    "GetPeersResponse": {
+      "description": "Response containing the network peers of the node",
+      "schema": {
+        "type": "object",
+        "required": ["Peers"],
+        "properties": {
+          "Peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/PeerStatus"
+            }
+          }
+        }
+      }
+    },
     "GetBlockTimeStampOffsetResponse": {
       "description": "Response containing the timestamp offset in seconds",
       "schema": {

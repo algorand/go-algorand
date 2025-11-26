@@ -523,6 +523,27 @@
         },
         "description": "Response containing the timestamp offset in seconds"
       },
+      "GetPeersResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "Peers": {
+                  "items": {
+                    "$ref": "#/components/schemas/PeerStatus"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "Peers"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the network peers of the node"
+      },
       "GetSyncRoundResponse": {
         "content": {
           "application/json": {
@@ -2224,6 +2245,37 @@
           "address",
           "id",
           "key"
+        ],
+        "type": "object"
+      },
+      "PeerStatus": {
+        "description": "The status of a connected peer in the P2P network",
+        "properties": {
+          "connection-type": {
+            "description": "Connection type",
+            "enum": [
+              "inbound",
+              "outbound"
+            ],
+            "type": "string"
+          },
+          "network-address": {
+            "description": "Network address of the peer",
+            "type": "string"
+          },
+          "network-type": {
+            "description": "Network type",
+            "enum": [
+              "p2p",
+              "ws"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection-type",
+          "network-address",
+          "network-type"
         ],
         "type": "object"
       },
@@ -5773,6 +5825,69 @@
         ]
       }
     },
+    "/v2/node/peers": {
+      "get": {
+        "description": "Get information about connected peers.",
+        "operationId": "GetPeers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "Peers": {
+                      "items": {
+                        "$ref": "#/components/schemas/PeerStatus"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "Peers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the network peers of the node"
+          }
+        },
+        "tags": [
+          "private"
+        ]
+      }
+    },
+    "/v2/node/shutdown": {
+      "post": {
+        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
+        "operationId": "ShutdownNode2",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "timeout",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "private",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/participation": {
       "get": {
         "description": "Return a list of participation keys",
@@ -6288,7 +6403,8 @@
     },
     "/v2/shutdown": {
       "post": {
-        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
+        "deprecated": true,
+        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds. This endpoint is deprecated, use `POST /v2/node/shutdown` instead",
         "operationId": "ShutdownNode",
         "parameters": [
           {
