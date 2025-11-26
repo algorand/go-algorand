@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -253,7 +253,7 @@ func (sv stackValue) toEncodedTealValue() basics.TealValue {
 	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
 
-// parseCallStack initializes an array of CallFrame objects from the raw
+// parseCallstack initializes an array of CallFrame objects from the raw
 // callstack.
 func (d *DebugState) parseCallstack(callstack []frame) []CallFrame {
 	callFrames := make([]CallFrame, 0)

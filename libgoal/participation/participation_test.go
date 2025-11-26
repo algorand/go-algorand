@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,7 +47,6 @@ func TestGenParticipationKeysTo_Install(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -73,8 +72,8 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 
 	var addr basics.Address
 	addr[1] = 1
-	first := uint64(1000)
-	last := uint64(2000)
+	const first = 1000
+	const last = 2000
 
 	testcases := []struct {
 		name     string
@@ -84,7 +83,7 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 		{
 			name:     "default",
 			dilution: 0,
-			expected: account.DefaultKeyDilution(basics.Round(first), basics.Round(last)),
+			expected: account.DefaultKeyDilution(first, last),
 		}, {
 			name:     "override",
 			dilution: 5,
@@ -93,7 +92,6 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

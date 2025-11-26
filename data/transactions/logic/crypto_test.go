@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,11 +25,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"slices"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
@@ -53,6 +53,31 @@ keccak256
 byte 0xc195eca25a6f4c82bfba0287082ddb0d602ae9230f9cf1f1a40b68f8e2c41567
 ==`
 	testAccepts(t, progText, 1)
+}
+
+func TestSumhash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	/* tests extracted from test vector in go-algorand/sumhash	*/
+	testVectors := []struct{ in, out string }{
+		{
+			"",
+			"591591c93181f8f90054d138d6fa85b63eeeb416e6fd201e8375ba05d3cb55391047b9b64e534042562cc61944930c0075f906f16710cdade381ee9dd47d10a0",
+		},
+		{
+			"a",
+			"ea067eb25622c633f5ead70ab83f1d1d76a7def8d140a587cb29068b63cb6407107aceecfdffa92579ed43db1eaa5bbeb4781223a6e07dd5b5a12d5e8bde82c6",
+		},
+		{
+			"I think, therefore I am. – Rene Descartes.",
+			"2d4583cdb18710898c78ec6d696a86cc2a8b941bb4d512f9d46d96816d95cbe3f867c9b8bd31964406c847791f5669d60b603c9c4d69dadcb87578e613b60b7a",
+		},
+	}
+
+	for _, v := range testVectors {
+		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 13)
+	}
 }
 
 func TestSHA3_256(t *testing.T) {
@@ -90,6 +115,96 @@ sha512_256
 byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 ==`
 	testAccepts(t, progText, 1)
+}
+
+func TestSHA512(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// echo -n "hello" | sha512sum
+	progText := `
+byte "hello"; sha512
+byte 0x9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043
+==`
+	testAccepts(t, progText, 13)
+}
+
+func TestMimc(t *testing.T) {
+	// We created test vectors for the MiMC hash function by defining a set of preimages for different
+	// input sizes and calling gnark-crypto's MiMC implementation to compute the expected hash values.
+	// E.g.:
+	//		import "github.com/consensys/gnark-crypto/ecc/bn254/fr/mimc"
+	//		hasher := mimc.NewMiMC()
+	//		hasher.Write(inputBytes)
+	//		hashBytes := hasher.Sum(nil)
+	// Since we are hardcoding the expected hash values, we are also testing that gnark-crypto's MiMC
+	// output does not change under the hood with new versions.
+	//
+	// We test that malformed inputs panic, in particular we test malfornmed inputs of:
+	// 0 length, lengths not multiple of 32 bytes, chunks representing values greater than the modulus.
+	// We test that well formed inputs hash correctly, testing both single chunk inputs (32-byte) and
+	// multiple chunk inputs (96 bytes).
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type PreImageTestVector struct {
+		PreImage      string
+		ShouldSucceed bool
+	}
+	preImageTestVectors := []PreImageTestVector{
+		{"0x",
+			false}, // zero-length input
+		{"0x23a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535",
+			true}, // 32 bytes, less than modulus
+		{"0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
+			false}, // 32 bytes, more than modulus
+		{"0xdeadf00d",
+			false}, // less than 32 byte
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253530644e72e131a029b85045b68181585d2833e84879b9709143e1f593ef676981",
+			true}, // 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253573eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
+			false}, //  32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535abba",
+			false}, // 32 bytes, less than modulus | 32 bytes, less than modulus | less than 32 bytes
+	}
+
+	circuitHashTestVectors := map[string][]string{
+		"BN254Mp110": {
+			"20104241803663641422577121134203490505137011783614913652735802145961801733870",
+			"12886436712380113721405259596386800092738845035233065858332878701083870690753",
+			"19565877911319815535452130675266047290072088868113536892077808700068649624391",
+			"1037254799353855871006189384309576393135431139055333626960622147300727796413",
+			"6040222623731283351958201178122781676432899642144860863024149088913741383362",
+			"21691351735381703396517600859480938764038501053226864452091917666642352837076",
+			"10501393540371963307040960561318023073151272109639330842515119353134949995409",
+		},
+		"BLS12_381Mp111": {
+			"17991912493598890696181760734961918471863781118188078948205844982816313445306",
+			"8791766422525455185980675814845076441443662947059416063736889106252015893524",
+			"35137972692771717943992759113612269767581262500164574105059686144346651628747",
+			"15039173432183897369859775531867817848264266283034981501223857291379142522368",
+			"12964111614552580241101202600014316932811348627866250816177200046290462797607",
+			"21773894974440411325489312534417904228129169539217646609523079291104496302656",
+			"9873666029497961930790892458408217321483390383568592297687427911011295910871",
+		},
+	}
+
+	for _, config := range []string{"BN254Mp110", "BLS12_381Mp111"} {
+		for i, preImageTestVector := range preImageTestVectors {
+			var n big.Int
+			n.SetString(circuitHashTestVectors[config][i], 10)
+			circuitHash := n.Bytes()
+			progText := fmt.Sprintf(`byte %s
+mimc %s
+byte 0x%x
+==`, preImageTestVector.PreImage, config, circuitHash)
+			if preImageTestVector.ShouldSucceed {
+				testAccepts(t, progText, 11)
+			} else {
+				testPanics(t, progText, 11)
+			}
+		}
+	}
 }
 
 // This is patterned off vrf_test.go, but we don't create proofs here, we only
@@ -143,7 +258,7 @@ func TestVrfVerify(t *testing.T) {
 	testLogic(t, source, LogicVersion, ep)
 }
 
-// BenchMarkVerify is useful to see relative speeds of various crypto verify functions
+// BenchmarkVerify is useful to see relative speeds of various crypto verify functions
 func BenchmarkVerify(b *testing.B) {
 	benches := [][]string{
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
@@ -170,6 +285,14 @@ byte 0x13e49a19378bbfa8d55ac81a35b87d7bae456c79fcf04a78803d8eb45b253fab
 byte 0xa2d237cd897ca70787abf04d2155c6dc2fbe26fd642e0472cd75c13dc919ef1a
 ecdsa_verify Secp256r1
 assert`, "int 1"},
+		{"falcon_verify", "", `
+byte 0x62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd // msg
+// public key
+byte 0xba00a5222fbaa5e2a1a61f708198a4dbc3de94b60d925042d9fa5a299ebb4be27156b1d86a174df4939342f11b776dffb8a0e874714f23318ca9acb823e9aeb14a926ed5cf76e736faa0b22e4bdedf7910decd19329f353b926ae4b404653dbc6db1885c010052b94675d4cc209ef2cf3cfe910c4ef51b6af16d8c7ab6651e57934ab19c89f771058f389ad80474740c529d59a3ea9ab9db228415fb9315dee23e8c7229398c4b0a2b7c5d6eff6e7d8cf1a776ae37f6272082796c0b2a0af637f7ce8fa7f1675dfbd1766543cbf3f19544d635298ea1fafe96ad1bb06fcc6ae9ff9c34acacb88653555c37f2ad6c4eb408478b0d2b6269841243f29b18fa8e0d5050f4f93878e53aac466dc4eb5a7194cb2213c26a2b8c7ccea06f89af26ae85315454da1b15952be639bb94fe3e99236291c4a1edfbe9faf8f32589bf47eb536b28e2cfbdea799d9cf4c88ef85ae45d451e1ab3431c247b796cbf12e63b737cc4894ad7a204f680a449cbbd2e86deca1069b3592977bd8ac7c5b5e1c1b436cde65177b6e82b2e666117a8e37b58122d1a31307ca112311e665b32c68bd42531b4e6bc79957d3d865f6470b8213db8175e5c7115f4ad520a4711b12d9004e661346c4da4cb3e95954ac58e075a320b862a6a317e0988d8fc376fb14562773b9d35d5a44ba951d866a3a06ac93a55e1a26fa91718db49a53e78d9e61d6120dfadd2b4929579ac56ccaac0f8e704826b55b4ca6d8020e42a6e62b5e41708e2e6848cd047385fa1df4f51733df35dbee25c96c4176eae332ca4df31c695fff8be31b4be62e63c3e049483c89384fb1d802e58db5514a59eb96e527b202d0cf45dc760fa0439afbc661868b9408e67254c8cf7c689c50d2f29bccd59c71ea7b6dd368de68669fdf889ac1f8cd390ea17894dd0538ff6e7c740bbf03b4fe32ad66c483c823548eea84f85826da44016bd8cdf2315b07a96a9737ebc7cb244547be3f759bdf50b467552c58333ed7e61cde799346bccc29d5d377d9d5364c369ffd88a83f90a699b3622184436b518e9196524ac9b55385b39ec099d9c18386e06b9dcad2499ddb9673cb87c652209ee60511c9249f1b7ab2b948b5e8b9115c218d5b793d65b96e2fc9e2c6c40ba63791bb89d7d96c33536ad7e6668a85e52ec7e1450a69f25766deeaeb41bcd249394b8ab65a286312db461c363cebe431c4dd5fd3b6bb5d26ae2c597799f400abb3ba160522e2e6da5ebd170a45c9ce80b135a5b330656aab26399bcacd857a7f237dfd2b14ecbfbcaabc7291ba78fe19ac2ecf005b66bb9771bf64f090269a2341967e79702733dc617b469ac12123faeb4c70d6fffac25f9fcd7dbd12ca363985b9bd845e939e6caf328e2bf8e53725bae94fbe30bfdbbc21e584ba72d7badbc2a0915c9faf9c69ad3703cf99a16399b38df157be8ec3a78f20d24b2131f9c25b3c1da70fc6c0c7aa9e9da3108368ca6211dcfa4988b1ace3c28b15b0559224570fbe3cde364734c7a66a0525c1d41e26788cd1c8a3888f344c9385804364f8430ca7d22338cc941917da3dc47a00aae13e3e972af49940c8fa179574694e369a3d5e67db6c91bf843151ca0fff512d9c322c690063ae9bd671815e9d03b3a841952ce04683509e415b8d5aebfcdbd6bd55efbffb2463cf2b96ccb8650a6cee732c8d4ce6409b9a747317866759553f1c5bcc392c98d14a034ccaaa6df5723bb88c38e80
+// sig
+byte 0x0a85ea3bb342a95a3941a4c2280c686729c76bc164092c0e203388460c556273e6f0a92640650c37e9d5b08fbd8d6bcca940acac9964e64a9e78bd28086b52898812264985e19c3d26318be2ec8852ca2ae2380746428cd08124cf792790d127d3dad09fe891cbadefef36269ae7d584b77ec428d794a6c3b7555956db00314d14a0aa14936830c8622623916639743b218243344224472240cfd158819190ede108394063c3df9c474eb16aa750e48663515d8229d3849670e30891142b632a6a282d915273a5f219d65ebe6b9e6c88170ac62c16a44895a950bfec82819221dab1358861bf0aa6b6342477016d50502a298840ddc42b3ade784b643c63c5e47993ada37dfdc0d56a1c7e4690b5a1d6485900b84f0b61425383b14d4b7ccc0abe8284a47a6f22050838b0482ad8ad389151c25e790ad670d5530f9b3dc518bb0a410f64346a74dc824238026daaa4ad97518d93670a48cf8f86ece593d23ab3a0d601d49a975db291f0d76263551e9f0b8a1b42396a27d9a122210330c692d5545d67c808b50560fc3d4933fa70c463513d7183e8aa091f34dd4426272620fe4b357deea710c687bb7a475d0ed0a40a26ae8f2a357e7a8fa5d5434050c1a36beaa7a90ee4db213a126db8151f2f4bbb4889d4e42bbd19f62dd7285def148071fb7f4f16b28c1d145d2e621fee275161a3d5b9319e7a59527c3d5c2838ef503e4166f2c22118b22bf80e8a1fc1bbbba00f231d2b1a8d3e592bdcc5fd40a2ecebb5ad27a51e7867715b54185a3e62951a5d808d80c31a59e6a3ca53a51eadc34c76dfd6aac22a6e805163b5e9ac8090869a9cd1e2972af7192bcd1da39c30f423ebc86d1976e8f52052262521d3b8ae7eb99d0ad623d811bac636f447e7dc9dcef6f52befd95861f1917116517b0e9b56a85967ab701ff8f1d4de443efce1b2a3d85b592df7a8c87814e8981575ef4e72757c5afa6bec4358e2f29966ad2830e4782f9a293351dfcaac1d0ca30ec1b5fd08a40a6e82938427a68641b96252a85443141c081982ba4d3c8ab05a1a545ea49c23ee07643ec5f013c2676db09cb834ef61817e615ad19c5829216026e5635dc13cad5ffb8bc267bf58d4ebbf100c3045e250c02c10772e96c580db049c80fdd3188e19ad893d16ac100052c557378416929319c9c262c21b768e6058a09b4e4800ae624c892117ec71504a283f558c623a212d048d5d401b00448b18ac25e1c99ab35d91f78badebcd651e86f3465ef99a0afa1721d2153e4a7b51d22b344a8dd102e7411abfe4bd5b8e2d62015edc08fc461fa90cfa666a9a42a0a86e11d6988913ba0259096cb846a1fd311c4cb693c4e3e1ed2ab57e2a5e0bd4616a79e22b28caa6d10dd09225e44bbdbfa1b7b23887055a90918220252777d5a620351cb013cc28346fc69d348165a39d03243a84a9c9bcd4d557a8e9607256baab893a0a5644520686be935e9ead84501f743a489a431cf10b8c27d3901c87b8771ce65e3130a7fe6ad62b709c23bbef1381b1ed49222f487db16af3c9d6779c01c986ea9f823be017fb8bce8e00f2b32840d54e8f656139a4c492257ee8743a8c5f51450c0366655e2b02d27619d07e556001430b04454891247813c8bc31bdee926d039a5038bfca8dc35e57789950442ad7ab3cfc031a8354bd9c462a37052d0b62066bcee0c292b890a71f4ea65895a7d837283404842c59f08414b20ec1b4fda6cc0c4d62216e8ead74ba90196168bc449a2050b442181ea57b915581bc387ed412e4cd5970fd0fb83c94fbbf960d05ffe6d0a26171c249809604a0b2b411e2d6622145c936e31258baf2b7d3c413a9a1d67bc4026d01b47a10b6c5b87f6a36ba1cedd681ca55b9c042bf9afcfcb636040793e08158dd877c49c16658f819129e26237427a1d80b941fbabb4abd4f1da0b6d428a59fbc450620eeb1651849e5972fb12e6dc8092a9fda70206a48d9dc2645641a147626350cf45b1a7d57724fcab0a594df7c023928a3c7a2fc3c9d33e9af10ae5ed282c475a611671d20d90752f2a28db48b7e5d9184212432fa948fbc885f866c93a0b7f510329aea4d53ecf9482f42974beaf289086afdb4797aa129d10639948f46a805ea4000cf1554505f4bd9d775d5894da115f5840913d5070c860b3a623eb261f5f928a31cbcec17c4274b5d1b28fdb231cc8f606c9dc324db5c12f97518fd03466541f7881762c25d711976c6d4f9271d29fa51dc263f650a32010343a51e7dab344e2f6d768864072ddb5df58486434998a280aad94886ea7a11132184e6274d4cd59a5deabf8a4dbbe29e9c234a52d3972608d0a3ea92a78e08531bb938384444246be5bc594ed4d06168e870924e8913f8242bd35f7c9d5ee238cb6db17496047acce0183f2d10a4cf2bbc8e39daf44e630393a0473b8983863b1998c17026ff35ec32a8058fd603ec369b80a94cb7b555cb469f6468de3909b21293b8d0a53a5c813d218d7c630f4d47bb1eb88253e6e1af721ba8a4453e
+falcon_verify
+assert`, "int 1"},
 		{"vrf_verify", "", `byte 0x72
 byte 0xae5b66bdf04b4c010bfe32b2fc126ead2107b697634f6f7337b9bff8785ee111200095ece87dde4dbe87343f6df3b107d91798c8a7eb1245d3bb9c5aafb093358c13e6ae1111a55717e895fd15f99f07
 byte 0x3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c
@@ -184,13 +307,17 @@ pop								// output`, "int 1"},
 	}
 }
 
+func randSeed() crypto.Seed {
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	return s
+}
+
 func TestEd25519verify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -229,9 +356,7 @@ func TestEd25519VerifyBare(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -260,6 +385,52 @@ func TestEd25519VerifyBare(t *testing.T) {
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:], c.SignatureVerifier[:]}
 			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
+		})
+	}
+}
+
+func TestFalconVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var s crypto.FalconSeed
+	fs, err := crypto.GenerateFalconSigner(s)
+	require.NoError(t, err)
+
+	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+	data, err := hex.DecodeString(msg)
+	require.NoError(t, err)
+
+	yes := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify`,
+		hex.EncodeToString(fs.PublicKey[:])), 12)
+	require.NoError(t, err)
+	no := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify; !`,
+		hex.EncodeToString(fs.PublicKey[:])), 12)
+	require.NoError(t, err)
+
+	for v := uint64(12); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			yes.Program[0] = byte(v)
+			sig, err := fs.SignBytes(data)
+			require.NoError(t, err)
+
+			var txn transactions.SignedTxn
+			txn.Lsig.Args = [][]byte{data[:], sig[:]}
+			testLogicBytes(t, yes.Program, defaultSigParams(txn))
+			testLogicBytes(t, no.Program, defaultSigParams(txn), "REJECT")
+
+			// short sig will fail
+			txn.Lsig.Args[1] = sig[1:]
+			testLogicBytes(t, yes.Program, defaultSigParams(txn), "REJECT")
+			testLogicBytes(t, no.Program, defaultSigParams(txn))
+
+			// flip a bit and it should not pass
+			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+			data1, err := hex.DecodeString(msg1)
+			require.NoError(t, err)
+			txn.Lsig.Args = [][]byte{data1, sig[:]}
+			testLogicBytes(t, yes.Program, defaultSigParams(txn), "REJECT")
+			testLogicBytes(t, no.Program, defaultSigParams(txn))
 		})
 	}
 }
@@ -344,15 +515,15 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
-		i, test, source := i, test, source
+		innerSource := source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
 			t.Parallel()
 			t.Log("decompressTests i", i)
-			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(innerSource, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
 			} else {
-				testPanics(t, src, 5)
+				testPanics(t, notrack(src), 5)
 			}
 		})
 	}
@@ -381,10 +552,10 @@ byte 0x%s
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
-		test, source := test, source
+		innerSource := source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
 			t.Parallel()
-			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(innerSource, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
 			} else {
@@ -394,7 +565,10 @@ byte 0x%s
 	}
 
 	// coverage for pk length check
-	testPanics(t, `int 31; bzero; byte 0x; byte 0x; byte 0x; byte 0x; ecdsa_verify Secp256k1`, 5, "must be 32")
+	testPanics(t, notrack(`int 31; bzero; byte 0x; byte 0x; byte 0x; byte 0x; ecdsa_verify Secp256k1`), 5, "must be 32")
+
+	// we did not implement arg length checks for x,y & r,s, so we must simply fail to verify, not panic
+	testAccepts(t, notrack(`int 32; bzero; byte 0x; byte 0x; byte 0x; byte 0x; ecdsa_verify Secp256k1; !`), 5)
 
 	// ecdsa recover tests
 	source = `
@@ -436,10 +610,10 @@ load 1
 	pkExpanded := secp256k1.S256().Marshal(key.PublicKey.X, key.PublicKey.Y)
 
 	for i, test := range recoverTests {
-		i, test, source := i, test, source
+		innerSource := source
 		t.Run(fmt.Sprintf("recover/%d", i), func(t *testing.T) {
 			t.Parallel()
-			src := fmt.Sprintf(source, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y), hex.EncodeToString(pkExpanded))
+			src := fmt.Sprintf(innerSource, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y), hex.EncodeToString(pkExpanded))
 			test.checker(t, src, 5)
 		})
 	}
@@ -496,15 +670,15 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
-		i, test, source := i, test, source
+		innerSource := source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
 			t.Parallel()
 			t.Log("decompressTests i", i)
-			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(innerSource, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, fidoVersion)
 			} else {
-				testPanics(t, src, fidoVersion)
+				testPanics(t, notrack(src), fidoVersion)
 			}
 		})
 	}
@@ -524,8 +698,8 @@ ecdsa_verify Secp256r1
 
 	ri, si, err := ecdsa.Sign(rand.Reader, key, msg[:])
 	require.NoError(t, err)
-	r := ri.Bytes()
-	s := si.Bytes()
+	r := ri.FillBytes(make([]byte, 32))
+	s := si.FillBytes(make([]byte, 32))
 
 	rTampered := slices.Clone(r)
 	rTampered[0] += byte(1) // intentional overflow
@@ -540,10 +714,10 @@ ecdsa_verify Secp256r1
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
-		test, source := test, source
+		innerSource := source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
 			t.Parallel()
-			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(innerSource, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, fidoVersion)
 			} else {
@@ -606,11 +780,8 @@ func TestEcdsaCostVariation(t *testing.T) {
 
 	// Doesn't matter if the actual verify returns true or false. Just confirm the cost depends on curve.
 	source := `
-global ZeroAddress				// need 32 bytes
-byte "signature r"
-byte "signature s"
-byte "PK x"
-byte "PK y"
+global ZeroAddress				// need 32 bytes for all 5 args
+dup; dup; dup; dup;
 ecdsa_verify Secp256k1
 !
 assert
@@ -621,11 +792,8 @@ int ` + fmt.Sprintf("%d", testLogicBudget-1700-8) + `
 	testAccepts(t, source, 6) // Secp256k1 was 5, but OpcodeBudget is 6
 
 	source = `
-global ZeroAddress				// need 32 bytes
-byte "signature r"
-byte "signature s"
-byte "PK x"
-byte "PK y"
+global ZeroAddress				// need 32 bytes for all 5 args
+dup; dup; dup; dup
 ecdsa_verify Secp256r1
 !
 assert
@@ -636,26 +804,16 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 	testAccepts(t, source, fidoVersion)
 }
 
-func BenchmarkHash(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256", "sha512_256"} {
-		b.Run(hash+"-0w", func(b *testing.B) { // hash 0 bytes
-			benchmarkOperation(b, "", "byte 0x; "+hash+"; pop", "int 1")
-		})
-		b.Run(hash+"-32", func(b *testing.B) { // hash 32 bytes
-			benchmarkOperation(b, "int 32; bzero", hash, "pop; int 1")
-		})
-		b.Run(hash+"-128", func(b *testing.B) { // hash 128 bytes
-			benchmarkOperation(b, "int 32; bzero",
-				"dup; concat; dup; concat;"+hash, "pop; int 1")
-		})
-		b.Run(hash+"-512", func(b *testing.B) { // hash 512 bytes
-			benchmarkOperation(b, "int 32; bzero",
-				"dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
-		})
-		b.Run(hash+"-4096", func(b *testing.B) { // hash 4k bytes
-			benchmarkOperation(b, "int 32; bzero",
-				"dup; concat; dup; concat; dup; concat; dup; concat; dup; concat; dup; concat; dup; concat;"+hash, "pop; int 1")
-		})
+func BenchmarkHashes(b *testing.B) {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "sha512"} {
+		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
+			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111") {
+				continue
+			}
+			b.Run(hash+"-"+strconv.Itoa(size), func(b *testing.B) {
+				benchmarkOperation(b, "", fmt.Sprintf("int %d; bzero; %s; pop", size, hash), "int 1")
+			})
+		}
 	}
 }
 
@@ -680,9 +838,7 @@ func BenchmarkEd25519Verifyx1(b *testing.B) {
 		crypto.RandBytes(buffer[:])
 		data = append(data, buffer)
 
-		var s crypto.Seed //generate programs and signatures
-		crypto.RandBytes(s[:])
-		secret := crypto.GenerateSignatureSecrets(s)
+		secret := crypto.GenerateSignatureSecrets(randSeed()) //generate programs and signatures
 		pk := basics.Address(secret.SignatureVerifier)
 		pkStr := pk.String()
 		ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
@@ -763,8 +919,8 @@ func benchmarkEcdsaGenData(b *testing.B, curve EcdsaCurve) (data []benchmarkEcds
 		} else if curve == Secp256r1 {
 			r, s, err := ecdsa.Sign(rand.Reader, key, data[i].msg[:])
 			require.NoError(b, err)
-			data[i].r = r.Bytes()
-			data[i].s = s.Bytes()
+			data[i].r = r.FillBytes(make([]byte, 32))
+			data[i].s = s.FillBytes(make([]byte, 32))
 		}
 	}
 	return data

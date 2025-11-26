@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package remote
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math/rand"
@@ -58,14 +59,14 @@ var ErrDeployedNetworkInsufficientHosts = fmt.Errorf("target network requires mo
 // ErrDeployedNetworkNameCantIncludeWildcard is returned by Validate if network name contains '*'
 var ErrDeployedNetworkNameCantIncludeWildcard = fmt.Errorf("network name cannont include wild-cards")
 
-// ErrDeployedNetworkTemplate A template file contained {{Field}} sections that were not handled by a corresponding Field value in configuration.
-type ErrDeployedNetworkTemplate struct {
-	UnhandledTemplate string
+// deployedNetworkTemplateError A template file contained {{Field}} sections that were not handled by a corresponding Field value in configuration.
+type deployedNetworkTemplateError struct {
+	unhandledTemplate string
 }
 
 // Error satisfies error interface
-func (ednt ErrDeployedNetworkTemplate) Error() string {
-	return fmt.Sprintf("config file contains unrecognized token: %s", ednt.UnhandledTemplate)
+func (dnte deployedNetworkTemplateError) Error() string {
+	return fmt.Sprintf("config file contains unrecognized token: %s", dnte.unhandledTemplate)
 }
 
 // DeployedNetworkConfig represents the complete configuration specification for a deployed network
@@ -75,12 +76,12 @@ type DeployedNetworkConfig struct {
 
 // DeployedNetwork represents the complete configuration specification for a deployed network
 type DeployedNetwork struct {
-	useExistingGenesis       bool
-	createBoostrappedNetwork bool
-	GenesisData              gen.GenesisData
-	Topology                 topology
-	Hosts                    []HostConfig
-	BootstrappedNet          BootstrappedNetwork
+	useExistingGenesis        bool
+	createBootstrappedNetwork bool
+	GenesisData               gen.GenesisData
+	Topology                  topology
+	Hosts                     []HostConfig
+	BootstrappedNet           BootstrappedNetwork
 }
 
 type netState struct {
@@ -123,10 +124,13 @@ int 1
 `
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
-func InitDeployedNetworkConfig(file string, buildConfig BuildConfig) (cfg DeployedNetworkConfig, err error) {
+func InitDeployedNetworkConfig(file string, buildConfig BuildConfig, ignoreUnkTokens bool) (cfg DeployedNetworkConfig, err error) {
 	processedFile, err := loadAndProcessConfig(file, buildConfig)
 	if err != nil {
-		return
+		var dnte deployedNetworkTemplateError
+		if !errors.As(err, &dnte) || !ignoreUnkTokens {
+			return
+		}
 	}
 
 	err = json.Unmarshal([]byte(processedFile), &cfg)
@@ -178,7 +182,7 @@ func replaceTokens(original string, buildConfig BuildConfig) (expanded string, e
 		if closeIndex < 0 {
 			closeIndex = len(expanded) - 2
 		}
-		return "", ErrDeployedNetworkTemplate{expanded[openIndex : closeIndex+2]}
+		return expanded, deployedNetworkTemplateError{expanded[openIndex : closeIndex+2]}
 	}
 
 	return
@@ -253,12 +257,12 @@ func (cfg *DeployedNetwork) SetUseExistingGenesisFiles(useExisting bool) bool {
 	return old
 }
 
-// SetUseBoostrappedFiles sets the override flag indicating we should use existing genesis
+// SetUseBootstrappedFiles sets the override flag indicating we should use existing genesis
 // files instead of generating new ones.  This is useful for permanent networks like devnet and testnet.
 // Returns the previous value.
-func (cfg *DeployedNetwork) SetUseBoostrappedFiles(boostrappedFile bool) bool {
-	old := cfg.createBoostrappedNetwork
-	cfg.createBoostrappedNetwork = boostrappedFile
+func (cfg *DeployedNetwork) SetUseBootstrappedFiles(bootstrappedFile bool) bool {
+	old := cfg.createBootstrappedNetwork
+	cfg.createBootstrappedNetwork = bootstrappedFile
 	return old
 }
 
@@ -291,7 +295,7 @@ func (cfg DeployedNetwork) Validate(buildCfg BuildConfig, rootDir string) (err e
 
 // Validate that the string is a valid filename (we'll use it as part of a directory name somewhere)
 func validateFilename(filename string) (err error) {
-	if strings.Index(filename, "*") >= 0 {
+	if strings.Contains(filename, "*") {
 		return ErrDeployedNetworkNameCantIncludeWildcard
 	}
 	file, err := os.CreateTemp("", filename)
@@ -346,7 +350,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 		return
 	}
 
-	if cfg.createBoostrappedNetwork {
+	if cfg.createBootstrappedNetwork {
 		fmt.Println("Generating db files ")
 
 		cfg.GenerateDatabaseFiles(cfg.BootstrappedNet, genesisFolder)
@@ -417,11 +421,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 
 	minAccounts := accountsNeeded(fileCfgs.GeneratedApplicationCount, fileCfgs.GeneratedAssetsCount, params)
 	nAccounts := fileCfgs.GeneratedAccountsCount
-	if minAccounts > nAccounts {
-		bootstrappedNet.nAccounts = minAccounts
-	} else {
-		bootstrappedNet.nAccounts = nAccounts
-	}
+	bootstrappedNet.nAccounts = max(minAccounts, nAccounts)
 
 	//fund src account with enough funding
 	rand.Seed(time.Now().UnixNano())
@@ -488,16 +488,6 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	l.Close()
 
 	return nil
-}
-
-func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bookkeeping.GenesisAllocation {
-	name = strings.ToLower(name)
-	for _, alloc := range allocation {
-		if strings.ToLower(alloc.Comment) == name {
-			return alloc
-		}
-	}
-	return bookkeeping.GenesisAllocation{}
 }
 
 // deterministicKeypair returns a key based on the provided index
@@ -573,9 +563,9 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64,
 	}
 
 	for _, stxn := range stxns {
-		txib, err := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
-		if err != nil {
-			return bookkeeping.Block{}, err
+		txib, err1 := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
+		if err1 != nil {
+			return bookkeeping.Block{}, err1
 		}
 		txibs = append(txibs, txib)
 	}
@@ -997,6 +987,16 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 		if node.IsRelay() {
 			relayCount++
 			port, err = extractPublicPort(node.NetAddress)
+			if err != nil {
+				return
+			}
+			if !ports[port] {
+				ports[port] = true
+				portList = append(portList, strconv.Itoa(port))
+			}
+		}
+		if node.P2PHybridNetAddress != "" {
+			port, err = extractPublicPort(node.P2PHybridNetAddress)
 			if err != nil {
 				return
 			}

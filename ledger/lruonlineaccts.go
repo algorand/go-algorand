@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
-// lruAccounts provides a storage class for the most recently used accounts data.
+// lruOnlineAccounts provides a storage class for the most recently used accounts data.
 // It doesn't have any synchronization primitive on its own and so is required to be
 // synchronized by the caller.
 type lruOnlineAccounts struct {
@@ -120,10 +120,8 @@ func (m *lruOnlineAccounts) prune(newSize int) (removed int) {
 	if m.accounts == nil {
 		return
 	}
-	for {
-		if len(m.accounts) <= newSize {
-			break
-		}
+	for len(m.accounts) > newSize {
+
 		back := m.accountsList.Back()
 		delete(m.accounts, back.Value.Addr)
 		m.accountsList.Remove(back)

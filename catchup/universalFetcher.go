@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,14 +36,14 @@ import (
 	"github.com/algorand/go-algorand/rpcs"
 )
 
-// UniversalFetcher fetches blocks either from an http peer or ws peer.
+// universalBlockFetcher fetches blocks either from an http peer or ws peer.
 type universalBlockFetcher struct {
 	config config.Local
 	net    network.GossipNode
 	log    logging.Logger
 }
 
-// makeUniversalFetcher returns a fetcher for http and ws peers.
+// makeUniversalBlockFetcher returns a fetcher for http and ws peers.
 func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) *universalBlockFetcher {
 	return &universalBlockFetcher{
 		config: config,
@@ -69,11 +69,15 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 		}
 		address = fetcherClient.address()
 	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
+		httpClient := httpPeer.GetHTTPClient()
+		if httpClient == nil {
+			return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: HTTPPeer %s has no http client", httpPeer.GetAddress())
+		}
 		fetcherClient := &HTTPFetcher{
 			peer:    httpPeer,
 			rootURL: httpPeer.GetAddress(),
 			net:     uf.net,
-			client:  httpPeer.GetHTTPClient(),
+			client:  httpClient,
 			log:     uf.log,
 			config:  &uf.config}
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
@@ -84,7 +88,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	} else {
 		return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
-	downloadDuration = time.Now().Sub(blockDownloadStartTime)
+	downloadDuration = time.Since(blockDownloadStartTime)
 	block, cert, err := processBlockBytes(fetchedBuf, round, address)
 	if err != nil {
 		return nil, nil, time.Duration(0), err
@@ -219,13 +223,8 @@ type HTTPFetcher struct {
 // getBlockBytes gets a block.
 // Core piece of FetcherClient interface
 func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
-	parsedURL, err := network.ParseHostOrURL(hf.rootURL)
-	if err != nil {
-		return nil, err
-	}
+	blockURL := rpcs.FormatBlockQuery(uint64(r), "", hf.net)
 
-	parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
-	blockURL := parsedURL.String()
 	hf.log.Debugf("block GET %#v peer %#v %T", blockURL, hf.peer, hf.peer)
 	request, err := http.NewRequest("GET", blockURL, nil)
 	if err != nil {
@@ -254,14 +253,14 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		}
 		return nil, noBlockErr
 	default:
-		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
+		bodyBytes, err1 := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
 		hf.log.Warnf("HTTPFetcher.getBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))
-		if err == nil {
-			err = makeErrHTTPResponse(response.StatusCode, blockURL, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
+		if err1 == nil {
+			err1 = makeErrHTTPResponse(response.StatusCode, blockURL, fmt.Sprintf("Response body '%s'", string(bodyBytes)))
 		} else {
-			err = makeErrHTTPResponse(response.StatusCode, blockURL, err.Error())
+			err1 = makeErrHTTPResponse(response.StatusCode, blockURL, err1.Error())
 		}
-		return nil, err
+		return nil, err1
 	}
 
 	// at this point, we've already receieved the response headers. ensure that the

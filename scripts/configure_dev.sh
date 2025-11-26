@@ -73,20 +73,18 @@ function install_windows_shellcheck() {
 
 if [ "${OS}" = "linux" ]; then
     if ! which sudo >/dev/null; then
-        "$SCRIPTPATH/install_linux_deps.sh"
+        DEBIAN_FRONTEND="$DEBIAN_FRONTEND" "$SCRIPTPATH/install_linux_deps.sh"
     else
         sudo "$SCRIPTPATH/install_linux_deps.sh"
     fi
 elif [ "${OS}" = "darwin" ]; then
-    if [ "${CIRCLECI}" != "true" ]; then
-        brew update
-        brew_version=$(brew --version | head -1 | cut -d' ' -f2)
-        major_version=$(echo $brew_version | cut -d. -f1)
-        minor_version=$(echo $brew_version | cut -d. -f2)
-        version_decimal="$major_version.$minor_version"
-        if (($(echo "$version_decimal < 2.5" | bc -l))); then
-            brew tap homebrew/cask
-        fi
+    brew update
+    brew_version=$(brew --version | head -1 | cut -d' ' -f2)
+    major_version=$(echo $brew_version | cut -d. -f1)
+    minor_version=$(echo $brew_version | cut -d. -f2)
+    version_decimal="$major_version.$minor_version"
+    if (($(echo "$version_decimal < 2.5" | bc -l))); then
+        brew tap homebrew/cask
     fi
     install_or_upgrade pkg-config
     install_or_upgrade libtool
@@ -95,9 +93,11 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade autoconf
     install_or_upgrade automake
     install_or_upgrade python3
-    install_or_upgrade lnav
     install_or_upgrade diffutils
-    lnav -i "$SCRIPTPATH/algorand_node_log.json"
+    if [ "$CI" != "true" ] && [ "$CIRCLECI" != "true" ]; then
+        install_or_upgrade lnav
+        lnav -i "$SCRIPTPATH/algorand_node_log.json"
+    fi
 elif [ "${OS}" = "windows" ]; then
     if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-jq unzip procps; then
         echo "Error installing pacman dependencies"

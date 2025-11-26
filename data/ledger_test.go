@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -682,6 +682,10 @@ func TestLedgerErrorValidate(t *testing.T) {
 					require.LessOrEqual(t, attemptedRound, dbRound)
 					require.GreaterOrEqual(t, int(l.Latest()), dbRound+int(cfg.MaxAcctLookback))
 					um = ""
+				} else if strings.Contains(um, "rolling back failed commitRound") {
+					// this in-memory ledger is expected to hit "database table is locked" errors
+					// so that retry logic is exercised and trackers notified of the rollback
+					um = ""
 				}
 				require.Empty(t, um, um)
 			default:
@@ -716,6 +720,10 @@ func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string, 
 
 	if proto.SupportGenesisHash {
 		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(genesisID))
+	}
+
+	if proto.EnableSha512BlockHash {
+		blk.BlockHeader.Branch512 = lastBlock.Hash512()
 	}
 
 	blk.RewardsPool = testPoolAddr

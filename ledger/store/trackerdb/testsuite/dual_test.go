@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 )
 
 func TestDualEngines(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partitioning inside subtest
 	dbFactory := func(proto config.ConsensusParams) dbForTests {
 		db := testdb.OpenForTesting(t, true)
 		seedDb(t, db)

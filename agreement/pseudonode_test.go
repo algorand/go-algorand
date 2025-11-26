@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package agreement
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -449,7 +448,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	for rnd := basics.Round(3); rnd < 1000; rnd += 43 {
 		keyManagerProxy.target = func(votingRound, balanceRnd basics.Round) []account.ParticipationRecordForRound {
 			require.Equal(t, rnd, votingRound)
-			require.Equal(t, balanceRound(rnd, cparams), balanceRnd)
+			require.Equal(t, BalanceRound(rnd, cparams), balanceRnd)
 			return keyManager.VotingKeys(votingRound, balanceRnd)
 		}
 		pb.loadRoundParticipationKeys(basics.Round(rnd))
@@ -458,12 +457,12 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 
 type substrServiceLogger struct {
 	logging.Logger
-	looupStrings   []string
+	lookupStrings  []string
 	instancesFound []int
 }
 
 func (ssl *substrServiceLogger) Infof(s string, args ...interface{}) {
-	for i, str := range ssl.looupStrings {
+	for i, str := range ssl.lookupStrings {
 		if strings.Contains(s, str) {
 			ssl.instancesFound[i]++
 			return
@@ -471,9 +470,9 @@ func (ssl *substrServiceLogger) Infof(s string, args ...interface{}) {
 	}
 }
 
-// TestPseudonodeFailedEnqueuedTasks test to see that in the case where we cannot enqueue the verification task to the backlog, we won't be waiting forever - instead,
+// TestPseudonodeNonEnqueuedTasks test to see that in the case where we cannot enqueue the verification task to the backlog, we won't be waiting forever - instead,
 // we would generate a warning message and keep going.
-func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
+func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
@@ -485,7 +484,7 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 
 	subStrLogger := &substrServiceLogger{
 		Logger:         logging.TestingLog(t),
-		looupStrings:   []string{"pseudonode.makeVotes: failed to enqueue vote verification for", "pseudonode.makeProposals: failed to enqueue vote verification"},
+		lookupStrings:  []string{"pseudonode.makeVotes: failed to enqueue vote verification for", "pseudonode.makeProposals: failed to enqueue vote verification"},
 		instancesFound: []int{0, 0},
 	}
 	sLogger := serviceLogger{
@@ -520,21 +519,21 @@ func TestPseudonodeFailedEnqueuedTasks(t *testing.T) {
 	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
 		ch, err = pb.MakeProposals(context.Background(), startRound, period(i))
 		if err != nil {
-			require.ErrorAs(t, errPseudonodeBacklogFull, &err)
+			require.ErrorIs(t, err, errPseudonodeBacklogFull)
 			break
 		}
 		channels = append(channels, ch)
 	}
 	enqueuedProposals := len(channels)
 	require.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
-	require.True(t, errors.Is(err, errPseudonodeBacklogFull))
+	require.ErrorIs(t, err, errPseudonodeBacklogFull)
 
 	persist := make(chan error)
 	close(persist)
 	for i := 0; i < pseudonodeVerificationBacklog*2; i++ {
 		ch, err = pb.MakeVotes(context.Background(), startRound, period(i), step(i%5), makeProposalValue(period(i), accounts[0].Address()), persist)
 		if err != nil {
-			require.ErrorAs(t, errPseudonodeBacklogFull, &err)
+			require.ErrorIs(t, err, errPseudonodeBacklogFull)
 			break
 		}
 		channels = append(channels, ch)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package network
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"time"
@@ -60,7 +61,7 @@ func (t *telemetryURIUpdater) Start() {
 		updateTelemetryURI := func() {
 			endpointURL := t.lookupTelemetryURL()
 
-			if endpointURL != nil && endpointURL.String() != t.log.GetTelemetryURI() && false == t.cfg.DisableNetworking {
+			if endpointURL != nil && endpointURL.String() != t.log.GetTelemetryURI() && !t.cfg.DisableNetworking {
 				err := t.log.UpdateTelemetryURI(endpointURL.String())
 				if err != nil {
 					t.log.Warnf("Unable to update telemetry URI to '%s' : %v", endpointURL.String(), err)
@@ -132,5 +133,5 @@ func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 }
 
 func (t *telemetryURIUpdater) readFromSRV(protocol string, bootstrapID string) (addrs []string, err error) {
-	return ReadFromSRV("telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress, t.cfg.DNSSecuritySRVEnforced())
+	return ReadFromSRV(context.Background(), "telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress, t.cfg.DNSSecuritySRVEnforced())
 }

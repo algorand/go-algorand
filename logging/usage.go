@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,7 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 	ticker := time.NewTicker(period)
 	hasPrev := false
 
-	for true {
+	for {
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():

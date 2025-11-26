@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -36,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -95,7 +93,6 @@ type mockNode struct {
 	err             error
 	id              account.ParticipationID
 	keys            account.StateProofKeys
-	usertxns        map[basics.Address][]node.TxnWithStatus
 	status          node.StatusReport
 	devmode         bool
 	timestampOffset *int64
@@ -119,7 +116,7 @@ func (m *mockNode) RemoveParticipationKey(id account.ParticipationID) error {
 	panic("implement me")
 }
 
-func (m *mockNode) SetSyncRound(rnd uint64) error {
+func (m *mockNode) SetSyncRound(rnd basics.Round) error {
 	args := m.Called(rnd)
 	return args.Error(0)
 }
@@ -127,9 +124,9 @@ func (m *mockNode) SetSyncRound(rnd uint64) error {
 func (m *mockNode) UnsetSyncRound() {
 }
 
-func (m *mockNode) GetSyncRound() uint64 {
+func (m *mockNode) GetSyncRound() basics.Round {
 	args := m.Called()
-	return uint64(args.Int(0))
+	return basics.Round(args.Int(0))
 }
 
 func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {
@@ -148,7 +145,6 @@ func makeMockNodeWithConfig(ledger v2.LedgerForAPI, genesisID string, nodeError 
 		genesisID: genesisID,
 		config:    cfg,
 		err:       nodeError,
-		usertxns:  map[basics.Address][]node.TxnWithStatus{},
 		status:    status,
 		devmode:   devMode,
 	}
@@ -198,44 +194,6 @@ func (m *mockNode) SuggestedFee() basics.MicroAlgos {
 // unused by handlers:
 func (m *mockNode) Config() config.Local {
 	return m.config
-}
-func (m *mockNode) Start() {}
-
-func (m *mockNode) ListeningAddress() (string, bool) {
-	return "mock listening addresses not implemented", false
-}
-
-func (m *mockNode) Stop() {}
-
-func (m *mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]node.TxnWithStatus, error) {
-	txns, ok := m.usertxns[addr]
-	if !ok {
-		return nil, fmt.Errorf("no txns for %s", addr)
-	}
-
-	return txns, nil
-}
-
-func (m *mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {
-	return node.TxnWithStatus{}, false
-}
-
-func (m *mockNode) IsArchival() bool {
-	return false
-}
-
-func (m *mockNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {}
-
-func (m *mockNode) Uint64() uint64 {
-	return 1
-}
-
-func (m *mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
-	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
-}
-
-func (m *mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
-	return nil, fmt.Errorf("assemble block not implemented")
 }
 
 func (m *mockNode) StartCatchup(catchpoint string) error {
@@ -355,7 +313,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusFuture, bootstrap, genesisID, genesisHash, nil, cfg)
+	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusFuture, bootstrap, genesisID, genesisHash, cfg)
 	if err != nil {
 		panic(err)
 	}

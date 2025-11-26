@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 package verify
 
 import (
-	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -98,10 +98,16 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 }
 
+// TxnGroupBatchSigVerifier provides Verify method to synchronously verify a group of transactions
+// It starts a new block listener to receive latests block headers for the sig verification
+type TxnGroupBatchSigVerifier struct {
+	cache  VerifiedTransactionCache
+	nbw    *NewBlockWatcher
+	ledger logic.LedgerForSignature
+}
+
 type txnSigBatchProcessor struct {
-	cache       VerifiedTransactionCache
-	nbw         *NewBlockWatcher
-	ledger      logic.LedgerForSignature
+	TxnGroupBatchSigVerifier
 	resultChan  chan<- *VerificationResult
 	droppedChan chan<- *UnverifiedTxnSigJob
 }
@@ -142,25 +148,47 @@ func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, 
 	}
 }
 
-// MakeSigVerifyJobProcessor returns the object implementing the stream verifier Helper interface
-func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
-	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob) (svp execpool.BatchProcessor, err error) {
+// MakeSigVerifier creats a new TxnGroupBatchSigVerifier for synchronous verification of transactions
+func MakeSigVerifier(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache) (TxnGroupBatchSigVerifier, error) {
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
 	if err != nil {
-		return nil, errors.New("MakeStreamVerifier: Could not get header for previous block")
+		return TxnGroupBatchSigVerifier{}, fmt.Errorf("MakeSigVerifier: Could not get header for previous block: %w", err)
 	}
 
 	nbw := MakeNewBlockWatcher(latestHdr)
 	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
 
+	verifier := TxnGroupBatchSigVerifier{
+		cache:  cache,
+		nbw:    nbw,
+		ledger: ledger,
+	}
+
+	return verifier, nil
+}
+
+// MakeSigVerifyJobProcessor returns the object implementing the stream verifier Helper interface
+func MakeSigVerifyJobProcessor(
+	ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
+	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob,
+) (svp execpool.BatchProcessor, err error) {
+	sigVerifier, err := MakeSigVerifier(ledger, cache)
+	if err != nil {
+		return nil, err
+	}
 	return &txnSigBatchProcessor{
-		cache:       cache,
-		nbw:         nbw,
-		ledger:      ledger,
-		droppedChan: droppedChan,
-		resultChan:  resultChan,
+		TxnGroupBatchSigVerifier: sigVerifier,
+		droppedChan:              droppedChan,
+		resultChan:               resultChan,
 	}, nil
+}
+
+// Verify synchronously verifies the signatures of the transactions in the group
+func (sv *TxnGroupBatchSigVerifier) Verify(stxs []transactions.SignedTxn) error {
+	blockHeader := sv.nbw.getBlockHeader()
+	_, err := txnGroup(stxs, blockHeader, sv.cache, sv.ledger, nil)
+	return err
 }
 
 func (tbp *txnSigBatchProcessor) ProcessBatch(txns []execpool.InputJob) {
@@ -170,7 +198,7 @@ func (tbp *txnSigBatchProcessor) ProcessBatch(txns []execpool.InputJob) {
 	tbp.postProcessVerifiedJobs(ctx, failed, err)
 }
 
-func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uTxns))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here
@@ -230,11 +258,10 @@ func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed
 		for i := range bl.txnGroups {
 			tbp.sendResult(bl.txnGroups[i], bl.backlogMessage[i], nil)
 		}
-		tbp.cache.AddPayset(bl.txnGroups, bl.groupCtxs)
+		tbp.cache.AddPayset(bl.groupCtxs)
 		return
 	}
 
-	verifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(bl.txnGroups))
 	verifiedGroupCtxs := make([]*GroupContext, 0, len(bl.groupCtxs))
 	failedSigIdx := 0
 	for txgIdx := range bl.txnGroups {
@@ -252,7 +279,6 @@ func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed
 		}
 		var result error
 		if !txGroupSigFailed {
-			verifiedTxnGroups = append(verifiedTxnGroups, bl.txnGroups[txgIdx])
 			verifiedGroupCtxs = append(verifiedGroupCtxs, bl.groupCtxs[txgIdx])
 		} else {
 			result = err
@@ -260,5 +286,5 @@ func (tbp *txnSigBatchProcessor) postProcessVerifiedJobs(ctx interface{}, failed
 		tbp.sendResult(bl.txnGroups[txgIdx], bl.backlogMessage[txgIdx], result)
 	}
 	// loading them all at once by locking the cache once
-	tbp.cache.AddPayset(verifiedTxnGroups, verifiedGroupCtxs)
+	tbp.cache.AddPayset(verifiedGroupCtxs)
 }

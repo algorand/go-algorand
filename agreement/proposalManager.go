@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -245,7 +245,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 	}
 }
 
-// filterVote filters a vote, checking if it is both fresh and not a duplicate, returning
+// filterProposalVote filters a vote, checking if it is both fresh and not a duplicate, returning
 // an errProposalManagerPVNotFresh or errProposalManagerPVDuplicate if so, else nil.
 // It also returns a bool indicating whether this proposal-vote should still be verified for tracking credential history.
 func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) (bool, error) {
@@ -289,7 +289,7 @@ func proposalUsefulForCredentialHistory(curRound round, vote unauthenticatedVote
 	return false
 }
 
-// voteFresh determines whether a proposal satisfies freshness rules.
+// proposalFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
 	switch vote.R.Round {
 	case freshData.PlayerRound:

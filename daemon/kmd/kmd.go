@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,6 +69,7 @@ func Start(startConfig StartConfig) (died chan error, sock string, err error) {
 		DataDir:        startConfig.DataDir,
 		Address:        kmdCfg.Address,
 		AllowedOrigins: kmdCfg.AllowedOrigins,
+		AllowHeaderPNA: kmdCfg.AllowHeaderPNA,
 		SessionManager: session.MakeManager(kmdCfg),
 		Log:            startConfig.Log,
 		Timeout:        startConfig.Timeout,

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,13 +19,15 @@ package gen
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/basics"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,6 +42,7 @@ import (
 )
 
 func TestLoadMultiRootKeyConcurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
 	tempDir := t.TempDir()
@@ -53,8 +56,8 @@ func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 			defer wg.Done()
 			wallet := filepath.Join(tempDir, fmt.Sprintf("wallet%d", idx+1))
 			rootDB, err := db.MakeErasableAccessor(wallet)
-			defer rootDB.Close()
 			a.NoError(err)
+			defer rootDB.Close()
 			_, err = account.GenerateRoot(rootDB)
 			a.NoError(err)
 		}(i)
@@ -79,6 +82,7 @@ func TestLoadMultiRootKeyConcurrent(t *testing.T) {
 }
 
 func TestLoadSingleRootKeyConcurrent(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Skip() // skip in auto-test mode
 	a := require.New(t)
 	tempDir := t.TempDir()
@@ -170,12 +174,7 @@ func TestGenesisJsonCreation(t *testing.T) {
 		deterministicAddresses := []string{"FeeSink", "RewardsPool"}
 
 		isNondeterministicAddress := func(name string) bool {
-			for _, address := range deterministicAddresses {
-				if name == address {
-					return false
-				}
-			}
-			return true
+			return !slices.Contains(deterministicAddresses, name)
 		}
 
 		for i := range as {
@@ -239,7 +238,7 @@ func TestGenesisJsonCreation(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("name=%v", tc.name), func(t *testing.T) {
 			gd := tc.gd
-			gd.LastPartKeyRound = uint64(quickLastPartKeyRound)
+			gd.LastPartKeyRound = quickLastPartKeyRound
 
 			outDir := t.TempDir()
 			err := GenerateGenesisFiles(gd, config.Consensus, outDir, nil)

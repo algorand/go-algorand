@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -708,7 +708,7 @@ func TestRunMode(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 
 	// check run mode application
 	dp = DebugParams{
@@ -745,7 +745,7 @@ func TestRunMode(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 }
 
 func TestDebugFromTxn(t *testing.T) {
@@ -810,7 +810,7 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal([]byte{3}, l.runs[0].program)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 
 	// ensure clear approval program is supposed to be debugged
 	brs = makeSampleBalanceRecord(sender, 0, appIdx)
@@ -1248,15 +1248,19 @@ int 1`
 	}
 	balanceBlob := protocol.EncodeMsgp(&br)
 
+	// Get proto using the same lookup that LocalRunner.Setup will use
+	_, proto, err := protoFromString(string(protocol.ConsensusCurrentVersion))
+	a.NoError(err)
+
 	// two testcase: success with enough fees and fail otherwise
 	var tests = []struct {
 		fee      uint64
 		expected func(LocalRunner, runAllResult)
 	}{
-		{2000, func(l LocalRunner, r runAllResult) {
+		{2 * proto.MinTxnFee, func(l LocalRunner, r runAllResult) {
 			a.Equal(allPassing(len(l.runs)), r)
 		}},
-		{1500, func(_ LocalRunner, r runAllResult) {
+		{proto.MinTxnFee + proto.MinTxnFee/2, func(_ LocalRunner, r runAllResult) {
 			a.Condition(allErrors(r.allErrors()))
 			for _, result := range r.results {
 				a.False(result.pass)
@@ -1265,7 +1269,6 @@ int 1`
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(fmt.Sprintf("fee=%d", test.fee), func(t *testing.T) {
 			t.Parallel()
 			stxn := transactions.SignedTxn{
@@ -1294,7 +1297,7 @@ int 1`
 				LatestTimestamp: 333,
 				GroupIndex:      0,
 				RunMode:         "application",
-				AppID:           uint64(appIdx),
+				AppID:           appIdx,
 			}
 
 			local := MakeLocalRunner(nil)
@@ -1395,7 +1398,6 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 		}},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(fmt.Sprintf("txn-count=%d", test.additionalApps+1), func(t *testing.T) {
 			t.Parallel()
 			txnBlob := protocol.EncodeMsgp(&stxn)
@@ -1427,7 +1429,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 				LatestTimestamp: 333,
 				GroupIndex:      0,
 				RunMode:         "application",
-				AppID:           uint64(appIdx),
+				AppID:           appIdx,
 			}
 
 			local := MakeLocalRunner(nil)

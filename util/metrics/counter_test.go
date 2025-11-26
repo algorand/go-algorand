@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ func TestMetricCounter(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
@@ -113,7 +113,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
@@ -162,7 +162,7 @@ func TestMetricCounterMixed(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
@@ -230,4 +230,43 @@ func TestGetValueForLabels(t *testing.T) {
 	labels2 := map[string]string{"a": "c"}
 	c.Inc(labels2)
 	require.Equal(t, uint64(1), c.GetUint64ValueForLabels(labels2))
+}
+
+func TestCounterLabels(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	m := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	m.Deregister(nil)
+
+	m.AddUint64(1, map[string]string{"a": "b"})
+	m.AddUint64(10, map[string]string{"c": "d"})
+	m.AddUint64(1, map[string]string{"a": "b"})
+	m.AddUint64(5, nil)
+
+	require.Equal(t, uint64(2), m.GetUint64ValueForLabels(map[string]string{"a": "b"}))
+	require.Equal(t, uint64(10), m.GetUint64ValueForLabels(map[string]string{"c": "d"}))
+
+	buf := strings.Builder{}
+	m.WriteMetric(&buf, "")
+	res := buf.String()
+	require.Contains(t, res, `testname{a="b"} 2`)
+	require.Contains(t, res, `testname{c="d"} 10`)
+	require.Contains(t, res, `testname 5`)
+	require.Equal(t, 1, strings.Count(res, "# HELP testname testhelp"))
+	require.Equal(t, 1, strings.Count(res, "# TYPE testname counter"))
+
+	buf = strings.Builder{}
+	m.WriteMetric(&buf, `p1=v1,p2="v2"`)
+	res = buf.String()
+	require.Contains(t, res, `testname{p1=v1,p2="v2",a="b"} 2`)
+	require.Contains(t, res, `testname{p1=v1,p2="v2",c="d"} 10`)
+
+	m = MakeCounter(MetricName{Name: "testname2", Description: "testhelp2"})
+	m.Deregister(nil)
+
+	m.AddUint64(101, nil)
+	buf = strings.Builder{}
+	m.WriteMetric(&buf, "")
+	res = buf.String()
+	require.Contains(t, res, `testname2 101`)
 }

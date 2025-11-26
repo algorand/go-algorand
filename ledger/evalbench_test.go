@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -176,7 +176,7 @@ func (g *benchAppOptInsTxnGenerator) Prepare(tb testing.TB, addrs []basics.Addre
 					GenesisHash: gh,
 				},
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: basics.AppIndex(appIdx),
+					ApplicationID: appIdx,
 					OnCompletion:  transactions.OptInOC,
 				},
 			}
@@ -514,16 +514,22 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 	if len(initSignedTxns) > 0 {
 
 		var numBlocks uint64 = 0
+		var unfinishedBlock *ledgercore.UnfinishedBlock
 		var validatedBlock *ledgercore.ValidatedBlock
 
-		// there are might more transactions than MaxTxnBytesPerBlock allows
-		// so make smaller blocks to fit
+		// there might be more transactions than MaxTxnBytesPerBlock allows so
+		// make smaller blocks to fit
 		for i, stxn := range initSignedTxns {
 			err := bev.Transaction(stxn, transactions.ApplyData{})
 			require.NoError(b, err)
 			if maxTxnPerBlock > 0 && i%maxTxnPerBlock == 0 || i == len(initSignedTxns)-1 {
-				validatedBlock, err = bev.GenerateBlock()
+				unfinishedBlock, err = bev.GenerateBlock(nil)
 				require.NoError(b, err)
+				// We are not setting seed & proposer details with
+				// FinishBlock/WithProposer. When agreement actually does that,
+				// it surely has some cost.
+				vb := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
+				validatedBlock = &vb
 				for _, l := range []*Ledger{l, l2} {
 					err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 					require.NoError(b, err)
@@ -562,12 +568,14 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 		require.NoError(b, err)
 	}
 
-	validatedBlock, err := bev.GenerateBlock()
+	// as above - this might be an underestimate because we skip agreement
+	unfinishedBlock, err := bev.GenerateBlock(nil)
 	require.NoError(b, err)
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 	blockBuildDone := time.Now()
 	blockBuildTime := blockBuildDone.Sub(setupDone)
 	b.ReportMetric(float64(blockBuildTime)/float64(numTxns), "ns/block_build_tx")
 
-	return validatedBlock
+	return &validatedBlock
 }

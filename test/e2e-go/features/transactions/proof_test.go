@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -76,6 +76,9 @@ func TestTxnMerkleProof(t *testing.T) {
 	status, err := client.Status()
 	a.NoError(err)
 
+	params, err := client.SuggestedParams()
+	a.NoError(err)
+
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
 	// we do not want to have a full tree in order the catch an empty element edge case
@@ -83,16 +86,16 @@ func TestTxnMerkleProof(t *testing.T) {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
-		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, 1000, 10000000, nil)
+		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, params.MinFee, 10000000, nil)
 		a.NoError(err)
 	}
 
-	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
+	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, params.MinFee, 10000000, nil)
 	a.NoError(err)
 
 	txid := tx.ID()
 	txidSHA256 := tx.IDSha256() // only used for verification
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, txid.String())
 	a.NoError(err)
 	a.NotNil(confirmedTx.ConfirmedRound)
 
@@ -160,6 +163,9 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	status, err := client.Status()
 	a.NoError(err)
 
+	params, err := client.SuggestedParams()
+	a.NoError(err)
+
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
 	// we do not want to have a full tree in order the catch an empty element edge case
@@ -167,15 +173,15 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
-		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, 1000, 10000000, nil)
+		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, params.MinFee, 10000000, nil)
 		a.NoError(err)
 	}
 
-	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
+	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, params.MinFee, 10000000, nil)
 	a.NoError(err)
 
 	txid := tx.ID()
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, txid.String())
 	a.NoError(err)
 	a.NotNil(confirmedTx.ConfirmedRound)
 

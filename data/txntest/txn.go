@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,8 +23,10 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -55,6 +57,7 @@ type Txn struct {
 	VoteLast         basics.Round
 	VoteKeyDilution  uint64
 	Nonparticipation bool
+	StateProofPK     merklesignature.Commitment
 
 	Receiver         basics.Address
 	Amount           uint64
@@ -80,15 +83,22 @@ type Txn struct {
 	ForeignApps       []basics.AppIndex
 	ForeignAssets     []basics.AssetIndex
 	Boxes             []transactions.BoxRef
+	Access            []transactions.ResourceRef
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
-	ApprovalProgram   interface{} // string, nil, or []bytes if already compiled
-	ClearStateProgram interface{} // string, nil or []bytes if already compiled
+	ApprovalProgram   any // string, nil, or []bytes if already compiled
+	ClearStateProgram any // string, nil or []bytes if already compiled
 	ExtraProgramPages uint32
 
 	StateProofType protocol.StateProofType
 	StateProof     stateproof.StateProof
 	StateProofMsg  stateproofmsg.Message
+
+	HbAddress     basics.Address
+	HbProof       crypto.HeartbeatProof
+	HbSeed        committee.Seed
+	HbVoteID      crypto.OneTimeSignatureVerifier
+	HbKeyDilution uint64
 }
 
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
@@ -107,6 +117,10 @@ func (tx *Txn) internalCopy() {
 	tx.Boxes = append([]transactions.BoxRef(nil), tx.Boxes...)
 	for i := 0; i < len(tx.Boxes); i++ {
 		tx.Boxes[i].Name = append([]byte(nil), tx.Boxes[i].Name...)
+	}
+	tx.Access = append([]transactions.ResourceRef(nil), tx.Access...)
+	for i := 0; i < len(tx.Access); i++ {
+		tx.Access[i].Box.Name = append([]byte(nil), tx.Access[i].Box.Name...)
 	}
 
 	// Programs may or may not actually be byte slices.  The other
@@ -147,29 +161,42 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
 
-	if tx.Type == protocol.ApplicationCallTx &&
-		(tx.ApplicationID == 0 || tx.OnCompletion == transactions.UpdateApplicationOC) {
-
-		switch program := tx.ApprovalProgram.(type) {
-		case nil:
-			tx.ApprovalProgram = fmt.Sprintf("#pragma version %d\nint 1", params.LogicSigVersion)
-		case string:
-			if program != "" && !strings.Contains(program, "#pragma version") {
-				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
-				tx.ApprovalProgram = pragma + program
+	switch tx.Type {
+	case protocol.KeyRegistrationTx:
+		if !tx.VotePK.MsgIsZero() && !tx.SelectionPK.MsgIsZero() {
+			if tx.VoteLast == 0 {
+				tx.VoteLast = tx.VoteFirst + 1_000_000
 			}
-		case []byte:
 		}
-
-		switch program := tx.ClearStateProgram.(type) {
-		case nil:
-			tx.ClearStateProgram = tx.ApprovalProgram
-		case string:
-			if program != "" && !strings.Contains(program, "#pragma version") {
-				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
-				tx.ClearStateProgram = pragma + program
+	case protocol.ApplicationCallTx:
+		// fill in empty programs
+		if tx.ApplicationID == 0 || tx.OnCompletion == transactions.UpdateApplicationOC {
+			switch program := tx.ApprovalProgram.(type) {
+			case nil:
+				tx.ApprovalProgram = fmt.Sprintf("#pragma version %d\nint 1", params.LogicSigVersion)
+			case string:
+				if program != "" && !strings.Contains(program, "#pragma version") {
+					pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+					tx.ApprovalProgram = pragma + program
+				}
+			case []byte:
 			}
-		case []byte:
+
+			switch program := tx.ClearStateProgram.(type) {
+			case nil:
+				tx.ClearStateProgram = tx.ApprovalProgram
+			case string:
+				if program != "" && !strings.Contains(program, "#pragma version") {
+					pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+					tx.ClearStateProgram = pragma + program
+				}
+			case []byte:
+			}
+		}
+		if tx.ApplicationID == 0 && tx.ExtraProgramPages == 0 {
+			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
+			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
+			tx.ExtraProgramPages = uint32(totalPages - 1)
 		}
 	}
 }
@@ -207,6 +234,17 @@ func (tx Txn) Txn() transactions.Transaction {
 	case nil:
 		tx.Fee = basics.MicroAlgos{}
 	}
+
+	hb := &transactions.HeartbeatTxnFields{
+		HbAddress:     tx.HbAddress,
+		HbProof:       tx.HbProof,
+		HbSeed:        tx.HbSeed,
+		HbVoteID:      tx.HbVoteID,
+		HbKeyDilution: tx.HbKeyDilution,
+	}
+	if hb.MsgIsZero() {
+		hb = nil
+	}
 	return transactions.Transaction{
 		Type: tx.Type,
 		Header: transactions.Header{
@@ -228,6 +266,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			VoteLast:         tx.VoteLast,
 			VoteKeyDilution:  tx.VoteKeyDilution,
 			Nonparticipation: tx.Nonparticipation,
+			StateProofPK:     tx.StateProofPK,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         tx.Receiver,
@@ -258,6 +297,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			ForeignApps:       append([]basics.AppIndex(nil), tx.ForeignApps...),
 			ForeignAssets:     append([]basics.AssetIndex(nil), tx.ForeignAssets...),
 			Boxes:             tx.Boxes,
+			Access:            tx.Access,
 			LocalStateSchema:  tx.LocalStateSchema,
 			GlobalStateSchema: tx.GlobalStateSchema,
 			ApprovalProgram:   assemble(tx.ApprovalProgram),
@@ -269,6 +309,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			StateProof:     tx.StateProof,
 			Message:        tx.StateProofMsg,
 		},
+		HeartbeatTxnFields: hb,
 	}
 }
 

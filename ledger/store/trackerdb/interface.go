@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
@@ -105,6 +104,7 @@ type AccountsReader interface {
 
 	LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error)
 	LookupAllResources(addr basics.Address) (data []PersistedResourcesData, rnd basics.Round, err error)
+	LookupLimitedResources(addr basics.Address, minIdx basics.CreatableIndex, maxCreatables uint64, ctype basics.CreatableType) (data []PersistedResourcesDataWithCreator, rnd basics.Round, err error)
 
 	LookupKeyValue(key string) (pv PersistedKVData, err error)
 	LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error)
@@ -125,11 +125,13 @@ type AccountsReaderExt interface {
 	TotalResources(ctx context.Context) (total uint64, err error)
 	TotalAccounts(ctx context.Context) (total uint64, err error)
 	TotalKVs(ctx context.Context) (total uint64, err error)
+	TotalOnlineAccountRows(ctx context.Context) (total uint64, err error)
+	TotalOnlineRoundParams(ctx context.Context) (total uint64, err error)
 	AccountsRound() (rnd basics.Round, err error)
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
-	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
+	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, rewardUnit uint64) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
-	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
+	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, rewardUnit uint64, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)
@@ -175,10 +177,13 @@ type CatchpointWriter interface {
 
 	WriteCatchpointStagingBalances(ctx context.Context, bals []NormalizedAccountBalance) error
 	WriteCatchpointStagingKVs(ctx context.Context, keys [][]byte, values [][]byte, hashes [][]byte) error
+	WriteCatchpointStagingOnlineAccounts(context.Context, []encoded.OnlineAccountRecordV6) error
+	WriteCatchpointStagingOnlineRoundParams(context.Context, []encoded.OnlineRoundParamsRecordV6) error
 	WriteCatchpointStagingCreatable(ctx context.Context, bals []NormalizedAccountBalance) error
 	WriteCatchpointStagingHashes(ctx context.Context, bals []NormalizedAccountBalance) error
 
 	ApplyCatchpointStagingBalances(ctx context.Context, balancesRound basics.Round, merkleRootRound basics.Round) (err error)
+	ApplyCatchpointStagingTablesV7(ctx context.Context) error
 	ResetCatchpointStagingBalances(ctx context.Context, newCatchup bool) (err error)
 
 	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
@@ -231,6 +236,13 @@ type AccountAddressHash struct {
 type KVsIter interface {
 	Next() bool
 	KeyValue() (k []byte, v []byte, err error)
+	Close()
+}
+
+// TableIterator is used to add online accounts and online round params to catchpoint files.
+type TableIterator[T any] interface {
+	Next() bool
+	GetItem() (T, error)
 	Close()
 }
 

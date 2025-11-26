@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,11 +18,11 @@ package generickv
 
 import (
 	"context"
-	"github.com/algorand/go-algorand/config"
+	"testing"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
-	"testing"
 )
 
 type writer struct {
@@ -71,7 +71,7 @@ type writerForTesting struct {
 }
 
 // AccountsInitLightTest implements trackerdb.WriterTestExt
-func (w *writerForTesting) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
+func (w *writerForTesting) AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error) {
 	panic("unimplemented")
 }
 

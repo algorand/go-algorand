@@ -185,10 +185,6 @@ function get_updater_url() {
         UNAME=$(uname -m)
         if [[ "${UNAME}" = "x86_64" ]]; then
             ARCH="amd64"
-        elif [[ "${UNAME}" = "armv6l" ]]; then
-            ARCH="arm"
-        elif [[ "${UNAME}" = "armv7l" ]]; then
-            ARCH="arm"
         elif [[ "${UNAME}" = "aarch64" ]]; then
             ARCH="arm64"
         else
@@ -499,6 +495,8 @@ function backup_binaries() {
     BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
     [ -f "${BINDIR}/node_exporter" ] && BACKUPFILES="${BACKUPFILES} node_exporter"
+    # If we have algotmpl, we should back it up too
+    [ -f "${BINDIR}/algotmpl" ] && BACKUPFILES="${BACKUPFILES} algotmpl"
     tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" ${BACKUPFILES} >/dev/null 2>&1
 }
 

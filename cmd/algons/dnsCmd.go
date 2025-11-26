@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -329,7 +330,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 
 	var idsToDelete []cloudflare.DNSRecordResponseEntry
 	services := []string{"_algobootstrap", "_metrics"}
-	servicesRegexp, err := regexp.Compile("^(_algobootstrap|_metrics)\\._tcp\\..*algodev.network$")
+	servicesRegexp, err := regexp.Compile(`^(_algobootstrap|_metrics)\._tcp\..*algodev.network$`)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create services expression: %v", err)
@@ -347,13 +348,13 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 			name = service + "._tcp." + network + ".algodev.network"
 		}
 
-		records, err := cloudflareDNS.ListDNSRecord(context.Background(), "SRV", name, "", "", "", "")
+		records, err1 := cloudflareDNS.ListDNSRecord(context.Background(), "SRV", name, "", "", "", "")
 
-		if err != nil {
+		if err1 != nil {
 			if name != "" {
-				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err)
+				fmt.Fprintf(os.Stderr, "Error listing SRV '%s' entries: %v\n", service, err1)
 			} else {
-				fmt.Fprintf(os.Stderr, "Error listing SRV entries: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Error listing SRV entries: %v\n", err1)
 			}
 			os.Exit(1)
 		}
@@ -380,9 +381,9 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 	}
 
 	for _, recordType := range []string{"A", "CNAME", "TXT"} {
-		records, err := cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing DNS '%s' entries: %v\n", recordType, err)
+		records, err1 := cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
+		if err1 != nil {
+			fmt.Fprintf(os.Stderr, "Error listing DNS '%s' entries: %v\n", recordType, err1)
 			os.Exit(1)
 		}
 		for _, r := range records {
@@ -439,13 +440,7 @@ func checkedDelete(toDelete []cloudflare.DNSRecordResponseEntry, cloudflareDNS *
 
 func getEntries(getNetwork string, recordType string) ([]cloudflare.DNSRecordResponseEntry, error) {
 	recordTypes := []string{"A", "CNAME", "SRV", "TXT"}
-	isKnown := false
-	for _, known := range append(recordTypes, "") {
-		if recordType == known {
-			isKnown = true
-			break
-		}
-	}
+	isKnown := slices.Contains(recordTypes, recordType) || recordType == ""
 	if !isKnown {
 		return nil, fmt.Errorf("invalid recordType specified %s", recordType)
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1084,12 +1084,12 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 			Action: basics.DeleteAction,
 		},
 	}
-	gsd := StateDeltaToStateDelta(sd)
-	require.Equal(t, 3, len(*gsd))
+	gsd := globalDeltaToStateDelta(sd)
+	require.Equal(t, 3, len(gsd))
 
 	var keys []string
 	// test with a loop because sd is a map and iteration order is random
-	for _, item := range *gsd {
+	for _, item := range gsd {
 		if item.Key == b64("byteskey") {
 			require.Equal(t, uint64(1), item.Value.Action)
 			require.Nil(t, item.Value.Uint)
@@ -1155,7 +1155,7 @@ int 1`)
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
+				Id: appIdx,
 				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
@@ -1246,7 +1246,7 @@ return
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
+				Id: appIdx,
 				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
@@ -1255,7 +1255,7 @@ return
 				},
 			},
 			{
-				Id: uint64(appIdx + 1),
+				Id: appIdx + 1,
 				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approv,
@@ -1310,7 +1310,7 @@ func TestDryrunCost(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
 			expectedCosts := make([]int64, 3)
-			expectedBudgetAdded := make([]uint64, 3)
+			expectedBudgetAdded := make([]int, 3)
 
 			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
 			require.NoError(t, err)
@@ -1383,7 +1383,7 @@ int 1`)
 				},
 				Apps: []model.Application{
 					{
-						Id: uint64(appIdx),
+						Id: appIdx,
 						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app1,
@@ -1392,7 +1392,7 @@ int 1`)
 						},
 					},
 					{
-						Id: uint64(appIdx + 1),
+						Id: appIdx + 1,
 						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app2,
@@ -1401,7 +1401,7 @@ int 1`)
 						},
 					},
 					{
-						Id: uint64(appIdx + 2),
+						Id: appIdx + 2,
 						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app3,
@@ -1483,7 +1483,7 @@ int 1`
 			ApplicationID: appIdx,
 		}.SignedTxn()},
 		Apps: []model.Application{{
-			Id: uint64(appIdx),
+			Id: appIdx,
 			Params: model.ApplicationParams{
 				Creator:           sender.String(),
 				ApprovalProgram:   approval,
@@ -1545,7 +1545,7 @@ int 0
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
+				Id: appIdx,
 				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
@@ -1601,6 +1601,7 @@ int 1
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(7)
+	proto := config.Consensus[dryrunProtoVersion]
 	dr := DryrunRequest{
 		ProtocolVersion: string(dryrunProtoVersion),
 		Txns: []transactions.SignedTxn{txntest.Txn{
@@ -1609,7 +1610,7 @@ int 1
 			ApplicationID: appIdx,
 		}.SignedTxn()},
 		Apps: []model.Application{{
-			Id: uint64(appIdx),
+			Id: appIdx,
 			Params: model.ApplicationParams{
 				ApprovalProgram:   paySender.Program,
 				ClearStateProgram: clst,
@@ -1618,8 +1619,8 @@ int 1
 		// Sender must exist (though no fee is ever taken)
 		// AppAccount must exist and be able to pay the inner fee and the pay amount (but min balance not checked)
 		Accounts: []model.Account{
-			{Address: sender.String(), Status: "Offline"},                                                // sender
-			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: 1_010}}, // app account
+			{Address: sender.String(), Status: "Offline"},                                                               // sender
+			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: proto.MinTxnFee + 10}}, // app account needs MinTxnFee + pay amount
 	}
 	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)
@@ -1685,7 +1686,7 @@ int 1`)
 			Sender:        sender,
 			ApplicationID: appIdx}.SignedTxn())
 		apps = append(apps, model.Application{
-			Id: uint64(appIdx),
+			Id: appIdx,
 			Params: model.ApplicationParams{
 				ApprovalProgram:   approvalOps.Program,
 				ClearStateProgram: clst,

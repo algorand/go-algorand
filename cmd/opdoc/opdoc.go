@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// OpImmediateNote returns a short string about immediate data which follows the op byte
+// opImmediateNoteSyntaxMarkdown returns a short string about immediate data which follows the op byte
 func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails) string {
 	if len(oids) == 0 {
 		return ""
@@ -256,7 +256,7 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec, groupDocWritten map[string]bo
 }
 
 func opsToMarkdown(out io.Writer, version uint64) error {
-	_, err := out.Write([]byte(fmt.Sprintf("# v%d Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n", version)))
+	_, err := fmt.Fprintf(out, "# v%d Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n", version)
 	if err != nil {
 		return err
 	}
@@ -443,7 +443,7 @@ func create(file string) *os.File {
 }
 
 func main() {
-	const docVersion = uint64(10)
+	const docVersion = uint64(12)
 
 	opGroups := make(map[string][]string, len(logic.OpSpecs))
 	for grp, names := range logic.OpGroups {

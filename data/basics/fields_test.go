@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package basics_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -35,11 +36,9 @@ func makeTypeCheckFunction(t *testing.T, exceptions []reflectionhelpers.TypePath
 	return func(path reflectionhelpers.TypePath, stack []reflect.Type) bool {
 		currentType := stack[len(stack)-1]
 
-		for _, exception := range exceptions {
-			if path.Equals(exception) {
-				t.Logf("Skipping exception for path: %s", path)
-				return true
-			}
+		if slices.ContainsFunc(exceptions, path.Equals) {
+			t.Logf("Skipping exception for path: %s", path)
+			return true
 		}
 
 		switch currentType.Kind() {
@@ -59,7 +58,7 @@ func makeTypeCheckFunction(t *testing.T, exceptions []reflectionhelpers.TypePath
 func TestBlockFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	typeToCheck := reflect.TypeOf(bookkeeping.Block{})
+	typeToCheck := reflect.TypeFor[bookkeeping.Block]()
 
 	// These exceptions are for pre-existing usages of string. Only add to this list if you really need to use string.
 	exceptions := []reflectionhelpers.TypePath{
@@ -85,7 +84,7 @@ func TestBlockFields(t *testing.T) {
 func TestAccountDataFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	typeToCheck := reflect.TypeOf(basics.AccountData{})
+	typeToCheck := reflect.TypeFor[basics.AccountData]()
 
 	// These exceptions are for pre-existing usages of string. Only add to this list if you really need to use string.
 	exceptions := []reflectionhelpers.TypePath{

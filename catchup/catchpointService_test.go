@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -81,8 +81,8 @@ func (m *catchpointCatchupAccessorMock) Ledger() (l ledger.CatchupAccessorClient
 }
 
 // GetVerifyData returns the balances hash, spver hash and totals used by VerifyCatchpoint
-func (m *catchpointCatchupAccessorMock) GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
-	return crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, nil
+func (m *catchpointCatchupAccessorMock) GetVerifyData(ctx context.Context) (balancesHash, spverHash, onlineAccountsHash, onlineRoundParamsHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
+	return crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, nil
 }
 
 // TestCatchpointServicePeerRank ensures CatchpointService does not crash when a block fetched
@@ -144,6 +144,7 @@ func TestProcessStageBlocksDownloadNilCert(t *testing.T) {
 	blk2 := blk1
 	blk2.BlockHeader.Round = 2
 	blk2.BlockHeader.Branch = blk1.Hash()
+	blk2.BlockHeader.Branch512 = blk1.Hash512()
 	blk2.TxnCommitments, err = blk2.PaysetCommit()
 	require.NoError(t, err)
 

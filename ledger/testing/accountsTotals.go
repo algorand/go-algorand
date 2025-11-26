@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,8 +34,8 @@ func CalculateNewRoundAccountTotals(t *gotesting.T, newRoundDeltas ledgercore.Ac
 	for i := 0; i < newRoundDeltas.Len(); i++ {
 		addr, ad := newRoundDeltas.GetByIdx(i)
 		prevBal := ledgercore.ToAccountData(prevRoundBalances[addr])
-		newTotals.DelAccount(newRoundConsensusParams, prevBal, &ot)
-		newTotals.AddAccount(newRoundConsensusParams, ad, &ot)
+		newTotals.DelAccount(newRoundConsensusParams.RewardUnit, prevBal, &ot)
+		newTotals.AddAccount(newRoundConsensusParams.RewardUnit, ad, &ot)
 	}
 	require.False(t, ot.Overflowed)
 	return

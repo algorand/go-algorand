@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 // Package pingpong provides a transaction generating utility for performance testing.
 //
-//nolint:unused,structcheck,deadcode,varcheck // ignore unused pingpong code
+//nolint:unused // ignore unused pingpong code
 package pingpong
 
 import (
@@ -30,6 +30,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -49,9 +50,9 @@ import (
 
 // CreatablesInfo has information about created assets, apps and opting in
 type CreatablesInfo struct {
-	AssetParams map[uint64]model.AssetParams
-	AppParams   map[uint64]model.ApplicationParams
-	OptIns      map[uint64][]string
+	AssetParams map[basics.AssetIndex]model.AssetParams
+	AppParams   map[basics.AppIndex]model.ApplicationParams
+	OptIns      map[any][]string
 }
 
 // pingPongAccount represents the account state for each account in the pingpong application
@@ -65,7 +66,7 @@ type pingPongAccount struct {
 	pk basics.Address
 
 	// asset holdings
-	holdings map[uint64]uint64
+	holdings map[basics.AssetIndex]uint64
 }
 
 func (ppa *pingPongAccount) getBalance() uint64 {
@@ -91,18 +92,18 @@ func (ppa *pingPongAccount) addBalance(offset int64) {
 	}
 }
 
-func (ppa *pingPongAccount) getAsset(aid uint64) (v uint64, ok bool) {
+func (ppa *pingPongAccount) getAsset(aid basics.AssetIndex) (v uint64, ok bool) {
 	ppa.Lock()
 	defer ppa.Unlock()
 	v, ok = ppa.holdings[aid]
 	return
 }
-func (ppa *pingPongAccount) setAsset(aid, value uint64) {
+func (ppa *pingPongAccount) setAsset(aid basics.AssetIndex, value uint64) {
 	ppa.Lock()
 	defer ppa.Unlock()
 	ppa.holdings[aid] = value
 }
-func (ppa *pingPongAccount) addAsset(aid uint64, dv int64) {
+func (ppa *pingPongAccount) addAsset(aid basics.AssetIndex, dv int64) {
 	ppa.Lock()
 	defer ppa.Unlock()
 	v := ppa.holdings[aid]
@@ -267,8 +268,8 @@ func computeAccountMinBalance(client *libgoal.Client, cfg PpConfig) (fundingRequ
 		optInCost := uint64(cfg.NumApp) * proto.AppFlatOptInMinBalance * uint64(maxAppsOptedIn)
 		maxGlobalSchema := basics.StateSchema{NumUint: proto.MaxGlobalSchemaEntries, NumByteSlice: proto.MaxGlobalSchemaEntries}
 		maxLocalSchema := basics.StateSchema{NumUint: proto.MaxLocalSchemaEntries, NumByteSlice: proto.MaxLocalSchemaEntries}
-		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(&proto).Raw*uint64(maxAppsCreated) +
-			maxLocalSchema.MinBalance(&proto).Raw*uint64(maxAppsOptedIn))
+		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(proto.BalanceRequirements()).Raw*uint64(maxAppsCreated) +
+			maxLocalSchema.MinBalance(proto.BalanceRequirements()).Raw*uint64(maxAppsOptedIn))
 		fundingRequiredBalance += creationCost + optInCost + schemaCost
 		runningRequiredBalance += creationCost + optInCost + schemaCost
 	}
@@ -326,10 +327,8 @@ func (pps *WorkerState) schedule(n int) {
 	if n > 1 {
 		nextSendTime = nextSendTime.Add(timePerStep * time.Duration(n-1))
 	}
-	for {
-		if now.After(nextSendTime) {
-			break
-		}
+	for !now.After(nextSendTime) {
+
 		dur := nextSendTime.Sub(now)
 		if dur < durationEpsilon {
 			break
@@ -682,7 +681,7 @@ func NewPingpong(cfg PpConfig) *WorkerState {
 	}
 }
 
-func (pps *WorkerState) randAssetID() (aidx uint64) {
+func (pps *WorkerState) randAssetID() (aidx basics.AssetIndex) {
 	if len(pps.cinfo.AssetParams) == 0 {
 		return 0
 	}
@@ -696,7 +695,7 @@ func (pps *WorkerState) randAssetID() (aidx uint64) {
 	}
 	return
 }
-func (pps *WorkerState) randAppID() (aidx uint64) {
+func (pps *WorkerState) randAppID() (aidx basics.AppIndex) {
 	if len(pps.cinfo.AppParams) == 0 {
 		return 0
 	}
@@ -960,14 +959,14 @@ func (pps *WorkerState) constructTxn(from, to string, fee uint64, client *libgoa
 	totalWeight := pps.cfg.WeightPayment + pps.cfg.WeightAsset + pps.cfg.WeightApp
 	target := rand.Float64() * totalWeight
 	if target < pps.cfg.WeightAsset && pps.cfg.NumAsset > 0 {
-		txn, sender, update, err = pps.constructAssetTxn(from, to, fee, client, noteField, lease)
+		txn, sender, update, err = pps.constructAssetTxn(fee, client, noteField, lease)
 		if err != errNotOptedIn {
 			goto weightdone
 		}
 	}
 	target -= pps.cfg.WeightAsset
 	if target < pps.cfg.WeightApp && pps.cfg.NumApp > 0 {
-		txn, sender, update, err = pps.constructAppTxn(from, to, fee, client, noteField, lease)
+		txn, sender, update, err = pps.constructAppTxn(from, fee, client, noteField, lease)
 		if err != errNotOptedIn {
 			goto weightdone
 		}
@@ -1052,7 +1051,7 @@ func pReplace(i int) bool {
 	return rand.Intn(i) == 0
 }
 
-func (pps *WorkerState) constructAssetTxn(from, toUnused string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructAssetTxn(fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
 	// select a pair of random opted-in accounts by aidx
 	// use them as from/to addresses
 	amt := uint64(1)
@@ -1062,17 +1061,27 @@ func (pps *WorkerState) constructAssetTxn(from, toUnused string, fee uint64, cli
 		return
 	}
 	if len(pps.cinfo.OptIns[aidx]) == 0 {
-		// Opt-in another
-		// TODO: continue opt-in up to some amount? gradually?
-		txn, err = pps.appOptIn(from, aidx, client)
-		if err != nil {
-			return
-		}
-		update = &appOptInUpdate{
-			addr: from,
-			aidx: aidx,
-		}
-		return txn, from, update, nil
+		panic("This probably never happens.  If it does, investigate this.")
+
+		/*
+			   This code was here, but it makes no sense.  After selecting an
+			   _asset_ id, it performs an _app_ opt-in.  Best guess is that this
+			   never runs - enough accounts are opted in during setup that the len=0
+			   condition above never occurs.  The code used to compile because we
+			   conflated asset and app id as `uint64`.
+
+				// Opt-in another
+				// TODO: continue opt-in up to some amount? gradually?
+				txn, err = pps.appOptIn(from, aidx, client)
+				if err != nil {
+					return
+				}
+				update = &appOptInUpdate{
+					addr: from,
+					aidx: aidx,
+				}
+				return txn, from, update, nil
+		*/
 	}
 
 	optInsForAsset := pps.cinfo.OptIns[aidx]
@@ -1109,7 +1118,7 @@ func (pps *WorkerState) constructAssetTxn(from, toUnused string, fee uint64, cli
 	}
 
 	to := toAcct.pk.String()
-	from = fromAcct.pk.String()
+	from := fromAcct.pk.String()
 	sender = from
 	if to != from {
 		if toAcct.holdings[aidx] < 1000 && fromAcct.holdings[aidx] > 11000 {
@@ -1137,15 +1146,20 @@ func (pps *WorkerState) constructAssetTxn(from, toUnused string, fee uint64, cli
 	return txn, sender, update, err
 }
 
+/* This was part of the mystery in constructAppTxn, which was conflating app and
+   asset IDs. Commenting out because it does not compile now that we more
+   strongly segregate app/asset indexes.
+
 type appOptInUpdate struct {
 	addr string
-	aidx uint64
+	aidx basics.AppIndex
 }
 
 func (au *appOptInUpdate) apply(pps *WorkerState) {
 	pps.accounts[au.addr].holdings[au.aidx] = 0
 	pps.cinfo.OptIns[au.aidx] = uniqueAppend(pps.cinfo.OptIns[au.aidx], au.addr)
 }
+*/
 
 type nopUpdate struct {
 }
@@ -1158,7 +1172,7 @@ var nopUpdateSingleton = &nopUpdate{}
 type assetUpdate struct {
 	from string
 	to   string
-	aidx uint64
+	aidx basics.AssetIndex
 	amt  uint64
 	fee  uint64
 }
@@ -1168,12 +1182,12 @@ func (au *assetUpdate) apply(pps *WorkerState) {
 	pps.accounts[au.from].holdings[au.aidx] -= au.amt
 	to := pps.accounts[au.to]
 	if to.holdings == nil {
-		to.holdings = make(map[uint64]uint64)
+		to.holdings = make(map[basics.AssetIndex]uint64)
 	}
 	to.holdings[au.aidx] += au.amt
 }
 
-func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
+func (pps *WorkerState) constructAppTxn(from string, fee uint64, client *libgoal.Client, noteField []byte, lease [32]byte) (txn transactions.Transaction, sender string, update txnUpdate, err error) {
 	// select opted-in accounts for Txn.Accounts field
 	var accounts []string
 	aidx := pps.randAppID()
@@ -1183,41 +1197,42 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 	}
 
 	// construct box ref array
-	var boxRefs []transactions.BoxRef
-	for i := uint32(0); i < pps.getNumBoxes(); i++ {
-		boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
+	var boxRefs []basics.BoxRef
+	for i := range pps.getNumBoxes() {
+		boxRefs = append(boxRefs, basics.BoxRef{App: 0, Name: fmt.Sprintf("%d", i)})
 	}
 
 	appOptIns := pps.cinfo.OptIns[aidx]
 	sender = from
 	if len(appOptIns) > 0 {
 		indices := rand.Perm(len(appOptIns))
-		limit := 5
-		if len(indices) < limit {
-			limit = len(indices)
-		}
+		limit := min(len(indices), 5)
 		for i := 0; i < limit; i++ {
 			idx := indices[i]
 			accounts = append(accounts, appOptIns[idx])
 		}
-		if pps.cinfo.AppParams[aidx].Creator == from {
-			// if the application was created by the "from" account, then we don't need to worry about it being opted-in.
-		} else {
-			fromIsOptedIn := false
-			for i := 0; i < len(appOptIns); i++ {
-				if appOptIns[i] == from {
-					fromIsOptedIn = true
-					break
-				}
-			}
-			if !fromIsOptedIn {
-				sender = accounts[0]
-				from = sender
-			}
+		// change `from` to an account that's opted-in. creator also allowed.
+		if pps.cinfo.AppParams[aidx].Creator != from &&
+			!slices.Contains(appOptIns, from) {
+			from = accounts[0]
+			sender = from
 		}
 		accounts = accounts[1:]
 	}
-	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, boxRefs)
+	addresses := make([]basics.Address, 0, len(accounts))
+	for _, acct := range accounts {
+		var addr basics.Address
+		addr, err = basics.UnmarshalChecksumAddress(acct)
+		if err != nil {
+			return
+		}
+		addresses = append(addresses, addr)
+	}
+	refs := libgoal.RefBundle{
+		Accounts: addresses,
+		Boxes:    boxRefs,
+	}
+	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, refs, 0)
 	if err != nil {
 		return
 	}

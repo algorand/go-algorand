@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package testsuite
 import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,6 +28,9 @@ func init() {
 	registerTest("accounts-crud", CustomTestAccountsCrud)
 	registerTest("resources-crud", CustomTestResourcesCrud)
 	registerTest("resources-query-all", CustomTestResourcesQueryAll)
+	// NOTE: this test is disabled because it is not supported by the kv implementation,
+	//       it is only supported by the sqlite implementation and is enabled there (see sqlitedb_test.go)
+	// registerTest("resources-query-all-limited", CustomTestResourcesQueryAllLimited)
 	registerTest("kv-crud", CustomTestAppKVCrud)
 	registerTest("creatables-crud", CustomTestCreatablesCrud)
 }
@@ -57,7 +61,7 @@ func CustomTestAccountsCrud(t *customT) {
 	}
 
 	// insert the account
-	normBalanceA := dataA.NormalizedOnlineBalance(t.proto)
+	normBalanceA := dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 	refA, err := aow.InsertAccount(addrA, normBalanceA, dataA)
 	require.NoError(t, err)
 
@@ -76,7 +80,7 @@ func CustomTestAccountsCrud(t *customT) {
 
 	// update the account
 	dataA.RewardsBase = 98287
-	normBalanceA = dataA.NormalizedOnlineBalance(t.proto)
+	normBalanceA = dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 	_, err = aow.UpdateAccount(refA, normBalanceA, dataA)
 	require.NoError(t, err)
 
@@ -122,7 +126,7 @@ func CustomTestResourcesCrud(t *customT) {
 	// account
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 
 	//
@@ -205,17 +209,19 @@ func CustomTestResourcesQueryAll(t *customT) {
 	// account A
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 
 	// resource A-0
 	resDataA0 := trackerdb.ResourcesData{}
+	resDataA0.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA0 := basics.CreatableIndex(0)
 	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0)
 	require.NoError(t, err)
 
 	// resource A-1
 	resDataA1 := trackerdb.ResourcesData{}
+	resDataA1.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA1 := basics.CreatableIndex(1)
 	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1)
 	require.NoError(t, err)
@@ -230,6 +236,195 @@ func CustomTestResourcesQueryAll(t *customT) {
 	require.Equal(t, aidxResA1, prs[1].Aidx)
 	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
 	require.Equal(t, expectedRound, rnd)          // db round (from the return)
+}
+
+func CustomTestResourcesQueryAllLimited(t *customT) {
+	aow, err := t.db.MakeAccountsOptimizedWriter(true, true, false, true)
+	require.NoError(t, err)
+
+	aor, err := t.db.MakeAccountsOptimizedReader()
+	require.NoError(t, err)
+
+	aw, err := t.db.MakeAccountsWriter()
+	require.NoError(t, err)
+
+	// set round to 3
+	// Note: this will be used to check that we read the round
+	expectedRound := basics.Round(3)
+	err = aw.UpdateAccountsRound(expectedRound)
+	require.NoError(t, err)
+
+	//
+	// pre-fill the db with two accounts for testing - one owning creatables, the other opting into them
+	//
+
+	// account A - will own creatables
+	addrA := RandomAddress()
+	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
+	require.NoError(t, err)
+
+	// account B - will opt into creatables
+	addrB := RandomAddress()
+	accDataB := trackerdb.BaseAccountData{RewardsBase: 1000}
+	refAccB, err := aow.InsertAccount(addrB, accDataB.NormalizedOnlineBalance(t.proto.RewardUnit), accDataB)
+	require.NoError(t, err)
+
+	// asset A-0 for accounts A and B
+	resDataA0AcctA := trackerdb.ResourcesData{}
+	resDataA0AcctA.SetAssetHolding(basics.AssetHolding{Amount: 10})
+	resDataA0AcctA.SetAssetParams(basics.AssetParams{
+		Total: 100,
+	}, true)
+	// Non-creators will inherit asset params from the creator
+	resDataA0AcctB := trackerdb.ResourcesData{}
+	resDataA0AcctB.SetAssetHolding(basics.AssetHolding{Amount: 0})
+	aidxResA0 := basics.CreatableIndex(1)
+
+	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0AcctA)
+	require.NoError(t, err)
+	_, err = aow.InsertResource(refAccB, aidxResA0, resDataA0AcctB)
+	require.NoError(t, err)
+
+	// App A-1 for accounts A and B - this should be completely ignored
+	resDataA1AcctA := trackerdb.ResourcesData{}
+	appParams := ledgertesting.RandomAppParams()
+	resDataA1AcctA.SetAppParams(appParams, true)
+	resDataA1AcctA.SetAppLocalState(basics.AppLocalState{})
+	resDataA1AcctB := trackerdb.ResourcesData{}
+	resDataA1AcctB.SetAppLocalState(basics.AppLocalState{})
+	aidxResA1 := basics.CreatableIndex(2)
+	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1AcctA)
+	require.NoError(t, err)
+	_, err = aow.InsertResource(refAccB, aidxResA1, resDataA1AcctB)
+	require.NoError(t, err)
+
+	// asset A-2 for accounts A and B
+	resDataA2AcctA := trackerdb.ResourcesData{}
+	resDataA2AcctA.SetAssetHolding(basics.AssetHolding{Amount: 100})
+	resDataA2AcctA.SetAssetParams(basics.AssetParams{
+		Total: 10000,
+	}, true)
+	resDataA2AcctB := trackerdb.ResourcesData{}
+	resDataA2AcctB.SetAssetHolding(basics.AssetHolding{Amount: 200})
+
+	aidxResA2 := basics.CreatableIndex(3)
+	_, err = aow.InsertResource(refAccA, aidxResA2, resDataA2AcctA)
+	require.NoError(t, err)
+	_, err = aow.InsertResource(refAccB, aidxResA2, resDataA2AcctB)
+	require.NoError(t, err)
+
+	// Results for account B (opted in, not creator) we expect back will have asset params but the resource flags
+	// are explicitly set to be
+	resDataWithParamsA0AcctB := trackerdb.ResourcesData{}
+	resDataWithParamsA0AcctB.SetAssetHolding(resDataA0AcctB.GetAssetHolding())
+	resDataWithParamsA0AcctB.SetAssetParams(resDataA0AcctA.GetAssetParams(), true)
+	resDataWithParamsA0AcctB.ResourceFlags = resDataA0AcctB.ResourceFlags
+
+	resDataWithParamsA1AcctB := trackerdb.ResourcesData{}
+	resDataWithParamsA1AcctB.SetAssetHolding(resDataA2AcctB.GetAssetHolding())
+	resDataWithParamsA1AcctB.SetAssetParams(resDataA2AcctA.GetAssetParams(), true)
+	resDataWithParamsA1AcctB.ResourceFlags = resDataA2AcctB.ResourceFlags
+
+	// insert creator account A for A-0
+	resA0ctype := basics.AssetCreatable
+	cRefA0, err := aow.InsertCreatable(aidxResA0, resA0ctype, addrA[:])
+	require.NoError(t, err)
+	require.NotNil(t, cRefA0)
+
+	// insert creator account A for A-1
+	resA1ctype := basics.AppCreatable
+	cRefA1, err := aow.InsertCreatable(aidxResA1, resA1ctype, addrA[:])
+	require.NoError(t, err)
+	require.NotNil(t, cRefA1)
+
+	// insert creator account A for A-2
+	resA2ctype := basics.AssetCreatable
+	cRefA2, err := aow.InsertCreatable(aidxResA2, resA2ctype, addrA[:])
+	require.NoError(t, err)
+	require.NotNil(t, cRefA2)
+
+	// Lookup with limited resources for account A
+	prs, rnd, err := aor.LookupLimitedResources(addrA, 0, 2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(prs))
+	require.Equal(t, aidxResA0, prs[0].Aidx)
+	require.Equal(t, aidxResA2, prs[1].Aidx)
+	require.Equal(t, addrA, prs[0].Creator)
+	require.Equal(t, addrA, prs[1].Creator)
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, expectedRound, prs[1].Round)
+	require.Equal(t, resDataA0AcctA, prs[0].Data)
+	require.Equal(t, resDataA2AcctA, prs[1].Data)
+	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Lookup with limited resources for account B
+	prs, rnd, err = aor.LookupLimitedResources(addrB, 0, 2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(prs))
+	require.Equal(t, aidxResA0, prs[0].Aidx)
+	require.Equal(t, aidxResA2, prs[1].Aidx)
+	// Creator should be present and set to address A
+	require.Equal(t, addrA, prs[0].Creator)
+	require.Equal(t, addrA, prs[1].Creator)
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, expectedRound, prs[1].Round)
+	require.Equal(t, resDataWithParamsA0AcctB, prs[0].Data)
+	require.Equal(t, resDataWithParamsA1AcctB, prs[1].Data)
+	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Set limit to 1, should return only 1 resource
+	prs, rnd, err = aor.LookupLimitedResources(addrB, 0, 1, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(prs))
+	require.Equal(t, aidxResA0, prs[0].Aidx)
+	require.Equal(t, addrA, prs[0].Creator)
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, resDataWithParamsA0AcctB, prs[0].Data)
+	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Delete app owner for A-1
+	_, err = aow.DeleteCreatable(aidxResA1, basics.AppCreatable)
+	require.NoError(t, err)
+
+	// Set min to 1, should return only 1 resource (index 1)
+	prs, rnd, err = aor.LookupLimitedResources(addrB, 1, 1, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(prs))
+	require.Equal(t, aidxResA2, prs[0].Aidx)
+	require.Equal(t, addrA, prs[0].Creator)
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, resDataWithParamsA1AcctB, prs[0].Data)
+	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Delete both resource creatables
+	rowsAffected, err := aow.DeleteCreatable(aidxResA0, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), rowsAffected)
+	rowsAffected, err = aow.DeleteCreatable(aidxResA2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), rowsAffected)
+	_, err = aow.DeleteResource(refAccA, aidxResA0)
+	require.NoError(t, err)
+	_, err = aow.DeleteResource(refAccA, aidxResA2)
+	require.NoError(t, err)
+
+	// Account A should have no resources, account B should have 2 resources without a creator/params
+	prs, rnd, err = aor.LookupLimitedResources(addrA, 0, 2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(prs))
+	prs, rnd, err = aor.LookupLimitedResources(addrB, 0, 2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(prs))
+	require.Equal(t, aidxResA0, prs[0].Aidx)
+	require.Equal(t, aidxResA2, prs[1].Aidx)
+	require.True(t, prs[0].Creator.IsZero())
+	require.True(t, prs[1].Creator.IsZero())
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, expectedRound, prs[1].Round)
+	// Note these directly reflect what was inserted into resources table (no creator/params)
+	require.Equal(t, resDataA0AcctB, prs[0].Data)
+	require.Equal(t, resDataA2AcctB, prs[1].Data)
 }
 
 func CustomTestAppKVCrud(t *customT) {
@@ -255,10 +450,11 @@ func CustomTestAppKVCrud(t *customT) {
 	// account
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 	// resource
 	resDataA0 := trackerdb.ResourcesData{}
+	resDataA0.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA0 := basics.CreatableIndex(0)
 	refResA0, err := aow.InsertResource(refAccA, aidxResA0, resDataA0)
 	require.NoError(t, err)
@@ -328,17 +524,19 @@ func CustomTestCreatablesCrud(t *customT) {
 	// account A
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 
 	// resource A-0
 	resDataA0 := trackerdb.ResourcesData{}
+	resDataA0.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA0 := basics.CreatableIndex(0)
 	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0)
 	require.NoError(t, err)
 
 	// resource A-1
 	resDataA1 := trackerdb.ResourcesData{}
+	resDataA1.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA1 := basics.CreatableIndex(1)
 	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1)
 	require.NoError(t, err)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,10 +17,11 @@
 package basics
 
 import (
+	"math"
+
 	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -54,8 +55,8 @@ func (a MicroAlgos) ToUint64() uint64 {
 }
 
 // RewardUnits returns the number of reward units in some number of algos
-func (a MicroAlgos) RewardUnits(proto config.ConsensusParams) uint64 {
-	return a.Raw / proto.RewardUnit
+func (a MicroAlgos) RewardUnits(unitSize uint64) uint64 {
+	return a.Raw / unitSize
 }
 
 // We generate our own encoders and decoders for MicroAlgos
@@ -120,6 +121,17 @@ func (a MicroAlgos) MsgIsZero() bool {
 // It is expected by msgp generated MaxSize functions
 func MicroAlgosMaxSize() (s int) {
 	return msgp.Uint64Size
+}
+
+// Algos is a convenience function so that whole Algos can be written easily. It
+// panics on overflow because it should only be used for constants - things that
+// are best human-readable in source code - not used on arbitrary values from,
+// say, transactions.
+func Algos(algos uint64) MicroAlgos {
+	if algos > math.MaxUint64/1_000_000 {
+		panic(algos)
+	}
+	return MicroAlgos{Raw: algos * 1_000_000}
 }
 
 // Round represents a protocol round index

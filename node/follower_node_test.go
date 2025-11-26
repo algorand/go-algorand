@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,6 +39,8 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+var testAddr = basics.Address{0x6, 0xda, 0xcc, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x21, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
+
 func followNodeDefaultGenesis() bookkeeping.Genesis {
 	return bookkeeping.Genesis{
 		SchemaID:    "go-test-follower-node-genesis",
@@ -56,7 +58,13 @@ func followNodeDefaultGenesis() bookkeeping.Genesis {
 			{
 				Address: sinkAddr.String(),
 				State: bookkeeping.GenesisAccountData{
-					MicroAlgos: basics.MicroAlgos{Raw: 1000000},
+					MicroAlgos: basics.MicroAlgos{Raw: 500000},
+				},
+			},
+			{
+				Address: testAddr.String(),
+				State: bookkeeping.GenesisAccountData{
+					MicroAlgos: basics.MicroAlgos{Raw: 500000},
 				},
 			},
 		},
@@ -73,20 +81,6 @@ func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 	return node
 }
 
-func remakeableFollowNode(t *testing.T, tempDir string, maxAcctLookback uint64) (*AlgorandFollowerNode, string) {
-	cfg := config.GetDefaultLocal()
-	cfg.EnableFollowMode = true
-	cfg.DisableNetworking = true
-	cfg.MaxAcctLookback = maxAcctLookback
-	genesis := followNodeDefaultGenesis()
-	if tempDir == "" {
-		tempDir = t.TempDir()
-	}
-	followNode, err := MakeFollower(logging.Base(), tempDir, cfg, []string{}, genesis)
-	require.NoError(t, err)
-	return followNode, tempDir
-}
-
 func TestSyncRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -99,7 +93,7 @@ func TestSyncRound(t *testing.T) {
 	b.CurrentProtocol = protocol.ConsensusCurrentVersion
 	err := node.Ledger().AddBlock(b, agreement.Certificate{})
 	require.NoError(t, err)
-	dbRound := uint64(node.Ledger().LatestTrackerCommitted())
+	dbRound := node.Ledger().LatestTrackerCommitted()
 	// Sync Round should be initialized to the ledger's dbRound + 1
 	require.Equal(t, dbRound+1, node.GetSyncRound())
 	// Set a new sync round
@@ -108,7 +102,7 @@ func TestSyncRound(t *testing.T) {
 	require.Equal(t, dbRound+11, node.GetSyncRound())
 	// Unset the sync round and make sure get returns 0
 	node.UnsetSyncRound()
-	require.Equal(t, uint64(0), node.GetSyncRound())
+	require.Zero(t, node.GetSyncRound())
 }
 
 func TestErrors(t *testing.T) {
@@ -162,7 +156,7 @@ func TestFastCatchupResume(t *testing.T) {
 	node.ctx = context.Background()
 
 	// Initialize sync round to a future round.
-	syncRound := uint64(10000)
+	syncRound := basics.Round(10000)
 	node.SetSyncRound(syncRound)
 	require.Equal(t, syncRound, node.GetSyncRound())
 
@@ -171,7 +165,7 @@ func TestFastCatchupResume(t *testing.T) {
 	<-out
 
 	// Verify the sync was reset.
-	assert.Equal(t, uint64(0), node.GetSyncRound())
+	assert.Zero(t, node.GetSyncRound())
 }
 
 // TestDefaultResourcePaths confirms that when no extra configuration is provided, all resources are created in the dataDir
@@ -315,12 +309,13 @@ func TestSimulate(t *testing.T) {
 
 	round := node.ledger.LastRound()
 
+	proto := config.Consensus[protocol.ConsensusFuture]
 	stxn := txntest.Txn{
 		Type:        protocol.PaymentTx,
-		Sender:      sinkAddr,
+		Sender:      testAddr,
 		Receiver:    poolAddr,
 		Amount:      1,
-		Fee:         1000,
+		Fee:         proto.MinTxnFee,
 		FirstValid:  round,
 		LastValid:   round + 1000,
 		GenesisHash: node.ledger.GenesisHash(),

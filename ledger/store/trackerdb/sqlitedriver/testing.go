@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,8 +46,8 @@ func OpenForTesting(t testing.TB, inMemory bool) (trackerdb.Store, string) {
 
 // AccountsInitLightTest initializes an empty database for testing without the extra methods being called.
 // implements Testing interface, test function only
-func AccountsInitLightTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	newDB, err := accountsInit(e, initAccounts, proto)
+func AccountsInitLightTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error) {
+	newDB, err := accountsInit(e, initAccounts, rewardUnit)
 	require.NoError(tb, err)
 	return newDB, err
 }
@@ -61,11 +61,11 @@ func modifyAcctBaseTest(e db.Executable) error {
 
 // AccountsInitTest initializes an empty database for testing.
 // implements Testing interface, test function only
-func AccountsInitTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	newDB, err := accountsInit(e, initAccounts, config.Consensus[proto])
+func AccountsInitTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, cv protocol.ConsensusVersion) (newDatabase bool) {
+	newDB, err := accountsInit(e, initAccounts, config.Consensus[cv].RewardUnit)
 	require.NoError(tb, err)
 
-	err = accountsAddNormalizedBalance(e, config.Consensus[proto])
+	err = accountsAddNormalizedBalance(e, config.Consensus[cv].RewardUnit)
 	require.NoError(tb, err)
 
 	err = accountsCreateResourceTable(context.Background(), e)
@@ -92,7 +92,7 @@ func AccountsInitTest(tb testing.TB, e db.Executable, initAccounts map[basics.Ad
 	err = accountsCreateOnlineRoundParamsTable(context.Background(), e)
 	require.NoError(tb, err)
 
-	err = performOnlineRoundParamsTailMigration(context.Background(), e, db.Accessor{}, true, proto)
+	err = performOnlineRoundParamsTailMigration(context.Background(), e, db.Accessor{}, true, cv)
 	require.NoError(tb, err)
 
 	err = accountsCreateBoxTable(context.Background(), e)
@@ -101,26 +101,37 @@ func AccountsInitTest(tb testing.TB, e db.Executable, initAccounts map[basics.Ad
 	err = performKVStoreNullBlobConversion(context.Background(), e)
 	require.NoError(tb, err)
 
+	err = accountsAddCreatableTypeColumn(context.Background(), e, false)
+	require.NoError(tb, err)
+
 	return newDB
 }
 
 // AccountsUpdateSchemaTest adds some empty tables for tests to work with a "v6" store.
 func AccountsUpdateSchemaTest(ctx context.Context, e db.Executable) (err error) {
-	if err := accountsCreateOnlineAccountsTable(ctx, e); err != nil {
+	if err = accountsCreateOnlineAccountsTable(ctx, e); err != nil {
 		return err
 	}
-	if err := accountsCreateTxTailTable(ctx, e); err != nil {
+	if err = accountsCreateTxTailTable(ctx, e); err != nil {
 		return err
 	}
-	if err := accountsCreateOnlineRoundParamsTable(ctx, e); err != nil {
+	if err = accountsCreateOnlineRoundParamsTable(ctx, e); err != nil {
 		return err
 	}
-	if err := accountsCreateCatchpointFirstStageInfoTable(ctx, e); err != nil {
+	if err = accountsCreateCatchpointFirstStageInfoTable(ctx, e); err != nil {
 		return err
 	}
 	// this line creates kvstore table, even if it is not required in accountDBVersion 6 -> 7
 	// or in later version where we need kvstore table, some tests will fail
-	if err := accountsCreateBoxTable(ctx, e); err != nil {
+	if err = accountsCreateBoxTable(ctx, e); err != nil {
+		return err
+	}
+	// this adds the resources table and ctype column, even if it is not required in accountDBVersion 6 -> 7
+	// this prevents some tests from failing.
+	if err = accountsCreateResourceTable(ctx, e); err != nil {
+		return err
+	}
+	if err = accountsAddCreatableTypeColumn(ctx, e, false); err != nil {
 		return err
 	}
 	return createStateProofVerificationTable(ctx, e)

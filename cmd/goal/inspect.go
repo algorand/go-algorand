@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ type inspectMultisigSig struct {
 	Subsigs   []inspectMultisigSubsig `codec:"subsig"`
 }
 
-// inspectMultisigSig is isomorphic to MultisigSig but uses different
+// inspectMultisigSubsig is isomorphic to MultisigSig but uses different
 // types to print public keys using algorand's address format in JSON.
 type inspectMultisigSubsig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`

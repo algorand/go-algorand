@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,16 +26,22 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/go-querystring/query"
 
 	"github.com/algorand/go-algorand/crypto"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/test/e2e-go/globals"
 )
 
 const (
@@ -72,6 +78,7 @@ type HTTPError struct {
 	StatusCode  int
 	Status      string
 	ErrorString string
+	Data        map[string]any
 }
 
 // Error formats an error string.
@@ -120,24 +127,11 @@ func extractError(resp *http.Response) error {
 	decodeErr := json.Unmarshal(errorBuf, &errorJSON)
 
 	var errorString string
+	var data map[string]any
 	if decodeErr == nil {
-		if errorJSON.Data == nil {
-			// There's no additional data, so let's just use the message
-			errorString = errorJSON.Message
-		} else {
-			// There's additional data, so let's re-encode the JSON response to show everything.
-			// We do this because the original response is likely encoded with escapeHTML=true, but
-			// since this isn't a webpage that extra encoding is not preferred.
-			var buffer strings.Builder
-			enc := json.NewEncoder(&buffer)
-			enc.SetEscapeHTML(false)
-			encErr := enc.Encode(errorJSON)
-			if encErr != nil {
-				// This really shouldn't happen, but if it does let's default to errorBuff
-				errorString = string(errorBuf)
-			} else {
-				errorString = buffer.String()
-			}
+		errorString = errorJSON.Message
+		if errorJSON.Data != nil {
+			data = *errorJSON.Data
 		}
 	} else {
 		errorString = string(errorBuf)
@@ -149,7 +143,7 @@ func extractError(resp *http.Response) error {
 		return unauthorizedRequestError{errorString, apiToken, resp.Request.URL.String()}
 	}
 
-	return HTTPError{StatusCode: resp.StatusCode, Status: resp.Status, ErrorString: errorString}
+	return HTTPError{StatusCode: resp.StatusCode, Status: resp.Status, ErrorString: errorString, Data: data}
 }
 
 // stripTransaction gets a transaction of the form "tx-XXXXXXXX" and truncates the "tx-" part, if it starts with "tx-"
@@ -241,7 +235,7 @@ func (client RestClient) submitForm(
 	}
 
 	if decodeJSON {
-		dec := json.NewDecoder(resp.Body)
+		dec := protocol.NewJSONDecoder(resp.Body)
 		return dec.Decode(&response)
 	}
 
@@ -292,10 +286,93 @@ func (client RestClient) Status() (response model.NodeStatusResponse, err error)
 	return
 }
 
-// WaitForBlock returns the node status after waiting for the given round.
-func (client RestClient) WaitForBlock(round basics.Round) (response model.NodeStatusResponse, err error) {
+// WaitForBlockAfter returns the node status after trying to wait for the given
+// round+1. This REST API has the documented misfeatures of returning after 1
+// minute, regardless of whether the given block has been reached.
+func (client RestClient) WaitForBlockAfter(round basics.Round) (response model.NodeStatusResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d/", round), nil)
 	return
+}
+
+// WaitForRound returns the node status after waiting for the given round. It
+// waits no more than waitTime in TOTAL, and returns an error if the round has
+// not been reached.
+func (client RestClient) WaitForRound(round basics.Round, waitTime time.Duration) (status model.NodeStatusResponse, err error) {
+	timeout := time.After(waitTime)
+	for {
+		status, err = client.Status()
+		if err != nil {
+			return
+		}
+
+		if status.LastRound >= round {
+			return
+		}
+		select {
+		case <-timeout:
+			return model.NodeStatusResponse{}, fmt.Errorf("timeout waiting for round %v with last round = %v", round, status.LastRound)
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+const singleRoundMaxTime = globals.MaxTimePerRound * 40
+
+// WaitForRoundWithTimeout waits for a given round to be reached. As it
+// waits, it returns early with an error if the wait time for any round exceeds
+// singleRoundMaxTime so we can alert when we're getting "hung" waiting.
+func (client RestClient) WaitForRoundWithTimeout(roundToWaitFor basics.Round) error {
+	status, err := client.Status()
+	if err != nil {
+		return err
+	}
+
+	for lastRound := status.LastRound; lastRound < roundToWaitFor; lastRound = status.LastRound {
+		status, err = client.WaitForRound(lastRound+1, singleRoundMaxTime)
+		if err != nil {
+			return fmt.Errorf("client.WaitForRound took too long between round %d and %d", lastRound, lastRound+1)
+		}
+	}
+	return nil
+}
+
+// WaitForConfirmedTxn waits until either the passed txid is confirmed
+// or until the passed roundTimeout passes
+// or until waiting for a round to pass times out
+func (client RestClient) WaitForConfirmedTxn(roundTimeout basics.Round, txid string) (txn v2.PreEncodedTxInfo, err error) {
+	for {
+		// Get current round information
+		curStatus, statusErr := client.Status()
+		if err != nil {
+			return txn, statusErr
+		}
+		curRound := curStatus.LastRound
+
+		// Check if we know about the transaction yet
+		var resp []byte
+		resp, err = client.RawPendingTransactionInformation(txid)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txn)
+			if err != nil {
+				return txn, err
+			}
+		}
+
+		// Check if transaction was confirmed
+		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
+			return
+		}
+		// Check if we should wait a round
+		if curRound > roundTimeout {
+			err = fmt.Errorf("failed to see confirmed transaction by round %v", roundTimeout)
+			return txn, err
+		}
+		// Wait a round
+		err = client.WaitForRoundWithTimeout(curRound + 1)
+		if err != nil {
+			return txn, err
+		}
+	}
 }
 
 // HealthCheck does a health check on the potentially running node,
@@ -308,14 +385,6 @@ func (client RestClient) HealthCheck() error {
 // returning an error if the node is not ready (caught up and healthy)
 func (client RestClient) ReadyCheck() error {
 	return client.get(nil, "/ready", nil)
-}
-
-// StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
-// blocks on the node end
-// Not supported
-func (client RestClient) StatusAfterBlock(blockNum uint64) (response model.NodeStatusResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d", blockNum), nil)
-	return
 }
 
 type pendingTransactionsParams struct {
@@ -356,26 +425,6 @@ type pendingTransactionsByAddrParams struct {
 	Max uint64 `url:"max"`
 }
 
-type transactionsByAddrParams struct {
-	FirstRound uint64 `url:"firstRound"`
-	LastRound  uint64 `url:"lastRound"`
-	Max        uint64 `url:"max"`
-}
-
-type assetsParams struct {
-	AssetIdx uint64 `url:"assetIdx"`
-	Max      uint64 `url:"max"`
-}
-
-type appsParams struct {
-	AppIdx uint64 `url:"appIdx"`
-	Max    uint64 `url:"max"`
-}
-
-type rawblockParams struct {
-	Raw uint64 `url:"raw"`
-}
-
 type rawFormat struct {
 	Format string `url:"format"`
 }
@@ -387,6 +436,11 @@ type proofParams struct {
 type accountInformationParams struct {
 	Format  string `url:"format"`
 	Exclude string `url:"exclude"`
+}
+
+type pageParams struct {
+	Next  *string `url:"next,omitempty"`
+	Limit *uint64 `url:"limit,omitempty"`
 }
 
 type catchupParams struct {
@@ -408,14 +462,14 @@ func (client RestClient) RawPendingTransactionsByAddr(addr string, max uint64) (
 }
 
 // AssetInformation gets the AssetInformationResponse associated with the passed asset index
-func (client RestClient) AssetInformation(index uint64) (response model.Asset, err error) {
+func (client RestClient) AssetInformation(index basics.AssetIndex) (response model.Asset, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/assets/%d", index), nil)
 	return
 }
 
 // ApplicationInformation gets the ApplicationInformationResponse associated
 // with the passed application index
-func (client RestClient) ApplicationInformation(index uint64) (response model.Application, err error) {
+func (client RestClient) ApplicationInformation(index basics.AppIndex) (response model.Application, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/applications/%d", index), nil)
 	return
 }
@@ -425,7 +479,7 @@ type applicationBoxesParams struct {
 }
 
 // ApplicationBoxes gets the BoxesResponse associated with the passed application ID
-func (client RestClient) ApplicationBoxes(appID uint64, maxBoxNum uint64) (response model.BoxesResponse, err error) {
+func (client RestClient) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (response model.BoxesResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{maxBoxNum})
 	return
 }
@@ -435,7 +489,7 @@ type applicationBoxByNameParams struct {
 }
 
 // GetApplicationBoxByName gets the BoxResponse associated with the passed application ID and box name
-func (client RestClient) GetApplicationBoxByName(appID uint64, name string) (response model.BoxResponse, err error) {
+func (client RestClient) GetApplicationBoxByName(appID basics.AppIndex, name string) (response model.BoxResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/box", appID), applicationBoxByNameParams{name})
 	return
 }
@@ -493,13 +547,13 @@ func (client RestClient) RawPendingTransactionInformation(transactionID string) 
 }
 
 // AccountApplicationInformation gets account information about a given app.
-func (client RestClient) AccountApplicationInformation(accountAddress string, applicationID uint64) (response model.AccountApplicationResponse, err error) {
+func (client RestClient) AccountApplicationInformation(accountAddress string, applicationID basics.AppIndex) (response model.AccountApplicationResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), nil)
 	return
 }
 
 // RawAccountApplicationInformation gets account information about a given app.
-func (client RestClient) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (response []byte, err error) {
+func (client RestClient) RawAccountApplicationInformation(accountAddress string, applicationID basics.AppIndex) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/applications/%d", accountAddress, applicationID), rawFormat{Format: "msgpack"})
 	response = blob
@@ -507,15 +561,21 @@ func (client RestClient) RawAccountApplicationInformation(accountAddress string,
 }
 
 // AccountAssetInformation gets account information about a given app.
-func (client RestClient) AccountAssetInformation(accountAddress string, assetID uint64) (response model.AccountAssetResponse, err error) {
+func (client RestClient) AccountAssetInformation(accountAddress string, assetID basics.AssetIndex) (response model.AccountAssetResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), nil)
 	return
 }
 
-// RawAccountAssetInformation gets account information about a given app.
-func (client RestClient) RawAccountAssetInformation(accountAddress string, assetID uint64) (response []byte, err error) {
+// AccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
+func (client RestClient) AccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response model.AccountAssetsInformationResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+	return
+}
+
+// RawAccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
+func (client RestClient) RawAccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response []byte, err error) {
 	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), rawFormat{Format: "msgpack"})
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
 	response = blob
 	return
 }
@@ -552,16 +612,28 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 }
 
 // Block gets the block info for the given round
-func (client RestClient) Block(round uint64) (response model.BlockResponse, err error) {
+func (client RestClient) Block(round basics.Round) (response v2.BlockResponseJSON, err error) {
+	// Note: this endpoint gets the Block as JSON, meaning some string fields with non-UTF-8 data will lose
+	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d", round), nil)
 	return
 }
 
 // RawBlock gets the encoded, raw msgpack block for the given round
-func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
+func (client RestClient) RawBlock(round basics.Round) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
 	response = blob
+	return
+}
+
+// EncodedBlockCert takes a round and returns its parsed block and certificate
+func (client RestClient) EncodedBlockCert(round basics.Round) (blockCert rpcs.EncodedBlockCert, err error) {
+	resp, err := client.RawBlock(round)
+	if err != nil {
+		return
+	}
+	err = protocol.Decode(resp, &blockCert)
 	return
 }
 
@@ -697,19 +769,19 @@ func (client RestClient) RawSimulateRawTransaction(data []byte) (response []byte
 }
 
 // StateProofs gets a state proof that covers a given round
-func (client RestClient) StateProofs(round uint64) (response model.StateProofResponse, err error) {
+func (client RestClient) StateProofs(round basics.Round) (response model.StateProofResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/stateproofs/%d", round), nil)
 	return
 }
 
 // LightBlockHeaderProof gets a Merkle proof for the light block header of a given round.
-func (client RestClient) LightBlockHeaderProof(round uint64) (response model.LightBlockHeaderProofResponse, err error) {
+func (client RestClient) LightBlockHeaderProof(round basics.Round) (response model.LightBlockHeaderProofResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/lightheader/proof", round), nil)
 	return
 }
 
 // TransactionProof gets a Merkle proof for a transaction in a block.
-func (client RestClient) TransactionProof(txid string, round uint64, hashType crypto.HashType) (response model.TransactionProofResponse, err error) {
+func (client RestClient) TransactionProof(txid string, round basics.Round, hashType crypto.HashType) (response model.TransactionProofResponse, err error) {
 	txid = stripTransaction(txid)
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/transactions/%s/proof", round, txid), proofParams{HashType: hashType.String()})
 	return
@@ -742,7 +814,7 @@ func (client RestClient) RemoveParticipationKeyByID(participationID string) (err
 /* Endpoint registered for follower nodes */
 
 // SetSyncRound sets the sync round for the catchup service
-func (client RestClient) SetSyncRound(round uint64) (err error) {
+func (client RestClient) SetSyncRound(round basics.Round) (err error) {
 	err = client.post(nil, fmt.Sprintf("/v2/ledger/sync/%d", round), nil, nil, true)
 	return
 }
@@ -760,19 +832,27 @@ func (client RestClient) GetSyncRound() (response model.GetSyncRoundResponse, er
 }
 
 // GetLedgerStateDelta retrieves the ledger state delta for the round
-func (client RestClient) GetLedgerStateDelta(round uint64) (response model.LedgerStateDeltaResponse, err error) {
+func (client RestClient) GetLedgerStateDelta(round basics.Round) (response ledgercore.StateDelta, err error) {
+	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
+	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d", round), nil)
 	return
 }
 
 // GetLedgerStateDeltaForTransactionGroup retrieves the ledger state delta for the txn group specified by the id
-func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (response model.LedgerStateDeltaForTransactionGroupResponse, err error) {
+func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (response eval.StateDeltaSubset, err error) {
+	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
+	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/txn/group/%s", id), nil)
 	return
 }
 
 // GetTransactionGroupLedgerStateDeltasForRound retrieves the ledger state deltas for the txn groups in the specified round
-func (client RestClient) GetTransactionGroupLedgerStateDeltasForRound(round uint64) (response model.TransactionGroupLedgerStateDeltasForRoundResponse, err error) {
+func (client RestClient) GetTransactionGroupLedgerStateDeltasForRound(round uint64) (response struct {
+	Deltas []eval.TxnGroupDeltaWithIds
+}, err error) {
+	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
+	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d/txn/group", round), nil)
 	return
 }
@@ -786,5 +866,11 @@ func (client RestClient) SetBlockTimestampOffset(offset uint64) (err error) {
 // GetBlockTimestampOffset gets the offset in seconds which is being added to devmode blocks
 func (client RestClient) GetBlockTimestampOffset() (response model.GetBlockTimeStampOffsetResponse, err error) {
 	err = client.get(&response, "/v2/devmode/blocks/offset", nil)
+	return
+}
+
+// BlockLogs returns all the logs in a block for a given round
+func (client RestClient) BlockLogs(round basics.Round) (response model.BlockLogsResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/logs", round), nil)
 	return
 }

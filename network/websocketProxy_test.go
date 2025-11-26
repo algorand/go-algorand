@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// This is a simple reverse proxy for websocket connections. It is used to to test
+// This is a simple reverse proxy for websocket connections. It is used to test
 // ws network behavior when UseXForwardedForAddressField is enabled.
 // Not suitable for production use.
 package network
@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/websocket"
 	"github.com/stretchr/testify/require"
@@ -71,7 +72,7 @@ func (w *websocketProxy) ServeHTTP(response http.ResponseWriter, request *http.R
 	}
 
 	// set X-Forwarded-For
-	url, err := ParseHostOrURL(request.RemoteAddr)
+	url, err := addr.ParseHostOrURL(request.RemoteAddr)
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
@@ -254,7 +255,7 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 	gossipA, err := netA.addrToGossipAddr(addrA)
 	require.NoError(t, err)
 
-	parsedA, err := ParseHostOrURL(gossipA)
+	parsedA, err := addr.ParseHostOrURL(gossipA)
 	require.NoError(t, err)
 
 	// setup the proxy
@@ -316,7 +317,7 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 	peerB := netA.peers[0]
 	require.NotEmpty(t, peerB.originAddress)
 	require.Equal(t, fakeXForwardedFor, peerB.originAddress)
-	require.NotEqual(t, peerB.RoutingAddr(), peerB.IPAddr())
+	require.NotEqual(t, peerB.RoutingAddr(), peerB.ipAddr())
 	fakeXForwardedForParsed := net.ParseIP(fakeXForwardedFor)
 	require.NotEqual(t, fakeXForwardedForParsed, peerB.RoutingAddr())
 }

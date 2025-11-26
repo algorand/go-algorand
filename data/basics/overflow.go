@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"math"
 	"math/bits"
 
 	"golang.org/x/exp/constraints"
@@ -39,6 +40,22 @@ func OSub[T constraints.Unsigned](a, b T) (res T, overflowed bool) {
 	res = a - b
 	overflowed = res > a
 	return
+}
+
+// ODiff should be used when you really do want the signed difference between
+// uint64s, but still care about detecting overflow.  I don't _think_ it can be
+// generic to different bit widths.
+func ODiff(a, b uint64) (res int64, overflowed bool) {
+	if a >= b {
+		if a-b > math.MaxInt64 {
+			return 0, true
+		}
+		return int64(a - b), false
+	}
+	if b-a > uint64(math.MaxInt64)+1 {
+		return 0, true
+	}
+	return -int64(b - a), false
 }
 
 // OMul multiplies 2 values with overflow detection
@@ -140,6 +157,14 @@ func (t *OverflowTracker) SubA(a, b MicroAlgos) MicroAlgos {
 // ScalarMulA multiplies an Algo amount by a scalar
 func (t *OverflowTracker) ScalarMulA(a MicroAlgos, b uint64) MicroAlgos {
 	return MicroAlgos{Raw: t.Mul(a.Raw, b)}
+}
+
+// MinA returns the smaller of 2 MicroAlgos values
+func MinA(a, b MicroAlgos) MicroAlgos {
+	if a.Raw < b.Raw {
+		return a
+	}
+	return b
 }
 
 // Muldiv computes a*b/c.  The overflow flag indicates that

@@ -35,6 +35,7 @@ logger.Info("New wallet was created")
 package logging
 
 import (
+	"context"
 	"io"
 	"runtime"
 	"runtime/debug"
@@ -148,10 +149,13 @@ type Logger interface {
 	// source adds file, line and function fields to the event
 	source() *logrus.Entry
 
+	// Entry returns the logrus raw entry
+	Entry() *logrus.Entry
+
 	// Adds a hook to the logger
 	AddHook(hook logrus.Hook)
 
-	EnableTelemetry(cfg TelemetryConfig) error
+	EnableTelemetryContext(ctx context.Context, cfg TelemetryConfig) error
 	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
 	GetTelemetryUploadingEnabled() bool
@@ -308,7 +312,7 @@ func (l logger) SetOutput(w io.Writer) {
 }
 
 func (l logger) setOutput(w io.Writer) {
-	l.entry.Logger.Out = w
+	l.entry.Logger.SetOutput(w)
 }
 
 func (l logger) getOutput() io.Writer {
@@ -316,7 +320,11 @@ func (l logger) getOutput() io.Writer {
 }
 
 func (l logger) SetJSONFormatter() {
-	l.entry.Logger.Formatter = &logrus.JSONFormatter{TimestampFormat: "2006-01-02T15:04:05.000000Z07:00"}
+	l.entry.Logger.SetFormatter(&logrus.JSONFormatter{TimestampFormat: "2006-01-02T15:04:05.000000Z07:00"})
+}
+
+func (l logger) Entry() *logrus.Entry {
+	return l.entry
 }
 
 func (l logger) source() *logrus.Entry {
@@ -382,11 +390,11 @@ func RegisterExitHandler(handler func()) {
 	logrus.RegisterExitHandler(handler)
 }
 
-func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
+func (l logger) EnableTelemetryContext(ctx context.Context, cfg TelemetryConfig) (err error) {
 	if l.loggerState.telemetry != nil || (!cfg.Enable && !cfg.SendToLog) {
 		return nil
 	}
-	return EnableTelemetry(cfg, &l)
+	return EnableTelemetryContext(ctx, cfg, &l)
 }
 
 func (l logger) UpdateTelemetryURI(uri string) (err error) {

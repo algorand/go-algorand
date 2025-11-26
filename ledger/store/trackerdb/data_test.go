@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,10 +26,12 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1105,7 +1107,7 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
 		zeros32 := "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
-		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"TotalBoxes":0,"TotalBoxBytes":0,"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"UpdateRound":0}`
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"TotalBoxes":0,"TotalBoxBytes":0,"IncentiveEligible":false,"LastProposed":0,"LastHeartbeat":0,"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"UpdateRound":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -1152,7 +1154,7 @@ func TestBaseOnlineAccountDataIsEmpty(t *testing.T) {
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
 		zeros32 := "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
-		expectedEncoding := `{"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"MicroAlgos":{"Raw":0},"RewardsBase":0}`
+		expectedEncoding := `{"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"LastProposed":0,"LastHeartbeat":0,"IncentiveEligible":false,"MicroAlgos":{"Raw":0},"RewardsBase":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -1190,8 +1192,8 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 	require.Equal(t, data.VoteKeyDilution, ba.VoteKeyDilution)
 	require.Equal(t, data.StateProofID, ba.StateProofID)
 
-	normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
-	require.Equal(t, normBalance, ba.NormalizedOnlineBalance(proto))
+	normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto.RewardUnit)
+	require.Equal(t, normBalance, ba.NormalizedOnlineBalance(proto.RewardUnit))
 	oa := ba.GetOnlineAccount(addr, normBalance)
 
 	require.Equal(t, addr, oa.Address)
@@ -1204,9 +1206,9 @@ func TestBaseOnlineAccountDataGettersSetters(t *testing.T) {
 
 	rewardsLevel := uint64(1)
 	microAlgos, _, _ := basics.WithUpdatedRewards(
-		proto, basics.Online, oa.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
+		proto.RewardUnit, basics.Online, oa.MicroAlgos, basics.MicroAlgos{}, ba.RewardsBase, rewardsLevel,
 	)
-	oad := ba.GetOnlineAccountData(proto, rewardsLevel)
+	oad := ba.GetOnlineAccountData(proto.RewardUnit, rewardsLevel)
 
 	require.Equal(t, microAlgos, oad.MicroAlgosWithRewards)
 	require.Equal(t, ba.VoteID, oad.VoteID)
@@ -1249,14 +1251,14 @@ func TestBaseOnlineAccountDataReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, 4, reflect.TypeOf(BaseOnlineAccountData{}).NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
+	require.Equal(t, 7, reflect.TypeFor[BaseOnlineAccountData]().NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
 }
 
 func TestBaseVotingDataReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, 7, reflect.TypeOf(BaseVotingData{}).NumField(), "update all getters and setters for baseVotingData and change the field count")
+	require.Equal(t, 7, reflect.TypeFor[BaseVotingData]().NumField(), "update all getters and setters for baseVotingData and change the field count")
 }
 
 // TestBaseAccountDataDecodeEmpty ensures no surprises when decoding nil/empty data.
@@ -1274,4 +1276,73 @@ func TestBaseAccountDataDecodeEmpty(t *testing.T) {
 
 	err = protocol.Decode([]byte{0x80}, &b)
 	require.NoError(t, err)
+}
+
+func TestCopyFunctions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// AssetParams are copied into and out of ResourceData losslessly
+	assetToRD := func(ap basics.AssetParams) ResourcesData {
+		var rd ResourcesData
+		rd.SetAssetParams(ap, false)
+		return rd
+	}
+	rdToAsset := func(rd ResourcesData) basics.AssetParams {
+		return rd.GetAssetParams()
+	}
+	for _, nz := range basics_testing.NearZeros(t, basics.AssetParams{}) {
+		assert.True(t, basics_testing.RoundTrip(t, nz, assetToRD, rdToAsset), nz)
+	}
+
+	// Asset holdings are copied into and out of ResourceData losslessly
+	holdingToRD := func(ap basics.AssetHolding) ResourcesData {
+		var rd ResourcesData
+		rd.SetAssetHolding(ap)
+		return rd
+	}
+	rdToHolding := func(rd ResourcesData) basics.AssetHolding {
+		return rd.GetAssetHolding()
+	}
+	for _, nz := range basics_testing.NearZeros(t, basics.AssetHolding{}) {
+		assert.True(t, basics_testing.RoundTrip(t, nz, holdingToRD, rdToHolding), nz)
+	}
+
+	// AppParams are copied into and out of ResourceData losslessly
+	apToRD := func(ap basics.AppParams) ResourcesData {
+		var rd ResourcesData
+		rd.SetAppParams(ap, false)
+		return rd
+	}
+	rdToAP := func(rd ResourcesData) basics.AppParams {
+		return rd.GetAppParams()
+	}
+	for _, nz := range basics_testing.NearZeros(t, basics.AppParams{}) {
+		assert.True(t, basics_testing.RoundTrip(t, nz, apToRD, rdToAP), nz)
+	}
+
+	// AppLocalStates are copied into and out of ResourceData losslessly
+	localsToRD := func(ap basics.AppLocalState) ResourcesData {
+		var rd ResourcesData
+		rd.SetAppLocalState(ap)
+		return rd
+	}
+	rdToLocals := func(rd ResourcesData) basics.AppLocalState {
+		return rd.GetAppLocalState()
+	}
+	for _, nz := range basics_testing.NearZeros(t, basics.AppLocalState{}) {
+		assert.True(t, basics_testing.RoundTrip(t, nz, localsToRD, rdToLocals), nz)
+	}
+
+}
+
+func TestIsEmptyAppFields(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, nz := range basics_testing.NearZeros(t, basics.AppParams{}) {
+		var rd ResourcesData
+		rd.SetAppParams(nz, false)
+		assert.False(t, rd.IsEmptyAppFields(), nz)
+	}
 }

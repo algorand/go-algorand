@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,17 +59,16 @@ type ApplicationIndexerResponse struct {
 }
 
 type localLedger struct {
-	balances        map[basics.Address]basics.AccountData
-	txnGroup        []transactions.SignedTxn
-	groupIndex      int
-	round           uint64
-	aidx            basics.AppIndex
-	latestTimestamp int64
+	balances   map[basics.Address]basics.AccountData
+	txnGroup   []transactions.SignedTxn
+	groupIndex int
+	round      basics.Round
+	aidx       basics.AppIndex
 }
 
 func makeBalancesAdapter(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto string, round uint64, latestTimestamp int64,
+	groupIndex int, proto string, round basics.Round, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
 ) (apply.Balances, AppState, error) {
 
@@ -215,7 +214,7 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	return creator, nil
 }
 
-func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round uint64) (basics.AccountData, error) {
+func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round basics.Round) (basics.AccountData, error) {
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
@@ -299,10 +298,10 @@ func (l *localLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx ba
 		return ledgercore.AssetResource{}, nil
 	}
 	var result ledgercore.AssetResource
-	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.AssetParams[aidx]; ok {
 		result.AssetParams = &p
 	}
-	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.Assets[aidx]; ok {
 		result.AssetHolding = &p
 	}
 
@@ -315,10 +314,10 @@ func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, a
 		return ledgercore.AppResource{}, nil
 	}
 	var result ledgercore.AppResource
-	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+	if p, ok := ad.AppParams[aidx]; ok {
 		result.AppParams = &p
 	}
-	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+	if s, ok := ad.AppLocalStates[aidx]; ok {
 		result.AppLocalState = &s
 	}
 
@@ -334,6 +333,38 @@ func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address
 	// Clear RewardsBase since tealdbg has no idea about rewards level so the underlying calculation with reward will fail.
 	ad.RewardsBase = 0
 	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+func (l *localLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// tealdbg does not understand rewards, so no pending rewards are applied.
+	// Further, it has no history, so we return the _current_ information,
+	// ignoring the `rnd` argument.
+	ad := l.balances[addr]
+	if ad.Status != basics.Online {
+		return basics.OnlineAccountData{}, nil
+	}
+
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}, nil
+}
+
+func (l *localLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, nil
+}
+
+func (l *localLedger) OnlineCirculation(rnd basics.Round, voteRound basics.Round) (basics.MicroAlgos, error) {
+	// A constant is fine for tealdbg
+	return basics.Algos(1_000_000_000), nil // 1B
 }
 
 func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

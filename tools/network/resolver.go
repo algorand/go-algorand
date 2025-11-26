@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ const (
 
 // Resolver provides equivalent functionality to the net.Resolver with one exception - it allows to use a provided DNS server instead of relying on the existing default resolver.
 type Resolver struct {
-	// DNSAddress is the the DNS server that we'll be trying to connect to.
+	// DNSAddress is the DNS server that we'll be trying to connect to.
 	dnsAddress net.IPAddr
 	resolver   ResolverIf
 }
@@ -109,11 +109,10 @@ func (p *Resolver) effectiveResolver() ResolverIf {
 // SetFallbackResolverAddress sets preferred DNS server address
 func (p *Resolver) SetFallbackResolverAddress(fallbackDNSResolverAddress net.IPAddr) {
 	p.dnsAddress = fallbackDNSResolverAddress
-	return
 }
 
-func (p *Resolver) resolverDial(ctx context.Context, network, address string) (net.Conn, error) {
+func (p *Resolver) resolverDial(ctx context.Context, network, _address string) (net.Conn, error) {
 	// override the default address with our own.
-	address = p.EffectiveResolverDNS() + dnsPortSuffix
+	address := p.EffectiveResolverDNS() + dnsPortSuffix
 	return (&net.Dialer{}).DialContext(ctx, network, address)
 }

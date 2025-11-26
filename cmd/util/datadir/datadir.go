@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ import (
 // DataDirs contains the list of data directories
 var DataDirs []string
 
-// ResolveDataDir determines the data directory to to use.
+// ResolveDataDir determines the data directory to use.
 // If not specified on cmdline with '-d', look for default in environment.
 func ResolveDataDir() string {
 	var dir string

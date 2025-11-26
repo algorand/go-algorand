@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -40,7 +41,7 @@ func TestAppRateLimiter_Make(t *testing.T) {
 	window := 1 * time.Second
 	rm := makeAppRateLimiter(10, rate, window)
 
-	require.Equal(t, 1, rm.maxBucketSize)
+	require.Equal(t, 2, rm.maxBucketSize)
 	require.NotEmpty(t, rm.seed)
 	require.NotEmpty(t, rm.salt)
 	for i := 0; i < len(rm.buckets); i++ {
@@ -183,7 +184,7 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	require.True(t, drop)
 }
 
-// TestAppRateLimiter_IntervalFull checks the cur counter accounts only admitted requests
+// TestAppRateLimiter_IntervalAdmitted checks the cur counter accounts only admitted requests
 func TestAppRateLimiter_IntervalAdmitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -229,7 +230,7 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC).UnixNano() // 11 sec => 1 sec into the interval
 
 	// fill 80% of the current interval
-	// switch to the next next interval
+	// switch to the next interval
 	// ensure all capacity is available
 
 	for i := 0; i < int(0.8*float64(rate)); i++ {
@@ -492,8 +493,8 @@ func BenchmarkAppRateLimiter_TxgroupToKeys(b *testing.B) {
 
 	txgroups := make([][]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		txgroup := make([]transactions.SignedTxn, 0, config.MaxTxGroupSize)
-		for j := 0; j < config.MaxTxGroupSize; j++ {
+		txgroup := make([]transactions.SignedTxn, 0, bounds.MaxTxGroupSize)
+		for j := 0; j < bounds.MaxTxGroupSize; j++ {
 			apptxn := transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{

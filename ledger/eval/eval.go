@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -34,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -43,11 +46,14 @@ type LedgerForCowBase interface {
 	GenesisHash() crypto.Digest
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
+	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
+	GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	OnlineCirculation(basics.Round, basics.Round) (basics.MicroAlgos, error)
 }
 
 // ErrRoundZero is self-explanatory
@@ -64,7 +70,7 @@ var ErrNotInCowCache = errors.New("can't find object in cow cache")
 // is considerably slower.
 const averageEncodedTxnSizeHint = 150
 
-// Creatable represent a single creatable object.
+// creatable represent a single creatable object.
 type creatable struct {
 	cindex basics.CreatableIndex
 	ctype  basics.CreatableType
@@ -126,6 +132,15 @@ type roundCowBase struct {
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]ledgercore.AccountData
 
+	// The online accounts that we've already accessed during this round evaluation. This is a
+	// cache used to avoid looking up the same account data more than once during a single evaluator
+	// execution. The OnlineAccountData is historical and therefore won't be changing.
+	onlineAccounts map[basics.Address]basics.OnlineAccountData
+
+	// totalOnline is the cached amount of online stake for rnd (so it's from
+	// rnd-320). The zero value indicates it is not yet cached.
+	totalOnline basics.MicroAlgos
+
 	// Similarly to accounts cache that stores base account data, there are caches for params, states, holdings.
 	appParams      map[ledgercore.AccountApp]cachedAppParams
 	assetParams    map[ledgercore.AccountAsset]cachedAssetParams
@@ -147,6 +162,7 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, sta
 		stateProofNextRnd: stateProofNextRnd,
 		proto:             proto,
 		accounts:          make(map[basics.Address]ledgercore.AccountData),
+		onlineAccounts:    make(map[basics.Address]basics.OnlineAccountData),
 		appParams:         make(map[ledgercore.AccountApp]cachedAppParams),
 		assetParams:       make(map[ledgercore.AccountAsset]cachedAssetParams),
 		appLocalStates:    make(map[ledgercore.AccountApp]cachedAppLocalState),
@@ -188,6 +204,58 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, erro
 
 	x.accounts[addr] = ad
 	return ad, err
+}
+
+// balanceRound reproduces the way that the agreement package finds the round to
+// consider for online accounts. It returns the round that would be considered
+// while voting on the current round (which is x.rnd+1).
+func (x *roundCowBase) balanceRound() (basics.Round, error) {
+	current := x.rnd + 1
+	phdr, err := x.BlockHdr(agreement.ParamsRound(current))
+	if err != nil {
+		return 0, err
+	}
+	agreementParams := config.Consensus[phdr.CurrentProtocol]
+	return agreement.BalanceRound(current, agreementParams), nil
+}
+
+// lookupAgreement returns the online accountdata for the provided account address. It uses an internal cache
+// to avoid repeated lookups against the ledger.
+func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
+	if accountData, found := x.onlineAccounts[addr]; found {
+		return accountData, nil
+	}
+
+	brnd, err := x.balanceRound()
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	ad, err := x.l.LookupAgreement(brnd, addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+
+	x.onlineAccounts[addr] = ad
+	return ad, err
+}
+
+// onlineStake returns the total online stake as of the start of the round. It
+// caches the result to prevent repeated calls to the ledger.
+func (x *roundCowBase) onlineStake() (basics.MicroAlgos, error) {
+	if !x.totalOnline.IsZero() {
+		return x.totalOnline, nil
+	}
+
+	brnd, err := x.balanceRound()
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	total, err := x.l.OnlineCirculation(brnd, x.rnd+1) // x.rnd+1 is round being built
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	x.totalOnline = total
+	return x.totalOnline, nil
 }
 
 func (x *roundCowBase) updateAssetResourceCache(aa ledgercore.AccountAsset, r ledgercore.AssetResource) {
@@ -402,13 +470,8 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	var err error
-	count := basics.StateSchema{}
-	exist := false
-	kv := basics.TealKeyValue{}
 	if global {
-		var app ledgercore.AppParamsDelta
-		app, exist, err = x.lookupAppParams(addr, aidx, false)
+		app, exist, err := x.lookupAppParams(addr, aidx, false)
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
@@ -416,11 +479,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 		}
 		if exist {
-			kv = app.Params.GlobalState
+			return app.Params.GlobalState.ToStateSchema()
 		}
 	} else {
-		var ls ledgercore.AppLocalStateDelta
-		ls, exist, err = x.lookupAppLocalState(addr, aidx, false)
+		ls, exist, err := x.lookupAppLocalState(addr, aidx, false)
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
@@ -428,21 +490,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 		}
 		if exist {
-			kv = ls.LocalState.KeyValue
+			return ls.LocalState.KeyValue.ToStateSchema()
 		}
 	}
-	if !exist {
-		return count, nil
-	}
-
-	for _, v := range kv {
-		if v.Type == basics.TealUintType {
-			count.NumUint++
-		} else {
-			count.NumByteSlice++
-		}
-	}
-	return count, nil
+	return basics.StateSchema{}, nil
 }
 
 func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
@@ -483,7 +534,7 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (ledg
 		return ledgercore.AccountData{}, err
 	}
 	if withPendingRewards {
-		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+		acct = acct.WithUpdatedRewards(cs.proto.RewardUnit, cs.rewardsLevel())
 	}
 	return acct, nil
 }
@@ -520,7 +571,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if err != nil {
 		return err
 	}
-	fromBalNew := fromBal.WithUpdatedRewards(cs.proto, rewardlvl)
+	fromBalNew := fromBal.WithUpdatedRewards(cs.proto.RewardUnit, rewardlvl)
 
 	if fromRewards != nil {
 		var ot basics.OverflowTracker
@@ -532,12 +583,13 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	// Only write the change if it's meaningful (or required by old code).
-	if !amt.IsZero() || fromBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+	if !amt.IsZero() || fromBal.MicroAlgos.RewardUnits(cs.proto.RewardUnit) > 0 || !cs.proto.UnfundedSenders {
 		var overflowed bool
 		fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
 		if overflowed {
 			return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 		}
+		fromBalNew = cs.autoHeartbeat(fromBal, fromBalNew)
 		err = cs.putAccount(from, fromBalNew)
 		if err != nil {
 			return err
@@ -548,7 +600,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if err != nil {
 		return err
 	}
-	toBalNew := toBal.WithUpdatedRewards(cs.proto, rewardlvl)
+	toBalNew := toBal.WithUpdatedRewards(cs.proto.RewardUnit, rewardlvl)
 
 	if toRewards != nil {
 		var ot basics.OverflowTracker
@@ -560,12 +612,13 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	// Only write the change if it's meaningful (or required by old code).
-	if !amt.IsZero() || toBal.MicroAlgos.RewardUnits(cs.proto) > 0 || !cs.proto.UnfundedSenders {
+	if !amt.IsZero() || toBal.MicroAlgos.RewardUnits(cs.proto.RewardUnit) > 0 || !cs.proto.UnfundedSenders {
 		var overflowed bool
 		toBalNew.MicroAlgos, overflowed = basics.OAddA(toBalNew.MicroAlgos, amt)
 		if overflowed {
 			return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 		}
+		toBalNew = cs.autoHeartbeat(toBal, toBalNew)
 		err = cs.putAccount(to, toBalNew)
 		if err != nil {
 			return err
@@ -573,6 +626,24 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	return nil
+}
+
+// autoHeartbeat compares `before` and `after`, returning a new AccountData
+// based on `after` but with an updated `LastHeartbeat` if `after` shows enough
+// balance increase to risk a false positive suspension for absenteeism.
+func (cs *roundCowState) autoHeartbeat(before, after ledgercore.AccountData) ledgercore.AccountData {
+	// No need to adjust unless account is suspendable
+	if after.Status != basics.Online || !after.IncentiveEligible {
+		return after
+	}
+
+	// Adjust only if balance has doubled
+	twice, o := basics.OMul(before.MicroAlgos.Raw, 2)
+	if !o && after.MicroAlgos.Raw >= twice {
+		lookback := agreement.BalanceLookback(cs.ConsensusParams())
+		after.LastHeartbeat = cs.Round() + lookback
+	}
+	return after
 }
 
 func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
@@ -716,19 +787,19 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 
 	poolAddr := eval.prevHeader.RewardsPool
 	// get the reward pool account data without any rewards
-	incentivePoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
+	rewardsPoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
-	incentivePoolData = incentivePoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
+	rewardsPoolData = rewardsPoolData.WithUpdatedRewards(prevProto.RewardUnit, eval.prevHeader.RewardsLevel)
 
 	if evalOpts.Generate {
 		if eval.proto.SupportGenesisHash {
 			eval.block.BlockHeader.GenesisHash = eval.genesisHash
 		}
-		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
+		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, rewardsPoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
 	}
 	// set the eval state with the current header
 	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
@@ -740,7 +811,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		}
 
 		// Check that the rewards rate, level and residue match expected values
-		expectedRewardsState := eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
+		expectedRewardsState := eval.prevHeader.NextRewardsState(hdr.Round, proto, rewardsPoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
 		if eval.block.RewardsState != expectedRewardsState {
 			return nil, fmt.Errorf("bad rewards state: %+v != %+v", eval.block.RewardsState, expectedRewardsState)
 		}
@@ -751,7 +822,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		}
 	}
 
-	// Withdraw rewards from the incentive pool
+	// Withdraw rewards from the pool
 	var ot basics.OverflowTracker
 	rewardsPerUnit := ot.Sub(eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel)
 	if ot.Overflowed {
@@ -831,6 +902,11 @@ func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
 }
 
+// ConsensusParams returns the consensus parameters for the block being evaluated.
+func (eval *BlockEvaluator) ConsensusParams() config.ConsensusParams {
+	return eval.proto
+}
+
 // ResetTxnBytes resets the number of bytes tracked by the BlockEvaluator to
 // zero.  This is a specialized operation used by the transaction pool to
 // simulate the effect of putting pending transactions in multiple blocks.
@@ -902,7 +978,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // evaluator, or modify the block evaluator state in any other visible way.
 func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
-	err := txn.Txn.Alive(eval.block)
+	err := eval.block.Alive(txn.Txn.Header)
 	if err != nil {
 		return err
 	}
@@ -915,7 +991,7 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 
 	// Transaction already in the ledger?
 	txid := txn.ID()
-	err = eval.state.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+	err = eval.state.checkDup(txn.Txn.FirstValid, txn.Txn.LastValid, txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 	if err != nil {
 		return err
 	}
@@ -1063,7 +1139,7 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 			continue
 		}
 
-		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
+		dataNew := data.WithUpdatedRewards(eval.proto.RewardUnit, rewardlvl)
 		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
@@ -1091,13 +1167,19 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	txid := txn.ID()
 
 	if eval.validate {
-		err = txn.Txn.Alive(eval.block)
+		err = eval.block.Alive(txn.Txn.Header)
 		if err != nil {
 			return err
 		}
 
+		err = txn.Txn.WellFormed(eval.specials, eval.proto)
+		if err != nil {
+			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
+			return &txnErr
+		}
+
 		// Transaction already in the ledger?
-		err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+		err = cow.checkDup(txn.Txn.FirstValid, txn.Txn.LastValid, txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
@@ -1165,12 +1247,27 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	return nil
 }
 
+func (cs *roundCowState) takeFee(tx *transactions.Transaction, senderRewards *basics.MicroAlgos, ep *logic.EvalParams) error {
+	err := cs.Move(tx.Sender, ep.Specials.FeeSink, tx.Fee, senderRewards, nil)
+	if err != nil {
+		return err
+	}
+	// transactions from FeeSink should be exceedingly rare. But we can't count
+	// them in feesCollected because there are no net algos added to the Sink
+	if tx.Sender == ep.Specials.FeeSink {
+		return nil
+	}
+	// overflow impossible, since these sum the fees actually paid and max supply is uint64
+	cs.feesCollected, _ = basics.OAddA(cs.feesCollected, tx.Fee)
+	return nil
+
+}
+
 // applyTransaction changes the balances according to this transaction.
 func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := cow.ConsensusParams()
 
-	// move fee to pool
-	err = cow.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = cow.takeFee(&tx, &ad.SenderRewards, evalParams)
 	if err != nil {
 		return
 	}
@@ -1203,6 +1300,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		// Applying the StateProof transaction will advance the cow's StateProofNextRound field.
 		// Validation of the StateProof transaction before applying will only occur in validate mode.
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
+
+	case protocol.HeartbeatTx:
+		err = apply.Heartbeat(*tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
 
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
@@ -1258,7 +1358,13 @@ func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
-func (eval *BlockEvaluator) endOfBlock() error {
+// When generating a block, participating addresses are passed to prevent a
+// proposer from suspending itself.
+func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
+	if participating != nil && !eval.generate {
+		panic("logic error: only pass partAddresses to endOfBlock when generating")
+	}
+
 	if eval.generate {
 		var err error
 		eval.block.TxnCommitments, err = eval.block.PaysetCommit()
@@ -1272,7 +1378,18 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
-		eval.generateExpiredOnlineAccountsList()
+		if eval.proto.Payouts.Enabled {
+			// Determine how much the proposer should be paid. Agreement code
+			// can cancel this payment by zero'ing the ProposerPayout if the
+			// proposer is found to be ineligible. See WithProposer().
+			eval.block.FeesCollected = eval.state.feesCollected
+			eval.block.BlockHeader.ProposerPayout, err = eval.proposerPayout()
+			if err != nil {
+				return err
+			}
+		}
+
+		eval.generateKnockOfflineAccountsList(participating)
 
 		if eval.proto.StateProofInterval > 0 {
 			var basicStateProof bookkeeping.StateProofTrackingData
@@ -1288,13 +1405,17 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
-	err := eval.validateExpiredOnlineAccounts()
-	if err != nil {
+	if err := eval.validateExpiredOnlineAccounts(); err != nil {
+		return err
+	}
+	if err := eval.resetExpiredOnlineAccountsParticipationKeys(); err != nil {
 		return err
 	}
 
-	err = eval.resetExpiredOnlineAccountsParticipationKeys()
-	if err != nil {
+	if err := eval.validateAbsentOnlineAccounts(); err != nil {
+		return err
+	}
+	if err := eval.suspendAbsentAccounts(); err != nil {
 		return err
 	}
 
@@ -1314,6 +1435,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 		if eval.block.TxnCounter != expectedTxnCount {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
+		}
+
+		if err := eval.validateForPayouts(); err != nil {
+			return err
 		}
 
 		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()
@@ -1358,8 +1483,15 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
-	err = eval.state.CalculateTotals()
-	if err != nil {
+	if err := eval.performPayout(); err != nil {
+		return err
+	}
+
+	if err := eval.recordProposal(); err != nil {
+		return err
+	}
+
+	if err := eval.state.CalculateTotals(); err != nil {
 		return err
 	}
 
@@ -1370,41 +1502,285 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	return nil
 }
 
-// generateExpiredOnlineAccountsList creates the list of the expired participation accounts by traversing over the
-// modified accounts in the state deltas and testing if any of them needs to be reset.
-func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
+func (eval *BlockEvaluator) validateForPayouts() error {
+	if !eval.proto.Payouts.Enabled {
+		if !eval.block.FeesCollected.IsZero() {
+			return fmt.Errorf("feesCollected %d present when payouts disabled", eval.block.FeesCollected.Raw)
+		}
+		if !eval.block.Proposer().IsZero() {
+			return fmt.Errorf("proposer %v present when payouts disabled", eval.block.Proposer())
+		}
+		if !eval.block.ProposerPayout().IsZero() {
+			return fmt.Errorf("payout %d present when payouts disabled", eval.block.ProposerPayout().Raw)
+		}
+		return nil
+	}
+
+	if eval.block.FeesCollected != eval.state.feesCollected {
+		return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, eval.state.feesCollected)
+	}
+
+	// agreement will check that the payout is zero if the proposer is
+	// ineligible, but we must check that it is correct if non-zero. We
+	// allow it to be too low. A proposer can be algruistic.
+	expectedPayout, err := eval.proposerPayout()
+	if err != nil {
+		return err
+	}
+	payout := eval.block.ProposerPayout()
+	if payout.Raw > expectedPayout.Raw {
+		return fmt.Errorf("proposal wants %d payout, %d is allowed", payout.Raw, expectedPayout.Raw)
+	}
+
+	// agreement will check that the proposer is correct (we can't because
+	// we don't see the bundle), but agreement allows the proposer to be set
+	// even if Payouts is not enabled (and unset any time).  So make sure
+	// it's set only if it should be.
+	if !eval.generate { // if generating, proposer is set later by agreement
+		proposer := eval.block.Proposer()
+		if proposer.IsZero() {
+			return fmt.Errorf("proposer missing when payouts enabled")
+		}
+		// a closed account cannot get payout
+		if !payout.IsZero() {
+			prp, err := eval.state.Get(proposer, false)
+			if err != nil {
+				return err
+			}
+			if prp.IsZero() {
+				return fmt.Errorf("proposer %v is closed but expects payout %d", proposer, payout.Raw)
+			}
+		}
+	}
+	return nil
+}
+
+func (eval *BlockEvaluator) performPayout() error {
+	proposer := eval.block.Proposer()
+	// The proposer won't be present yet when generating a block, nor before enabled
+	if proposer.IsZero() {
+		return nil
+	}
+
+	payout := eval.block.ProposerPayout()
+
+	if !payout.IsZero() {
+		err := eval.state.Move(eval.block.FeeSink, proposer, payout, nil, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (eval *BlockEvaluator) recordProposal() error {
+	proposer := eval.block.Proposer()
+	// The proposer won't be present yet when generating a block, nor before enabled
+	if proposer.IsZero() {
+		return nil
+	}
+
+	prp, err := eval.state.Get(proposer, false)
+	if err != nil {
+		return err
+	}
+	// Record the LastProposed round, except in the unlikely case that a
+	// proposer has closed their account, but is still voting (it takes
+	// 320 rounds to be effective). Recording would prevent GC.
+	if !prp.IsZero() {
+		prp.LastProposed = eval.Round()
+	}
+	// An account could propose, even while suspended, because of the
+	// 320 round lookback.  Doing so is evidence the account is
+	// operational. Unsuspend. But the account will remain not
+	// IncentiveElgible until they keyreg again with the extra fee.
+	if prp.Suspended() {
+		prp.Status = basics.Online
+	}
+	err = eval.state.Put(proposer, prp)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// proposerPayout determines how much the proposer should be paid, assuming it
+// gets paid at all.  It may not examine the actual proposer because it is
+// called before the proposer is known.  Agreement might zero out this value
+// when the actual proposer is decided, if that proposer is ineligible.
+func (eval *BlockEvaluator) proposerPayout() (basics.MicroAlgos, error) {
+	incentive, _ := basics.NewPercent(eval.proto.Payouts.Percent).DivvyAlgos(eval.block.FeesCollected)
+	total, o := basics.OAddA(incentive, eval.block.Bonus)
+	if o {
+		return basics.MicroAlgos{}, fmt.Errorf("payout overflowed adding bonus incentive %d %d", incentive, eval.block.Bonus)
+	}
+
+	sink, err := eval.state.lookup(eval.block.FeeSink)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	available := sink.AvailableBalance(&eval.proto)
+	return basics.MinA(total, available), nil
+}
+
+// generateKnockOfflineAccountsList creates the lists of expired or absent
+// participation accounts to be suspended. It examines the accounts that appear
+// in the current block and high-stake accounts being tracked for state
+// proofs. Expiration takes precedence - if an account is expired, it should be
+// knocked offline and key material deleted. If it is only suspended, the key
+// material will remain.
+//
+// Different nodes may propose different list of addresses based on node state,
+// the protocol does not enforce which accounts must appear.  Block validators
+// only check whether ExpiredParticipationAccounts or
+// AbsentParticipationAccounts meet the criteria for expiration or suspension,
+// not whether the lists are complete.
+//
+// This function is passed a list of participating addresses so a node will not
+// propose a block that suspends or expires itself.
+func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []basics.Address) {
 	if !eval.generate {
 		return
 	}
-	// We are going to find the list of modified accounts and the
-	// current round that is being evaluated.
-	// Then we are going to go through each modified account and
-	// see if it meets the criteria for adding it to the expired
-	// participation accounts list.
-	modifiedAccounts := eval.state.modifiedAccounts()
-	currentRound := eval.Round()
 
-	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+	current := eval.Round()
+	maxExpirations := eval.proto.MaxProposedExpiredOnlineAccounts
+	maxSuspensions := eval.proto.Payouts.MaxMarkAbsent
 
-	for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
-		accountAddr := modifiedAccounts[i]
-		acctDelta, found := eval.state.mods.Accts.GetData(accountAddr)
+	updates := &eval.block.ParticipationUpdates
+
+	ch := apply.FindChallenge(eval.proto.Payouts, current, eval.state, apply.ChActive)
+	onlineStake, err := eval.state.onlineStake()
+	if err != nil {
+		logging.Base().Errorf("unable to fetch online stake, no knockoffs: %v", err)
+		return
+	}
+
+	// Make a set of candidate addresses to check for expired or absentee status.
+	type candidateData struct {
+		VoteLastValid         basics.Round
+		VoteID                crypto.OneTimeSignatureVerifier
+		Status                basics.Status
+		LastProposed          basics.Round
+		LastHeartbeat         basics.Round
+		MicroAlgosWithRewards basics.MicroAlgos
+		IncentiveEligible     bool // currently unused below, but may be needed in the future
+	}
+	candidates := make(map[basics.Address]candidateData)
+	partAddrs := util.MakeSet(participating...)
+
+	// First, ask the ledger for the top N online accounts, with their latest
+	// online account data, current up to the previous round.
+	if maxSuspensions > 0 {
+		knockOfflineCandidates, err := eval.l.GetKnockOfflineCandidates(eval.prevHeader.Round, eval.proto)
+		if err != nil {
+			// Log an error and keep going; generating lists of absent and expired
+			// accounts is not required by block validation rules.
+			logging.Base().Warnf("error fetching knockOfflineCandidates: %v", err)
+			knockOfflineCandidates = nil
+		}
+		for accountAddr, acctData := range knockOfflineCandidates {
+			// acctData is from previous block: doesn't include any updates in mods
+			candidates[accountAddr] = candidateData{
+				VoteLastValid:         acctData.VoteLastValid,
+				VoteID:                acctData.VoteID,
+				Status:                basics.Online, // GetKnockOfflineCandidates only returns online accounts
+				LastProposed:          acctData.LastProposed,
+				LastHeartbeat:         acctData.LastHeartbeat,
+				MicroAlgosWithRewards: acctData.MicroAlgosWithRewards,
+				IncentiveEligible:     acctData.IncentiveEligible,
+			}
+		}
+	}
+
+	// Then add any accounts modified in this block, with their state at the
+	// end of the round.
+	for _, accountAddr := range eval.state.modifiedAccounts() {
+		acctData, found := eval.state.mods.Accts.GetData(accountAddr)
 		if !found {
 			continue
 		}
-
-		// true if the account is online
-		isOnline := acctDelta.Status == basics.Online
-		// true if the accounts last valid round has passed
-		pastCurrentRound := acctDelta.VoteLastValid < currentRound
-
-		if isOnline && pastCurrentRound {
-			eval.block.ParticipationUpdates.ExpiredParticipationAccounts = append(
-				eval.block.ParticipationUpdates.ExpiredParticipationAccounts,
-				accountAddr,
-			)
+		// This will overwrite data from the knockOfflineCandidates list, if they were modified in the current block.
+		candidates[accountAddr] = candidateData{
+			VoteLastValid:         acctData.VoteLastValid,
+			VoteID:                acctData.VoteID,
+			Status:                acctData.Status,
+			LastProposed:          acctData.LastProposed,
+			LastHeartbeat:         acctData.LastHeartbeat,
+			MicroAlgosWithRewards: acctData.WithUpdatedRewards(eval.proto.RewardUnit, eval.state.rewardsLevel()).MicroAlgos,
+			IncentiveEligible:     acctData.IncentiveEligible,
 		}
 	}
+
+	// Now, check these candidate accounts to see if they are expired or absent.
+	for accountAddr, acctData := range candidates {
+		if acctData.MicroAlgosWithRewards.IsZero() {
+			continue // don't check accounts that are being closed
+		}
+
+		if partAddrs.Contains(accountAddr) {
+			continue // don't check our own participation accounts
+		}
+
+		// Expired check: are this account's voting keys no longer valid?
+		// Regardless of being online or suspended, if voting data exists, the
+		// account can be expired to remove it.  This means an offline account
+		// can be expired (because it was already suspended).
+		if !acctData.VoteID.IsEmpty() {
+			expiresBeforeCurrent := acctData.VoteLastValid < current
+			if expiresBeforeCurrent &&
+				len(updates.ExpiredParticipationAccounts) < maxExpirations {
+				updates.ExpiredParticipationAccounts = append(
+					updates.ExpiredParticipationAccounts,
+					accountAddr,
+				)
+				continue // if marking expired, do not consider suspension
+			}
+		}
+
+		// Absent check: has it been too long since the last heartbeat/proposal, or
+		// has this online account failed a challenge?
+		if len(updates.AbsentParticipationAccounts) >= maxSuspensions {
+			continue // no more room (don't break the loop, since we may have more expiries)
+		}
+
+		if acctData.Status == basics.Online && acctData.IncentiveEligible {
+			lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
+			oad, lErr := eval.state.lookupAgreement(accountAddr)
+			if lErr != nil {
+				logging.Base().Errorf("unable to check account for absenteeism: %v", accountAddr)
+				continue
+			}
+			if isAbsent(onlineStake, oad.VotingStake(), lastSeen, current) ||
+				ch.Failed(accountAddr, lastSeen) {
+				updates.AbsentParticipationAccounts = append(
+					updates.AbsentParticipationAccounts,
+					accountAddr,
+				)
+			}
+		}
+	}
+}
+
+const absentFactor = 20
+
+func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
+	// Don't consider accounts that were online when payouts went into effect as
+	// absent.  They get noticed the next time they propose or keyreg, which
+	// ought to be soon, if they are high stake or want to earn incentives.
+	if lastSeen == 0 || acctStake.Raw == 0 {
+		return false
+	}
+	// See if the account has exceeded their expected observation interval.
+	allowableLag, o := basics.Muldiv(absentFactor, totalOnlineStake.Raw, acctStake.Raw)
+	// just return false for overflow or a huge allowableLag. It implies the lag
+	// is longer that any network could be around, and computing with wraparound
+	// is annoying.
+	if o || allowableLag > math.MaxUint32 {
+		return false
+	}
+
+	return lastSeen+basics.Round(allowableLag) < current
 }
 
 // validateExpiredOnlineAccounts tests the expired online accounts specified in ExpiredParticipationAccounts, and verify
@@ -1427,7 +1803,7 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 	// are unique.  We make this map to keep track of previously seen address
 	addressSet := make(map[basics.Address]bool, lengthOfExpiredParticipationAccounts)
 
-	// Validate that all expired accounts meet the current criteria
+	// Validate that all proposed accounts have expired keys
 	currentRound := eval.Round()
 	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
 
@@ -1444,18 +1820,79 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 			return fmt.Errorf("endOfBlock was unable to retrieve account %v : %w", accountAddr, err)
 		}
 
-		// true if the account is online
-		isOnline := acctData.Status == basics.Online
-		// true if the accounts last valid round has passed
-		pastCurrentRound := acctData.VoteLastValid < currentRound
-
-		if !isOnline {
-			return fmt.Errorf("endOfBlock found %v was not online but %v", accountAddr, acctData.Status)
+		if acctData.VoteID.IsEmpty() {
+			return fmt.Errorf("endOfBlock found expiration candidate %v had no vote key", accountAddr)
 		}
 
-		if !pastCurrentRound {
+		if acctData.VoteLastValid >= currentRound {
 			return fmt.Errorf("endOfBlock found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
 		}
+	}
+	return nil
+}
+
+// validateAbsentOnlineAccounts tests the accounts specified in
+// AbsentParticipationAccounts, and verifies that they need to be suspended
+func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
+	if !eval.validate {
+		return nil
+	}
+	maxSuspensions := eval.proto.Payouts.MaxMarkAbsent
+	suspensionCount := len(eval.block.ParticipationUpdates.AbsentParticipationAccounts)
+
+	// If the length of the array is strictly greater than our max then we have an error.
+	// This works when the expected number of accounts is zero (i.e. it is disabled) as well
+	if suspensionCount > maxSuspensions {
+		return fmt.Errorf("length of absent accounts (%d) was greater than expected (%d)",
+			suspensionCount, maxSuspensions)
+	}
+
+	// For consistency with expired account handling, we preclude duplicates
+	addressSet := make(map[basics.Address]bool, suspensionCount)
+
+	ch := apply.FindChallenge(eval.proto.Payouts, eval.Round(), eval.state, apply.ChActive)
+	totalOnlineStake, err := eval.state.onlineStake()
+	if err != nil {
+		logging.Base().Errorf("unable to fetch online stake, can't check knockoffs: %v", err)
+		// I suppose we can still return successfully if the absent list is empty.
+		if suspensionCount > 0 {
+			return err
+		}
+	}
+
+	for _, accountAddr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
+		if _, exists := addressSet[accountAddr]; exists {
+			return fmt.Errorf("duplicate address found: %v", accountAddr)
+		}
+		addressSet[accountAddr] = true
+
+		acctData, err := eval.state.lookup(accountAddr)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve proposed absent account %v : %w", accountAddr, err)
+		}
+
+		if acctData.Status != basics.Online {
+			return fmt.Errorf("proposed absent account %v was %v, not Online", accountAddr, acctData.Status)
+		}
+		if acctData.MicroAlgos.IsZero() {
+			return fmt.Errorf("proposed absent account %v with zero algos", accountAddr)
+		}
+		if !acctData.IncentiveEligible {
+			return fmt.Errorf("proposed absent account %v not IncentiveEligible", accountAddr)
+		}
+
+		oad, lErr := eval.state.lookupAgreement(accountAddr)
+		if lErr != nil {
+			return fmt.Errorf("unable to check absent account: %v", accountAddr)
+		}
+		if isAbsent(totalOnlineStake, oad.VotingStake(), acctData.LastSeen(), eval.Round()) {
+			continue // ok. it's "normal absent"
+		}
+		if ch.Failed(accountAddr, acctData.LastSeen()) {
+			continue // ok. it's "challenge absent"
+		}
+		return fmt.Errorf("proposed absent account %v is not absent in %d, %d",
+			accountAddr, acctData.LastProposed, acctData.LastHeartbeat)
 	}
 	return nil
 }
@@ -1490,6 +1927,24 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 	return nil
 }
 
+// suspendAbsentAccounts suspends the proposed list of absent accounts.
+func (eval *BlockEvaluator) suspendAbsentAccounts() error {
+	for _, addr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
+		acct, err := eval.state.lookup(addr)
+		if err != nil {
+			return err
+		}
+
+		acct.Suspend()
+
+		err = eval.state.putAccount(addr, acct)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
 // used during proposal to get an actual block that will be proposed, after
 // feeding in tentative transactions into this block evaluator.
@@ -1497,7 +1952,16 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 // After a call to GenerateBlock, the BlockEvaluator can still be used to
 // accept transactions.  However, to guard against reuse, subsequent calls
 // to GenerateBlock on the same BlockEvaluator will fail.
-func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) {
+//
+// A list of participating addresses is passed to GenerateBlock. This lets
+// the BlockEvaluator know which of this node's participating addresses might
+// be proposing this block. This information is used when:
+//   - generating lists of absent accounts (don't suspend yourself)
+//   - preparing a ledgercore.UnfinishedBlock, which contains the end-of-block
+//     state of each potential proposer. This allows for a final check in
+//     UnfinishedBlock.FinishBlock to ensure the proposer hasn't closed its
+//     account before setting the ProposerPayout header.
+func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledgercore.UnfinishedBlock, error) {
 	if !eval.generate {
 		logging.Base().Panicf("GenerateBlock() called but generate is false")
 	}
@@ -1506,12 +1970,22 @@ func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) 
 		return nil, fmt.Errorf("GenerateBlock already called on this BlockEvaluator")
 	}
 
-	err := eval.endOfBlock()
+	err := eval.endOfBlock(participating...)
 	if err != nil {
 		return nil, err
 	}
 
-	vb := ledgercore.MakeValidatedBlock(eval.block, eval.state.deltas())
+	// look up end-of-block state of possible proposers passed to GenerateBlock
+	finalAccounts := make(map[basics.Address]ledgercore.AccountData, len(participating))
+	for i := range participating {
+		acct, err := eval.state.lookup(participating[i])
+		if err != nil {
+			return nil, err
+		}
+		finalAccounts[participating[i]] = acct
+	}
+
+	vb := ledgercore.MakeUnfinishedBlock(eval.block, eval.state.deltas(), finalAccounts)
 	eval.blockGenerated = true
 	proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
 	if !ok {
@@ -1554,7 +2028,7 @@ func (validator *evalTxValidator) run() {
 		signedTxnGroup := make([]transactions.SignedTxn, len(group))
 		for j, txn := range group {
 			signedTxnGroup[j] = txn.SignedTxn
-			err := txn.SignedTxn.Txn.Alive(validator.block)
+			err := validator.block.Alive(txn.SignedTxn.Txn.Header)
 			if err != nil {
 				validator.done <- err
 				return

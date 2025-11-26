@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -100,7 +100,7 @@ const MaxEncodedBaseAccountDataSize = 350
 const MaxEncodedBaseResourceDataSize = 20000
 
 // prepareNormalizedBalancesV5 converts an array of encodedBalanceRecordV5 into an equal size array of normalizedAccountBalances.
-func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.ConsensusParams) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
+func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, rewardUnit uint64) (normalizedAccountBalances []trackerdb.NormalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]trackerdb.NormalizedAccountBalance, len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].Address = balance.Address
@@ -110,7 +110,7 @@ func prepareNormalizedBalancesV5(bals []encoded.BalanceRecordV5, proto config.Co
 			return nil, err
 		}
 		normalizedAccountBalances[i].AccountData.SetAccountData(&accountDataV5)
-		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(proto)
+		normalizedAccountBalances[i].NormalizedBalance = accountDataV5.NormalizedOnlineBalance(rewardUnit)
 		type resourcesRow struct {
 			aidx basics.CreatableIndex
 			trackerdb.ResourcesData
@@ -151,7 +151,7 @@ func prepareNormalizedBalancesV6(bals []encoded.BalanceRecordV6, proto config.Co
 			normalizedAccountBalances[i].AccountData.Status,
 			normalizedAccountBalances[i].AccountData.RewardsBase,
 			normalizedAccountBalances[i].AccountData.MicroAlgos,
-			proto)
+			proto.RewardUnit)
 		normalizedAccountBalances[i].EncodedAccountData = balance.AccountData
 		curHashIdx := 0
 		if balance.ExpectingMoreEntries {
@@ -543,7 +543,7 @@ func (c *onlineAccountDelta) append(acctDelta ledgercore.AccountData, deltaRound
 	c.newStatus = append(c.newStatus, acctDelta.Status)
 }
 
-// makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
+// makeCompactOnlineAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes each account get modified across the round range by specifying it in the nAcctDeltas field of the accountDeltaCount/modifiedCreatable.
 func makeCompactOnlineAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseRound basics.Round, baseOnlineAccounts lruOnlineAccounts) (outAccountDeltas compactOnlineAccountDeltas) {
@@ -687,7 +687,7 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 		Address:                 address,
 		MicroAlgos:              ad.MicroAlgos,
 		RewardsBase:             ad.RewardsBase,
-		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
+		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto.RewardUnit),
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
 		StateProofID:            ad.StateProofID,
@@ -752,7 +752,7 @@ func accountsNewRoundImpl(
 			} else {
 				// create a new entry.
 				var ref trackerdb.AccountRef
-				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+				normBalance := data.newAcct.NormalizedOnlineBalance(proto.RewardUnit)
 				ref, err = writer.InsertAccount(data.address, normBalance, data.newAcct)
 				if err != nil {
 					return nil, nil, nil, err
@@ -779,7 +779,7 @@ func accountsNewRoundImpl(
 				}
 			} else {
 				var rowsAffected int64
-				normBalance := data.newAcct.NormalizedOnlineBalance(proto)
+				normBalance := data.newAcct.NormalizedOnlineBalance(proto.RewardUnit)
 				rowsAffected, err = writer.UpdateAccount(data.oldAcct.Ref, normBalance, data.newAcct)
 				if err != nil {
 					return nil, nil, nil, err
@@ -986,20 +986,36 @@ func onlineAccountsNewRoundImpl(
 			newAcct := data.newAcct[j]
 			updRound := data.updRound[j]
 			newStatus := data.newStatus[j]
-			if prevAcct.Ref == nil {
-				// zero rowid means we don't have a previous value.
-				if newAcct.IsEmpty() {
-					// IsEmpty means we don't have a previous value.
-					// if we didn't had it before, and we don't have anything now, just skip it.
-				} else {
-					if newStatus == basics.Online {
-						if newAcct.IsVotingEmpty() {
-							err = fmt.Errorf("empty voting data for online account %s: %v", data.address.String(), newAcct)
-							return nil, err
-						}
-						// create a new entry.
+			if newStatus == basics.Online && newAcct.IsVotingEmpty() {
+				return nil, fmt.Errorf("empty voting data for online account %s: %v", data.address, newAcct)
+			}
+			if prevAcct.Ref == nil { // zero rowid (nil Ref) means we don't have a previous value.
+				if newStatus != basics.Online {
+					continue // didn't exist, and not going online, we don't care.
+				}
+
+				// create a new entry.
+				var ref trackerdb.OnlineAccountRef
+				normBalance := newAcct.NormalizedOnlineBalance(proto.RewardUnit)
+				ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
+				if err != nil {
+					return nil, err
+				}
+				updated := trackerdb.PersistedOnlineAccountData{
+					Addr:        data.address,
+					AccountData: newAcct,
+					Round:       lastUpdateRound,
+					Ref:         ref,
+					UpdRound:    basics.Round(updRound),
+				}
+				updatedAccounts = append(updatedAccounts, updated)
+				prevAcct = updated
+			} else { // non-zero rowid (non-nil Ref) means we had a previous value.
+				if newStatus == basics.Online {
+					// was already online, so create an update only if something changed
+					if prevAcct.AccountData != newAcct {
 						var ref trackerdb.OnlineAccountRef
-						normBalance := newAcct.NormalizedOnlineBalance(proto)
+						normBalance := newAcct.NormalizedOnlineBalance(proto.RewardUnit)
 						ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
 						if err != nil {
 							return nil, err
@@ -1011,21 +1027,25 @@ func onlineAccountsNewRoundImpl(
 							Ref:         ref,
 							UpdRound:    basics.Round(updRound),
 						}
+
 						updatedAccounts = append(updatedAccounts, updated)
 						prevAcct = updated
-					} else if !newAcct.IsVotingEmpty() {
-						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
-						return nil, err
 					}
-				}
-			} else {
-				// non-zero rowid means we had a previous value.
-				if newAcct.IsVotingEmpty() {
-					// new value is zero then go offline
-					if newStatus == basics.Online {
-						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
-						return nil, err
+				} else {
+					if prevAcct.AccountData.IsVotingEmpty() && newStatus != basics.Online {
+						// we are not using newAcct.IsVotingEmpty because new account comes from deltas,
+						// and deltas are base (full) accounts, so that it can have status=offline and non-empty voting data
+						// for suspended accounts.
+						// it is not the same for online accounts where empty all offline accounts are stored with empty voting data.
+
+						// if both old and new are offline, ignore
+						// otherwise the following could happen:
+						// 1. there are multiple offline account deltas so all of them could be inserted
+						// 2. delta.oldAcct is often pulled from a cache that is only updated on new rows insert so
+						// it could pull a very old already deleted offline value resulting one more insert
+						continue
 					}
+					// "delete" by inserting a zero entry
 					var ref trackerdb.OnlineAccountRef
 					ref, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
 					if err != nil {
@@ -1041,25 +1061,6 @@ func onlineAccountsNewRoundImpl(
 
 					updatedAccounts = append(updatedAccounts, updated)
 					prevAcct = updated
-				} else {
-					if prevAcct.AccountData != newAcct {
-						var ref trackerdb.OnlineAccountRef
-						normBalance := newAcct.NormalizedOnlineBalance(proto)
-						ref, err = writer.InsertOnlineAccount(data.address, normBalance, newAcct, updRound, uint64(newAcct.VoteLastValid))
-						if err != nil {
-							return nil, err
-						}
-						updated := trackerdb.PersistedOnlineAccountData{
-							Addr:        data.address,
-							AccountData: newAcct,
-							Round:       lastUpdateRound,
-							Ref:         ref,
-							UpdRound:    basics.Round(updRound),
-						}
-
-						updatedAccounts = append(updatedAccounts, updated)
-						prevAcct = updated
-					}
 				}
 			}
 		}

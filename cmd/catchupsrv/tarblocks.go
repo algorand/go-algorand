@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package main
 import (
 	"archive/tar"
 	"compress/bzip2"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -197,7 +196,7 @@ func (tbf *tarBlockFile) getBlock(round uint64) (data []byte, err error) {
 		}
 	}
 	err = nil
-	for true {
+	for {
 		tbf.current, err = tbf.tarfile.Next()
 		if err == io.EOF {
 			tbf._close()
@@ -224,5 +223,4 @@ func (tbf *tarBlockFile) getBlock(round uint64) (data []byte, err error) {
 			return
 		}
 	}
-	return nil, errors.New("this should be unreachable")
 }

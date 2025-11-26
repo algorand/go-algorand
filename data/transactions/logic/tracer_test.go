@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -101,7 +101,6 @@ func TestLogicSigEvalWithTracer(t *testing.T) {
 	t.Parallel()
 	testCases := getSimpleTracerTestCases(ModeSig)
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			mock := mocktracer.Tracer{}
@@ -119,7 +118,6 @@ func TestTopLevelAppEvalWithTracer(t *testing.T) {
 	t.Parallel()
 	testCases := getSimpleTracerTestCases(ModeApp)
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			mock := mocktracer.Tracer{}
@@ -137,7 +135,6 @@ func TestInnerAppEvalWithTracer(t *testing.T) {
 	t.Parallel()
 	scenarios := mocktracer.GetTestScenarios()
 	for name, makeScenario := range scenarios {
-		makeScenario := makeScenario
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			mock := mocktracer.Tracer{}
@@ -217,13 +214,12 @@ func (t *panicTracer) AfterOpcode(cx *EvalContext, evalError error) {
 	panic("panicTracer panics")
 }
 
-// TestEvalWithTracerTracerPanic ensures that tracer panics get recovered and turned into errors
+// TestEvalWithTracerPanic ensures that tracer panics get recovered and turned into errors
 func TestEvalWithTracerPanic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	for _, mode := range []RunMode{ModeSig, ModeApp} {
-		mode := mode
 		t.Run(mode.String(), func(t *testing.T) {
 			t.Parallel()
 			tracer := panicTracer{}

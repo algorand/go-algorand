@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,7 +90,7 @@ func MakeVoteFilter(voteFilterConfig *VoteFilterConfig) *VoteFilter {
 	}
 }
 func (n *VoteFilter) Eval(tag protocol.Tag, data []byte, direction string) bool {
-	msgDecoder := n.fuzzer.facades[n.nodeID].GetFilterByType(reflect.TypeOf(&MessageDecoderFilter{})).(*MessageDecoderFilter)
+	msgDecoder := n.fuzzer.facades[n.nodeID].GetFilterByType(reflect.TypeFor[*MessageDecoderFilter]()).(*MessageDecoderFilter)
 	if msgDecoder == nil {
 		return true
 	}
@@ -139,7 +139,7 @@ func (n *VoteFilter) Eval(tag protocol.Tag, data []byte, direction string) bool 
 	return true
 }
 
-// Unmarshall VoteFilter
+// Unmarshal VoteFilter
 func (n *VoteFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type voteFilterJSON struct {
 		Name             string

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,12 +39,12 @@ func TestDisabledAPIConfig(t *testing.T) {
 	localFixture.Setup(t, filepath.Join("nettemplates", "DisableAPIAuth.json"))
 	defer localFixture.Shutdown()
 
-	testClient := localFixture.LibGoalClient
+	libgoalClient := localFixture.LibGoalClient
 
-	statusResponse, err := testClient.Status()
+	statusResponse, err := libgoalClient.Status()
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-	statusResponse2, err := testClient.Status()
+	statusResponse2, err := libgoalClient.Status()
 	a.NoError(err)
 	a.NotEmpty(statusResponse2)
 	a.True(statusResponse2.LastRound >= statusResponse.LastRound)
@@ -58,12 +58,21 @@ func TestDisabledAPIConfig(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	// check public api works without a token
-	testClient.WaitForRound(1)
+	url, err := localFixture.NC.ServerURL()
+	a.NoError(err)
+	testClient := client.MakeRestClient(url, "") // empty token
+
+	err = testClient.WaitForRoundWithTimeout(1)
+	assert.NoError(t, err)
 	_, err = testClient.Block(1)
 	assert.NoError(t, err)
+	_, err = testClient.Status()
+	a.NoError(err)
+
 	// check admin api works with the generated token
-	_, err = testClient.GetParticipationKeys()
+	_, err = libgoalClient.GetParticipationKeys()
 	assert.NoError(t, err)
+
 	// check admin api doesn't work with an invalid token
 	algodURL, err := nc.ServerURL()
 	assert.NoError(t, err)
@@ -72,7 +81,7 @@ func TestDisabledAPIConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "Invalid API Token")
 }
 
-func TestSendingNotClosingAccountFails(t *testing.T) {
+func TestSendingNotClosingAccountErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -114,8 +123,10 @@ func TestSendingNotClosingAccountFails(t *testing.T) {
 	if someAddress == "" {
 		t.Error("no addr with funds")
 	}
-	amt := someBal - 10000 - 1
-	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, amt, nil, "", 0, 0)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+	amt := someBal - params.MinFee - 1
+	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.MinFee, amt, nil, "", 0, 0)
 	a.Error(err)
 }
 

@@ -11,13 +11,12 @@
 # Our build task-runner `mule` will refer to this script and will automatically
 # build a new image whenever the version number has been changed.
 
-BUILD=1.20.7
- MIN=1.20
- GO_MOD_SUPPORT=1.20
+BUILD=1.25.3
+MIN=$(echo $BUILD | cut -d. -f1-2).0
 
 if [ "$1" = all ]
 then
-    echo $BUILD $MIN $GO_MOD_SUPPORT
+    echo $BUILD $MIN
 elif [ "$1" = dev ]
 then
     echo $MIN

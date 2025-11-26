@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,6 +42,35 @@ type mockLedger struct {
 
 func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
 	return ledgercore.ToAccountData(ml.balanceMap[addr]), nil
+}
+
+// convertToOnline is only suitable for test code because OnlineAccountData
+// should have rewards paid. Here, we ignore that for simple tests.
+func convertToOnline(ad ledgercore.AccountData) basics.OnlineAccountData {
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}
+}
+
+func (ml *mockLedger) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, err := ml.lookup(addr)
+	if err != nil { //  impossible, see lookup()
+		return basics.OnlineAccountData{}, err
+	}
+	return convertToOnline(ad), nil
+}
+
+func (ml *mockLedger) onlineStake() (basics.MicroAlgos, error) {
+	return basics.Algos(55_555), nil
 }
 
 func (ml *mockLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
@@ -282,6 +311,7 @@ func TestCowChildReflect(t *testing.T) {
 		"compatibilityMode":        {},
 		"compatibilityGetKeyCache": {},
 		"prevTotals":               {},
+		"feesCollected":            {},
 	}
 
 	cow := roundCowState{}
@@ -289,7 +319,7 @@ func TestCowChildReflect(t *testing.T) {
 	st := v.Type()
 	for i := 0; i < v.NumField(); i++ {
 		reflectedCowName := st.Field(i).Name
-		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing the test", reflectedCowName)
+		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing this test", reflectedCowName)
 	}
 }
 
@@ -308,20 +338,20 @@ func TestCowStateProof(t *testing.T) {
 	c0.SetStateProofNextRound(firstStateproof)
 	stateproofTxn := transactions.StateProofTxnFields{
 		StateProofType: protocol.StateProofBasic,
-		Message:        stateproofmsg.Message{LastAttestedRound: uint64(firstStateproof) + version.StateProofInterval},
+		Message:        stateproofmsg.Message{LastAttestedRound: firstStateproof + basics.Round(version.StateProofInterval)},
 	}
 
 	// can not apply state proof for 3*version.StateProofInterval when we expect 2*version.StateProofInterval
 	err := apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
 	a.ErrorIs(err, apply.ErrExpectedDifferentStateProofRound)
 
-	stateproofTxn.Message.LastAttestedRound = uint64(firstStateproof)
+	stateproofTxn.Message.LastAttestedRound = firstStateproof
 	err = apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
 	a.NoError(err)
 	a.Equal(3*basics.Round(version.StateProofInterval), c0.GetStateProofNextRound())
 
 	// try to apply the next stateproof 3*version.StateProofInterval
-	stateproofTxn.Message.LastAttestedRound = 3 * version.StateProofInterval
+	stateproofTxn.Message.LastAttestedRound = 3 * basics.Round(version.StateProofInterval)
 	err = apply.StateProof(stateproofTxn, firstStateproof+1, c0, false)
 	a.NoError(err)
 	a.Equal(4*basics.Round(version.StateProofInterval), c0.GetStateProofNextRound())

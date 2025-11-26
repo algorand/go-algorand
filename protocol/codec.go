@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -258,7 +258,7 @@ type MsgpDecoderBytes struct {
 	pos int
 }
 
-// Decode an objptr from from a byte stream
+// Decode an objptr from a byte stream
 func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
 	if !objptr.CanUnmarshalMsg(objptr) {
 		return fmt.Errorf("object %T cannot be msgp-unmashalled", objptr)

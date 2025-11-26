@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,7 +64,7 @@ func (m *Monotonic[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType Time
 	tmt = timeout{delta: delta}
 
 	target := m.zero.Add(delta)
-	left := target.Sub(time.Now())
+	left := time.Until(target)
 	if left < 0 {
 		ch := make(chan time.Time)
 		close(ch)

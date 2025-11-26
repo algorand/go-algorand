@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=actionType
+//go:generate go tool -modfile=../tool.mod stringer -type=actionType
 type actionType uint8
 
 const (
@@ -232,7 +232,7 @@ type ensureAction struct {
 	Payload proposal
 	// the certificate proving commitment
 	Certificate Certificate
-	// The time that the winning proposal-vote was validated for round credentialRoundLag back from the current one
+	// The time that the lowest proposal-vote was validated for `credentialRoundLag` rounds ago (R-credentialRoundLag). This may not have been the winning proposal, since we wait `credentialRoundLag` rounds to see if there was a better one.
 	voteValidatedAt time.Duration
 	// The dynamic filter timeout calculated for this round, even if not enabled, for reporting to telemetry.
 	dynamicFilterTimeout time.Duration
@@ -566,7 +566,6 @@ func (c checkpointAction) do(ctx context.Context, s *Service) {
 		// we don't expect this to happen in recovery
 		s.log.with(logEvent).Errorf("checkpoint action for (%v, %v, %v) reached with nil completion channel", c.Round, c.Period, c.Step)
 	}
-	return
 }
 
 func (c checkpointAction) String() string {

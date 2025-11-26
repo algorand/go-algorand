@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,7 +55,7 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 	decoded, err := base32Encoder.DecodeString(address)
 
 	if err != nil {
-		return Address{}, fmt.Errorf("failed to decode address %s to base 32", address)
+		return Address{}, fmt.Errorf("failed to decode address %s from base 32", address)
 	}
 	var short Address
 	if len(decoded) < len(short) {

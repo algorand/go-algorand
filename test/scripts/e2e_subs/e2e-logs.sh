@@ -7,9 +7,6 @@ date "+${scriptname} start %Y%m%d_%H%M%S"
 
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"
-function rest() {
-    curl -q -s -H "Authorization: Bearer $PUB_TOKEN" "$NET$1"
-}
 
 function app_txid {
     # When app (call or optin) submits, this is how the txid is

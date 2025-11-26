@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/codecs"
 )
 
@@ -42,15 +43,15 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34" version[35]:"35" version[36]:"36" version[37]:"37"`
 
-	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes. Relays (nodes with a valid NetAddress) are always Archival, regardless of this setting. This may change in the future. If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only effects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
+	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes.  If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only affects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
 	Archival bool `version[0]:"false"`
 
 	// GossipFanout sets the maximum number of peers the node will connect to with outgoing connections. If the list of peers is less than this setting, fewer connections will be made. The node will not connect to the same peer multiple times (with outgoing connections).
 	GossipFanout int `version[0]:"4"`
 
-	// NetAddress is the address and/or port on which the relay node listens for incoming connections, or blank to ignore incoming connections. Specify an IP and port or just a port. For example, 127.0.0.1:0 will listen on a random port on the localhost.
+	// NetAddress is the address and/or port on which a node listens for incoming connections, or blank to ignore incoming connections. Specify an IP and port or just a port. For example, 127.0.0.1:0 will listen on a random port on the localhost.
 	NetAddress string `version[0]:""`
 
 	// ReconnectTime is deprecated and unused.
@@ -64,7 +65,7 @@ type Local struct {
 	PublicAddress string `version[0]:""`
 
 	// MaxConnectionsPerIP is the maximum number of connections allowed per IP address.
-	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
+	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15" version[35]:"8"`
 
 	// PeerPingPeriodSeconds is deprecated and unused.
 	PeerPingPeriodSeconds int `version[0]:"0"`
@@ -129,9 +130,13 @@ type Local struct {
 	LogArchiveDir string `version[31]:""`
 
 	// IncomingConnectionsLimit specifies the max number of incoming connections
-	// for the port configured in NetAddress. 0 means no connections allowed. Must be non-negative.
+	// for the gossip protocol configured in NetAddress. 0 means no connections allowed. Must be non-negative.
 	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
 	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
+
+	// P2PHybridIncomingConnectionsLimit is used as IncomingConnectionsLimit for P2P connections in hybrid mode.
+	// For pure P2P nodes IncomingConnectionsLimit is used.
+	P2PHybridIncomingConnectionsLimit int `version[34]:"1200"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node. If the
@@ -164,6 +169,9 @@ type Local struct {
 	// EndpointAddress configures the address the node listens to for REST API calls. Specify an IP and port or just port. For example, 127.0.0.1:0 will listen on a random port on the localhost (preferring 8080).
 	EndpointAddress string `version[0]:"127.0.0.1:0"`
 
+	// Respond to Private Network Access preflight requests sent to the node. Useful when a public website is trying to access a node that's hosted on a local network.
+	EnablePrivateNetworkAccessHeader bool `version[35]:"false"`
+
 	// RestReadTimeoutSeconds is passed to the API servers rest http.Server implementation.
 	RestReadTimeoutSeconds int `version[4]:"15"`
 
@@ -171,6 +179,7 @@ type Local struct {
 	RestWriteTimeoutSeconds int `version[4]:"120"`
 
 	// DNSBootstrapID specifies the names of a set of DNS SRV records that identify the set of nodes available to connect to.
+	// This is applicable to both relay and archival nodes - they are assumed to use the same DNSBootstrapID today.
 	// When resolving the bootstrap ID <network> will be replaced by the genesis block's network name. This string uses a URL
 	// parsing library and supports optional backup and dedup parameters. 'backup' is used to provide a second DNS entry to use
 	// in case the primary is unavailable. dedup is intended to be used to deduplicate SRV records returned from the primary
@@ -245,6 +254,12 @@ type Local struct {
 	// EnableTxBacklogAppRateLimiting controls if an app rate limiter should be attached to the tx backlog enqueue process
 	EnableTxBacklogAppRateLimiting bool `version[32]:"true"`
 
+	// TxBacklogAppRateLimitingCountERLDrops feeds messages dropped by the ERL congestion manager & rate limiter (enabled by
+	// EnableTxBacklogRateLimiting) to the app rate limiter (enabled by EnableTxBacklogAppRateLimiting), so that all TX messages
+	// are counted. This provides more accurate rate limiting for the app rate limiter, at the potential expense of additional
+	// deserialization overhead.
+	TxBacklogAppRateLimitingCountERLDrops bool `version[35]:"false"`
+
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager should be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
 	EnableTxBacklogRateLimiting bool `version[27]:"false" version[30]:"true"`
@@ -311,7 +326,7 @@ type Local struct {
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
-	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in in the header and always uses the last value
+	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in the header and always uses the last value
 	// from the last X-Forwarded-For HTTP header that corresponds to a single reverse proxy (even if it received the request from another reverse proxy or adversary node).
 	//
 	// WARNING: By enabling this option, you are trusting peers to provide accurate forwarding addresses.
@@ -351,6 +366,9 @@ type Local struct {
 	// EnableRuntimeMetrics exposes Go runtime metrics in /metrics and via node_exporter.
 	EnableRuntimeMetrics bool `version[22]:"false"`
 
+	// EnableNetDevMetrics exposes network interface total bytes sent/received metrics in /metrics
+	EnableNetDevMetrics bool `version[34]:"false"`
+
 	// TelemetryToLog configures whether to record messages to node.log that are normally only sent to remote event monitoring.
 	TelemetryToLog bool `version[5]:"true"`
 
@@ -360,8 +378,9 @@ type Local struct {
 	// 0x01 (dnssecSRV) - validate SRV response
 	// 0x02 (dnssecRelayAddr) - validate relays' names to addresses resolution
 	// 0x04 (dnssecTelemetryAddr) - validate telemetry and metrics names to addresses resolution
+	// 0x08 (dnssecTXT) - validate TXT response
 	// ...
-	DNSSecurityFlags uint32 `version[6]:"1"`
+	DNSSecurityFlags uint32 `version[6]:"1" version[34]:"9"`
 
 	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
 	EnablePingHandler bool `version[6]:"true"`
@@ -454,27 +473,15 @@ type Local struct {
 	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
 	VerifiedTranscationsCacheSize int `version[14]:"30000" version[23]:"150000"`
 
-	// EnableCatchupFromArchiveServers controls which peers the catchup service would use in order to catchup.
-	// When enabled, the catchup service would use the archive servers before falling back to the relays.
-	// On networks that don't have archive servers, this becomes a no-op, as the catchup service would have no
-	// archive server to pick from, and therefore automatically selects one of the relay nodes.
-	EnableCatchupFromArchiveServers bool `version[15]:"false"`
-
 	// DisableLocalhostConnectionRateLimit controls whether the incoming connection rate limit would apply for
 	// connections that are originating from the local machine. Setting this to "true", allow to create large
 	// local-machine networks that won't trip the incoming connection limit observed by relays.
 	DisableLocalhostConnectionRateLimit bool `version[16]:"true"`
 
 	// BlockServiceCustomFallbackEndpoints is a comma delimited list of endpoints which the block service uses to
-	// redirect the http requests to in case it does not have the round. If it is not specified, will check
-	// EnableBlockServiceFallbackToArchiver.
+	// redirect the http requests to in case it does not have the round. If empty, the block service will return
+	// StatusNotFound (404)
 	BlockServiceCustomFallbackEndpoints string `version[16]:""`
-
-	// EnableBlockServiceFallbackToArchiver controls whether the block service redirects the http requests to
-	// an archiver or return StatusNotFound (404) when in does not have the requested round, and
-	// BlockServiceCustomFallbackEndpoints is empty.
-	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
-	EnableBlockServiceFallbackToArchiver bool `version[16]:"true" version[31]:"false"`
 
 	// CatchupBlockValidateMode is a development and testing configuration used by the catchup service.
 	// It can be used to omit certain validations to speed up the catchup process, or to apply extra validations which are redundant in normal operation.
@@ -606,8 +613,19 @@ type Local struct {
 	// When it exceeds this capacity, it redirects the block requests to a different node
 	BlockServiceMemCap uint64 `version[28]:"500000000"`
 
-	// EnableP2P turns on the peer to peer network
+	// EnableP2P turns on the peer to peer network.
+	// When both EnableP2P and EnableP2PHybridMode (below) are set, EnableP2PHybridMode takes precedence.
 	EnableP2P bool `version[31]:"false"`
+
+	// EnableP2PHybridMode turns on both websockets and P2P networking.
+	// Enabling this setting also requires PublicAddress to be set.
+	EnableP2PHybridMode bool `version[34]:"false"`
+
+	// P2PHybridNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
+	P2PHybridNetAddress string `version[34]:""`
+
+	// EnableDHT will turn on the hash table for use with capabilities advertisement
+	EnableDHTProviders bool `version[34]:"false"`
 
 	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
 	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
@@ -620,6 +638,25 @@ type Local struct {
 
 	// DisableAPIAuth turns off authentication for public (non-admin) API endpoints.
 	DisableAPIAuth bool `version[30]:"false"`
+
+	// GoMemLimit provides the Go runtime with a soft memory limit. The default behavior is no limit,
+	// unless the GOMEMLIMIT environment variable is set.
+	GoMemLimit uint64 `version[34]:"0"`
+
+	// EnableVoteCompression controls whether vote compression is enabled for websocket networks
+	EnableVoteCompression bool `version[36]:"true"`
+
+	// StatefulVoteCompressionTableSize controls the size of the per-peer tables used for vote compression.
+	// If 0, stateful vote compression is disabled (but stateless vote compression will still be used if
+	// EnableVoteCompression is true). This value should be a power of 2 between 16 and 2048, inclusive.
+	// The per-peer overhead for stateful compression in one direction (from peer A => B) is 224 bytes times
+	// this value, plus 800 bytes of fixed overhead; it is twice that if votes are also being sent from B => A.
+	// So the default value of 2048 requires 459,552 bytes of memory per peer for stateful vote compression
+	// in one direction, or 919,104 bytes if both directions are used.
+	StatefulVoteCompressionTableSize uint `version[37]:"2048"`
+
+	// EnableBatchVerification controls whether ed25519 batch verification is enabled
+	EnableBatchVerification bool `version[37]:"true"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -641,8 +678,8 @@ func (cfg Local) ValidateDNSBootstrapArray(networkID protocol.NetworkID) ([]*DNS
 func (cfg Local) internalValidateDNSBootstrapArray(networkID protocol.NetworkID) (
 	bootstrapArray []*DNSBootstrap, err error) {
 
-	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
-	for _, bootstrapString := range bootstrapStringArray {
+	bootstrapStringArray := strings.SplitSeq(cfg.DNSBootstrapID, ";")
+	for bootstrapString := range bootstrapStringArray {
 		if len(strings.TrimSpace(bootstrapString)) == 0 {
 			continue
 		}
@@ -666,10 +703,9 @@ func (cfg Local) SaveToDisk(root string) error {
 
 // SaveAllToDisk writes the all Local settings into a root/ConfigFilename file
 func (cfg Local) SaveAllToDisk(root string) error {
-	configpath := filepath.Join(root, ConfigFilename)
-	filename := os.ExpandEnv(configpath)
-	prettyPrint := true
-	return codecs.SaveObjectToFile(filename, cfg, prettyPrint)
+	configPath := filepath.Join(root, ConfigFilename)
+	filename := os.ExpandEnv(configPath)
+	return codecs.SaveObjectToFile(filename, cfg, true)
 }
 
 // SaveToFile saves the config to a specific filename, allowing overriding the default name
@@ -689,9 +725,14 @@ func (cfg Local) DNSSecurityRelayAddrEnforced() bool {
 	return cfg.DNSSecurityFlags&dnssecRelayAddr != 0
 }
 
-// DNSSecurityTelemeryAddrEnforced returns true if relay name to ip addr resolution enforced
-func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
+// DNSSecurityTelemetryAddrEnforced returns true if relay name to ip addr resolution enforced
+func (cfg Local) DNSSecurityTelemetryAddrEnforced() bool {
 	return cfg.DNSSecurityFlags&dnssecTelemetryAddr != 0
+}
+
+// DNSSecurityTXTEnforced returns true if TXT response verification enforced
+func (cfg Local) DNSSecurityTXTEnforced() bool {
+	return cfg.DNSSecurityFlags&dnssecTXT != 0
 }
 
 // CatchupVerifyCertificate returns true if certificate verification is needed
@@ -724,10 +765,52 @@ func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }
 
-// IsGossipServer returns true if NetAddress is set and this node supposed
-// to start websocket server
+// IsGossipServer returns true if this node supposed to start websocket or p2p server
 func (cfg Local) IsGossipServer() bool {
-	return cfg.NetAddress != ""
+	return cfg.IsWsGossipServer() || cfg.IsP2PGossipServer()
+}
+
+// IsWsGossipServer returns true if a node is configured to run a listening ws net
+func (cfg Local) IsWsGossipServer() bool {
+	// 1. NetAddress is set and EnableP2P is not set
+	// 2. NetAddress is set and EnableP2PHybridMode is set then EnableP2P is overridden  by EnableP2PHybridMode
+	return cfg.NetAddress != "" && (!cfg.EnableP2P || cfg.EnableP2PHybridMode)
+}
+
+// IsP2PGossipServer returns true if a node is configured to run a listening p2p net
+func (cfg Local) IsP2PGossipServer() bool {
+	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PHybridNetAddress != "")
+}
+
+// IsHybridServer returns true if a node configured to run a listening both ws and p2p networks
+func (cfg Local) IsHybridServer() bool {
+	return cfg.NetAddress != "" && cfg.P2PHybridNetAddress != "" && cfg.EnableP2PHybridMode
+}
+
+// ValidateP2PHybridConfig checks if both NetAddress and P2PHybridNetAddress are set or unset in hybrid mode.
+func (cfg Local) ValidateP2PHybridConfig() error {
+	if cfg.EnableP2PHybridMode {
+		if cfg.NetAddress == "" && cfg.P2PHybridNetAddress != "" || cfg.NetAddress != "" && cfg.P2PHybridNetAddress == "" {
+			return P2PHybridConfigError{
+				msg: "P2PHybridMode requires both NetAddress and P2PHybridNetAddress to be set or unset",
+			}
+		}
+		// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
+		// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
+		if (cfg.NetAddress != "" || cfg.P2PHybridNetAddress != "") && cfg.PublicAddress == "" {
+			return P2PHybridConfigError{msg: "PublicAddress must be specified when EnableP2PHybridMode is set"}
+		}
+	}
+	return nil
+}
+
+// P2PHybridConfigError is an error type for P2PHybrid configuration issues
+type P2PHybridConfigError struct {
+	msg string
+}
+
+func (e P2PHybridConfigError) Error() string {
+	return e.msg
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
@@ -797,6 +880,7 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 
 type logger interface {
 	Infof(format string, args ...interface{})
+	Warnf(format string, args ...interface{})
 }
 
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
@@ -904,7 +988,7 @@ func moveDirIfExists(logger logger, srcdir, dstdir string, files ...string) erro
 	// then, check if any files exist in srcdir, and move them to dstdir
 	for _, file := range files {
 		if _, err := os.Stat(filepath.Join(srcdir, file)); err == nil {
-			if err := os.Rename(filepath.Join(srcdir, file), filepath.Join(dstdir, file)); err != nil {
+			if err := util.MoveFile(filepath.Join(srcdir, file), filepath.Join(dstdir, file)); err != nil {
 				return fmt.Errorf("failed to move file %s from %s to %s: %v", file, srcdir, dstdir, err)
 			}
 			logger.Infof("Moved DB file %s from ColdDataDir %s to HotDataDir %s", file, srcdir, dstdir)
@@ -925,10 +1009,24 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 	if cfg.RestConnectionsHardLimit <= diff+reservedRESTConns {
 		restDelta := diff + reservedRESTConns - cfg.RestConnectionsHardLimit
 		cfg.RestConnectionsHardLimit = reservedRESTConns
-		if cfg.IncomingConnectionsLimit > int(restDelta) {
-			cfg.IncomingConnectionsLimit -= int(restDelta)
-		} else {
-			cfg.IncomingConnectionsLimit = 0
+		splitRatio := 1
+		if cfg.IsHybridServer() {
+			// split the rest of the delta between ws and p2p evenly
+			splitRatio = 2
+		}
+		if cfg.IsWsGossipServer() || cfg.IsP2PGossipServer() {
+			if cfg.IncomingConnectionsLimit > int(restDelta) {
+				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
+			} else {
+				cfg.IncomingConnectionsLimit = 0
+			}
+		}
+		if cfg.IsHybridServer() {
+			if cfg.P2PHybridIncomingConnectionsLimit > int(restDelta) {
+				cfg.P2PHybridIncomingConnectionsLimit -= int(restDelta) / splitRatio
+			} else {
+				cfg.P2PHybridIncomingConnectionsLimit = 0
+			}
 		}
 	} else {
 		cfg.RestConnectionsHardLimit -= diff
@@ -970,4 +1068,36 @@ func (cfg *Local) TracksCatchpoints() bool {
 		return true
 	}
 	return false
+}
+
+// NormalizedVoteCompressionTableSize validates and normalizes the StatefulVoteCompressionTableSize config value.
+// Supported values are powers of 2 in the range [16, 2048].
+// Values >= 2048 clamp to 2048.
+// Values 1-15 are below the minimum and return 0 (disabled).
+// Values between supported powers of 2 round down to the nearest supported value.
+// Logs a message if the configured value is adjusted.
+// Returns the normalized size.
+func (cfg Local) NormalizedVoteCompressionTableSize(log logger) uint {
+	configured := cfg.StatefulVoteCompressionTableSize
+	if configured == 0 {
+		return 0
+	}
+	if configured < 16 {
+		log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid (minimum 16). Stateful vote compression disabled.", configured)
+		return 0
+	}
+	// Round down to nearest power of 2 within supported range [16, 2048]
+	supportedSizes := []uint{2048, 1024, 512, 256, 128, 64, 32, 16}
+	for _, size := range supportedSizes {
+		if configured >= size {
+			if configured != size {
+				log.Infof("StatefulVoteCompressionTableSize configured as %d, using nearest supported value: %d", configured, size)
+			}
+			return size
+		}
+	}
+
+	// Should never reach here given the checks above
+	log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid. Stateful vote compression disabled.", configured)
+	return 0
 }

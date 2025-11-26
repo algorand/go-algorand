@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 )
 
 // PartitionTest checks if the current partition should run this test, and skips it if not.
-func PartitionTest(t *testing.T) {
+func PartitionTest(t testing.TB) {
 	pt, found := os.LookupEnv("PARTITION_TOTAL")
 	if !found {
 		return

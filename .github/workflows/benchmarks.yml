@@ -17,13 +17,14 @@ jobs:
     name: Performance regression check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.5.3
-      - uses: actions/setup-go@v4.0.1
-        with:
-          go-version-file: 'go.mod'
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
       - run: go version
       - name: Build go-algorand
-        run: scripts/travis/build.sh
+        run: |
+          export SKIP_GO_INSTALLATION=True
+          scripts/travis/build.sh
       # BenchmarkUintMath - Serves as a proxy for AVM `eval` performance.
       # Performance degradations suggest either or both:  (1) op code
       # degradation, (2) `eval` degradation.  (2) suggests a broader performance

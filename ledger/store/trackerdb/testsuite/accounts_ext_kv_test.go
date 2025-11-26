@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -238,7 +238,7 @@ func CustomTestAccountLookupByRowID(t *customT) {
 	dataA := trackerdb.BaseAccountData{
 		RewardsBase: 1000,
 	}
-	normBalanceA := dataA.NormalizedOnlineBalance(t.proto)
+	normBalanceA := dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 	refA, err := aow.InsertAccount(addrA, normBalanceA, dataA)
 	require.NoError(t, err)
 
@@ -267,7 +267,7 @@ func CustomTestResourceLookupByRowID(t *customT) {
 	// generate some test data
 	addrA := RandomAddress()
 	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
-	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto.RewardUnit), accDataA)
 	require.NoError(t, err)
 
 	// generate some test data

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	kmdconfig "github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
@@ -42,6 +43,20 @@ type NetworkTemplate struct {
 	Genesis   gen.GenesisData
 	Nodes     []remote.NodeConfigGoal
 	Consensus config.ConsensusProtocols
+	kmdConfig TemplateKMDConfig // set by OverrideKmdConfig
+}
+
+// TemplateKMDConfig is a subset of the kmd configuration that can be overridden in the network template
+// by using OverrideKmdConfig TemplateOverride opts.
+// The reason why config.KMDConfig cannot be used directly is that it contains DataDir field which
+// is not known until the template instantiation.
+type TemplateKMDConfig struct {
+	SessionLifetimeSecs uint64
+}
+
+func (c TemplateKMDConfig) apply(cfg kmdconfig.KMDConfig) kmdconfig.KMDConfig {
+	cfg.SessionLifetimeSecs = c.SessionLifetimeSecs
+	return cfg
 }
 
 var defaultNetworkTemplate = NetworkTemplate{
@@ -131,10 +146,27 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 			}
 		}
 
+		var kmdDir string
+		if (t.kmdConfig != TemplateKMDConfig{}) {
+			kmdDir = filepath.Join(nodeDir, libgoal.DefaultKMDDataDir)
+			err = os.MkdirAll(kmdDir, 0700) // kmd requires 700 permissions
+			if err != nil {
+				return
+			}
+			err = createKMDConfigFile(t.kmdConfig, kmdDir)
+			if err != nil {
+				return
+			}
+		}
+
 		if importKeys && hasWallet {
 			var client libgoal.Client
-			client, err = libgoal.MakeClientWithBinDir(binDir, nodeDir, "", libgoal.KmdClient)
-			if err != nil {
+			if client, err = libgoal.MakeClientFromConfig(libgoal.ClientConfig{
+				AlgodDataDir: nodeDir,
+				KMDDataDir:   kmdDir,
+				CacheDir:     "",
+				BinDir:       binDir,
+			}, libgoal.KmdClient); err != nil {
 				return
 			}
 			_, err = client.CreateWallet(libgoal.UnencryptedWalletName, nil, crypto.MasterDerivationKey{})
@@ -241,12 +273,12 @@ func (t NetworkTemplate) Validate() error {
 		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
 	}
 
-	// Validate JSONOverride decoding
+	// Validate ConfigJSONOverride decoding
 	for _, cfg := range t.Nodes {
 		local := config.GetDefaultLocal()
 		err := decodeJSONOverride(cfg.ConfigJSONOverride, &local)
 		if err != nil {
-			return fmt.Errorf("invalid template: unable to decode JSONOverride: %w", err)
+			return fmt.Errorf("invalid template: unable to decode ConfigJSONOverride: %w", err)
 		}
 	}
 
@@ -293,7 +325,7 @@ func countRelayNodes(nodeCfgs []remote.NodeConfigGoal) (relayCount int) {
 	return
 }
 
-func decodeJSONOverride(override string, cfg *config.Local) error {
+func decodeJSONOverride[T any](override string, cfg *T) error {
 	if override != "" {
 		reader := strings.NewReader(override)
 		dec := json.NewDecoder(reader)
@@ -321,6 +353,9 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	if node.IsRelay {
 		// Have relays listen on any localhost port
 		cfg.NetAddress = "127.0.0.1:0"
+
+		cfg.Archival = false                // make it explicit non-archival
+		cfg.MaxBlockHistoryLookback = 20000 // to save blocks beyond MaxTxnLife=13
 	} else {
 		// Non-relays should not open incoming connections
 		cfg.IncomingConnectionsLimit = 0
@@ -336,4 +371,9 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	}
 
 	return cfg, cfg.SaveToFile(configFile)
+}
+
+func createKMDConfigFile(kmdConfig TemplateKMDConfig, kmdDir string) error {
+	cfg := kmdConfig.apply(kmdconfig.DefaultConfig(kmdDir))
+	return kmdconfig.SaveKMDConfig(kmdDir, cfg)
 }

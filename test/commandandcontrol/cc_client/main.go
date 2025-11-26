@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net/url"
 	"os"
 	"os/signal"
@@ -79,9 +78,9 @@ func main() {
 	}
 	defer func() {
 		log.Infof("closing service connection: %s", serverWs.RemoteAddr())
-		err := serverWs.Close()
-		if err != nil {
-			log.Fatalf("error closing service websocket %v", err)
+		err1 := serverWs.Close()
+		if err1 != nil {
+			log.Fatalf("error closing service websocket %v", err1)
 		}
 	}()
 	serverWs.Unsafe = true
@@ -100,7 +99,7 @@ func main() {
 	ccServiceRequest := lib.CCServiceRequest{
 		Component:       *componentName,
 		Command:         *componentAction,
-		Parameters:      fmt.Sprintf("%s", options),
+		Parameters:      string(options),
 		TargetAgentList: targetHosts,
 	}
 
@@ -119,7 +118,7 @@ func main() {
 		} else {
 			log.Infof("Response: %+v", response)
 		}
-		if *listen == false {
+		if !*listen {
 			break
 		}
 	}

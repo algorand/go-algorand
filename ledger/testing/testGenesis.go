@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,17 +25,26 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// testGenesisCfg provides a configuration object for NewTestGenesis.
-type testGenesisCfg struct {
+// GenesisCfg provides a configuration object for NewTestGenesis.
+type GenesisCfg struct {
 	rewardsPoolAmount basics.MicroAlgos
+	feeSinkAmount     basics.MicroAlgos
+	OnlineCount       int
 }
 
 // TestGenesisOption provides functional options for testGenesisCfg.
-type TestGenesisOption func(*testGenesisCfg)
+type TestGenesisOption func(*GenesisCfg)
 
-// TestGenesisRewardsPoolSize configures the rewards pool size in the genesis block.
-func TestGenesisRewardsPoolSize(amount basics.MicroAlgos) TestGenesisOption {
-	return func(cfg *testGenesisCfg) { cfg.rewardsPoolAmount = amount }
+// TurnOffRewards turns off the rewards pool for tests that are sensitive to
+// "surprise" balance changes.
+var TurnOffRewards = func(cfg *GenesisCfg) { cfg.rewardsPoolAmount = basics.MicroAlgos{Raw: 100_000} }
+
+// InitialFeeSinkBalance sets the initial balance of the fee sink to a specific value.
+// This is useful for tests that need precise control over the fee sink balance.
+func InitialFeeSinkBalance(microAlgos uint64) TestGenesisOption {
+	return func(cfg *GenesisCfg) {
+		cfg.feeSinkAmount = basics.MicroAlgos{Raw: microAlgos}
+	}
 }
 
 // NewTestGenesis creates a bunch of accounts, splits up 10B algos
@@ -43,7 +52,7 @@ func TestGenesisRewardsPoolSize(amount basics.MicroAlgos) TestGenesisOption {
 // addresses and secrets it creates to enable tests.  For special
 // scenarios, manipulate these return values before using newTestLedger.
 func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
-	var cfg testGenesisCfg
+	var cfg GenesisCfg
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -75,12 +84,25 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 
 		adata := basics.AccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: amount},
+			Status:     basics.Offline,
+		}
+		if i < cfg.OnlineCount {
+			adata.Status = basics.Online
+			adata.VoteFirstValid = 0
+			adata.VoteLastValid = 1_000_000
+			crypto.RandBytes(adata.VoteID[:])
+			crypto.RandBytes(adata.SelectionID[:])
+			crypto.RandBytes(adata.StateProofID[:])
 		}
 		accts[addrs[i]] = adata
 	}
 
+	feeSinkBal := basics.MicroAlgos{Raw: amount}
+	if cfg.feeSinkAmount.Raw > 0 {
+		feeSinkBal = cfg.feeSinkAmount
+	}
 	accts[sink] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
+		MicroAlgos: feeSinkBal,
 		Status:     basics.NotParticipating,
 	}
 

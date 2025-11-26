@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,9 +21,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
+	"maps"
+	"slices"
 )
 
 // storedNodeIdentifier is the "equivalent" of a node-ptr, but oriented around persisting the
@@ -118,7 +117,6 @@ func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, memoryConf
 		}
 	}
 	mtc.modified = false
-	return
 }
 
 // allocateNewNode allocates a new node
@@ -258,9 +256,7 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 		mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
 	} else {
 		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[page])
-		for nodeID, pnode := range decodedNodes {
-			mtc.pageToNIDsPtr[page][nodeID] = pnode
-		}
+		maps.Copy(mtc.pageToNIDsPtr[page], decodedNodes)
 		mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
 	}
 
@@ -313,7 +309,7 @@ func (mtc *merkleTrieCache) commitTransaction() {
 			delete(mtc.pageToNIDsPtr[page], nodeID)
 			// if the page is empty, and it's not on the pendingDeletionPages, it means that we have no further references to it,
 			// so we can delete it right away.
-			if len(mtc.pageToNIDsPtr[page]) == 0 && mtc.pendingDeletionPages[page] == false {
+			if len(mtc.pageToNIDsPtr[page]) == 0 && !mtc.pendingDeletionPages[page] {
 				delete(mtc.pageToNIDsPtr, page)
 			}
 		} else {
@@ -448,8 +444,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 	}
 
 	// create a sorted list of created pages
-	sortedCreatedPages := maps.Keys(createdPages)
-	slices.Sort(sortedCreatedPages)
+	sortedCreatedPages := slices.Sorted(maps.Keys(createdPages))
 
 	mtc.reallocatedPages = make(map[uint64]map[storedNodeIdentifier]*node)
 
@@ -488,9 +483,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 		delete(createdPages, page)
 	}
 
-	for pageID, page := range mtc.reallocatedPages {
-		createdPages[pageID] = page
-	}
+	maps.Copy(createdPages, mtc.reallocatedPages)
 
 	for _, nodeIDs := range createdPages {
 		for _, node := range nodeIDs {
@@ -542,7 +535,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 func (mtc *merkleTrieCache) calculatePageHashes(page int64, newPage bool) (fanoutRelocatedNodes int64, err error) {
 	nodes := mtc.pageToNIDsPtr[uint64(page)]
 	for i := storedNodeIdentifier(page * mtc.nodesPerPage); i < storedNodeIdentifier((page+1)*mtc.nodesPerPage); i++ {
-		if !newPage && mtc.pendingCreatedNID[i] == false {
+		if !newPage && !mtc.pendingCreatedNID[i] {
 			continue
 		}
 		node := nodes[i]
@@ -696,7 +689,7 @@ func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err erro
 	return nodesMap, nil
 }
 
-// decodePage encodes a page contents into a byte array
+// encodePage encodes a page contents into a byte array
 func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node, serializedBuffer []byte) []byte {
 	version := binary.PutUvarint(serializedBuffer[:], nodePageVersion)
 	length := binary.PutVarint(serializedBuffer[version:], int64(len(nodeIDs)))

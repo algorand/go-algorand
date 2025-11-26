@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package restapi
 
 import (
-	"context"
 	"flag"
 	"math"
 	"os"
@@ -150,9 +149,11 @@ func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	badAccountAddress := "This is absolutely not a valid account address."
 	goodAccountAddress := addresses[0]
-	_, err = testClient.SendPaymentFromWallet(wh, nil, badAccountAddress, goodAccountAddress, 10000, 100000, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, badAccountAddress, goodAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
 	a.Error(err)
 }
 
@@ -167,9 +168,11 @@ func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	badAccountAddress := "This is absolutely not a valid account address."
 	goodAccountAddress := addresses[0]
-	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, badAccountAddress, 10000, 100000, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, badAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
 	a.Error(err)
 }
 
@@ -184,6 +187,8 @@ func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	goodAccountAddress := addresses[0]
 	var unmutatedAccountAddress string
 	if len(addresses) > 1 {
@@ -193,7 +198,7 @@ func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 		a.NoError(err)
 	}
 	mutatedAccountAddress := mutateStringAtIndex(unmutatedAccountAddress, 0)
-	_, err = testClient.SendPaymentFromWallet(wh, nil, mutatedAccountAddress, goodAccountAddress, 10000, 100000, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, mutatedAccountAddress, goodAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
 	a.Error(err)
 }
 
@@ -208,6 +213,8 @@ func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	goodAccountAddress := addresses[0]
 	var unmutatedAccountAddress string
 	if len(addresses) > 1 {
@@ -217,7 +224,7 @@ func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 		a.NoError(err)
 	}
 	mutatedAccountAddress := mutateStringAtIndex(unmutatedAccountAddress, 0)
-	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, mutatedAccountAddress, 10000, 100000, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, mutatedAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
 	a.Error(err)
 }
 
@@ -232,9 +239,11 @@ func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	goodAccountAddress := addresses[0]
 	nodeDoesNotHaveKeyForThisAddress := "NJY27OQ2ZXK6OWBN44LE4K43TA2AV3DPILPYTHAJAMKIVZDWTEJKZJKO4A"
-	_, err = testClient.SendPaymentFromWallet(wh, nil, nodeDoesNotHaveKeyForThisAddress, goodAccountAddress, 10000, 100000, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, nodeDoesNotHaveKeyForThisAddress, goodAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
 	a.Error(err)
 }
 
@@ -250,6 +259,8 @@ func TestClientOversizedNote(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	fromAddress := addresses[0]
 	var toAddress string
 	if len(addresses) > 1 {
@@ -260,7 +271,7 @@ func TestClientOversizedNote(t *testing.T) {
 	}
 	maxTxnNoteBytes := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnNoteBytes
 	note := make([]byte, maxTxnNoteBytes+1)
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, 100000, note, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, params.MinFee, 100000, note, "", 0, 0)
 	a.Error(err)
 }
 
@@ -276,6 +287,8 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	_, someAddress := GetMaxBalAddr(t, testClient, addresses)
 	if someAddress == "" {
 		t.Error("no addr with funds")
@@ -283,7 +296,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	toAddress := GetDestAddr(t, testClient, addresses, someAddress, wh)
 	maxTxnNoteBytes := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnNoteBytes
 	note := make([]byte, maxTxnNoteBytes)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, note, "", 0, 0)
+	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, params.MinFee, 100000, note, "", 0, 0)
 	a.NoError(err)
 	txStatus, err := WaitForTransaction(t, testClient, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
@@ -302,12 +315,14 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	_, someAddress := GetMaxBalAddr(t, testClient, addresses)
 	if someAddress == "" {
 		t.Error("no addr with funds")
 	}
 	toAddress := GetDestAddr(t, testClient, addresses, someAddress, wh)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
+	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, params.MinFee, 100000, nil, "", 0, 0)
 	t.Log(string(protocol.EncodeJSON(tx)))
 	a.NoError(err)
 	t.Log(tx.ID().String())
@@ -327,6 +342,8 @@ func TestAccountBalance(t *testing.T) {
 	a.NoError(err)
 	addresses, err := testClient.ListAddresses(wh)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	_, someAddress := GetMaxBalAddr(t, testClient, addresses)
 	if someAddress == "" {
 		t.Error("no addr with funds")
@@ -334,7 +351,7 @@ func TestAccountBalance(t *testing.T) {
 
 	toAddress, err := testClient.GenerateAddress(wh)
 	a.NoError(err)
-	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
+	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, params.MinFee, 100000, nil, "", 0, 0)
 	a.NoError(err)
 	_, err = WaitForTransaction(t, testClient, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
@@ -387,7 +404,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:      addr,
-			Fee:         basics.MicroAlgos{Raw: 10000},
+			Fee:         basics.MicroAlgos{Raw: params.MinFee},
 			FirstValid:  firstRound,
 			LastValid:   lastRound,
 			GenesisHash: gh,
@@ -410,8 +427,8 @@ func TestAccountParticipationInfo(t *testing.T) {
 	a.NoError(err)
 	a.Equal(randomVotePKStr, string(account.Participation.VoteParticipationKey), "API must print correct root voting key")
 	a.Equal(randomSelPKStr, string(account.Participation.SelectionParticipationKey), "API must print correct vrf key")
-	a.Equal(uint64(firstRound), account.Participation.VoteFirstValid, "API must print correct first participation round")
-	a.Equal(uint64(lastRound), account.Participation.VoteLastValid, "API must print correct last participation round")
+	a.Equal(firstRound, account.Participation.VoteFirstValid, "API must print correct first participation round")
+	a.Equal(lastRound, account.Participation.VoteLastValid, "API must print correct last participation round")
 	a.Equal(dilution, account.Participation.VoteKeyDilution, "API must print correct key dilution")
 	// TODO: should we update the v1 API to support state proof? Currently it does not return this field.
 }
@@ -437,15 +454,14 @@ func TestClientCanGetGoRoutines(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.AlgodClient
-	ctx, ctxCancel := context.WithCancel(context.Background())
-	defer ctxCancel()
+	ctx := t.Context()
 	goRoutines, err := testClient.GetGoRoutines(ctx)
 	a.NoError(err)
 	a.NotEmpty(goRoutines)
 	a.True(strings.Contains(goRoutines, "goroutine profile:"))
 }
 
-func TestSendingTooMuchFails(t *testing.T) {
+func TestSendingTooMuchErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -466,28 +482,30 @@ func TestSendingTooMuchFails(t *testing.T) {
 	}
 	fromBalance, err := testClient.GetBalance(fromAddress)
 	a.NoError(err)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
 	// too much amount
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, fromBalance+100, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, params.MinFee, fromBalance+100, nil, "", 0, 0)
 	t.Log(err)
 	a.Error(err)
 
 	// waaaay too much amount
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, math.MaxUint64, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, params.MinFee, math.MaxUint64, nil, "", 0, 0)
 	t.Log(err)
 	a.Error(err)
 
 	// too much fee
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, fromBalance+100, 10000, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, fromBalance+100, params.MinFee, nil, "", 0, 0)
 	t.Log(err)
 	a.Error(err)
 
 	// waaaay too much fee
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, math.MaxUint64, 10000, nil, "", 0, 0)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, math.MaxUint64, params.MinFee, nil, "", 0, 0)
 	t.Log(err)
 	a.Error(err)
 }
 
-func TestSendingFromEmptyAccountFails(t *testing.T) {
+func TestSendingFromEmptyAccountErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -523,11 +541,13 @@ func TestSendingFromEmptyAccountFails(t *testing.T) {
 		toAddress, err = testClient.GenerateAddress(wh)
 		a.NoError(err)
 	}
-	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, 10000, 100000, nil, "", 0, 0)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, params.MinFee, 100000, nil, "", 0, 0)
 	a.Error(err)
 }
 
-func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
+func TestSendingTooLittleToEmptyAccountErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -556,11 +576,13 @@ func TestSendingTooLittleToEmptyAccountFails(t *testing.T) {
 	if someAddress == "" {
 		t.Error("no addr with funds")
 	}
-	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, 1, nil, "", 0, 0)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.MinFee, 1, nil, "", 0, 0)
 	a.Error(err)
 }
 
-func TestSendingLowFeeFails(t *testing.T) {
+func TestSendingLowFeeErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 

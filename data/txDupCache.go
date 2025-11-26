@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-deadlock"
 
@@ -31,7 +31,7 @@ import (
 )
 
 // digestCache is a rotating cache of size N accepting crypto.Digest as a key
-// and keeping up to 2*N elements in memory
+// and keeping up to 2*maxSize elements in memory
 type digestCache struct {
 	cur  map[crypto.Digest]struct{}
 	prev map[crypto.Digest]struct{}
@@ -49,11 +49,11 @@ func makeDigestCache(size int) *digestCache {
 }
 
 // check if digest d is in a cache.
-// locking semantic: write lock must be taken
-func (c *digestCache) check(d *crypto.Digest) bool {
-	_, found := c.cur[*d]
+// locking semantic: read lock must be taken
+func (c *digestCache) check(d crypto.Digest) bool {
+	_, found := c.cur[d]
 	if !found {
-		_, found = c.prev[*d]
+		_, found = c.prev[d]
 	}
 	return found
 }
@@ -67,15 +67,15 @@ func (c *digestCache) swap() {
 
 // put adds digest d into a cache.
 // locking semantic: write lock must be taken
-func (c *digestCache) put(d *crypto.Digest) {
+func (c *digestCache) put(d crypto.Digest) {
 	if len(c.cur) >= c.maxSize {
 		c.swap()
 	}
-	c.cur[*d] = struct{}{}
+	c.cur[d] = struct{}{}
 }
 
 // CheckAndPut adds digest d into a cache if not found
-func (c *digestCache) CheckAndPut(d *crypto.Digest) bool {
+func (c *digestCache) CheckAndPut(d crypto.Digest) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.check(d) {
@@ -94,11 +94,11 @@ func (c *digestCache) Len() int {
 }
 
 // Delete from the cache
-func (c *digestCache) Delete(d *crypto.Digest) {
+func (c *digestCache) Delete(d crypto.Digest) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.cur, *d)
-	delete(c.prev, *d)
+	delete(c.cur, d)
+	delete(c.prev, d)
 }
 
 // txSaltedCache is a digest cache with a rotating salt
@@ -179,8 +179,8 @@ func (c *txSaltedCache) innerSwap(scheduled bool) {
 }
 
 // innerCheck returns true if exists, and the current salted hash if does not.
-// locking semantic: write lock must be held
-func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
+// locking semantic: READ lock must be held, cache is not mutated
+func (c *txSaltedCache) innerCheck(msg []byte) (crypto.Digest, bool) {
 	ptr := saltedPool.Get()
 	defer saltedPool.Put(ptr)
 
@@ -193,7 +193,7 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
 
 	_, found := c.cur[d]
 	if found {
-		return nil, true
+		return crypto.Digest{}, true
 	}
 
 	toBeHashed = append(toBeHashed[:len(msg)], c.prevSalt[:]...)
@@ -201,14 +201,14 @@ func (c *txSaltedCache) innerCheck(msg []byte) (*crypto.Digest, bool) {
 	pd := crypto.Digest(blake2b.Sum256(toBeHashed))
 	_, found = c.prev[pd]
 	if found {
-		return nil, true
+		return crypto.Digest{}, true
 	}
-	return &d, false
+	return d, false
 }
 
 // CheckAndPut adds msg into a cache if not found
 // returns a hashing key used for insertion if the message not found.
-func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
+func (c *txSaltedCache) CheckAndPut(msg []byte) (crypto.Digest, bool) {
 	c.mu.RLock()
 	d, found := c.innerCheck(msg)
 	salt := c.curSalt
@@ -231,7 +231,7 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 	} else {
 		// Do another check to see if another copy of the transaction won the race to write it to the cache
 		// Only check current to save a lookup since swaps are rare and no need to re-hash
-		if _, found := c.cur[*d]; found {
+		if _, found := c.cur[d]; found {
 			return d, found
 		}
 	}
@@ -246,16 +246,15 @@ func (c *txSaltedCache) CheckAndPut(msg []byte) (*crypto.Digest, bool) {
 		toBeHashed = append(toBeHashed, c.curSalt[:]...)
 		toBeHashed = toBeHashed[:len(msg)+len(c.curSalt)]
 
-		dn := crypto.Digest(blake2b.Sum256(toBeHashed))
-		d = &dn
+		d = crypto.Digest(blake2b.Sum256(toBeHashed))
 	}
 
-	c.cur[*d] = struct{}{}
+	c.cur[d] = struct{}{}
 	return d, false
 }
 
 // DeleteByKey from the cache by using a key used for insertion
-func (c *txSaltedCache) DeleteByKey(d *crypto.Digest) {
+func (c *txSaltedCache) DeleteByKey(d crypto.Digest) {
 	c.digestCache.Delete(d)
 }
 
@@ -264,6 +263,6 @@ var saltedPool = sync.Pool{
 		// 2 x MaxAvailableAppProgramLen that covers
 		// max approve + clear state programs with max args for app create txn.
 		// other transactions are much smaller.
-		return make([]byte, 2*config.MaxAvailableAppProgramLen)
+		return make([]byte, 2*bounds.MaxAvailableAppProgramLen)
 	},
 }

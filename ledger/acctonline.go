@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -118,6 +118,9 @@ type onlineAccounts struct {
 
 	// disableCache (de)activates the LRU cache use in onlineAccounts
 	disableCache bool
+
+	// cache for expired online circulation stake since the underlying query is quite heavy
+	expiredCirculationCache *expiredCirculationCache
 }
 
 // initialize initializes the accountUpdates structure
@@ -125,6 +128,9 @@ func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.accountsReadCond = sync.NewCond(ao.accountsMu.RLocker())
 	ao.acctLookback = cfg.MaxAcctLookback
 	ao.disableCache = cfg.DisableLedgerLRUCache
+	// 2 pages * 256 entries look large enough to handle
+	// both early and late votes, and well as a current and previous stateproof periods
+	ao.expiredCirculationCache = makeExpiredCirculationCache(256)
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the onlineAccounts becomes functional
@@ -339,6 +345,7 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		// find the tip point.
 		tipPoint := sort.Search(int(offset), func(i int) bool {
+			//nolint:dupword // ignore
 			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
 			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
 			return ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+1+i].CurrentProtocol
@@ -347,13 +354,6 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 		offset = uint64(tipPoint)
 	}
 	return offset
-}
-
-func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (ao *onlineAccounts) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (ao *onlineAccounts) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (ao *onlineAccounts) maxBalLookback() uint64 {
@@ -529,9 +529,6 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.voters.postCommit(dcc)
 }
 
-func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
 // onlineCirculation return the total online balance for the given round, for use by agreement.
 func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	// Get cached total stake for rnd
@@ -549,7 +546,7 @@ func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Rou
 		if rnd == 0 {
 			return totalStake, nil
 		}
-		expiredStake, err := ao.ExpiredOnlineCirculation(rnd, voteRnd)
+		expiredStake, err := ao.expiredOnlineCirculation(rnd, voteRnd)
 		if err != nil {
 			return basics.MicroAlgos{}, err
 		}
@@ -616,24 +613,6 @@ func (ao *onlineAccounts) onlineTotals(rnd basics.Round) (basics.MicroAlgos, pro
 	return basics.MicroAlgos{Raw: onlineRoundParams.OnlineSupply}, onlineRoundParams.CurrentProtocol, nil
 }
 
-// LookupOnlineAccountData returns the online account data for a given address at a given round.
-func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
-	oad, err := ao.lookupOnlineAccountData(rnd, addr)
-	if err != nil {
-		return
-	}
-
-	data.MicroAlgosWithRewards = oad.MicroAlgosWithRewards
-	data.VotingData.VoteID = oad.VotingData.VoteID
-	data.VotingData.SelectionID = oad.VotingData.SelectionID
-	data.VotingData.StateProofID = oad.VotingData.StateProofID
-	data.VotingData.VoteFirstValid = oad.VotingData.VoteFirstValid
-	data.VotingData.VoteLastValid = oad.VotingData.VoteLastValid
-	data.VotingData.VoteKeyDilution = oad.VotingData.VoteKeyDilution
-
-	return
-}
-
 // roundOffset calculates the offset of the given round compared to the current dbRound. Requires that the lock would be taken.
 func (ao *onlineAccounts) roundOffset(rnd basics.Round) (offset uint64, err error) {
 	if rnd < ao.cachedDBRoundOnline {
@@ -675,7 +654,7 @@ func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, er
 }
 
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
-func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (ledgercore.OnlineAccountData, error) {
+func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	needUnlock := false
 	defer func() {
 		if needUnlock {
@@ -703,14 +682,14 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if err != nil {
 			var roundOffsetError *RoundOffsetError
 			if !errors.As(err, &roundOffsetError) {
-				return ledgercore.OnlineAccountData{}, err
+				return basics.OnlineAccountData{}, err
 			}
 			// the round number cannot be found in deltas, it is in history
 			inHistory = true
 		}
 		paramsOffset, err = ao.roundParamsOffset(rnd)
 		if err != nil {
-			return ledgercore.OnlineAccountData{}, err
+			return basics.OnlineAccountData{}, err
 		}
 
 		rewardsProto = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
@@ -723,7 +702,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 				// Check if this is the most recent round, in which case, we can
 				// use a cache of the most recent account state.
 				if offset == uint64(len(ao.deltas)) {
-					return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
+					return macct.data.OnlineAccountData(rewardsProto.RewardUnit, rewardsLevel), nil
 				}
 				// the account appears in the deltas, but we don't know if it appears in the
 				// delta range of [0..offset], so we'll need to check :
@@ -734,14 +713,14 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 					offset--
 					d, ok := ao.deltas[offset].GetData(addr)
 					if ok {
-						return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+						return d.OnlineAccountData(rewardsProto.RewardUnit, rewardsLevel), nil
 					}
 				}
 			}
 		}
 
 		if macct, has := ao.onlineAccountsCache.read(addr, rnd); has {
-			return macct.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+			return macct.GetOnlineAccountData(rewardsProto.RewardUnit, rewardsLevel), nil
 		}
 
 		ao.accountsMu.RUnlock()
@@ -754,7 +733,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		persistedData, err = ao.accountsq.LookupOnline(addr, rnd)
 		if err != nil || persistedData.Ref == nil {
 			// no such online account, return empty
-			return ledgercore.OnlineAccountData{}, err
+			return basics.OnlineAccountData{}, err
 		}
 		// Now we load the entire history of this account to fill the onlineAccountsCache, so that the
 		// next lookup for this online account will not hit the on-disk DB.
@@ -769,7 +748,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		//   3. after postCommit => OK, postCommit does not add new entry with writeFrontIfExist, but here all the full history is loaded
 		persistedDataHistory, validThrough, err := ao.accountsq.LookupOnlineHistory(addr)
 		if err != nil || len(persistedDataHistory) == 0 {
-			return ledgercore.OnlineAccountData{}, err
+			return basics.OnlineAccountData{}, err
 		}
 		// 3. After we finished reading the history (lookupOnlineHistory), either
 		//   1. The DB round has not advanced (validThrough == currentDbRound) => OK
@@ -796,20 +775,20 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 					if !written {
 						ao.accountsMu.Unlock()
 						err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.Addr.String(), data.UpdRound)
-						return ledgercore.OnlineAccountData{}, err
+						return basics.OnlineAccountData{}, err
 					}
 				}
 				ao.log.Info("inserted new item to onlineAccountsCache")
 			}
 			ao.accountsMu.Unlock()
-			return persistedData.AccountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+			return persistedData.AccountData.GetOnlineAccountData(rewardsProto.RewardUnit, rewardsLevel), nil
 		}
 		// case 3.3: retry (for loop iterates and queries again)
 		ao.accountsMu.Unlock()
 
 		if validThrough < currentDbRound {
 			ao.log.Errorf("onlineAccounts.lookupOnlineAccountData: database round %d is behind in-memory round %d", validThrough, currentDbRound)
-			return ledgercore.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: validThrough, memoryRound: currentDbRound}
+			return basics.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: validThrough, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -887,21 +866,21 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 		for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
 			var accts map[basics.Address]*ledgercore.OnlineAccount
 			start := time.Now()
-			ledgerAccountsonlinetopCount.Inc(nil)
+			ledgerAccountsOnlineTopCount.Inc(nil)
 			err = ao.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
 				ar, err := tx.MakeAccountsReader()
 				if err != nil {
 					return err
 				}
 
-				accts, err = ar.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto)
+				accts, err = ar.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto.RewardUnit)
 				if err != nil {
 					return
 				}
 				dbRound, err = ar.AccountsRound()
 				return
 			})
-			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
+			ledgerAccountsOnlineTopMicros.AddMicrosecondsSince(start, nil)
 			if err != nil {
 				return nil, basics.MicroAlgos{}, err
 			}
@@ -978,7 +957,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 
 		// If set, return total online stake minus all future expired stake by voteRnd
 		if params.ExcludeExpiredCirculation {
-			expiredStake, err := ao.ExpiredOnlineCirculation(rnd, voteRnd)
+			expiredStake, err := ao.expiredOnlineCirculation(rnd, voteRnd)
 			if err != nil {
 				return nil, basics.MicroAlgos{}, err
 			}
@@ -997,7 +976,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound")
 			}
 			if params.StateProofExcludeTotalWeightWithRewards {
-				rewards := basics.PendingRewards(&ot, *params, oa.MicroAlgos, oa.RewardsBase, rewardsLevel)
+				rewards := basics.PendingRewards(&ot, params.RewardUnit, oa.MicroAlgos, oa.RewardsBase, rewardsLevel)
 				totalOnlineStake = ot.SubA(totalOnlineStake, rewards)
 				if ot.Overflowed {
 					return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound rewards")
@@ -1009,7 +988,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 	}
 }
 
-func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (map[basics.Address]*basics.OnlineAccountData, error) {
 	needUnlock := false
 	defer func() {
 		if needUnlock {
@@ -1017,7 +996,7 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 		}
 	}()
 
-	var expiredAccounts map[basics.Address]*ledgercore.OnlineAccountData
+	var expiredAccounts map[basics.Address]*basics.OnlineAccountData
 	ao.accountsMu.RLock()
 	needUnlock = true
 	for {
@@ -1040,6 +1019,9 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 		rewardsParams := config.Consensus[roundParams.CurrentProtocol]
 		rewardsLevel := roundParams.RewardsLevel
 
+		start := time.Now()
+		ledgerAccountExpiredByRoundCount.Inc(nil)
+
 		// Step 1: get all online accounts from DB for rnd
 		// Not unlocking ao.accountsMu yet, to stay consistent with Step 2
 		var dbRound basics.Round
@@ -1048,13 +1030,14 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			if err != nil {
 				return err
 			}
-			expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams, rewardsLevel)
+			expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams.RewardUnit, rewardsLevel)
 			if err != nil {
 				return err
 			}
 			dbRound, err = ar.AccountsRound()
 			return err
 		})
+		ledgerAccountsExpiredByRoundMicros.AddMicrosecondsSince(start, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1083,7 +1066,7 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 				// setting VoteFirstValid into future.
 				if d.Status == basics.Online && d.VoteLastValid != 0 && voteRnd > d.VoteLastValid {
 					// Online expired: insert or overwrite the old data in expiredAccounts.
-					oadata := d.OnlineAccountData(rewardsParams, rewardsLevel)
+					oadata := d.OnlineAccountData(rewardsParams.RewardUnit, rewardsLevel)
 					expiredAccounts[addr] = &oadata
 				} else {
 					// addr went offline not expired, so do not report as an expired ONLINE account.
@@ -1099,9 +1082,13 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 	return expiredAccounts, nil
 }
 
-// ExpiredOnlineCirculation returns the total online stake for accounts with participation keys registered
+// expiredOnlineCirculation returns the total online stake for accounts with participation keys registered
 // at round `rnd` that are expired by round `voteRnd`.
-func (ao *onlineAccounts) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+func (ao *onlineAccounts) expiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	if expiredStake, ok := ao.expiredCirculationCache.get(rnd, voteRnd); ok {
+		return expiredStake, nil
+	}
+
 	expiredAccounts, err := ao.onlineAcctsExpiredByRound(rnd, voteRnd)
 	if err != nil {
 		return basics.MicroAlgos{}, err
@@ -1114,8 +1101,11 @@ func (ao *onlineAccounts) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (b
 			return basics.MicroAlgos{}, fmt.Errorf("ExpiredOnlineCirculation: overflow totaling expired stake")
 		}
 	}
+	ao.expiredCirculationCache.put(rnd, voteRnd, expiredStake)
 	return expiredStake, nil
 }
 
-var ledgerAccountsonlinetopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
-var ledgerAccountsonlinetopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "µs spent")
+var ledgerAccountsOnlineTopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
+var ledgerAccountsOnlineTopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "µs spent")
+var ledgerAccountExpiredByRoundCount = metrics.NewCounter("ledger_accountsexpired_count", "calls")
+var ledgerAccountsExpiredByRoundMicros = metrics.NewCounter("ledger_accountsexpired_micros", "µs spent")

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,8 @@ package crypto
 // #cgo linux,arm64 LDFLAGS: ${SRCDIR}/libs/linux/arm64/lib/libsodium.a
 // #cgo linux,arm CFLAGS: -I${SRCDIR}/libs/linux/arm/include
 // #cgo linux,arm LDFLAGS: ${SRCDIR}/libs/linux/arm/lib/libsodium.a
+// #cgo linux,riscv64 CFLAGS: -I${SRCDIR}/libs/linux/riscv64/include
+// #cgo linux,riscv64 LDFLAGS: ${SRCDIR}/libs/linux/riscv64/lib/libsodium.a
 // #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
 // #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/libsodium.a
 // #include <stdint.h>

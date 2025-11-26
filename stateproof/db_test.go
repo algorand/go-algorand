@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -144,10 +144,7 @@ func TestPendingSigDB(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		expectedLen := 100 - int(deletedBefore)
-		if expectedLen < 0 {
-			expectedLen = 0
-		}
+		expectedLen := max(100-int(deletedBefore), 0)
 
 		require.Equal(t, len(psigs), expectedLen)
 		require.Equal(t, len(psigsThis), expectedLen)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,11 +17,11 @@
 package config
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
+	"maps"
 	"time"
 
+	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -113,8 +113,12 @@ type ConsensusParams struct {
 	EnableAppCostPooling bool
 
 	// EnableLogicSigCostPooling specifies LogicSig budgets are pooled across a
-	// group. The total available is len(group) * LogicSigMaxCost)
+	// group. The total available is len(group) * LogicSigMaxCost
 	EnableLogicSigCostPooling bool
+
+	// EnableLogicSigSizePooling specifies LogicSig sizes are pooled across a
+	// group. The total available is len(group) * LogicSigMaxSize
+	EnableLogicSigSizePooling bool
 
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
@@ -228,17 +232,23 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this
+	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this (unless pooling is enabled)
 	LogicSigMaxSize uint64
 
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
+
+	LogicSigMsig  bool
+	LogicSigLMsig bool
 
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
 
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
+
+	// EnforceAuthAddrSenderDiff requires that AuthAddr must be empty or different from Sender
+	EnforceAuthAddrSenderDiff bool
 
 	// application support
 	Application bool
@@ -277,8 +287,9 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
-	// maximum number of "foreign references" (accounts, asa, app, boxes)
-	// that can be attached to a single app call.
+	// maximum number of "foreign references" (accounts, asa, app, boxes) that
+	// can be attached to a single app call.  Modern transactions can use
+	// MaxAppAccess references in txn.Access to access more.
 	MaxAppTotalTxnReferences int
 
 	// maximum cost of application approval program or clear state program
@@ -349,6 +360,9 @@ type ConsensusParams struct {
 
 	// Number of box references allowed
 	MaxAppBoxReferences int
+
+	// Number of references allowed in txn.Access
+	MaxAppAccess int
 
 	// Amount added to a txgroup's box I/O budget per box ref supplied.
 	// For reads: the sum of the sizes of all boxes in the group must be less than I/O budget
@@ -445,15 +459,23 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
-	EnableExtraPagesOnAppUpdate bool
+	// When extra pages were introduced, a bug prevented the extra pages of an
+	// app from being properly removed from the creator upon deletion.
+	EnableProperExtraPageAccounting bool
 
-	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-	// to be taken offline, that would be proposed to be taken offline.
+	// Autoincrements an app's version when the app is updated, careful callers
+	// may avoid making inner calls to apps that have changed.
+	EnableAppVersioning bool
+
+	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
+	// that a proposer can take offline for having expired voting keys.
 	MaxProposedExpiredOnlineAccounts int
 
-	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
-	// in a separate table.
-	EnableAccountDataResourceSeparation bool
+	// EnableLedgerDataUpdateRound enables the support for setting the UpdateRound on account and
+	// resource data in the ledger. The UpdateRound is encoded in account/resource data types used
+	// on disk and in catchpoint snapshots, and also used to construct catchpoint merkle trie keys,
+	// but does not appear in on-chain state.
+	EnableLedgerDataUpdateRound bool
 
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
@@ -484,9 +506,6 @@ type ConsensusParams struct {
 	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
 	DeeperBlockHeaderHistory uint64
 
-	// EnableOnlineAccountCatchpoints specifies when to re-enable catchpoints after the online account table migration has occurred.
-	EnableOnlineAccountCatchpoints bool
-
 	// UnfundedSenders ensures that accounts with no balance (so they don't even
 	// "exist") can still be a transaction sender by avoiding updates to rewards
 	// state for accounts with no algos. The actual change implemented to allow
@@ -510,6 +529,10 @@ type ConsensusParams struct {
 	// Version 7 includes state proof verification contexts
 	EnableCatchpointsWithSPContexts bool
 
+	// EnableCatchpointsWithOnlineAccounts specifies when to enable version 8 catchpoints.
+	// Version 8 includes onlineaccounts and onlineroundparams amounts, for historical stake lookups.
+	EnableCatchpointsWithOnlineAccounts bool
+
 	// AppForbidLowResources enforces a rule that prevents apps from accessing
 	// asas and apps below 256, in an effort to decrease the ambiguity of
 	// opcodes that accept IDs or slot indexes. Simultaneously, the first ID
@@ -529,6 +552,141 @@ type ConsensusParams struct {
 	// arrival times or is set to a static value. Even if this flag disables the
 	// dynamic filter, it will be calculated and logged (but not used).
 	DynamicFilterTimeout bool
+
+	// Payouts contains parameters for amounts and eligibility for block proposer
+	// payouts. It excludes information about the "unsustainable" payouts
+	// described in BonusPlan.
+	Payouts ProposerPayoutRules
+
+	// Bonus contains parameters related to the extra payout made to block
+	// proposers, unrelated to the fees paid in that block.  For it to actually
+	// occur, extra funds need to be put into the FeeSink.  The bonus amount
+	// decays exponentially.
+	Bonus BonusPlan
+
+	// Heartbeat support
+	Heartbeat bool
+
+	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
+	EnableSha512BlockHash bool
+
+	// AppSizeUpdates allows application update transactions to change
+	// the extra-program-pages and global schema sizes. Since it enables newly
+	// legal transactions, this parameter can be removed and assumed true after
+	// the first consensus release in which it is set true.
+	AppSizeUpdates bool
+
+	// AllowZeroLocalAppRef allows for a 0 in a LocalRef of the access list to
+	// specify the current app. This parameter can be removed and assumed true
+	// after the first consensus release in which it is set true.
+	AllowZeroLocalAppRef bool
+}
+
+// ProposerPayoutRules puts several related consensus parameters in one place. The same
+// care for backward compatibility with old blocks must be taken.
+type ProposerPayoutRules struct {
+	// Enabled turns on several things needed for paying block incentives,
+	// including tracking of the proposer and fees collected.
+	Enabled bool
+
+	// GoOnlineFee imparts a small cost on moving from offline to online. This
+	// will impose a cost to running unreliable nodes that get suspended and
+	// then come back online.
+	GoOnlineFee uint64
+
+	// Percent specifies the percent of fees paid in a block that go to the
+	// proposer instead of the FeeSink.
+	Percent uint64
+
+	// MinBalance is the minimum balance an account must have to be eligible for
+	// incentives. It ensures that smaller accounts continue to operate for the
+	// same motivations they had before block incentives were
+	// introduced. Without that assurance, it is difficult to model their
+	// behaviour - might many participants join for the hope of easy financial
+	// rewards, but without caring enough to run a high-quality node?
+	MinBalance uint64
+
+	// MaxBalance is the maximum balance an account can have to be eligible for
+	// incentives. It encourages large accounts to split their stake to add
+	// resilience to consensus in the case of outages.  Nothing in protocol can
+	// prevent such accounts from running nodes that share fate (same machine,
+	// same data center, etc), but this serves as a gentle reminder.
+	MaxBalance uint64
+
+	// MaxMarkAbsent is the maximum number of online accounts, that a proposer
+	// can suspend for not proposing "lately" (In 10x expected interval, or
+	// within a grace period from being challenged)
+	MaxMarkAbsent int
+
+	// Challenges occur once every challengeInterval rounds.
+	ChallengeInterval uint64
+	// Suspensions happen between 1 and 2 grace periods after a challenge. Must
+	// be less than half MaxTxnLife to ensure the Block header will be cached
+	// and less than half ChallengeInterval to avoid overlapping challenges. A larger
+	// grace period means larger stake nodes will probably propose before they
+	// need to consider an active heartbeat.
+	ChallengeGracePeriod uint64
+	// An account is challenged if the first challengeBits match the start of
+	// the account address. An online account will be challenged about once
+	// every interval*2^bits rounds.
+	ChallengeBits int
+}
+
+// BonusPlan describes how the "extra" proposer payouts are to be made.  It
+// specifies an exponential decay in which the bonus decreases by 1% every n
+// rounds.  If we need to change the decay rate (only), we would create a new
+// plan like:
+//
+//	BaseAmount: 0, DecayInterval: XXX
+//
+// by using a zero baseAmount, the amount is not affected.
+// For a bigger change, we'd use a plan like:
+//
+//	BaseRound:  <FUTURE round>, BaseAmount: <new amount>, DecayInterval: <new>
+//
+// or just
+//
+//	BaseAmount: <new amount>, DecayInterval: <new>
+//
+// the new decay rate would go into effect at upgrade time, and the new
+// amount would be set at baseRound or at upgrade time.
+type BonusPlan struct {
+	// BaseRound is the earliest round this plan can apply. Of course, the
+	// consensus update must also have happened. So using a low value makes it
+	// go into effect immediately upon upgrade.
+	BaseRound uint64
+	// BaseAmount is the bonus to be paid when this plan first applies (see
+	// baseRound). If it is zero, then no explicit change is made to the bonus
+	// (useful for only changing the decay rate).
+	BaseAmount uint64
+	// DecayInterval is the time in rounds between 1% decays. For simplicity,
+	// decay occurs based on round % BonusDecayInterval, so a decay can happen right
+	// after going into effect. The BonusDecayInterval goes into effect at upgrade
+	// time, regardless of `baseRound`.
+	DecayInterval uint64
+}
+
+// EffectiveKeyDilution returns the key dilution for this account,
+// returning the default key dilution if not explicitly specified.
+func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
+	if kd != 0 {
+		return kd
+	}
+	return proto.DefaultKeyDilution
+}
+
+// BalanceRequirements returns all the consensus values that determine min balance.
+func (proto ConsensusParams) BalanceRequirements() basics.BalanceRequirements {
+	return basics.BalanceRequirements{
+		MinBalance:               proto.MinBalance,
+		AppFlatParamsMinBalance:  proto.AppFlatParamsMinBalance,
+		AppFlatOptInMinBalance:   proto.AppFlatOptInMinBalance,
+		BoxFlatMinBalance:        proto.BoxFlatMinBalance,
+		BoxByteMinBalance:        proto.BoxByteMinBalance,
+		SchemaMinBalancePerEntry: proto.SchemaMinBalancePerEntry,
+		SchemaUintMinBalance:     proto.SchemaUintMinBalance,
+		SchemaBytesMinBalance:    proto.SchemaBytesMinBalance,
+	}
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -556,93 +714,6 @@ type ConsensusProtocols map[protocol.ConsensusVersion]ConsensusParams
 // consensus protocol.
 var Consensus ConsensusProtocols
 
-// MaxVoteThreshold is the largest threshold for a bundle over all supported
-// consensus protocols, used for decoding purposes.
-var MaxVoteThreshold int
-
-// MaxEvalDeltaAccounts is the largest number of accounts that may appear in
-// an eval delta, used for decoding purposes.
-var MaxEvalDeltaAccounts int
-
-// MaxStateDeltaKeys is the largest number of key/value pairs that may appear
-// in a StateDelta, used for decoding purposes.
-var MaxStateDeltaKeys int
-
-// MaxLogCalls is the highest allowable log messages that may appear in
-// any version, used only for decoding purposes. Never decrease this value.
-var MaxLogCalls int
-
-// MaxInnerTransactionsPerDelta is the maximum number of inner transactions in one EvalDelta
-var MaxInnerTransactionsPerDelta int
-
-// MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
-// protocols, used for decoding purposes.
-var MaxLogicSigMaxSize int
-
-// MaxTxnNoteBytes is the largest supported nodes field array size supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxTxnNoteBytes int
-
-// MaxTxGroupSize is the largest supported number of transactions per transaction group supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxTxGroupSize int
-
-// MaxAppProgramLen is the largest supported app program size supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxAppProgramLen int
-
-// MaxBytesKeyValueLen is a maximum length of key or value across all protocols.
-// used for decoding purposes.
-var MaxBytesKeyValueLen int
-
-// MaxExtraAppProgramLen is the maximum extra app program length supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxExtraAppProgramLen int
-
-// MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
-// supported supported by any of the consensus protocols. used for decoding purposes.
-var MaxAvailableAppProgramLen int
-
-// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-// to be taken offline, that would be proposed to be taken offline.
-var MaxProposedExpiredOnlineAccounts int
-
-// MaxAppTotalArgLen is the maximum number of bytes across all arguments of an application
-// max sum([len(arg) for arg in txn.ApplicationArgs])
-var MaxAppTotalArgLen int
-
-// MaxAssetNameBytes is the maximum asset name length in bytes
-var MaxAssetNameBytes int
-
-// MaxAssetUnitNameBytes is the maximum asset unit name length in bytes
-var MaxAssetUnitNameBytes int
-
-// MaxAssetURLBytes is the maximum asset URL length in bytes
-var MaxAssetURLBytes int
-
-// MaxAppBytesValueLen is the maximum length of a bytes value used in an application's global or
-// local key/value store
-var MaxAppBytesValueLen int
-
-// MaxAppBytesKeyLen is the maximum length of a key used in an application's global or local
-// key/value store
-var MaxAppBytesKeyLen int
-
-// StateProofTopVoters is a bound on how many online accounts get to
-// participate in forming the state proof, by including the
-// top StateProofTopVoters accounts (by normalized balance) into the
-// vector commitment.
-var StateProofTopVoters int
-
-// MaxTxnBytesPerBlock determines the maximum number of bytes
-// that transactions can take up in a block.  Specifically,
-// the sum of the lengths of encodings of each transaction
-// in a block must not exceed MaxTxnBytesPerBlock.
-var MaxTxnBytesPerBlock int
-
-// MaxAppTxnForeignApps is the max number of foreign apps per txn across all consensus versions
-var MaxAppTxnForeignApps int
-
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -653,68 +724,47 @@ func checkSetMax(value int, curMax *int) {
 // to enforce memory allocation limits. The values should be generous to
 // prevent correctness bugs, but not so large that DoS attacks are trivial
 func checkSetAllocBounds(p ConsensusParams) {
-	checkSetMax(int(p.SoftCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.CertCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.NextCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.LateCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.RedoCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.DownCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.SoftCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.CertCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.NextCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.LateCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.RedoCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.DownCommitteeThreshold), &bounds.MaxVoteThreshold)
 
 	// These bounds could be tighter, but since these values are just to
 	// prevent DoS, setting them to be the maximum number of allowed
 	// executed TEAL instructions should be fine (order of ~1000)
-	checkSetMax(p.MaxAppProgramLen, &MaxStateDeltaKeys)
-	checkSetMax(p.MaxAppProgramLen, &MaxEvalDeltaAccounts)
-	checkSetMax(p.MaxAppProgramLen, &MaxAppProgramLen)
-	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
-	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
-	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
+	checkSetMax(p.MaxAppProgramLen, &bounds.MaxStateDeltaKeys)
+	checkSetMax(p.MaxAppProgramLen, &bounds.MaxEvalDeltaAccounts)
+	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
+	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
+	checkSetMax(p.MaxTxnNoteBytes, &bounds.MaxTxnNoteBytes)
+	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
-	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
-	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
-	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
+	checkSetMax(p.MaxAppKeyLen, &bounds.MaxBytesKeyValueLen)
+	checkSetMax(p.MaxAppBytesValueLen, &bounds.MaxBytesKeyValueLen)
+	checkSetMax(p.MaxExtraAppProgramPages, &bounds.MaxExtraAppProgramLen)
 	// MaxAvailableAppProgramLen is the max of supported app program size
-	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
+	bounds.MaxAvailableAppProgramLen = bounds.MaxAppProgramLen * (1 + bounds.MaxExtraAppProgramLen)
 	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation
 	// Its value is much larger than any possible reasonable MaxLogCalls value in future
-	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
-	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
-	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
+	checkSetMax(p.MaxAppProgramLen, &bounds.MaxLogCalls)
+	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &bounds.MaxInnerTransactionsPerDelta)
+	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &bounds.MaxProposedExpiredOnlineAccounts)
+	checkSetMax(p.Payouts.MaxMarkAbsent, &bounds.MaxMarkAbsent)
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
-	checkSetMax(p.MaxAppTotalArgLen, &MaxAppTotalArgLen)
-	checkSetMax(p.MaxAssetNameBytes, &MaxAssetNameBytes)
-	checkSetMax(p.MaxAssetUnitNameBytes, &MaxAssetUnitNameBytes)
-	checkSetMax(p.MaxAssetURLBytes, &MaxAssetURLBytes)
-	checkSetMax(p.MaxAppBytesValueLen, &MaxAppBytesValueLen)
-	checkSetMax(p.MaxAppKeyLen, &MaxAppBytesKeyLen)
-	checkSetMax(int(p.StateProofTopVoters), &StateProofTopVoters)
-	checkSetMax(p.MaxTxnBytesPerBlock, &MaxTxnBytesPerBlock)
+	checkSetMax(p.MaxAppTotalArgLen, &bounds.MaxAppTotalArgLen)
+	checkSetMax(p.MaxAssetNameBytes, &bounds.MaxAssetNameBytes)
+	checkSetMax(p.MaxAssetUnitNameBytes, &bounds.MaxAssetUnitNameBytes)
+	checkSetMax(p.MaxAssetURLBytes, &bounds.MaxAssetURLBytes)
+	checkSetMax(p.MaxAppBytesValueLen, &bounds.MaxAppBytesValueLen)
+	checkSetMax(p.MaxAppKeyLen, &bounds.MaxAppBytesKeyLen)
+	checkSetMax(int(p.StateProofTopVoters), &bounds.StateProofTopVoters)
+	checkSetMax(p.MaxTxnBytesPerBlock, &bounds.MaxTxnBytesPerBlock)
 
-	checkSetMax(p.MaxAppTxnForeignApps, &MaxAppTxnForeignApps)
-}
-
-// SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
-// if the params contains zero protocols, the existing consensus.json file will be removed if exists.
-func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
-	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
-
-	if len(params) == 0 {
-		// we have no consensus params to write. In this case, just delete the existing file
-		// ( if any )
-		err := os.Remove(consensusProtocolPath)
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	encodedConsensusParams, err := json.Marshal(params)
-	if err != nil {
-		return err
-	}
-	err = os.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
-	return err
+	checkSetMax(p.MaxAppTxnForeignApps, &bounds.MaxAppTxnForeignApps)
 }
 
 // DeepCopy creates a deep copy of a consensus protocols map.
@@ -722,13 +772,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	staticConsensus := make(ConsensusProtocols)
 	for consensusVersion, consensusParams := range cp {
 		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
-		if consensusParams.ApprovedUpgrades != nil {
-			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
-			for ver, when := range consensusParams.ApprovedUpgrades {
-				newApprovedUpgrades[ver] = when
-			}
-			consensusParams.ApprovedUpgrades = newApprovedUpgrades
-		}
+		consensusParams.ApprovedUpgrades = maps.Clone(consensusParams.ApprovedUpgrades)
 		staticConsensus[consensusVersion] = consensusParams
 	}
 	return staticConsensus
@@ -757,54 +801,6 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 	}
 
 	return staticConsensus
-}
-
-// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directory
-func LoadConfigurableConsensusProtocols(dataDirectory string) error {
-	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
-	if err != nil {
-		return err
-	}
-	if newConsensus != nil {
-		SetConfigurableConsensusProtocols(newConsensus)
-	}
-	return nil
-}
-
-// SetConfigurableConsensusProtocols sets the configurable protocols.
-func SetConfigurableConsensusProtocols(newConsensus ConsensusProtocols) ConsensusProtocols {
-	oldConsensus := Consensus
-	Consensus = newConsensus
-	// Set allocation limits
-	for _, p := range Consensus {
-		checkSetAllocBounds(p)
-	}
-	return oldConsensus
-}
-
-// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
-// and merge it with a copy of the Consensus map. Then, it returns it to the caller.
-func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
-	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
-	file, err := os.Open(consensusProtocolPath)
-
-	if err != nil {
-		if os.IsNotExist(err) {
-			// this file is not required, only optional. if it's missing, no harm is done.
-			return Consensus, nil
-		}
-		return nil, err
-	}
-	defer file.Close()
-
-	configurableConsensus := make(ConsensusProtocols)
-
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&configurableConsensus)
-	if err != nil {
-		return nil, err
-	}
-	return Consensus.Merge(configurableConsensus), nil
 }
 
 // initConsensusProtocols defines the consensus protocol values and how values change across different versions of the protocol.
@@ -990,6 +986,7 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.LogicSigMaxCost = 20000
+	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
 	v18.SupportTxGroups = true
 	v18.MaxTxGroupSize = 16
@@ -1199,8 +1196,8 @@ func initConsensusProtocols() {
 	v29 := v28
 	v29.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// Enable ExtraProgramPages for application update
-	v29.EnableExtraPagesOnAppUpdate = true
+	// Fix the accounting bug
+	v29.EnableProperExtraPageAccounting = true
 
 	Consensus[protocol.ConsensusV29] = v29
 
@@ -1260,7 +1257,7 @@ func initConsensusProtocols() {
 	// flag would already be restructuring their internal storage for extended
 	// application storage, and therefore would not produce catchpoints and/or
 	// catchpoint labels prior to this feature being enabled.
-	v32.EnableAccountDataResourceSeparation = true
+	v32.EnableLedgerDataUpdateRound = true
 
 	// Remove limits on MinimumBalance
 	v32.MaximumMinimumBalance = 0
@@ -1313,7 +1310,6 @@ func initConsensusProtocols() {
 	v34.UnifyInnerTxIDs = true
 
 	v34.EnableSHA256TxnCommitmentHeader = true
-	v34.EnableOnlineAccountCatchpoints = true
 
 	v34.UnfundedSenders = true
 
@@ -1405,12 +1401,70 @@ func initConsensusProtocols() {
 	// but our current max is 150000 so using that :
 	v38.ApprovedUpgrades[protocol.ConsensusV39] = 150000
 
+	v40 := v39
+	v40.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v40.LogicSigVersion = 11
+
+	v40.EnableLogicSigSizePooling = true
+
+	v40.Payouts.Enabled = true
+	v40.Payouts.Percent = 50
+	v40.Payouts.GoOnlineFee = 2_000_000         // 2 algos
+	v40.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
+	v40.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
+	v40.Payouts.MaxMarkAbsent = 32
+	v40.Payouts.ChallengeInterval = 1000
+	v40.Payouts.ChallengeGracePeriod = 200
+	v40.Payouts.ChallengeBits = 5
+
+	v40.Bonus.BaseAmount = 10_000_000 // 10 Algos
+	// 2.9 sec rounds gives about 10.8M rounds per year.
+	v40.Bonus.DecayInterval = 1_000_000 // .99^(10.8M/1M) ~ .897. So ~10% decay per year
+
+	v40.Heartbeat = true
+
+	v40.EnableCatchpointsWithOnlineAccounts = true
+
+	Consensus[protocol.ConsensusV40] = v40
+
+	// v39 can be upgraded to v40, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v39.ApprovedUpgrades[protocol.ConsensusV40] = 208000
+
+	v41 := v40
+	v41.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v41.LogicSigVersion = 12
+
+	v41.EnableAppVersioning = true
+	v41.EnableSha512BlockHash = true
+
+	// txn.Access work
+	v41.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
+	v41.MaxAppAccess = 16           // Twice as many, though cross products are explicit
+	v41.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
+	v41.LogicSigMsig = false
+	v41.LogicSigLMsig = true
+
+	Consensus[protocol.ConsensusV41] = v41
+
+	// v40 can be upgraded to v41, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v40.ApprovedUpgrades[protocol.ConsensusV41] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v39
+	vFuture := v41
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.AppSizeUpdates = true
+	vFuture.AllowZeroLocalAppRef = true
+	vFuture.EnforceAuthAddrSenderDiff = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

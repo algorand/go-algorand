@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -427,6 +427,32 @@ match_label1:
 pushbytess "1" "2" "1"
 `
 
+const incentiveNonsense = `
+online_stake
+voter_params_get VoterIncentiveEligible
+`
+
+const fvNonsense = `
+pushbytes 0xabcd
+dup; dup
+falcon_verify
+`
+
+const sumhashNonsense = `
+pushbytes 0x0123
+sumhash512
+`
+
+const sha512Nonsense = `
+pushbytes 0x0123
+sha512
+`
+
+const mimcNonsense = `
+pushbytes 0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff
+mimc BLS12_381Mp111
+`
+
 const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense + boxNonsense
 
 const v9Nonsense = v8Nonsense
@@ -438,7 +464,11 @@ const spliceNonsence = `
 
 const v10Nonsense = v9Nonsense + pairingNonsense + spliceNonsence
 
-const v11Nonsense = v10Nonsense
+const v11Nonsense = v10Nonsense + incentiveNonsense + mimcNonsense
+
+const v12Nonsense = v11Nonsense + fvNonsense
+
+const v13Nonsense = v12Nonsense + sumhashNonsense + sha512Nonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
@@ -460,7 +490,16 @@ const spliceCompiled = "d2d3"
 
 const v10Compiled = v9Compiled + pairingCompiled + spliceCompiled
 
-const V11Compiled = v10Compiled
+const incentiveCompiled = "757401"
+const mimcCompiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe601"
+const v11Compiled = v10Compiled + incentiveCompiled + mimcCompiled
+
+const fvCompiled = "8002abcd494985"
+const v12Compiled = v11Compiled + fvCompiled
+
+const sumhashCompiled = "8002012386"
+const sha512Compiled = "8002012387"
+const v13Compiled = v12Compiled + sumhashCompiled + sha512Compiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,
@@ -474,6 +513,8 @@ var nonsense = map[uint64]string{
 	9:  v9Nonsense,
 	10: v10Nonsense,
 	11: v11Nonsense,
+	12: v12Nonsense,
+	13: v13Nonsense,
 }
 
 var compiled = map[uint64]string{
@@ -487,7 +528,9 @@ var compiled = map[uint64]string{
 	8:  "08" + v8Compiled,
 	9:  "09" + v9Compiled,
 	10: "0a" + v10Compiled,
-	11: "0b" + V11Compiled,
+	11: "0b" + v11Compiled,
+	12: "0c" + v12Compiled,
+	13: "0d" + v13Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -541,7 +584,7 @@ func TestAssemble(t *testing.T) {
 	}
 }
 
-var experiments = []uint64{}
+var experiments = []uint64{sumhashVersion}
 
 // TestExperimental forces a conscious choice to promote "experimental" opcode
 // groups. This will fail when we increment vFuture's LogicSigVersion. If we had
@@ -605,9 +648,8 @@ func testMatch(t testing.TB, actual, expected string) (ok bool) {
 		return strings.Contains(actual+"^", expected[3:]+"^")
 	} else if strings.HasSuffix(expected, "...") {
 		return strings.Contains("^"+actual, "^"+expected[:len(expected)-3])
-	} else {
-		return expected == actual
 	}
+	return expected == actual
 }
 
 func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
@@ -617,28 +659,13 @@ func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
 	return &ops, err
 }
 
-func lines(s string, num int) (bool, string) {
-	if num < 1 {
-		return true, ""
-	}
-	found := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			found++
-			if found == num {
-				return true, s[0 : i+1]
-			}
-		}
-	}
-	return false, s
-}
-
 func summarize(trace *strings.Builder) string {
-	truncated, msg := lines(trace.String(), 50)
-	if !truncated {
-		return msg
+	all := trace.String()
+	if strings.Count(all, "\n") < 50 {
+		return all
 	}
-	return msg + "(trace truncated)\n"
+	lines := strings.Split(all, "\n")
+	return strings.Join(lines[:20], "\n") + "\n(some trace elided)\n" + strings.Join(lines[len(lines)-20:], "\n")
 }
 
 func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpStream {
@@ -1698,6 +1725,36 @@ block BlkSeed
 global AssetCreateMinBalance
 global AssetOptInMinBalance
 global GenesisHash
+pushint 1
+block BlkBranch
+pushint 1
+block BlkFeeSink
+pushint 1
+block BlkProtocol
+pushint 1
+block BlkTxnCounter
+pushint 1
+block BlkProposer
+pushint 1
+block BlkFeesCollected
+pushint 1
+block BlkBonus
+pushint 1
+block BlkProposerPayout
+global PayoutsEnabled
+global PayoutsGoOnlineFee
+global PayoutsPercent
+global PayoutsMinBalance
+global PayoutsMaxBalance
+txn RejectVersion
+pushint 1
+block BlkBranch512
+pushint 1
+block BlkSha512_256TxnCommitment
+pushint 1
+block BlkSha512TxnCommitment
+pushint 1
+block BlkSha256TxnCommitment
 `, AssemblerMaxVersion)
 	for _, names := range [][]string{GlobalFieldNames[:], TxnFieldNames[:], blockFieldNames[:]} {
 		for _, f := range names {
@@ -1724,7 +1781,6 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// assembler pick it up.
 	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
-		v, source := v, source
 		if v > LogicVersion {
 			continue // We allow them to be set, but can't test assembly beyond LogicVersion
 		}
@@ -2157,6 +2213,52 @@ label1:
 			require.NoError(t, err)
 			require.Equal(t, source, dis)
 		})
+	}
+}
+
+// TestDisassembleBytecblock asserts correct disassembly for
+// uses of bytecblock and intcblock, from examples in #6154
+func TestDisassembleBytecblock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ver := uint64(AssemblerMaxVersion)
+	for _, prog := range []string{
+		`#pragma version %d
+intcblock 0 1 2 3 4 5
+intc_0 // 0
+intc_1 // 1
+intc_2 // 2
+intc_3 // 3
+intc 4 // 4
+pushints 6
+intc_0 // 0
+intc_1 // 1
+intc_2 // 2
+intc_3 // 3
+intc 4 // 4
+`,
+		`#pragma version %d
+bytecblock 0x6869 0x414243 0x74657374 0x666f7572 0x6c617374
+bytec_0 // "hi"
+bytec_1 // "ABC"
+bytec_2 // "test"
+bytec_3 // "four"
+bytec 4 // "last"
+pushbytess 0x6576696c
+bytec_0 // "hi"
+bytec_1 // "ABC"
+bytec_2 // "test"
+bytec_3 // "four"
+bytec 4 // "last"
+`,
+	} {
+		source := fmt.Sprintf(prog, ver)
+		ops, err := AssembleStringWithVersion(source, ver)
+		require.NoError(t, err)
+		dis, err := Disassemble(ops.Program)
+		require.NoError(t, err, dis)
+		require.Equal(t, source, dis)
 	}
 }
 
@@ -2867,6 +2969,9 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
 	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 6)
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, exp(1, "...is not allowed."))
+
+	testProg(t, "itxn_begin; int 3; itxn_field RejectVersion", 11, exp(1, "...introduced in v12..."))
+	testProg(t, "itxn_begin; int 2; itxn_field RejectVersion", 12)
 }
 
 func TestTypeTracking(t *testing.T) {
@@ -3159,7 +3264,7 @@ func TestMacros(t *testing.T) {
 		#define ==? ==; bnz
 		pushint 1; pushint 2; ==? label1
 		err
-		label1: 
+		label1:
 		pushint 1`,
 	)
 
@@ -3197,19 +3302,19 @@ func TestMacros(t *testing.T) {
 	pushbytes 0xddf2554d
 	txna ApplicationArgs 0
 	==
-	bnz kickstart 
-	pushbytes 0x903f4535 
+	bnz kickstart
+	pushbytes 0x903f4535
 	txna ApplicationArgs 0
 	==
-	bnz portal_transfer 
+	bnz portal_transfer
 	kickstart:
 		pushint 1
 	portal_transfer:
 		pushint 1
 	`, `
-	#define abi-route txna ApplicationArgs 0; ==; bnz 
-	method "kickstart(account)void"; abi-route kickstart 
-	method "portal_transfer(byte[])byte[]"; abi-route portal_transfer 
+	#define abi-route txna ApplicationArgs 0; ==; bnz
+	method "kickstart(account)void"; abi-route kickstart
+	method "portal_transfer(byte[])byte[]"; abi-route portal_transfer
 	kickstart:
 		pushint 1
 	portal_transfer:
@@ -3265,7 +3370,7 @@ add:
 	extract_uint32
 	stores
 
-	load 1; load 2; + 
+	load 1; load 2; +
 	store 255
 
 	int 255
@@ -3289,11 +3394,11 @@ add:
 #define abi-decode-uint32 ;int 0; extract_uint32;
 #define abi-encode-uint32 ;itob;extract 4 0;
 
-#define abi-encode-bytes  ;dup; len; abi-encode-uint16; swap; concat; 
+#define abi-encode-bytes  ;dup; len; abi-encode-uint16; swap; concat;
 #define abi-decode-bytes  ;extract 2 0;
 
-// abi method handling 
-#define abi-route 	;txna ApplicationArgs 0; ==; bnz 
+// abi method handling
+#define abi-route 	;txna ApplicationArgs 0; ==; bnz
 #define abi-return  ;pushbytes 0x151f7c75; swap; concat; log; int 1; return;
 
 // stanza: "set $var from-{type}"
@@ -3322,15 +3427,15 @@ echo:
 
 
 // add handler
-method "add(uint32,uint32)uint32"; abi-route add 
+method "add(uint32,uint32)uint32"; abi-route add
 add:
 	#define x 1
-	parse x from-uint32 
+	parse x from-uint32
 
 	#define y 2
 	parse y from-uint32
 
-	#define sum 255 
+	#define sum 255
 	load x; load y; +; store sum
 
 	returns sum as-uint32
@@ -3454,7 +3559,8 @@ add:
 		AssemblerMaxVersion,
 		exp(3, "Cannot create label with same name as macro: coolLabel"),
 	)
-	// These two tests are just for coverage, they really really can't happen
+	testProg(t, `#define 👩 123`, AssemblerMaxVersion, exp(1, "👩 character not allowed in macro name"))
+	// These two tests are just for coverage, they really can't happen
 	ops := newOpStream(AssemblerMaxVersion)
 	err := define(&ops, []token{{str: "not#define"}})
 	require.EqualError(t, err, "0: invalid syntax: not#define")

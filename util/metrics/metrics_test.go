@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,8 +69,8 @@ func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return
 	}
-	lines := strings.Split(string(body), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(body), "\n")
+	for line := range lines {
 		if len(line) < 5 {
 			continue
 		}

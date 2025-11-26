@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,10 +18,10 @@ package eval
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/algorand/go-deadlock"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -32,6 +32,8 @@ import (
 )
 
 // TxnGroupDeltaWithIds associates all the Ids (group and Txn) with a single state delta object
+//
+//revive:disable:var-naming
 type TxnGroupDeltaWithIds struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	Ids     []string

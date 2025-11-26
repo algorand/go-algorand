@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,8 +18,8 @@ package network
 
 import (
 	"context"
-	"net"
 	"net/http"
+	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
@@ -27,6 +27,22 @@ import (
 
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
+
+// DisconnectablePeer is a Peer with a long-living connection to a network that can be disconnected
+type DisconnectablePeer interface {
+	GetNetwork() GossipNode
+}
+
+// DisconnectableAddressablePeer is a Peer with a long-living connection to a network that can be disconnected and has an IP address
+type DisconnectableAddressablePeer interface {
+	DisconnectablePeer
+	IPAddressable
+}
+
+// IPAddressable is addressable with either IPv4 or IPv6 address
+type IPAddressable interface {
+	RoutingAddr() []byte
+}
 
 // PeerOption allows users to specify a subset of peers to query
 //
@@ -42,20 +58,34 @@ const (
 	PeersPhonebookRelays PeerOption = iota
 	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
 	PeersPhonebookArchivalNodes PeerOption = iota
-	// PeersPhonebookArchivers specifies all archivers in the phonebook
-	PeersPhonebookArchivers PeerOption = iota
 )
+
+func (po PeerOption) String() string {
+	switch po {
+	case PeersConnectedOut:
+		return "ConnectedOut"
+	case PeersConnectedIn:
+		return "ConnectedIn"
+	case PeersPhonebookRelays:
+		return "PhonebookRelays"
+	case PeersPhonebookArchivalNodes:
+		return "PhonebookArchivalNodes"
+	default:
+		return "Unknown PeerOption"
+	}
+}
 
 // GossipNode represents a node in the gossip network
 type GossipNode interface {
 	Address() (string, bool)
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	Disconnect(badnode Peer)
+	Disconnect(badnode DisconnectablePeer)
 	DisconnectPeers() // only used by testing
 
-	// RegisterHTTPHandler path accepts gorilla/mux path annotations
+	// RegisterHTTPHandler and RegisterHTTPHandlerFunc: path accepts gorilla/mux path annotations
 	RegisterHTTPHandler(path string, handler http.Handler)
+	RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request))
 
 	// RequestConnectOutgoing asks the system to actually connect to peers.
 	// `replace` optionally drops existing connections before making new ones.
@@ -66,7 +96,7 @@ type GossipNode interface {
 	GetPeers(options ...PeerOption) []Peer
 
 	// Start threads, listen on sockets.
-	Start()
+	Start() error
 
 	// Close sockets. Stop threads.
 	Stop()
@@ -77,8 +107,17 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
-	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-	GetRoundTripper() http.RoundTripper
+	// RegisterValidatorHandlers adds to the set of given message validation handlers.
+	// A difference with regular handlers is validation ones perform synchronous validation.
+	// Currently used as p2p pubsub topic validators.
+	RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler)
+
+	// ClearValidatorHandlers deregisters all the existing message processors.
+	ClearValidatorHandlers()
+
+	// GetHTTPClient returns a http.Client with a suitable for the network Transport
+	// that would also limit the number of outgoing connections.
+	GetHTTPClient(address string) (*http.Client, error)
 
 	// OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
 	// this is the only indication that we have that we haven't formed a clique, where all incoming messages
@@ -86,12 +125,8 @@ type GossipNode interface {
 	// characteristics as with a watchdog timer.
 	OnNetworkAdvance()
 
-	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
-	// request that was provided to the http handler ( or provide a fallback Context() to that )
-	GetHTTPRequestConnection(request *http.Request) (conn net.Conn)
-
-	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
-	SubstituteGenesisID(rawURL string) string
+	// GetGenesisID returns the network-specific genesisID.
+	GetGenesisID() string
 
 	// called from wsPeer to report that it has closed
 	peerRemoteClose(peer *wsPeer, reason disconnectReason)
@@ -109,7 +144,7 @@ var outgoingMessagesBufferSize = int(
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
 type IncomingMessage struct {
-	Sender Peer
+	Sender DisconnectableAddressablePeer
 	Tag    Tag
 	Data   []byte
 	Err    error
@@ -128,11 +163,9 @@ type IncomingMessage struct {
 // Tag is a short string (2 bytes) marking a type of message
 type Tag = protocol.Tag
 
-func highPriorityTag(tags []protocol.Tag) bool {
-	for _, tag := range tags {
-		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
-			return true
-		}
+func highPriorityTag(tag protocol.Tag) bool {
+	if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
+		return true
 	}
 	return false
 }
@@ -167,6 +200,9 @@ const (
 
 	// Respond - reply to the sender
 	Respond
+
+	// Accept - accept for further processing after successful validation
+	Accept
 )
 
 // MessageHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
@@ -177,19 +213,41 @@ type MessageHandler interface {
 	Handle(message IncomingMessage) OutgoingMessage
 }
 
-// HandlerFunc represents an implemenation of the MessageHandler interface
+// HandlerFunc represents an implementation of the MessageHandler interface
 type HandlerFunc func(message IncomingMessage) OutgoingMessage
 
-// Handle implements MessageHandler.Handle, calling the handler with the IncomingKessage and returning the OutgoingMessage
+// Handle implements MessageHandler.Handle, calling the handler with the IncomingMessage and returning the OutgoingMessage
 func (f HandlerFunc) Handle(message IncomingMessage) OutgoingMessage {
 	return f(message)
 }
 
-// TaggedMessageHandler receives one type of broadcast messages
-type TaggedMessageHandler struct {
-	Tag
-	MessageHandler
+// MessageValidatorHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
+// to send to the network in response.
+// it supposed to perform synchronous validation and return the result of the validation
+// so that network knows immediately if the message should be broadcasted or not.
+type MessageValidatorHandler interface {
+	ValidateHandle(message IncomingMessage) OutgoingMessage
 }
+
+// ValidateHandleFunc represents an implementation of the MessageProcessor interface
+type ValidateHandleFunc func(message IncomingMessage) OutgoingMessage
+
+// ValidateHandle implements MessageValidatorHandler.ValidateHandle, calling the validator with the IncomingMessage and returning the action.
+func (f ValidateHandleFunc) ValidateHandle(message IncomingMessage) OutgoingMessage {
+	return f(message)
+}
+
+type taggedMessageDispatcher[T any] struct {
+	Tag
+	MessageHandler T
+}
+
+// TaggedMessageHandler receives one type of broadcast messages
+type TaggedMessageHandler = taggedMessageDispatcher[MessageHandler]
+
+// TaggedMessageValidatorHandler receives one type of broadcast messages
+// and performs two stage processing: validating and handling
+type TaggedMessageValidatorHandler = taggedMessageDispatcher[MessageValidatorHandler]
 
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
@@ -197,13 +255,7 @@ func Propagate(msg IncomingMessage) OutgoingMessage {
 	return OutgoingMessage{Action: Broadcast, Tag: msg.Tag, Payload: msg.Data, Topics: nil}
 }
 
-// find the max value across the given uint64 numbers.
-func max(numbers ...uint64) (maxNum uint64) {
-	maxNum = 0 // this is the lowest uint64 value.
-	for _, num := range numbers {
-		if num > maxNum {
-			maxNum = num
-		}
-	}
-	return
+// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
+func SubstituteGenesisID(net GossipNode, rawURL string) string {
+	return strings.ReplaceAll(rawURL, "{genesisID}", net.GetGenesisID())
 }

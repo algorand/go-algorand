@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package prefetcher_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -118,6 +120,23 @@ func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, add
 	}
 	return ledgercore.AccountData{}, 0, nil
 }
+
+func (l *prefetcherAlignmentTestLedger) LookupAgreement(_ basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// prefetch alignment tests do not check for prefetching of online account data
+	// because it's quite different and can only occur in AVM opcodes, which
+	// aren't handled anyway (just as we don't know if a holding or app local
+	// will be accessed in AVM.)
+	return basics.OnlineAccountData{}, errors.New("not implemented")
+}
+
+func (l *prefetcherAlignmentTestLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	return basics.MicroAlgos{}, errors.New("not implemented")
+}
+
+func (l *prefetcherAlignmentTestLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (l *prefetcherAlignmentTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	l.mu.Lock()
 	if l.requestedApps == nil {
@@ -133,6 +152,7 @@ func (l *prefetcherAlignmentTestLedger) LookupApplication(rnd basics.Round, addr
 
 	return l.apps[addr][aidx], nil
 }
+
 func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
 	l.mu.Lock()
 	if l.requestedAssets == nil {
@@ -148,9 +168,11 @@ func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basic
 
 	return l.assets[addr][aidx], nil
 }
+
 func (l *prefetcherAlignmentTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	panic("not implemented")
 }
+
 func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	l.mu.Lock()
 	if l.requestedCreators == nil {
@@ -164,6 +186,7 @@ func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx 
 	}
 	return basics.Address{}, false, nil
 }
+
 func (l *prefetcherAlignmentTestLedger) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
@@ -259,6 +282,18 @@ type ledgerData struct {
 	Apps     map[basics.Address]map[basics.AppIndex]struct{}
 	Assets   map[basics.Address]map[basics.AssetIndex]struct{}
 	Creators map[creatable]struct{}
+}
+
+// pretend adds the `before` addresses to the Accounts. It "pretends" that the
+// addresses were prefetched, so we can get agreement with what was actually
+// requested.  We do this to include two addresses that are going to end up
+// requested *before* prefetch is even attempted. So there's no point in
+// PrefetchAccounts being modified to return them, they have been "prefetched"
+// simply by accessing them.
+func (ld *ledgerData) pretend(before ...basics.Address) {
+	for _, a := range before {
+		ld.Accounts[a] = struct{}{}
+	}
 }
 
 func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) ledgerData {
@@ -361,7 +396,7 @@ func TestEvaluatorPrefetcherAlignmentPayment(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -393,7 +428,7 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	// Only one (non-existing) asset is requested. Ignore it.
 	require.Len(t, requested.Assets, 1)
 	require.Len(t, requested.Assets[makeAddress(1)], 1)
@@ -449,7 +484,7 @@ func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -504,7 +539,7 @@ func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -570,7 +605,7 @@ func TestEvaluatorPrefetcherAlignmentAssetOptInCloseTo(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -641,7 +676,7 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 
 	// zero transfer of any asset
@@ -660,7 +695,7 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 
 	requested, prefetched = run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -741,7 +776,7 @@ func TestEvaluatorPrefetcherAlignmentAssetClawback(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -811,7 +846,7 @@ func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -858,7 +893,7 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -895,7 +930,7 @@ func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	// Only one (non-existing) asset is requested. Ignore it.
 	require.Len(t, requested.Apps, 1)
 	require.Len(t, requested.Apps[makeAddress(1)], 1)
@@ -953,7 +988,7 @@ func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1011,7 +1046,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1075,7 +1110,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1139,7 +1174,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1203,7 +1238,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	// Foreign accounts are not loaded, ensure they are not prefetched
 	require.NotContains(t, prefetched.Accounts, makeAddress(5))
 	require.NotContains(t, prefetched.Accounts, makeAddress(3))
@@ -1271,7 +1306,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	// Foreign apps are not loaded, ensure they are not prefetched
 	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AppCreatable})
 	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AppCreatable})
@@ -1338,7 +1373,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
 	// Foreign apps are not loaded, ensure they are not prefetched
 	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AssetCreatable})
 	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AssetCreatable})
@@ -1385,6 +1420,60 @@ func TestEvaluatorPrefetcherAlignmentStateProof(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.Accounts[rewardsPool()] = struct{}{}
+	prefetched.pretend(rewardsPool())
+	require.Equal(t, requested, prefetched)
+}
+
+func TestEvaluatorPrefetcherAlignmentHeartbeat(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// We need valid part keys to evaluate the Heartbeat.
+	const kd = 10
+	firstID := basics.OneTimeIDForRound(0, kd)
+	otss := crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, 5)
+
+	l := &prefetcherAlignmentTestLedger{
+		balances: map[basics.Address]ledgercore.AccountData{
+			rewardsPool(): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
+				},
+			},
+			makeAddress(1): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1000001},
+				},
+			},
+			makeAddress(2): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 100_000},
+				},
+				VotingData: basics.VotingData{
+					VoteID:          otss.OneTimeSignatureVerifier,
+					VoteKeyDilution: 123,
+				},
+			},
+		},
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(1),
+			GenesisHash: genesisHash(),
+			Fee:         basics.Algos(1), // Heartbeat txn is unusual in that it checks fees a bit.
+		},
+		HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
+			HbAddress:     makeAddress(2),
+			HbProof:       otss.Sign(firstID, committee.Seed(genesisHash())).ToHeartbeatProof(),
+			HbSeed:        committee.Seed(genesisHash()),
+			HbVoteID:      otss.OneTimeSignatureVerifier,
+			HbKeyDilution: 123,
+		},
+	}
+
+	requested, prefetched := run(t, l, txn)
+
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }

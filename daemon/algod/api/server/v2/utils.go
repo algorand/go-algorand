@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,16 +18,17 @@ package v2
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -39,12 +40,18 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
-	return ctx.JSON(code, model.ErrorResponse{Message: external})
+	var data *map[string]any
+	var se *basics.SError
+	if errors.As(internal, &se) {
+		data = &se.Attrs
+	}
+	return ctx.JSON(code, model.ErrorResponse{Message: external, Data: data})
 }
 
 func badRequest(ctx echo.Context, internal error, external string, log logging.Logger) error {
@@ -71,14 +78,6 @@ func notImplemented(ctx echo.Context, internal error, external string, log loggi
 	return returnError(ctx, http.StatusNotImplemented, internal, external, log)
 }
 
-func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
-	output := make([]Y, len(input))
-	for i := range input {
-		output[i] = fn(input[i])
-	}
-	return output
-}
-
 func convertMap[X comparable, Y, Z any](input map[X]Y, fn func(X, Y) Z) []Z {
 	output := make([]Z, len(input))
 	counter := 0
@@ -89,12 +88,8 @@ func convertMap[X comparable, Y, Z any](input map[X]Y, fn func(X, Y) Z) []Z {
 	return output
 }
 
-func uint64Slice[T ~uint64](s []T) []uint64 {
-	return convertSlice(s, func(t T) uint64 { return uint64(t) })
-}
-
 func stringSlice[T fmt.Stringer](s []T) []string {
-	return convertSlice(s, func(t T) string { return t.String() })
+	return util.Map(s, func(t T) string { return t.String() })
 }
 
 func sliceOrNil[T any](s []T) *[]T {
@@ -137,6 +132,17 @@ func nilToZero[T any](valPtr *T) T {
 	return *valPtr
 }
 
+func nilToZeroAddr(s *string) (basics.Address, error) {
+	if s == nil {
+		return basics.Address{}, nil
+	}
+	addr, err := basics.UnmarshalChecksumAddress(*s)
+	if err != nil {
+		return basics.Address{}, err
+	}
+	return addr, nil
+}
+
 func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
 	// Compute transaction index in block
 	txID := tx.Txn.Txn.ID()
@@ -157,7 +163,7 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
+func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *basics.AssetIndex {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -175,7 +181,7 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 		return nil
 	}
 
-	aid := uint64(tx.ApplyData.ConfigAsset)
+	aid := tx.ApplyData.ConfigAsset
 	if aid > 0 {
 		return &aid
 	}
@@ -195,13 +201,13 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 		return nil
 	}
 
-	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+	return (*basics.AssetIndex)(computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset))
 }
 
 // computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *basics.AppIndex {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -219,7 +225,7 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 		return nil
 	}
 
-	aid := uint64(tx.ApplyData.ApplicationID)
+	aid := tx.ApplyData.ApplicationID
 	if aid > 0 {
 		return &aid
 	}
@@ -239,7 +245,7 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *uint64 {
 		return nil
 	}
 
-	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+	return (*basics.AppIndex)(computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset))
 }
 
 // getCodecHandle converts a format string into the encoder + content type
@@ -282,14 +288,16 @@ func decode(handle codec.Handle, data []byte, v interface{}) error {
 	return nil
 }
 
-// Helper to convert basics.StateDelta -> *model.StateDelta
-func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
-	if len(d) == 0 {
+// globalDeltaToStateDelta converts basics.StateDelta -> model.StateDelta. It
+// should only be used on globals, because locals require extra context to
+// translate account indexes.
+func globalDeltaToStateDelta(bsd basics.StateDelta) model.StateDelta {
+	if len(bsd) == 0 {
 		return nil
 	}
-	var delta model.StateDelta
-	for k, v := range d {
-		delta = append(delta, model.EvalDeltaKeyValue{
+	msd := make(model.StateDelta, 0, len(bsd))
+	for k, v := range bsd {
+		msd = append(msd, model.EvalDeltaKeyValue{
 			Key: base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: model.EvalDelta{
 				Action: uint64(v.Action),
@@ -298,7 +306,7 @@ func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
 			},
 		})
 	}
-	return &delta
+	return msd
 }
 
 func edIndexToAddress(index uint64, txn *transactions.Transaction, shared []basics.Address) string {
@@ -315,23 +323,21 @@ func edIndexToAddress(index uint64, txn *transactions.Transaction, shared []basi
 	}
 }
 
-func convertToDeltas(txn node.TxnWithStatus) (*[]model.AccountStateDelta, *model.StateDelta) {
-	var localStateDelta *[]model.AccountStateDelta
-	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
-		d := make([]model.AccountStateDelta, 0)
-		shared := txn.ApplyData.EvalDelta.SharedAccts
+func localDeltasToLocalDeltas(ed transactions.EvalDelta, txn *transactions.Transaction) []model.AccountStateDelta {
+	if len(ed.LocalDeltas) == 0 {
+		return nil
+	}
+	lsd := make([]model.AccountStateDelta, 0, len(ed.LocalDeltas))
+	shared := ed.SharedAccts
 
-		for k, v := range txn.ApplyData.EvalDelta.LocalDeltas {
-			d = append(d, model.AccountStateDelta{
-				Address: edIndexToAddress(k, &txn.Txn.Txn, shared),
-				Delta:   *(stateDeltaToStateDelta(v)),
-			})
-		}
-
-		localStateDelta = &d
+	for k, v := range ed.LocalDeltas {
+		lsd = append(lsd, model.AccountStateDelta{
+			Address: edIndexToAddress(k, txn, shared),
+			Delta:   globalDeltaToStateDelta(v),
+		})
 	}
 
-	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
+	return lsd
 }
 
 func convertLogs(txn node.TxnWithStatus) *[][]byte {
@@ -372,14 +378,15 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 
 	// Since this is an inner txn, we know these indexes will be populated. No
 	// need to search payset for IDs
-	response.AssetIndex = omitEmpty(uint64(txn.ApplyData.ConfigAsset))
-	response.ApplicationIndex = omitEmpty(uint64(txn.ApplyData.ApplicationID))
+	response.AssetIndex = omitEmpty(txn.ApplyData.ConfigAsset)
+	response.ApplicationIndex = omitEmpty(txn.ApplyData.ApplicationID)
 
+	response.LocalStateDelta = sliceOrNil(localDeltasToLocalDeltas(txn.ApplyData.EvalDelta, &txn.Txn))
+	response.GlobalStateDelta = sliceOrNil(globalDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta))
 	withStatus := node.TxnWithStatus{
 		Txn:       txn.SignedTxn,
 		ApplyData: txn.ApplyData,
 	}
-	response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(withStatus)
 	response.Logs = convertLogs(withStatus)
 	response.Inners = convertInners(&withStatus)
 	return response
@@ -437,11 +444,11 @@ func convertApplicationStateChange(stateChange simulation.StateOperation) model.
 func convertOpcodeTraceUnit(opcodeTraceUnit simulation.OpcodeTraceUnit) model.SimulationOpcodeTraceUnit {
 	return model.SimulationOpcodeTraceUnit{
 		Pc:             opcodeTraceUnit.PC,
-		SpawnedInners:  sliceOrNil(convertSlice(opcodeTraceUnit.SpawnedInners, func(v int) uint64 { return uint64(v) })),
-		StackAdditions: sliceOrNil(convertSlice(opcodeTraceUnit.StackAdded, convertToAVMValue)),
+		SpawnedInners:  sliceOrNil(opcodeTraceUnit.SpawnedInners),
+		StackAdditions: sliceOrNil(util.Map(opcodeTraceUnit.StackAdded, convertToAVMValue)),
 		StackPopCount:  omitEmpty(opcodeTraceUnit.StackPopCount),
-		ScratchChanges: sliceOrNil(convertSlice(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
-		StateChanges:   sliceOrNil(convertSlice(opcodeTraceUnit.StateChanges, convertApplicationStateChange)),
+		ScratchChanges: sliceOrNil(util.Map(opcodeTraceUnit.ScratchSlotChanges, convertScratchChange)),
+		StateChanges:   sliceOrNil(util.Map(opcodeTraceUnit.StateChanges, convertApplicationStateChange)),
 	}
 }
 
@@ -450,15 +457,15 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		return nil
 	}
 	return &model.SimulationTransactionExecTrace{
-		ApprovalProgramTrace:    sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
+		ApprovalProgramTrace:    sliceOrNil(util.Map(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
 		ApprovalProgramHash:     digestOrNil(txnTrace.ApprovalProgramHash),
-		ClearStateProgramTrace:  sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
+		ClearStateProgramTrace:  sliceOrNil(util.Map(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
 		ClearStateProgramHash:   digestOrNil(txnTrace.ClearStateProgramHash),
 		ClearStateRollback:      omitEmpty(txnTrace.ClearStateRollback),
 		ClearStateRollbackError: omitEmpty(txnTrace.ClearStateRollbackError),
-		LogicSigTrace:           sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
+		LogicSigTrace:           sliceOrNil(util.Map(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
 		LogicSigHash:            digestOrNil(txnTrace.LogicSigHash),
-		InnerTrace: sliceOrNil(convertSlice(txnTrace.InnerTraces,
+		InnerTrace: sliceOrNil(util.Map(txnTrace.InnerTraces,
 			func(trace simulation.TransactionTrace) model.SimulationTransactionExecTrace {
 				return *convertTxnTrace(&trace)
 			}),
@@ -467,40 +474,48 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 }
 
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
-	return PreEncodedSimulateTxnResult{
+	result := PreEncodedSimulateTxnResult{
 		Txn:                      ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
 		TransactionTrace:         convertTxnTrace(txnResult.Trace),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
 	}
+
+	if !txnResult.FixedSigner.IsZero() {
+		fixedSigner := txnResult.FixedSigner.String()
+		result.FixedSigner = &fixedSigner
+	}
+
+	return result
 }
 
 func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *model.SimulateUnnamedResourcesAccessed {
 	if resources == nil {
 		return nil
 	}
+	resources.Simplify()
 	return &model.SimulateUnnamedResourcesAccessed{
-		Accounts: sliceOrNil(stringSlice(maps.Keys(resources.Accounts))),
-		Assets:   sliceOrNil(uint64Slice(maps.Keys(resources.Assets))),
-		Apps:     sliceOrNil(uint64Slice(maps.Keys(resources.Apps))),
-		Boxes: sliceOrNil(convertSlice(maps.Keys(resources.Boxes), func(box logic.BoxRef) model.BoxReference {
+		Accounts: sliceOrNil(stringSlice(slices.Collect(maps.Keys(resources.Accounts)))),
+		Assets:   sliceOrNil(slices.Collect(maps.Keys(resources.Assets))),
+		Apps:     sliceOrNil(slices.Collect(maps.Keys(resources.Apps))),
+		Boxes: sliceOrNil(util.Map(slices.Collect(maps.Keys(resources.Boxes)), func(box basics.BoxRef) model.BoxReference {
 			return model.BoxReference{
-				App:  uint64(box.App),
+				App:  box.App,
 				Name: []byte(box.Name),
 			}
 		})),
-		ExtraBoxRefs: omitEmpty(uint64(resources.NumEmptyBoxRefs)),
-		AssetHoldings: sliceOrNil(convertSlice(maps.Keys(resources.AssetHoldings), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
+		ExtraBoxRefs: omitEmpty(resources.NumEmptyBoxRefs),
+		AssetHoldings: sliceOrNil(util.Map(slices.Collect(maps.Keys(resources.AssetHoldings)), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
 			return model.AssetHoldingReference{
 				Account: holding.Address.String(),
-				Asset:   uint64(holding.Asset),
+				Asset:   holding.Asset,
 			}
 		})),
-		AppLocals: sliceOrNil(convertSlice(maps.Keys(resources.AppLocals), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
+		AppLocals: sliceOrNil(util.Map(slices.Collect(maps.Keys(resources.AppLocals)), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
 			return model.ApplicationLocalReference{
 				Account: local.Address.String(),
-				App:     uint64(local.App),
+				App:     local.App,
 			}
 		})),
 	}
@@ -535,7 +550,7 @@ func convertAppKVStoreInstance(address basics.Address, appKVPairs simulation.App
 
 func convertApplicationInitialStates(appID basics.AppIndex, states simulation.SingleAppInitialStates) model.ApplicationInitialStates {
 	return model.ApplicationInitialStates{
-		Id:         uint64(appID),
+		Id:         appID,
 		AppBoxes:   convertAppKVStorePtr(basics.Address{}, states.AppBoxes),
 		AppGlobals: convertAppKVStorePtr(basics.Address{}, states.AppGlobals),
 		AppLocals:  sliceOrNil(convertMap(states.AppLocals, convertAppKVStoreInstance)),
@@ -552,10 +567,7 @@ func convertSimulateInitialStates(initialStates *simulation.ResourcesInitialStat
 }
 
 func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
-	txnResults := make([]PreEncodedSimulateTxnResult, len(txnGroupResult.Txns))
-	for i, txnResult := range txnGroupResult.Txns {
-		txnResults[i] = convertTxnResult(txnResult)
-	}
+	txnResults := util.Map(txnGroupResult.Txns, convertTxnResult)
 
 	encoded := PreEncodedSimulateTxnGroupResult{
 		Txns:                     txnResults,
@@ -566,7 +578,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
-		failedAt := slices.Clone[[]uint64, uint64](txnGroupResult.FailedAt)
+		failedAt := slices.Clone[[]int, int](txnGroupResult.FailedAt)
 		encoded.FailedAt = &failedAt
 	}
 
@@ -582,13 +594,14 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 			MaxLogSize:            result.EvalOverrides.MaxLogSize,
 			MaxLogCalls:           result.EvalOverrides.MaxLogCalls,
 			ExtraOpcodeBudget:     omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
+			FixSigners:            omitEmpty(result.EvalOverrides.FixSigners),
 		}
 	}
 
 	return PreEncodedSimulateResponse{
 		Version:         result.Version,
-		LastRound:       uint64(result.LastRound),
-		TxnGroups:       convertSlice(result.TxnGroups, convertTxnGroupResult),
+		LastRound:       result.LastRound,
+		TxnGroups:       util.Map(result.TxnGroups, convertTxnGroupResult),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,
 		InitialStates:   convertSimulateInitialStates(result.InitialStates),
@@ -608,6 +621,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowUnnamedResources: request.AllowUnnamedResources,
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
 		TraceConfig:           request.ExecTraceConfig,
+		FixSigners:            request.FixSigners,
 	}
 }
 

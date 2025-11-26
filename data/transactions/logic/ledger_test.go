@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,9 +46,14 @@ import (
 )
 
 type balanceRecord struct {
-	addr     basics.Address
-	auth     basics.Address
-	balance  uint64
+	addr    basics.Address
+	auth    basics.Address
+	balance uint64
+	voting  basics.VotingData
+
+	proposed  basics.Round // The last round that this account proposed the accepted block
+	heartbeat basics.Round // The last round that this account sent a heartbeat to show it was online.
+
 	locals   map[basics.AppIndex]basics.TealKeyValue
 	holdings map[basics.AssetIndex]basics.AssetHolding
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
@@ -133,6 +138,12 @@ func (l *Ledger) NewApp(creator basics.Address, appID basics.AppIndex, params ba
 	}
 }
 
+func (l *Ledger) SetAppGlobalSchema(appID basics.AppIndex, schema basics.StateSchema) {
+	app := l.applications[appID]
+	app.GlobalStateSchema = schema
+	l.applications[appID] = app
+}
+
 // NewAsset adds an asset with the given id and params to the ledger.
 func (l *Ledger) NewAsset(creator basics.Address, assetID basics.AssetIndex, params basics.AssetParams) {
 	l.assets[assetID] = asaParams{
@@ -165,41 +176,65 @@ func (l *Ledger) Counter() uint64 {
 }
 
 // NewHolding sets the ASA balance of a given account.
-func (l *Ledger) NewHolding(addr basics.Address, assetID uint64, amount uint64, frozen bool) {
+func (l *Ledger) NewHolding(addr basics.Address, assetID basics.AssetIndex, amount uint64, frozen bool) {
 	br, ok := l.balances[addr]
 	if !ok {
 		br = newBalanceRecord(addr, 0)
 	}
-	br.holdings[basics.AssetIndex(assetID)] = basics.AssetHolding{Amount: amount, Frozen: frozen}
+	br.holdings[assetID] = basics.AssetHolding{Amount: amount, Frozen: frozen}
 	l.balances[addr] = br
 }
 
 // NewLocals essentially "opts in" an address to an app id.
-func (l *Ledger) NewLocals(addr basics.Address, appID uint64) {
+func (l *Ledger) NewLocals(addr basics.Address, appID basics.AppIndex) {
 	if _, ok := l.balances[addr]; !ok {
 		l.balances[addr] = newBalanceRecord(addr, 0)
 	}
-	l.balances[addr].locals[basics.AppIndex(appID)] = basics.TealKeyValue{}
+	l.balances[addr].locals[appID] = basics.TealKeyValue{}
+}
+
+func toTealValue(value any) basics.TealValue {
+	switch v := value.(type) {
+	case int:
+		return basics.TealValue{Type: basics.TealUintType, Uint: uint64(v)}
+	case uint64:
+		return basics.TealValue{Type: basics.TealUintType, Uint: v}
+	case string:
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: v}
+	case []byte:
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(v)}
+	case basics.TealValue:
+		return v
+	}
+	panic(value)
 }
 
 // NewLocal sets a local value of an app on an address
-func (l *Ledger) NewLocal(addr basics.Address, appID uint64, key string, value basics.TealValue) {
-	l.balances[addr].locals[basics.AppIndex(appID)][key] = value
+func (l *Ledger) NewLocal(addr basics.Address, appID basics.AppIndex, key string, value any) {
+	l.balances[addr].locals[appID][key] = toTealValue(value)
 }
 
 // NoLocal removes a key from an address locals for an app.
-func (l *Ledger) NoLocal(addr basics.Address, appID uint64, key string) {
-	delete(l.balances[addr].locals[basics.AppIndex(appID)], key)
+func (l *Ledger) NoLocal(addr basics.Address, appID basics.AppIndex, key string) {
+	delete(l.balances[addr].locals[appID], key)
 }
 
-// NewGlobal sets a global value for an app
-func (l *Ledger) NewGlobal(appID uint64, key string, value basics.TealValue) {
-	l.applications[basics.AppIndex(appID)].GlobalState[key] = value
+// NewGlobal sets a global value for an app incrmementing the schema to accommodate it
+func (l *Ledger) NewGlobal(appID basics.AppIndex, key string, value any) {
+	tv := toTealValue(value)
+	app := l.applications[appID]
+	app.GlobalState[key] = tv
+	if tv.Type == basics.TealBytesType {
+		app.GlobalStateSchema.NumByteSlice++
+	} else {
+		app.GlobalStateSchema.NumUint++
+	}
+	l.applications[appID] = app
 }
 
 // NoGlobal removes a global key for an app
-func (l *Ledger) NoGlobal(appID uint64, key string) {
-	delete(l.applications[basics.AppIndex(appID)].GlobalState, key)
+func (l *Ledger) NoGlobal(appID basics.AppIndex, key string) {
+	delete(l.applications[appID].GlobalState, key)
 }
 
 // Rekey sets the authAddr for an address.
@@ -210,10 +245,16 @@ func (l *Ledger) Rekey(addr basics.Address, auth basics.Address) {
 	}
 }
 
-// LatestTimestamp gives a uint64, chosen randomly.  It should
+// PrevTimestamp gives a uint64, chosen randomly.  It should
 // probably increase monotonically, but no tests care yet.
 func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
+}
+
+// OnlineStake returns the online stake that applies to the latest round (so
+// it's actually the online stake from 320 rounds ago)
+func (l *Ledger) OnlineStake() (basics.MicroAlgos, error) {
+	return basics.Algos(3333), nil
 }
 
 // BlockHdr returns the block header for the given round, if it is available
@@ -306,7 +347,39 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 
 			TotalBoxes:    uint64(boxesTotal),
 			TotalBoxBytes: uint64(boxBytesTotal),
+
+			LastProposed:  br.proposed,
+			LastHeartbeat: br.heartbeat,
 		},
+		VotingData: br.voting,
+	}, nil
+}
+
+// AgreementData is not a very high-fidelity fake. There's no time delay, it
+// just returns the data that's in AccountData, reshaped into an
+// OnlineAccountData.
+func (l *Ledger) AgreementData(addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, err := l.AccountData(addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	// You might imagine this conversion function exists. It does, but requires
+	// rewards handling because OnlineAccountData should have rewards
+	// paid. Here, we ignore that for simple tests.
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		// VotingData is not exposed to `voter_params_get`, the thinking is that
+		// we don't want them used as "free" storage. And thus far, we don't
+		// have compelling reasons to examine them in AVM.
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
 	}, nil
 }
 
@@ -355,11 +428,38 @@ func (l *Ledger) SetGlobal(appIdx basics.AppIndex, key string, value basics.Teal
 		return fmt.Errorf("no app %d", appIdx)
 	}
 
-	// if writing the same value, return
-	// this simulates real ledger behavior for tests
-	val, ok := params.GlobalState[key]
-	if ok && val == value {
+	// Populate globals from the app object, then add in the mods
+	globals := params.GlobalState.Clone() // this does not contain the running changes in mods
+	for k, vd := range l.mods[appIdx] {
+		tv, exists := vd.ToTealValue()
+		if exists {
+			globals[k] = tv
+		} else {
+			delete(globals, k)
+		}
+	}
+
+	// if writing the same value, return to simulate real ledger behavior for
+	// tests
+	val, present := globals[key]
+	if present && val == value {
 		return nil
+	}
+
+	delete(globals, key) // remove before getting schema, since type may change
+	required, err := globals.ToStateSchema()
+	if err != nil {
+		return err
+	}
+	// now add it back in, possibly with new type
+	if value.Type == basics.TealBytesType {
+		required.NumByteSlice++
+	} else {
+		required.NumUint++
+	}
+	if !params.GlobalStateSchema.Allows(required) {
+		return fmt.Errorf("app %d global schema %s does not allow %s",
+			appIdx, params.GlobalStateSchema, required)
 	}
 
 	// write to deltas
@@ -625,7 +725,7 @@ func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) err
 		tbr = newBalanceRecord(to, 0)
 	}
 	if fbr.balance < amount {
-		return fmt.Errorf("insufficient balance")
+		return fmt.Errorf("insufficient balance in %v. %d < %d", from, fbr.balance, amount)
 	}
 	fbr.balance -= amount
 	tbr.balance += amount
@@ -688,17 +788,20 @@ func (l *Ledger) axfer(from basics.Address, xfer transactions.AssetTransferTxnFi
 	}
 	fholding, ok := fbr.holdings[aid]
 	if !ok {
-		if from == to && amount == 0 {
-			// opt in
-			if params, exists := l.assets[aid]; exists {
-				fbr.holdings[aid] = basics.AssetHolding{
-					Frozen: params.DefaultFrozen,
+		if amount == 0 {
+			if from == to {
+				// opt in
+				if params, exists := l.assets[aid]; exists {
+					fbr.holdings[aid] = basics.AssetHolding{
+						Frozen: params.DefaultFrozen,
+					}
+				} else {
+					return fmt.Errorf("Asset (%d) does not exist", aid)
 				}
-				return nil
 			}
-			return fmt.Errorf("Asset (%d) does not exist", aid)
+		} else {
+			return fmt.Errorf("Sender (%s) not opted in to %d", from, aid)
 		}
-		return fmt.Errorf("Sender (%s) not opted in to %d", from, aid)
 	}
 	if fholding.Frozen {
 		return fmt.Errorf("Sender (%s) is frozen for %d", from, aid)
@@ -810,6 +913,7 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 				},
 			},
 			ExtraProgramPages: appl.ExtraProgramPages,
+			Version:           0,
 		}
 		l.NewApp(from, aid, params)
 		ad.ApplicationID = aid
@@ -872,6 +976,19 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 		}
 		app.ApprovalProgram = appl.ApprovalProgram
 		app.ClearStateProgram = appl.ClearStateProgram
+		if ep.Proto.EnableAppVersioning {
+			app.Version++
+		}
+		if appl.UpdatingSizes() {
+			if ep.Proto.AppSizeUpdates {
+				app.ExtraProgramPages = appl.ExtraProgramPages
+				app.GlobalStateSchema = appl.GlobalStateSchema
+				app.SizeSponsor = from
+			} else {
+				return fmt.Errorf("Tried to update size epp=%v gs=%v",
+					appl.ExtraProgramPages, appl.GlobalStateSchema)
+			}
+		}
 		l.applications[aid] = app
 	}
 	return nil
@@ -909,7 +1026,7 @@ func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 }
 
 // Get returns the AccountData of an address. This test ledger does
-// not handle rewards, so the pening rewards flag is ignored.
+// not handle rewards, so withPendingRewards is ignored.
 func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -921,6 +1038,17 @@ func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.Accou
 		Assets:         map[basics.AssetIndex]basics.AssetHolding{},
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{},
 		AppParams:      map[basics.AppIndex]basics.AppParams{},
+		LastProposed:   br.proposed,
+		LastHeartbeat:  br.heartbeat,
+		// The fields below are not exposed to `acct_params_get`, the thinking
+		// is that we don't want them used as "free" storage.  And thus far, we
+		// don't have compelling reasons to examine them in AVM.
+		VoteID:          br.voting.VoteID,
+		SelectionID:     br.voting.SelectionID,
+		StateProofID:    br.voting.StateProofID,
+		VoteFirstValid:  br.voting.VoteFirstValid,
+		VoteLastValid:   br.voting.VoteLastValid,
+		VoteKeyDilution: br.voting.VoteKeyDilution,
 	}, nil
 }
 
@@ -940,9 +1068,9 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 // SetKey creates a new key-value in {addr, aidx, global} storage
 func (l *Ledger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue, accountIdx uint64) error {
 	if global {
-		l.NewGlobal(uint64(aidx), key, value)
+		l.NewGlobal(aidx, key, value)
 	} else {
-		l.NewLocal(addr, uint64(aidx), key, value)
+		l.NewLocal(addr, aidx, key, value)
 	}
 	return nil
 }
@@ -950,9 +1078,9 @@ func (l *Ledger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, 
 // DelKey removes a key from {addr, aidx, global} storage
 func (l *Ledger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) error {
 	if global {
-		l.NoGlobal(uint64(aidx), key)
+		l.NoGlobal(aidx, key)
 	} else {
-		l.NoLocal(addr, uint64(aidx), key)
+		l.NoLocal(addr, aidx, key)
 	}
 	return nil
 }

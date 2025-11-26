@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -103,7 +103,7 @@ func init() {
 	runCmd.Flags().Uint64VarP(&minAccountFunds, "minaccount", "", 0, "The minimum amount to fund a test account with")
 	runCmd.Flags().Uint64VarP(&txnPerSec, "tps", "t", 0, "Number of Txn per second that pingpong sends")
 	runCmd.Flags().Int64VarP(&maxFee, "mf", "f", -1, "The MAX fee to be used for transactions, a value of '0' tells the server to use a suggested fee.")
-	runCmd.Flags().Uint64VarP(&minFee, "minf", "m", 1000, "The MIN fee to be used for randomFee transactions")
+	runCmd.Flags().Uint64VarP(&minFee, "minf", "m", 0, "The MIN fee to be used for randomFee transactions (0 will use suggested fee)")
 	runCmd.Flags().BoolVar(&randomAmount, "ra", false, "Set to enable random amounts (up to maxamount)")
 	runCmd.Flags().BoolVar(&noRandomAmount, "nra", false, "Set to disable random amounts")
 	runCmd.Flags().BoolVar(&randomFee, "rf", false, "Set to enable random fees (between minf and mf)")
@@ -280,16 +280,16 @@ var runCmd = &cobra.Command{
 		cfg.RandomizeDst = randomDst || cfg.RandomizeDst
 		cfg.Quiet = quietish || cfg.Quiet
 		if runTime != "" {
-			val, err := strconv.ParseUint(runTime, 10, 32)
-			if err != nil {
-				reportErrorf("Invalid value specified for --run: %v\n", err)
+			val, err1 := strconv.ParseUint(runTime, 10, 32)
+			if err1 != nil {
+				reportErrorf("Invalid value specified for --run: %v\n", err1)
 			}
 			cfg.RunTime = time.Duration(uint32(val)) * time.Second
 		}
 		if refreshTime != "" {
-			val, err := strconv.ParseUint(refreshTime, 10, 32)
-			if err != nil {
-				reportErrorf("Invalid value specified for --refresh: %v\n", err)
+			val, err1 := strconv.ParseUint(refreshTime, 10, 32)
+			if err1 != nil {
+				reportErrorf("Invalid value specified for --refresh: %v\n", err1)
 			}
 			cfg.RefreshTime = time.Duration(uint32(val)) * time.Second
 		}
@@ -311,8 +311,8 @@ var runCmd = &cobra.Command{
 				programStr = tealLight
 			case "normal":
 				programStr = tealNormal
-				bytes, err := base64.StdEncoding.DecodeString("iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=")
-				if err != nil {
+				bytes, err1 := base64.StdEncoding.DecodeString("iZWMx72KvU6Bw6sPAWQFL96YH+VMrBA0XKWD9XbZOZI=")
+				if err1 != nil {
 					reportErrorf("Internal error, cannot decode.")
 				}
 				cfg.LogicArgs = [][]byte{bytes}
@@ -321,8 +321,8 @@ var runCmd = &cobra.Command{
 			default:
 				reportErrorf("Invalid argument for --teal: %v\n", teal)
 			}
-			ops, err := logic.AssembleString(programStr)
-			if err != nil {
+			ops, err1 := logic.AssembleString(programStr)
+			if err1 != nil {
 				ops.ReportMultipleErrors(teal, os.Stderr)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}

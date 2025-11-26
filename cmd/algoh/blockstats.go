@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package main
 import (
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/rpcs"
 )
@@ -31,7 +32,7 @@ type blockstats struct {
 	lastBlockTime time.Time
 }
 
-func (stats *blockstats) init(block uint64) {
+func (stats *blockstats) init(block basics.Round) {
 }
 
 func (stats *blockstats) onBlock(block rpcs.EncodedBlockCert) {

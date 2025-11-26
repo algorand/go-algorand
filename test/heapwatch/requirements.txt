@@ -1,7 +1,10 @@
-dash==2.11.1
+dash==2.15.0
 dash-table==5.0.0
-Jinja2==3.1.2
+Jinja2==3.1.6
 matplotlib==3.7.2
 plotly==5.16.0
 py-algorand-sdk==2.3.0
 kaleido==0.2.1
+networkx==3.3
+gravis==0.1.0
+termcolor==2.4.0

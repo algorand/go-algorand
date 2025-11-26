@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -339,6 +339,10 @@ func (au *accountUpdates) flushCaches() {
 
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
+}
+
+func (au *accountUpdates) LookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	return au.lookupAssetResources(addr, assetIDGT, limit)
 }
 
 func (au *accountUpdates) LookupKv(rnd basics.Round, key string) ([]byte, error) {
@@ -985,7 +989,7 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 				if err == nil {
 					ledgercore.AssignAccountData(&data, ad)
 					withoutRewards = data.MicroAlgos // record balance before updating rewards
-					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+					data = data.WithUpdatedRewards(rewardsProto.RewardUnit, rewardsLevel)
 				}
 			}()
 			withRewards = false
@@ -1206,6 +1210,55 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return ledgercore.AccountResource{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.Round, memoryRound: currentDbRound}
 		}
 	}
+}
+
+// lookupAssetResources returns all the resources for a given address, solely based on what is persisted to disk. It does not
+// take into account any in-memory deltas; the round number returned is the latest round number that is known to the database.
+func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) (data []ledgercore.AssetResourceWithIDs, validThrough basics.Round, err error) {
+	// Look for resources on disk
+	persistedResources, resourceDbRound, err0 := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(assetIDGT), limit, basics.AssetCreatable)
+	if err0 != nil {
+		return nil, basics.Round(0), err0
+	}
+
+	data = make([]ledgercore.AssetResourceWithIDs, 0, len(persistedResources))
+	for _, pd := range persistedResources {
+		ah := pd.Data.GetAssetHolding()
+
+		var arwi ledgercore.AssetResourceWithIDs
+		if !pd.Creator.IsZero() {
+			ap := pd.Data.GetAssetParams()
+
+			arwi = ledgercore.AssetResourceWithIDs{
+				AssetID: basics.AssetIndex(pd.Aidx),
+				Creator: pd.Creator,
+
+				AssetResource: ledgercore.AssetResource{
+					AssetHolding: &ah,
+					AssetParams:  &ap,
+				},
+			}
+		} else {
+			arwi = ledgercore.AssetResourceWithIDs{
+				AssetID: basics.AssetIndex(pd.Aidx),
+
+				AssetResource: ledgercore.AssetResource{
+					AssetHolding: &ah,
+				},
+			}
+		}
+
+		data = append(data, arwi)
+	}
+	// We've found all the resources we could find for this address.
+	currentDbRound := resourceDbRound
+	// The resourceDbRound will not be set if there are no persisted resources
+	if len(data) == 0 {
+		au.accountsMu.RLock()
+		currentDbRound = au.cachedDBRound
+		au.accountsMu.RUnlock()
+	}
+	return data, currentDbRound, nil
 }
 
 func (au *accountUpdates) lookupStateDelta(rnd basics.Round) (ledgercore.StateDelta, error) {
@@ -1430,13 +1483,6 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-func (au *accountUpdates) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (au *accountUpdates) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (au *accountUpdates) handleCommitError(dcc *deferredCommitContext) {
-}
-
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
 func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	if au.logAccountUpdatesMetrics {
@@ -1462,7 +1508,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	// once the consensus upgrade to resource separation is complete, all resources/accounts are also tagged with
 	// their corresponding update round.
-	setUpdateRound := config.Consensus[au.versions[1]].EnableAccountDataResourceSeparation
+	setUpdateRound := config.Consensus[au.versions[1]].EnableLedgerDataUpdateRound
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
@@ -1690,9 +1736,6 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		var details struct{}
 		au.log.Metrics(telemetryspec.Accounts, dcc.stats, details)
 	}
-}
-
-func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 // compactKvDeltas takes an array of StateDeltas containing kv deltas (one array entry per round), and

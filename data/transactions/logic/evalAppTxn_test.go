@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -74,9 +74,7 @@ func TestCurrentInnerTypes(t *testing.T) {
 	TestApp(t, "itxn_begin; int axfer; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 
 	TestApp(t, "itxn_begin; byte \"acfg\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
-	TestApp(t, "itxn_begin; byte \"afrz\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
 	TestApp(t, "itxn_begin; int acfg; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
-	TestApp(t, "itxn_begin; int afrz; itxn_field TypeEnum; itxn_submit; int 1;", ep, "insufficient balance")
 
 	// allowed since v6
 	TestApp(t, "itxn_begin; byte \"keyreg\"; itxn_field Type; itxn_submit; int 1;", ep, "insufficient balance")
@@ -110,7 +108,7 @@ func TestFieldTypes(t *testing.T) {
 	TestApp(t, NoTrack("itxn_begin; int 7; itxn_field Receiver;"), ep, "not an address")
 	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field CloseRemainderTo;"), ep, "not an address")
 	TestApp(t, NoTrack("itxn_begin; byte \"\"; itxn_field AssetSender;"), ep, "not an address")
-	// can't really tell if it's an addres, so 32 bytes gets further
+	// can't really tell if it's an address, so 32 bytes gets further
 	TestApp(t, "itxn_begin; byte \"01234567890123456789012345678901\"; itxn_field AssetReceiver; int 1",
 		ep, "unavailable Account")
 	// but a b32 string rep is not an account
@@ -375,6 +373,34 @@ func TestRekeyBack(t *testing.T) {
 	})
 }
 
+// TestRekeyInnerGroup ensures that in an inner group, if an account is
+// rekeyed, it can not be used (by the previously owning app) later in the
+// group.
+func TestRekeyInnerGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rekeyAndUse := `
+  itxn_begin
+   // pay 0 to the zero address, and rekey a junk addr
+   int pay;  itxn_field TypeEnum
+   global ZeroAddress; byte 0x01; b|; itxn_field RekeyTo
+  itxn_next
+   // try to perform the same 0 pay, but fail because tx0 gave away control
+   int pay;  itxn_field TypeEnum
+  itxn_submit
+  int 1
+`
+
+	// v6 added inner rekey
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		// fund the app account
+		ledger.NewAccount(basics.AppIndex(888).Address(), 1_000_000)
+		TestApp(t, rekeyAndUse, ep, "unauthorized AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVIOOBQA")
+	})
+}
+
 func TestDefaultSender(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -403,6 +429,13 @@ func TestAppAxfer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	closeWithClawback := `
+  itxn_begin
+  int axfer        ; itxn_field TypeEnum
+  txn Sender       ; itxn_field AssetSender
+  txn Sender       ; itxn_field AssetCloseTo
+  itxn_submit
+`
 	axfer := `
   itxn_begin
   int 77
@@ -422,6 +455,8 @@ func TestAppAxfer(t *testing.T) {
 			TestApp(t, source, ep, problem...)
 		}
 
+		test(closeWithClawback, "cannot close asset by clawback")
+
 		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 		ledger.NewAsset(tx.Receiver, 777, basics.AssetParams{}) // not in foreign-assets of sample
 		ledger.NewAsset(tx.Receiver, 77, basics.AssetParams{})  // in foreign-assets of sample
@@ -433,6 +468,14 @@ func TestAppAxfer(t *testing.T) {
 			"assert failed") // app account not opted in
 
 		ledger.NewAccount(appAddr(888), 10000) // plenty for fees
+
+		// It should be possible to send 0 amount of an asset (existing
+		// or not) to any account but ourself. Regardless of being opted in
+		test("global CurrentApplicationAddress; txn Accounts 1; int 0" + axfer + "int 1")
+		holding, err := ledger.AssetHolding(appAddr(888), 77)
+		require.ErrorContains(t, err, "no asset 77 for account")
+		require.Equal(t, uint64(0), holding.Amount)
+
 		ledger.NewHolding(appAddr(888), 77, 3000, false)
 		test("global CurrentApplicationAddress; int 77; asset_holding_get AssetBalance; assert; int 3000; ==;")
 
@@ -466,7 +509,7 @@ func TestAppAxfer(t *testing.T) {
 		// is going to fail anyway, but to keep the behavior consistent, v9
 		// allows the zero asset (and zero account) in `requireHolding`.
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100"+noid+"int 1",
-			fmt.Sprintf("Sender (%s) not opted in to 0", appAddr(888)))
+			"asset ID cannot be zero")
 
 		test("global CurrentApplicationAddress; txn Accounts 1; int 100" + axfer + "int 1")
 
@@ -747,14 +790,7 @@ func TestAssetFreeze(t *testing.T) {
   int 5000
   ==
 `
-	// v5 added inners
-	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
-		// Give it enough for fees.  Recall that we don't check min balance at this level.
-		ledger.NewAccount(appAddr(888), 12*MakeTestProto().MinTxnFee)
-		TestApp(t, create, ep)
-
-		freeze := `
+	freeze := `
   itxn_begin
   int afrz                    ; itxn_field TypeEnum
   int 5000                    ; itxn_field FreezeAsset
@@ -763,6 +799,24 @@ func TestAssetFreeze(t *testing.T) {
   itxn_submit
   int 1
 `
+	missingFreezeAccount := `
+  itxn_begin
+  int afrz       ; itxn_field TypeEnum
+  int 5000       ; itxn_field FreezeAsset
+  itxn_submit
+`
+	missingAssetID := `
+  itxn_begin
+  int afrz       ; itxn_field TypeEnum
+  itxn_submit
+`
+	// v5 added inners
+	TestLogicRange(t, 5, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		// Give it enough for fees.  Recall that we don't check min balance at this level.
+		ledger.NewAccount(appAddr(888), 12*MakeTestProto().MinTxnFee)
+		TestApp(t, create, ep)
+
 		TestApp(t, freeze, ep, "unavailable Asset 5000")
 		tx.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(5000)}
 		tx.ApplicationArgs = [][]byte{{0x01}}
@@ -777,6 +831,10 @@ func TestAssetFreeze(t *testing.T) {
 		holding, err = ledger.AssetHolding(tx.Receiver, 5000)
 		require.NoError(t, err)
 		require.Equal(t, false, holding.Frozen)
+
+		// Malformed
+		TestApp(t, missingFreezeAccount, ep, "freeze account cannot be empty")
+		TestApp(t, missingAssetID, ep, "asset ID cannot be zero")
 	})
 }
 
@@ -1168,7 +1226,6 @@ func TestBigApplCreation(t *testing.T) {
 
 	// First, test normal accummulation
 	for _, pgm := range []string{"Approval", "ClearState"} {
-		pgm := pgm
 		t.Run(pgm, func(t *testing.T) {
 			t.Parallel()
 
@@ -1251,7 +1308,43 @@ func TestApplSubmission(t *testing.T) {
 	// Can't set epp when app id is given
 	tx.ForeignApps = append(tx.ForeignApps, basics.AppIndex(7))
 	TestApp(t, p+`int 1; itxn_field ExtraProgramPages;
-                  int 7; itxn_field ApplicationID`+s, ep, "immutable")
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Extra")
+	// nor can global schema be set
+	TestApp(t, p+`int 1; itxn_field GlobalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Global")
+	// nor can local schema be set
+	TestApp(t, p+`int 1; itxn_field LocalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Local")
+
+	// When performing an update, we can set epp and (global only) schema
+	ledger.NewApp(tx.Receiver, 7, basics.AppParams{
+		ApprovalProgram: ops.Program, // which is "int 1"
+	})
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field ExtraProgramPages;
+                  int 7; itxn_field ApplicationID`+s, ep)
+	// global schema can be set
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field GlobalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep)
+	// but local schema still cannot be set
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field LocalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Local")
+
+	// Even when performing an update, they cannot be set (in old consensus)
+	ep.Proto.AppSizeUpdates = false
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field ExtraProgramPages;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Extra")
+	// global schema can be set
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field GlobalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Global")
+	// but local schema still cannot be set
+	TestApp(t, p+a+`int UpdateApplication; itxn_field OnCompletion;
+                  int 1; itxn_field LocalNumUint;
+                  int 7; itxn_field ApplicationID`+s, ep, "inappropriate non-zero tx.Local")
 
 	TestApp(t, p+a+"int 20; itxn_field GlobalNumUint; int 11; itxn_field GlobalNumByteSlice"+s,
 		ep, "too large")
@@ -1259,7 +1352,9 @@ func TestApplSubmission(t *testing.T) {
 		ep, "too large")
 }
 
-func TestInnerApplCreate(t *testing.T) {
+// TestInnerApplLifecycle tests creation, update, and deletion of apps with
+// inner transactions.
+func TestInnerApplLifecycle(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1288,6 +1383,7 @@ itxn_submit
 int 1
 `)
 
+		// Can't examine it without ForeignApps
 		test("int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert",
 			"unavailable App 5000")
 
@@ -1301,7 +1397,8 @@ int 1
 		// Can't call it either
 		test(call, "unavailable App 5000")
 
-		tx.ForeignApps = []basics.AppIndex{basics.AppIndex(5000)}
+		// Add to ForeignApps, then we can examine and call it.
+		tx.ForeignApps = []basics.AppIndex{5000}
 		test(`
 int 5000; app_params_get AppGlobalNumByteSlice; assert; int 0; ==; assert
 int 5000; app_params_get AppGlobalNumUint;      assert; int 1; ==; assert
@@ -1309,10 +1406,54 @@ int 5000; app_params_get AppLocalNumByteSlice;  assert; int 2; ==; assert
 int 5000; app_params_get AppLocalNumUint;       assert; int 3; ==; assert
 int 1
 `)
+		if v >= 12 {
+			// Version starts at 0
+			test(`int 5000; app_params_get AppVersion; assert; !`)
+		}
 
 		// Call it (default OnComplete is NoOp)
 		test(call)
 
+		update := `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 5000;    itxn_field ApplicationID
+` + approve + `; itxn_field ApprovalProgram
+` + approve + `; itxn_field ClearStateProgram
+int UpdateApplication; itxn_field OnCompletion
+itxn_submit
+int 1
+`
+		test(update)
+
+		if v >= 12 {
+			// Version is up to 1
+			test(`int 5000; app_params_get AppVersion; assert; int 1; ==`)
+		}
+
+		updateSchema := `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 5000;    itxn_field ApplicationID
+` + approve + `; itxn_field ApprovalProgram
+` + approve + `; itxn_field ClearStateProgram
+int 2;       itxn_field GlobalNumUint
+int UpdateApplication; itxn_field OnCompletion
+itxn_submit
+int 1
+`
+		test(updateSchema)
+		if v >= 12 {
+			// Version is up to 2
+			test(`int 5000; app_params_get AppVersion; assert; int 2; ==`)
+		}
+
+		test(`
+int 5000; app_params_get AppGlobalNumUint;      assert; int 2; ==; assert
+int 1
+`)
+
+		// Delete it
 		test(`
 itxn_begin
 int appl;              itxn_field TypeEnum
@@ -1327,11 +1468,10 @@ int 1
 
 		// Can't call it either
 		test(call, "no app 5000")
-
 	})
 }
 
-func TestCreateOldAppFails(t *testing.T) {
+func TestCreateOldAppErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1819,7 +1959,7 @@ func TestTxIDAndGroupIDCalculation(t *testing.T) {
 			})
 			require.Equal(t, crypto.Digest{0x96, 0x90, 0x1, 0x64, 0x24, 0xa5, 0xda, 0x4, 0x3d, 0xd, 0x40, 0xc9, 0xf6, 0xfa, 0xc3, 0xa6, 0x26, 0x19, 0xd3, 0xf0, 0xb7, 0x28, 0x87, 0xf8, 0x5a, 0xd1, 0xa7, 0xbc, 0x1d, 0xad, 0x8b, 0xfc}, gcBCDgroup)
 		} else {
-			// these calculations are "wrong," but they're here to maintain backwards compatability with the original implementation
+			// these calculations are "wrong," but they're here to maintain backwards compatibility with the original implementation
 
 			gcAAtxid = actual[grandchildAAIndex].txn.InnerID(childAtxn.ID(), 0)
 			require.Equal(t, transactions.Txid{0xb5, 0xa, 0x16, 0x90, 0x78, 0x21, 0xf6, 0x96, 0x1b, 0x9c, 0x72, 0x5e, 0xf4, 0x8b, 0xe7, 0xb8, 0x2b, 0xd, 0x74, 0xd4, 0x71, 0xa2, 0x43, 0xb0, 0xfc, 0x19, 0xbc, 0x1c, 0xda, 0x95, 0x8f, 0xd0}, gcAAtxid)
@@ -1973,7 +2113,6 @@ int 1
 `
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
@@ -2006,7 +2145,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
@@ -2199,7 +2338,7 @@ func TestInnerTxIDCalculation(t *testing.T) {
 			gcBDtxid = actual[grandchildBDIndex].txn.InnerID(childBtxid, 3)
 			require.Equal(t, transactions.Txid{0xcd, 0x15, 0x47, 0x3f, 0x42, 0xf5, 0x9c, 0x4a, 0x11, 0xa4, 0xe3, 0x92, 0x30, 0xf, 0x97, 0x1d, 0x3b, 0x1, 0x7, 0xbc, 0x1f, 0x3f, 0xcc, 0x9d, 0x43, 0x5b, 0xb2, 0xa4, 0x15, 0x8b, 0x89, 0x4e}, gcBDtxid)
 		} else {
-			// these calculations are "wrong," but they're here to maintain backwards compatability with the original implementation
+			// these calculations are "wrong," but they're here to maintain backwards compatibility with the original implementation
 
 			childAtxid = childAtxn.ID()
 			require.Equal(t, transactions.Txid{0xc9, 0xa4, 0x41, 0xff, 0x9c, 0x62, 0x40, 0x6e, 0x63, 0xd9, 0x5, 0x19, 0x3b, 0x32, 0x43, 0x3d, 0xba, 0x80, 0x9f, 0xa3, 0xe4, 0xed, 0x2f, 0xa4, 0x19, 0x2b, 0x3f, 0x21, 0x96, 0xe2, 0xec, 0x21}, childAtxid)
@@ -2301,7 +2440,6 @@ int 1
 `
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
@@ -2334,7 +2472,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
@@ -2439,7 +2577,6 @@ func TestInnerTxIDCaching(t *testing.T) {
 	childAppID := basics.AppIndex(222)
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
@@ -2555,7 +2692,7 @@ func TestGtixn(t *testing.T) {
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333), basics.AppIndex(444)}
+	tx.ForeignApps = []basics.AppIndex{222, 333, 444}
 
 	TestApp(t, `
 itxn_begin
@@ -2638,7 +2775,7 @@ func TestGtxnLog(t *testing.T) {
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 50_000)
-	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222), basics.AppIndex(333)}
+	tx.ForeignApps = []basics.AppIndex{222, 333}
 
 	TestApp(t, `itxn_begin
 int appl;    itxn_field TypeEnum
@@ -2948,7 +3085,7 @@ func hexProgram(t *testing.T, source string, v uint64) string {
 	return "0x" + hex.EncodeToString(TestProg(t, source, v).Program)
 }
 
-// TestCreateAndSeeApp checks that an app can be created in an inner txn, and then
+// TestCreateSeeApp checks that an app can be created in an inner txn, and then
 // the address for it can be looked up.
 func TestCreateSeeApp(t *testing.T) {
 	partitiontest.PartitionTest(t)

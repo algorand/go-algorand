@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -485,7 +485,7 @@ func TestSizeLimitsMerkle(t *testing.T) {
 	for depth := uint64(0); depth < uint64(18); depth = depth + increment {
 		size := uint64(1) << depth
 
-		// eltCoefficient is the coefficent to determine how many elements are in the proof.
+		// eltCoefficient is the coefficient to determine how many elements are in the proof.
 		// There will be 1/eltCoefficient elements of all possible element (2^treeDepth)
 		// numElts = 2^(depth-eltCoefficient)
 

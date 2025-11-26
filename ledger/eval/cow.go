@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/maps"
 )
 
 //   ___________________
@@ -43,6 +42,10 @@ import (
 type roundCowParent interface {
 	// lookup retrieves data about an address, eventually querying the ledger if the address was not found in cache.
 	lookup(basics.Address) (ledgercore.AccountData, error)
+
+	// lookup retrieves agreement data about an address, querying the ledger if necessary.
+	lookupAgreement(basics.Address) (basics.OnlineAccountData, error)
+	onlineStake() (basics.MicroAlgos, error)
 
 	// lookupAppParams, lookupAssetParams, lookupAppLocalState, and lookupAssetHolding retrieve data for a given address and ID.
 	// If cacheOnly is set, the ledger DB will not be queried, and only the cache will be consulted.
@@ -95,6 +98,8 @@ type roundCowState struct {
 	// prevTotals contains the accounts totals for the previous round. It's being used to calculate the totals for the new round
 	// so that we could perform the validation test on these to ensure the block evaluator generate a valid changeset.
 	prevTotals ledgercore.AccountTotals
+
+	feesCollected basics.MicroAlgos
 }
 
 var childPool = sync.Pool{
@@ -178,6 +183,12 @@ func (cb *roundCowState) lookup(addr basics.Address) (data ledgercore.AccountDat
 	}
 
 	return cb.lookupParent.lookup(addr)
+}
+
+// lookupAgreement differs from other lookup methods because it need not
+// maintain a local value because it cannot be modified by transactions.
+func (cb *roundCowState) lookupAgreement(addr basics.Address) (data basics.OnlineAccountData, err error) {
+	return cb.lookupParent.lookupAgreement(addr)
 }
 
 func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
@@ -299,6 +310,8 @@ func (cb *roundCowState) commitToParent() {
 		cb.commitParent.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: incTxn.LastValid, Intra: commitParentBaseIdx + incTxn.Intra}
 	}
 	cb.commitParent.txnCount += cb.txnCount
+	// no overflow because max supply is uint64, can't exceed that in fees paid
+	cb.commitParent.feesCollected, _ = basics.OAddA(cb.commitParent.feesCollected, cb.feesCollected)
 
 	for txl, expires := range cb.mods.Txleases {
 		cb.commitParent.mods.AddTxLease(txl, expires)
@@ -338,10 +351,11 @@ func (cb *roundCowState) reset() {
 	cb.proto = config.ConsensusParams{}
 	cb.mods.Reset()
 	cb.txnCount = 0
-	maps.Clear(cb.sdeltas)
+	clear(cb.sdeltas)
 	cb.compatibilityMode = false
-	maps.Clear(cb.compatibilityGetKeyCache)
+	clear(cb.compatibilityGetKeyCache)
 	cb.prevTotals = ledgercore.AccountTotals{}
+	cb.feesCollected = basics.MicroAlgos{}
 }
 
 // recycle resets the roundcowstate and returns it to the sync.Pool
@@ -371,8 +385,8 @@ func (cb *roundCowState) CalculateTotals() error {
 		if lookupError != nil {
 			return fmt.Errorf("roundCowState.CalculateTotals unable to load account data for address %v", accountAddr)
 		}
-		totals.DelAccount(cb.proto, previousAccountData, &ot)
-		totals.AddAccount(cb.proto, updatedAccountData, &ot)
+		totals.DelAccount(cb.proto.RewardUnit, previousAccountData, &ot)
+		totals.AddAccount(cb.proto.RewardUnit, updatedAccountData, &ot)
 	}
 
 	if ot.Overflowed {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,11 @@
 package logging
 
 import (
+	"context"
+	"sync"
+
 	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 type telemetryHook interface {
@@ -54,6 +56,7 @@ type TelemetryConfig struct {
 	Version            string       `json:"-"`
 	UserName           string
 	Password           string
+	DataDirectory      string `json:"-"` // distinguishes instances on the same node
 }
 
 // MarshalingTelemetryConfig is used for json serialization of the TelemetryConfig
@@ -81,4 +84,4 @@ type asyncTelemetryHook struct {
 // A dummy noop type to get rid of checks like telemetry.hook != nil
 type dummyHook struct{}
 
-type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)
+type hookFactory func(ctx context.Context, cfg TelemetryConfig) (logrus.Hook, error)

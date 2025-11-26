@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,8 +59,8 @@
 // Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
 // loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
 //
-//go:generate swagger generate spec -m -o="./swagger.json"
-//go:generate swagger validate ./swagger.json --stop-on-error
+//go:generate go run github.com/algorand/go-swagger/cmd/swagger@v0.0.0-20251018003531-2ea7c750dcac generate spec -m --transparent-aliases -o="./swagger.json"
+//go:generate go run github.com/algorand/go-swagger/cmd/swagger@v0.0.0-20251018003531-2ea7c750dcac validate ./swagger.json --stop-on-error
 //go:generate sh ../lib/kmdapi/bundle_swagger_json.sh
 package api
 
@@ -70,7 +70,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/algorand/go-algorand/daemon/kmd/api/v1"
+	v1 "github.com/algorand/go-algorand/daemon/kmd/api/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/daemon/kmd/session"
 	"github.com/algorand/go-algorand/logging"
@@ -137,10 +137,13 @@ func SwaggerHandler(w http.ResponseWriter, r *http.Request) {
 
 // Handler returns the root mux router for the kmd API. It sets up handlers on
 // subrouters specific to each API version.
-func Handler(sm *session.Manager, log logging.Logger, allowedOrigins []string, apiToken string, reqCB func()) *mux.Router {
+func Handler(sm *session.Manager, log logging.Logger, allowedOrigins []string, apiToken string, pnaHeader bool, reqCB func()) *mux.Router {
 	rootRouter := mux.NewRouter()
 
 	// Send the appropriate CORS headers
+	if pnaHeader {
+		rootRouter.Use(AllowPNA())
+	}
 	rootRouter.Use(corsMiddleware(allowedOrigins))
 
 	// Handle OPTIONS requests

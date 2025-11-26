@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,10 +83,7 @@ func ShiftLeft(nyb1 Nibbles, numNibbles int) Nibbles {
 // SharedPrefix returns a slice from nyb1 that contains the shared prefix
 // between nyb1 and nyb2
 func SharedPrefix(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
-	minLength := len(nyb1)
-	if len(nyb2) < minLength {
-		minLength = len(nyb2)
-	}
+	minLength := min(len(nyb2), len(nyb1))
 	for i := 0; i < minLength; i++ {
 		if nyb1[i] != nyb2[i] {
 			return nyb1[:i]

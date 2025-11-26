@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -166,9 +166,7 @@ func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns []transactions.
 			if encodedLength+txGroupLength > txs.responseSizeLimit {
 				break
 			}
-			for _, tx := range txgroup {
-				missingTxns = append(missingTxns, tx)
-			}
+			missingTxns = append(missingTxns, txgroup...)
 			encodedLength += txGroupLength
 		}
 	}

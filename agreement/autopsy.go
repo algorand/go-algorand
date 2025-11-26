@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/slices"
 )
 
 // An Autopsy is a trace of the ordered input events and output
@@ -384,7 +384,7 @@ func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, 
 				close(pch)
 			}
 
-			pch = make(chan autopsyPair, 0)
+			pch = make(chan autopsyPair)
 			acc = autopsyTrace{m: acc.m, p: pch}
 			err = protocol.DecodeStream(a, &acc.x)
 			if err != nil {

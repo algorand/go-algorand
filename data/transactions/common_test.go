@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func generateTestObjects(numTxs, numAccs int) ([]Transaction, []SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+func generateSignedTxns(numTxs, numAccs int) []SignedTxn {
 	txs := make([]Transaction, numTxs)
 	signed := make([]SignedTxn, numTxs)
 	secrets := make([]*crypto.SignatureSecrets, numAccs)
@@ -62,5 +62,5 @@ func generateTestObjects(numTxs, numAccs int) ([]Transaction, []SignedTxn, []*cr
 		signed[i] = txs[i].Sign(secrets[s])
 	}
 
-	return txs, signed, secrets, addresses
+	return signed
 }

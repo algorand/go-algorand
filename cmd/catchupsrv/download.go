@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,15 +88,6 @@ func blockToPath(blk uint64) string {
 		s[(len(s)+2-minLenBlockStr):(len(s)+4-minLenBlockStr)],
 		s,
 	)
-}
-
-// stringBlockToPath is the same as blockToPath except it takes a (non-padded) base-36 block
-func stringBlockToPath(s string) (string, error) {
-	blk, err := stringToBlock(s)
-	if err != nil {
-		return "", err
-	}
-	return blockToPath(blk), nil
 }
 
 // blockDir returns the root folder where all the blocks are stored

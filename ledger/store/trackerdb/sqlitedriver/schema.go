@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -181,7 +182,7 @@ var accountsResetExprs = []string{
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
-func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
+func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error) {
 	for _, tableCreate := range accountsSchema {
 		_, err = e.Exec(tableCreate)
 		if err != nil {
@@ -217,7 +218,7 @@ func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.Accoun
 			}
 
 			ad := ledgercore.ToAccountData(data)
-			totals.AddAccount(proto, ad, &ot)
+			totals.AddAccount(rewardUnit, ad, &ot)
 		}
 
 		if ot.Overflowed {
@@ -245,7 +246,7 @@ func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.Accoun
 
 // accountsAddNormalizedBalance adds the normalizedonlinebalance column
 // to the accountbase table.
-func accountsAddNormalizedBalance(e db.Executable, proto config.ConsensusParams) error {
+func accountsAddNormalizedBalance(e db.Executable, rewardUnit uint64) error {
 	var exists bool
 	err := e.QueryRow("SELECT 1 FROM pragma_table_info('accountbase') WHERE name='normalizedonlinebalance'").Scan(&exists)
 	if err == nil {
@@ -283,7 +284,7 @@ func accountsAddNormalizedBalance(e db.Executable, proto config.ConsensusParams)
 			return err
 		}
 
-		normBalance := data.NormalizedOnlineBalance(proto)
+		normBalance := data.NormalizedOnlineBalance(rewardUnit)
 		if normBalance > 0 {
 			_, err = e.Exec("UPDATE accountbase SET normalizedonlinebalance=? WHERE address=?", normBalance, addrbuf)
 			if err != nil {
@@ -734,8 +735,12 @@ func performOnlineAccountsTableMigration(ctx context.Context, e db.Executable, p
 			}
 		}
 
-		// remove stateproofID field for offline accounts
-		if ba.Status != basics.Online && !ba.StateProofID.IsEmpty() {
+		// We had a bug that didn't remove StateProofIDs when going offline.
+		// Tidy up such accounts.  We don't zero it out based on
+		// `!basics.Online` because accounts can be suspended, in which case
+		// they are Offline, but retain their voting material. But it remains
+		// illegal to have a StateProofID without a SelectionID.
+		if ba.SelectionID.IsEmpty() && !ba.StateProofID.IsEmpty() {
 			// store old data for account hash update
 			state := acctState{old: ba, oldEnc: encodedAcctData}
 			ba.StateProofID = merklesignature.Commitment{}
@@ -936,4 +941,99 @@ func convertOnlineRoundParamsTail(ctx context.Context, e db.Executable) error {
 	// create vote last index
 	_, err := e.ExecContext(ctx, createVoteLastValidIndex)
 	return err
+}
+
+func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable, populateColumn bool) error {
+	// Run ctype resources migration if it hasn't run yet
+	var creatableTypeOnResourcesRun bool
+	err := e.QueryRow("SELECT 1 FROM pragma_table_info('resources') WHERE name='ctype'").Scan(&creatableTypeOnResourcesRun)
+	if err == nil {
+		// Check if any ctypes are invalid
+		var count uint64
+		err0 := e.QueryRow("SELECT COUNT(*) FROM resources WHERE ctype NOT IN (0, 1)").Scan(&count)
+		if err0 != nil {
+			return err0
+		}
+		if count > 0 {
+			// Invalid ctypes found, return an error
+			return fmt.Errorf("invalid ctypes found in resources table; database is corrupted and needs to be rebuilt")
+		}
+		// Column exists, no ctypes are invalid, no migration needed so return clean
+		return nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	} // A sql.ErrNoRows error means the column does not exist, so we need to create it/run the migration
+
+	// If we reached here, a sql.ErrNoRows error was returned, so we need to create the column
+
+	// Add ctype column
+	createStmt := `ALTER TABLE resources ADD COLUMN ctype INTEGER NOT NULL DEFAULT -1`
+
+	_, err = e.ExecContext(ctx, createStmt)
+	if err != nil {
+		return err
+	}
+
+	if populateColumn {
+		// Populate the new ctype column with the corresponding creatable type from assetcreators where available
+		updateStmt := `UPDATE resources SET ctype = (
+    SELECT COALESCE((SELECT ac.ctype FROM assetcreators ac WHERE ac.asset = resources.aidx),-1)
+	) WHERE ctype = -1`
+
+		_, err0 := e.ExecContext(ctx, updateStmt)
+		if err0 != nil {
+			return err0
+		}
+
+		updatePrepStmt, err0 := e.PrepareContext(ctx, "UPDATE resources SET ctype = ? WHERE addrid = ? AND aidx = ?")
+		if err0 != nil {
+			return err0
+		}
+		defer updatePrepStmt.Close()
+
+		// Pull resource entries into memory where ctype is not set
+		rows, err0 := e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources r WHERE ctype = -1")
+		if err0 != nil {
+			return err0
+		}
+		defer rows.Close()
+
+		// Update the ctype column for subset of resources where ctype was not resolved from assetcreators
+		for rows.Next() {
+			var addrid int64
+			var aidx int64
+			var encodedData []byte
+			err0 = rows.Scan(&addrid, &aidx, &encodedData)
+			if err0 != nil {
+				return err0
+			}
+
+			var rd trackerdb.ResourcesData
+			err0 = protocol.Decode(encodedData, &rd)
+			if err0 != nil {
+				return err0
+			}
+
+			var ct basics.CreatableType
+			if rd.IsAsset() && rd.IsApp() {
+				// This should never happen!
+				return fmt.Errorf("unable to discern creatable type for addrid %d, resource %d", addrid, aidx)
+			} else if rd.IsAsset() {
+				ct = basics.AssetCreatable
+			} else if rd.IsApp() {
+				ct = basics.AppCreatable
+			} else { // This should never happen!
+				return fmt.Errorf("unable to discern creatable type for addrid %d, resource %d", addrid, aidx)
+			}
+
+			_, err0 = updatePrepStmt.ExecContext(ctx, ct, addrid, aidx)
+			if err0 != nil {
+				return err0
+			}
+		}
+
+		return rows.Err()
+	}
+
+	return nil
 }

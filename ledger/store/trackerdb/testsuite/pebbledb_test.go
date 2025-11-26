@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 )
 
 func TestPebbleDB(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partitioning inside subtest
 	dbFactory := func(proto config.ConsensusParams) dbForTests {
 		// create a tmp dir for the db, the testing runtime will clean it up automatically
 		dir := fmt.Sprintf("%s/db", t.TempDir())

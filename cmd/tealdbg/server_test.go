@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -57,8 +57,7 @@ func (t testServerDebugFrontend) eventLoop() {
 			if n.Event == "completed" {
 				return
 			}
-			if n.Event == "registered" {
-			}
+			// No special action needed for 'registered' events
 			// simulate user delay to workaround race cond
 			time.Sleep(10 * time.Millisecond)
 			t.debugger.Resume()

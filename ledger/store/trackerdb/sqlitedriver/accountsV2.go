@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -203,7 +202,7 @@ func (r *accountsV2Reader) AccountsHashRound(ctx context.Context) (hashrnd basic
 //
 // Note that this does not check if the accounts have a vote key valid for any
 // particular round (past, present, or future).
-func (r *accountsV2Reader) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error) {
+func (r *accountsV2Reader) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, rewardUnit uint64) (map[basics.Address]*ledgercore.OnlineAccount, error) {
 	// onlineaccounts has historical data ordered by updround for both online and offline accounts.
 	// This means some account A might have norm balance != 0 at round N and norm balance == 0 at some round K > N.
 	// For online top query one needs to find entries not fresher than X with norm balance != 0.
@@ -250,7 +249,7 @@ ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?`, rnd, n, o
 		// The original implementation uses current proto to recalculate norm balance
 		// In the same time, in accountsNewRound genesis protocol is used to fill norm balance value
 		// In order to be consistent with the original implementation recalculate the balance with current proto
-		normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, proto)
+		normBalance := basics.NormalizedOnlineAccountBalance(basics.Online, data.RewardsBase, data.MicroAlgos, rewardUnit)
 		oa := data.GetOnlineAccount(addr, normBalance)
 		res[addr] = &oa
 	}
@@ -303,7 +302,7 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pe
 }
 
 // ExpiredOnlineAccountsForRound returns all online accounts known at `rnd` that will be expired by `voteRnd`.
-func (r *accountsV2Reader) ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+func (r *accountsV2Reader) ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, rewardUnit uint64, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error) {
 	// This relies on SQLite's handling of max(updround) and bare columns not in the GROUP BY.
 	// The values of votelastvalid, votefirstvalid, and data will all be from the same row as max(updround)
 	rows, err := r.q.Query(`SELECT address, data, max(updround)
@@ -317,7 +316,7 @@ ORDER BY address`, rnd, voteRnd)
 	}
 	defer rows.Close()
 
-	ret := make(map[basics.Address]*ledgercore.OnlineAccountData)
+	ret := make(map[basics.Address]*basics.OnlineAccountData)
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
@@ -337,7 +336,7 @@ ORDER BY address`, rnd, voteRnd)
 		if err != nil {
 			return nil, err
 		}
-		oadata := baseData.GetOnlineAccountData(proto, rewardsLevel)
+		oadata := baseData.GetOnlineAccountData(rewardUnit, rewardsLevel)
 		if _, ok := ret[addr]; ok {
 			return nil, fmt.Errorf("duplicate address in expired online accounts: %s", addr.String())
 		}
@@ -371,6 +370,28 @@ func (r *accountsV2Reader) TotalAccounts(ctx context.Context) (total uint64, err
 // TotalKVs returns the total number of kv items
 func (r *accountsV2Reader) TotalKVs(ctx context.Context) (total uint64, err error) {
 	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM kvstore").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
+// TotalOnlineAccountRows returns the total number of rows in the onlineaccounts table.
+func (r *accountsV2Reader) TotalOnlineAccountRows(ctx context.Context) (total uint64, err error) {
+	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM onlineaccounts").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
+// TotalOnlineRoundParams returns the total number of rows in the onlineroundparamstail table.
+func (r *accountsV2Reader) TotalOnlineRoundParams(ctx context.Context) (total uint64, err error) {
+	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM onlineroundparamstail").Scan(&total)
 	if err == sql.ErrNoRows {
 		total = 0
 		err = nil
@@ -701,7 +722,11 @@ func (w *accountsV2Writer) TxtailNewRound(ctx context.Context, baseRound basics.
 // After this cleanup runs, accounts in this table will have either one entry (if all entries besides the latest are expired),
 // or will have more than one entry (if multiple entries are not yet expired).
 func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err error) {
-	rows, err := w.e.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound < ? ORDER BY address, updRound DESC", forgetBefore)
+	return w.onlineAccountsDelete(forgetBefore, "onlineaccounts")
+}
+
+func (w *accountsV2Writer) onlineAccountsDelete(forgetBefore basics.Round, table string) (err error) {
+	rows, err := w.e.Query(fmt.Sprintf("SELECT rowid, address, updRound, data FROM %s WHERE updRound < ? ORDER BY address, updRound DESC", table), forgetBefore)
 	if err != nil {
 		return err
 	}
@@ -756,10 +781,10 @@ func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err 
 		rowids = append(rowids, rowid.Int64)
 	}
 
-	return onlineAccountsDeleteByRowIDs(w.e, rowids)
+	return onlineAccountsDeleteByRowIDs(w.e, rowids, table)
 }
 
-func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64) (err error) {
+func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64, table string) (err error) {
 	if len(rowids) == 0 {
 		return
 	}
@@ -769,7 +794,7 @@ func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64) (err error) {
 	// rowids might be larger => split to chunks are remove
 	chunks := rowidsToChunkedArgs(rowids)
 	for _, chunk := range chunks {
-		_, err = e.Exec("DELETE FROM onlineaccounts WHERE rowid IN (?"+strings.Repeat(",?", len(chunk)-1)+")", chunk...)
+		_, err = e.Exec("DELETE FROM "+table+" WHERE rowid IN (?"+strings.Repeat(",?", len(chunk)-1)+")", chunk...)
 		if err != nil {
 			return
 		}

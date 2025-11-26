@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,12 +23,8 @@ import (
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
 //
-//msgp:allocbound ConsensusVersion maxConsensusVersionLen
+//msgp:allocbound ConsensusVersion bounds.MaxConsensusVersionLen
 type ConsensusVersion string
-
-// maxConsensusVersionLen is used for generating MaxSize functions on types that contain ConsensusVersion
-// as it's member. 128 is slightly larger than the existing URL length of consensus version URL+hash=89
-const maxConsensusVersionLen = 128
 
 // DEPRECATEDConsensusV0 is a baseline version of the Algorand consensus protocol.
 // at the time versioning was introduced.
@@ -51,7 +47,7 @@ const DEPRECATEDConsensusV3 = ConsensusVersion("v3")
 // closes out an account.
 const DEPRECATEDConsensusV4 = ConsensusVersion("v4")
 
-// DEPRECATEDConsensusV5 sets MinTxnFee to 1000 and fixes a blance lookback bug
+// DEPRECATEDConsensusV5 sets MinTxnFee to 1000 and fixes a balance lookback bug
 const DEPRECATEDConsensusV5 = ConsensusVersion("v5")
 
 // DEPRECATEDConsensusV6 adds support for explicit ephemeral-key parameters
@@ -223,6 +219,16 @@ const ConsensusV39 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/925a46433742afb0b51bb939354bd907fa88bf95",
 )
 
+// ConsensusV40 enables consensus incentives and TEAL v11 featuring the mimc opcode
+const ConsensusV40 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/236dcc18c9c507d794813ab768e467ea42d1b4d9",
+)
+
+// ConsensusV41 enables txn access, Sha512BlockHash, AppVersioning and TEAL v12 including the falcon verify opcode
+const ConsensusV41 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/953304de35264fc3ef91bcd05c123242015eeaed",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -252,7 +258,7 @@ const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV39
+const ConsensusCurrentVersion = ConsensusV41
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

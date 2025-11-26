@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -55,14 +56,14 @@ var testCases map[string]testParams
 var asaClearStateProgram []byte
 var asaAppovalProgram []byte
 
-func makeUnsignedApplicationCallTxPerf(appIdx uint64, params testParams, onCompletion transactions.OnCompletion, round int) transactions.Transaction {
+func makeUnsignedApplicationCallTxPerf(appIdx basics.AppIndex, params testParams, onCompletion transactions.OnCompletion, round basics.Round) transactions.Transaction {
 	var tx transactions.Transaction
 
 	tx.Type = protocol.ApplicationCallTx
-	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.ApplicationID = appIdx
 	tx.OnCompletion = onCompletion
-	tx.Header.FirstValid = basics.Round(round)
-	tx.Header.LastValid = basics.Round(round + 1000)
+	tx.Header.FirstValid = round
+	tx.Header.LastValid = round + 1000
 	tx.Header.Fee = basics.MicroAlgos{Raw: 1000}
 
 	// If creating, set programs
@@ -80,13 +81,13 @@ func makeUnsignedApplicationCallTxPerf(appIdx uint64, params testParams, onCompl
 	return tx
 }
 
-func makeUnsignedASATx(appIdx uint64, creator basics.Address, round int) transactions.Transaction {
+func makeUnsignedASATx(appIdx basics.AppIndex, creator basics.Address, round basics.Round) transactions.Transaction {
 	var tx transactions.Transaction
 
 	tx.Type = protocol.ApplicationCallTx
-	tx.ApplicationID = basics.AppIndex(appIdx)
-	tx.Header.FirstValid = basics.Round(round)
-	tx.Header.LastValid = basics.Round(round + 1000)
+	tx.ApplicationID = appIdx
+	tx.Header.FirstValid = round
+	tx.Header.LastValid = round + 1000
 	tx.Header.Fee = basics.MicroAlgos{Raw: 1000}
 
 	if appIdx == 0 {
@@ -114,12 +115,12 @@ func makeUnsignedASATx(appIdx uint64, creator basics.Address, round int) transac
 	return tx
 }
 
-func makeUnsignedPaymentTx(sender basics.Address, round int) transactions.Transaction {
+func makeUnsignedPaymentTx(sender basics.Address, round basics.Round) transactions.Transaction {
 	return transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			FirstValid: basics.Round(round),
-			LastValid:  basics.Round(round + 1000),
+			FirstValid: round,
+			LastValid:  round + 1000,
 			Fee:        basics.MicroAlgos{Raw: 1000},
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
@@ -181,13 +182,13 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 
 	blk := genesisInitState.Block
 
-	numBlocks := b.N
+	numBlocks := basics.Round(b.N)
 	cert := agreement.Certificate{}
 	var blocks []bookkeeping.Block
-	var createdAppIdx uint64
+	var createdAppIdx basics.AppIndex
 	var txPerBlock int
 	onCompletion := transactions.OptInOC
-	for i := 0; i < numBlocks+2; i++ {
+	for i := range numBlocks + 2 {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.BlockHeader.GenesisID = "x"
@@ -270,7 +271,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			// First block just creates app + opts in accts if asa test
 			if i == 1 {
 				onCompletion = transactions.NoOpOC
-				createdAppIdx = eval.TestingTxnCounter()
+				createdAppIdx = basics.AppIndex(eval.TestingTxnCounter())
 
 				// On first block, opt in all accts to asa (accts is empty if not asa test)
 				k := 0
@@ -293,24 +294,26 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			}
 		}
 
-		lvb, err := eval.GenerateBlock()
+		lvb, err := eval.GenerateBlock(nil)
 		require.NoError(b, err)
+
+		fb := lvb.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
 
 		// If this is the app creation block, add to both ledgers
 		if i == 1 {
-			err = l0.AddBlock(lvb.Block(), cert)
+			err = l0.AddBlock(fb, cert)
 			require.NoError(b, err)
-			err = l1.AddBlock(lvb.Block(), cert)
+			err = l1.AddBlock(fb, cert)
 			require.NoError(b, err)
 			continue
 		}
 
 		// For all other blocks, add just to the first ledger, and stash
 		// away to be replayed in the second ledger while running timer
-		err = l0.AddBlock(lvb.Block(), cert)
+		err = l0.AddBlock(fb, cert)
 		require.NoError(b, err)
 
-		blocks = append(blocks, lvb.Block())
+		blocks = append(blocks, fb)
 	}
 
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)

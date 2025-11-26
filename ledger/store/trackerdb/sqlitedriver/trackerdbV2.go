@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,6 +136,12 @@ func RunMigrations(ctx context.Context, e db.Executable, params trackerdb.Params
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 9 : %v", err)
 					return
 				}
+			case 10:
+				err = tu.upgradeDatabaseSchema10(ctx, e)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 10 : %v", err)
+					return
+				}
 			default:
 				return trackerdb.InitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
@@ -181,7 +187,7 @@ func (tu trackerDBSchemaInitializer) version() int32 {
 // The acctrounds would get updated to indicate that the balance matches round 0
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema0(ctx context.Context, e db.Executable) (err error) {
 	tu.log.Infof("upgradeDatabaseSchema0 initializing schema")
-	tu.newDatabase, err = accountsInit(e, tu.InitAccounts, config.Consensus[tu.InitProto])
+	tu.newDatabase, err = accountsInit(e, tu.InitAccounts, config.Consensus[tu.InitProto].RewardUnit)
 	if err != nil {
 		return fmt.Errorf("upgradeDatabaseSchema0 unable to initialize schema : %v", err)
 	}
@@ -268,7 +274,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema2(ctx context.Context
 // upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
 // adding the normalizedonlinebalance column to the accountbase table.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema3(ctx context.Context, e db.Executable) (err error) {
-	err = accountsAddNormalizedBalance(e, config.Consensus[tu.InitProto])
+	err = accountsAddNormalizedBalance(e, config.Consensus[tu.InitProto].RewardUnit)
 	if err != nil {
 		return err
 	}
@@ -505,6 +511,17 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 
 	// update version
 	return tu.setVersion(ctx, e, 10)
+}
+
+// upgradeDatabaseSchema10 upgrades the database schema from version 10 to version 11,
+// altering the resources table to add a new column, resources.ctype.
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema10(ctx context.Context, e db.Executable) (err error) {
+	err = accountsAddCreatableTypeColumn(ctx, e, true)
+	if err != nil {
+		return err
+	}
+	// update version
+	return tu.setVersion(ctx, e, 11)
 }
 
 func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {

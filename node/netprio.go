@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -134,7 +134,7 @@ func (node *AlgorandFullNode) VerifyPrioResponse(challenge string, response []by
 		return
 	}
 
-	ephID := basics.OneTimeIDForRound(rs.Round, data.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(rs.Round, proto.EffectiveKeyDilution(data.VoteKeyDilution))
 	if !data.VoteID.Verify(ephID, rs.Response, rs.Sig) {
 		err = fmt.Errorf("signature verification failure")
 		return

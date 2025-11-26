@@ -1,4 +1,6 @@
 name: "ReviewDog workflow"
+env:
+  GOLANGCI_LINT_VERSION: "v2.6.0"
 on:
   push:
     branches:
@@ -10,91 +12,105 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3.5.3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0 # required for new-from-rev option in .golangci.yml
-        # move go out of the way temporarily to avoid "go list ./..." from installing modules
-      - name: Make libsodium.a
-        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
-      - name: reviewdog-golangci-lint
-        uses: reviewdog/action-golangci-lint@v2.3.1
+      - name: Cache libsodium
+        uses: actions/cache@v4
         with:
-          go_version_file: go.mod
-          golangci_lint_version: "v1.53.2"
-          golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
-          reporter: "github-pr-check"
-          tool_name: "Lint Errors"
-          level: "error"
-          fail_on_error: true
-          filter_mode: "nofilter"
-  # Non-Blocking Warnings Section
-  reviewdog-warnings:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v3.5.3
-        with:
-          fetch-depth: 0 # required for new-from-rev option in .golangci.yml
+          path: crypto/libs
+          key: libsodium-ubuntu-latest-${{ hashFiles('crypto/libsodium-fork/**') }}
       # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
-        run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make libsodium && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: Add bin to PATH
         run: |
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
           echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
-      - name: Determine Go version
-        id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
-      - name: Install specific golang
-        uses: actions/setup-go@v4.0.1
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Create folders for golangci-lint
-        run: mkdir -p cicdtmp/golangci-lint
-      - name: Check if custom golangci-lint is already built
-        id: cache-golangci-lint
-        uses: actions/cache@v3.3.1
-        with:
-          path: cicdtmp/golangci-lint/golangci-lint-cgo
-          key: cicd-golangci-lint-cgo-v0.0.2-${{ env.GO_VERSION }}
-
-      - name: Build custom golangci-lint with CGO_ENABLED
-        if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Install golangci-lint
         run: |
-          cd cicdtmp/golangci-lint
-          git clone https://github.com/golangci/golangci-lint.git .
-          git checkout tags/v1.53.2
-          CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
-          ./golangci-lint-cgo --version
-          cd ../../
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }}
+          golangci-lint --version
       - name: Install reviewdog
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.14.1/install.sh | sh -s
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.0/install.sh | sh -s -- v0.21.0
           reviewdog --version
-      - name: Build custom linters
-        run: |
-          cd cmd/partitiontest_linter/
-          CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
-          cd ../../
-          ls -la cmd/partitiontest_linter/
       - name: Run golangci-lint with reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
 
-          ./cicdtmp/golangci-lint/golangci-lint-cgo run \
-          --out-format line-number \
+          golangci-lint run \
+          --output.text.path stdout \
+          -c .golangci.yml \
+          --issues-exit-code 0 \
+          --allow-parallel-runners > temp_golangci-lint-errors.txt
+
+          cat temp_golangci-lint-errors.txt | reviewdog \
+          -f=golangci-lint \
+          -name="Lint Errors" \
+          -reporter=github-pr-check \
+          -filter-mode=nofilter \
+          -fail-level=any \
+          -level=error
+  # Non-Blocking Warnings Section
+  reviewdog-warnings:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # required for new-from-rev option in .golangci.yml
+      - name: Cache libsodium
+        uses: actions/cache@v4
+        with:
+          path: crypto/libs
+          key: libsodium-ubuntu-latest-${{ hashFiles('crypto/libsodium-fork/**') }}
+      # move go out of the way temporarily to avoid "go list ./..." from installing modules
+      - name: Make libsodium.a
+        run: sudo mv /usr/bin/go /usr/bin/go.bak && make libsodium && sudo mv /usr/bin/go.bak /usr/bin/go
+      - name: Add bin to PATH
+        run: |
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+          echo "$RUNNER_WORKSPACE/$(basename $GITHUB_REPOSITORY)/bin" >> $GITHUB_PATH
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Check if custom golangci-lint with partitiontest plugin is already built
+        id: cache-custom-golangci-lint
+        uses: actions/cache@v4
+        with:
+          path: custom-golangci-lint
+          key: custom-golangci-lint-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('cmd/partitiontest_linter/**', '.custom-gcl.yml') }}
+      - name: Build custom golangci-lint with partitiontest plugin
+        if: steps.cache-custom-golangci-lint.outputs.cache-hit != 'true'
+        run: |
+          go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${{ env.GOLANGCI_LINT_VERSION }} custom -v
+          ./custom-golangci-lint --version
+      - name: Install reviewdog
+        run: |
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.21.0/install.sh | sh -s -- v0.21.0
+          reviewdog --version
+      - name: Run golangci-lint with reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          ./custom-golangci-lint run \
+          --output.text.path stdout \
           -c .golangci-warnings.yml \
           --issues-exit-code 0 \
-          --allow-parallel-runners > temp_golangci-lint-cgo.txt
+          --allow-parallel-runners > temp_golangci-lint-warnings.txt
 
-          cat temp_golangci-lint-cgo.txt | reviewdog \
+          cat temp_golangci-lint-warnings.txt | reviewdog \
           -f=golangci-lint \
           -name="Lint Warnings" \
-          -reporter=github-check \
+          -reporter=github-pr-check \
           -filter-mode=added \
-          -fail-on-error=true \
+          -fail-level=any \
           -level=warning
       - name: Slack Notification
         env:
@@ -102,3 +118,16 @@ jobs:
         run: |
           curl -X POST --data-urlencode "payload={\"text\": \"Reviewdog failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
         if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}
+  reviewdog-shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        uses: reviewdog/action-shellcheck@v1.28.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: "github-pr-check"
+          shellcheck_flags: "-e SC2034,SC2046,SC2053,SC2207,SC2145 -S warning"
+          fail_level: any
+          path: |
+            test/scripts/e2e_subs

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -117,7 +117,7 @@ func (s step) nextVoteRanges(deadlineTimeout time.Duration) (lower, upper time.D
 	return lower, upper
 }
 
-// ReachesQuorum compares the current weight to the thresholds appropriate for the step,
+// reachesQuorum compares the current weight to the thresholds appropriate for the step,
 // to determine if we've reached a quorum.
 func (s step) reachesQuorum(proto config.ConsensusParams, weight uint64) bool {
 	switch s {
@@ -162,7 +162,7 @@ func (s step) threshold(proto config.ConsensusParams) uint64 {
 	}
 }
 
-// CommitteeSize returns the size of the committee required for the step
+// committeeSize returns the size of the committee required for the step
 func (s step) committeeSize(proto config.ConsensusParams) uint64 {
 	switch s {
 	case propose:

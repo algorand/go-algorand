@@ -466,7 +466,7 @@ if [[ $(echo "$RES" | jq '."txn-groups" | any(has("failure-message"))') != $CONS
     false
 fi
 
-EXPECTED_FAILURE="logic eval error: invalid Account reference $OTHERADDR"
+EXPECTED_FAILURE="logic eval error: unavailable Account $OTHERADDR"
 
 if [[ $(echo "$RES" | jq '."txn-groups"[0]."failure-message"') != *"${EXPECTED_FAILURE}"* ]]; then
     date '+app-simulate-test FAIL the app call without allow unnamed resources should fail with the expected error %Y%m%d_%H%M%S'

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,7 +83,7 @@ type StateProof struct {
 }
 
 // SigPartProofMaxSize is the maximum valid size of SigProofs and PartProofs elements of the Stateproof struct in bytes.
-// It is equal to merklearray.ProofMaxSizeByElements(config.StateProofTopVoters/2)
+// It is equal to merklearray.ProofMaxSizeByElements(bounds.StateProofTopVoters/2)
 // See merklearray.Proof comment for explanation on the bound calculation
 const SigPartProofMaxSize = 35353
 

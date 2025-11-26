@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -111,7 +111,7 @@ func (a byFieldName) Less(i, j int) bool {
 }
 
 func prettyPrint(c config.Local, format string) (out string) {
-	localType := reflect.TypeOf(c)
+	localType := reflect.TypeFor[config.Local]()
 
 	fields := []reflect.StructField{}
 	for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {

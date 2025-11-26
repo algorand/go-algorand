@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@ func applyCatchpointStateProofConsensusChanges(consensusParams *config.Consensus
 }
 
 func getStateProofNextRound(a *require.Assertions, goalClient *libgoal.Client, round basics.Round) basics.Round {
-	block, err := goalClient.BookkeepingBlock(uint64(round))
+	block, err := goalClient.BookkeepingBlock(round)
 	a.NoError(err)
 	return block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound
 }
@@ -70,7 +70,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointConsensusChanges(&consensusParams)
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 
@@ -92,6 +92,10 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
+
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
@@ -115,7 +119,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 	}
 
 	// wait for fastcatchup to complete and the node is synced
-	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+1))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(targetCatchpointRound + 1)
 	a.NoError(err)
 
 	primaryLibGoal := fixture.GetLibGoalClientFromNodeController(primaryNode)
@@ -169,12 +173,16 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
+
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
 	roundAfterSPGeneration := targetCatchpointRound.RoundUpToMultipleOf(basics.Round(consensusParams.StateProofInterval)) +
 		basics.Round(consensusParams.StateProofInterval/2)
-	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(roundAfterSPGeneration))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(roundAfterSPGeneration)
 	a.NoError(err)
 
 	primaryLibGoal := fixture.GetLibGoalClientFromNodeController(primaryNode)
@@ -211,7 +219,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("catchpointtestingprotocol")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 	applyCatchpointConsensusChanges(&consensusParams)
 	// Weight threshold allows creation of state proofs using the primary node and at least one other node.
@@ -221,6 +229,12 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "ThreeNodesWithRichAcct.json"))
+	for _, nodeDir := range fixture.NodeDataDirs() {
+		cfg, err := config.LoadConfigFromDisk(nodeDir)
+		a.NoError(err)
+		cfg.GoMemLimit = 4 * 1024 * 1024 * 1024 // 4GB
+		cfg.SaveToDisk(nodeDir)
+	}
 
 	primaryNode, primaryNodeRestClient, primaryEC := startCatchpointGeneratingNode(a, &fixture, "Primary")
 	defer primaryEC.Print()
@@ -228,14 +242,14 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	primaryNodeAddr, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
 
-	err = fixture.ClientWaitForRoundWithTimeout(primaryNodeRestClient, 3)
+	err = primaryNodeRestClient.WaitForRoundWithTimeout(3)
 	a.NoError(err)
 
 	normalNode, normalNodeRestClient, normalNodeEC := startCatchpointNormalNode(a, &fixture, "Node1", primaryNodeAddr)
 	defer normalNodeEC.Print()
 	defer normalNode.StopAlgod()
 
-	err = fixture.ClientWaitForRoundWithTimeout(normalNodeRestClient, 3)
+	err = normalNodeRestClient.WaitForRoundWithTimeout(3)
 	a.NoError(err)
 
 	// at this point PrimaryNode and Node1 would pass round 3. Before running Node2 we remove block 2 from Primary database.
@@ -261,7 +275,11 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
-	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound)+1)
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
+
+	err = usingNodeRestClient.WaitForRoundWithTimeout(targetCatchpointRound + 1)
 	a.NoError(err)
 
 	lastNormalRound, err := fixture.GetLibGoalClientFromNodeController(normalNode).CurrentRound()
@@ -274,7 +292,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	lastNormalNodeSignedRound := basics.Round(lastNormalRound).RoundDownToMultipleOf(basics.Round(consensusParams.StateProofInterval))
 	lastNormalNextStateProofRound := lastNormalNodeSignedRound + basics.Round(consensusParams.StateProofInterval)
 	targetRound := lastNormalNextStateProofRound + basics.Round(consensusParams.StateProofInterval*2)
-	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetRound))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(targetRound)
 	a.NoError(err)
 
 	primaryClient := fixture.GetLibGoalClientFromNodeController(primaryNode)

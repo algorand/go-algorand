@@ -8,6 +8,7 @@ proc TestGoalDryrun { DRREQ_FILE TEST_PRIMARY_NODE_DIR } {
     set PROGRAM_TYPE ""
     spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
     expect {
+        #nolint:eof checking PASSED catches no match
         timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
         "budget consumed:" {set COST 1; exp_continue}
         -re {(ApprovalProgram)} {set PROGRAM_TYPE $expect_out(1,string); exp_continue}
@@ -113,7 +114,7 @@ if { [catch {
     set AT_TX2_FILE "$TEST_ROOT_DIR/atomic-tran-tx2.mspg"
     set AT_COMBINED_FILE "$TEST_ROOT_DIR/atomic-tran-comb.mspg"
     set AT_GROUPPED_FILE "$TEST_ROOT_DIR/atomic-tran-group.mspg"
-    spawn goal clerk send --from $PRIMARY_ACCOUNT_ADDRESS --to $PRIMARY_ACCOUNT_ADDRESS -a 1 --fee 1000 -d $TEST_PRIMARY_NODE_DIR -o $AT_TX1_FILE
+    spawn goal clerk send --from $PRIMARY_ACCOUNT_ADDRESS --to $PRIMARY_ACCOUNT_ADDRESS -a 1 -d $TEST_PRIMARY_NODE_DIR -o $AT_TX1_FILE
     expect {
         timeout { ::AlgorandGoal::Abort "goal clerk send timeout" }
     }

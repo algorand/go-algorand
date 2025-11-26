@@ -24,6 +24,9 @@ cmd/algod/algod
 cmd/goal/goal
 cmd/updater/updater
 
+# custom golangci-lint binary with plugins
+custom-golangci-lint
+
 # Exclude our local temp directory
 tmp/
 
@@ -78,3 +81,7 @@ tools/x-repo-types/x-repo-types
 
 # python virtual environment
 .venv
+
+# ignore local claude config changes
+CLAUDE.local.md
+.claude

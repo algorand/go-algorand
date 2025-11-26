@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -195,6 +195,8 @@ func (t *emptyTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
 }
 func (t *emptyTracker) handleCommitError(dcc *deferredCommitContext) {
 }
+func (t *emptyTracker) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {
+}
 
 // close is not used by the emptyTracker
 func (t *emptyTracker) close() {
@@ -259,7 +261,7 @@ func (st *commitRoundStallingTracker) commitRound(context.Context, trackerdb.Tra
 // 3. Set a block in prepareCommit, and initiate the commit
 // 4. Set a block in produceCommittingTask, add a new block and resume the commit
 // 5. Resume produceCommittingTask
-// 6. The data race and panic happens in block queue syncher thread
+// 6. The data race and panic happens in block queue syncer thread
 func TestTrackers_DbRoundDataRace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

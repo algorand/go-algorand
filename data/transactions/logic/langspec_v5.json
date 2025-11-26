@@ -1,34 +1,7 @@
 {
   "Version": 5,
-  "LogicSigVersion": 10,
+  "LogicSigVersion": 12,
   "NamedTypes": [
-    {
-      "Name": "[32]byte",
-      "Abbreviation": "3",
-      "Bound": [
-        32,
-        32
-      ],
-      "AVMType": "[]byte"
-    },
-    {
-      "Name": "[64]byte",
-      "Abbreviation": "6",
-      "Bound": [
-        64,
-        64
-      ],
-      "AVMType": "[]byte"
-    },
-    {
-      "Name": "[80]byte",
-      "Abbreviation": "8",
-      "Bound": [
-        80,
-        80
-      ],
-      "AVMType": "[]byte"
-    },
     {
       "Name": "[]byte",
       "Abbreviation": "b",
@@ -208,10 +181,10 @@
       "Name": "ecdsa_verify",
       "Args": [
         "[32]byte",
-        "[]byte",
-        "[]byte",
-        "[]byte",
-        "[]byte"
+        "[32]byte",
+        "[32]byte",
+        "[32]byte",
+        "[32]byte"
       ],
       "Returns": [
         "bool"
@@ -240,11 +213,11 @@
       "Opcode": 6,
       "Name": "ecdsa_pk_decompress",
       "Args": [
-        "[]byte"
+        "[33]byte"
       ],
       "Returns": [
-        "[]byte",
-        "[]byte"
+        "[32]byte",
+        "[32]byte"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -276,8 +249,8 @@
         "[32]byte"
       ],
       "Returns": [
-        "[]byte",
-        "[]byte"
+        "[32]byte",
+        "[32]byte"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -559,7 +532,7 @@
         "uint64"
       ],
       "Returns": [
-        "[]byte"
+        "[8]byte"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -2350,7 +2323,7 @@
       "Name": "app_local_get",
       "Args": [
         "any",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any"
@@ -2370,7 +2343,7 @@
       "Args": [
         "any",
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any",
@@ -2389,7 +2362,7 @@
       "Opcode": 100,
       "Name": "app_global_get",
       "Args": [
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any"
@@ -2408,7 +2381,7 @@
       "Name": "app_global_get_ex",
       "Args": [
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any",
@@ -2428,7 +2401,7 @@
       "Name": "app_local_put",
       "Args": [
         "any",
-        "[]byte",
+        "stateKey",
         "any"
       ],
       "Size": 1,
@@ -2444,7 +2417,7 @@
       "Opcode": 103,
       "Name": "app_global_put",
       "Args": [
-        "[]byte",
+        "stateKey",
         "any"
       ],
       "Size": 1,
@@ -2460,7 +2433,7 @@
       "Name": "app_local_del",
       "Args": [
         "any",
-        "[]byte"
+        "stateKey"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -2475,7 +2448,7 @@
       "Opcode": 105,
       "Name": "app_global_del",
       "Args": [
-        "[]byte"
+        "stateKey"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -3011,11 +2984,11 @@
       "Opcode": 170,
       "Name": "b%",
       "Args": [
-        "[]byte",
-        "[]byte"
+        "bigint",
+        "bigint"
       ],
       "Returns": [
-        "[]byte"
+        "bigint"
       ],
       "Size": 1,
       "DocCost": "20",

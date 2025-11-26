@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package catchup
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
 	"net"
@@ -30,6 +31,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
+	p2ptesting "github.com/algorand/go-algorand/network/p2p/testing"
+	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -97,7 +100,6 @@ func TestLedgerFetcherErrorResponseHandling(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			// create a dummy server.
@@ -125,7 +127,7 @@ func TestLedgerFetcherErrorResponseHandling(t *testing.T) {
 	}
 }
 
-func TestLedgerFetcherHeadLedger(t *testing.T) {
+func TestLedgerFetcher(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create a dummy server.
@@ -136,16 +138,19 @@ func TestLedgerFetcherHeadLedger(t *testing.T) {
 	listener, err := net.Listen("tcp", "localhost:")
 
 	var httpServerResponse = 0
-	var contentTypes = make([]string, 0)
 	require.NoError(t, err)
 	go s.Serve(listener)
 	defer s.Close()
 	defer listener.Close()
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		for _, contentType := range contentTypes {
-			w.Header().Add("Content-Type", contentType)
+		if req.Method == http.MethodHead {
+			w.WriteHeader(httpServerResponse)
+		} else {
+			w.Header().Add("Content-Type", rpcs.LedgerResponseContentType)
+			w.WriteHeader(httpServerResponse)
+			wtar := tar.NewWriter(w)
+			wtar.Close()
 		}
-		w.WriteHeader(httpServerResponse)
 	})
 	successPeer := testHTTPPeer(listener.Addr().String())
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
@@ -157,7 +162,7 @@ func TestLedgerFetcherHeadLedger(t *testing.T) {
 	// headLedger parseURL failure
 	parseFailurePeer := testHTTPPeer("foobar")
 	err = lf.headLedger(context.Background(), &parseFailurePeer, basics.Round(0))
-	require.Equal(t, fmt.Errorf("could not parse a host from url"), err)
+	require.ErrorContains(t, err, "could not parse a host from url")
 
 	// headLedger 404 response
 	httpServerResponse = http.StatusNotFound
@@ -169,8 +174,46 @@ func TestLedgerFetcherHeadLedger(t *testing.T) {
 	err = lf.headLedger(context.Background(), &successPeer, basics.Round(0))
 	require.NoError(t, err)
 
+	httpServerResponse = http.StatusOK
+	err = lf.downloadLedger(context.Background(), &successPeer, basics.Round(0))
+	require.NoError(t, err)
+
 	// headLedger 500 response
 	httpServerResponse = http.StatusInternalServerError
 	err = lf.headLedger(context.Background(), &successPeer, basics.Round(0))
 	require.Equal(t, fmt.Errorf("headLedger error response status code %d", http.StatusInternalServerError), err)
+}
+
+func TestLedgerFetcherP2P(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	mux := http.NewServeMux()
+	nodeA := p2ptesting.MakeHTTPNode(t)
+	nodeA.RegisterHTTPHandler("/v1/ledger/0", mux)
+	var httpServerResponse = 0
+	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodHead {
+			w.WriteHeader(httpServerResponse)
+		} else {
+			w.Header().Add("Content-Type", rpcs.LedgerResponseContentType)
+			w.WriteHeader(httpServerResponse)
+			wtar := tar.NewWriter(w)
+			wtar.Close()
+		}
+	})
+
+	nodeA.Start()
+	defer nodeA.Stop()
+
+	successPeer := nodeA.GetHTTPPeer()
+	lf := makeLedgerFetcher(nodeA, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
+
+	// headLedger 200 response
+	httpServerResponse = http.StatusOK
+	err := lf.headLedger(context.Background(), successPeer, basics.Round(0))
+	require.NoError(t, err)
+
+	httpServerResponse = http.StatusOK
+	err = lf.downloadLedger(context.Background(), successPeer, basics.Round(0))
+	require.NoError(t, err)
 }

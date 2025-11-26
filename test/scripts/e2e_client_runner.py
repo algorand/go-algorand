@@ -106,7 +106,7 @@ def _script_thread_inner(runset, scriptname, timeout):
 
     # create a wallet for the test
     walletname = base64.b16encode(os.urandom(16)).decode()
-    winfo = kmd.create_wallet(walletname, '')
+    winfo = kmd.create_wallet(walletname, '', timeout=120) # 2 minute timeout
     handle = kmd.init_wallet_handle(winfo['id'], '')
     addr = kmd.generate_key(handle)
 
@@ -118,17 +118,18 @@ def _script_thread_inner(runset, scriptname, timeout):
     txn = algosdk.transaction.PaymentTxn(maxpubaddr, params, addr, 1_000_000_000_000)
     stxn = kmd.sign_transaction(pubw, '', txn)
     txid = algod.send_transaction(stxn)
-    ptxinfo = None
+    txinfo = None
     for _ in range(max_init_wait_rounds):
         txinfo = algod.pending_transaction_info(txid)
-        if txinfo.get('round'):
+        if txinfo.get('confirmed-round'):
             break
         status = algod.status_after_block(round_num=round)
         round = status['last-round']
 
-    if ptxinfo is not None:
-        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname, max_init_wait_rounds))
+    if not txinfo or not txinfo.get('confirmed-round'):
+        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds. txinfo: {}\n'.format(scriptname, max_init_wait_rounds, txinfo))
         runset.done(scriptname, False, time.time() - start)
+        return
 
     env = dict(runset.env)
     env['TEMPDIR'] = os.path.join(env['TEMPDIR'], walletname)
@@ -483,7 +484,7 @@ def main():
         trdir = os.path.join(trdir, package)
         os.makedirs(trdir, exist_ok=True)
 
-        jsonpath = os.path.join(trdir, "results.json")
+        jsonpath = os.path.join(trdir, "testresults.json")
         rs.jsonfile = open(jsonpath, "w")
         junitpath = os.path.join(trdir, "testresults.xml")
         atexit.register(finish_test_results, rs.jsonfile, jsonpath, junitpath)
@@ -513,9 +514,9 @@ def main():
 def finish_test_results(jsonfile, jsonpath, junitpath):
     # This only runs in CI, since TEST_RESULTS env var controls the
     # block that opens the jsonfile, and registers this atexit. So we
-    # assume jsonfile is open, and gotestsum available.
+    # assume jsonfile is open.
     jsonfile.close()
-    xrun(["gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
+    xrun(["go", "tool", "-modfile=tool.mod", "gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -187,7 +187,7 @@ func (n *SchedulerFilterSchedule) Evaluate(timepoint int, nodeID int) bool {
 	}
 }
 
-// Unmarshall SchedulerFilter
+// Unmarshal SchedulerFilter
 func (n *SchedulerFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type schedulerFilterConfigJSON struct {
 		Name         string

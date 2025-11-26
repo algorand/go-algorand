@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,9 +23,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -40,7 +37,7 @@ func TestEmptyEncoding(t *testing.T) {
 func TestRewards(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const unitSize = 1_000_000
 	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
 	for _, accountAlgo := range accountAlgos {
 		ad := AccountData{
@@ -52,9 +49,13 @@ func TestRewards(t *testing.T) {
 
 		levels := []uint64{uint64(0), uint64(1), uint64(30), uint64(3000)}
 		for _, level := range levels {
-			money, rewards := ad.Money(proto, ad.RewardsBase+level)
-			require.Equal(t, money.Raw, ad.MicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(proto))
-			require.Equal(t, rewards.Raw, ad.RewardedMicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(proto))
+			money := func(u AccountData, rewardsLevel uint64) (balance MicroAlgos, rewards MicroAlgos) {
+				u = u.WithUpdatedRewards(unitSize, rewardsLevel)
+				return u.MicroAlgos, u.RewardedMicroAlgos
+			}
+			balance, rewards := money(ad, ad.RewardsBase+level)
+			require.Equal(t, balance.Raw, ad.MicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(unitSize))
+			require.Equal(t, rewards.Raw, ad.RewardedMicroAlgos.Raw+level*ad.MicroAlgos.RewardUnits(unitSize))
 		}
 	}
 }
@@ -62,7 +63,7 @@ func TestRewards(t *testing.T) {
 func TestWithUpdatedRewardsPanics(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	const unitSize = 1_000_000
 	t.Run("AlgoPanic", func(t *testing.T) {
 		paniced := false
 		func() {
@@ -81,7 +82,7 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 				RewardedMicroAlgos: MicroAlgos{Raw: 0},
 				RewardsBase:        0,
 			}
-			a.WithUpdatedRewards(proto, 100)
+			a.WithUpdatedRewards(unitSize, 100)
 		}()
 		require.Equal(t, true, paniced)
 	})
@@ -93,67 +94,9 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 			RewardedMicroAlgos: MicroAlgos{Raw: ^uint64(0)},
 			RewardsBase:        0,
 		}
-		b := a.WithUpdatedRewards(proto, 100)
-		require.Equal(t, 100*a.MicroAlgos.RewardUnits(proto)-1, b.RewardedMicroAlgos.Raw)
+		b := a.WithUpdatedRewards(unitSize, 100)
+		require.Equal(t, 100*a.MicroAlgos.RewardUnits(unitSize)-1, b.RewardedMicroAlgos.Raw)
 	})
-}
-
-func makeString(len int) string {
-	s := ""
-	for i := 0; i < len; i++ {
-		s += string(byte(i))
-	}
-	return s
-}
-
-func getSampleAccountData() AccountData {
-	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
-	vrfSecrets := crypto.GenerateVRFSecrets()
-	var stateProofID merklesignature.Commitment
-	crypto.RandBytes(stateProofID[:])
-
-	return AccountData{
-		Status:             NotParticipating,
-		MicroAlgos:         MicroAlgos{},
-		RewardsBase:        0x1234123412341234,
-		RewardedMicroAlgos: MicroAlgos{},
-		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
-		SelectionID:        vrfSecrets.PK,
-		StateProofID:       stateProofID,
-		VoteFirstValid:     Round(0x1234123412341234),
-		VoteLastValid:      Round(0x1234123412341234),
-		VoteKeyDilution:    0x1234123412341234,
-		AssetParams:        make(map[AssetIndex]AssetParams),
-		Assets:             make(map[AssetIndex]AssetHolding),
-		AppLocalStates:     make(map[AppIndex]AppLocalState),
-		AppParams:          make(map[AppIndex]AppParams),
-		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
-	}
-}
-
-func TestEncodedAccountAllocationBounds(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// ensure that all the supported protocols have value limits less or
-	// equal to their corresponding codec allocbounds
-	for protoVer, proto := range config.Consensus {
-		if proto.MaxAssetsPerAccount > 0 && proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
-			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppsCreated > 0 && proto.MaxAppsCreated > EncodedMaxAppParams {
-			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
-		}
-		if proto.MaxAppsOptedIn > 0 && proto.MaxAppsOptedIn > EncodedMaxAppLocalStates {
-			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
-		}
-		if proto.MaxLocalSchemaEntries > EncodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
-		}
-		if proto.MaxGlobalSchemaEntries > EncodedMaxKeyValueEntries {
-			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
-		}
-		// There is no protocol limit to the number of Boxes per account, so that allocbound is not checked.
-	}
 }
 
 func TestAppIndexHashing(t *testing.T) {
@@ -173,21 +116,4 @@ func TestAppIndexHashing(t *testing.T) {
 	// python -c "import algosdk.encoding as e; print(e.encode_address(e.checksum(b'appID'+($APPID).to_bytes(8, 'big'))))"
 	i = AppIndex(77)
 	require.Equal(t, "PCYUFPA2ZTOYWTP43MX2MOX2OWAIAXUDNC2WFCXAGMRUZ3DYD6BWFDL5YM", i.Address().String())
-}
-
-func TestOnlineAccountData(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	ad := getSampleAccountData()
-	ad.MicroAlgos.Raw = 1000000
-	ad.Status = Offline
-
-	oad := ad.OnlineAccountData()
-	require.Empty(t, oad)
-
-	ad.Status = Online
-	oad = ad.OnlineAccountData()
-	require.Equal(t, ad.MicroAlgos, oad.MicroAlgosWithRewards)
-	require.Equal(t, ad.VoteID, oad.VoteID)
-	require.Equal(t, ad.SelectionID, oad.SelectionID)
 }

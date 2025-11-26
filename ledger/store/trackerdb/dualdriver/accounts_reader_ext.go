@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package dualdriver
 import (
 	"context"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -73,9 +72,9 @@ func (ar *accountsReaderExt) AccountsOnlineRoundParams() (onlineRoundParamsData 
 }
 
 // AccountsOnlineTop implements trackerdb.AccountsReaderExt
-func (ar *accountsReaderExt) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (onlineAccounts map[basics.Address]*ledgercore.OnlineAccount, err error) {
-	onlineAccountsP, errP := ar.primary.AccountsOnlineTop(rnd, offset, n, proto)
-	onlineAccountsS, errS := ar.secondary.AccountsOnlineTop(rnd, offset, n, proto)
+func (ar *accountsReaderExt) AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, rewardUnit uint64) (onlineAccounts map[basics.Address]*ledgercore.OnlineAccount, err error) {
+	onlineAccountsP, errP := ar.primary.AccountsOnlineTop(rnd, offset, n, rewardUnit)
+	onlineAccountsS, errS := ar.secondary.AccountsOnlineTop(rnd, offset, n, rewardUnit)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {
@@ -284,9 +283,9 @@ func (ar *accountsReaderExt) OnlineAccountsAll(maxAccounts uint64) (accounts []t
 }
 
 // ExpiredOnlineAccountsForRound implements trackerdb.AccountsReaderExt
-func (ar *accountsReaderExt) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (expAccounts map[basics.Address]*ledgercore.OnlineAccountData, err error) {
-	expAccountsP, errP := ar.primary.ExpiredOnlineAccountsForRound(rnd, voteRnd, proto, rewardsLevel)
-	expAccountsS, errS := ar.secondary.ExpiredOnlineAccountsForRound(rnd, voteRnd, proto, rewardsLevel)
+func (ar *accountsReaderExt) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, rewardUnit uint64, rewardsLevel uint64) (expAccounts map[basics.Address]*basics.OnlineAccountData, err error) {
+	expAccountsP, errP := ar.primary.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardUnit, rewardsLevel)
+	expAccountsS, errS := ar.secondary.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardUnit, rewardsLevel)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {
@@ -347,6 +346,42 @@ func (ar *accountsReaderExt) TotalKVs(ctx context.Context) (total uint64, err er
 func (ar *accountsReaderExt) TotalResources(ctx context.Context) (total uint64, err error) {
 	totalP, errP := ar.primary.TotalResources(ctx)
 	totalS, errS := ar.secondary.TotalResources(ctx)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// check results match
+	if totalP != totalS {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return totalP, nil
+}
+
+// TotalOnlineAccountRows implements trackerdb.AccountsReaderExt
+func (ar *accountsReaderExt) TotalOnlineAccountRows(ctx context.Context) (total uint64, err error) {
+	totalP, errP := ar.primary.TotalOnlineAccountRows(ctx)
+	totalS, errS := ar.secondary.TotalOnlineAccountRows(ctx)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// check results match
+	if totalP != totalS {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return totalP, nil
+}
+
+// TotalOnlineRoundParams implements trackerdb.AccountsReaderExt
+func (ar *accountsReaderExt) TotalOnlineRoundParams(ctx context.Context) (total uint64, err error) {
+	totalP, errP := ar.primary.TotalOnlineRoundParams(ctx)
+	totalS, errS := ar.secondary.TotalOnlineRoundParams(ctx)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {

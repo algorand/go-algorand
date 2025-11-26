@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -188,7 +188,7 @@ func (n *MessageDelayFilter) processUpstreamBuffer() bool {
 	return received
 }
 
-// Unmarshall MessageDelayFilter
+// Unmarshal MessageDelayFilter
 func (n *MessageDelayFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type messageDelayFilterJSON struct {
 		Name                string

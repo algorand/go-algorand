@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -179,15 +179,15 @@ var ensureCmd = &cobra.Command{
 
 		if createRelease {
 			// In case we're creating first one for network, ensure output directory exists
-			err := os.MkdirAll(releaseNetworkDir, os.ModeDir|os.FileMode(0777))
-			if err != nil {
-				reportErrorf("Error creating release genesis output directory '%s': %v\n", releaseNetworkDir, err)
+			err1 := os.MkdirAll(releaseNetworkDir, os.ModeDir|os.FileMode(0777))
+			if err1 != nil {
+				reportErrorf("Error creating release genesis output directory '%s': %v\n", releaseNetworkDir, err1)
 			}
 
 			// Make sure release genesis file exists and if it does, the hash matches its computed hash
-			err = ensureReleaseGenesis(sourceGenesis, releaseFile)
-			if err != nil {
-				reportErrorf("Error ensuring release genesis file '%s': %v\n", releaseFile, err)
+			err1 = ensureReleaseGenesis(sourceGenesis, releaseFile)
+			if err1 != nil {
+				reportErrorf("Error ensuring release genesis file '%s': %v\n", releaseFile, err1)
 			}
 		} else {
 			// If the target network is custom (not well-known), don't bother with release genesis file

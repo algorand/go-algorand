@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -141,7 +141,7 @@ var dnsaddrTreeCreateCmd = &cobra.Command{
 		dnsaddrsFrom := []string{fmt.Sprintf("_dnsaddr.%s", dnsaddrDomain)}
 		entries, err := getEntries(dnsaddrsFrom[0], "TXT")
 		if err != nil {
-			fmt.Printf("failed fetching entries for %s\n", dnsaddrsFrom[0])
+			fmt.Printf("failed fetching entries for %s: %v\n", dnsaddrsFrom[0], err)
 			os.Exit(1)
 		}
 		if len(entries) > 0 {
