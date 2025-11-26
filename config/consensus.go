@@ -247,6 +247,9 @@ type ConsensusParams struct {
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
 
+	// EnforceAuthAddrSenderDiff requires that AuthAddr must be empty or different from Sender
+	EnforceAuthAddrSenderDiff bool
+
 	// application support
 	Application bool
 
@@ -1461,6 +1464,7 @@ func initConsensusProtocols() {
 
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
+	vFuture.EnforceAuthAddrSenderDiff = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

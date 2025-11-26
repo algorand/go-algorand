@@ -47,7 +47,7 @@ const DEPRECATEDConsensusV3 = ConsensusVersion("v3")
 // closes out an account.
 const DEPRECATEDConsensusV4 = ConsensusVersion("v4")
 
-// DEPRECATEDConsensusV5 sets MinTxnFee to 1000 and fixes a blance lookback bug
+// DEPRECATEDConsensusV5 sets MinTxnFee to 1000 and fixes a balance lookback bug
 const DEPRECATEDConsensusV5 = ConsensusVersion("v5")
 
 // DEPRECATEDConsensusV6 adds support for explicit ephemeral-key parameters
