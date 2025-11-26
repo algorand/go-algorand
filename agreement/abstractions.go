@@ -293,6 +293,10 @@ type Network interface {
 	// associated with the given MessageHandle.
 	Disconnect(MessageHandle)
 
+	// Ignore sends the Network a hint to ignore messages from the peer
+	// associated with the given MessageHandle.
+	Ignore(MessageHandle)
+
 	// Start notifies the network that the agreement service is ready
 	// to start receiving messages.
 	Start()

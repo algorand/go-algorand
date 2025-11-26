@@ -122,6 +122,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 					return
 				}
 				d.UpdateEventsQueue(eventQueueTokenizing[tag], 1)
+				// syncCh := net.SyncChannel(raw.MessageHandle)
 
 				o, err := tokenize(raw.Data)
 				if err != nil {
