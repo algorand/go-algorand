@@ -1605,8 +1605,8 @@ type GetTransactionGroupLedgerStateDeltasForRoundParams struct {
 // GetTransactionGroupLedgerStateDeltasForRoundParamsFormat defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
 type GetTransactionGroupLedgerStateDeltasForRoundParamsFormat string
 
-// ShutdownNodeParams defines parameters for ShutdownNode.
-type ShutdownNodeParams struct {
+// ShutdownNode2Params defines parameters for ShutdownNode2.
+type ShutdownNode2Params struct {
 	Timeout *int `form:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
@@ -1620,6 +1620,11 @@ type GenerateParticipationKeysParams struct {
 
 	// Last Last round for participation key.
 	Last basics.Round `form:"last" json:"last"`
+}
+
+// ShutdownNodeParams defines parameters for ShutdownNode.
+type ShutdownNodeParams struct {
+	Timeout *int `form:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 // TealCompileTextBody defines parameters for TealCompile.

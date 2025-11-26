@@ -1035,11 +1035,34 @@
         }
       }
     },
+    "/v2/shutdown": {
+      "post": {
+        "deprecated": true,
+        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds. This endpoint is deprecated, use `POST /v2/node/shutdown` instead",
+        "tags": ["private", "nonparticipating"],
+        "operationId": "ShutdownNode",
+        "parameters": [
+          {
+            "type": "integer",
+            "default": 0,
+            "name": "timeout",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
     "/v2/node/shutdown": {
       "post": {
         "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
         "tags": ["private", "nonparticipating"],
-        "operationId": "ShutdownNode",
+        "operationId": "ShutdownNode2",
         "parameters": [
           {
             "type": "integer",

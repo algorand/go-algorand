@@ -5860,7 +5860,7 @@
     "/v2/node/shutdown": {
       "post": {
         "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
-        "operationId": "ShutdownNode",
+        "operationId": "ShutdownNode2",
         "parameters": [
           {
             "in": "query",
@@ -6399,6 +6399,38 @@
           "participating"
         ],
         "x-codegen-request-body-name": "keymap"
+      }
+    },
+    "/v2/shutdown": {
+      "post": {
+        "deprecated": true,
+        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds. This endpoint is deprecated, use `POST /v2/node/shutdown` instead",
+        "operationId": "ShutdownNode",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "timeout",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "private",
+          "nonparticipating"
+        ]
       }
     },
     "/v2/stateproofs/{round}": {
