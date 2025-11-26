@@ -646,7 +646,7 @@ func (client RestClient) EncodedBlockCert(round basics.Round) (blockCert rpcs.En
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil, nil, false)
+	err = client.post(&response, "/v2/node/shutdown", nil, nil, false)
 	return
 }
 

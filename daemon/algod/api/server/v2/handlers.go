@@ -403,7 +403,7 @@ func (v2 *Handlers) AppendKeys(ctx echo.Context, participationID string) error {
 }
 
 // ShutdownNode shuts down the node.
-// (POST /v2/shutdown)
+// (POST /v2/node/shutdown)
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params model.ShutdownNodeParams) error {
 	// TODO: shutdown endpoint
 	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")

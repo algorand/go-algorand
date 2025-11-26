@@ -5857,6 +5857,37 @@
         ]
       }
     },
+    "/v2/node/shutdown": {
+      "post": {
+        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
+        "operationId": "ShutdownNode",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "timeout",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "private",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/participation": {
       "get": {
         "description": "Return a list of participation keys",
@@ -6368,37 +6399,6 @@
           "participating"
         ],
         "x-codegen-request-body-name": "keymap"
-      }
-    },
-    "/v2/shutdown": {
-      "post": {
-        "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
-        "operationId": "ShutdownNode",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "timeout",
-            "schema": {
-              "default": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "private",
-          "nonparticipating"
-        ]
       }
     },
     "/v2/stateproofs/{round}": {
