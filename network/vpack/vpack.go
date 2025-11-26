@@ -215,9 +215,31 @@ func (d *StatelessDecoder) proposalValueMapSize(mask uint8) uint8 {
 	return uint8(bits.OnesCount8(mask & (bitDig | bitEncDig | bitOper | bitOprop)))
 }
 
+// ErrLikelyUncompressed is returned when vpack decompression detects what appears
+// to be uncompressed msgpack data from a peer claiming vpack support.
+var ErrLikelyUncompressed = fmt.Errorf("data appears to be uncompressed msgpack")
+
+// isLikelyUncompressedMsgpack checks if the source data looks like an uncompressed
+// msgpack vote that was mistakenly treated as vpack-compressed.
+func isLikelyUncompressedMsgpack(src []byte) bool {
+	// uncompressed msgpack votes start with 0x83 (fixmap marker with 3 elements: cred, r, sig),
+	// followed by 0xa4 (fixstr marker of length 4), then "cred"
+	return len(src) > 5 && src[0] == 0x83 && src[1] == 0xa4 &&
+		src[2] == 'c' && src[3] == 'r' && src[4] == 'e' && src[5] == 'd'
+}
+
 // DecompressVote decodes a compressed vote in src and appends it to dst.
 // To re-use dst, run like: dst = dec.DecompressVote(dst[:0], src)
 func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
+	result, err := d.decompressVote(dst, src)
+	if err != nil && isLikelyUncompressedMsgpack(src) {
+		return nil, fmt.Errorf("%w: %v", ErrLikelyUncompressed, err)
+	}
+	return result, err
+}
+
+// decompressVote performs the actual decompression logic.
+func (d *StatelessDecoder) decompressVote(dst, src []byte) ([]byte, error) {
 	if len(src) < 2 {
 		return nil, fmt.Errorf("header missing")
 	}
