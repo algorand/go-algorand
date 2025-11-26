@@ -1031,11 +1031,18 @@ func TestNodeHybridTopology(t *testing.T) {
 	// ensure discovery of archival node by tracking its ledger
 	select {
 	case <-nodes[0].ledger.Wait(targetRound):
-		e0, err := nodes[0].ledger.Block(targetRound)
+		b0, err := nodes[0].ledger.Block(targetRound)
 		require.NoError(t, err)
-		e1, err := nodes[1].ledger.Block(targetRound)
-		require.NoError(t, err)
-		require.Equal(t, e1.Hash(), e0.Hash())
+
+		var err1 error
+		var b1 bookkeeping.Block
+		require.Eventually(t, func() bool {
+			// it is possible N0 commits blocks faster than R, so wait a bit
+			b1, err1 = nodes[1].ledger.Block(targetRound)
+			return err1 == nil
+		}, 3*time.Second, 50*time.Millisecond)
+
+		require.Equal(t, b1.Hash(), b0.Hash())
 	case <-time.After(3 * time.Minute): // set it to 1.5x of the dht.periodicBootstrapInterval to give DHT code to rebuild routing table one more time
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
