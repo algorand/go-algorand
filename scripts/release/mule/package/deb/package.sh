@@ -34,12 +34,12 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
 
     # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
     if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
-        BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
+        BIN_FILES=("carpenter" "msgpacktool" "tealdbg")
         UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
         OUTPUT_DEB="$PKG_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
         REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
     else
-        BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
+        BIN_FILES=("algocfg" "algod" "algoh" "algokey" "diagcfg" "goal" "kmd" "node_exporter")
         UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
         OUTPUT_DEB="$PKG_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
     fi

@@ -135,7 +135,6 @@ Contains the two daemons that provide Algorand clients with services:
 Enables developers to interface with the Algorand system:
 
 - **cmd**: Contains the primary commands defining entry points into the system.
-  - **cmd/catchupsrv** ([README](cmd/catchupsrv/README.md)): A tool to assist with processing historic blocks on a new node.
 - **libgoal**: Exports a Go interface useful for developers of Algorand clients.
 - **tools** ([README](tools/README.md)): Various tools and utilities that don’t have a better place to go.
 - **tools/debug**: Holds secondary commands that assist developers during debugging.
@@ -147,8 +146,6 @@ Helps Algorand developers deploy networks of their own:
 
 - **nodecontrol**
 - **docker**
-- **commandandcontrol** ([README](test/commandandcontrol/README.md)): A tool to automate a network of `algod` instances.
-- **components**
 - **netdeploy**
 
 ### Utilities

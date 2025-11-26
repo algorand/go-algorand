@@ -301,7 +301,7 @@ build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	wait
 	cp $(GOBIN)/kmd $(GOBIN)-race
 
-NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING $(GOBIN)/ddconfig.sh
+NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING
 
 NONGO_BIN: $(NONGO_BIN_FILES)
 
@@ -310,8 +310,6 @@ $(GOBIN)/find-nodes.sh: scripts/find-nodes.sh
 $(GOBIN)/update.sh: cmd/updater/update.sh
 
 $(GOBIN)/COPYING: COPYING
-
-$(GOBIN)/ddconfig.sh: scripts/ddconfig.sh
 
 $(GOBIN)/%:
 	cp -f $< $@
