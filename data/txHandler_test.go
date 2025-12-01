@@ -944,7 +944,7 @@ func TestTxHandlerProcessIncomingCacheRotation(t *testing.T) {
 		// double enqueue a single txn message, ensure it discarded
 		ctx := t.Context()
 
-		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 10*time.Millisecond)
+		handler := makeTestTxHandlerOrphanedWithContext(ctx, txBacklogSize, txBacklogSize, txHandlerConfig{true, true}, 0)
 
 		var action network.OutgoingMessage
 		var msg *txBacklogMsg
