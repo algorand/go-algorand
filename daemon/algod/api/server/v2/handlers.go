@@ -973,7 +973,7 @@ func (v2 *Handlers) GetPeers(ctx echo.Context) error {
 
 	// Populate the response struct
 	response := model.GetPeersResponse{
-		Peers: make([]model.PeerStatus, len(inboundPeers), len(outboundPeers)),
+		Peers: make([]model.PeerStatus, 0, len(inboundPeers)+len(outboundPeers)),
 	}
 	response.Peers = appendPeers(response.Peers, inboundPeers, model.PeerStatusConnectionTypeInbound)
 	response.Peers = appendPeers(response.Peers, outboundPeers, model.PeerStatusConnectionTypeOutbound)
