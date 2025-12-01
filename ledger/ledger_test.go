@@ -257,25 +257,25 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 
 // evaluatorToBlock converts a BlockEvaluator to a validated block and adds it to the ledger.
 // This follows the pattern from simple_test.go:endBlock() - generates the block, sets the proposer,
-// re-validates without signature checks, and adds to the ledger.
+// re-validates with full signature checks, and adds to the ledger.
 func (l *Ledger) evaluatorToBlock(t testing.TB, eval *eval.BlockEvaluator) error {
 	// Generate the block using real BlockEvaluator (following simple_test.go:endBlock pattern)
 	ub, err := eval.GenerateBlock(nil)
 	if err != nil {
 		return err
 	}
-	// Create a ValidatedBlock from UnfinishedBlock and deltas
-	validatedBlock := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
-	gvb := &validatedBlock
 	// Set proposer (use feesink as proposer to minimize test disruption)
-	prp := gvb.Block().BlockHeader.FeeSink
+	block := ub.UnfinishedBlock()
+	prp := block.BlockHeader.FeeSink
 	if l.GenesisProto().Payouts.Enabled {
-		*gvb = ledgercore.MakeValidatedBlock(gvb.Block().WithProposer(committee.Seed(prp), prp, true), gvb.Delta())
+		block = block.WithProposer(committee.Seed(prp), prp, true)
 	} else {
-		*gvb = ledgercore.MakeValidatedBlock(gvb.Block().WithProposer(committee.Seed(prp), basics.Address{}, false), gvb.Delta())
+		block = block.WithProposer(committee.Seed(prp), basics.Address{}, false)
 	}
-	// Re-validate without signature checks (like simple_test.go does)
-	vvb, err := validateWithoutSignatures(t, l, gvb.Block())
+	// Re-validate with signature checks before adding to the ledger
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+	vvb, err := l.Validate(context.Background(), block, backlogPool)
 	if err != nil {
 		return err
 	}
