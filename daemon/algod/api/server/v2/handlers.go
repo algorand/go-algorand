@@ -975,38 +975,45 @@ func (v2 *Handlers) GetPeers(ctx echo.Context) error {
 	response := model.GetPeersResponse{
 		Peers: make([]model.PeerStatus, 0, len(inboundPeers)+len(outboundPeers)),
 	}
-	response.Peers = appendPeers(response.Peers, inboundPeers, model.PeerStatusConnectionTypeInbound)
-	response.Peers = appendPeers(response.Peers, outboundPeers, model.PeerStatusConnectionTypeOutbound)
+	response.Peers = filterPeers(inboundPeers, model.PeerStatusConnectionTypeInbound)
+	response.Peers = append(response.Peers, filterPeers(outboundPeers, model.PeerStatusConnectionTypeOutbound)...)
 	return ctx.JSON(http.StatusOK, response)
 }
 
-func appendPeers(response []model.PeerStatus, peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
+type PeerMap map[string]string
+
+func (pm PeerMap) addPeer(addr string, network string) {
+	if _, found := pm[addr]; !found {
+		pm[addr] = network
+		return
+	}
+	pm[addr] += "," + network
+}
+
+func filterPeers(peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
+	peerMap := make(PeerMap)
+
 	for _, p := range peers {
-		if wsPeer, ok := p.(network.HTTPPeer); ok {
-			addr := wsPeer.GetAddress()
-			network := model.PeerStatusNetworkTypeWs
-			if len(addr) > 0 && addr[0] == '/' {
-				network = model.PeerStatusNetworkTypeP2p
-			}
-			response = append(response, model.PeerStatus{
-				NetworkAddress: addr,
-				NetworkType:    network,
-				ConnectionType: connType,
-			})
-		} else if wsPeer, ok := p.(network.UnicastPeer); ok {
-			addr := wsPeer.GetAddress()
-			network := model.PeerStatusNetworkTypeWs
-			if len(addr) > 0 && addr[0] == '/' {
-				network = model.PeerStatusNetworkTypeP2p
-			}
-			response = append(response, model.PeerStatus{
-				NetworkAddress: addr,
-				NetworkType:    network,
-				ConnectionType: connType,
-			})
+		switch peer := p.(type) {
+		case network.HTTPPeer:
+			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeWs))
+		case network.UnicastPeer:
+			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeWs))
+		case network.LibP2PPeer:
+			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeP2p))
 		}
 	}
-	return response
+	peerStatuses := make([]model.PeerStatus, len(peerMap))
+	var i int = 0
+	for addr := range peerMap {
+		peerStatuses[i] = model.PeerStatus{
+			ConnectionType: connType,
+			NetworkAddress: addr,
+			NetworkType:    model.PeerStatusNetworkType(peerMap[addr]),
+		}
+		i++
+	}
+	return peerStatuses
 }
 
 // GetStatus gets the current node status.
