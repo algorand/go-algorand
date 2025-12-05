@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -105,7 +106,7 @@ func TestAddressChecksumCanonical(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = UnmarshalChecksumAddress(nonCanonical)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 type TestOb struct {

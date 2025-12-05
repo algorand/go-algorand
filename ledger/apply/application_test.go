@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -276,7 +277,7 @@ func TestAppCallGetParam(t *testing.T) {
 
 	b := newTestBalances()
 	_, _, _, err := getAppParams(b, appIdxError)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	_, _, exist, err := getAppParams(b, appIdxOk)
 	a.NoError(err)
@@ -287,14 +288,14 @@ func TestAppCallGetParam(t *testing.T) {
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdxOk: creator}
 	b.balances = map[basics.Address]basics.AccountData{addr: {}}
 	_, _, exist, err = getAppParams(b, appIdxOk)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(exist)
 
 	b.balances[creator] = basics.AccountData{
 		AppParams: map[basics.AppIndex]basics.AppParams{},
 	}
 	_, _, exist, err = getAppParams(b, appIdxOk)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(exist)
 
 	b.balances[creator] = basics.AccountData{
@@ -421,7 +422,7 @@ func TestAppCallCreate(t *testing.T) {
 	creator := getRandomAddress(a)
 	// no balance record
 	appIdx, err := createApplication(&ac, b, creator, txnCounter)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Zero(appIdx)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
@@ -848,7 +849,7 @@ func TestAppCallClearState(t *testing.T) {
 	b.delta = transactions.EvalDelta{GlobalDelta: nil}
 	b.err = fmt.Errorf("test error")
 	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	br = b.putBalances[sender]
 	a.Zero(len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)

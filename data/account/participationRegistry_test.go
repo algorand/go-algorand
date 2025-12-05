@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -598,7 +599,7 @@ func TestParticipation_MultipleInsertError(t *testing.T) {
 	_, err := registry.Insert(p)
 	a.NoError(err)
 	_, err = registry.Insert(p)
-	a.Error(err, ErrAlreadyInserted.Error())
+	errorcontains.CaptureError(t, err, ErrAlreadyInserted.Error())
 }
 
 // This is a contrived test on every level. To workaround errors we setup the
@@ -687,7 +688,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	err = registry.Register(id, 1)
 	a.NoError(err)
 	err = registry.Flush(defaultTimeout)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "unable to disable old key")
 	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
 
@@ -934,9 +935,9 @@ func TestAddStateProofKeys(t *testing.T) {
 	a.NoError(err)
 
 	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(1))
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(2))
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// Make sure we're able to fetch the same data that was put in.
 	for i := uint64(3); i < max; i++ {
@@ -1039,7 +1040,7 @@ func TestAddingSecretTwice(t *testing.T) {
 	a.NoError(err)
 
 	err = registry.Flush(10 * time.Second)
-	a.Error(err)
+	errorcontains.CaptureErrorAssert(t, err)
 	a.EqualError(err, "unable to execute append keys: UNIQUE constraint failed: StateProofKeys.pk, StateProofKeys.round")
 }
 
@@ -1065,10 +1066,10 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	partPerRound, err := registry.GetStateProofSecretsForRound(id, 1)
-	a.Error(err)
+	errorcontains.CaptureErrorAssert(t, err)
 
 	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests))
-	a.Error(err)
+	errorcontains.CaptureErrorAssert(t, err)
 
 	// Append key
 	keys := make(StateProofKeys, 1)
@@ -1080,7 +1081,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests)-1)
-	a.Error(err)
+	errorcontains.CaptureErrorAssert(t, err)
 
 	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests))
 	a.NoError(err)
@@ -1202,7 +1203,7 @@ func TestFlushResetsLastError(t *testing.T) {
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
 
-	a.Error(registry.Flush(10 * time.Second))
+	errorcontains.CaptureErrorAssert(t, registry.Flush(10*time.Second))
 	a.NoError(registry.Flush(10 * time.Second))
 }
 

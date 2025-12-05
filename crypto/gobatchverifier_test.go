@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -214,7 +215,7 @@ func testBatchVectors(t *testing.T, makeBV func(int) BatchVerifier, testVectors 
 		}
 		failed, err := bv.VerifyWithFeedback()
 		if slices.Contains(expFail, true) { // some failures expected
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 			require.NotNil(t, failed)
 			require.Len(t, failed, len(vecs))
 			for i := range expFail {

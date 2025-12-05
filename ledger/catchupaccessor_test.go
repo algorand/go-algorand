@@ -39,6 +39,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/msgp/msgp"
@@ -254,7 +255,7 @@ func TestCatchupAccessorFoo(t *testing.T) {
 	err = catchpointAccessor.SetState(context.Background(), CatchpointCatchupStateSwitch)
 	require.NoError(t, err, "catchpointAccessor.SetState")
 	err = catchpointAccessor.SetState(context.Background(), catchpointCatchupStateLast+1)
-	require.Error(t, err, "catchpointAccessor.SetState")
+	errorcontains.CaptureError(t, err, "catchpointAccessor.SetState")
 
 	state, err := catchpointAccessor.GetState(context.Background())
 	require.NoError(t, err, "catchpointAccessor.GetState")
@@ -263,7 +264,7 @@ func TestCatchupAccessorFoo(t *testing.T) {
 
 	// invalid label
 	err = catchpointAccessor.SetLabel(context.Background(), "wat")
-	require.Error(t, err, "catchpointAccessor.SetLabel")
+	errorcontains.CaptureError(t, err, "catchpointAccessor.SetLabel")
 
 	// ok
 	calabel := "98#QGMCMMUPV74AXXVKSNPRN73XMJG44ZJTZHU25HDG7JH5OHMM6N3Q"
@@ -305,7 +306,7 @@ func TestBuildMerkleTrie(t *testing.T) {
 	// actual testing...
 	// insufficient setup, it should fail:
 	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// from reset it's okay, but it doesn't do anything
 	err = catchpointAccessor.ResetStagingBalances(ctx, true)
@@ -325,10 +326,10 @@ func TestBuildMerkleTrie(t *testing.T) {
 	// this shouldn't work yet
 	balancesFileName := fmt.Sprintf("%s%s%s", catchpointBalancesFileNamePrefix, "FAKE", catchpointBalancesFileNameSuffix)
 	err = catchpointAccessor.ProcessStagingBalances(ctx, balancesFileName, blob, &progress)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	// this needs content
 	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointContentFileName, blob, &progress)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// content.msgpack from this:
 	accountsCount := uint64(len(initKeys))
@@ -347,12 +348,12 @@ func TestBuildMerkleTrie(t *testing.T) {
 	require.NoError(t, err)
 	// shouldn't work a second time
 	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointContentFileName, encodedFileHeader, &progress)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// This should still fail, but slightly different coverage path
 	balancesFileName = fmt.Sprintf("%s%s%s", catchpointBalancesFileNamePrefix, "FAKE", catchpointBalancesFileNameSuffix)
 	err = catchpointAccessor.ProcessStagingBalances(ctx, balancesFileName, blob, &progress)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// create some catchpoint data
 	encodedAccountChunks, _ := createTestingEncodedChunks(accountsCount)
@@ -416,7 +417,7 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 
 	// actual testing...
 	err = catchpointAccessor.BuildMerkleTrie(ctx, func(uint64, uint64) {})
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestVerifyCatchpoint(t *testing.T) {
@@ -441,13 +442,13 @@ func TestVerifyCatchpoint(t *testing.T) {
 	var blk bookkeeping.Block
 	var cert agreement.Certificate
 	err = catchpointAccessor.VerifyCatchpoint(ctx, &blk)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	err = catchpointAccessor.ResetStagingBalances(ctx, true)
 	require.NoError(t, err, "ResetStagingBalances")
 
 	err = catchpointAccessor.VerifyCatchpoint(ctx, &blk)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	// TODO: verify a catchpoint block that is valid
 
 	// StoreBalancesRound assumes things are valid, so just does the db put
@@ -466,7 +467,7 @@ func TestVerifyCatchpoint(t *testing.T) {
 
 	// TODO: write a case with working no-err
 	err = catchpointAccessor.CompleteCatchup(ctx)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	//require.NoError(t, err)
 }
 
@@ -518,7 +519,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 	// expect error since there is a resource count mismatch
 	balancesFileName := fmt.Sprintf("%s%s%s", catchpointBalancesFileNamePrefix, "XX", catchpointBalancesFileNameSuffix)
 	err = catchpointAccessor.ProcessStagingBalances(ctx, balancesFileName, encodedAccounts, &progress)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 type testStagingWriter struct {

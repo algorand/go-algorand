@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -402,7 +403,7 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	for x := 0; x < 10; x++ {
 		err := verificationPool.EnqueueBacklog(context.Background(),
 			func(arg interface{}) interface{} { return nil }, nil, nil)
-		require.Error(t, err, fmt.Sprintf("x = %d", x))
+		errorcontains.CaptureError(t, err, fmt.Sprintf("x = %d", x))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -800,10 +801,10 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 func TestStreamToBatchMakeStreamToBatchErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	_, err := MakeSigVerifier(&DummyLedgerForSignature{badHdr: true}, nil)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	_, err = MakeSigVerifyJobProcessor(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 // TestStreamToBatchCancelWhenPooled tests the case where the ctx is cancled after the verification
@@ -902,5 +903,5 @@ func TestSigVerifier(t *testing.T) {
 	txnGroup = txnGroups[0]
 
 	err = verifier.Verify(txnGroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }

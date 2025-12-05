@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -75,7 +76,7 @@ func TestResolverWithInvalidDNSResolution(t *testing.T) {
 	timingOutContext, timingOutContextFunc := context.WithTimeout(context.Background(), time.Duration(100)*time.Millisecond)
 	defer timingOutContextFunc()
 	cname, addrs, err := resolver.LookupSRV(timingOutContext, "telemetry", "tls", "devnet.algodev.network")
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, "", cname)
 	require.True(t, len(addrs) == 0)
 	require.Equal(t, "255.255.128.1", resolver.EffectiveResolverDNS())

@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -186,5 +187,5 @@ func TestPinningTransactions(t *testing.T) {
 	require.NoError(t, impl.Pin(txnGroups[0]))
 
 	// try to pin an entry that was not added.
-	require.Error(t, impl.Pin(txnGroups[len(txnGroups)-1]))
+	errorcontains.CaptureError(t, impl.Pin(txnGroups[len(txnGroups)-1]))
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -511,7 +512,7 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	firstValid := basics.Round(0)
 	lastValid := maxValidPeriod + 1
 	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestFillDBWithParticipationKeys(t *testing.T) {
@@ -564,7 +565,7 @@ func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not paral
 	firstValid = basics.Round(0)
 	lastValid = maxValidPeriod + 1
 	_, err = FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func BenchmarkParticipationSign(b *testing.B) {

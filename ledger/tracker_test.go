@@ -37,6 +37,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -516,7 +517,7 @@ func TestTrackers_AccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
 		tail:       &txTail{},
 	}
 	hdr, err := aul.BlockHdr(99)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, ledgercore.ErrNoEntry{}, err)
 	require.Equal(t, bookkeeping.BlockHeader{}, hdr)
 }

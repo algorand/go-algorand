@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -90,7 +91,7 @@ func TestBundleCreationWithZeroVotes(t *testing.T) {
 		makeBundlePanicWrapper(t, "makeBundle: no votes present in bundle (len(equivocationVotes) =", proposal, votes, nil)
 
 		bundle, err := ub.verify(context.Background(), ledger, avv)
-		require.Error(t, err)
+		errorcontains.CaptureError(t, err)
 
 		bundles = append(bundles, bundle)
 	}
@@ -248,38 +249,38 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	voteBadCredBundle := unauthenticatedBundles[0]
 	voteBadCredBundle.Votes[0].Cred = committee.UnauthenticatedCredential{}
 	_, err := voteBadCredBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	voteBadSenderBundle := unauthenticatedBundles[1]
 	voteBadSenderBundle.Votes[0].Sender = basics.Address{}
 	_, err = voteBadSenderBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	voteNoQuorumBundle := unauthenticatedBundles[2]
 	voteNoQuorumBundle.Votes = voteNoQuorumBundle.Votes[:2]
 	voteNoQuorumBundle.EquivocationVotes = voteNoQuorumBundle.EquivocationVotes[:2]
 	_, err = voteNoQuorumBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	evBadCredBundle := unauthenticatedBundles[3]
 	evBadCredBundle.EquivocationVotes[0].Cred = committee.UnauthenticatedCredential{}
 	_, err = evBadCredBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	evBadEVBundle := unauthenticatedBundles[4]
 	evBadEVBundle.EquivocationVotes[0].Sigs = [2]crypto.OneTimeSignature{{}, {}}
 	_, err = evBadEVBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	duplicateVoteBundle := unauthenticatedBundles[5]
 	duplicateVoteBundle.Votes = append(duplicateVoteBundle.Votes, duplicateVoteBundle.Votes[0])
 	_, err = duplicateVoteBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	duplicateEquivocationVoteBundle := unauthenticatedBundles[6]
 	duplicateEquivocationVoteBundle.EquivocationVotes = append(duplicateEquivocationVoteBundle.EquivocationVotes, duplicateEquivocationVoteBundle.EquivocationVotes[0])
 	_, err = duplicateEquivocationVoteBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 }
 

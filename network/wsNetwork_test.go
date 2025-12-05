@@ -55,6 +55,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -4690,7 +4691,7 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 		require.NoError(t, err)
 		resp, err := tr.RoundTrip(req)
 		if test.expected == expErr {
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 		} else {
 			require.NoError(t, err)
 			require.Equal(t, 200, resp.StatusCode)
@@ -4735,7 +4736,7 @@ func TestWebsocketNetworkHTTPClient(t *testing.T) {
 	require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode) // not enough ws peer headers
 
 	_, err = netB.GetHTTPClient("invalid")
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 // TestPeerComparisonInBroadcast tests that the peer comparison in the broadcast function works as expected

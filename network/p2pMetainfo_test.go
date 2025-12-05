@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
@@ -84,7 +85,7 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	mockStream = new(MockStream)
 	mockStream.On("Read", mock.Anything).Return([]byte{1}, nil).Once()
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Contains(t, err.Error(), "error reading response message length")
 	mockStream.AssertExpectations(t)
 
@@ -92,7 +93,7 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	mockStream = new(MockStream)
 	mockStream.On("Read", mock.Anything).Return([]byte{}, fmt.Errorf("read error")).Once()
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Contains(t, err.Error(), "error reading response message length")
 	mockStream.AssertExpectations(t)
 
@@ -101,7 +102,7 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	mockStream.On("Read", mock.Anything).Return(lengthBytes, nil).Once()
 	mockStream.On("Read", mock.Anything).Return(data[:len(data)/2], nil).Once() // Return only half the data
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Contains(t, err.Error(), "error reading response message")
 	mockStream.AssertExpectations(t)
 
@@ -110,7 +111,7 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	mockStream.On("Read", mock.Anything).Return(lengthBytes, nil).Once()
 	mockStream.On("Read", mock.Anything).Return([]byte{}, fmt.Errorf("read error")).Once()
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Contains(t, err.Error(), "error reading response message")
 	mockStream.AssertExpectations(t)
 
@@ -121,7 +122,7 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	mockStream.On("Read", mock.Anything).Return(corruptedMsgpLength, nil).Once()
 	mockStream.On("Read", mock.Anything).Return([]byte{0x99, 0x01, 0x02}, nil).Once()
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Contains(t, err.Error(), "error unmarshaling response message")
 	mockStream.AssertExpectations(t)
 
@@ -138,7 +139,7 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	mockStream.On("Read", mock.Anything).Return(incompatibleLengthBytes, nil).Once()
 	mockStream.On("Read", mock.Anything).Return(incompatibleData, nil).Once()
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Contains(t, err.Error(), "does not support any of the supported protocol versions")
 	mockStream.AssertExpectations(t)
 }
@@ -171,7 +172,7 @@ func TestWritePeerMetaHeaders(t *testing.T) {
 	mockStream = new(MockStream)
 	mockStream.On("Write", mock.Anything).Return(0, fmt.Errorf("write error")).Once()
 	err = writePeerMetaHeaders(mockStream, p2pPeer, "1.0", n)
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Contains(t, err.Error(), "error sending initial message")
 	mockStream.AssertExpectations(t)
 }

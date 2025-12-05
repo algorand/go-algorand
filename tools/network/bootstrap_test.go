@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +36,7 @@ func TestReadFromSRVPriority(t *testing.T) {
 	secure := true
 
 	prioAddrs, err := ReadFromSRVPriority("", protocol, name, fallback, secure)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	prioAddrs, err = ReadFromSRVPriority(service, protocol, name, fallback, secure)
 	require.NoError(t, err)
@@ -57,7 +58,7 @@ func TestReadFromSRV(t *testing.T) {
 	secure := true
 
 	addrs, err := ReadFromSRV(context.Background(), "", protocol, name, fallback, secure)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	addrs, err = ReadFromSRV(context.Background(), service, protocol, name, fallback, secure)
 	require.NoError(t, err)

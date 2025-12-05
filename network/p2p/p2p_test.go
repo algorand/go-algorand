@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -76,7 +77,7 @@ func TestNetAddressToListenAddress(t *testing.T) {
 		t.Run(fmt.Sprintf("input: %s", test.input), func(t *testing.T) {
 			res, err := netAddressToListenAddress(test.input)
 			if test.err {
-				require.Error(t, err)
+				errorcontains.CaptureError(t, err)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.output, res)

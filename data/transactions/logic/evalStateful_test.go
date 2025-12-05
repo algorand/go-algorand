@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 )
@@ -1832,7 +1833,7 @@ intc_1
 			ep.SigLedger = ledger
 
 			_, err = EvalApp(ops.Program, 0, 100, ep)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 			require.Contains(t, err.Error(), "is not opted into")
 
 			ledger.NewApp(txn.Txn.Sender, 100, basics.AppParams{})
@@ -1840,7 +1841,7 @@ intc_1
 
 			if name == "read" {
 				_, err = EvalApp(ops.Program, 0, 100, ep)
-				require.Error(t, err)
+				errorcontains.CaptureError(t, err)
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
 

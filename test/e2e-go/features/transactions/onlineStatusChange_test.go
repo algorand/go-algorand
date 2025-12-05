@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal/participation"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -184,7 +185,7 @@ func TestCloseOnError(t *testing.T) {
 	a.NoError(err)
 	// check duplicate keys does not crash
 	_, err = client.AddParticipationKey(partkeyFile)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "cannot register duplicate participation key")
 	// check lastValid < firstValid does not crash
 	_, _, err = client.GenParticipationKeys(initiallyOffline, curRound+1001, curRound+1000, 0)

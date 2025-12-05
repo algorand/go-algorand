@@ -32,6 +32,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -427,7 +428,7 @@ func TestBoxRW(t *testing.T) {
 		dl.txn(call.Args("create", "yy"), fmt.Sprintf("invalid Box reference %#x", "yy"))
 		withBr := call.Args("create", "yy")
 		withBr.Boxes = append(withBr.Boxes, transactions.BoxRef{Index: 1, Name: []byte("yy")})
-		require.Error(dl.t, withBr.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.GenesisProto()))
+		errorcontains.CaptureError(dl.t, withBr.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.GenesisProto()))
 		withBr.Boxes[1].Index = 0
 		dl.txn(withBr)
 	})
@@ -650,7 +651,7 @@ func TestBoxInners(t *testing.T) {
 
 		// This isn't right: Index should be index into ForeignApps
 		call.Boxes = []transactions.BoxRef{{Index: uint64(boxID), Name: []byte("x")}}
-		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
+		errorcontains.CaptureError(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
 
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
 		if ver < boxQuotaBumpVersion {

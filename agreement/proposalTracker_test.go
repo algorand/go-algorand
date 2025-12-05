@@ -21,6 +21,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,7 +78,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[3])
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Equal(t, effect, NoLateCredentialTrackingImpact)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
@@ -103,7 +104,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[0])
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 	assert.Equal(t, effect, VerifiedBetterLateCredentialForTracking)
 	assert.Equal(t, s.Lowest, lowestBeforeFreeze)
 	assert.True(t, s.Frozen)

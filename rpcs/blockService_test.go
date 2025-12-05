@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -501,7 +502,7 @@ func TestRedirectExceptions(t *testing.T) {
 	require.NoError(t, err)
 	_, err = client.Do(requestNodeB)
 
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Contains(t, err.Error(), "stopped after 10 redirects")
 }
 

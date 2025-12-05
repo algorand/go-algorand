@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/stretchr/testify/require"
 )
 
@@ -130,7 +131,7 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) (payset []
 	if problem == "" {
 		require.NoError(dl.t, err)
 	} else {
-		require.Error(dl.t, err)
+		errorcontains.CaptureError(dl.t, err)
 		require.Contains(dl.t, err.Error(), problem)
 	}
 	return nil

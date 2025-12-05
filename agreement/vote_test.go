@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/vpack"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -113,37 +114,37 @@ func TestVoteValidation(t *testing.T) {
 			noSig := unauthenticatedVote
 			noSig.Sig = crypto.OneTimeSignature{}
 			_, err = noSig.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			noCred := unauthenticatedVote
 			noCred.Cred = committee.UnauthenticatedCredential{}
 			_, err = noCred.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badRound := unauthenticatedVote
 			badRound.R.Round++
 			_, err = badRound.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badPeriod := unauthenticatedVote
 			badPeriod.R.Period++
 			_, err = badPeriod.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badStep := unauthenticatedVote
 			badStep.R.Step++
 			_, err = badStep.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badBlockHash := unauthenticatedVote
 			badBlockHash.R.Proposal.BlockDigest = randomBlockHash()
 			_, err = badBlockHash.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badProposer := unauthenticatedVote
 			badProposer.R.Proposal.OriginalProposer = basics.Address(randomBlockHash())
 			_, err = badProposer.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 		}
 	}
 	require.True(t, processedVote, "No votes were processed")
@@ -194,7 +195,7 @@ func TestVoteReproposalValidation(t *testing.T) {
 			badReproposalVote, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			_, err = badReproposalVote.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			// bad period-1 reproposal for a period 2 original proposal
 			rv = rawVote{Sender: address, Round: round, Period: per, Step: step(0), Proposal: proposal}
@@ -203,7 +204,7 @@ func TestVoteReproposalValidation(t *testing.T) {
 			badReproposalVote, err = makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			_, err = badReproposalVote.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 		}
 	}
 	require.True(t, processedVote, "No votes were processed")
@@ -274,7 +275,7 @@ func TestVoteValidationStepCertAndProposalBottom(t *testing.T) {
 			unauthenticatedVote.R.Step = cert
 			unauthenticatedVote.R.Proposal = bottom
 			_, err = unauthenticatedVote.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 		}
 	}
@@ -343,7 +344,7 @@ func TestEquivocationVoteValidation(t *testing.T) {
 
 			// check for same vote
 			_, err = evSameVote.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			// test vote accessors
 			v0 := aev.v0()
@@ -357,42 +358,42 @@ func TestEquivocationVoteValidation(t *testing.T) {
 			noSig := ev
 			noSig.Sigs = [2]crypto.OneTimeSignature{{}, {}}
 			_, err = noSig.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			noCred := ev
 			noCred.Cred = committee.UnauthenticatedCredential{}
 			_, err = noCred.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badRound := ev
 			badRound.Round++
 			_, err = badRound.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badPeriod := ev
 			badPeriod.Period++
 			_, err = badPeriod.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badStep := ev
 			badStep.Step++
 			_, err = badStep.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badBlockHash1 := ev
 			badBlockHash1.Proposals[0].BlockDigest = randomBlockHash()
 			_, err = badBlockHash1.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badBlockHash2 := ev
 			badBlockHash2.Proposals[1].BlockDigest = randomBlockHash()
 			_, err = badBlockHash2.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			badSender := ev
 			badSender.Sender = basics.Address{}
 			_, err = badSender.verify(ledger)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 		}
 	}
 	require.True(t, processedVote, "No votes were processed")

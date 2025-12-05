@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
@@ -96,7 +97,7 @@ func TestTrustedZone(t *testing.T) {
 	zk.PublicKey = ksks[0].PublicKey
 	tzRoot.zsk[zsks[0].KeyTag()] = zk
 	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.False(cacheOutdated)
 }
 
@@ -146,7 +147,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	}
 	tzRoot.zsk[zk.KeyTag()] = ks
 	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "DS signature verification failed")
 	a.False(cacheOutdated)
 	a.Empty(tzCom)
@@ -155,7 +156,7 @@ func TestMakeTrustedZone(t *testing.T) {
 
 	// test non-existing zone
 	tzOrg, cacheOutdated, err := makeTrustedZone(context.Background(), "ttt.", tzRoot, r, tt)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.False(cacheOutdated)
 	a.Empty(tzOrg)
 
@@ -171,7 +172,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.NoError(err)
 
 	tzRoot, cacheOutdated, err = makeTrustedZone(context.Background(), ".", trustedZone{}, re, tt)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "EOF")
 	a.False(cacheOutdated)
 	a.Empty(tzRoot)
@@ -187,7 +188,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.NoError(err)
 
 	tzTest, cacheOutdated, err := makeTrustedZone(context.Background(), "test.", trustedZone{}, re, tt)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "test. not found")
 	a.False(cacheOutdated)
 	a.Empty(tzTest)

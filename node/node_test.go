@@ -46,6 +46,7 @@ import (
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
@@ -626,7 +627,7 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	node, err := MakeFull(log, testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
 
 	require.Nil(t, node)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Contains(t, err.Error(), "permission denied")
 
 	require.NoError(t, os.Chmod(testDirectroy, 1700))

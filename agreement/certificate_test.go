@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -178,7 +179,7 @@ func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	require.Error(t, cert.Authenticate(block, ledger, avv))
+	errorcontains.CaptureError(t, cert.Authenticate(block, ledger, avv))
 }
 
 func TestCertificateDifferentBlock(t *testing.T) {
@@ -204,12 +205,12 @@ func TestCertificateDifferentBlock(t *testing.T) {
 	bundle := unauthenticatedBundle(cert)
 	require.NotEqual(t, Certificate{}, cert)
 
-	require.Error(t, cert.claimsToAuthenticate(block))
+	errorcontains.CaptureError(t, cert.claimsToAuthenticate(block))
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	require.NoError(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	require.Error(t, cert.Authenticate(block, ledger, avv))
+	errorcontains.CaptureError(t, cert.Authenticate(block, ledger, avv))
 }
 
 func TestCertificateNoCertStep(t *testing.T) {
@@ -293,12 +294,12 @@ func TestCertificateCertWrongRound(t *testing.T) {
 	cert := makeCertTesting(block.Digest(), votes, equiVotes)
 	bundle := unauthenticatedBundle(cert)
 	require.NotEqual(t, Certificate{}, cert)
-	require.Error(t, cert.claimsToAuthenticate(block))
+	errorcontains.CaptureError(t, cert.claimsToAuthenticate(block))
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	require.NoError(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	require.Error(t, cert.Authenticate(block, ledger, avv))
+	errorcontains.CaptureError(t, cert.Authenticate(block, ledger, avv))
 }
 
 func TestCertificateCertWithTooFewVotes(t *testing.T) {
@@ -363,6 +364,6 @@ func TestCertificateDupVote(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	require.Error(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	require.Error(t, cert.Authenticate(block, ledger, avv))
+	errorcontains.CaptureError(t, verifyBundleAgainstLedger(bundle, ledger, avv))
+	errorcontains.CaptureError(t, cert.Authenticate(block, ledger, avv))
 }

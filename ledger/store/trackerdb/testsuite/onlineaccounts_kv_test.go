@@ -21,6 +21,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/stretchr/testify/require"
 )
 
@@ -308,7 +309,7 @@ func CustomTestLookupOnlineAccountDataByAddress(t *customT) {
 	// check non-existing account
 	nonExistingAddr := RandomAddress()
 	_, _, err = ar.LookupOnlineAccountDataByAddress(nonExistingAddr)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, trackerdb.ErrNotFound, err) // check the error type
 
 	// read existing addr

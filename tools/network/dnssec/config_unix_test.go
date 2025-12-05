@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +34,7 @@ func TestConfigEmpty(t *testing.T) {
 	a := require.New(t)
 
 	s, tm, err := systemConfig(nil)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Empty(s)
 	a.Empty(tm)
 

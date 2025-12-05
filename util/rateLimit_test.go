@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 )
@@ -70,7 +71,7 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 
 	erl.DisableCongestionControl()
 	_, _, err = erl.ConsumeCapacity(client)
@@ -161,7 +162,7 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
-	assert.Error(t, err)
+	errorcontains.CaptureErrorAssert(t, err)
 
 	// now release the capacity and observe the items return to the correct places
 	err = c1.Release()

@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -75,14 +76,14 @@ func TestGroupTransactions(t *testing.T) {
 
 	// submitting the transactions individually should fail
 	_, err = client.BroadcastTransaction(stx1)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	_, err = client.BroadcastTransaction(stx2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// wrong order should fail
 	err = client.BroadcastTransactionGroup([]transactions.SignedTxn{stx2, stx1})
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// correct order should succeed
 	err = client.BroadcastTransactionGroup([]transactions.SignedTxn{stx1, stx2})
@@ -208,7 +209,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 
 		// broadcasting group should now fail
 		err = client.BroadcastTransactionGroup(stxns)
-		a.Error(err)
+		errorcontains.CaptureError(t, err)
 	}
 }
 
@@ -272,7 +273,7 @@ func TestGroupTransactionsSubmission(t *testing.T) {
 		// send gs-1
 		reduced := stxns[:len(stxns)-1]
 		err = client.BroadcastTransactionGroup(reduced)
-		a.Error(err)
+		errorcontains.CaptureError(t, err)
 		if len(reduced) == 0 {
 			a.Contains(err.Error(), "empty txgroup")
 		} else {
@@ -282,7 +283,7 @@ func TestGroupTransactionsSubmission(t *testing.T) {
 		// send gs+1
 		expanded := append(stxns, sampleStxn)
 		err = client.BroadcastTransactionGroup(expanded)
-		a.Error(err)
+		errorcontains.CaptureError(t, err)
 		if len(expanded) >= exceedGroupSize {
 			a.Contains(err.Error(), "group size")
 			a.Contains(err.Error(), fmt.Sprintf("%d", maxTxGroupSize))

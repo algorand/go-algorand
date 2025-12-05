@@ -32,6 +32,7 @@ import (
 
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -271,7 +272,7 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	cLatest.Version = getLatestConfigVersion() + 1
 	_, _, err = migrate(cLatest)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
@@ -355,7 +356,7 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
 	_, _, err = migrate(cNext)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 // Verify that nobody is changing the shipping default configurations
@@ -999,7 +1000,7 @@ func TestEnsureAndResolveGenesisDirs_migrateCrashErr(t *testing.T) {
 	require.NoError(t, err)
 	// Resolve
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Empty(t, paths)
 	// Confirm that crash.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite"))
@@ -1031,7 +1032,7 @@ func TestEnsureAndResolveGenesisDirs_migrateSPErr(t *testing.T) {
 	require.NoError(t, err)
 	// Resolve
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Empty(t, paths)
 	// Confirm that stateproof.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite"))
@@ -1057,7 +1058,7 @@ func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
 	// first try an error with an empty root dir
 	paths, err := cfg.EnsureAndResolveGenesisDirs("", "myGenesisID", tLogger{t: t})
 	require.Empty(t, paths)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Contains(t, err.Error(), "rootDir is required")
 
 	require.NoError(t, os.Chmod(testDirectory, 0200))
@@ -1065,7 +1066,7 @@ func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
 	// now try an error with a root dir that can't be written to
 	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
 	require.Empty(t, paths)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Contains(t, err.Error(), "permission denied")
 }
 

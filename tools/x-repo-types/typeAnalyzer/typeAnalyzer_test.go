@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -75,7 +76,7 @@ func TestEdgeFromLabel(t *testing.T) {
 			t.Parallel()
 			edge, err := ChildNameFromLabel(tc.label)
 			if tc.expectError {
-				require.Error(t, err)
+				errorcontains.CaptureError(t, err)
 				require.Equal(t, ChildName{}, edge)
 			} else {
 				require.NoError(t, err)

@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -174,7 +175,7 @@ func TestPseudonode(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	assert.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
+	errorcontains.CaptureErrorAssert(t, err, "MakeProposals did not returned an error when being overflowed with requests")
 
 	persist := make(chan error)
 	close(persist)
@@ -186,7 +187,7 @@ func TestPseudonode(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	assert.Error(t, err, "MakeVotes did not returned an error when being overflowed with requests")
+	errorcontains.CaptureErrorAssert(t, err, "MakeVotes did not returned an error when being overflowed with requests")
 
 	// drain output channels.
 	for _, ch := range channels {
@@ -525,7 +526,7 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		channels = append(channels, ch)
 	}
 	enqueuedProposals := len(channels)
-	require.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
+	errorcontains.CaptureError(t, err, "MakeProposals did not returned an error when being overflowed with requests")
 	require.ErrorIs(t, err, errPseudonodeBacklogFull)
 
 	persist := make(chan error)
@@ -538,7 +539,7 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	require.Error(t, err, "MakeVotes did not returned an error when being overflowed with requests")
+	errorcontains.CaptureError(t, err, "MakeVotes did not returned an error when being overflowed with requests")
 	enqueuedVotes := len(channels) - enqueuedProposals
 	// drain output channels.
 	for _, ch := range channels {

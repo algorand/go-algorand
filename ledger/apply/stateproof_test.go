@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -263,7 +264,7 @@ func TestApplyStateProof(t *testing.T) {
 
 	// crypto verification should fail since it is not a valid stateproof
 	err = StateProof(stateProofTx, atRound, applier, validate)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "crypto error")
 
 	a.Equal(basics.Round(512), applier.GetStateProofNextRound())

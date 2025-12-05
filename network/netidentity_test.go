@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +89,7 @@ func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// happy path: response should be attached here
 	h = http.Header{}
@@ -198,7 +199,7 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 // TestIdentityChallengeSchemeBadPayload tests that the  scheme will
@@ -216,7 +217,7 @@ func TestIdentityChallengeSchemeBadPayload(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 // TestIdentityChallengeSchemeBadResponseSignature tests that the  scheme will
@@ -247,7 +248,7 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	key2, verificationMsg, err := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 // TestIdentityChallengeSchemeBadResponsePayload tests that the  scheme will
@@ -269,7 +270,7 @@ func TestIdentityChallengeSchemeBadResponsePayload(t *testing.T) {
 	key2, verificationMsg, err := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 // TestIdentityChallengeSchemeWrongChallenge the scheme will
@@ -295,7 +296,7 @@ func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
 	key2, verificationMsg, err := i.VerifyResponse(r, newIdentityChallengeValue())
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestNewIdentityTracker(t *testing.T) {

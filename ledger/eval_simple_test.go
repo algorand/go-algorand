@@ -41,6 +41,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -87,14 +88,14 @@ func TestBlockEvaluator(t *testing.T) {
 	st.Sig[2] ^= 8
 	txgroup := []transactions.SignedTxn{stbad}
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// Repeat should fail
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	err = eval.Transaction(st, transactions.ApplyData{})
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// out of range should fail
 	btxn := txn
@@ -103,9 +104,9 @@ func TestBlockEvaluator(t *testing.T) {
 	st = btxn.Sign(keys[0])
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	err = eval.Transaction(st, transactions.ApplyData{})
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// bogus group should fail
 	btxn = txn
@@ -113,9 +114,9 @@ func TestBlockEvaluator(t *testing.T) {
 	st = btxn.Sign(keys[0])
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	err = eval.Transaction(st, transactions.ApplyData{})
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// mixed fields should fail
 	btxn = txn
@@ -123,7 +124,7 @@ func TestBlockEvaluator(t *testing.T) {
 	st = btxn.Sign(keys[0])
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	// We don't test eval.Transaction() here because it doesn't check txn.WellFormed(), instead relying on that to have already been checked by the transaction pool.
 	// err = eval.Transaction(st, transactions.ApplyData{})
 	// require.Error(t, err)
@@ -162,10 +163,10 @@ func TestBlockEvaluator(t *testing.T) {
 	s4 := t4.Sign(keys[2])
 	txgroup = []transactions.SignedTxn{s3, s4}
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
 	err = eval.TransactionGroup(txgroupad)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// Test a group that should work
 	var group transactions.TxGroup
@@ -184,15 +185,15 @@ func TestBlockEvaluator(t *testing.T) {
 	s4bad := t4bad.Sign(keys[2])
 	txgroup = []transactions.SignedTxn{s3, s4bad}
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	txgroupad = transactions.WrapSignedTxnsWithAD(txgroup)
 	err = eval.TransactionGroup(txgroupad)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// missing part of the group should fail
 	txgroup = []transactions.SignedTxn{s3}
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	unfinishedBlock, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
@@ -1335,7 +1336,7 @@ func TestRekeying(t *testing.T) {
 		makeTxn(addrs[0], addrs[0], basics.Address{}, keys[0], 2), // [A -> A][0,A]
 	}
 	err = tryBlock(test2txns)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// TODO: More tests
 }
@@ -1412,10 +1413,10 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
 				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
-					require.Error(t, err)
+					errorcontains.CaptureError(t, err)
 					require.Contains(t, err.Error(), testCase.expectedErrorV29)
 				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
-					require.Error(t, err)
+					errorcontains.CaptureError(t, err)
 					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
 				}
 			})

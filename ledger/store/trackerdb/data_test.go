@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1269,10 +1270,10 @@ func TestBaseAccountDataDecodeEmpty(t *testing.T) {
 	var b BaseAccountData
 
 	err := protocol.Decode([]byte{}, &b)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	err = protocol.Decode(nil, &b)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	err = protocol.Decode([]byte{0x80}, &b)
 	require.NoError(t, err)

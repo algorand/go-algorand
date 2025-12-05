@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -310,11 +311,11 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			ep, _, _ := makeSampleEnv()
 			ep.TxnGroup[1].Lsig.Logic = ops.Program
 			_, err := EvalSignature(1, ep)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 			ep.Ledger = NewLedger(nil)
 			_, err = EvalApp(ops.Program, 1, 888, ep)
 			if v < txnEffectsVersion {
-				require.Error(t, err, source)
+				errorcontains.CaptureError(t, err, source)
 			} else {
 				if fs.array {
 					continue // Array (Logs) will be 0 length, so will fail anyway

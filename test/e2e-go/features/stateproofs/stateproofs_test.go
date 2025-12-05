@@ -45,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -1087,7 +1088,7 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 				// The pool is full, and only one SP transaction will be admitted in per round. Otherwise, pool is full error will be returned
 				// However, if this is the lucky SP transaction to get into the pool, it will eventually be rejected by ValidateStateProof and a different
 				// error will be returned
-				require.Error(t, err)
+				errorcontains.CaptureError(t, err)
 				time.Sleep(25 * time.Millisecond)
 			}
 		}()
@@ -1113,7 +1114,7 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 				cntr = cntr + 1
 				// ignore the returned error (most of the time will be error)
 				_, err := relay.SendPaymentFromUnencryptedWallet(account0, account0, params.MinFee, ps.amount, []byte{byte(params.LastRound)})
-				require.Error(t, err)
+				errorcontains.CaptureError(t, err)
 				require.Equal(t, "HTTP 400 Bad Request: TransactionPool.checkPendingQueueSize: transaction pool have reached capacity", err.Error())
 				time.Sleep(25 * time.Millisecond)
 			}

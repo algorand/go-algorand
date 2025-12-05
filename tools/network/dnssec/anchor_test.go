@@ -19,6 +19,7 @@ package dnssec
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -42,5 +43,5 @@ func TestParseRootTrustAnchor(t *testing.T) {
 	a.Equal(uint8(2), currentDS.DigestType)
 
 	_, err = makeRootTrustAnchor("not xml")
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }

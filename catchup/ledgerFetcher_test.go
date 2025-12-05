@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	p2ptesting "github.com/algorand/go-algorand/network/p2p/testing"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -57,7 +58,7 @@ func TestNonParsableAddress(t *testing.T) {
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	peer := testHTTPPeer(":def")
 	err := lf.getPeerLedger(context.Background(), &peer, basics.Round(0))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestLedgerFetcherErrorResponseHandling(t *testing.T) {

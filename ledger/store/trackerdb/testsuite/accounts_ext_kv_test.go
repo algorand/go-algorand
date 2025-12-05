@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/stretchr/testify/require"
 )
 
@@ -135,7 +136,7 @@ func CustomTestTxTail(t *customT) {
 
 	// load  TxTail's (error, must be the latest round)
 	_, _, _, err = ar.LoadTxTail(context.Background(), basics.Round(1))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// load  TxTail's
 	txtails, hashes, readBaseRound, err := ar.LoadTxTail(context.Background(), basics.Round(2))
@@ -204,7 +205,7 @@ func CustomTestOnlineAccountParams(t *customT) {
 
 	// lookup single round params (not found)
 	_, err = aor.LookupOnlineRoundParams(basics.Round(9000))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, trackerdb.ErrNotFound, err)
 
 	// read all round params
@@ -248,7 +249,7 @@ func CustomTestAccountLookupByRowID(t *customT) {
 
 	// non-existing account
 	_, err = ar.LookupAccountRowID(RandomAddress())
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, err, trackerdb.ErrNotFound)
 
 	// read account
@@ -293,7 +294,7 @@ func CustomTestResourceLookupByRowID(t *customT) {
 
 	// non-existing resource
 	_, err = ar.LookupResourceDataByAddrID(refAccA, basics.CreatableIndex(100))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, err, trackerdb.ErrNotFound)
 
 	// read resource
@@ -308,6 +309,6 @@ func CustomTestResourceLookupByRowID(t *customT) {
 
 	// read resource on nil account
 	_, err = ar.LookupResourceDataByAddrID(nil, basics.CreatableIndex(100))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, err, trackerdb.ErrNotFound)
 }

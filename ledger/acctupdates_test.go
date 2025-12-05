@@ -43,6 +43,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
@@ -349,20 +350,20 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 
 	// the log has "onlineAccounts failed to fetch online totals for rnd" warning that is expected
 	_, err := ao.onlineCirculation(latest+1, latest+1+basics.Round(ao.maxBalLookback()))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	var validThrough basics.Round
 	_, validThrough, err = au.LookupWithoutRewards(latest+1, ledgertesting.RandomAddress())
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Zero(t, validThrough)
 
 	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
 		rnd := base - basics.Round(ao.maxBalLookback())
 		_, err := ao.onlineCirculation(rnd, base)
-		require.Error(t, err)
+		errorcontains.CaptureError(t, err)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
-		require.Error(t, err)
+		errorcontains.CaptureError(t, err)
 		require.Zero(t, validThrough)
 	}
 

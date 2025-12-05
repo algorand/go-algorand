@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/bloom"
 )
@@ -210,7 +211,7 @@ func TestSyncFromUnsupportedClient(t *testing.T) {
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
-	require.Error(t, syncer.syncFromClient(&client))
+	errorcontains.CaptureError(t, syncer.syncFromClient(&client))
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -227,7 +228,7 @@ func TestSyncFromClientAndQuit(t *testing.T) {
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	syncer.cancel()
-	require.Error(t, syncer.syncFromClient(&client))
+	errorcontains.CaptureError(t, syncer.syncFromClient(&client))
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -243,7 +244,7 @@ func TestSyncFromClientAndError(t *testing.T) {
 	// Since syncer is not Started, set the context here
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
-	require.Error(t, syncer.syncFromClient(&client))
+	errorcontains.CaptureError(t, syncer.syncFromClient(&client))
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -260,7 +261,7 @@ func TestSyncFromClientAndTimeout(t *testing.T) {
 	// Since syncer is not Started, set the context here
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
-	require.Error(t, syncer.syncFromClient(&client))
+	errorcontains.CaptureError(t, syncer.syncFromClient(&client))
 	require.Zero(t, handler.messageCounter.Load())
 }
 

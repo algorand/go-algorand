@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/algorand/falcon"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -70,7 +71,7 @@ func TestFalconCanHandleNilSignature(t *testing.T) {
 	a.NoError(err)
 
 	err = key.GetVerifyingKey().VerifyBytes([]byte("Test"), nil)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestVerificationBytes(t *testing.T) {

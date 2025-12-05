@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -90,12 +91,12 @@ func TestParseHostOrURL(t *testing.T) {
 	for _, addr := range badUrls {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseHostOrURL(addr)
-			require.Error(t, err, "url should fail", addr)
+			errorcontains.CaptureError(t, err, "url should fail", addr)
 			require.False(t, IsMultiaddr(addr))
 		})
 		t.Run(addr+"-multiaddr", func(t *testing.T) {
 			_, err := ParseHostOrURLOrMultiaddr(addr)
-			require.Error(t, err, "url should fail", addr)
+			errorcontains.CaptureError(t, err, "url should fail", addr)
 			require.False(t, IsMultiaddr(addr))
 		})
 	}
@@ -136,7 +137,7 @@ func TestParseHostURLOrMultiaddr(t *testing.T) {
 	for _, addr := range badMultiAddrs {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseHostOrURLOrMultiaddr(addr)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 			require.False(t, IsMultiaddr(addr))
 		})
 	}

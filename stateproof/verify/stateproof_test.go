@@ -17,6 +17,8 @@
 package verify
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
@@ -25,9 +27,9 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func invokeValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader,
@@ -159,7 +161,7 @@ func TestStateProofParams(t *testing.T) {
 	var hdr bookkeeping.BlockHeader
 
 	_, err := GetProvenWeight(&votersHdr, &hdr)
-	require.Error(t, err) // not enabled
+	errorcontains.CaptureError(t, err) // not enabled
 
 	votersHdr.CurrentProtocol = "TestStateProofParams"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
@@ -167,12 +169,12 @@ func TestStateProofParams(t *testing.T) {
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	votersHdr.Round = 1
 	_, err = GetProvenWeight(&votersHdr, &hdr)
-	require.Error(t, err) // wrong round
+	errorcontains.CaptureError(t, err) // wrong round
 
 	votersHdr.Round = 2
 	hdr.Round = 3
 	_, err = GetProvenWeight(&votersHdr, &hdr)
-	require.Error(t, err) // wrong round
+	errorcontains.CaptureError(t, err) // wrong round
 
 	// Covers all cases except overflow
 }

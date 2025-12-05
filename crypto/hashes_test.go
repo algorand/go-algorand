@@ -19,6 +19,7 @@ package crypto
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 
 	"github.com/stretchr/testify/require"
@@ -68,7 +69,7 @@ func TestEmptyHash(t *testing.T) {
 	var msg [4]byte
 	len, err := hash.Write(msg[:])
 	a.Equal(0, len)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	a.Equal(0, hash.BlockSize())
 	var emptySlice []byte

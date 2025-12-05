@@ -34,6 +34,7 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/stretchr/testify/require"
@@ -133,17 +134,17 @@ func TestVersionToMajorMinor(t *testing.T) {
 	require.Equal(t, int64(2), mi)
 
 	ma, mi, err = versionToMajorMinor("1.2.3")
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("1")
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("a.b")
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 }

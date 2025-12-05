@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,7 +100,7 @@ func TestGetMissingCatchpointLabel(t *testing.T) {
 			label, err := getMissingCatchpointLabel(test.URL)
 
 			if test.expectedErr != "" {
-				require.Error(t, err)
+				errorcontains.CaptureError(t, err)
 				require.Contains(t, err.Error(), test.expectedErr)
 			} else {
 				_, _, err = ledgercore.ParseCatchpointLabel(label)

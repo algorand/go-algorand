@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -449,7 +450,7 @@ func TestLeadingZeros(t *testing.T) {
 
 	b := big.NewInt(0x100)
 	r, err := leadingZeros(1, b)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Nil(t, r)
 
 	b = big.NewInt(100)

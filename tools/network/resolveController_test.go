@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
 )
@@ -118,6 +119,6 @@ func TestRealNamesWithResolver(t *testing.T) {
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 		_, err = r.LookupIPAddr(timeoutCtx, example)
 		cancel()
-		a.Error(err)
+		errorcontains.CaptureError(t, err)
 	}
 }

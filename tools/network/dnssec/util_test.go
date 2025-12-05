@@ -19,6 +19,7 @@ package dnssec
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -31,13 +32,13 @@ func TestSplitZone(t *testing.T) {
 	var err error
 
 	res, err = splitToZones("")
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	res, err = splitToZones("com")
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	res, err = splitToZones("example.com")
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	res, err = splitToZones(".")
 	a.NoError(err)
@@ -64,13 +65,13 @@ func TestParentZone(t *testing.T) {
 	var err error
 
 	res, err = getParentZone("")
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	res, err = getParentZone("com")
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	res, err = getParentZone(".")
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	res, err = getParentZone("com.")
 	a.NoError(err)

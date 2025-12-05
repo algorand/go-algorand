@@ -48,6 +48,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/stateproof/verify"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -231,7 +232,7 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
-	require.Error(t, transactionPool.RememberOne(signedTx))
+	errorcontains.CaptureError(t, transactionPool.RememberOne(signedTx))
 }
 
 func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
@@ -297,7 +298,7 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 	err := transactionPool.RememberOne(signedTx)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	var returnedTxid, returnedAcct string
 	var returnedBal, returnedMin, numAssets uint64
 	_, err = fmt.Sscanf(err.Error(), "TransactionPool.Remember: transaction %s account %s balance %d below min %d (%d assets)",
@@ -366,7 +367,7 @@ func TestCloseAccount(t *testing.T) {
 		},
 	}
 	signedTx2 := tx.Sign(secrets[0])
-	require.Error(t, transactionPool.RememberOne(signedTx2))
+	errorcontains.CaptureError(t, transactionPool.RememberOne(signedTx2))
 }
 
 func TestCloseAccountWhileTxIsPending(t *testing.T) {
@@ -429,7 +430,7 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 		},
 	}
 	signedCloseTx := closeTx.Sign(secrets[0])
-	require.Error(t, transactionPool.RememberOne(signedCloseTx))
+	errorcontains.CaptureError(t, transactionPool.RememberOne(signedCloseTx))
 }
 
 func TestClosingAccountBelowMinBalance(t *testing.T) {
@@ -474,7 +475,7 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 		},
 	}
 	signedTx := closeTx.Sign(secrets[0])
-	require.Error(t, transactionPool.RememberOne(signedTx))
+	errorcontains.CaptureError(t, transactionPool.RememberOne(signedTx))
 }
 
 func TestRecipientGoesBelowMinBalance(t *testing.T) {
@@ -517,7 +518,7 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
-	require.Error(t, transactionPool.RememberOne(signedTx))
+	errorcontains.CaptureError(t, transactionPool.RememberOne(signedTx))
 }
 
 func TestRememberForget(t *testing.T) {
@@ -807,7 +808,7 @@ func TestOverspender(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 
 	// consume the transaction of allowed limit
-	require.Error(t, transactionPool.RememberOne(signedTx))
+	errorcontains.CaptureError(t, transactionPool.RememberOne(signedTx))
 
 	// min transaction
 	minTx := transactions.Transaction{
@@ -826,7 +827,7 @@ func TestOverspender(t *testing.T) {
 		},
 	}
 	signedMinTx := minTx.Sign(secrets[0])
-	require.Error(t, transactionPool.RememberOne(signedMinTx))
+	errorcontains.CaptureError(t, transactionPool.RememberOne(signedMinTx))
 }
 
 func TestRemove(t *testing.T) {
@@ -1384,7 +1385,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 		}
 
 		// ensure that we would fail adding this.
-		require.Error(t, transactionPool.Remember(txgroup))
+		errorcontains.CaptureError(t, transactionPool.Remember(txgroup))
 
 		if groupSize > 1 {
 			// add a single transaction and ensure we succeed

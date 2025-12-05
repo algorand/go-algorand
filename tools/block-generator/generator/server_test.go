@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -104,7 +105,7 @@ func TestParseURL(t *testing.T) {
 				require.NoError(t, err, msg)
 				assert.Equal(t, tc.expectedParam, round)
 			} else {
-				require.Error(t, err, fmt.Sprintf("Expected an error containing: %s", tc.err))
+				errorcontains.CaptureError(t, err, fmt.Sprintf("Expected an error containing: %s", tc.err))
 				require.True(t, strings.Contains(err.Error(), tc.err))
 			}
 		})

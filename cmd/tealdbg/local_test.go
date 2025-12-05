@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -595,7 +596,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	}
 
 	err := l.Setup(&dp)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "invalid group index 1 for a single transaction")
 
 	dp = DebugParams{
@@ -606,7 +607,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	}
 
 	err = l.Setup(&dp)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "invalid group index 3 for a txn in a transaction group of 2")
 
 	dp = DebugParams{
@@ -618,7 +619,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	}
 
 	err = l.Setup(&dp)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "unknown run mode")
 
 	dp = DebugParams{
@@ -787,7 +788,7 @@ func TestDebugFromTxn(t *testing.T) {
 	}
 
 	err = l.Setup(&dp)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Contains(err.Error(), "no programs found in transactions")
 	a.Equal(2, len(l.txnGroup))
 
@@ -897,7 +898,7 @@ func TestDebugFromTxn(t *testing.T) {
 	}
 
 	err = l.Setup(&dp)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Equal(2, len(l.txnGroup))
 }
 

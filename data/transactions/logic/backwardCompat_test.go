@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -413,7 +414,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 			if fs.array {
 				// "txn Accounts" is invalid, so skip evaluation
-				require.Error(t, err)
+				errorcontains.CaptureError(t, err)
 				continue
 			} else {
 				require.NoError(t, err)

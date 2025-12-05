@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/unicode"
@@ -48,10 +49,10 @@ func TestParseTrailingCommas(t *testing.T) {
 		commas := strings.Repeat(",", i)
 		intScalar := `{"key0": 4160` + commas + `}`
 		_, err := parseJSON([]byte(intScalar))
-		require.Error(t, err)
+		errorcontains.CaptureError(t, err)
 		strScalar := `{"key0": "algo"` + commas + `}`
 		_, err = parseJSON([]byte(strScalar))
-		require.Error(t, err)
+		errorcontains.CaptureError(t, err)
 	}
 }
 
@@ -60,10 +61,10 @@ func TestParseComments(t *testing.T) {
 	t.Parallel()
 	text := `{"key0": /*comment*/"algo"}`
 	_, err := parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": [1,/*comment*/,3]}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestParseUnclosed(t *testing.T) {
@@ -71,19 +72,19 @@ func TestParseUnclosed(t *testing.T) {
 	t.Parallel()
 	text := `{"key0": ["algo"}`
 	_, err := parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": ["algo"]]}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": ["algo"],"key1":{}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": ["algo"],"key1":{{}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": [1,}]}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestParseNested(t *testing.T) {
@@ -100,7 +101,7 @@ func TestParseWhiteSpace(t *testing.T) {
 	//empty text
 	text := ""
 	_, err := parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	//space, tab, new line and carriage return are allowed
 	text = "{\"key0\": [\t]\n\r}"
 	_, err = parseJSON([]byte(text))
@@ -108,7 +109,7 @@ func TestParseWhiteSpace(t *testing.T) {
 	//form feed is not allowed
 	text = "{\"key0\": [\f]}"
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestParseSpecialValues(t *testing.T) {
@@ -116,13 +117,13 @@ func TestParseSpecialValues(t *testing.T) {
 	t.Parallel()
 	text := `{"key0": NaN}`
 	_, err := parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": +Inf}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": -Inf}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": null}`
 	_, err = parseJSON([]byte(text))
 	require.NoError(t, err)
@@ -139,10 +140,10 @@ func TestParseHexValue(t *testing.T) {
 	t.Parallel()
 	text := `{"key0": 0x1}`
 	_, err := parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": 0xFF}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestParseBigNum(t *testing.T) {
@@ -174,7 +175,7 @@ func TestParseArrays(t *testing.T) {
 	t.Parallel()
 	text := `{"key0": [,1,]}`
 	_, err := parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = "{\"key0\":[1\n]}"
 	_, err = parseJSON([]byte(text))
 	require.NoError(t, err)
@@ -199,7 +200,7 @@ func TestParseKeys(t *testing.T) {
 	require.Equal(t, "1", string(parsed["a"]))
 	text = `{"key0": 1,"key0": 2}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": 1,"key1": {"key2":2,"key2":"10"}}`
 	_, err = parseJSON([]byte(text))
 	require.NoError(t, err)
@@ -208,16 +209,16 @@ func TestParseKeys(t *testing.T) {
 	require.NoError(t, err)
 	text = `{"key0":: 1}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0":: "1"}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": 'algo'}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{1: 1}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestParseFileEncoding(t *testing.T) {
@@ -237,13 +238,13 @@ func TestParseFileEncoding(t *testing.T) {
 	encoded, err := enc.String(text)
 	require.NoError(t, err)
 	_, err = parseJSON([]byte(encoded))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	// utf-16BE
 	enc = unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM).NewEncoder()
 	encoded, err = enc.String(text)
 	require.NoError(t, err)
 	_, err = parseJSON([]byte(encoded))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 
 	// json fails to parse utf-32 encoded text
 	// utf-32LE
@@ -251,13 +252,13 @@ func TestParseFileEncoding(t *testing.T) {
 	encoded, err = enc.String(text)
 	require.NoError(t, err)
 	_, err = parseJSON([]byte(encoded))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	// utf-32BE
 	enc = utf32.UTF32(utf32.BigEndian, utf32.IgnoreBOM).NewEncoder()
 	encoded, err = enc.String(text)
 	require.NoError(t, err)
 	_, err = parseJSON([]byte(encoded))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestParseByteOrderMark(t *testing.T) {
@@ -267,7 +268,7 @@ func TestParseByteOrderMark(t *testing.T) {
 	// it is treated as an error
 	text := "\uFEFF{\"key0\": 1}"
 	_, err := parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestParseControlChar(t *testing.T) {
@@ -291,13 +292,13 @@ func TestParseEscapeChar(t *testing.T) {
 	// incomplete escaped chars
 	text = `{"key0": ["\u00A"]}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": "\"}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": """}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestParseEscapedInvalidChar(t *testing.T) {
@@ -329,8 +330,8 @@ func TestParseRawNonUnicodeChar(t *testing.T) {
 	require.NoError(t, err)
 	text = `{"key0": "\uFF"}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	text = `{"key0": FF}`
 	_, err = parseJSON([]byte(text))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }

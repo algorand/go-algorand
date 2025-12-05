@@ -20,6 +20,7 @@ package privatenet
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -47,7 +48,7 @@ func TestPrivateNetworkImportKeys(t *testing.T) {
 
 	// Check that if there is an existing directory with same name, test fails.
 	errStr, err := goalFixture.NetworkPregen(defaultTemplate, tmpGenDir)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Contains(t, errStr, "already exists and is not empty")
 
 	// Then try importing files from same template.

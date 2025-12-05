@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -238,24 +239,24 @@ func TestLedgerCirculation(t *testing.T) {
 		} else if rnd < basics.Round(520) {
 			// test one round in the future ( expected error )
 			data, _, _, err = realLedger.LookupAccount(rnd+1, destAccount)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 			data, _, _, err = l.LookupAccount(rnd+1, destAccount)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 
 			_, err = realLedger.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			_, err = l.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 		} else if rnd < basics.Round(520) {
 			// test expired round ( expected error )
 			_, err = realLedger.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 
 			_, err = l.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
-			require.Error(t, err)
+			errorcontains.CaptureError(t, err)
 		}
 	}
 }

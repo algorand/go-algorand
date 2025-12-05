@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/netdeploy/remote"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -54,7 +55,7 @@ func TestLoadMissingConfig(t *testing.T) {
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
 	a.NoError(err)
 	template, err := loadTemplate(filepath.Join(templateDir, "<invalidname>.json"))
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.Equal(template.Genesis.NetworkName, "")
 }
 
@@ -96,7 +97,7 @@ func TestValidate(t *testing.T) {
 	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
 	template, _ = loadTemplate(filepath.Join(templateDir, "NegativeStake.json"))
 	err = template.Validate()
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
 	template, _ = loadTemplate(filepath.Join(templateDir, "TwoNodesOneRelay1000Accounts.json"))

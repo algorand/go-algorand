@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -110,16 +111,16 @@ func TestErrors(t *testing.T) {
 	t.Parallel()
 	// Validates that expected functions are disabled
 	node := setupFollowNode(t)
-	require.Error(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
-	require.Error(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}))
+	errorcontains.CaptureError(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
+	errorcontains.CaptureError(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}))
 	_, err := node.Simulate(simulation.Request{})
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	_, err = node.GetParticipationKey(account.ParticipationID{})
-	require.Error(t, err)
-	require.Error(t, node.RemoveParticipationKey(account.ParticipationID{}))
-	require.Error(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}))
+	errorcontains.CaptureError(t, err)
+	errorcontains.CaptureError(t, node.RemoveParticipationKey(account.ParticipationID{}))
+	errorcontains.CaptureError(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}))
 	_, err = node.InstallParticipationKey([]byte{})
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestDevModeWarning(t *testing.T) {

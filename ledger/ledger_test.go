@@ -48,6 +48,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -520,99 +521,99 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	badTx = correctPay
 	badTx.GenesisID = "invalid"
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid genesis ID")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid genesis ID")
 
 	badTx = correctPay
 	badTx.Type = "invalid"
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid tx type")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid tx type")
 
 	badTx = correctPay
 	badTx.KeyregTxnFields = correctKeyregFields
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added pay tx with keyreg fields set")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added pay tx with keyreg fields set")
 
 	badTx = correctKeyreg
 	badTx.PaymentTxnFields = correctPayFields
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay fields set")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay fields set")
 
 	badTx = correctKeyreg
 	badTx.PaymentTxnFields = correctCloseFields
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay (close) fields set")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay (close) fields set")
 
 	badTx = correctPay
 	badTx.FirstValid = badTx.LastValid + 1
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with FirstValid > LastValid")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with FirstValid > LastValid")
 
 	badTx = correctPay
 	badTx.LastValid += basics.Round(proto.MaxTxnLife)
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly long validity")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly long validity")
 
 	badTx = correctPay
 	badTx.LastValid = l.Latest()
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added expired tx")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added expired tx")
 
 	badTx = correctPay
 	badTx.FirstValid = l.Latest() + 2
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx which is not valid yet")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx which is not valid yet")
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
 
 	badTx = correctPay
 	badTx.Sender = poolAddr
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from tx pool")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from tx pool")
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero address")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero address")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee - 1}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with fee below minimum")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with fee below minimum")
 
 	badTx = correctKeyreg
 	fee, overflow := basics.OAddA(initAccounts[badTx.Sender].MicroAlgos, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with fee above user balance")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with fee above user balance")
 
 	// TODO try excessive spending given distribution of some number of rewards
 
 	badTx = correctPay
 	sbadTx := sign(initSecrets, badTx)
 	sbadTx.Sig = crypto.Signature{}
-	a.Error(l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
+	errorcontains.CaptureError(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
 
 	badTx = correctPay
 	sbadTx = sign(initSecrets, badTx)
 	sbadTx.Sig[5]++
-	a.Error(l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with corrupt signature")
+	errorcontains.CaptureError(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with corrupt signature")
 
 	// TODO set multisig and test
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink spent to non-sink address")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink spent to non-sink address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.CloseRemainderTo = addrList[0]
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink address")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.Receiver = poolAddr
 	badTx.CloseRemainderTo = addrList[0]
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink address")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.CloseRemainderTo = poolAddr
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to pool address")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to pool address")
 
 	badTx = correctPay
 	remainder, overflow := basics.OSubA(initAccounts[badTx.Sender].MicroAlgos, badTx.Amount)
@@ -620,7 +621,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	fee, overflow = basics.OAddA(remainder, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "overspent with (amount + fee)")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "overspent with (amount + fee)")
 
 	adClose := ad
 	adClose.ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
@@ -637,7 +638,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	correctPay.Receiver = poolAddr
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not spend from sink to pool")
 
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
 }
 
 func TestLedgerSingleTxV24(t *testing.T) {
@@ -1195,68 +1196,68 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.GenesisID = "invalid"
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid genesis ID")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid genesis ID")
 
 	badTx = correctPay
 	badTx.Type = "invalid"
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid tx type")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid tx type")
 
 	badTx = correctPay
 	badTx.KeyregTxnFields = correctKeyregFields
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added pay tx with keyreg fields set")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added pay tx with keyreg fields set")
 
 	badTx = correctKeyreg
 	badTx.PaymentTxnFields = correctPayFields
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay fields set")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay fields set")
 
 	badTx = correctKeyreg
 	badTx.PaymentTxnFields = correctCloseFields
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay (close) fields set")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay (close) fields set")
 
 	badTx = correctPay
 	badTx.FirstValid = badTx.LastValid + 1
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with FirstValid > LastValid")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with FirstValid > LastValid")
 
 	badTx = correctPay
 	badTx.LastValid += basics.Round(proto.MaxTxnLife)
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly long validity")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly long validity")
 
 	badTx = correctPay
 	badTx.LastValid = l.Latest()
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added expired tx")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added expired tx")
 
 	badTx = correctPay
 	badTx.FirstValid = l.Latest() + 2
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx which is not valid yet")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx which is not valid yet")
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero address")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero address")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee - 1}
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with fee below minimum")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with fee below minimum")
 
 	badTx = correctKeyreg
 	fee, overflow := basics.OAddA(initAccounts[badTx.Sender].MicroAlgos, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with fee above user balance")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with fee above user balance")
 
 	// TODO try excessive spending given distribution of some number of rewards
 
 	badTx = correctPay
 	sbadTx := sign(initSecrets, badTx)
 	sbadTx.Sig = crypto.Signature{}
-	a.Error(l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
+	errorcontains.CaptureError(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
 
 	badTx = correctPay
 	remainder, overflow := basics.OSubA(initAccounts[badTx.Sender].MicroAlgos, badTx.Amount)
@@ -1264,7 +1265,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	fee, overflow = basics.OAddA(remainder, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "overspent with (amount + fee)")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "overspent with (amount + fee)")
 
 	adClose := ad
 	adClose.ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
@@ -1277,11 +1278,11 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	adCloseWrong.ClosingAmount.Raw++
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not add payment transaction")
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), "closed transaction with wrong ApplyData")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), "closed transaction with wrong ApplyData")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adClose), "could not add close transaction")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "could not add key registration")
 
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
+	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
 
 	leaseReleaseRound := l.Latest() + 10
 	correctPayLease := correctPay
@@ -1294,7 +1295,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		correctPayLease.Note = make([]byte, 1)
 		correctPayLease.Note[0] = 1
 		correctPayLease.LastValid += 10
-		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+		errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
 		correctPayLeaseOther := correctPayLease
 		correctPayLeaseOther.Sender = addrList[4]
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching lease but different sender")
@@ -1303,7 +1304,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching sender but different lease")
 
 		for l.Latest() < leaseReleaseRound {
-			a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+			errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
 
 			var totalRewardUnits uint64
 			for _, acctdata := range initAccounts {
@@ -1345,7 +1346,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction after lease was dropped")
 	} else {
-		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with transaction lease unsupported by protocol version")
+		errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with transaction lease unsupported by protocol version")
 	}
 }
 
@@ -1448,7 +1449,7 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	correctPayLease.LastValid = l.Latest() + 10
 
 	if proto.FixTransactionLeases {
-		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with overlapping lease")
+		errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with overlapping lease")
 	} else {
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
 	}
@@ -1758,7 +1759,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	// we make sure that the voters header does not exist and that the voters tracker
 	// lost tracking of the top voters.
 	_, err = l.BlockHdr(basics.Round(proto.StateProofInterval))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	expectedErr := &ledgercore.ErrNoEntry{}
 	require.ErrorAs(t, err, expectedErr, fmt.Sprintf("got error %s", err))
 
@@ -2214,7 +2215,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		errorcontains.CaptureError(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2225,7 +2226,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	rnd := basics.Round(proto.MaxBalLookback - shorterLookback)
 	_, err = l.OnlineCirculation(rnd, rnd+basics.Round(proto.MaxBalLookback))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	for i := basics.Round(proto.MaxBalLookback - shorterLookback + 1); i <= l.Latest(); i++ {
 		online, err := l.OnlineCirculation(i, i+basics.Round(proto.MaxBalLookback))
 		require.NoError(t, err)
@@ -2262,7 +2263,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		errorcontains.CaptureError(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
 	}
 }
 
@@ -2670,7 +2671,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		errorcontains.CaptureError(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2691,7 +2692,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	rnd := basics.Round(proto.MaxBalLookback - shorterLookback)
 	_, err = l2.OnlineCirculation(rnd, rnd+basics.Round(proto.MaxBalLookback))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	for i := l2.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l2.Latest(); i++ {
 		online, err := l2.OnlineCirculation(i, i+basics.Round(proto.MaxBalLookback))
 		require.NoError(t, err)
@@ -2724,7 +2725,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		errorcontains.CaptureError(t, l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
 	}
 }
 
@@ -3458,7 +3459,7 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 
 	// make sure we can't get a block before the max lookback
 	blk, err = l.Block(90)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Empty(t, blk)
 }
 

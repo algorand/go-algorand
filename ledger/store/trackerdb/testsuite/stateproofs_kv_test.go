@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,7 +64,7 @@ func CustomTestStateproofsReadWrite(t *customT) {
 
 	// read non-existing item
 	vc, err := spr.LookupSPContext(basics.Round(9000))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, trackerdb.ErrNotFound, err)
 
 	// read back a single item
@@ -78,7 +79,7 @@ func CustomTestStateproofsReadWrite(t *customT) {
 
 	// read delete items
 	vc, err = spr.LookupSPContext(basics.Round(0))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Equal(t, trackerdb.ErrNotFound, err)
 
 	// read back remaining items

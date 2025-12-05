@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -61,7 +62,7 @@ func TestWordNotInList(t *testing.T) {
 
 	mn := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon zzz invest"
 	_, err := MnemonicToKey(mn)
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	return
 }
 
@@ -77,7 +78,7 @@ func TestCorruptedChecksum(t *testing.T) {
 	// Shuffle the last word (last 11 bits of checksum)
 	wl[len(wl)-1] = wordlist[(indexOf(wordlist, lastWord)+1)%len(wordlist)]
 	recovered, err := MnemonicToKey(strings.Join(wl, sepStr))
-	require.Error(t, err)
+	errorcontains.CaptureError(t, err)
 	require.Empty(t, recovered)
 }
 
@@ -90,7 +91,7 @@ func TestInvalidKeyLen(t *testing.T) {
 		_, err := rand.Read(key)
 		require.NoError(t, err)
 		m, err := KeyToMnemonic(key)
-		require.Error(t, err)
+		errorcontains.CaptureError(t, err)
 		require.Empty(t, m)
 	}
 }
