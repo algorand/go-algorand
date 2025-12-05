@@ -344,20 +344,12 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid ba
 		return transactions.Transaction{}, err
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		goOnlineTransaction.GenesisHash = genHash
+		copy(goOnlineTransaction.GenesisHash[:], params.GenesisHash)
 	}
 
-	// Default to the suggested fee, if the caller didn't supply it
-	// Fee is tricky, should taken care last. We encode the final
-	// transaction to get the size post signing and encoding.
-	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
-		goOnlineTransaction.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, goOnlineTransaction.EstimateEncodedSize())
-		if goOnlineTransaction.Fee.Raw < cparams.MinTxnFee {
-			goOnlineTransaction.Fee.Raw = cparams.MinTxnFee
-		}
+		goOnlineTransaction.Fee, goOnlineTransaction.Tip =
+			suggestedFee(goOnlineTransaction, params)
 	}
 	return goOnlineTransaction, nil
 }
@@ -398,20 +390,14 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid b
 		},
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		goOfflineTransaction.GenesisHash = genHash
+		copy(goOfflineTransaction.GenesisHash[:], params.GenesisHash)
 	}
 
-	// Default to the suggested fee, if the caller didn't supply it
-	// Fee is tricky, should taken care last. We encode the final transaction to get the size post signing and encoding
-	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
-		goOfflineTransaction.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, goOfflineTransaction.EstimateEncodedSize())
-		if goOfflineTransaction.Fee.Raw < cparams.MinTxnFee {
-			goOfflineTransaction.Fee.Raw = cparams.MinTxnFee
-		}
+		goOfflineTransaction.Fee, goOfflineTransaction.Tip =
+			suggestedFee(goOfflineTransaction, params)
 	}
+
 	return goOfflineTransaction, nil
 }
 
@@ -450,20 +436,13 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		},
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		becomeNonparticipatingTransaction.GenesisHash = genHash
+		copy(becomeNonparticipatingTransaction.GenesisHash[:], params.GenesisHash)
 	}
 	becomeNonparticipatingTransaction.KeyregTxnFields.Nonparticipation = true
 
-	// Default to the suggested fee, if the caller didn't supply it
-	// Fee is tricky, should taken care last. We encode the final transaction to get the size post signing and encoding
-	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
-		becomeNonparticipatingTransaction.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, becomeNonparticipatingTransaction.EstimateEncodedSize())
-		if becomeNonparticipatingTransaction.Fee.Raw < cparams.MinTxnFee {
-			becomeNonparticipatingTransaction.Fee.Raw = cparams.MinTxnFee
-		}
+		becomeNonparticipatingTransaction.Fee, becomeNonparticipatingTransaction.Tip =
+			suggestedFee(becomeNonparticipatingTransaction, params)
 	}
 	return becomeNonparticipatingTransaction, nil
 }
@@ -499,20 +478,11 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid bas
 	tx.Header.LastValid = lastValid
 
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		tx.GenesisHash = genHash
+		copy(tx.GenesisHash[:], params.GenesisHash)
 	}
 
-	// Default to the suggested fee, if the caller didn't supply it
-	// Fee is tricky, should taken care last. We encode the final
-	// transaction to get the size post signing and encoding.
-	// Then, we multiply it by the suggested fee per byte.
 	if fee == 0 {
-		tx.Fee = basics.MulAIntSaturate(basics.MicroAlgos{Raw: params.Fee}, tx.EstimateEncodedSize())
-		if tx.Fee.Raw < cparams.MinTxnFee {
-			tx.Fee.Raw = cparams.MinTxnFee
-		}
+		tx.Fee, tx.Tip = suggestedFee(tx, params)
 	}
 
 	return tx, nil
