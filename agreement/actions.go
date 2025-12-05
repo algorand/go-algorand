@@ -175,6 +175,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case disconnect:
 		s.Network.Disconnect(a.h)
 	case ignore:
+		s.Network.Ignore(a.h)
 		// pass
 	}
 }

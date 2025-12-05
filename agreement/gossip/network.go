@@ -44,7 +44,8 @@ const (
 )
 
 type messageMetadata struct {
-	raw network.IncomingMessage
+	raw    network.IncomingMessage
+	syncCh chan network.ForwardingPolicy
 }
 
 // networkImpl wraps network.GossipNode to provide a compatible interface with agreement.
@@ -86,6 +87,13 @@ func (i *networkImpl) Start() {
 		{Tag: protocol.VoteBundleTag, MessageHandler: network.HandlerFunc(i.processBundleMessage)},
 	}
 	i.net.RegisterHandlers(handlers)
+
+	validateHandlers := []network.TaggedMessageValidatorHandler{
+		{Tag: protocol.AgreementVoteTag, MessageHandler: network.ValidateHandleFunc(i.processValidateVoteMessage)},
+		{Tag: protocol.ProposalPayloadTag, MessageHandler: network.ValidateHandleFunc(i.processValidateProposalMessage)},
+		{Tag: protocol.VoteBundleTag, MessageHandler: network.ValidateHandleFunc(i.processValidateBundleMessage)},
+	}
+	i.net.RegisterValidatorHandlers(validateHandlers)
 }
 
 func messageMetadataFromHandle(h agreement.MessageHandle) *messageMetadata {
@@ -99,6 +107,10 @@ func (i *networkImpl) processVoteMessage(raw network.IncomingMessage) network.Ou
 	return i.processMessage(raw, i.voteCh, agreementVoteMessageType)
 }
 
+func (i *networkImpl) processValidateVoteMessage(raw network.IncomingMessage) network.OutgoingMessage {
+	return i.processValidateMessage(raw, i.voteCh, agreementVoteMessageType)
+}
+
 func (i *networkImpl) processProposalMessage(raw network.IncomingMessage) network.OutgoingMessage {
 	if i.trace != nil {
 		i.trace.HashTrace(messagetracer.Proposal, raw.Data)
@@ -106,8 +118,19 @@ func (i *networkImpl) processProposalMessage(raw network.IncomingMessage) networ
 	return i.processMessage(raw, i.proposalCh, agreementProposalMessageType)
 }
 
+func (i *networkImpl) processValidateProposalMessage(raw network.IncomingMessage) network.OutgoingMessage {
+	if i.trace != nil {
+		i.trace.HashTrace(messagetracer.Proposal, raw.Data)
+	}
+	return i.processValidateMessage(raw, i.proposalCh, agreementProposalMessageType)
+}
+
 func (i *networkImpl) processBundleMessage(raw network.IncomingMessage) network.OutgoingMessage {
 	return i.processMessage(raw, i.bundleCh, agreementBundleMessageType)
+}
+
+func (i *networkImpl) processValidateBundleMessage(raw network.IncomingMessage) network.OutgoingMessage {
+	return i.processValidateMessage(raw, i.bundleCh, agreementBundleMessageType)
 }
 
 // i.e. process<Type>Message
@@ -128,6 +151,32 @@ func (i *networkImpl) processMessage(raw network.IncomingMessage, submit chan<- 
 
 	// Immediately ignore everything here, sometimes Relay/Broadcast/Disconnect later based on API handles saved from IncomingMessage
 	return network.OutgoingMessage{Action: network.Ignore}
+}
+
+// i.e. process<Type>Message
+func (i *networkImpl) processValidateMessage(raw network.IncomingMessage, submit chan<- agreement.Message, msgType string) network.OutgoingMessage {
+	metadata := &messageMetadata{
+		raw:    raw,
+		syncCh: make(chan network.ForwardingPolicy, 1),
+	}
+
+	var action network.ForwardingPolicy
+	select {
+	case submit <- agreement.Message{MessageHandle: agreement.MessageHandle(metadata), Data: raw.Data}:
+		action = <-metadata.syncCh
+		// It would be slightly better to measure at de-queue
+		// time, but that happens in many places in code and
+		// this is much easier.
+		messagesHandledTotal.Inc(nil)
+		messagesHandledByType.Add(msgType, 1)
+	default:
+		messagesDroppedTotal.Inc(nil)
+		messagesDroppedByType.Add(msgType, 1)
+		action = network.Ignore
+	}
+
+	// Immediately ignore everything here, sometimes Relay/Broadcast/Disconnect later based on API handles saved from IncomingMessage
+	return network.OutgoingMessage{Action: action}
 }
 
 func (i *networkImpl) Messages(t protocol.Tag) <-chan agreement.Message {
@@ -160,9 +209,14 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
 		}
 	} else {
-		err = i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
-		if err != nil {
-			i.log.Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
+		if metadata.syncCh != nil {
+			// Synchronous validation path
+			metadata.syncCh <- network.Accept
+		} else {
+			err = i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
+			if err != nil {
+				i.log.Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
+			}
 		}
 	}
 	return
@@ -176,5 +230,23 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 		return
 	}
 
+	if metadata.syncCh != nil {
+		// Synchronous validation path
+		metadata.syncCh <- network.Disconnect
+		return
+	}
 	i.net.Disconnect(metadata.raw.Sender)
+}
+
+func (i *networkImpl) Ignore(h agreement.MessageHandle) {
+	metadata := messageMetadataFromHandle(h)
+
+	if metadata == nil { // synthentic loopback
+		return
+	}
+
+	if metadata.syncCh != nil {
+		// Synchronous validation path
+		metadata.syncCh <- network.Ignore
+	}
 }

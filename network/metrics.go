@@ -194,6 +194,18 @@ func (t pubsubMetricsTracer) RecvRPC(rpc *pubsub.RPC) {
 				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
 				networkP2PReceivedBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
 				networkP2PMessageReceivedByTag.Add(string(protocol.TxnTag), 1)
+			case p2p.AVTopicName:
+				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PReceivedBytesByTag.Add(string(protocol.AgreementVoteTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedByTag.Add(string(protocol.AgreementVoteTag), 1)
+			case p2p.PPTopicName:
+				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PReceivedBytesByTag.Add(string(protocol.ProposalPayloadTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedByTag.Add(string(protocol.ProposalPayloadTag), 1)
+			case p2p.VBTopicName:
+				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PReceivedBytesByTag.Add(string(protocol.VoteBundleTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedByTag.Add(string(protocol.VoteBundleTag), 1)
 			}
 		}
 	}
@@ -211,6 +223,18 @@ func (t pubsubMetricsTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 				networkP2PSentBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
 				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
 				networkP2PMessageSentByTag.Add(string(protocol.TxnTag), 1)
+			case p2p.AVTopicName:
+				networkP2PSentBytesByTag.Add(string(protocol.AgreementVoteTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentByTag.Add(string(protocol.AgreementVoteTag), 1)
+			case p2p.PPTopicName:
+				networkP2PSentBytesByTag.Add(string(protocol.ProposalPayloadTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentByTag.Add(string(protocol.ProposalPayloadTag), 1)
+			case p2p.VBTopicName:
+				networkP2PSentBytesByTag.Add(string(protocol.VoteBundleTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentByTag.Add(string(protocol.VoteBundleTag), 1)
 			}
 		}
 	}
