@@ -126,7 +126,6 @@ linters:
         path: _test\.go
         text: 'dot-imports: should not use dot imports' # dot imports OK for tests
       - linters: revive
-        path: util/
         text: 'var-naming: avoid meaningless package names' # util package is OK
       - linters: unused
         text: 'field _struct is unused' # we use _struct field tags for msgp/json encoding settings
