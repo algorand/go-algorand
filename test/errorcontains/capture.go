@@ -41,7 +41,8 @@ func initOutput() {
 	initOnce.Do(func() {
 		path := os.Getenv("ERROR_CAPTURE_FILE")
 		if path == "" {
-			path = "/tmp/error_capture.jsonl"
+			// Use PID in filename to avoid contention between parallel test processes
+			path = fmt.Sprintf("/tmp/error_capture.%d.jsonl", os.Getpid())
 		}
 		var err error
 		outputFile, err = os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
@@ -223,10 +224,12 @@ func Summary(inputPath string) (map[string]int, error) {
 }
 
 // OutputPath returns the path where error captures are being written.
+// Note: when ERROR_CAPTURE_FILE is not set, each test process writes to its
+// own file with PID suffix. Use "cat /tmp/error_capture.*.jsonl" to combine.
 func OutputPath() string {
 	path := os.Getenv("ERROR_CAPTURE_FILE")
 	if path == "" {
-		path = "/tmp/error_capture.jsonl"
+		path = fmt.Sprintf("/tmp/error_capture.%d.jsonl", os.Getpid())
 	}
 	return filepath.Clean(path)
 }
