@@ -246,6 +246,7 @@ func processFile(content, filePath, rootDir string, siteLookup map[string]*CallS
 		}
 
 		// Pattern 3: CaptureError + Equal(sentinel, err) -> ErrorIs
+		// Only convert if sentinel is a variable (not a function call like fmt.Errorf)
 		if equalMatch := equalRe.FindStringSubmatch(nextLine); equalMatch != nil {
 			arg1 := strings.TrimSpace(equalMatch[3])
 			arg2 := strings.TrimSpace(equalMatch[4])
@@ -258,7 +259,9 @@ func processFile(content, filePath, rootDir string, siteLookup map[string]*CallS
 				sentinel = arg2
 			}
 
-			if sentinel != "" && !strings.Contains(sentinel, ".Error()") {
+			// Only use ErrorIs if sentinel looks like a variable (not a function call)
+			// Function calls contain "(" which sentinels don't
+			if sentinel != "" && !strings.Contains(sentinel, "(") && !strings.Contains(sentinel, ".Error()") {
 				var newLine string
 				if userMsg != "" {
 					newLine = fmt.Sprintf("%srequire.ErrorIs(%s, %s, %s, %s)", indent, tVar, errVar, sentinel, userMsg)

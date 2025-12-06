@@ -26,6 +26,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	lcss "gopkg.in/vmarkovtsev/go-lcss.v1"
 )
 
 // CapturedError represents one entry from the JSONL capture file.
@@ -205,30 +207,28 @@ func longestCommonSubstring(strs []string) string {
 		return ""
 	}
 	if len(strs) == 1 {
-		// For single sample, return first meaningful phrase
 		return extractPhrase(strs[0])
 	}
 
-	// Start with LCS of first two strings
-	lcs := lcs2(strs[0], strs[1])
-
-	// Iteratively find LCS with remaining strings
-	for i := 2; i < len(strs) && lcs != ""; i++ {
-		lcs = lcs2(lcs, strs[i])
+	// Convert to [][]byte for the library
+	byteStrs := make([][]byte, len(strs))
+	for i, s := range strs {
+		byteStrs[i] = []byte(s)
 	}
 
-	// Trim whitespace and clean up
-	lcs = strings.TrimSpace(lcs)
+	// Use the efficient library implementation
+	result := lcss.LongestCommonSubstring(byteStrs...)
+	lcsStr := string(result)
 
-	// If LCS is too short, try to find a common prefix
-	if len(lcs) < 5 {
+	// If too short, try common prefix
+	if len(lcsStr) < 5 {
 		prefix := commonPrefix(strs)
-		if len(prefix) > len(lcs) {
-			lcs = prefix
+		if len(prefix) > len(lcsStr) {
+			lcsStr = prefix
 		}
 	}
 
-	return lcs
+	return cleanupLCS(strings.TrimSpace(lcsStr))
 }
 
 // lcs2 finds the longest common substring between two strings.
@@ -297,10 +297,47 @@ func commonPrefix(strs []string) string {
 }
 
 // extractPhrase extracts a meaningful phrase from a single error message.
-// For single samples (or all identical samples), return the full message
-// as it's the best possible match string.
+// We want a short, meaningful substring - not serialized struct data.
 func extractPhrase(msg string) string {
-	msg = strings.TrimSpace(msg)
-	// Return the full message - it's the only sample so use it entirely
-	return msg
+	return cleanupLCS(msg)
+}
+
+// cleanupLCS trims an LCS to remove serialized struct data and keep
+// only the meaningful error prefix.
+func cleanupLCS(lcs string) string {
+	lcs = strings.TrimSpace(lcs)
+
+	// If LCS starts with garbage characters, it's not useful
+	if strings.HasPrefix(lcs, "]") || strings.HasPrefix(lcs, "}") ||
+		strings.HasPrefix(lcs, "[0") || strings.HasPrefix(lcs, "0x") {
+		return ""
+	}
+
+	// Chop at '{' which typically starts serialized struct data
+	if idx := strings.Index(lcs, "{"); idx > 5 {
+		lcs = strings.TrimSpace(lcs[:idx])
+	}
+
+	// Also chop at '[' followed by numbers (byte arrays)
+	if idx := strings.Index(lcs, "[0 "); idx > 5 {
+		lcs = strings.TrimSpace(lcs[:idx])
+	}
+	if idx := strings.Index(lcs, "[0x"); idx > 5 {
+		lcs = strings.TrimSpace(lcs[:idx])
+	}
+
+	// Chop at serialized struct markers
+	if idx := strings.Index(lcs, "_struct:"); idx > 0 {
+		lcs = strings.TrimSpace(lcs[:idx])
+	}
+
+	// Remove trailing colons, punctuation, or partial struct syntax
+	lcs = strings.TrimRight(lcs, ":, ]}")
+
+	// If what's left is too short or looks like garbage, return empty
+	if len(lcs) < 5 {
+		return ""
+	}
+
+	return lcs
 }
