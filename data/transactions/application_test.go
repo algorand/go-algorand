@@ -27,7 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
+	"github.com/algorand/go-algorand/data/basics/testing/roundtrip"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -37,7 +37,7 @@ func TestResourceRefEmpty(t *testing.T) {
 	t.Parallel()
 
 	assert.True(t, ResourceRef{}.Empty())
-	for _, rr := range basics_testing.NearZeros(t, ResourceRef{}) {
+	for _, rr := range roundtrip.NearZeros(t, ResourceRef{}) {
 		assert.False(t, rr.Empty(), "Empty is disregarding a non-zero field in %+v", rr)
 	}
 }
@@ -51,7 +51,7 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 	ac := ApplicationCallTxnFields{}
 	a.True(ac.Empty())
 
-	for _, fields := range basics_testing.NearZeros(t, ac) {
+	for _, fields := range roundtrip.NearZeros(t, ac) {
 		a.False(fields.Empty(), "Empty is disregarding a non-zero field in %+v", fields)
 	}
 }
