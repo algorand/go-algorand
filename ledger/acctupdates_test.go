@@ -350,11 +350,11 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 
 	// the log has "onlineAccounts failed to fetch online totals for rnd" warning that is expected
 	_, err := ao.onlineCirculation(latest+1, latest+1+basics.Round(ao.maxBalLookback()))
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `too high: dbRound 0, onlineRoundParamsData`)
 
 	var validThrough basics.Round
 	_, validThrough, err = au.LookupWithoutRewards(latest+1, ledgertesting.RandomAddress())
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `too high: dbRound 0, deltas`)
 	require.Zero(t, validThrough)
 
 	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {

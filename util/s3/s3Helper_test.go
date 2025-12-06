@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -244,7 +243,7 @@ func TestGetPartsFromVersion(t *testing.T) {
 	}
 
 	_, _, _, err := GetVersionPartsFromVersion(1<<40 - 1)
-	errorcontains.CaptureError(t, err, "Versions less than 1.0.0 should not be parsed.")
+	require.ErrorContains(t, err, `versions below 1.0.0 not supported`, "Versions less than 1.0.0 should not be parsed.")
 }
 
 func TestGetPartsFromVersionEndToEnd(t *testing.T) {

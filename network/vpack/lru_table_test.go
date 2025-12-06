@@ -23,7 +23,6 @@ import (
 	"testing/quick"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -33,13 +32,11 @@ func TestLRUTableSizeValidation(t *testing.T) {
 
 	// Test invalid size (not power of 2)
 	_, err := NewStatefulEncoder(100)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "must be a power of 2")
+	require.ErrorContains(t, err, "must be a power of 2")
 
 	// Test invalid size (too small)
 	_, err = NewStatefulEncoder(8)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "at least 16")
+	require.ErrorContains(t, err, "at least 16")
 
 	// Test valid sizes
 	for _, size := range []uint{16, 32, 64, 128, 256, 512, 1024, 2048} {

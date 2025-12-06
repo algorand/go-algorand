@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/netdeploy/remote"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -55,7 +54,7 @@ func TestLoadMissingConfig(t *testing.T) {
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
 	a.NoError(err)
 	template, err := loadTemplate(filepath.Join(templateDir, "<invalidname>.json"))
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `open /Users/cce/ga/errorcontains/test/testdata/nettemplates/<invalidname>.json: no such file or directory`)
 	a.Equal(template.Genesis.NetworkName, "")
 }
 
@@ -97,7 +96,7 @@ func TestValidate(t *testing.T) {
 	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
 	template, _ = loadTemplate(filepath.Join(templateDir, "NegativeStake.json"))
 	err = template.Validate()
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `invalid template: negative stake on Genesis account W2`)
 
 	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
 	template, _ = loadTemplate(filepath.Join(templateDir, "TwoNodesOneRelay1000Accounts.json"))

@@ -27,7 +27,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -186,7 +185,7 @@ func TestErrorInMarshal(t *testing.T) {
 
 	a := nonmarshalable{1}
 	_, err := Build(&a, crypto.HashFactory{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `can't be marshaled`)
 }
 
 func TestMerkleBuildEdgeCases(t *testing.T) {
@@ -236,7 +235,6 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{4})
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// prove on nothing
@@ -250,7 +248,6 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{0})
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrProvingZeroCommitment)
 
 	// prove on nothing - now the tree is empty as well
@@ -273,12 +270,10 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 
 	// element in the out of the inner array
 	_, err = tree.Prove([]uint64{5})
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// element in the padded array - bottom leaf
 	_, err = tree.Prove([]uint64{8})
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	// prove on nothing
@@ -292,7 +287,6 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{0})
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrProvingZeroCommitment)
 
 	// prove on nothing - now the tree is empty as well
@@ -319,15 +313,12 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	root := tree.Root()
 
 	err = Verify(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = Verify(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = Verify(root, nil, nil)
-	errorcontains.CaptureError(t, err)
 	a.ErrorIs(ErrProofIsNil, err)
 
 	trivialProof := Proof{TreeDepth: 2, HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}}
@@ -335,7 +326,6 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	err = Verify(root, nil, proof)
-	errorcontains.CaptureError(t, err)
 	a.ErrorIs(ErrNonEmptyProofForEmptyElements, err)
 
 	err = Verify(root, nil, &trivialProof)
@@ -403,15 +393,12 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	root := tree.Root()
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	err = VerifyVectorCommitment(root, nil, nil)
-	errorcontains.CaptureError(t, err)
 	a.ErrorIs(ErrProofIsNil, err)
 
 	trivialProof := Proof{TreeDepth: 2, HashFactory: crypto.HashFactory{HashType: crypto.Sha512_256}}
@@ -419,7 +406,6 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	err = VerifyVectorCommitment(root, nil, proof)
-	errorcontains.CaptureError(t, err)
 	a.ErrorIs(ErrNonEmptyProofForEmptyElements, err)
 
 	err = VerifyVectorCommitment(root, nil, &trivialProof)
@@ -448,7 +434,7 @@ func TestGenericDigest(t *testing.T) {
 	require.NoError(t, err)
 
 	err = testWithSize(t, crypto.MaxHashDigestSize+1)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `msgp: length overflow: 65 > 64 at Path/0`)
 }
 
 func testWithSize(t *testing.T, size int) error {

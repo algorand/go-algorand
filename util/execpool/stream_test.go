@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -431,7 +430,7 @@ func TestPendingJobOnRestart(t *testing.T) {
 
 	// wait for the notifiation from cleanup before checking the TestPendingJobOnRestart
 	<-mbp.notify
-	errorcontains.CaptureError(t, mj.returnError)
+	require.ErrorContains(t, mj.returnError, `not processed, execpool service is shutting down`)
 	require.False(t, mj.processed)
 
 	<-callbackFeedback

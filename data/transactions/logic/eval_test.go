@@ -39,7 +39,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 
@@ -258,7 +257,7 @@ func TestTooManyArgs(t *testing.T) {
 			args := [transactions.EvalMaxArgs + 1][]byte{}
 			txn.Lsig.Args = args[:]
 			pass, err := EvalSignature(0, defaultSigParams(txn))
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `rejected by logic err=LogicSig has too many arguments. Details: pc=1`)
 			require.False(t, pass)
 		})
 	}
@@ -275,7 +274,7 @@ func TestArgTooLarge(t *testing.T) {
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{make([]byte, transactions.MaxLogicSigArgSize+1)}
 			pass, err := EvalSignature(0, defaultSigParams(txn))
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `rejected by logic err=LogicSig argument too large. Details: pc=1`)
 			require.False(t, pass)
 		})
 	}
@@ -346,7 +345,7 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	require.Equal(t, string(addr[:]), tealValue.Bytes)
 
 	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 100, false)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `invalid Accounts index 100`)
 	require.Equal(t, basics.TealUintType, tealValue.Type)
 	require.Equal(t, uint64(0), tealValue.Uint)
 	require.Equal(t, "", tealValue.Bytes)
@@ -4524,7 +4523,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			_, err = EvalApp(ops.Program, 0, 0, aep)
 			if spec.Name != "return" {
 				// "return" opcode always succeeds so ignore it
-				errorcontains.CaptureError(t, err, source)
+				require.ErrorContains(t, err, `0 appId in contract eval`, source)
 				require.NotContains(t, err.Error(), "illegal opcode")
 			}
 
@@ -5261,7 +5260,7 @@ func TestPcDetails(t *testing.T) {
 			ep.Trace = &strings.Builder{}
 
 			pass, cx, err := EvalContract(ops.Program, 0, 888, ep)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `. Details: app=888, pc=`)
 			require.False(t, pass)
 			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
@@ -5483,7 +5482,7 @@ func TestProtocolParseDuplicateErrMsg(t *testing.T) {
 	var parsed map[string]json.RawMessage
 	err := protocol.DecodeJSON([]byte(text), &parsed)
 	require.Contains(t, err.Error(), "cannot decode into a non-pointer value")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `json decode error [pos 26]: cannot decode into a non-pointer value`)
 }
 
 func TestOpJSONRef(t *testing.T) {
@@ -6232,7 +6231,7 @@ func TestNoHeaderLedger(t *testing.T) {
 
 	nhl := NoHeaderLedger{}
 	_, err := nhl.BlockHdr(1)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `no block header access`)
 	require.Equal(t, err, fmt.Errorf("no block header access"))
 }
 

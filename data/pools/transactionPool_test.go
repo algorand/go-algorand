@@ -298,7 +298,7 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 	err := transactionPool.RememberOne(signedTx)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `balance 199999 below min 200000 (1 assets)`)
 	var returnedTxid, returnedAcct string
 	var returnedBal, returnedMin, numAssets uint64
 	_, err = fmt.Sscanf(err.Error(), "TransactionPool.Remember: transaction %s account %s balance %d below min %d (%d assets)",

@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
@@ -34,19 +33,19 @@ func TestEmptyClient(t *testing.T) {
 
 	c := MakeDNSClient(nil, time.Second)
 	rr, rsig, err := c.QueryRRSet(context.Background(), "test", 0)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `no answer for (test., 0) from DNS servers [`)
 	a.Empty(rr)
 	a.Empty(rsig)
 
 	c = MakeDNSClient([]ResolverAddress{}, time.Second)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `no answer for (test., 0) from DNS servers [`)
 	a.Empty(rr)
 	a.Empty(rsig)
 
 	c = MakeDNSClient([]ResolverAddress{"example.com"}, time.Millisecond)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `no answer for (test., 0) from DNS servers [example.com`)
 	a.Empty(rr)
 	a.Empty(rsig)
 }
@@ -67,7 +66,7 @@ func TestMockedClient(t *testing.T) {
 	qs := ttr{}
 	c := dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
 	rr, rsig, err := c.QueryRRSet(context.Background(), "test", 0)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `no signature in DNS response for test`)
 	a.Empty(rr)
 	a.Empty(rsig)
 
@@ -75,7 +74,7 @@ func TestMockedClient(t *testing.T) {
 	qs = ttr{msg: dns.Msg{MsgHdr: dns.MsgHdr{Rcode: dns.RcodeServerFailure}, Answer: answer}}
 	c = dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `DNS error: SERVFAIL`)
 	a.Contains(err.Error(), "SERVFAIL")
 	a.Empty(rr)
 	a.Empty(rsig)

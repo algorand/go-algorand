@@ -239,17 +239,17 @@ func TestLedgerCirculation(t *testing.T) {
 		} else if rnd < basics.Round(520) {
 			// test one round in the future ( expected error )
 			data, _, _, err = realLedger.LookupAccount(rnd+1, destAccount)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `too high: dbRound 496, deltas`)
 			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 			data, _, _, err = l.LookupAccount(rnd+1, destAccount)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `too high: dbRound 496, deltas`)
 			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 
 			_, err = realLedger.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `too high: dbRound 177, onlineRoundParamsData 3`)
 
 			_, err = l.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `too high: dbRound 177, onlineRoundParamsData 3`)
 		} else if rnd < basics.Round(520) {
 			// test expired round ( expected error )
 			_, err = realLedger.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)

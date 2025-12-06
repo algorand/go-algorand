@@ -41,7 +41,6 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -502,8 +501,7 @@ func TestRedirectExceptions(t *testing.T) {
 	require.NoError(t, err)
 	_, err = client.Do(requestNodeB)
 
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "stopped after 10 redirects")
+	require.ErrorContains(t, err, "stopped after 10 redirects")
 }
 
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}

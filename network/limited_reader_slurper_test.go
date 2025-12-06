@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -191,7 +190,7 @@ func TestLimitedReaderSlurperPerMessageMaxSize(t *testing.T) {
 			b = make([]byte, dataSize)
 			crypto.RandBytes(b[:])
 			err := slurper.Read(bytes.NewBuffer(b))
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `read limit exceeded`)
 		}
 	}
 }

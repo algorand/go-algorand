@@ -41,7 +41,6 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -88,14 +87,14 @@ func TestBlockEvaluator(t *testing.T) {
 	st.Sig[2] ^= 8
 	txgroup := []transactions.SignedTxn{stbad}
 	err = eval.TestTransactionGroup(txgroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transaction already in ledger`)
 
 	// Repeat should fail
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transaction already in ledger`)
 	err = eval.Transaction(st, transactions.ApplyData{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transaction already in ledger`)
 
 	// out of range should fail
 	btxn := txn
@@ -104,9 +103,9 @@ func TestBlockEvaluator(t *testing.T) {
 	st = btxn.Sign(keys[0])
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `txn dead: round 1 outside of 2--3`)
 	err = eval.Transaction(st, transactions.ApplyData{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `txn dead: round 1 outside of 2--3`)
 
 	// bogus group should fail
 	btxn = txn
@@ -114,9 +113,9 @@ func TestBlockEvaluator(t *testing.T) {
 	st = btxn.Sign(keys[0])
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transactionGroup: incomplete group: AAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA !=`)
 	err = eval.Transaction(st, transactions.ApplyData{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transactionGroup: incomplete group: AAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA !=`)
 
 	// mixed fields should fail
 	btxn = txn
@@ -124,7 +123,7 @@ func TestBlockEvaluator(t *testing.T) {
 	st = btxn.Sign(keys[0])
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `: malformed: transaction of type pay has non-zero fields for type axfer`)
 	// We don't test eval.Transaction() here because it doesn't check txn.WellFormed(), instead relying on that to have already been checked by the transaction pool.
 	// err = eval.Transaction(st, transactions.ApplyData{})
 	// require.Error(t, err)
@@ -163,10 +162,10 @@ func TestBlockEvaluator(t *testing.T) {
 	s4 := t4.Sign(keys[2])
 	txgroup = []transactions.SignedTxn{s3, s4}
 	err = eval.TestTransactionGroup(txgroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transactionGroup: [0] had zero Group but was submitted in a group of 2`)
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
 	err = eval.TransactionGroup(txgroupad)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transactionGroup: [0] had zero Group but was submitted in a group of 2`)
 
 	// Test a group that should work
 	var group transactions.TxGroup
@@ -185,15 +184,15 @@ func TestBlockEvaluator(t *testing.T) {
 	s4bad := t4bad.Sign(keys[2])
 	txgroup = []transactions.SignedTxn{s3, s4bad}
 	err = eval.TestTransactionGroup(txgroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transactionGroup: inconsistent group values`)
 	txgroupad = transactions.WrapSignedTxnsWithAD(txgroup)
 	err = eval.TransactionGroup(txgroupad)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transactionGroup: inconsistent group values`)
 
 	// missing part of the group should fail
 	txgroup = []transactions.SignedTxn{s3}
 	err = eval.TestTransactionGroup(txgroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transactionGroup: incomplete group`)
 
 	unfinishedBlock, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
@@ -1336,7 +1335,7 @@ func TestRekeying(t *testing.T) {
 		makeTxn(addrs[0], addrs[0], basics.Address{}, keys[0], 2), // [A -> A][0,A]
 	}
 	err = tryBlock(test2txns)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `: should have been authorized by`)
 
 	// TODO: More tests
 }
@@ -1413,10 +1412,10 @@ func TestEvalAppPooledBudgetWithTxnGroup(t *testing.T) {
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				err := testEvalAppPoolingGroup(t, basics.StateSchema{NumByteSlice: 3}, testCase.prog, param)
 				if !testCase.isSuccessV29 && reflect.DeepEqual(param, protocol.ConsensusV29) {
-					errorcontains.CaptureError(t, err)
+					require.ErrorContains(t, err, `dynamic cost budget exceeded, executing`)
 					require.Contains(t, err.Error(), testCase.expectedErrorV29)
 				} else if !testCase.isSuccessVFuture && reflect.DeepEqual(param, protocol.ConsensusFuture) {
-					errorcontains.CaptureError(t, err)
+					require.ErrorContains(t, err, `: logic eval error: pc= 78 dynamic cost budget exceeded, executing pushint: local program cost was 2100. Details: app=1001, pc=78, opcodes=substring 0 4; pop; pushint 1`)
 					require.Contains(t, err.Error(), testCase.expectedErrorVFuture)
 				}
 			})

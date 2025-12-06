@@ -4736,7 +4736,7 @@ func TestWebsocketNetworkHTTPClient(t *testing.T) {
 	require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode) // not enough ws peer headers
 
 	_, err = netB.GetHTTPClient("invalid")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `could not parse a host from url`)
 }
 
 // TestPeerComparisonInBroadcast tests that the peer comparison in the broadcast function works as expected

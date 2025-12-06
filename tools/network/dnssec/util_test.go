@@ -19,7 +19,6 @@ package dnssec
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -32,13 +31,13 @@ func TestSplitZone(t *testing.T) {
 	var err error
 
 	res, err = splitToZones("")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `is not FQDN`)
 
 	res, err = splitToZones("com")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `com is not FQDN`)
 
 	res, err = splitToZones("example.com")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `example.com is not FQDN`)
 
 	res, err = splitToZones(".")
 	a.NoError(err)
@@ -65,13 +64,13 @@ func TestParentZone(t *testing.T) {
 	var err error
 
 	res, err = getParentZone("")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `is not FQDN`)
 
 	res, err = getParentZone("com")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `com is not FQDN`)
 
 	res, err = getParentZone(".")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `No parent zone for .`)
 
 	res, err = getParentZone("com.")
 	a.NoError(err)

@@ -801,10 +801,10 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 func TestStreamToBatchMakeStreamToBatchErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	_, err := MakeSigVerifier(&DummyLedgerForSignature{badHdr: true}, nil)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `MakeSigVerifier: Could not get header for previous block: test error block hdr`)
 
 	_, err = MakeSigVerifyJobProcessor(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `MakeSigVerifier: Could not get header for previous block: test error block hdr`)
 }
 
 // TestStreamToBatchCancelWhenPooled tests the case where the ctx is cancled after the verification
@@ -903,5 +903,5 @@ func TestSigVerifier(t *testing.T) {
 	txnGroup = txnGroups[0]
 
 	err = verifier.Verify(txnGroup)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `At least one signature didn't pass verification`)
 }

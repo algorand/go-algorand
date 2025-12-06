@@ -152,10 +152,10 @@ func TestUpgradeVariableDelay(t *testing.T) {
 	}
 
 	_, err := s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 2})
-	errorcontains.CaptureError(t, err, "accepted upgrade vote with delay less than MinUpgradeWaitRounds")
+	require.ErrorContains(t, err, `applyUpgradeVote: proposed upgrade wait rounds 2 out of permissible range [3, 7`, "accepted upgrade vote with delay less than MinUpgradeWaitRounds")
 
 	_, err = s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 8})
-	errorcontains.CaptureError(t, err, "accepted upgrade vote with delay more than MaxUpgradeWaitRounds")
+	require.ErrorContains(t, err, `applyUpgradeVote: proposed upgrade wait rounds 8 out of permissible range [3, 7`, "accepted upgrade vote with delay more than MaxUpgradeWaitRounds")
 
 	_, err = s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 5})
 	require.NoError(t, err, "did not accept upgrade vote with in-bounds delay")
@@ -480,12 +480,12 @@ func TestEncodeMalformedSignedTxn(t *testing.T) {
 
 	tx.Txn.GenesisID = "bar"
 	_, err = b.EncodeSignedTxn(tx, transactions.ApplyData{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `GenesisID mismatch: bar != foo`)
 
 	tx.Txn.GenesisID = b.BlockHeader.GenesisID
 	crypto.RandBytes(tx.Txn.GenesisHash[:])
 	_, err = b.EncodeSignedTxn(tx, transactions.ApplyData{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `GenesisHash mismatch`)
 }
 
 func TestDecodeMalformedSignedTxn(t *testing.T) {
@@ -500,12 +500,12 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 	var txib1 transactions.SignedTxnInBlock
 	txib1.SignedTxn.Txn.GenesisID = b.BlockHeader.GenesisID
 	_, _, err := b.DecodeSignedTxn(txib1)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `GenesisID <foo> not empty`)
 
 	var txib2 transactions.SignedTxnInBlock
 	txib2.SignedTxn.Txn.GenesisHash = b.BlockHeader.GenesisHash
 	_, _, err = b.DecodeSignedTxn(txib2)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `GenesisHash <`)
 }
 
 // TestInitialRewardsRateCalculation perform positive and negative testing for the InitialRewardsRateCalculation fix by

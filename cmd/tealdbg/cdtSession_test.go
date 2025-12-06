@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -92,7 +91,7 @@ func TestCdtSessionProto11Common(t *testing.T) {
 	req.Method = "Debugger.getScriptSource"
 	req.Params = map[string]interface{}{}
 	resp, events, err = s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `getScriptSource failed: no scriptId`)
 	require.Equal(t, 0, len(events))
 	require.Empty(t, resp.Result)
 	require.Empty(t, resp.ID)
@@ -140,7 +139,7 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	req.Method = "Debugger.removeBreakpoint"
 	req.Params = map[string]interface{}{"breakpointId": "test"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `strconv.Atoi: parsing \"test\": invalid syntax`)
 	require.Equal(t, 0, len(events))
 	require.Empty(t, resp.ID)
 	require.Empty(t, resp.Result)
@@ -302,7 +301,7 @@ func TestCdtSessionProto11Evaluate(t *testing.T) {
 
 	req.Params = map[string]interface{}{}
 	resp, events, err = s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `evaluate failed: no expression`)
 	require.Equal(t, 0, len(events))
 	require.Empty(t, resp.ID)
 	require.Empty(t, resp.Result)
@@ -324,15 +323,15 @@ func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 	req.Method = "Runtime.callFunctionOn"
 	req.Params = map[string]interface{}{}
 	resp, events, err := s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `callFunctionOn failed: no objectId`)
 
 	req.Params = map[string]interface{}{"objectId": ""}
 	resp, events, err = s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `callFunctionOn failed: no functionDeclaration`)
 
 	req.Params = map[string]interface{}{"objectId": "", "functionDeclaration": ""}
 	resp, events, err = s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `callFunctionOn failed: no arguments`)
 
 	req.Params = map[string]interface{}{"objectId": "", "functionDeclaration": "", "arguments": []interface{}{}}
 	resp, events, err = s.handleCdtRequest(&req, &state)
@@ -415,11 +414,11 @@ func TestCdtSessionProto11GetProps(t *testing.T) {
 	req.Method = "Runtime.getProperties"
 	req.Params = map[string]interface{}{}
 	resp, events, err := s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `getProperties failed: no objectId`)
 
 	req.Params = map[string]interface{}{"objectId": "", "generatePreview": true}
 	resp, events, err = s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `getObjectDescriptor error: unk object id`)
 
 	req.Params = map[string]interface{}{"objectId": globalScopeObjID, "generatePreview": true}
 	s.verbose = true
@@ -587,7 +586,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 	req.Method = "Runtime.getProperties"
 	req.Params = map[string]interface{}{}
 	resp, events, err := s.handleCdtRequest(&req, &state)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `getProperties failed: no objectId`)
 
 	for k := range objectDescMap {
 		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}

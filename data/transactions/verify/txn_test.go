@@ -340,7 +340,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	errorcontains.CaptureError(t, err, "payment txn %#v verified from StateProofSender", stxn2)
+	require.ErrorContains(t, err, `signedtxn has no sig`, "payment txn %#v verified from StateProofSender", stxn2)
 
 	secret := keypair()
 	stxn2 = stxn
@@ -349,32 +349,32 @@ func TestTxnValidationStateProof(t *testing.T) {
 	stxn2 = stxn2.Txn.Sign(secret)
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	errorcontains.CaptureError(t, err, "state proof txn %#v verified from non-StateProofSender", stxn2)
+	require.ErrorContains(t, err, `sender must be the state-proof sender`, "state proof txn %#v verified from non-StateProofSender", stxn2)
 
 	// state proof txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	errorcontains.CaptureError(t, err, "state proof txn %#v verified", stxn2)
+	require.ErrorContains(t, err, `fee must be zero in state-proof transaction`, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Header.Note = []byte{'A'}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	errorcontains.CaptureError(t, err, "state proof txn %#v verified", stxn2)
+	require.ErrorContains(t, err, `note must be empty in state-proof transaction`, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Lease[0] = 1
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	errorcontains.CaptureError(t, err, "state proof txn %#v verified", stxn2)
+	require.ErrorContains(t, err, `lease must be zero in state-proof transaction`, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	errorcontains.CaptureError(t, err, "state proof txn %#v verified", stxn2)
+	require.ErrorContains(t, err, `rekey must be zero in state-proof transaction`, "state proof txn %#v verified", stxn2)
 }
 
 func TestDecodeNil(t *testing.T) {
@@ -616,7 +616,7 @@ func TestPaysetGroups(t *testing.T) {
 	// break the signature and see if it fails.
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
 	err = PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `At least one signature didn't pass verification`)
 
 	// ensure the rest are fine
 	err = PaysetGroups(context.Background(), txnGroups[1:], blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
@@ -744,7 +744,7 @@ func TestLsigSize(t *testing.T) {
 		if test.success {
 			require.NoError(t, err)
 		} else {
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `LogicSig`)
 		}
 	}
 }
@@ -773,8 +773,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	tmpSig := txnGroups[0][0].Sig
 	txnGroups[0][0].Sig = crypto.Signature{}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "has no sig")
+	require.ErrorContains(t, err, "has no sig")
 	txnGroups[0][0].Sig = tmpSig
 
 	///// Sig + multiSig
@@ -784,15 +783,13 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorContains(t, err, "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Msig.Subsigs = nil
 
 	///// Sig + logic
 	txnGroups[0][0].Lsig.Logic = op.Program
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorContains(t, err, "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Lsig.Logic = []byte{}
 
 	///// MultiSig + logic
@@ -804,8 +801,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorContains(t, err, "should only have one of Sig or Msig or LogicSig")
 	txnGroups[0][0].Lsig.Logic = []byte{}
 	txnGroups[0][0].Sig = tmpSig
 	txnGroups[0][0].Msig.Subsigs = nil
@@ -820,8 +816,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	require.ErrorContains(t, err, "should only have one of Sig, Msig, or LMsig")
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 
 	/////  logic with sig and LMsig
@@ -831,8 +826,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	require.ErrorContains(t, err, "should only have one of Sig, Msig, or LMsig")
 	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
@@ -848,8 +842,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x4},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	require.ErrorContains(t, err, "should only have one of Sig, Msig, or LMsig")
 
 }
 
@@ -1195,7 +1188,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 
 	dummyLedger := DummyLedgerForSignature{}
 	_, err := TxnGroup(txnGroups[0], blkHdr, cache, &dummyLedger)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `ication`)
 	require.Contains(t, err.Error(), errorString)
 
 	// The txns should not be in the cache
@@ -1233,7 +1226,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 	for _, txng := range txnGroups {
 		_, err = TxnGroup(txng, blkHdr, cache, &dummyLedger)
 		if err != nil {
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `ication`)
 			require.Contains(t, err.Error(), errorString)
 			numFailed++
 		}

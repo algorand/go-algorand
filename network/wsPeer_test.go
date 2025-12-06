@@ -34,7 +34,6 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/stretchr/testify/require"
@@ -134,17 +133,17 @@ func TestVersionToMajorMinor(t *testing.T) {
 	require.Equal(t, int64(2), mi)
 
 	ma, mi, err = versionToMajorMinor("1.2.3")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `version 1.2.3 does not have two components`)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("1")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `version 1 does not have two components`)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("a.b")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `strconv.ParseInt: parsing \"a\": invalid syntax`)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 }

@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -107,7 +106,6 @@ func TestIndexOutOfBounds(t *testing.T) {
 	require.Equal(t, uint64(1), lsbIndex)
 
 	lsbIndex, err = merkleTreeToVectorCommitmentIndex(2, pathLen)
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 	pathLen = 4
@@ -116,7 +114,6 @@ func TestIndexOutOfBounds(t *testing.T) {
 	require.Equal(t, uint64(15), lsbIndex)
 
 	lsbIndex, err = merkleTreeToVectorCommitmentIndex(16, pathLen)
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, ErrPosOutOfBound)
 
 }

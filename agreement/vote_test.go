@@ -195,7 +195,7 @@ func TestVoteReproposalValidation(t *testing.T) {
 			badReproposalVote, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			_, err = badReproposalVote.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `unauthenticatedVote.verify: proposal-vote sender mismatches with proposal-value`)
 
 			// bad period-1 reproposal for a period 2 original proposal
 			rv = rawVote{Sender: address, Round: round, Period: per, Step: step(0), Proposal: proposal}
@@ -204,7 +204,7 @@ func TestVoteReproposalValidation(t *testing.T) {
 			badReproposalVote, err = makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
 			require.NoError(t, err)
 			_, err = badReproposalVote.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `unauthenticatedVote.verify: proposal-vote in period 1 claims to repropose block from future period 2`)
 		}
 	}
 	require.True(t, processedVote, "No votes were processed")
@@ -275,7 +275,7 @@ func TestVoteValidationStepCertAndProposalBottom(t *testing.T) {
 			unauthenticatedVote.R.Step = cert
 			unauthenticatedVote.R.Proposal = bottom
 			_, err = unauthenticatedVote.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `unauthenticatedVote.verify: votes from step 2 cannot validate bottom`)
 
 		}
 	}
@@ -344,7 +344,7 @@ func TestEquivocationVoteValidation(t *testing.T) {
 
 			// check for same vote
 			_, err = evSameVote.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `isEquivocationPair: not an equivocation pair: identical vote (block hash`)
 
 			// test vote accessors
 			v0 := aev.v0()
@@ -393,7 +393,7 @@ func TestEquivocationVoteValidation(t *testing.T) {
 			badSender := ev
 			badSender.Sender = basics.Address{}
 			_, err = badSender.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `unauthenticatedEquivocationVote.verify: failed to verify pair 0: unauthenticatedVote.verify: could not verify FS signature on vote by AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ given`)
 		}
 	}
 	require.True(t, processedVote, "No votes were processed")

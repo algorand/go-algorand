@@ -23,7 +23,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-codec/codec"
 	"github.com/stretchr/testify/require"
@@ -210,7 +209,7 @@ func TestMsgpDecode(t *testing.T) {
 	var tag Tag = "test"
 	dec := NewMsgpDecoderBytes([]byte{1, 2, 3})
 	err := dec.Decode(&tag)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `msgp: attempted to decode type \"int\" with method for \"str\"`)
 
 	data := EncodeMsgp(tag)
 	dec = NewMsgpDecoderBytes(data)
@@ -234,7 +233,6 @@ func TestMsgpDecode(t *testing.T) {
 		require.Equal(t, tags[i], tag2)
 	}
 	err = dec.Decode(&tag2)
-	errorcontains.CaptureError(t, err)
 	require.ErrorIs(t, err, io.EOF)
 }
 

@@ -25,7 +25,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -311,11 +310,11 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			ep, _, _ := makeSampleEnv()
 			ep.TxnGroup[1].Lsig.Logic = ops.Program
 			_, err := EvalSignature(1, ep)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `attempt to evaluate a signature with Application mode EvalParams`)
 			ep.Ledger = NewLedger(nil)
 			_, err = EvalApp(ops.Program, 1, 888, ep)
 			if v < txnEffectsVersion {
-				errorcontains.CaptureError(t, err, source)
+				require.ErrorContains(t, err, `logic eval error: Unable to obtain effects from top-level transactions. Details: app=888, pc=1`, source)
 			} else {
 				if fs.array {
 					continue // Array (Logs) will be 0 length, so will fail anyway

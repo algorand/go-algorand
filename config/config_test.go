@@ -32,7 +32,6 @@ import (
 
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -272,7 +271,7 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	cLatest.Version = getLatestConfigVersion() + 1
 	_, _, err = migrate(cLatest)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `unexpected config version: 38`)
 
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
@@ -356,7 +355,7 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
 	_, _, err = migrate(cNext)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `unexpected config version: 38`)
 }
 
 // Verify that nobody is changing the shipping default configurations
@@ -1000,7 +999,7 @@ func TestEnsureAndResolveGenesisDirs_migrateCrashErr(t *testing.T) {
 	require.NoError(t, err)
 	// Resolve
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `error moving crash DB files from ColdDataDir /var/folders/cj/tbnn8rf51170ytfb2bjbw5jm0000gn/T/TestEnsureAndResolveGenesisDirs_migrateCrashErr`)
 	require.Empty(t, paths)
 	// Confirm that crash.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite"))
@@ -1032,7 +1031,7 @@ func TestEnsureAndResolveGenesisDirs_migrateSPErr(t *testing.T) {
 	require.NoError(t, err)
 	// Resolve
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `error moving stateproof DB files from ColdDataDir /var/folders/cj/tbnn8rf51170ytfb2bjbw5jm0000gn/T/TestEnsureAndResolveGenesisDirs_migrateSPErr`)
 	require.Empty(t, paths)
 	// Confirm that stateproof.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite"))
@@ -1058,16 +1057,14 @@ func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
 	// first try an error with an empty root dir
 	paths, err := cfg.EnsureAndResolveGenesisDirs("", "myGenesisID", tLogger{t: t})
 	require.Empty(t, paths)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "rootDir is required")
+	require.ErrorContains(t, err, "rootDir is required")
 
 	require.NoError(t, os.Chmod(testDirectory, 0200))
 
 	// now try an error with a root dir that can't be written to
 	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
 	require.Empty(t, paths)
-	errorcontains.CaptureError(t, err)
-	require.Contains(t, err.Error(), "permission denied")
+	require.ErrorContains(t, err, "permission denied")
 }
 
 // TestResolveLogPaths confirms that log paths are resolved to the most appropriate data directory of the supplied config

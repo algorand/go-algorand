@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -102,15 +101,15 @@ func TestCatchpointLabelParsing2(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, _, err := ParseCatchpointLabel("5893060#KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJAB")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `catchpoint parsing failed`)
 	_, _, err = ParseCatchpointLabel("5893060KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `catchpoint parsing failed`)
 	_, _, err = ParseCatchpointLabel("5893060##KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `catchpoint parsing failed`)
 	_, _, err = ParseCatchpointLabel("5x893060#KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `strconv.ParseUint: parsing \"5x893060\": invalid syntax`)
 	_, _, err = ParseCatchpointLabel("-5893060#KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `strconv.ParseUint: parsing \"-5893060\": invalid syntax`)
 	_, _, err = ParseCatchpointLabel("5893060#aURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `illegal base32 data at input byte 0`)
 }

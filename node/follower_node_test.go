@@ -114,13 +114,13 @@ func TestErrors(t *testing.T) {
 	errorcontains.CaptureError(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
 	errorcontains.CaptureError(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}))
 	_, err := node.Simulate(simulation.Request{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `expected 1 transaction group, got 0`)
 	_, err = node.GetParticipationKey(account.ParticipationID{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `cannot get participation key in follower mode`)
 	errorcontains.CaptureError(t, node.RemoveParticipationKey(account.ParticipationID{}))
 	errorcontains.CaptureError(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}))
 	_, err = node.InstallParticipationKey([]byte{})
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `cannot install participation key in follower mode`)
 }
 
 func TestDevModeWarning(t *testing.T) {

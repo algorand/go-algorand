@@ -25,7 +25,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -78,7 +77,7 @@ func TestNibblesDeserialize(t *testing.T) {
 	t.Parallel()
 	enc := []byte{0x01}
 	_, err := Deserialize(enc)
-	errorcontains.CaptureError(t, err, "should return invalid encoding error")
+	require.ErrorContains(t, err, `invalid encoding`, "should return invalid encoding error")
 }
 
 func TestNibbles(t *testing.T) {
@@ -213,7 +212,7 @@ func TestNibbles(t *testing.T) {
 	}
 
 	_, e := Deserialize([]byte{})
-	errorcontains.CaptureError(t, e)
+	require.ErrorContains(t, e, `invalid encoding`)
 	_, e = Deserialize([]byte{0x02})
-	errorcontains.CaptureError(t, e)
+	require.ErrorContains(t, e, `invalid encoding`)
 }

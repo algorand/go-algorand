@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -148,10 +147,10 @@ func TestProposalFunctions(t *testing.T) {
 		require.NoError(t, err)
 
 		err = proposalValue.matches(encDigest, encDigest)
-		errorcontains.CaptureError(t, err)
+		require.ErrorContains(t, err, `proposal block digest mismatches payload`)
 
 		err = proposalValue.matches(digest, digest)
-		errorcontains.CaptureError(t, err)
+		require.ErrorContains(t, err, `proposal encoding digest mismatches payload`)
 
 	}
 }
@@ -183,7 +182,7 @@ func TestProposalUnauthenticated(t *testing.T) {
 
 	// test bad round number
 	proposal, err = unauthenticatedProposal.validate(context.Background(), round+1, ledger, validator)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `proposed entry from wrong round: entry.Round() != current: 1 != 2`)
 	proposal, err = unauthenticatedProposal.validate(context.Background(), round, ledger, validator)
 	require.NotNil(t, proposal)
 	require.NoError(t, err)
@@ -201,7 +200,7 @@ func TestProposalUnauthenticated(t *testing.T) {
 	unauthenticatedProposal3 := proposal3.u()
 	unauthenticatedProposal3.SeedProof = unauthenticatedProposal.SeedProof
 	_, err = unauthenticatedProposal3.validate(context.Background(), round, ledger, validator)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `unable to verify header: seed proof malformed (`)
 
 	// validate mismatch proposer address between block and unauthenticatedProposal
 	proposal4, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)

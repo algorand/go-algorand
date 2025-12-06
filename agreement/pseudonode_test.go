@@ -526,7 +526,6 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		channels = append(channels, ch)
 	}
 	enqueuedProposals := len(channels)
-	errorcontains.CaptureError(t, err, "MakeProposals did not returned an error when being overflowed with requests")
 	require.ErrorIs(t, err, errPseudonodeBacklogFull)
 
 	persist := make(chan error)
@@ -539,7 +538,7 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	errorcontains.CaptureError(t, err, "MakeVotes did not returned an error when being overflowed with requests")
+	require.ErrorContains(t, err, `unable to make vote for (1, 33, 3): pseudonode input channel is full`, "MakeVotes did not returned an error when being overflowed with requests")
 	enqueuedVotes := len(channels) - enqueuedProposals
 	// drain output channels.
 	for _, ch := range channels {

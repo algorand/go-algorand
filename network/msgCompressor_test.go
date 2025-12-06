@@ -29,7 +29,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
@@ -80,7 +79,7 @@ func TestZstdDecompress(t *testing.T) {
 	compressed, err = zstd.Compress(nil, msg)
 	require.NoError(t, err)
 	decompressed, err = d.convert(compressed)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `proposal data is too large: 20971530`)
 	require.Nil(t, decompressed)
 }
 

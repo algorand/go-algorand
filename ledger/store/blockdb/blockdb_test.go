@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -74,7 +73,7 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []testBlockEntry) {
 
 	latest, err := BlockLatest(tx)
 	if len(blocks) == 0 {
-		errorcontains.CaptureError(t, err)
+		require.ErrorContains(t, err, `no blocks present`)
 	} else {
 		require.NoError(t, err)
 		require.Equal(t, latest, basics.Round(len(blocks))-1)
@@ -82,7 +81,7 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []testBlockEntry) {
 
 	earliest, err := BlockEarliest(tx)
 	if len(blocks) == 0 {
-		errorcontains.CaptureError(t, err)
+		require.ErrorContains(t, err, `no blocks present`)
 	} else {
 		require.NoError(t, err)
 		require.Equal(t, earliest, blocks[0].block.BlockHeader.Round)
@@ -100,7 +99,7 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []testBlockEntry) {
 	}
 
 	_, err = BlockGet(tx, basics.Round(len(blocks)))
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `ledger does not have entry`)
 }
 
 func blockChainBlocks(be []testBlockEntry) []bookkeeping.Block {

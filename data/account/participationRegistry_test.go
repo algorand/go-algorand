@@ -688,7 +688,7 @@ func TestParticipation_RecordMultipleUpdates_DB(t *testing.T) {
 	err = registry.Register(id, 1)
 	a.NoError(err)
 	err = registry.Flush(defaultTimeout)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `: multiple valid keys found for the same participationID`)
 	a.Contains(err.Error(), "unable to disable old key")
 	a.EqualError(errors.Unwrap(err), ErrMultipleKeysForID.Error())
 
@@ -935,9 +935,9 @@ func TestAddStateProofKeys(t *testing.T) {
 	a.NoError(err)
 
 	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(1))
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `failed to fetch state proof for round 1: the participation ID did not have secrets for the requested round`)
 	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(2))
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `failed to fetch state proof for round 2: the participation ID did not have secrets for the requested round`)
 
 	// Make sure we're able to fetch the same data that was put in.
 	for i := uint64(3); i < max; i++ {

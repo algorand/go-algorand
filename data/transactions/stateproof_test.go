@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -122,25 +121,25 @@ func TestStateProofTxnShouldBeZero(t *testing.T) {
 	const erroMsg = "type pay has non-zero fields for type stpf"
 	txn.StateProofType = 1
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transaction of type pay has non-zero fields for type stpf`)
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.StateProofType = 0
 	txn.Message = stateproofmsg.Message{FirstAttestedRound: 1}
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transaction of type pay has non-zero fields for type stpf`)
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.Message = stateproofmsg.Message{}
 	txn.StateProof = stateproof.StateProof{SignedWeight: 100}
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transaction of type pay has non-zero fields for type stpf`)
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.StateProof = stateproof.StateProof{}
 	txn.Message.LastAttestedRound = 512
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `transaction of type pay has non-zero fields for type stpf`)
 	require.Contains(t, err.Error(), erroMsg)
 
 	txn.Message.LastAttestedRound = 0

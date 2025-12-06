@@ -97,7 +97,7 @@ func TestTrustedZone(t *testing.T) {
 	zk.PublicKey = ksks[0].PublicKey
 	tzRoot.zsk[zsks[0].KeyTag()] = zk
 	cacheOutdated, err = tzRoot.verifyDS(rrsDS, rrsigsDS, tt)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `DS signature verification failed for 'com.'`)
 	a.False(cacheOutdated)
 }
 
@@ -147,7 +147,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	}
 	tzRoot.zsk[zk.KeyTag()] = ks
 	tzCom, cacheOutdated, err = makeTrustedZone(context.Background(), "com.", tzRoot, r, tt)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `DS signature verification failed for 'com.'`)
 	a.Contains(err.Error(), "DS signature verification failed")
 	a.False(cacheOutdated)
 	a.Empty(tzCom)
@@ -156,7 +156,7 @@ func TestMakeTrustedZone(t *testing.T) {
 
 	// test non-existing zone
 	tzOrg, cacheOutdated, err := makeTrustedZone(context.Background(), "ttt.", tzRoot, r, tt)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `ttt. not found`)
 	a.False(cacheOutdated)
 	a.Empty(tzOrg)
 
@@ -188,7 +188,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.NoError(err)
 
 	tzTest, cacheOutdated, err := makeTrustedZone(context.Background(), "test.", trustedZone{}, re, tt)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `test. not found`)
 	a.Contains(err.Error(), "test. not found")
 	a.False(cacheOutdated)
 	a.Empty(tzTest)

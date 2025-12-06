@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -274,7 +273,7 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 		}
 		u := MakeCredential(zeroVRFSecret, sel)
 		_, err := u.Verify(proto, m)
-		errorcontains.CaptureError(t, err, "account should not have been selected")
+		require.ErrorContains(t, err, `UnauthenticatedCredential.Verify: credential has weight 0`, "account should not have been selected")
 	}
 }
 
