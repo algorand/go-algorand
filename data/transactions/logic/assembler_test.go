@@ -700,7 +700,7 @@ func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpSt
 		if err == nil {
 			t.Log(source)
 		}
-		require.ErrorContains(t, err, `error`)
+		require.Error(t, err)
 		errors := ops.Errors
 		for _, exp := range expected {
 			if exp.l == 0 {

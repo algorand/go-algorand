@@ -209,7 +209,7 @@ func TestMsgpDecode(t *testing.T) {
 	var tag Tag = "test"
 	dec := NewMsgpDecoderBytes([]byte{1, 2, 3})
 	err := dec.Decode(&tag)
-	require.ErrorContains(t, err, `msgp: attempted to decode type \"int\" with method for \"str\"`)
+	require.ErrorContains(t, err, `msgp: attempted to decode type "int" with method for "str"`)
 
 	data := EncodeMsgp(tag)
 	dec = NewMsgpDecoderBytes(data)

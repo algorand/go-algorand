@@ -143,7 +143,7 @@ func TestVersionToMajorMinor(t *testing.T) {
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("a.b")
-	require.ErrorContains(t, err, `strconv.ParseInt: parsing \"a\": invalid syntax`)
+	require.ErrorContains(t, err, `strconv.ParseInt: parsing "a": invalid syntax`)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 }

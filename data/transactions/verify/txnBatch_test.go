@@ -402,7 +402,7 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	for x := 0; x < 10; x++ {
 		err := verificationPool.EnqueueBacklog(context.Background(),
 			func(arg interface{}) interface{} { return nil }, nil, nil)
-		require.ErrorContains(t, err, fmt.Sprintf("x = %d", x), `context canceled`)
+		require.ErrorContains(t, err, `context canceled`, "x = %d", x)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

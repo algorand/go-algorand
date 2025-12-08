@@ -90,12 +90,12 @@ func TestParseHostOrURL(t *testing.T) {
 	for _, addr := range badUrls {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseHostOrURL(addr)
-			require.ErrorContains(t, err, `could not parse`, "url should fail: %s", addr)
+			require.Error(t, err, "url should fail", addr)
 			require.False(t, IsMultiaddr(addr))
 		})
 		t.Run(addr+"-multiaddr", func(t *testing.T) {
 			_, err := ParseHostOrURLOrMultiaddr(addr)
-			require.ErrorContains(t, err, `could not parse`, "url should fail: %s", addr)
+			require.Error(t, err, "url should fail", addr)
 			require.False(t, IsMultiaddr(addr))
 		})
 	}

@@ -57,7 +57,7 @@ func TestNonParsableAddress(t *testing.T) {
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	peer := testHTTPPeer(":def")
 	err := lf.getPeerLedger(context.Background(), &peer, basics.Round(0))
-	require.ErrorContains(t, err, `Get \"/v1/mocknet/ledger/0\": parse \":def\": missing protocol scheme`)
+	require.ErrorContains(t, err, `Get "/v1/mocknet/ledger/0": parse ":def": missing protocol scheme`)
 }
 
 func TestLedgerFetcherErrorResponseHandling(t *testing.T) {
