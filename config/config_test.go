@@ -999,7 +999,7 @@ func TestEnsureAndResolveGenesisDirs_migrateCrashErr(t *testing.T) {
 	require.NoError(t, err)
 	// Resolve
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
-	require.ErrorContains(t, err, `error moving crash DB files from ColdDataDir /var/folders/cj/tbnn8rf51170ytfb2bjbw5jm0000gn/T/TestEnsureAndResolveGenesisDirs_migrateCrashErr`)
+	require.ErrorContains(t, err, `error moving crash DB files from ColdDataDir`)
 	require.Empty(t, paths)
 	// Confirm that crash.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite"))
@@ -1031,7 +1031,7 @@ func TestEnsureAndResolveGenesisDirs_migrateSPErr(t *testing.T) {
 	require.NoError(t, err)
 	// Resolve
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
-	require.ErrorContains(t, err, `error moving stateproof DB files from ColdDataDir /var/folders/cj/tbnn8rf51170ytfb2bjbw5jm0000gn/T/TestEnsureAndResolveGenesisDirs_migrateSPErr`)
+	require.ErrorContains(t, err, `error moving stateproof DB files from ColdDataDir`)
 	require.Empty(t, paths)
 	// Confirm that stateproof.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite"))

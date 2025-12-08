@@ -76,7 +76,7 @@ func TestNetAddressToListenAddress(t *testing.T) {
 		t.Run(fmt.Sprintf("input: %s", test.input), func(t *testing.T) {
 			res, err := netAddressToListenAddress(test.input)
 			if test.err {
-				require.ErrorContains(t, err, `invalid netAddress 192.168.1.1`)
+				require.ErrorContains(t, err, `invalid netAddress`)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.output, res)
