@@ -48,7 +48,6 @@ var (
 	captureErrorRe = regexp.MustCompile(`(?m)^(\s*)errorcontains\.CaptureError\(([^,]+),\s*(.+?)(?:,\s*("[^"]*"[^)]*))?\)\s*$`)
 
 	// Pattern to match the next line after CaptureError
-	errorIsRe  = regexp.MustCompile(`(?m)^(\s*)require\.ErrorIs\(([^,]+),\s*([^,]+),\s*([^)]+)\)`)
 	containsRe = regexp.MustCompile(`(?m)^(\s*)require\.Contains\(([^,]+),\s*([^.]+)\.Error\(\),\s*("[^"]+"|` + "`[^`]+`" + `)\)`)
 	equalRe    = regexp.MustCompile(`(?m)^(\s*)require\.Equal\(([^,]+),\s*([^,]+),\s*([^)]+)\)`)
 )

@@ -234,53 +234,6 @@ func longestCommonSubstring(strs []string) string {
 	return cleanupLCS(strings.TrimSpace(lcsStr))
 }
 
-// lcs2 finds the longest common substring between two strings.
-func lcs2(s1, s2 string) string {
-	if s1 == "" || s2 == "" {
-		return ""
-	}
-
-	// Use dynamic programming
-	m, n := len(s1), len(s2)
-
-	// Optimization: use shorter string as s1
-	if m > n {
-		s1, s2 = s2, s1
-		m, n = n, m
-	}
-
-	// Use rolling array to save memory
-	prev := make([]int, n+1)
-	curr := make([]int, n+1)
-
-	maxLen := 0
-	endIdx := 0
-
-	for i := 1; i <= m; i++ {
-		for j := 1; j <= n; j++ {
-			if s1[i-1] == s2[j-1] {
-				curr[j] = prev[j-1] + 1
-				if curr[j] > maxLen {
-					maxLen = curr[j]
-					endIdx = i
-				}
-			} else {
-				curr[j] = 0
-			}
-		}
-		prev, curr = curr, prev
-		// Reset curr for next iteration
-		for j := range curr {
-			curr[j] = 0
-		}
-	}
-
-	if maxLen == 0 {
-		return ""
-	}
-	return s1[endIdx-maxLen : endIdx]
-}
-
 // commonPrefix finds the longest common prefix of all strings.
 func commonPrefix(strs []string) string {
 	if len(strs) == 0 {

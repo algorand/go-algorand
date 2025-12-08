@@ -154,7 +154,7 @@ func writeEntry(testName, file string, line int, errType, errMsg, userMsg, unwra
 
 	outputMu.Lock()
 	defer outputMu.Unlock()
-	outputFile.WriteString(entry)
+	_, _ = outputFile.WriteString(entry)
 }
 
 // ErrorCapture provides an assertions-style interface like require.New(t).
