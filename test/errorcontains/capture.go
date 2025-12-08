@@ -29,11 +29,13 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/algorand/go-deadlock"
 )
 
 var (
 	outputFile *os.File
-	outputMu   sync.Mutex
+	outputMu   deadlock.Mutex
 	initOnce   sync.Once
 )
 
