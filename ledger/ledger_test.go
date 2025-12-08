@@ -578,14 +578,14 @@ func TestLedgerSingleTx(t *testing.T) {
 	fee, overflow := basics.OAddA(initAccounts[badTx.Sender].MicroAlgos, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `00000} RewardsBase:0 RewardedMicroAlgos`, "added keyreg tx with fee above user balance")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `tried to spend`, "added keyreg tx with fee above user balance")
 
 	// TODO try excessive spending given distribution of some number of rewards
 
 	badTx = correctPay
 	sbadTx := sign(initSecrets, badTx)
 	sbadTx.Sig = crypto.Signature{}
-	require.ErrorContains(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), `0000} CloseRemainderTo:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ} AssetConfigTxnFields`, "added tx with no signature")
+	require.ErrorContains(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), `signedtxn has no sig`, "added tx with no signature")
 
 	badTx = correctPay
 	sbadTx = sign(initSecrets, badTx)
@@ -620,7 +620,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	fee, overflow = basics.OAddA(remainder, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `9999} RewardsBase:0 RewardedMicroAlgos`, "overspent with (amount + fee)")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `tried to spend`, "overspent with (amount + fee)")
 
 	adClose := ad
 	adClose.ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
@@ -1199,7 +1199,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.Type = "invalid"
-	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `0000} CloseRemainderTo:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ} AssetConfigTxnFields`, "added tx with invalid tx type")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `unknown tx type invalid`, "added tx with invalid tx type")
 
 	badTx = correctPay
 	badTx.KeyregTxnFields = correctKeyregFields
@@ -1249,14 +1249,14 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	fee, overflow := basics.OAddA(initAccounts[badTx.Sender].MicroAlgos, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `00000} RewardsBase:0 RewardedMicroAlgos`, "added keyreg tx with fee above user balance")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `tried to spend`, "added keyreg tx with fee above user balance")
 
 	// TODO try excessive spending given distribution of some number of rewards
 
 	badTx = correctPay
 	sbadTx := sign(initSecrets, badTx)
 	sbadTx.Sig = crypto.Signature{}
-	require.ErrorContains(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), `0000} CloseRemainderTo:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ} AssetConfigTxnFields`, "added tx with no signature")
+	require.ErrorContains(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), `signedtxn has no sig`, "added tx with no signature")
 
 	badTx = correctPay
 	remainder, overflow := basics.OSubA(initAccounts[badTx.Sender].MicroAlgos, badTx.Amount)
@@ -1264,7 +1264,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	fee, overflow = basics.OAddA(remainder, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `9999} RewardsBase:0 RewardedMicroAlgos`, "overspent with (amount + fee)")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `tried to spend`, "overspent with (amount + fee)")
 
 	adClose := ad
 	adClose.ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
@@ -1277,7 +1277,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	adCloseWrong.ClosingAmount.Raw++
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not add payment transaction")
-	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), `6001} 0`, "closed transaction with wrong ApplyData")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), `applyData mismatch`, "closed transaction with wrong ApplyData")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adClose), "could not add close transaction")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "could not add key registration")
 
@@ -1294,7 +1294,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		correctPayLease.Note = make([]byte, 1)
 		correctPayLease.Note[0] = 1
 		correctPayLease.LastValid += 10
-		require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), `, AEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKE3PRHE)`, "added payment transaction with matching transaction lease")
+		require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), `overlapping lease`, "added payment transaction with matching transaction lease")
 		correctPayLeaseOther := correctPayLease
 		correctPayLeaseOther.Sender = addrList[4]
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching lease but different sender")
@@ -1303,7 +1303,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching sender but different lease")
 
 		for l.Latest() < leaseReleaseRound {
-			require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), `, AEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKE3PRHE)`, "added payment transaction with matching transaction lease")
+			require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), `overlapping lease`, "added payment transaction with matching transaction lease")
 
 			var totalRewardUnits uint64
 			for _, acctdata := range initAccounts {

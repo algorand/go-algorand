@@ -29,7 +29,6 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -280,7 +279,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	duplicateEquivocationVoteBundle := unauthenticatedBundles[6]
 	duplicateEquivocationVoteBundle.EquivocationVotes = append(duplicateEquivocationVoteBundle.EquivocationVotes, duplicateEquivocationVoteBundle.EquivocationVotes[0])
 	_, err = duplicateEquivocationVoteBundle.verify(context.Background(), ledger, avv)
-	require.ErrorContains(t, err, `EncodingDigest:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`)
+	require.ErrorContains(t, err, `was duplicated in bundle`)
 
 }
 
