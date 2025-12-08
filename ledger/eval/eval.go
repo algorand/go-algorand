@@ -945,9 +945,10 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 				return &ledgercore.TxGroupMalformedError{
 					Msg: fmt.Sprintf("transactionGroup: multiple tip values: %v != %v",
 						tip, txn.Txn.Tip),
-					Reason: ledgercore.TxGroupMalformedErrorReasonMultipleIncrements,
+					Reason: ledgercore.TxGroupMalformedErrorReasonMultipleTips,
 				}
 			}
+			tip = txn.Txn.Tip
 		}
 
 		// Make sure all transactions in group have the same group value
@@ -1127,9 +1128,10 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 				return &ledgercore.TxGroupMalformedError{
 					Msg: fmt.Sprintf("transactionGroup: multiple tip values: %v != %v",
 						tip, txad.Txn.Tip),
-					Reason: ledgercore.TxGroupMalformedErrorReasonMultipleIncrements,
+					Reason: ledgercore.TxGroupMalformedErrorReasonMultipleTips,
 				}
 			}
+			tip = txad.Txn.Tip
 		}
 
 		// Make sure all transactions in group have the same group value

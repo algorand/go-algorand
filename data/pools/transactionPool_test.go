@@ -476,6 +476,108 @@ func TestReceiverGoesBelowMinBalance(t *testing.T) {
 	require.ErrorContains(t, transactionPool.rememberOne(signedTx), addresses[1].String())
 }
 
+func TestGroupIDHandling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	secrets, addresses := generateAccounts(5)
+
+	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base(), nil)
+
+	tx0 := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: minBalance - 1},
+		},
+	}
+	tx1 := tx0
+	tx1.Note = []byte("another")
+
+	stxs := []transactions.SignedTxn{tx0.Sign(secrets[0]), tx1.Sign(secrets[0])}
+
+	err := transactionPool.Remember(stxs)
+	require.ErrorContains(t, err, "[0] had zero Group")
+
+	stxs[0].Txn.Group = crypto.Digest{1}
+	err = transactionPool.Remember(stxs)
+	require.ErrorContains(t, err, "inconsistent group values")
+
+	stxs[1].Txn.Group = crypto.Digest{1}
+	err = transactionPool.Remember(stxs)
+	// I don't love this error string, but the code assumes the problem is that
+	// the group doesn't have all its members. It should probably just say the
+	// hash is wrong.
+	require.ErrorContains(t, err, "incomplete group")
+
+	assignGroupIDs(stxs)
+	err = transactionPool.Remember(stxs)
+	require.NoError(t, err)
+}
+
+func assignGroupIDs(stxs []transactions.SignedTxn) {
+	var group transactions.TxGroup
+	for _, tx := range stxs {
+		copy := tx
+		copy.Txn.Group = crypto.Digest{}
+		group.TxGroupHashes = append(group.TxGroupHashes, crypto.Digest(copy.ID()))
+	}
+	groupID := crypto.HashObj(group)
+	for i := range stxs {
+		stxs[i].Txn.Group = groupID
+	}
+}
+
+func TestSingleTip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	secrets, addresses := generateAccounts(5)
+
+	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base(), nil)
+
+	tx0 := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        make([]byte, 2),
+			GenesisHash: ledger.GenesisHash(),
+			Tip:         3,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: minBalance - 1},
+		},
+	}
+	tx1 := tx0
+	tx1.Note = []byte("another")
+
+	stxs := []transactions.SignedTxn{tx0.Sign(secrets[0]), tx1.Sign(secrets[0])}
+	assignGroupIDs(stxs)
+	err := transactionPool.Remember(stxs)
+	require.ErrorContains(t, err, "multiple tip values")
+
+	stxs[1].Txn.Tip = 0
+	assignGroupIDs(stxs)
+	err = transactionPool.Remember(stxs)
+	require.NoError(t, err)
+}
+
 func TestRememberForget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

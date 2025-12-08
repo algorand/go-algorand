@@ -133,8 +133,8 @@ const (
 	TxGroupMalformedErrorReasonEmptyGroupID
 	// TxGroupMalformedErrorReasonIncompleteGroup indicates expected group ID does not match to provided
 	TxGroupMalformedErrorReasonIncompleteGroup
-	// TxGroupMalformedErrorReasonMultipleIncrements indicates multiple transactions specify a CostIncrement
-	TxGroupMalformedErrorReasonMultipleIncrements
+	// TxGroupMalformedErrorReasonMultipleTips indicates multiple transactions specify a CostIncrement
+	TxGroupMalformedErrorReasonMultipleTips
 	// TxGroupErrorReasonInvalidFee indicates a group with improper fees
 	TxGroupErrorReasonInvalidFee
 )
