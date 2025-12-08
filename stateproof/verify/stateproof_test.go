@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -161,7 +160,7 @@ func TestStateProofParams(t *testing.T) {
 	var hdr bookkeeping.BlockHeader
 
 	_, err := GetProvenWeight(&votersHdr, &hdr)
-	errorcontains.CaptureError(t, err) // not enabled
+	require.ErrorContains(t, err, `state proofs are not enabled`)
 
 	votersHdr.CurrentProtocol = "TestStateProofParams"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
@@ -169,12 +168,12 @@ func TestStateProofParams(t *testing.T) {
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	votersHdr.Round = 1
 	_, err = GetProvenWeight(&votersHdr, &hdr)
-	errorcontains.CaptureError(t, err) // wrong round
+	require.ErrorContains(t, err, `not a multiple of`)
 
 	votersHdr.Round = 2
 	hdr.Round = 3
 	_, err = GetProvenWeight(&votersHdr, &hdr)
-	errorcontains.CaptureError(t, err) // wrong round
+	require.ErrorContains(t, err, `not 2 ahead of voters`)
 
 	// Covers all cases except overflow
 }

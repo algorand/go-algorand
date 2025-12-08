@@ -43,7 +43,6 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-deadlock"
@@ -360,10 +359,10 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 	if base > 0 && base >= basics.Round(ao.maxBalLookback()) {
 		rnd := base - basics.Round(ao.maxBalLookback())
 		_, err := ao.onlineCirculation(rnd, base)
-		errorcontains.CaptureError(t, err)
+		require.ErrorContains(t, err, `too high: dbRound`)
 
 		_, validThrough, err = au.LookupWithoutRewards(base-1, ledgertesting.RandomAddress())
-		errorcontains.CaptureError(t, err)
+		require.ErrorContains(t, err, `too high: dbRound`)
 		require.Zero(t, validThrough)
 	}
 

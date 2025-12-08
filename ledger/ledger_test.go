@@ -48,7 +48,6 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -1346,7 +1345,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add payment transaction after lease was dropped")
 	} else {
-		errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with transaction lease unsupported by protocol version")
+		require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), `does not support transaction leases`)
 	}
 }
 

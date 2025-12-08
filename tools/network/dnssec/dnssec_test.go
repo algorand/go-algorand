@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
@@ -325,8 +324,7 @@ func TestDeadNS(t *testing.T) {
 
 	r := MakeDnssecResolver([]ResolverAddress{"192.168.12.34:5678", "10.12.34.56:890"}, time.Microsecond)
 	addrs, err := r.LookupIPAddr(context.Background(), "example.com")
-	errorcontains.CaptureError(t, err)
-	a.Contains(err.Error(), "no answer for")
+	require.ErrorContains(t, err, "no answer for")
 	a.Empty(addrs)
 
 	// possible race :( with 100ms timeout
@@ -354,7 +352,7 @@ func TestRealRequests(t *testing.T) {
 	a.NoError(err)
 	a.Equal(2, len(addrs))
 	_, err = r.LookupIPAddr(context.Background(), "dnssec-failed.org")
-	errorcontains.CaptureError(t, err)
+	require.Error(t, err) // DNSSEC validation error varies by DNS server response
 
 	// SRV
 	srvFullName := "_algobootstrap._tcp.mainnet.algorand.network."
@@ -383,8 +381,7 @@ func TestRealRequests(t *testing.T) {
 	// but it is two-level aliasing
 	r.(*Resolver).maxHops = 1
 	addrs, err = r.LookupIPAddr(context.Background(), "relay-montreal-mainnet-algorand.algorand-mainnet.network.")
-	errorcontains.CaptureError(t, err)
-	a.Contains(err.Error(), "exceed max attempts")
+	require.ErrorContains(t, err, "exceed max attempts")
 }
 
 func TestDefaultResolver(t *testing.T) {

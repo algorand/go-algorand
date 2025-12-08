@@ -55,7 +55,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -4691,7 +4690,7 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 		require.NoError(t, err)
 		resp, err := tr.RoundTrip(req)
 		if test.expected == expErr {
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not parse`)
 		} else {
 			require.NoError(t, err)
 			require.Equal(t, 200, resp.StatusCode)

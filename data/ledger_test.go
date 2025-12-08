@@ -38,7 +38,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -253,10 +252,10 @@ func TestLedgerCirculation(t *testing.T) {
 		} else if rnd < basics.Round(520) {
 			// test expired round ( expected error )
 			_, err = realLedger.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `too high: dbRound`)
 
 			_, err = l.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `too high: dbRound`)
 		}
 	}
 }

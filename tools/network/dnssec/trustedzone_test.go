@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
@@ -172,8 +171,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	a.NoError(err)
 
 	tzRoot, cacheOutdated, err = makeTrustedZone(context.Background(), ".", trustedZone{}, re, tt)
-	errorcontains.CaptureError(t, err)
-	a.Contains(err.Error(), "EOF")
+	require.ErrorContains(t, err, "EOF")
 	a.False(cacheOutdated)
 	a.Empty(tzRoot)
 

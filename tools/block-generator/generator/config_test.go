@@ -21,7 +21,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -233,7 +232,7 @@ func TestTxTypeParse(t *testing.T) {
 			isApp, kind, txType, err := parseAppTxType(test.txType)
 
 			if test.err != "" {
-				errorcontains.CaptureError(t, err, test.err)
+				require.ErrorContains(t, err, test.err)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.IsApp, isApp, "Mismatch in isApp for %s", test.txType)

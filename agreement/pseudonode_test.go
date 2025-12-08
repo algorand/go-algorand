@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -175,7 +174,7 @@ func TestPseudonode(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	errorcontains.CaptureErrorAssert(t, err, "MakeProposals did not returned an error when being overflowed with requests")
+	assert.ErrorContains(t, err, `pseudonode input channel is full`, "MakeProposals did not returned an error when being overflowed with requests")
 
 	persist := make(chan error)
 	close(persist)
@@ -187,7 +186,7 @@ func TestPseudonode(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	errorcontains.CaptureErrorAssert(t, err, "MakeVotes did not returned an error when being overflowed with requests")
+	assert.ErrorContains(t, err, `pseudonode input channel is full`, "MakeVotes did not returned an error when being overflowed with requests")
 
 	// drain output channels.
 	for _, ch := range channels {

@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
@@ -377,7 +376,7 @@ func TestAuthenticate(t *testing.T) {
 	// DNSKEY is signed with KSK so authenticate will fail looking up KSK in ZSK
 	rrset, rrsig, err = r.QueryRRSet(context.Background(), "test.", dns.TypeDNSKEY)
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `not found in zone`)
 
 	err = tch.Authenticate(context.Background(), rrset, nil)
 	require.ErrorContains(t, err, `empty RRSIG`)
