@@ -593,6 +593,12 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 	if err == ledgercore.ErrNoSpace {
 		pool.numPendingWholeBlocks++
 		pool.pendingBlockEvaluator.ResetTxnBytes()
+		// Since we've added a block, need to recheck fees
+		if !recomputing {
+			if err := pool.checkFeeAtIngress(txgroup); err != nil {
+				return err
+			}
+		}
 		err = pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	}
 	return err

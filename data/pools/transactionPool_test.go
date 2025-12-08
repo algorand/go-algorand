@@ -843,11 +843,10 @@ func TestTransactionPoolEnforcesTax(t *testing.T) {
 	}
 	crypto.RandBytes(tx.Note)
 	signedTx := tx.Sign(secrets[0])
-	paySize := len(protocol.Encode(&transactions.SignedTxnInBlock{
+	paySize := transactions.SignedTxnInBlock{
 		SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: signedTx},
-	}))
-	// size estimates aren't perfect, we can get 1 more in.
-	for i := range blockSize/paySize + 1 {
+	}.GetEncodedLength()
+	for i := range blockSize / paySize {
 		sender := addresses[i%numAccounts]
 		receiver := addresses[(i+1)%numAccounts]
 		tx := transactions.Transaction{
