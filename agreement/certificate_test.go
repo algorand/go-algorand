@@ -179,7 +179,7 @@ func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	errorcontains.CaptureError(t, cert.Authenticate(block, ledger, avv))
+	require.ErrorContains(t, cert.Authenticate(block, ledger, avv), `unauthenticatedBundle.verify: vote`)
 }
 
 func TestCertificateDifferentBlock(t *testing.T) {
@@ -205,12 +205,12 @@ func TestCertificateDifferentBlock(t *testing.T) {
 	bundle := unauthenticatedBundle(cert)
 	require.NotEqual(t, Certificate{}, cert)
 
-	errorcontains.CaptureError(t, cert.claimsToAuthenticate(block))
+	require.ErrorContains(t, cert.claimsToAuthenticate(block), `certificate claims to validate the wrong hash`)
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	require.NoError(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	errorcontains.CaptureError(t, cert.Authenticate(block, ledger, avv))
+	require.ErrorContains(t, cert.Authenticate(block, ledger, avv), `certificate claims to validate the wrong hash`)
 }
 
 func TestCertificateNoCertStep(t *testing.T) {
@@ -294,12 +294,12 @@ func TestCertificateCertWrongRound(t *testing.T) {
 	cert := makeCertTesting(block.Digest(), votes, equiVotes)
 	bundle := unauthenticatedBundle(cert)
 	require.NotEqual(t, Certificate{}, cert)
-	errorcontains.CaptureError(t, cert.claimsToAuthenticate(block))
+	require.ErrorContains(t, cert.claimsToAuthenticate(block), `certificate claims to validate the wrong round: 1 != 0`)
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
 	require.NoError(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	errorcontains.CaptureError(t, cert.Authenticate(block, ledger, avv))
+	require.ErrorContains(t, cert.Authenticate(block, ledger, avv), `certificate claims to validate the wrong round: 1 != 0`)
 }
 
 func TestCertificateCertWithTooFewVotes(t *testing.T) {
@@ -364,6 +364,6 @@ func TestCertificateDupVote(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	errorcontains.CaptureError(t, verifyBundleAgainstLedger(bundle, ledger, avv))
-	errorcontains.CaptureError(t, cert.Authenticate(block, ledger, avv))
+	require.ErrorContains(t, verifyBundleAgainstLedger(bundle, ledger, avv), `was duplicated in bundle`)
+	require.ErrorContains(t, cert.Authenticate(block, ledger, avv), `was duplicated in bundle`)
 }

@@ -29,7 +29,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -148,7 +147,7 @@ func TestPaymentSelfClose(t *testing.T) {
 			CloseRemainderTo: self,
 		},
 	}
-	errorcontains.CaptureError(t, tx.WellFormed(spec, config.Consensus[protocol.ConsensusCurrentVersion]))
+	require.ErrorContains(t, tx.WellFormed(spec, config.Consensus[protocol.ConsensusCurrentVersion]), `transaction cannot close account to its sender`)
 }
 
 func generateTestPays(numTxs int) []transactions.Transaction {

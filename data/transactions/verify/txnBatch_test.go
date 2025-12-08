@@ -38,7 +38,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -403,7 +402,7 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	for x := 0; x < 10; x++ {
 		err := verificationPool.EnqueueBacklog(context.Background(),
 			func(arg interface{}) interface{} { return nil }, nil, nil)
-		errorcontains.CaptureError(t, err, fmt.Sprintf("x = %d", x))
+		require.ErrorContains(t, err, fmt.Sprintf("x = %d", x), `context canceled`)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

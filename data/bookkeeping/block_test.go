@@ -33,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -167,7 +166,7 @@ func TestUpgradeVariableDelay(t *testing.T) {
 	require.NoError(t, err, "did not accept upgrade vote with maximal delay")
 
 	_, err = s.applyUpgradeVote(basics.Round(10), UpgradeVote{UpgradePropose: proto1, UpgradeDelay: 0})
-	errorcontains.CaptureError(t, err, "accepted upgrade vote with zero (below minimal) delay")
+	require.ErrorContains(t, err, `applyUpgradeVote: proposed upgrade wait rounds 0 out of permissible range [3, 7`, "accepted upgrade vote with zero (below minimal) delay")
 }
 
 func TestMakeBlockUpgrades(t *testing.T) {

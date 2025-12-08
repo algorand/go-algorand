@@ -599,7 +599,7 @@ func TestParticipation_MultipleInsertError(t *testing.T) {
 	_, err := registry.Insert(p)
 	a.NoError(err)
 	_, err = registry.Insert(p)
-	errorcontains.CaptureError(t, err, ErrAlreadyInserted.Error())
+	require.ErrorContains(t, err, ErrAlreadyInserted.Error(), `these participation keys are already inserted`)
 }
 
 // This is a contrived test on every level. To workaround errors we setup the
@@ -1040,7 +1040,6 @@ func TestAddingSecretTwice(t *testing.T) {
 	a.NoError(err)
 
 	err = registry.Flush(10 * time.Second)
-	errorcontains.CaptureErrorAssert(t, err)
 	a.EqualError(err, "unable to execute append keys: UNIQUE constraint failed: StateProofKeys.pk, StateProofKeys.round")
 }
 
@@ -1066,10 +1065,10 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	partPerRound, err := registry.GetStateProofSecretsForRound(id, 1)
-	errorcontains.CaptureErrorAssert(t, err)
+	a.ErrorContains(err, `did not have secrets for the requested round`)
 
 	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests))
-	errorcontains.CaptureErrorAssert(t, err)
+	a.ErrorContains(err, `did not have secrets for the requested round`)
 
 	// Append key
 	keys := make(StateProofKeys, 1)
@@ -1081,7 +1080,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	a.NoError(registry.Flush(defaultTimeout))
 
 	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests)-1)
-	errorcontains.CaptureErrorAssert(t, err)
+	a.ErrorContains(err, `did not have secrets for the requested round`)
 
 	partPerRound, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests))
 	a.NoError(err)
@@ -1203,7 +1202,7 @@ func TestFlushResetsLastError(t *testing.T) {
 	err = registry.AppendKeys(id, keys)
 	a.NoError(err)
 
-	errorcontains.CaptureErrorAssert(t, registry.Flush(10*time.Second))
+	a.ErrorContains(registry.Flush(10*time.Second), `UNIQUE constraint failed`)
 	a.NoError(registry.Flush(10 * time.Second))
 }
 

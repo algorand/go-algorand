@@ -275,7 +275,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	duplicateVoteBundle := unauthenticatedBundles[5]
 	duplicateVoteBundle.Votes = append(duplicateVoteBundle.Votes, duplicateVoteBundle.Votes[0])
 	_, err = duplicateVoteBundle.verify(context.Background(), ledger, avv)
-	errorcontains.CaptureError(t, err)
+	require.ErrorContains(t, err, `was duplicated in bundle`)
 
 	duplicateEquivocationVoteBundle := unauthenticatedBundles[6]
 	duplicateEquivocationVoteBundle.EquivocationVotes = append(duplicateEquivocationVoteBundle.EquivocationVotes, duplicateEquivocationVoteBundle.EquivocationVotes[0])

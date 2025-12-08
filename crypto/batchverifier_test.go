@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -81,7 +80,7 @@ func testBatchVerifierSingle(t *testing.T, makeBV func(int) BatchVerifier) {
 	// break the signature:
 	sig[0] = sig[0] + 1
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
-	errorcontains.CaptureError(t, bv.Verify())
+	require.ErrorContains(t, bv.Verify(), `At least one signature didn't pass verification`)
 }
 
 func TestBatchVerifierBulk(t *testing.T) {
@@ -148,7 +147,7 @@ func testBatchVerifierWithInvalidSignature(t *testing.T, makeBV func(int) BatchV
 	sig[0] = sig[0] + 1
 	bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
 
-	errorcontains.CaptureError(t, bv.Verify())
+	require.ErrorContains(t, bv.Verify(), `At least one signature didn't pass verification`)
 }
 
 func BenchmarkBatchVerifier(b *testing.B) {

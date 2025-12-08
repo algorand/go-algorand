@@ -43,8 +43,9 @@ type CallSite struct {
 }
 
 var (
-	// Pattern to match CaptureError calls
-	captureErrorRe = regexp.MustCompile(`(?m)^(\s*)errorcontains\.CaptureError\(([^,]+),\s*([^,)]+)(?:,\s*([^)]+))?\)\s*$`)
+	// Pattern to match CaptureError calls - handles nested function calls
+	// Group 1: indent, Group 2: t var, Group 3: error expression, Group 4: optional user msg
+	captureErrorRe = regexp.MustCompile(`(?m)^(\s*)errorcontains\.CaptureError\(([^,]+),\s*(.+?)(?:,\s*("[^"]*"[^)]*))?\)\s*$`)
 
 	// Pattern to match the next line after CaptureError
 	errorIsRe  = regexp.MustCompile(`(?m)^(\s*)require\.ErrorIs\(([^,]+),\s*([^,]+),\s*([^)]+)\)`)
@@ -202,8 +203,11 @@ func processFile(content, filePath, rootDir string, siteLookup map[string]*CallS
 
 		// Get relative path for lookup
 		relPath := filePath
-		if idx := strings.Index(filePath, "go-algorand/"); idx != -1 {
-			relPath = filePath[idx+len("go-algorand/"):]
+		for _, repoName := range []string{"go-algorand/", "errorcontains/"} {
+			if idx := strings.Index(filePath, repoName); idx != -1 {
+				relPath = filePath[idx+len(repoName):]
+				break
+			}
 		}
 
 		// Line numbers in the file are 1-indexed, array is 0-indexed

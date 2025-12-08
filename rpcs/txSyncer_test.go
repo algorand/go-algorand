@@ -36,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/bloom"
 )
@@ -211,7 +210,7 @@ func TestSyncFromUnsupportedClient(t *testing.T) {
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
-	errorcontains.CaptureError(t, syncer.syncFromClient(&client))
+	require.ErrorContains(t, syncer.syncFromClient(&client), `TxSyncer.Sync: peer 'mock.address.' error 'old failWithNil'`)
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -228,7 +227,7 @@ func TestSyncFromClientAndQuit(t *testing.T) {
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	syncer.cancel()
-	errorcontains.CaptureError(t, syncer.syncFromClient(&client))
+	require.ErrorContains(t, syncer.syncFromClient(&client), `TxSyncer.Sync: peer 'mock.address.' error 'cancelled'`)
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -244,7 +243,7 @@ func TestSyncFromClientAndError(t *testing.T) {
 	// Since syncer is not Started, set the context here
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
-	errorcontains.CaptureError(t, syncer.syncFromClient(&client))
+	require.ErrorContains(t, syncer.syncFromClient(&client), `TxSyncer.Sync: peer 'mock.address.' error 'failing call'`)
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -261,7 +260,7 @@ func TestSyncFromClientAndTimeout(t *testing.T) {
 	// Since syncer is not Started, set the context here
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
-	errorcontains.CaptureError(t, syncer.syncFromClient(&client))
+	require.ErrorContains(t, syncer.syncFromClient(&client), `TxSyncer.Sync: peer 'mock.address.' error 'cancelled'`)
 	require.Zero(t, handler.messageCounter.Load())
 }
 

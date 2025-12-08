@@ -186,8 +186,11 @@ func readAndAggregate(filename string) (map[string]*CallSite, error) {
 
 func normalizePath(path string) string {
 	// Remove the absolute path prefix, keep relative from repo root
-	if idx := strings.Index(path, "go-algorand/"); idx != -1 {
-		return path[idx+len("go-algorand/"):]
+	// Handle both "go-algorand/" and "errorcontains/" repo names
+	for _, repoName := range []string{"go-algorand/", "errorcontains/"} {
+		if idx := strings.Index(path, repoName); idx != -1 {
+			return path[idx+len(repoName):]
+		}
 	}
 	return filepath.Base(path)
 }

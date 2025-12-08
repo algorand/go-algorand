@@ -36,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -111,14 +110,14 @@ func TestErrors(t *testing.T) {
 	t.Parallel()
 	// Validates that expected functions are disabled
 	node := setupFollowNode(t)
-	errorcontains.CaptureError(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
-	errorcontains.CaptureError(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}))
+	require.ErrorContains(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}), `cannot broadcast txns in follower mode`)
+	require.ErrorContains(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}), `cannot broadcast internal signed txn group in follower mode`)
 	_, err := node.Simulate(simulation.Request{})
 	require.ErrorContains(t, err, `expected 1 transaction group, got 0`)
 	_, err = node.GetParticipationKey(account.ParticipationID{})
 	require.ErrorContains(t, err, `cannot get participation key in follower mode`)
-	errorcontains.CaptureError(t, node.RemoveParticipationKey(account.ParticipationID{}))
-	errorcontains.CaptureError(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}))
+	require.ErrorContains(t, node.RemoveParticipationKey(account.ParticipationID{}), `cannot remove participation key in follower mode`)
+	require.ErrorContains(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}), `cannot append participation keys in follower mode`)
 	_, err = node.InstallParticipationKey([]byte{})
 	require.ErrorContains(t, err, `cannot install participation key in follower mode`)
 }

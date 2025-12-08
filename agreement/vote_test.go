@@ -114,37 +114,37 @@ func TestVoteValidation(t *testing.T) {
 			noSig := unauthenticatedVote
 			noSig.Sig = crypto.OneTimeSignature{}
 			_, err = noSig.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			noCred := unauthenticatedVote
 			noCred.Cred = committee.UnauthenticatedCredential{}
 			_, err = noCred.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `sender was not selected`)
 
 			badRound := unauthenticatedVote
 			badRound.R.Round++
 			_, err = badRound.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badPeriod := unauthenticatedVote
 			badPeriod.R.Period++
 			_, err = badPeriod.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badStep := unauthenticatedVote
 			badStep.R.Step++
 			_, err = badStep.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badBlockHash := unauthenticatedVote
 			badBlockHash.R.Proposal.BlockDigest = randomBlockHash()
 			_, err = badBlockHash.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badProposer := unauthenticatedVote
 			badProposer.R.Proposal.OriginalProposer = basics.Address(randomBlockHash())
 			_, err = badProposer.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 		}
 	}
 	require.True(t, processedVote, "No votes were processed")
@@ -358,37 +358,37 @@ func TestEquivocationVoteValidation(t *testing.T) {
 			noSig := ev
 			noSig.Sigs = [2]crypto.OneTimeSignature{{}, {}}
 			_, err = noSig.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			noCred := ev
 			noCred.Cred = committee.UnauthenticatedCredential{}
 			_, err = noCred.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `sender was not selected`)
 
 			badRound := ev
 			badRound.Round++
 			_, err = badRound.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badPeriod := ev
 			badPeriod.Period++
 			_, err = badPeriod.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badStep := ev
 			badStep.Step++
 			_, err = badStep.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badBlockHash1 := ev
 			badBlockHash1.Proposals[0].BlockDigest = randomBlockHash()
 			_, err = badBlockHash1.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badBlockHash2 := ev
 			badBlockHash2.Proposals[1].BlockDigest = randomBlockHash()
 			_, err = badBlockHash2.verify(ledger)
-			errorcontains.CaptureError(t, err)
+			require.ErrorContains(t, err, `could not verify FS signature`)
 
 			badSender := ev
 			badSender.Sender = basics.Address{}

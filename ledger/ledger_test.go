@@ -521,99 +521,99 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	badTx = correctPay
 	badTx.GenesisID = "invalid"
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid genesis ID")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `could not sign txn: GenesisID mismatch: invalid != TestLedgerSingleTx`, "added tx with invalid genesis ID")
 
 	badTx = correctPay
 	badTx.Type = "invalid"
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid tx type")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: transaction`, "added tx with invalid tx type")
 
 	badTx = correctPay
 	badTx.KeyregTxnFields = correctKeyregFields
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added pay tx with keyreg fields set")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction of type pay has non-zero fields for type keyreg`, "added pay tx with keyreg fields set")
 
 	badTx = correctKeyreg
 	badTx.PaymentTxnFields = correctPayFields
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay fields set")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction of type keyreg has non-zero fields for type pay`, "added keyreg tx with pay fields set")
 
 	badTx = correctKeyreg
 	badTx.PaymentTxnFields = correctCloseFields
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay (close) fields set")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction of type keyreg has non-zero fields for type pay`, "added keyreg tx with pay (close) fields set")
 
 	badTx = correctPay
 	badTx.FirstValid = badTx.LastValid + 1
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with FirstValid > LastValid")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: txn dead: round 1 outside of 11--10`, "added tx with FirstValid > LastValid")
 
 	badTx = correctPay
 	badTx.LastValid += basics.Round(proto.MaxTxnLife)
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly long validity")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: transaction`, "added tx with overly long validity")
 
 	badTx = correctPay
 	badTx.LastValid = l.Latest()
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added expired tx")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: txn dead: round 1 outside of 1--0`, "added expired tx")
 
 	badTx = correctPay
 	badTx.FirstValid = l.Latest() + 2
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx which is not valid yet")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: txn dead: round 1 outside of 2--10`, "added tx which is not valid yet")
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: malformed: transaction note too big: 1025 > 1024`, "added tx with overly large note field")
 
 	badTx = correctPay
 	badTx.Sender = poolAddr
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from tx pool")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: transaction`, "added tx send from tx pool")
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero address")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction cannot close account to its sender AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ`, "added tx send from zero address")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction had fee 0, which is less than the minimum 1000`, "added tx with zero fee")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee - 1}
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with fee below minimum")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction had fee 999, which is less than the minimum 1000`, "added tx with fee below minimum")
 
 	badTx = correctKeyreg
 	fee, overflow := basics.OAddA(initAccounts[badTx.Sender].MicroAlgos, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with fee above user balance")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `00000} RewardsBase:0 RewardedMicroAlgos`, "added keyreg tx with fee above user balance")
 
 	// TODO try excessive spending given distribution of some number of rewards
 
 	badTx = correctPay
 	sbadTx := sign(initSecrets, badTx)
 	sbadTx.Sig = crypto.Signature{}
-	errorcontains.CaptureError(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
+	require.ErrorContains(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), `0000} CloseRemainderTo:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ} AssetConfigTxnFields`, "added tx with no signature")
 
 	badTx = correctPay
 	sbadTx = sign(initSecrets, badTx)
 	sbadTx.Sig[5]++
-	errorcontains.CaptureError(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with corrupt signature")
+	require.ErrorContains(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), `appendUnvalidated error in Validate: At least one signature didn't pass verification`, "added tx with corrupt signature")
 
 	// TODO set multisig and test
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink spent to non-sink address")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: cannot spend from fee sink's address FQVGZ2NJU7BIYIUV7UZE655FASFUFQVXVBKIJNUAWHQT2WM35M3BKL5JPY to non incentive pool address`, "sink spent to non-sink address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.CloseRemainderTo = addrList[0]
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink address")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: cannot spend from fee sink's address FQVGZ2NJU7BIYIUV7UZE655FASFUFQVXVBKIJNUAWHQT2WM35M3BKL5JPY to non incentive pool address`, "sink closed to non-sink address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.Receiver = poolAddr
 	badTx.CloseRemainderTo = addrList[0]
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to non-sink address")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: cannot close fee sink FQVGZ2NJU7BIYIUV7UZE655FASFUFQVXVBKIJNUAWHQT2WM35M3BKL5JPY to`, "sink closed to non-sink address")
 
 	badTx = correctPay
 	badTx.Sender = sinkAddr
 	badTx.CloseRemainderTo = poolAddr
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "sink closed to pool address")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: cannot spend from fee sink's address FQVGZ2NJU7BIYIUV7UZE655FASFUFQVXVBKIJNUAWHQT2WM35M3BKL5JPY to non incentive pool address`, "sink closed to pool address")
 
 	badTx = correctPay
 	remainder, overflow := basics.OSubA(initAccounts[badTx.Sender].MicroAlgos, badTx.Amount)
@@ -621,7 +621,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	fee, overflow = basics.OAddA(remainder, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "overspent with (amount + fee)")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `9999} RewardsBase:0 RewardedMicroAlgos`, "overspent with (amount + fee)")
 
 	adClose := ad
 	adClose.ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
@@ -638,7 +638,7 @@ func TestLedgerSingleTx(t *testing.T) {
 	correctPay.Receiver = poolAddr
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not spend from sink to pool")
 
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), `appendUnvalidated error in Validate: transaction already in ledger`, "added duplicate tx")
 }
 
 func TestLedgerSingleTxV24(t *testing.T) {
@@ -1196,68 +1196,68 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.GenesisID = "invalid"
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid genesis ID")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `could not sign txn: GenesisID mismatch: invalid != TestLedgerSingleTxApplyData`, "added tx with invalid genesis ID")
 
 	badTx = correctPay
 	badTx.Type = "invalid"
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with invalid tx type")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `0000} CloseRemainderTo:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ} AssetConfigTxnFields`, "added tx with invalid tx type")
 
 	badTx = correctPay
 	badTx.KeyregTxnFields = correctKeyregFields
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added pay tx with keyreg fields set")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction of type pay has non-zero fields for type keyreg`, "added pay tx with keyreg fields set")
 
 	badTx = correctKeyreg
 	badTx.PaymentTxnFields = correctPayFields
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay fields set")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction of type keyreg has non-zero fields for type pay`, "added keyreg tx with pay fields set")
 
 	badTx = correctKeyreg
 	badTx.PaymentTxnFields = correctCloseFields
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with pay (close) fields set")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction of type keyreg has non-zero fields for type pay`, "added keyreg tx with pay (close) fields set")
 
 	badTx = correctPay
 	badTx.FirstValid = badTx.LastValid + 1
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with FirstValid > LastValid")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: txn dead: round 1 outside of 11--10`, "added tx with FirstValid > LastValid")
 
 	badTx = correctPay
 	badTx.LastValid += basics.Round(proto.MaxTxnLife)
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly long validity")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: transaction`, "added tx with overly long validity")
 
 	badTx = correctPay
 	badTx.LastValid = l.Latest()
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added expired tx")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: txn dead: round 1 outside of 1--0`, "added expired tx")
 
 	badTx = correctPay
 	badTx.FirstValid = l.Latest() + 2
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx which is not valid yet")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: txn dead: round 1 outside of 2--10`, "added tx which is not valid yet")
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: malformed: transaction note too big: 1025 > 1024`, "added tx with overly large note field")
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx send from zero address")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: transaction cannot close account to its sender AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ`, "added tx send from zero address")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{}
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with zero fee")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: t`, "added tx with zero fee")
 
 	badTx = correctPay
 	badTx.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee - 1}
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with fee below minimum")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `appendUnvalidated error in Validate: t`, "added tx with fee below minimum")
 
 	badTx = correctKeyreg
 	fee, overflow := basics.OAddA(initAccounts[badTx.Sender].MicroAlgos, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added keyreg tx with fee above user balance")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `00000} RewardsBase:0 RewardedMicroAlgos`, "added keyreg tx with fee above user balance")
 
 	// TODO try excessive spending given distribution of some number of rewards
 
 	badTx = correctPay
 	sbadTx := sign(initSecrets, badTx)
 	sbadTx.Sig = crypto.Signature{}
-	errorcontains.CaptureError(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), "added tx with no signature")
+	require.ErrorContains(t, l.appendUnvalidatedSignedTx(t, initAccounts, sbadTx, ad), `0000} CloseRemainderTo:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ} AssetConfigTxnFields`, "added tx with no signature")
 
 	badTx = correctPay
 	remainder, overflow := basics.OSubA(initAccounts[badTx.Sender].MicroAlgos, badTx.Amount)
@@ -1265,7 +1265,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	fee, overflow = basics.OAddA(remainder, basics.MicroAlgos{Raw: 1})
 	a.False(overflow)
 	badTx.Fee = fee
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "overspent with (amount + fee)")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `9999} RewardsBase:0 RewardedMicroAlgos`, "overspent with (amount + fee)")
 
 	adClose := ad
 	adClose.ClosingAmount = initAccounts[correctClose.Sender].MicroAlgos
@@ -1278,11 +1278,11 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 	adCloseWrong.ClosingAmount.Raw++
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPay, ad), "could not add payment transaction")
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), "closed transaction with wrong ApplyData")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adCloseWrong), `6001} 0`, "closed transaction with wrong ApplyData")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctClose, adClose), "could not add close transaction")
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "could not add key registration")
 
-	errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), `appendUnvalidated error in Validate: transaction already in ledger`, "added duplicate tx")
 
 	leaseReleaseRound := l.Latest() + 10
 	correctPayLease := correctPay
@@ -1295,7 +1295,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		correctPayLease.Note = make([]byte, 1)
 		correctPayLease.Note[0] = 1
 		correctPayLease.LastValid += 10
-		errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+		require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), `, AEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKE3PRHE)`, "added payment transaction with matching transaction lease")
 		correctPayLeaseOther := correctPayLease
 		correctPayLeaseOther.Sender = addrList[4]
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching lease but different sender")
@@ -1304,7 +1304,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLeaseOther, ad), "could not add payment transaction with matching sender but different lease")
 
 		for l.Latest() < leaseReleaseRound {
-			errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with matching transaction lease")
+			require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), `, AEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKE3PRHE)`, "added payment transaction with matching transaction lease")
 
 			var totalRewardUnits uint64
 			for _, acctdata := range initAccounts {
@@ -1449,7 +1449,7 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	correctPayLease.LastValid = l.Latest() + 10
 
 	if proto.FixTransactionLeases {
-		errorcontains.CaptureError(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with overlapping lease")
+		require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), `, AEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKE3PRHE)`, "added payment transaction with overlapping lease")
 	} else {
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
 	}
@@ -2215,7 +2215,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		errorcontains.CaptureError(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		require.ErrorContains(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}), `txTail: tried to check for dup in missing round 639`)
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2263,7 +2263,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		errorcontains.CaptureError(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		require.ErrorContains(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}), `txTail: tried to check for dup in missing round 639`)
 	}
 }
 
@@ -2671,7 +2671,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		errorcontains.CaptureError(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		require.ErrorContains(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}), `txTail: tried to check for dup in missing round 999`)
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2725,7 +2725,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		errorcontains.CaptureError(t, l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		require.ErrorContains(t, l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}), `txTail: tried to check for dup in missing round 999`)
 	}
 }
 

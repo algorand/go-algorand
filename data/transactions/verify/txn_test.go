@@ -37,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -256,7 +255,7 @@ func TestSignedPayment(t *testing.T) {
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
 	groupCtx.signedGroupTxns[0] = stxn2
-	errorcontains.CaptureError(t, verifyTxn(0, groupCtx), "verify succeeded with bad sig")
+	require.ErrorContains(t, verifyTxn(0, groupCtx), `At least one signature didn't pass verification`, "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }

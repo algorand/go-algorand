@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -64,7 +63,7 @@ func TestMultisigAddr(t *testing.T) {
 	// test if invalid threshold can be detected
 	// #keys= 2 < threshold = 3
 	_, err = MultisigAddrGen(version, threshold, pks)
-	errorcontains.CaptureError(t, err, "MultisigAddr: unable to detect invalid threshold (keys == %d, threshold == %d)", len(pks), threshold)
+	require.ErrorContains(t, err, "MultisigAddr: unable to detect invalid threshold (keys == %d, threshold == %d)", len(pks), threshold, `Invalid threshold`)
 	// #keys = 3 == threshold = 3
 	pks = append(pks, secrets[2].SignatureVerifier)
 	_, err = MultisigAddrGen(version, threshold, pks)
