@@ -366,7 +366,7 @@ func TestCloseAccount(t *testing.T) {
 		},
 	}
 	signedTx2 := tx.Sign(secrets[0])
-	require.ErrorContains(t, transactionPool.RememberOne(signedTx2), `, data`)
+	require.ErrorContains(t, transactionPool.RememberOne(signedTx2), `overspend`)
 }
 
 func TestCloseAccountWhileTxIsPending(t *testing.T) {
@@ -429,7 +429,7 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 		},
 	}
 	signedCloseTx := closeTx.Sign(secrets[0])
-	require.ErrorContains(t, transactionPool.RememberOne(signedCloseTx), `, data`)
+	require.ErrorContains(t, transactionPool.RememberOne(signedCloseTx), `overspend`)
 }
 
 func TestClosingAccountBelowMinBalance(t *testing.T) {
@@ -517,7 +517,7 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
-	require.ErrorContains(t, transactionPool.RememberOne(signedTx), `, data`)
+	require.ErrorContains(t, transactionPool.RememberOne(signedTx), `overspend`)
 }
 
 func TestRememberForget(t *testing.T) {
@@ -807,7 +807,7 @@ func TestOverspender(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 
 	// consume the transaction of allowed limit
-	require.ErrorContains(t, transactionPool.RememberOne(signedTx), `, data`)
+	require.ErrorContains(t, transactionPool.RememberOne(signedTx), `overspend`)
 
 	// min transaction
 	minTx := transactions.Transaction{
@@ -826,7 +826,7 @@ func TestOverspender(t *testing.T) {
 		},
 	}
 	signedMinTx := minTx.Sign(secrets[0])
-	require.ErrorContains(t, transactionPool.RememberOne(signedMinTx), `, data`)
+	require.ErrorContains(t, transactionPool.RememberOne(signedMinTx), `overspend`)
 }
 
 func TestRemove(t *testing.T) {
