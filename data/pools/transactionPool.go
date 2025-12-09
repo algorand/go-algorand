@@ -641,7 +641,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
-		roundStartedEvaluating: prev.Round + basics.Round(1),
+		roundStartedEvaluating: prev.Round + 1,
 	}
 	pool.assemblyMu.Unlock()
 
@@ -755,7 +755,7 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 		TxnSize:        encodedLen,
 	}
 
-	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
+	lastSPRound := txib.Txn.StateProofTxnFields.Message.LastAttestedRound
 	verificationCtx, err := pool.ledger.GetStateProofVerificationContext(lastSPRound)
 	if err != nil {
 		return stateProofStats
