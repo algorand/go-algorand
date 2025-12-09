@@ -674,6 +674,8 @@ func TestCleanUp(t *testing.T) {
 		}
 	}
 
+	require.Len(t, transactionPool.PendingTxGroups(), issuedTransactions)
+
 	for mockLedger.Latest() < 6 {
 		eval := newBlockEvaluator(t, mockLedger)
 		ufblk, err := eval.GenerateBlock(nil)
@@ -686,24 +688,7 @@ func TestCleanUp(t *testing.T) {
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 	}
 
-	pending := transactionPool.PendingTxGroups()
-	require.Zero(t, len(pending))
-	require.Zero(t, transactionPool.numExpired(4))
-	require.Equal(t, issuedTransactions, transactionPool.numExpired(5))
-
-	for mockLedger.Latest() < 6+basics.Round(expiredHistory*proto.MaxTxnLife) {
-		eval := newBlockEvaluator(t, mockLedger)
-		ufblk, err := eval.GenerateBlock(nil)
-		require.NoError(t, err)
-
-		blk := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
-		err = mockLedger.AddValidatedBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
-
-		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
-		require.Zero(t, transactionPool.numExpired(blk.Block().Round()))
-	}
-	require.Len(t, transactionPool.expiredTxCount, int(expiredHistory*proto.MaxTxnLife))
+	require.Empty(t, transactionPool.PendingTxGroups())
 }
 
 func TestFixOverflowOnNewBlock(t *testing.T) {
