@@ -33,7 +33,7 @@ type branchNode struct {
 // makeBranchNode creates a branch node with the provided children nodes, valueHash,
 // and full key.
 func makeBranchNode(children [16]node, valueHash crypto.Digest, key nibbles.Nibbles) *branchNode {
-	stats.makebranches++
+	stats.makebranches.Add(1)
 	bn := &branchNode{children: children, valueHash: valueHash, key: make(nibbles.Nibbles, len(key))}
 	copy(bn.key, key)
 	return bn
@@ -105,7 +105,7 @@ func (bn *branchNode) hashing() error {
 		if err != nil {
 			return err
 		}
-		stats.cryptohashes++
+		stats.cryptohashes.Add(1)
 		bn.hash = crypto.Hash(bytes)
 	}
 	return nil
@@ -142,23 +142,21 @@ func (bn *branchNode) setHash(hash crypto.Digest) {
 	bn.hash = hash
 }
 
-var bnbuffer bytes.Buffer
-
 func (bn *branchNode) serialize() ([]byte, error) {
-	bnbuffer.Reset()
+	var buf bytes.Buffer
 	var empty crypto.Digest
 	prefix := byte(5)
 
-	bnbuffer.WriteByte(prefix)
+	buf.WriteByte(prefix)
 	for i := 0; i < 16; i++ {
 		if bn.children[i] != nil {
-			bnbuffer.Write(bn.children[i].getHash().ToSlice())
+			buf.Write(bn.children[i].getHash().ToSlice())
 		} else {
-			bnbuffer.Write(empty[:])
+			buf.Write(empty[:])
 		}
 	}
-	bnbuffer.Write(bn.valueHash[:])
-	return bnbuffer.Bytes(), nil
+	buf.Write(bn.valueHash[:])
+	return buf.Bytes(), nil
 }
 
 // getKey gets the nibbles of the full key for this node.

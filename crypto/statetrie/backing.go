@@ -38,7 +38,7 @@ var backingNodePool = sync.Pool{
 }
 
 func makeBackingNode(hash crypto.Digest, key nibbles.Nibbles) *backingNode {
-	stats.makebanodes++
+	stats.makebanodes.Add(1)
 	ba := backingNodePool.Get().(*backingNode)
 	ba.hash = hash
 	ba.key = append(ba.key[:0], key...)

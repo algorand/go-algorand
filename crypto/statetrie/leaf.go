@@ -33,7 +33,7 @@ type leafNode struct {
 // makeLeafNode creates a leaf node with the provided valueHash, key and keyEnd.
 // The full key of the value represented by the node is key + keyEnd.
 func makeLeafNode(keyEnd nibbles.Nibbles, valueHash crypto.Digest, key nibbles.Nibbles) *leafNode {
-	stats.makeleaves++
+	stats.makeleaves.Add(1)
 	ln := &leafNode{keyEnd: make(nibbles.Nibbles, len(keyEnd)), valueHash: valueHash, key: make(nibbles.Nibbles, len(key))}
 	copy(ln.key, key)
 	copy(ln.keyEnd, keyEnd)
@@ -207,30 +207,28 @@ func (ln *leafNode) hashing() error {
 	if ln.hash.IsZero() {
 		bytes, err := ln.serialize()
 		if err == nil {
-			stats.cryptohashes++
+			stats.cryptohashes.Add(1)
 			ln.setHash(crypto.Hash(bytes))
 		}
 	}
 	return nil
 }
 
-var lnbuffer bytes.Buffer
-
 // serialize creates a byte array containing an identifier prefix
 // (4 if the nibble length of the keyEnd is even, 3 if it is odd)
 // as well as the keyEnd and the valueHash themselves.
 func (ln *leafNode) serialize() ([]byte, error) {
-	lnbuffer.Reset()
+	var buf bytes.Buffer
 
 	prefix := byte(4)
 	pack, half := nibbles.Pack(ln.keyEnd)
 	if half {
 		prefix = byte(3)
 	}
-	lnbuffer.WriteByte(prefix)
-	lnbuffer.Write(ln.valueHash[:])
-	lnbuffer.Write(pack)
-	return lnbuffer.Bytes(), nil
+	buf.WriteByte(prefix)
+	buf.Write(ln.valueHash[:])
+	buf.Write(pack)
+	return buf.Bytes(), nil
 }
 
 // deserializeLeafNode turns a data array and its key in the trie into

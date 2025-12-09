@@ -33,7 +33,7 @@ type extensionNode struct {
 // makeExtensionNode creates a extension node with the provided shared prefix,
 // next node, and full key in the trie.
 func makeExtensionNode(sharedKey nibbles.Nibbles, next node, key nibbles.Nibbles) *extensionNode {
-	stats.makeextensions++
+	stats.makeextensions.Add(1)
 	en := &extensionNode{sharedKey: make(nibbles.Nibbles, len(sharedKey)), next: next, key: make(nibbles.Nibbles, len(key))}
 	copy(en.key, key)
 	copy(en.sharedKey, sharedKey)
@@ -167,7 +167,7 @@ func (en *extensionNode) hashing() error {
 			return err
 		}
 
-		stats.cryptohashes++
+		stats.cryptohashes.Add(1)
 		en.setHash(crypto.Hash(bytes))
 	}
 	return nil

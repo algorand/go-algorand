@@ -68,8 +68,8 @@ func (mt *Trie) Add(key nibbles.Nibbles, value []byte) (err error) {
 	if mt.root == nil {
 		// If there are no nodes in the trie, make a leaf node for this
 		// key/value pair and return.
-		stats.cryptohashes++
-		stats.newrootnode++
+		stats.cryptohashes.Add(1)
+		stats.newrootnode.Add(1)
 		mt.root = makeLeafNode(key, crypto.Hash(value), nibbles.Nibbles{})
 		return nil
 	}
@@ -78,13 +78,13 @@ func (mt *Trie) Add(key nibbles.Nibbles, value []byte) (err error) {
 	// new modified node that results from the operation.  If the root node has
 	// no hash, then the key/value pair resulted in a new root hash (i.e. it was
 	// not a duplicate key/value pair)
-	stats.cryptohashes++
+	stats.cryptohashes.Add(1)
 	replacement, err := mt.root.add(mt, nibbles.Nibbles{}, key, crypto.Hash(value))
 	if err != nil {
 		return err
 	}
 	if replacement.getHash().IsZero() {
-		stats.newrootnode++
+		stats.newrootnode.Add(1)
 	}
 
 	// Replace the root with the replacement node.

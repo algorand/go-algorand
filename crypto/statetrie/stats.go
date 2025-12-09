@@ -18,48 +18,50 @@ package statetrie
 
 import (
 	"fmt"
+	"sync/atomic"
 )
 
 // Helper class for keeping track of stats on the trie.
 
 type triestats struct {
-	dbsets         int
-	dbgets         int
-	dbdeletes      int
-	cryptohashes   int
-	makeleaves     int
-	makeextensions int
-	makebranches   int
-	makepanodes    int
-	makebanodes    int
-	newrootnode    int
-	addnode        int
-	delnode        int
-	getnode        int
-	evictions      int
+	dbsets         atomic.Uint64
+	dbgets         atomic.Uint64
+	dbdeletes      atomic.Uint64
+	cryptohashes   atomic.Uint64
+	makeleaves     atomic.Uint64
+	makeextensions atomic.Uint64
+	makebranches   atomic.Uint64
+	makepanodes    atomic.Uint64
+	makebanodes    atomic.Uint64
+	newrootnode    atomic.Uint64
+	addnode        atomic.Uint64
+	delnode        atomic.Uint64
+	getnode        atomic.Uint64
+	evictions      atomic.Uint64
 }
 
 var stats triestats
 
-func (s triestats) diff(s1 triestats) triestats {
-	return triestats{
-		dbsets:         s.dbsets - s1.dbsets,
-		dbgets:         s.dbgets - s1.dbgets,
-		dbdeletes:      s.dbdeletes - s1.dbdeletes,
-		cryptohashes:   s.cryptohashes - s1.cryptohashes,
-		makeleaves:     s.makeleaves - s1.makeleaves,
-		makeextensions: s.makeextensions - s1.makeextensions,
-		makebranches:   s.makebranches - s1.makebranches,
-		makepanodes:    s.makepanodes - s1.makepanodes,
-		makebanodes:    s.makebanodes - s1.makebanodes,
-		newrootnode:    s.newrootnode - s1.newrootnode,
-		addnode:        s.addnode - s1.addnode,
-		delnode:        s.delnode - s1.delnode,
-		getnode:        s.getnode - s1.getnode,
-		evictions:      s.evictions - s1.evictions,
-	}
+func (s *triestats) diff(s1 *triestats) triestats {
+	var result triestats
+	result.dbsets.Store(s.dbsets.Load() - s1.dbsets.Load())
+	result.dbgets.Store(s.dbgets.Load() - s1.dbgets.Load())
+	result.dbdeletes.Store(s.dbdeletes.Load() - s1.dbdeletes.Load())
+	result.cryptohashes.Store(s.cryptohashes.Load() - s1.cryptohashes.Load())
+	result.makeleaves.Store(s.makeleaves.Load() - s1.makeleaves.Load())
+	result.makeextensions.Store(s.makeextensions.Load() - s1.makeextensions.Load())
+	result.makebranches.Store(s.makebranches.Load() - s1.makebranches.Load())
+	result.makepanodes.Store(s.makepanodes.Load() - s1.makepanodes.Load())
+	result.makebanodes.Store(s.makebanodes.Load() - s1.makebanodes.Load())
+	result.newrootnode.Store(s.newrootnode.Load() - s1.newrootnode.Load())
+	result.addnode.Store(s.addnode.Load() - s1.addnode.Load())
+	result.delnode.Store(s.delnode.Load() - s1.delnode.Load())
+	result.getnode.Store(s.getnode.Load() - s1.getnode.Load())
+	result.evictions.Store(s.evictions.Load() - s1.evictions.Load())
+	return result
 }
-func (s triestats) String() string {
+
+func (s *triestats) String() string {
 	return fmt.Sprintf("dbsets: %d, dbgets: %d, dbdeletes: %d, cryptohashes: %d, makeleaves: %d, makeextensions: %d, makebranches: %d, makepanodes: %d, makebanodes: %d, newrootnode: %d, addnode: %d, delnode: %d, getnode: %d, evictions: %d",
-		s.dbsets, s.dbgets, s.dbdeletes, s.cryptohashes, s.makeleaves, s.makeextensions, s.makebranches, s.makepanodes, s.makebanodes, s.newrootnode, s.addnode, s.delnode, s.getnode, s.evictions)
+		s.dbsets.Load(), s.dbgets.Load(), s.dbdeletes.Load(), s.cryptohashes.Load(), s.makeleaves.Load(), s.makeextensions.Load(), s.makebranches.Load(), s.makepanodes.Load(), s.makebanodes.Load(), s.newrootnode.Load(), s.addnode.Load(), s.delnode.Load(), s.getnode.Load(), s.evictions.Load())
 }
