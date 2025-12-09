@@ -105,7 +105,7 @@ modernize:
 	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.39.0 -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
 
 lint:
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.1 run -c .golangci.yml
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 run -c .golangci.yml
 
 warninglint: custom-golangci-lint
 	./custom-golangci-lint run -c .golangci-warnings.yml
@@ -301,7 +301,7 @@ build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	wait
 	cp $(GOBIN)/kmd $(GOBIN)-race
 
-NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING $(GOBIN)/ddconfig.sh
+NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING
 
 NONGO_BIN: $(NONGO_BIN_FILES)
 
@@ -310,8 +310,6 @@ $(GOBIN)/find-nodes.sh: scripts/find-nodes.sh
 $(GOBIN)/update.sh: cmd/updater/update.sh
 
 $(GOBIN)/COPYING: COPYING
-
-$(GOBIN)/ddconfig.sh: scripts/ddconfig.sh
 
 $(GOBIN)/%:
 	cp -f $< $@
