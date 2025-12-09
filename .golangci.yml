@@ -127,6 +127,8 @@ linters:
         text: 'dot-imports: should not use dot imports' # dot imports OK for tests
       - linters: revive
         text: 'var-naming: avoid meaningless package names' # util package is OK
+      - linters: revive
+        text: 'var-naming: avoid package names that conflict with Go standard library package names' # e.g. crypto package
       - linters: unused
         text: 'field _struct is unused' # we use _struct field tags for msgp/json encoding settings
       - linters: revive
