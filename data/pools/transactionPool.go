@@ -61,7 +61,6 @@ type TransactionPool struct {
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
-	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  BlockEvaluator
 	evalTracer             logic.EvalTracer
 	numPendingWholeBlocks  basics.Round
@@ -131,7 +130,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
-		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
 		logProcessBlockStats: cfg.EnableProcessBlockStats,
@@ -195,7 +193,6 @@ func (pool *TransactionPool) Reset() {
 	pool.pendingTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 	pool.rememberedTxGroups = nil
-	pool.expiredTxCount = make(map[basics.Round]int)
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
@@ -207,15 +204,6 @@ func (pool *TransactionPool) getVotingAccountsForRound(rnd basics.Round) []basic
 		return nil
 	}
 	return pool.vac.VotingAccountsForRound(rnd)
-}
-
-// NumExpired returns the number of transactions that expired at the
-// end of a round (only meaningful if cleanup has been called for that
-// round).
-func (pool *TransactionPool) NumExpired(round basics.Round) int {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	return pool.expiredTxCount[round]
 }
 
 // PendingTxIDs return the IDs of all pending transactions.
@@ -585,10 +573,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 
 	stats.KnownCommittedCount = knownCommitted
 	stats.UnknownCommittedCount = unknownCommitted
-
-	proto := config.Consensus[block.CurrentProtocol]
-	pool.expiredTxCount[block.Round()] = int(stats.ExpiredCount)
-	delete(pool.expiredTxCount, block.Round()-expiredHistory*basics.Round(proto.MaxTxnLife))
 
 	if pool.logProcessBlockStats {
 		var details struct {
