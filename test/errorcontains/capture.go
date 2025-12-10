@@ -208,7 +208,7 @@ func Summary(inputPath string) (map[string]int, error) {
 
 	// Count occurrences of each error type
 	counts := make(map[string]int)
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if line == "" {
 			continue
 		}

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -176,7 +177,7 @@ func readAndAggregate(filename string) (map[string]*CallSite, error) {
 		}
 
 		// Add unique samples (up to 10 for LCS computation)
-		if len(site.Samples) < 10 && !containsString(site.Samples, entry.ErrorMsg) {
+		if len(site.Samples) < 10 && !slices.Contains(site.Samples, entry.ErrorMsg) {
 			site.Samples = append(site.Samples, entry.ErrorMsg)
 		}
 	}
@@ -193,15 +194,6 @@ func normalizePath(path string) string {
 		}
 	}
 	return filepath.Base(path)
-}
-
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 // longestCommonSubstring finds the longest substring common to all strings.
