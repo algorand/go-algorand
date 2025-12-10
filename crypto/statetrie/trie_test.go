@@ -119,9 +119,13 @@ func TestNodeSerialization(t *testing.T) {
 }
 
 func buildDotGraph(t *testing.T, mt *Trie, keys [][]byte, values [][]byte, fn string, title string) {
+	if os.Getenv("STATETRIE_DOT_GRAPH") == "" {
+		return
+	}
 	dot := dotGraph(mt, keys, values, title)
 	file, err := os.Create(fn)
 	require.NoError(t, err)
+	t.Log("Writing dot file to", fn)
 	defer file.Close()
 	_, err = file.WriteString(dot)
 }
@@ -163,6 +167,7 @@ func TestTrieAddSimpleSequenceNoCache(t *testing.T) {
 	v = []byte{0x04, 0x05, 0x0b}
 	kk = append(kk, k)
 	vv = append(vv, v)
+	mt.Add(k, v)
 	k = []byte{0x01, 0x02, 0x03, 0x06, 0x06, 0x07, 0x06}
 	v = []byte{0x04, 0x05, 0x0c}
 	kk = append(kk, k)
@@ -173,7 +178,7 @@ func TestTrieAddSimpleSequenceNoCache(t *testing.T) {
 	kk = append(kk, k)
 	vv = append(vv, v)
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, t.TempDir()+"trieSimpleSequence.dot", "Trie Simple Sequence")
+	buildDotGraph(t, mt, kk, vv, "trieSimpleSequence.dot", "Trie Simple Sequence")
 }
 
 func TestTrieLeafAddTransitions(t *testing.T) {
@@ -182,8 +187,6 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 
 	var mt *Trie
 	var err error
-
-	tempDir := t.TempDir()
 
 	rootHashCP1s0, _ := crypto.DigestFromString(string("EJKKWSBR6ND6FWXTHTKIANNHEAR5JZHNK4DCQIRAUN4K65F4P6KA"))
 	rootHashCP1s1, _ := crypto.DigestFromString(string("LTB7VIEISQQD5DN6WBKVD3ZB2BBXEFQVC7AVU7PXFFS6ZEU2ZQIQ"))
@@ -220,13 +223,13 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 	mt.Add(keyAB, valDEF)
 	kk = append(kk, keyAB)
 	vv = append(vv, valDEF)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath1.0.dot", "Leaf add: Codepath 7, before")
+	buildDotGraph(t, mt, kk, vv, "codepath1.0.dot", "Leaf add: Codepath 7, before")
 	require.Equal(t, rootHashCP1s0, mt.Hash())
 	mt.Add(keyCD, valGHI)
 	kk = append(kk, keyCD)
 	vv = append(vv, valGHI)
 	require.Equal(t, rootHashCP1s1, mt.Hash())
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath1.2.dot", "Leaf add: Codepath 7, after")
+	buildDotGraph(t, mt, kk, vv, "codepath1.2.dot", "Leaf add: Codepath 7, after")
 
 	require.NoError(t, err)
 
@@ -236,7 +239,7 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 	mt.Add(keyA, valDEF)
 	kk = append(kk, keyA)
 	vv = append(vv, valDEF)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath2.0.dot", "Leaf add: Codepath 2, before")
+	buildDotGraph(t, mt, kk, vv, "codepath2.0.dot", "Leaf add: Codepath 2, before")
 	require.Equal(t, rootHashCP2s0, mt.Hash())
 
 	mt.Add(keyA, valGHI)
@@ -244,7 +247,7 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 	vv = [][]byte{}
 	kk = append(kk, keyA)
 	vv = append(vv, valGHI)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath2.2.dot", "Leaf add: Codepath 2, after")
+	buildDotGraph(t, mt, kk, vv, "codepath2.2.dot", "Leaf add: Codepath 2, after")
 	require.Equal(t, rootHashCP2s2, mt.Hash())
 
 	mt = MakeTrie()
@@ -253,12 +256,12 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 	mt.Add(keyA, valDEF)
 	kk = append(kk, keyA)
 	vv = append(vv, valDEF)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath3.0.dot", "Leaf add: Codepath 3, before")
+	buildDotGraph(t, mt, kk, vv, "codepath3.0.dot", "Leaf add: Codepath 3, before")
 	require.Equal(t, rootHashCP3s0, mt.Hash())
 	mt.Add(keyAB, valGHI)
 	kk = append(kk, keyAB)
 	vv = append(vv, valGHI)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath3.2.dot", "Leaf add: Codepath 3, after")
+	buildDotGraph(t, mt, kk, vv, "codepath3.2.dot", "Leaf add: Codepath 3, after")
 	require.Equal(t, rootHashCP3s2, mt.Hash())
 
 	mt = MakeTrie()
@@ -267,12 +270,12 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 	mt.Add(keyAB, valDEF)
 	kk = append(kk, keyAB)
 	vv = append(vv, valDEF)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath4.0.dot", "Leaf add: Codepath 4, before")
+	buildDotGraph(t, mt, kk, vv, "codepath4.0.dot", "Leaf add: Codepath 4, before")
 	require.Equal(t, rootHashCP4s0, mt.Hash())
 	mt.Add(keyA, valGHI)
 	kk = append(kk, keyA)
 	vv = append(vv, valGHI)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath4.2.dot", "Leaf add: Codepath 4, after")
+	buildDotGraph(t, mt, kk, vv, "codepath4.2.dot", "Leaf add: Codepath 4, after")
 	require.Equal(t, rootHashCP4s2, mt.Hash())
 
 	mt = MakeTrie()
@@ -281,12 +284,12 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 	mt.Add(keyAB, valDEF)
 	kk = append(kk, keyAB)
 	vv = append(vv, valDEF)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath5.0.dot", "Leaf add: Codepath 5, before")
+	buildDotGraph(t, mt, kk, vv, "codepath5.0.dot", "Leaf add: Codepath 5, before")
 	require.Equal(t, rootHashCP5s0, mt.Hash())
 	mt.Add(keyAC, valGHI)
 	kk = append(kk, keyAC)
 	vv = append(vv, valGHI)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath5.2.dot", "Leaf add: Codepath 5, after")
+	buildDotGraph(t, mt, kk, vv, "codepath5.2.dot", "Leaf add: Codepath 5, after")
 	require.Equal(t, rootHashCP5s2, mt.Hash())
 
 	mt = MakeTrie()
@@ -295,17 +298,17 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 	mt.Add(keyA, valDEF)
 	kk = append(kk, keyA)
 	vv = append(vv, valDEF)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath6.0.dot", "Leaf add: Codepath 6, setup")
+	buildDotGraph(t, mt, kk, vv, "codepath6.0.dot", "Leaf add: Codepath 6, setup")
 	require.Equal(t, rootHashCP6s0, mt.Hash())
 	mt.Add(keyB, valGHI)
 	kk = append(kk, keyB)
 	vv = append(vv, valGHI)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath6.1.dot", "Leaf add: Codepath 6, before")
+	buildDotGraph(t, mt, kk, vv, "codepath6.1.dot", "Leaf add: Codepath 6, before")
 	require.Equal(t, rootHashCP6s1, mt.Hash())
 	mt.Add(keyAB, valJKL)
 	kk = append(kk, keyAB)
 	vv = append(vv, valJKL)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath6.2.dot", "Leaf add: Codepath 6, after")
+	buildDotGraph(t, mt, kk, vv, "codepath6.2.dot", "Leaf add: Codepath 6, after")
 	require.Equal(t, rootHashCP6s2, mt.Hash())
 
 	mt = MakeTrie()
@@ -314,25 +317,24 @@ func TestTrieLeafAddTransitions(t *testing.T) {
 	mt.Add(keyAB, valDEF)
 	kk = append(kk, keyAB)
 	vv = append(vv, valDEF)
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath7.0.dot", "Leaf add: Codepath 7, setup")
+	buildDotGraph(t, mt, kk, vv, "codepath7.0.dot", "Leaf add: Codepath 7, setup")
 	require.Equal(t, rootHashCP7s0, mt.Hash())
 	mt.Add(keyB, valGHI)
 	kk = append(kk, keyB)
 	vv = append(vv, valGHI)
 	require.Equal(t, rootHashCP7s1, mt.Hash())
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath7.1.dot", "Leaf add: Codepath 7, before")
+	buildDotGraph(t, mt, kk, vv, "codepath7.1.dot", "Leaf add: Codepath 7, before")
 	mt.Add(keyA, valJKL)
 	kk = append(kk, keyA)
 	vv = append(vv, valJKL)
 	require.Equal(t, rootHashCP7s2, mt.Hash())
-	buildDotGraph(t, mt, kk, vv, tempDir+"codepath7.2.dot", "Leaf add: Codepath 7, after")
+	buildDotGraph(t, mt, kk, vv, "codepath7.2.dot", "Leaf add: Codepath 7, after")
 
 }
 
 func TestTrieAddSimpleSequence(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	tempDir := t.TempDir()
 
 	mt := MakeTrie()
 	var k []byte
@@ -345,7 +347,7 @@ func TestTrieAddSimpleSequence(t *testing.T) {
 	vv = append(vv, v)
 
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie0.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie0.dot", "Trie Simple")
 	fmt.Printf("done with that")
 
 	v = []byte{0x04, 0x05, 0x07}
@@ -353,47 +355,47 @@ func TestTrieAddSimpleSequence(t *testing.T) {
 	vv = append(vv, v)
 	mt.Add(k, v)
 
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie2.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie2.dot", "Trie Simple")
 	v = []byte{0x04, 0x05, 0x09}
 	kk = append(kk, k)
 	vv = append(vv, v)
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie3.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie3.dot", "Trie Simple")
 
 	k = []byte{0x01, 0x02}
 	v = []byte{0x04, 0x05, 0x09}
 	kk = append(kk, k)
 	vv = append(vv, v)
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie4.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie4.dot", "Trie Simple")
 
 	k = []byte{0x01, 0x02}
 	v = []byte{0x04, 0x05, 0x0a}
 	kk = append(kk, k)
 	vv = append(vv, v)
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie5.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie5.dot", "Trie Simple")
 
 	k = []byte{0x01, 0x02, 0x03, 0x04}
 	v = []byte{0x04, 0x05, 0x0b}
 	kk = append(kk, k)
 	vv = append(vv, v)
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie6.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie6.dot", "Trie Simple")
 
 	k = []byte{0x01, 0x02, 0x03, 0x06, 0x06, 0x07, 0x06}
 	v = []byte{0x04, 0x05, 0x0c}
 	kk = append(kk, k)
 	vv = append(vv, v)
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie7.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie7.dot", "Trie Simple")
 
 	k = []byte{0x01, 0x0d, 0x02, 0x03, 0x06, 0x06, 0x07, 0x06}
 	v = []byte{0x04, 0x05, 0x0c}
 	kk = append(kk, k)
 	vv = append(vv, v)
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie8.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie8.dot", "Trie Simple")
 
 	//duplicate key and value
 	k = []byte{0x01, 0x0d, 0x02, 0x03, 0x06, 0x06, 0x07, 0x06}
@@ -401,7 +403,7 @@ func TestTrieAddSimpleSequence(t *testing.T) {
 	kk = append(kk, k)
 	vv = append(vv, v)
 	mt.Add(k, v)
-	buildDotGraph(t, mt, kk, vv, tempDir+"trie9.dot", "Trie Simple")
+	buildDotGraph(t, mt, kk, vv, "trie9.dot", "Trie Simple")
 }
 
 // DotGraph returns a dot graph of the trie
