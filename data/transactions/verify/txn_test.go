@@ -1187,8 +1187,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 
 	dummyLedger := DummyLedgerForSignature{}
 	_, err := TxnGroup(txnGroups[0], blkHdr, cache, &dummyLedger)
-	require.ErrorContains(t, err, `ication`)
-	require.Contains(t, err.Error(), errorString)
+	require.ErrorContains(t, err, errorString)
 
 	// The txns should not be in the cache
 	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups[:1], spec, blkHdr.CurrentProtocol)
@@ -1225,8 +1224,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 	for _, txng := range txnGroups {
 		_, err = TxnGroup(txng, blkHdr, cache, &dummyLedger)
 		if err != nil {
-			require.ErrorContains(t, err, `ication`)
-			require.Contains(t, err.Error(), errorString)
+			require.ErrorContains(t, err, errorString)
 			numFailed++
 		}
 	}

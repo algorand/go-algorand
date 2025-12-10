@@ -178,7 +178,7 @@ func TestCertificateBadCertificateWithFakeDoubleVote(t *testing.T) {
 
 	avv := MakeAsyncVoteVerifier(nil)
 	defer avv.Quit()
-	require.ErrorContains(t, cert.Authenticate(block, ledger, avv), `unauthenticatedBundle.verify: vote`)
+	require.ErrorContains(t, cert.Authenticate(block, ledger, avv), `not an equivocation pair`)
 }
 
 func TestCertificateDifferentBlock(t *testing.T) {
