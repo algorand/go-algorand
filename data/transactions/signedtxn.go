@@ -62,6 +62,11 @@ func (s SignedTxn) ID() Txid {
 	return s.Txn.ID()
 }
 
+// WithAD returns a SignedTxnWithAD with empty ApplyData
+func (s SignedTxn) WithAD() SignedTxnWithAD {
+	return SignedTxnWithAD{SignedTxn: s}
+}
+
 // ID on SignedTxnInBlock should never be called, because the ID depends
 // on the block from which this transaction will be decoded.  By having
 // a different return value from SignedTxn.ID(), we will catch errors at

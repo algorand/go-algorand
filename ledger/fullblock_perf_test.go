@@ -302,7 +302,7 @@ func addNewAccount(bc *benchConfig) (acct basics.Address) {
 }
 
 func addTransaction(bc *benchConfig, stxn transactions.SignedTxn) uint64 {
-	err := bc.eval.Transaction(stxn, transactions.ApplyData{})
+	err := bc.eval.TransactionGroup(stxn.WithAD())
 	if err == ledgercore.ErrNoSpace {
 		addBlock(bc)
 		addTransaction(bc, stxn)

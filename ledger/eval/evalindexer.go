@@ -33,7 +33,7 @@ func (eval *BlockEvaluator) ProcessBlockForIndexer(block *bookkeeping.Block) (le
 	}
 
 	for _, group := range paysetgroups {
-		err = eval.TransactionGroup(group)
+		err = eval.TransactionGroup(group...)
 		if err != nil {
 			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
 				fmt.Errorf("ProcessBlockForIndexer() err: %w", err)

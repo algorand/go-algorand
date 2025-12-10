@@ -79,7 +79,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	// Correct signature should work
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.NoError(t, err)
 
 	// Broken signature should fail
@@ -93,7 +93,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// out of range should fail
@@ -104,7 +104,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// bogus group should fail
@@ -114,7 +114,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.Error(t, err)
 
 	// mixed fields should fail
@@ -149,7 +149,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.NoError(t, err)
 
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.TransactionGroup(stxn.WithAD())
 	require.NoError(t, err)
 
 	t3 := txn
@@ -164,7 +164,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
-	err = eval.TransactionGroup(txgroupad)
+	err = eval.TransactionGroup(txgroupad...)
 	require.Error(t, err)
 
 	// Test a group that should work
@@ -186,7 +186,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 	txgroupad = transactions.WrapSignedTxnsWithAD(txgroup)
-	err = eval.TransactionGroup(txgroupad)
+	err = eval.TransactionGroup(txgroupad...)
 	require.Error(t, err)
 
 	// missing part of the group should fail
@@ -1290,7 +1290,7 @@ func TestRekeying(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
-			err = eval.Transaction(stxn, transactions.ApplyData{})
+			err = eval.TransactionGroup(stxn.WithAD())
 			if err != nil {
 				return err
 			}

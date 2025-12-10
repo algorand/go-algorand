@@ -137,7 +137,7 @@ func txns(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txnt
 func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
-	err := eval.Transaction(txn.SignedTxn(), transactions.ApplyData{})
+	err := eval.TransactionGroup(txn.SignedTxn().WithAD())
 	if err != nil {
 		if len(problem) == 1 && problem[0] != "" {
 			require.Contains(t, err.Error(), problem[0])
@@ -156,7 +156,7 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 	}
 	txgroup := txntest.Group(txns...)
 
-	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
 }
 
 // endBlock completes the block being created, returning the ValidatedBlock for

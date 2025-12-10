@@ -191,7 +191,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 		return nil, err
 	}
 
-	err = eval.TransactionGroup(group)
+	err = eval.TransactionGroup(group...)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}
