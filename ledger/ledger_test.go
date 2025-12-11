@@ -556,7 +556,7 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: malformed: transaction note too big: 1025 > 1024`, "added tx with overly large note field")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `transaction note too big: 1025 > 1024`, "added tx with overly large note field")
 
 	badTx = correctPay
 	badTx.Sender = poolAddr
@@ -1231,7 +1231,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `: malformed: transaction note too big: 1025 > 1024`, "added tx with overly large note field")
+	require.ErrorContains(t, l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), `transaction note too big: 1025 > 1024`, "added tx with overly large note field")
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}
