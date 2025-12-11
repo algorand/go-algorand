@@ -62,9 +62,16 @@ func (s SignedTxn) ID() Txid {
 	return s.Txn.ID()
 }
 
-// WithAD returns a SignedTxnWithAD with empty ApplyData
-func (s SignedTxn) WithAD() SignedTxnWithAD {
-	return SignedTxnWithAD{SignedTxn: s}
+// WithAD returns a SignedTxnWithAD with an (optional) ApplyData.
+func (s SignedTxn) WithAD(ad ...ApplyData) SignedTxnWithAD {
+	switch len(ad) {
+	case 0:
+		return SignedTxnWithAD{SignedTxn: s}
+	case 1:
+		return SignedTxnWithAD{SignedTxn: s, ApplyData: ad[0]}
+	default:
+		panic("WithAD called incorrectly")
+	}
 }
 
 // ID on SignedTxnInBlock should never be called, because the ID depends

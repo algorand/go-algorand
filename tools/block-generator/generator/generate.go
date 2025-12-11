@@ -552,7 +552,7 @@ func (g *generator) generateTxGroup(round basics.Round, intra uint64) ([]txn.Sig
 
 	txnGroupAD := make([]txn.SignedTxnWithAD, len(signedTxns))
 	for i := range signedTxns {
-		txnGroupAD[i] = txn.SignedTxnWithAD{SignedTxn: signedTxns[i]}
+		txnGroupAD[i] = signedTxns[i].WithAD()
 
 		// for debugging:
 		g.latestPaysetWithExpectedID = append(
