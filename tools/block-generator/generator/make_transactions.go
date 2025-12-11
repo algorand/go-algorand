@@ -34,7 +34,7 @@ func (g *generator) makeTxnHeader(sender basics.Address, round basics.Round, int
 
 	return txn.Header{
 		Sender:      sender,
-		Fee:         basics.MicroAlgos{Raw: g.params.MinTxnFee},
+		Fee:         g.params.MinFee(),
 		FirstValid:  round,
 		LastValid:   round + 1000,
 		GenesisID:   g.genesisID,
@@ -50,7 +50,7 @@ func (g *generator) makeTestTxn(sender basics.Address, round basics.Round, intra
 
 	return txntest.Txn{
 		Sender:      sender,
-		Fee:         basics.MicroAlgos{Raw: g.params.MinTxnFee},
+		Fee:         g.params.MinFee(),
 		FirstValid:  round,
 		LastValid:   round + 1000,
 		GenesisID:   g.genesisID,
