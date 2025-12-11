@@ -153,8 +153,10 @@ func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) 
 	if _, ok := s.topics[topicName]; !ok {
 		var topt []pubsub.TopicOpt
 		switch topicName {
-		case TXTopicName, AVTopicName, PPTopicName, VBTopicName:
+		case TXTopicName:
 			topt = append(topt, pubsub.WithTopicMessageIdFn(txMsgID))
+		case AVTopicName, PPTopicName, VBTopicName:
+			// use default message ID function (sender ID + sequence number)
 		}
 
 		psTopic, err := s.pubsub.Join(topicName, topt...)
