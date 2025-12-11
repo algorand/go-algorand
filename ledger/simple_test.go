@@ -141,7 +141,7 @@ func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.T
 
 	err := eval.TestTransactionGroup(txgroup)
 	if err == nil {
-		err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+		err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
 	}
 
 	if err != nil {
@@ -166,7 +166,7 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 		return err
 	}
 
-	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
+	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
 }
 
 // endBlock completes the block being created, returning the ValidatedBlock for

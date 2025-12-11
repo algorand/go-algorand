@@ -660,11 +660,9 @@ func TestArchivalCreatables(t *testing.T) {
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
 	return transactions.SignedTxnInBlock{
-		SignedTxnWithAD: transactions.SignedTxnWithAD{
-			SignedTxn: transactions.SignedTxn{
+		SignedTxnWithAD: transactions.SignedTxn{
 				Txn: tx,
-			},
-		},
+			}.WithAD(),
 		HasGenesisID: true,
 	}
 }

@@ -934,7 +934,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	var group transactions.TxGroup
 	var tip basics.Micros
 	for gi, txn := range txgroup {
-		err := eval.TestTransaction(txn)
+		err := eval.testTransaction(txn)
 		if err != nil {
 			return err
 		}
@@ -1022,10 +1022,10 @@ func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, minFee basi
 	return nil
 }
 
-// TestTransaction performs basic duplicate detection and well-formedness checks
+// testTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
+func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
 	err := eval.block.Alive(txn.Txn.Header)
 	if err != nil {
@@ -1048,22 +1048,10 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 	return nil
 }
 
-// Transaction tentatively adds a new transaction as part of this block evaluation.
-// If the transaction cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
-	return eval.TransactionGroup([]transactions.SignedTxnWithAD{
-		{
-			SignedTxn: txn,
-			ApplyData: ad,
-		},
-	})
-}
-
-// TransactionGroup attempts to add a new transaction group as part of this block evaluation.
+// TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) (err error) {
+func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWithAD) (err error) {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -2258,7 +2246,7 @@ transactionGroupLoop:
 					}
 				}
 			}
-			err = eval.TransactionGroup(txgroup.TxnGroup)
+			err = eval.TransactionGroup(txgroup.TxnGroup...)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}

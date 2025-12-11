@@ -331,7 +331,7 @@ func runEval(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Tr
 	eval, err := eval.StartEvaluator(l, block.BlockHeader, eval.EvaluatorOptions{})
 	require.NoError(t, err)
 
-	err = eval.TransactionGroup(makeGroupFromTxn(txn))
+	err = eval.TransactionGroup(makeGroupFromTxn(txn)...)
 	require.NoError(t, err)
 }
 

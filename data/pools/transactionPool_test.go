@@ -613,7 +613,7 @@ func TestRememberForget(t *testing.T) {
 				tx.Note[1] = byte(j)
 				signedTx := tx.Sign(secrets[i])
 				transactionPool.rememberOne(signedTx)
-				err := eval.Transaction(signedTx, transactions.ApplyData{})
+				err := eval.TransactionGroup(signedTx.WithAD())
 				require.NoError(t, err)
 			}
 		}
@@ -759,7 +759,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 
 	blockEval := newBlockEvaluator(t, mockLedger)
-	err := blockEval.Transaction(signedTx, transactions.ApplyData{})
+	err := blockEval.TransactionGroup(signedTx.WithAD())
 	require.NoError(t, err)
 
 	// simulate this transaction was applied
@@ -1265,7 +1265,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		eval := newBlockEvaluator(b, l)
 		for len(ledgerTxnQueue) > 0 {
 			stx := ledgerTxnQueue[0]
-			err := eval.Transaction(stx, transactions.ApplyData{})
+			err := eval.TransactionGroup(stx.WithAD())
 			if err == ledgercore.ErrNoSpace {
 				break
 			}
@@ -1509,7 +1509,7 @@ func TestStateProofLogging(t *testing.T) {
 	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000, nil)
 	require.NoError(t, err)
 
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.TransactionGroup(stxn.WithAD())
 	require.NoError(t, err)
 
 	err = transactionPool.rememberOne(stxn)

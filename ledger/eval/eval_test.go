@@ -165,7 +165,7 @@ ok:
 	if err != nil {
 		return eval, addrs[0], err
 	}
-	err = eval.TransactionGroup(g)
+	err = eval.TransactionGroup(g...)
 	return eval, addrs[0], err
 }
 
@@ -221,12 +221,12 @@ func TestPrivateTransactionGroup(t *testing.T) {
 
 	var txgroup []transactions.SignedTxnWithAD
 	eval := BlockEvaluator{}
-	err := eval.TransactionGroup(txgroup)
+	err := eval.TransactionGroup(txgroup...)
 	require.NoError(t, err) // nothing to do, no problem
 
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
-	err = eval.TransactionGroup(txgroup)
+	err = eval.TransactionGroup(txgroup...)
 	require.ErrorContains(t, err, "group size")
 }
 
@@ -400,7 +400,7 @@ int 1`,
 
 			require.Len(t, eval.block.Payset, 0)
 
-			err = eval.TransactionGroup(txgroup)
+			err = eval.TransactionGroup(txgroup...)
 			switch testCase.firstTxnBehavior {
 			case "approve":
 				if len(scenario.ExpectedError) != 0 {
@@ -667,7 +667,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 		},
 	}
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.NoError(t, err)
 
 	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
@@ -1421,12 +1421,11 @@ func TestAbsenteeChecks(t *testing.T) {
 		return pay(i, addrs[i]).Sign(keys[i])
 	}
 
-	require.NoError(t, blkEval.Transaction(selfpay(0), transactions.ApplyData{}))
-	require.NoError(t, blkEval.Transaction(selfpay(1), transactions.ApplyData{}))
-	require.NoError(t, blkEval.Transaction(selfpay(2), transactions.ApplyData{}))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(0).WithAD()))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(1).WithAD()))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(2).WithAD()))
 	for i := 0; i < 32; i++ {
-		require.NoError(t, blkEval.Transaction(pay(0, basics.Address{byte(i << 3), 0xaa}).Sign(keys[0]),
-			transactions.ApplyData{}))
+		require.NoError(t, blkEval.TransactionGroup(pay(0, basics.Address{byte(i << 3), 0xaa}).Sign(keys[0]).WithAD()))
 	}
 
 	// Make sure we validate our block as well
