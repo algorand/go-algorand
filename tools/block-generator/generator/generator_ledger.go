@@ -179,7 +179,7 @@ func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.
 	}
 	for i, txGroup := range txGroups {
 		for {
-			txErr := eval.TransactionGroup(txGroup)
+			txErr := eval.TransactionGroup(txGroup...)
 			if txErr != nil {
 				if strings.Contains(txErr.Error(), "database table is locked") {
 					time.Sleep(waitDelay)
