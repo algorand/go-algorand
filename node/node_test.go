@@ -256,6 +256,13 @@ type fullNodeLoggerProvider interface {
 	cleanup()
 }
 
+// compile-time interface check
+var (
+	_ fullNodeLoggerProvider = (*singleFileFullNodeLoggerProvider)(nil)
+	_ fullNodeLoggerProvider = (*multiFileFullNodeLoggerProvider)(nil)
+	_ fullNodeLoggerProvider = (*mixedLogFullNodeLoggerProvider)(nil)
+)
+
 // singleFileFullNodeLoggerProvider is a logger provider that creates a single log file for all nodes.
 type singleFileFullNodeLoggerProvider struct {
 	t *testing.T
@@ -281,6 +288,42 @@ func (p *singleFileFullNodeLoggerProvider) cleanup() {
 		p.h.Close()
 		p.h = nil
 		p.l = nil
+	}
+}
+
+// multiFileFullNodeLoggerProvider is a logger provider that creates a separate log file for each node.
+type multiFileFullNodeLoggerProvider struct {
+	t       *testing.T
+	handles []*os.File
+	loggers []logging.Logger
+}
+
+func (p *multiFileFullNodeLoggerProvider) getLogger(i int) logging.Logger {
+	// Expand slices if needed
+	for len(p.handles) <= i {
+		p.handles = append(p.handles, nil)
+		p.loggers = append(p.loggers, nil)
+	}
+
+	if p.loggers[i] == nil {
+		var err error
+		p.handles[i], err = os.Create(fmt.Sprintf("%s_node%d.log", p.t.Name(), i))
+		require.NoError(p.t, err, "Failed to create log file for node %d", i)
+		p.loggers[i] = logging.NewLogger()
+		p.loggers[i].SetJSONFormatter()
+		p.loggers[i].SetOutput(p.handles[i])
+		p.loggers[i].SetLevel(logging.Debug)
+	}
+	return p.loggers[i]
+}
+
+func (p *multiFileFullNodeLoggerProvider) cleanup() {
+	for i, h := range p.handles {
+		if h != nil {
+			h.Close()
+			p.handles[i] = nil
+			p.loggers[i] = nil
+		}
 	}
 }
 
