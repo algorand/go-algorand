@@ -1460,7 +1460,7 @@ func TestP2PTxTopicValidator_NoWsPeer(t *testing.T) {
 
 	ctx := context.Background()
 	require.NotContains(t, net.wsPeers, peerID)
-	res := net.txTopicValidator(ctx, peerID, &msg)
+	res := net.topicValidator(ctx, peerID, &msg)
 	require.Equal(t, pubsub.ValidationAccept, res)
 }
 

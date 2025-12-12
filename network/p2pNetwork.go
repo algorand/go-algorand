@@ -1152,7 +1152,7 @@ func (n *P2PNetwork) checkPeersConnectivity() {}
 // txTopicHandleLoop reads messages from the pubsub topic for transactions.
 func (n *P2PNetwork) txTopicHandleLoop() {
 	defer n.wg.Done()
-	sub, err := n.service.Subscribe(p2p.TXTopicName, n.txTopicValidator)
+	sub, err := n.service.Subscribe(p2p.TXTopicName, n.topicValidator)
 	if err != nil {
 		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.TXTopicName, err)
 		return
@@ -1191,21 +1191,21 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 // agreementTopicHandleLoop reads messages from the pubsub topic for AV/PP
 func (n *P2PNetwork) agreementTopicHandleLoop() {
 	defer n.wg.Done()
-	subAV, err := n.service.Subscribe(p2p.AVTopicName, n.txTopicValidator)
+	subAV, err := n.service.Subscribe(p2p.AVTopicName, n.topicValidator)
 	if err != nil {
 		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.AVTopicName, err)
 		return
 	}
 	n.log.Debugf("Subscribed to topic %s", p2p.AVTopicName)
 
-	subPP, err := n.service.Subscribe(p2p.PPTopicName, n.txTopicValidator)
+	subPP, err := n.service.Subscribe(p2p.PPTopicName, n.topicValidator)
 	if err != nil {
 		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.PPTopicName, err)
 		return
 	}
 	n.log.Debugf("Subscribed to topic %s", p2p.PPTopicName)
 
-	subVB, err := n.service.Subscribe(p2p.VBTopicName, n.txTopicValidator)
+	subVB, err := n.service.Subscribe(p2p.VBTopicName, n.topicValidator)
 	if err != nil {
 		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.VBTopicName, err)
 		return
@@ -1252,8 +1252,8 @@ func (p *gsPeer) RoutingAddr() []byte {
 	return []byte(p.peerID)
 }
 
-// txTopicValidator calls txHandler to validate and process incoming transactions.
-func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+// topicValidator calls txHandler to validate and process incoming transactions.
+func (n *P2PNetwork) topicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 	n.wsPeersLock.Lock()
 	var sender DisconnectableAddressablePeer
 	if wsp, ok := n.wsPeers[peerID]; ok {
