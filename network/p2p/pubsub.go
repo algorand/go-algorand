@@ -64,7 +64,8 @@ const PPTopicName = "algopp01"
 // VBTopicName defines a pubsub topic for Vote Bundle messages
 const VBTopicName = "algovb01"
 
-const incomingThreads = 20 // matches to number wsNetwork workers
+// Number of goroutines used for both wsNetwork workers and pubsub topic handler loops (e.g., agreementTopicHandleLoop)
+const incomingThreads = 20
 
 // deriveGossipSubParams derives the gossip sub parameters from the cfg.GossipFanout value
 // by using the same proportions as pubsub defaults - see GossipSubD, GossipSubDlo, etc.

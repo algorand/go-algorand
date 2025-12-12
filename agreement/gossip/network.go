@@ -172,7 +172,7 @@ func (i *networkImpl) processValidateMessage(raw network.IncomingMessage, submit
 		action = network.Ignore
 	}
 
-	// Immediately ignore everything here, sometimes Relay/Broadcast/Disconnect later based on API handles saved from IncomingMessage
+	// The action is returned synchronously via syncCh. Subsequent Relay, Broadcast, or Disconnect calls may occur asynchronously using the saved message handle from IncomingMessage.
 	return network.OutgoingMessage{Action: action}
 }
 
