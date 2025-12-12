@@ -49,7 +49,7 @@ jobs:
       - name: Run tests
         run: |
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
           mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
           go tool -modfile=tool.mod gotestsum --format standard-quiet \
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
@@ -57,6 +57,11 @@ jobs:
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
             $PACKAGE_NAMES
+      - name: Collect errorcontains capture files
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/errorcontains
+          cp /tmp/error_capture.*.jsonl ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/errorcontains/ 2>/dev/null || true
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -130,6 +135,11 @@ jobs:
           mkdir -p ~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID}
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID} \
           test/scripts/e2e.sh
+      - name: Collect errorcontains capture files
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p ~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID}/errorcontains
+          cp /tmp/error_capture.*.jsonl ~/test_results/${{ matrix.platform }}_integration/${PARTITION_ID}/errorcontains/ 2>/dev/null || true
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -186,6 +196,11 @@ jobs:
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID}
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID} \
           test/scripts/e2e.sh
+      - name: Collect errorcontains capture files
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID}/errorcontains
+          cp /tmp/error_capture.*.jsonl ~/test_results/${{ matrix.platform }}_e2e_expect/${PARTITION_ID}/errorcontains/ 2>/dev/null || true
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
@@ -239,6 +254,11 @@ jobs:
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs
           NO_BUILD=true TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs \
           test/scripts/e2e.sh
+      - name: Collect errorcontains capture files
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs/errorcontains
+          cp /tmp/error_capture.*.jsonl ~/test_results/${{ matrix.platform }}_e2e_subs/errorcontains/ 2>/dev/null || true
       - name: Notify Slack on failure
         if: failure()
         uses: ./.github/actions/slack-notify
