@@ -118,7 +118,7 @@ func (env *Environment) Txn(txn transactions.SignedTxn) transactions.ApplyData {
 	env.t.Helper()
 
 	evaluator := env.nextBlock()
-	err := evaluator.Transaction(txn, transactions.ApplyData{})
+	err := evaluator.TransactionGroup(txn.WithAD())
 	require.NoError(env.t, err)
 	newBlock := env.endBlock(evaluator).Block()
 

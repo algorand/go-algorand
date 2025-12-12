@@ -190,9 +190,7 @@ func TestLedgerCirculation(t *testing.T) {
 		tx.Type = protocol.PaymentTx
 		signedTx := tx.Sign(srcAccountKey)
 		blk.Payset = transactions.Payset{transactions.SignedTxnInBlock{
-			SignedTxnWithAD: transactions.SignedTxnWithAD{
-				SignedTxn: signedTx,
-			},
+			SignedTxnWithAD: signedTx.WithAD(),
 		}}
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)

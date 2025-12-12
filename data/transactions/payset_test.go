@@ -27,9 +27,7 @@ func generatePayset(txnCount, acctCount int) Payset {
 	stxnb := make([]SignedTxnInBlock, txnCount)
 	for i, stxn := range generateSignedTxns(txnCount, acctCount) {
 		stxnb[i] = SignedTxnInBlock{
-			SignedTxnWithAD: SignedTxnWithAD{
-				SignedTxn: stxn,
-			},
+			SignedTxnWithAD: stxn.WithAD(),
 		}
 	}
 	return Payset(stxnb)

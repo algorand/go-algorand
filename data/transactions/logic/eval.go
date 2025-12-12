@@ -2986,12 +2986,12 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
 	var cx EvalContext
-	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
+	stxnad := transactions.SignedTxn{Txn: *txn}.WithAD()
 	fs, ok := txnFieldSpecByField(field)
 	if !ok {
 		return basics.TealValue{}, fmt.Errorf("invalid field %s", field)
 	}
-	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, inner)
+	sv, err := cx.txnFieldToStack(&stxnad, &fs, arrayFieldIdx, groupIndex, inner)
 	return sv.ToTealValue(), err
 }
 
