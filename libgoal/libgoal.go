@@ -647,6 +647,15 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 
 /* Algod Wrappers */
 
+// GetPeers returns the node's peers
+func (c *Client) GetPeers() (resp model.GetPeersResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.GetPeers()
+	}
+	return
+}
+
 // Status returns the node status
 func (c *Client) Status() (resp model.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
