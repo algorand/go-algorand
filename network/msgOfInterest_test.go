@@ -17,6 +17,7 @@
 package network
 
 import (
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -69,4 +70,23 @@ func TestMarshallMessageOfInterest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, tags[protocol.AgreementVoteTag], true)
 	require.Equal(t, 1, len(tags))
+}
+
+func TestDefaultSendMessageTagsMarshalRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cloned := maps.Clone(defaultSendMessageTags)
+
+	toBytes := func(tags map[protocol.Tag]bool) []byte {
+		return marshallMessageOfInterestMap(tags)
+	}
+	toTags := func(data []byte) map[protocol.Tag]bool {
+		tags, err := unmarshallMessageOfInterest(data)
+		require.NoError(t, err)
+		return tags
+	}
+
+	// Test that default messages of interest round-trip correctly
+	result := toTags(toBytes(cloned))
+	require.Equal(t, cloned, result, "default messages of interest should round-trip")
 }
