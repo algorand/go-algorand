@@ -171,8 +171,9 @@ func setupFullNodesEx(
 		genesisDir := filepath.Join(rootDirectory, g.ID())
 		os.Mkdir(genesisDir, 0700)
 
-		wname := config.RootKeyFilename(t.Name() + "wallet" + strconv.Itoa(i))
-		pname := config.PartKeyFilename(t.Name()+"wallet"+strconv.Itoa(i), uint64(firstRound), uint64(lastRound))
+		testName := strings.ReplaceAll(t.Name(), string(filepath.Separator), "_")
+		wname := config.RootKeyFilename(testName + "wallet" + strconv.Itoa(i))
+		pname := config.PartKeyFilename(testName+"wallet"+strconv.Itoa(i), uint64(firstRound), uint64(lastRound))
 
 		wallets[i] = wname
 
@@ -273,7 +274,8 @@ type singleFileFullNodeLoggerProvider struct {
 func (p *singleFileFullNodeLoggerProvider) getLogger(i int) logging.Logger {
 	if p.l == nil {
 		var err error
-		p.h, err = os.Create(p.t.Name() + ".log")
+		testName := strings.ReplaceAll(p.t.Name(), string(filepath.Separator), "_")
+		p.h, err = os.Create(testName + ".log")
 		require.NoError(p.t, err, "Failed to create log file for node %d", i)
 		p.l = logging.NewLogger()
 		p.l.SetJSONFormatter()
@@ -307,7 +309,8 @@ func (p *multiFileFullNodeLoggerProvider) getLogger(i int) logging.Logger {
 
 	if p.loggers[i] == nil {
 		var err error
-		p.handles[i], err = os.Create(fmt.Sprintf("%s_node%d.log", p.t.Name(), i))
+		testName := strings.ReplaceAll(p.t.Name(), string(filepath.Separator), "_")
+		p.handles[i], err = os.Create(fmt.Sprintf("%s_node%d.log", testName, i))
 		require.NoError(p.t, err, "Failed to create log file for node %d", i)
 		p.loggers[i] = logging.NewLogger()
 		p.loggers[i].SetJSONFormatter()
@@ -638,12 +641,12 @@ func TestStatusReport_TimeSinceLastRound(t *testing.T) {
 	}
 }
 
-type mismatchingDirectroyPermissionsLog struct {
+type mismatchingDirectoryPermissionsLog struct {
 	logging.Logger
 	t *testing.T
 }
 
-func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interface{}) {
+func (m mismatchingDirectoryPermissionsLog) Errorf(fmts string, args ...interface{}) {
 	fmtStr := fmt.Sprintf(fmts, args...)
 	require.Contains(m.t, fmtStr, "Unable to create genesis directory")
 }
@@ -652,7 +655,7 @@ func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interfac
 func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	testDirectroy := t.TempDir()
+	testDirectory := t.TempDir()
 
 	genesis := bookkeeping.Genesis{
 		SchemaID:    "go-test-node-genesis",
@@ -662,18 +665,18 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 		RewardsPool: poolAddr.String(),
 	}
 
-	log := mismatchingDirectroyPermissionsLog{logging.TestingLog(t), t}
+	log := mismatchingDirectoryPermissionsLog{logging.TestingLog(t), t}
 
-	require.NoError(t, os.Chmod(testDirectroy, 0200))
+	require.NoError(t, os.Chmod(testDirectory, 0200))
 
-	node, err := MakeFull(log, testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
+	node, err := MakeFull(log, testDirectory, config.GetDefaultLocal(), []string{}, genesis)
 
 	require.Nil(t, node)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "permission denied")
 
-	require.NoError(t, os.Chmod(testDirectroy, 1700))
-	require.NoError(t, os.RemoveAll(testDirectroy))
+	require.NoError(t, os.Chmod(testDirectory, 1700))
+	require.NoError(t, os.RemoveAll(testDirectory))
 }
 
 // TestDefaultResourcePaths confirms that when no extra configuration is provided, all resources are created in the dataDir
@@ -949,14 +952,14 @@ func TestMaxSizesCorrect(t *testing.T) {
 	require.Equal(t, tsSize, protocol.TopicMsgRespTag.MaxMessageSize())
 }
 
-// TestNodeHybridTopology set ups 3 nodes network with the following topology:
+// TestNodeHybridOrP2PTopology set ups 3 nodes network with the following topology:
 // N -- R -- A and ensures N can discover A and download blocks from it.
 //
 // N is a non-part node that joins the network later
 // R is a non-archival relay node with block service disabled. It MUST NOT serve blocks to force N to discover A.
 // A is a archival node that can only provide blocks.
 // Nodes N and A have only R in their initial phonebook, and all nodes are in hybrid mode.
-func TestNodeHybridTopology(t *testing.T) {
+func TestNodeHybridOrP2PTopology(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const consensusTest0 = protocol.ConsensusVersion("test0")
@@ -975,39 +978,66 @@ func TestNodeHybridTopology(t *testing.T) {
 	acctStake[1] = basics.MicroAlgos{Raw: uint64(totalStake / 2)}
 	acctStake[2] = basics.MicroAlgos{Raw: uint64(totalStake / 2)}
 
-	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
-		cfg = config.GetDefaultLocal()
-		if ni.idx != 2 {
-			cfg.EnableBlockService = false
-			cfg.EnableGossipBlockService = false
-			cfg.EnableLedgerService = false
-			cfg.CatchpointInterval = 0
-			cfg.Archival = false
-		} else {
-			// node 2 is archival
-			cfg.EnableBlockService = true
-			cfg.EnableGossipBlockService = true
-			cfg.EnableLedgerService = true
-			cfg.CatchpointInterval = 200
-			cfg.Archival = true
-		}
-		if ni.idx == 0 {
-			// do not allow node 0 (N) to make any outgoing connections
-			cfg.GossipFanout = 0
-		}
+	tests := []struct {
+		name      string
+		configMod func(ni *nodeInfo, cfg *config.Local)
+	}{
+		{
+			name: "Hybrid",
+			configMod: func(ni *nodeInfo, cfg *config.Local) {
+				cfg.NetAddress = ni.wsNetAddr()
+				cfg.EnableP2PHybridMode = true
+				cfg.PublicAddress = ni.wsNetAddr()
+				cfg.EnableDHTProviders = true
+				cfg.P2PPersistPeerID = true
+				privKey, err := p2p.GetPrivKey(*cfg, ni.rootDir)
+				require.NoError(t, err)
+				ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
+				require.NoError(t, err)
 
-		cfg.NetAddress = ni.wsNetAddr()
-		cfg.EnableP2PHybridMode = true
-		cfg.PublicAddress = ni.wsNetAddr()
-		cfg.EnableDHTProviders = true
-		cfg.P2PPersistPeerID = true
-		privKey, err := p2p.GetPrivKey(cfg, ni.rootDir)
-		require.NoError(t, err)
-		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
-		require.NoError(t, err)
+				cfg.P2PHybridNetAddress = ni.p2pNetAddr()
+			},
+		},
+		{
+			name: "P2P",
+			configMod: func(ni *nodeInfo, cfg *config.Local) {
+				cfg.NetAddress = ni.p2pNetAddr()
+				cfg.EnableP2P = true
+				cfg.EnableDHTProviders = true
+				cfg.P2PPersistPeerID = true
+				privKey, err := p2p.GetPrivKey(*cfg, ni.rootDir)
+				require.NoError(t, err)
+				ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
+				require.NoError(t, err)
+			},
+		},
+	}
 
-		cfg.P2PHybridNetAddress = ni.p2pNetAddr()
-		return ni, cfg
+	configHookFactory := func(configMod func(ni *nodeInfo, cfg *config.Local)) func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
+		return func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
+			cfg = config.GetDefaultLocal()
+			if ni.idx != 2 {
+				cfg.EnableBlockService = false
+				cfg.EnableGossipBlockService = false
+				cfg.EnableLedgerService = false
+				cfg.CatchpointInterval = 0
+				cfg.Archival = false
+			} else {
+				// node 2 is archival
+				cfg.EnableBlockService = true
+				cfg.EnableGossipBlockService = true
+				cfg.EnableLedgerService = true
+				cfg.CatchpointInterval = 200
+				cfg.Archival = true
+			}
+			if ni.idx == 0 {
+				// do not allow node 0 (N) to make any outgoing connections
+				cfg.GossipFanout = 0
+			}
+
+			configMod(&ni, &cfg)
+			return ni, cfg
+		}
 	}
 
 	phonebookHook := func(ni []nodeInfo, i int) []string {
@@ -1031,63 +1061,70 @@ func TestNodeHybridTopology(t *testing.T) {
 		return nil
 	}
 
-	nodes, wallets := setupFullNodesEx(
-		t, consensusTest0, configurableConsensus,
-		acctStake, configHook, phonebookHook,
-		// log Node 0 to stdout/testing log for debugging - in order to preserve the log after failure
-		&mixedLogFullNodeLoggerProvider{
-			singleFileFullNodeLoggerProvider: singleFileFullNodeLoggerProvider{t: t},
-			stdoutNodes:                      map[int]struct{}{0: {}},
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configHook := configHookFactory(test.configMod)
+
+			nodes, wallets := setupFullNodesEx(
+				t, consensusTest0, configurableConsensus,
+				acctStake, configHook, phonebookHook,
+				// log Node 0 to stdout/testing log for debugging - in order to preserve the log after failure
+				// alternatively, use multiLogFullNodeLoggerProvider that logs into individual files
+				&mixedLogFullNodeLoggerProvider{
+					singleFileFullNodeLoggerProvider: singleFileFullNodeLoggerProvider{t: t},
+					stdoutNodes:                      map[int]struct{}{0: {}},
+				})
+			require.Len(t, nodes, 3)
+			require.Len(t, wallets, 3)
+			for i := 0; i < len(nodes); i++ {
+				defer os.Remove(wallets[i])
+				defer nodes[i].Stop()
+			}
+
+			startAndConnectNodes(nodes, 10*time.Second)
+
+			// ensure the initial connectivity topology
+			repeatCounter := 0
+			require.Eventually(t, func() bool {
+				repeatCounter++
+				node0Conn := len(nodes[0].net.GetPeers(network.PeersConnectedIn)) > 0                             // has connection from 1
+				node1Conn := len(nodes[1].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) == 2 // connected to 0 and 2
+				node2Conn := len(nodes[2].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) >= 1 // connected to 1
+				if repeatCounter > 100 && !(node0Conn && node1Conn && node2Conn) {
+					t.Logf("IN/OUT connection stats:\nNode0 %d/%d, Node1 %d/%d, Node2 %d/%d",
+						len(nodes[0].net.GetPeers(network.PeersConnectedIn)), len(nodes[0].net.GetPeers(network.PeersConnectedOut)),
+						len(nodes[1].net.GetPeers(network.PeersConnectedIn)), len(nodes[1].net.GetPeers(network.PeersConnectedOut)),
+						len(nodes[2].net.GetPeers(network.PeersConnectedIn)), len(nodes[2].net.GetPeers(network.PeersConnectedOut)))
+				}
+				return node0Conn && node1Conn && node2Conn
+			}, 60*time.Second, 500*time.Millisecond)
+
+			// node 0 has GossipFanout=0 but we still want to run all the machinery to update phonebooks
+			// (it this particular case to update peerstore with DHT nodes)
+			nodes[0].net.RequestConnectOutgoing(false, nil)
+
+			initialRound := nodes[0].ledger.NextRound()
+			targetRound := initialRound + 10
+
+			// ensure discovery of archival node by tracking its ledger
+			select {
+			case <-nodes[0].ledger.Wait(targetRound):
+				b0, err := nodes[0].ledger.Block(targetRound)
+				require.NoError(t, err)
+
+				var err1 error
+				var b1 bookkeeping.Block
+				require.Eventually(t, func() bool {
+					// it is possible N0 commits blocks faster than R, so wait a bit
+					b1, err1 = nodes[1].ledger.Block(targetRound)
+					return err1 == nil
+				}, 3*time.Second, 50*time.Millisecond)
+
+				require.Equal(t, b1.Hash(), b0.Hash())
+			case <-time.After(3 * time.Minute): // set it to 1.5x of the dht.periodicBootstrapInterval to give DHT code to rebuild routing table one more time
+				require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
+			}
 		})
-	require.Len(t, nodes, 3)
-	require.Len(t, wallets, 3)
-	for i := 0; i < len(nodes); i++ {
-		defer os.Remove(wallets[i])
-		defer nodes[i].Stop()
-	}
-
-	startAndConnectNodes(nodes, 10*time.Second)
-
-	// ensure the initial connectivity topology
-	repeatCounter := 0
-	require.Eventually(t, func() bool {
-		repeatCounter++
-		node0Conn := len(nodes[0].net.GetPeers(network.PeersConnectedIn)) > 0                             // has connection from 1
-		node1Conn := len(nodes[1].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) == 2 // connected to 0 and 2
-		node2Conn := len(nodes[2].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) >= 1 // connected to 1
-		if repeatCounter > 100 && !(node0Conn && node1Conn && node2Conn) {
-			t.Logf("IN/OUT connection stats:\nNode0 %d/%d, Node1 %d/%d, Node2 %d/%d",
-				len(nodes[0].net.GetPeers(network.PeersConnectedIn)), len(nodes[0].net.GetPeers(network.PeersConnectedOut)),
-				len(nodes[1].net.GetPeers(network.PeersConnectedIn)), len(nodes[1].net.GetPeers(network.PeersConnectedOut)),
-				len(nodes[2].net.GetPeers(network.PeersConnectedIn)), len(nodes[2].net.GetPeers(network.PeersConnectedOut)))
-		}
-		return node0Conn && node1Conn && node2Conn
-	}, 60*time.Second, 500*time.Millisecond)
-
-	// node 0 has GossipFanout=0 but we still want to run all the machinery to update phonebooks
-	// (it this particular case to update peerstore with DHT nodes)
-	nodes[0].net.RequestConnectOutgoing(false, nil)
-
-	initialRound := nodes[0].ledger.NextRound()
-	targetRound := initialRound + 10
-
-	// ensure discovery of archival node by tracking its ledger
-	select {
-	case <-nodes[0].ledger.Wait(targetRound):
-		b0, err := nodes[0].ledger.Block(targetRound)
-		require.NoError(t, err)
-
-		var err1 error
-		var b1 bookkeeping.Block
-		require.Eventually(t, func() bool {
-			// it is possible N0 commits blocks faster than R, so wait a bit
-			b1, err1 = nodes[1].ledger.Block(targetRound)
-			return err1 == nil
-		}, 3*time.Second, 50*time.Millisecond)
-
-		require.Equal(t, b1.Hash(), b0.Hash())
-	case <-time.After(3 * time.Minute): // set it to 1.5x of the dht.periodicBootstrapInterval to give DHT code to rebuild routing table one more time
-		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
 }
 
