@@ -511,7 +511,7 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	firstValid := basics.Round(0)
 	lastValid := maxValidPeriod + 1
 	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
-	a.Error(err)
+	require.ErrorContains(t, err, `the validity period for mss is too large: the limit is 16777215`)
 }
 
 func TestFillDBWithParticipationKeys(t *testing.T) {
@@ -564,7 +564,7 @@ func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not paral
 	firstValid = basics.Round(0)
 	lastValid = maxValidPeriod + 1
 	_, err = FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
-	a.Error(err)
+	require.ErrorContains(t, err, `the validity period for mss is too large: the limit is 4095`)
 }
 
 func BenchmarkParticipationSign(b *testing.B) {

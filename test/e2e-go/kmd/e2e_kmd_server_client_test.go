@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -64,7 +65,7 @@ func TestBadAuthErrs(t *testing.T) {
 	req := kmdapi.APIV1GETWalletsRequest{}
 	resp := kmdapi.APIV1GETWalletsResponse{}
 	err = client.DoV1Request(req, &resp)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestGoodAuthSucceeds(t *testing.T) {

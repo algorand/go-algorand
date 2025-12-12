@@ -18,6 +18,7 @@ package fuzzer
 
 import (
 	"container/heap"
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
