@@ -471,8 +471,8 @@ func (n *P2PNetwork) Start() error {
 	n.meshUpdateRequests <- meshRequest{}
 	n.mesher.start()
 
-	if n.capabilitiesDiscovery != nil {
-		n.capabilitiesDiscovery.AdvertiseCapabilities(n.nodeInfo.Capabilities()...)
+	if caps := n.nodeInfo.Capabilities(); len(caps) > 0 && n.capabilitiesDiscovery != nil {
+		n.capabilitiesDiscovery.AdvertiseCapabilities(caps...)
 	}
 
 	return nil
