@@ -164,9 +164,6 @@ func (i *networkImpl) processValidateMessage(raw network.IncomingMessage, submit
 	select {
 	case submit <- agreement.Message{MessageHandle: agreement.MessageHandle(metadata), Data: raw.Data}:
 		action = <-metadata.syncCh
-		// It would be slightly better to measure at de-queue
-		// time, but that happens in many places in code and
-		// this is much easier.
 		messagesHandledTotal.Inc(nil)
 		messagesHandledByType.Add(msgType, 1)
 	default:
@@ -203,7 +200,7 @@ func (i *networkImpl) Broadcast(t protocol.Tag, data []byte) (err error) {
 
 func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []byte) (err error) {
 	metadata := messageMetadataFromHandle(h)
-	if metadata == nil { // synthentic loopback
+	if metadata == nil { // synthetic loopback
 		err = i.net.Broadcast(context.Background(), t, data, false, nil)
 		if err != nil {
 			i.log.Infof("agreement: could not (pseudo)relay message with tag %v: %v", t, err)
@@ -229,18 +226,18 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	metadata := messageMetadataFromHandle(h)
 
-	if metadata == nil { // synthentic loopback
-		// TODO warn
+	if metadata == nil { // synthetic loopback
+		i.log.Warnf("agreement: Disconnect without message handle")
 		return
 	}
 
 	if metadata.syncCh != nil {
 		// Synchronous validation path
 		select {
-		case metadata.syncCh <- network.Accept:
+		case metadata.syncCh <- network.Disconnect:
 			return
 		default:
-			// validator already returned; do real relay
+			// validator already returned; do real disconnect
 		}
 	}
 	i.net.Disconnect(metadata.raw.Sender)
@@ -249,17 +246,17 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 func (i *networkImpl) Ignore(h agreement.MessageHandle) {
 	metadata := messageMetadataFromHandle(h)
 
-	if metadata == nil { // synthentic loopback
+	if metadata == nil { // synthetic loopback
+		i.log.Warnf("agreement: Ignore without message handle")
 		return
 	}
 
 	if metadata.syncCh != nil {
 		// Synchronous validation path
 		select {
-		case metadata.syncCh <- network.Accept:
+		case metadata.syncCh <- network.Ignore:
 			return
 		default:
-			// validator already returned; do real relay
 		}
 	}
 }
