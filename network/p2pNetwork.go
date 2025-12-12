@@ -1216,7 +1216,7 @@ func (n *P2PNetwork) agreementTopicHandleLoop() {
 	handler := func(ctx context.Context, topic string, sub p2p.SubNextCancellable, peerID peer.ID, log logging.Logger) {
 		defer wg.Done()
 		for {
-			// msg from sub.Next not used since all work done by txTopicValidator
+			// msg from sub.Next not used since all work done by topicValidator
 			_, err := sub.Next(ctx)
 			if err != nil {
 				if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
