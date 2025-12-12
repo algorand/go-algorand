@@ -157,7 +157,7 @@ func (i *networkImpl) processMessage(raw network.IncomingMessage, submit chan<- 
 func (i *networkImpl) processValidateMessage(raw network.IncomingMessage, submit chan<- agreement.Message, msgType string) network.OutgoingMessage {
 	metadata := &messageMetadata{
 		raw:    raw,
-		syncCh: make(chan network.ForwardingPolicy, 1),
+		syncCh: make(chan network.ForwardingPolicy),
 	}
 
 	var action network.ForwardingPolicy
@@ -211,12 +211,16 @@ func (i *networkImpl) Relay(h agreement.MessageHandle, t protocol.Tag, data []by
 	} else {
 		if metadata.syncCh != nil {
 			// Synchronous validation path
-			metadata.syncCh <- network.Accept
-		} else {
-			err = i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
-			if err != nil {
-				i.log.Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
+			select {
+			case metadata.syncCh <- network.Accept:
+				return
+			default:
+				// validator already returned; do real relay
 			}
+		}
+		err = i.net.Relay(context.Background(), t, data, false, metadata.raw.Sender)
+		if err != nil {
+			i.log.Infof("agreement: could not relay message from %v with tag %v: %v", metadata.raw.Sender, t, err)
 		}
 	}
 	return
@@ -232,8 +236,12 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 
 	if metadata.syncCh != nil {
 		// Synchronous validation path
-		metadata.syncCh <- network.Disconnect
-		return
+		select {
+		case metadata.syncCh <- network.Accept:
+			return
+		default:
+			// validator already returned; do real relay
+		}
 	}
 	i.net.Disconnect(metadata.raw.Sender)
 }
@@ -247,6 +255,11 @@ func (i *networkImpl) Ignore(h agreement.MessageHandle) {
 
 	if metadata.syncCh != nil {
 		// Synchronous validation path
-		metadata.syncCh <- network.Ignore
+		select {
+		case metadata.syncCh <- network.Accept:
+			return
+		default:
+			// validator already returned; do real relay
+		}
 	}
 }
