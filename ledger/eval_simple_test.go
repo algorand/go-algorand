@@ -79,7 +79,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	// Correct signature should work
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.NoError(t, err)
 
 	// Broken signature should fail
@@ -93,7 +93,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.ErrorContains(t, err, `transaction already in ledger`)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.ErrorContains(t, err, `transaction already in ledger`)
 
 	// out of range should fail
@@ -104,7 +104,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.ErrorContains(t, err, `txn dead: round 1 outside of 2--3`)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.ErrorContains(t, err, `txn dead: round 1 outside of 2--3`)
 
 	// bogus group should fail
@@ -114,7 +114,7 @@ func TestBlockEvaluator(t *testing.T) {
 	txgroup = []transactions.SignedTxn{st}
 	err = eval.TestTransactionGroup(txgroup)
 	require.ErrorContains(t, err, `transactionGroup: incomplete group: AAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA !=`)
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.ErrorContains(t, err, `transactionGroup: incomplete group: AAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA !=`)
 
 	// mixed fields should fail
@@ -149,7 +149,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.NoError(t, err)
 
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.TransactionGroup(stxn.WithAD())
 	require.NoError(t, err)
 
 	t3 := txn
@@ -164,7 +164,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.ErrorContains(t, err, `transactionGroup: [0] had zero Group but was submitted in a group of 2`)
 	txgroupad := transactions.WrapSignedTxnsWithAD(txgroup)
-	err = eval.TransactionGroup(txgroupad)
+	err = eval.TransactionGroup(txgroupad...)
 	require.ErrorContains(t, err, `transactionGroup: [0] had zero Group but was submitted in a group of 2`)
 
 	// Test a group that should work
@@ -186,7 +186,7 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.ErrorContains(t, err, `transactionGroup: inconsistent group values`)
 	txgroupad = transactions.WrapSignedTxnsWithAD(txgroup)
-	err = eval.TransactionGroup(txgroupad)
+	err = eval.TransactionGroup(txgroupad...)
 	require.ErrorContains(t, err, `transactionGroup: inconsistent group values`)
 
 	// missing part of the group should fail
@@ -1290,7 +1290,7 @@ func TestRekeying(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
-			err = eval.Transaction(stxn, transactions.ApplyData{})
+			err = eval.TransactionGroup(stxn.WithAD())
 			if err != nil {
 				return err
 			}

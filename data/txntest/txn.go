@@ -320,13 +320,6 @@ func (tx Txn) SignedTxn() transactions.SignedTxn {
 	return transactions.SignedTxn{Txn: tx.Txn()}
 }
 
-// SignedTxnWithAD produces unsigned, transactions.SignedTxnWithAD
-// from the fields in this Txn.  This seemingly pointless operation
-// exists, again, for convenience when driving tests.
-func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
-	return transactions.SignedTxnWithAD{SignedTxn: tx.SignedTxn()}
-}
-
 // Group turns a list of Txns into a slice of SignedTxns with
 // GroupIDs set properly to make them a transaction group. The input
 // Txns are modified with the calculated GroupID.

@@ -43,13 +43,13 @@ func TestNewAppEvalParams(t *testing.T) {
 		Sender:   basics.Address{1, 2, 3, 4},
 		Receiver: basics.Address{4, 3, 2, 1},
 		Amount:   100,
-	}.SignedTxnWithAD()
+	}.SignedTxn().WithAD()
 
 	appcall1 := txntest.Txn{
 		Type:          protocol.ApplicationCallTx,
 		Sender:        basics.Address{1, 2, 3, 4},
 		ApplicationID: basics.AppIndex(1),
-	}.SignedTxnWithAD()
+	}.SignedTxn().WithAD()
 
 	appcall2 := appcall1
 	appcall2.Txn.ApplicationID = basics.AppIndex(2)

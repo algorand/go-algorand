@@ -212,7 +212,7 @@ int 1`
 
 			require.Len(t, eval.block.Payset, 0)
 
-			err = eval.TransactionGroup(txgroup)
+			err = eval.TransactionGroup(txgroup...)
 			require.NoError(t, err)
 			require.Len(t, eval.block.Payset, 4)
 
@@ -226,10 +226,7 @@ int 1`
 				Fee:         minFee,
 				GenesisHash: genHash,
 			}
-			secondTxGroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
-				secondPayTxn.Txn().Sign(keys[2]),
-			})
-			err = eval.TransactionGroup(secondTxGroup)
+			err = eval.TransactionGroup(secondPayTxn.Txn().Sign(keys[2]).WithAD())
 			require.NoError(t, err)
 
 			// Calculate expected balances dynamically based on proto.MinTxnFee
