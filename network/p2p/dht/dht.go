@@ -60,7 +60,7 @@ func dhtMode(cfg config.Local) dht.ModeOpt {
 		return dht.ModeAuto
 	case "":
 		// Default behavior: nodes with listen addresses should be discoverable
-		if cfg.NetAddress != "" || cfg.P2PHybridNetAddress != "" {
+		if cfg.IsGossipServer() {
 			return dht.ModeServer
 		}
 		return dht.ModeAuto
