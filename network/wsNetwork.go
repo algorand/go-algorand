@@ -1986,7 +1986,8 @@ func (wn *WebsocketNetwork) tryConnectReleaseAddr(addr, gossipAddr string) {
 func (wn *WebsocketNetwork) numOutgoingPending() int {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
-	return len(wn.tryConnectAddrs)
+	// tryConnectAddrs always populates two entries per pending connection: addr and gossipAddr
+	return len(wn.tryConnectAddrs) / 2
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
