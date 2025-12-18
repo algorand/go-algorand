@@ -91,9 +91,18 @@ func (w *whiteholeNetwork) RegisterHandlers(dispatch []network.TaggedMessageHand
 	w.mux.RegisterHandlers(dispatch)
 }
 
+func (w *whiteholeNetwork) RegisterValidatorHandlers(dispatch []network.TaggedMessageValidatorHandler) {
+	w.mux.RegisterValidatorHandlers(dispatch)
+}
+
 // ClearHandlers deregisters all the existing message handlers.
 func (w *whiteholeNetwork) ClearHandlers() {
 	w.mux.ClearHandlers([]network.Tag{})
+}
+
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (w *whiteholeNetwork) ClearValidatorHandlers() {
+	w.mux.ClearValidatorHandlers([]network.Tag{})
 }
 
 func (w *whiteholeNetwork) Address() (string, bool) {
