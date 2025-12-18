@@ -610,3 +610,57 @@ func TestReplacePeerList(t *testing.T) {
 		require.Contains(t, res, info)
 	}
 }
+
+// TestReplacePeerListRefreshesAddresses simulates addresses expiring
+// by calling ReplacePeerList + UpdateAddrs(newTTL=0) + ReplacePeerList again
+func TestReplacePeerListRefreshesAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	relaysSet := []string{"relay1:4160", "relay2:4160", "relay3:4160"}
+	infoRelaySet := make([]*peer.AddrInfo, 0)
+	for _, addr := range relaysSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoRelaySet = append(infoRelaySet, info)
+	}
+
+	ph, err := MakePhonebook(1, time.Millisecond)
+	require.NoError(t, err)
+
+	ph.ReplacePeerList(infoRelaySet, "default", phonebook.RelayRole)
+
+	for _, info := range infoRelaySet {
+		addrs := ph.Addrs(info.ID)
+		require.NotEmpty(t, addrs)
+	}
+
+	// Simulate addr book GC run by setting zero TTL
+	for _, info := range infoRelaySet {
+		ph.UpdateAddrs(info.ID, libp2p.AddressTTL, 0)
+	}
+
+	// Verify metadata still exists but addresses are now empty
+	for _, info := range infoRelaySet {
+		addrs := ph.Addrs(info.ID)
+		require.Empty(t, addrs)
+		data, err := ph.Get(info.ID, psmdkAddressData)
+		require.NoError(t, err)
+		require.NotNil(t, data)
+	}
+
+	// Re-add the peer list, which should refresh the addresses
+	ph.ReplacePeerList(infoRelaySet, "default", phonebook.RelayRole)
+
+	// Verify addresses are restored
+	for _, info := range infoRelaySet {
+		addrs := ph.Addrs(info.ID)
+		require.NotEmpty(t, addrs)
+	}
+
+	result := ph.GetAddresses(len(relaysSet), phonebook.RelayRole)
+	require.Equal(t, len(relaysSet), len(result))
+	for _, info := range result {
+		require.NotEmpty(t, info.Addrs)
+	}
+}
