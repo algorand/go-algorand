@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -150,4 +151,15 @@ func TestLogicSigEquality(t *testing.T) {
 		assert.False(t, ls.Equal(&empty), "Equal() seems to be disregarding something %+v", ls)
 	}
 
+}
+
+func TestHeaderFieldCount(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// When a field is added to the transaction header, this test will fail as
+	// a reminder to consider whether the field should be banned from use by
+	// stateproofs and/or free heartbeats. Adjust their wellFormed methods and
+	// then change the value in the test.
+	assert.Equal(t, 12, reflect.TypeFor[Header]().NumField())
 }
