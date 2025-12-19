@@ -240,14 +240,19 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 
 	}
 	for _, info := range addressesThey {
+		if len(info.Addrs) == 0 {
+			// skip entries without addresses
+			continue
+		}
 		data, _ := ps.Get(info.ID, psmdkAddressData)
 		if data != nil {
 			// we already have this
-			// update the networkName and role
+			// update the networkName and role, and refresh the address TTL
 			ad := data.(addressData)
 			ad.networkNames[networkName] = true
 			ad.roles.Add(role)
 			_ = ps.Put(info.ID, psmdkAddressData, ad)
+			ps.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 
 			// do not remove this entry
 			delete(removeItems, info.ID)
@@ -273,6 +278,10 @@ func (ps *PeerStore) AddPersistentPeers(addrInfo []*peer.AddrInfo, networkName s
 	defer ps.lock.Unlock()
 
 	for _, info := range addrInfo {
+		if len(info.Addrs) == 0 {
+			// skip entries without addresses
+			continue
+		}
 		data, _ := ps.Get(info.ID, psmdkAddressData)
 		if data != nil {
 			// we already have this.
@@ -280,6 +289,8 @@ func (ps *PeerStore) AddPersistentPeers(addrInfo []*peer.AddrInfo, networkName s
 			ad := data.(addressData)
 			ad.roles.AddPersistent(role)
 			_ = ps.Put(info.ID, psmdkAddressData, ad)
+			// refresh the address TTL
+			ps.AddAddrs(info.ID, info.Addrs, libp2p.PermanentAddrTTL)
 		} else {
 			// we don't have this item. add it.
 			ps.AddAddrs(info.ID, info.Addrs, libp2p.PermanentAddrTTL)
