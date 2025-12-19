@@ -430,7 +430,7 @@ func TestPendingJobOnRestart(t *testing.T) {
 
 	// wait for the notifiation from cleanup before checking the TestPendingJobOnRestart
 	<-mbp.notify
-	require.Error(t, mj.returnError)
+	require.ErrorContains(t, mj.returnError, `not processed, execpool service is shutting down`)
 	require.False(t, mj.processed)
 
 	<-callbackFeedback

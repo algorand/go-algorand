@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -77,7 +78,7 @@ func TestWalletCreation(t *testing.T) {
 	err = f.Client.DoV1Request(req3, &resp3)
 
 	// Should be an error
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestBlankWalletCreation(t *testing.T) {
@@ -161,7 +162,7 @@ func TestWalletRename(t *testing.T) {
 	err = f.Client.DoV1Request(req2, &resp2)
 
 	// Should be an error
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// Try to rename the wallet with the correct password
 	req3 := kmdapi.APIV1POSTWalletRenameRequest{
@@ -234,7 +235,7 @@ func TestWalletSessionRelease(t *testing.T) {
 	err = f.Client.DoV1Request(req2, &resp2)
 
 	// Error response
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// Should not return the wallet we created
 	a.NotEqual(resp2.WalletHandle.Wallet.Name, f.WalletName)
@@ -322,5 +323,5 @@ func TestWalletSessionExpiry(t *testing.T) {
 	err = f.Client.DoV1Request(req1, &resp1)
 
 	// Token should have expired
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }

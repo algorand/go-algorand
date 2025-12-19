@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -76,7 +77,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 
 	waitUntilProtocolUpgrades(a, &fixture, nodeClient)
 
-	a.Error(registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
+	errorcontains.CaptureError(t, registerKeyInto(&nodeClient, a, lastValid+2, protocol.ConsensusV30))
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid+3, protocol.ConsensusV31))
 }
 
@@ -94,7 +95,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
 	a.NoError(registerKeyInto(&nodeClient, a, lastValid, protocol.ConsensusV30))
-	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV31))
+	errorcontains.CaptureError(t, registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV31))
 }
 
 func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid basics.Round, ver protocol.ConsensusVersion) error {

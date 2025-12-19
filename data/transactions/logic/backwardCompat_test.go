@@ -413,7 +413,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 			if fs.array {
 				// "txn Accounts" is invalid, so skip evaluation
-				require.Error(t, err)
+				require.ErrorContains(t, err, `txn can only be used with`)
 				continue
 			} else {
 				require.NoError(t, err)

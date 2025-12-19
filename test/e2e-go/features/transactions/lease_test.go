@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -73,7 +74,7 @@ func TestLeaseTransactionsSameSender(t *testing.T) {
 
 	// submitting the second transaction should fail
 	_, err = client.BroadcastTransaction(stx2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// wait for the txids and check balance
 	txids := make(map[string]string)
@@ -223,7 +224,7 @@ func TestLeaseRegressionFaultyFirstValidCheckNew_2f3880f7(t *testing.T) {
 
 	// submitting the second transaction should fail
 	_, err = client.BroadcastTransaction(stx2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestLeaseTransactionsSameSenderDifferentLease(t *testing.T) {
@@ -428,7 +429,7 @@ func TestOverlappingLeases(t *testing.T) {
 
 	// submitting the second transaction should fail right away
 	_, err = client.BroadcastTransaction(stx2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// wait for the first tx to confirm
 	txids := make(map[string]string)
@@ -439,7 +440,7 @@ func TestOverlappingLeases(t *testing.T) {
 
 	// submitting the second transaction should still fail
 	_, err = client.BroadcastTransaction(stx2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// wait for a round after the first txn was confirmed, but before its
 	// lease has expired
@@ -447,7 +448,7 @@ func TestOverlappingLeases(t *testing.T) {
 
 	// submitting the second transaction should still fail
 	_, err = client.BroadcastTransaction(stx2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// wait for us to be building leaseStart + firstTxLeaseLife + 1, where
 	// the first txn's lease should have expired

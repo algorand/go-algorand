@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -310,7 +311,7 @@ end:
 
 	// `assertErrorResponse` confirms the _Result limit exceeded_ error response provides expected fields and values.
 	assertErrorResponse := func(err error, expectedCount, requestedMax uint64) {
-		a.Error(err)
+		errorcontains.CaptureError(t, err)
 		e := err.(client.HTTPError)
 		a.Equal(400, e.StatusCode)
 

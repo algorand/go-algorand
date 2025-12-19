@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -264,7 +265,7 @@ func TestAssetConfig(t *testing.T) {
 		// Creating more assets should return an error
 		tx, err = client.MakeUnsignedAssetCreateTx(1, false, manager, reserve, freeze, clawback, "toomany", "toomany", assetURL, assetMetadataHash, 0)
 		_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
-		a.Error(err)
+		errorcontains.CaptureError(t, err)
 		a.True(strings.Contains(err.Error(), "too many assets in account:"))
 	}
 
@@ -399,7 +400,7 @@ func TestAssetConfig(t *testing.T) {
 
 	// Should not be able to close account before destroying assets
 	_, err = client.SendPaymentFromWallet(wh, nil, account0, "", 0, 0, nil, reserve, 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "cannot close:"))
 	a.True(strings.Contains(err.Error(), "outstanding assets"))
 
@@ -676,11 +677,11 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 
 	// asset 3 (create + destroy) not available
 	_, err = client1.AssetInformation(assetID3)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	// sending it should fail
 	txSend, err = client1.MakeUnsignedAssetSendTx(assetID3, 0, account1, "", "")
 	_, err = helperFillSignBroadcast(client1, wh1, account1, txSend, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestAssetSend(t *testing.T) {
@@ -765,7 +766,7 @@ func TestAssetSend(t *testing.T) {
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 0, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "overspend"))
 	a.True(strings.Contains(err.Error(), "tried to spend"))
 
@@ -779,14 +780,14 @@ func TestAssetSend(t *testing.T) {
 	// after opting in, should succeed for non-frozen asset.
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "asset"))
 	a.True(strings.Contains(err.Error(), "missing from"))
 
 	// Clawback assets to an account that hasn't opted in should fail
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "asset"))
 	a.True(strings.Contains(err.Error(), "missing from"))
 
@@ -798,14 +799,14 @@ func TestAssetSend(t *testing.T) {
 	// Account hasn't opted in yet. sending will fail
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "asset"))
 	a.True(strings.Contains(err.Error(), "missing from"))
 
 	// Account hasn't opted in yet. clawback to will fail
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", account0)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "asset"))
 	a.True(strings.Contains(err.Error(), "missing from"))
 
@@ -822,7 +823,7 @@ func TestAssetSend(t *testing.T) {
 
 	tx, err = client.MakeUnsignedAssetSendTx(frozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "asset frozen in recipient"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
@@ -851,13 +852,13 @@ func TestAssetSend(t *testing.T) {
 	// Should not be able to send more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount 10"))
 
 	// Should not be able to clawback more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, account0, "", extra)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount 10"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
@@ -868,7 +869,7 @@ func TestAssetSend(t *testing.T) {
 	// be able to change frozen status)
 	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, true)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "freeze not allowed: sender"))
 
 	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, true)
@@ -887,7 +888,7 @@ func TestAssetSend(t *testing.T) {
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 1, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "frozen in"))
 
 	// Clawback should be able to claim money out of both frozen and non-frozen accounts,
@@ -900,7 +901,7 @@ func TestAssetSend(t *testing.T) {
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, account0, "", extra)
 	_, err = helperFillSignBroadcast(client, wh, account0, tx, err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	a.True(strings.Contains(err.Error(), "clawback not allowed: sender"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 5, account0, "", extra)

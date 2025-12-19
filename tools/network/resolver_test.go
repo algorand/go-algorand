@@ -75,7 +75,7 @@ func TestResolverWithInvalidDNSResolution(t *testing.T) {
 	timingOutContext, timingOutContextFunc := context.WithTimeout(context.Background(), time.Duration(100)*time.Millisecond)
 	defer timingOutContextFunc()
 	cname, addrs, err := resolver.LookupSRV(timingOutContext, "telemetry", "tls", "devnet.algodev.network")
-	require.Error(t, err)
+	require.ErrorContains(t, err, `dial udp 255.255.128.1:53: i/o timeout`)
 	require.Equal(t, "", cname)
 	require.True(t, len(addrs) == 0)
 	require.Equal(t, "255.255.128.1", resolver.EffectiveResolverDNS())

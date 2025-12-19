@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -123,7 +124,7 @@ func TestImportKey(t *testing.T) {
 	err = f.Client.DoV1Request(req1, &resp1)
 
 	// Should fail (duplicate key)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// List public keys
 	req2 := kmdapi.APIV1POSTKeyListRequest{
@@ -202,7 +203,7 @@ func TestExportKey(t *testing.T) {
 	}
 	resp3 := kmdapi.APIV1POSTKeyExportResponse{}
 	err = f.Client.DoV1Request(req3, &resp3)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestDeleteKey(t *testing.T) {
@@ -248,7 +249,7 @@ func TestDeleteKey(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1DELETEKeyResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// Try to delete the key
 	req3 := kmdapi.APIV1DELETEKeyRequest{
@@ -476,7 +477,7 @@ func TestMasterKeyImportExport(t *testing.T) {
 	}
 	resp2 := kmdapi.APIV1POSTMasterKeyExportResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// Export master key with correct password should succeed
 	req3 := kmdapi.APIV1POSTMasterKeyExportRequest{
