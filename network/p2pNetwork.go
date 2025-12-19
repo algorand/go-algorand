@@ -747,6 +747,20 @@ func addrInfoToWsPeerCore(n *P2PNetwork, addrInfo *peer.AddrInfo) (wsPeerCore, b
 	return peerCore, true
 }
 
+type LibP2PPeer struct {
+	Direction network.Direction
+	Addr      multiaddr.Multiaddr
+	Id        peer.ID
+}
+
+func (p *LibP2PPeer) GetAddress() string {
+	return p.Addr.String()
+}
+
+func (p *LibP2PPeer) GetID() string {
+	return p.Id.String()
+}
+
 // GetPeers returns a list of Peers we could potentially send a direct message to.
 func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 	peers := make([]Peer, 0)
@@ -760,6 +774,19 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				}
 			}
 			n.wsPeersLock.RUnlock()
+			if n.service != nil {
+				for _, c := range n.service.Conns() {
+					if dir := c.Stat().Direction; dir == network.DirOutbound {
+						peer := LibP2PPeer{
+							Direction: dir,
+							Addr:      c.RemoteMultiaddr(),
+							Id:        c.RemotePeer(),
+						}
+						peers = append(peers, Peer(peer))
+					}
+				}
+			}
+
 		case PeersPhonebookRelays:
 			const maxNodes = 100
 			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.RelayRole)
@@ -804,6 +831,18 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				}
 			}
 			n.wsPeersLock.RUnlock()
+			if n.service != nil {
+				for _, c := range n.service.Conns() {
+					if dir := c.Stat().Direction; dir == network.DirInbound {
+						peer := LibP2PPeer{
+							Direction: dir,
+							Addr:      c.RemoteMultiaddr(),
+							Id:        c.RemotePeer(),
+						}
+						peers = append(peers, Peer(peer))
+					}
+				}
+			}
 		}
 	}
 	return peers
