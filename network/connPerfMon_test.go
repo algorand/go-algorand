@@ -17,7 +17,9 @@
 package network
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -239,4 +241,83 @@ func TestNetworkAdvanceMonitor(t *testing.T) {
 	// update and verify within again
 	m.updateLastAdvance()
 	require.True(t, m.lastAdvancedWithin(500*time.Millisecond))
+}
+
+func TestConnMonitor_Simulate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Skip("Use locally for conn perf logic adjustment as needed")
+
+	msgs := make([]IncomingMessage, 1+2+3) // 1 + 2 + 3 messages from peers
+
+	data1 := make([]byte, 10) // peer 1 data, 8 bytes for uint64 + 2 bytes for randomness
+	data2 := make([]byte, 10) // peer 2 data
+	data3 := make([]byte, 10) // peer 3 data
+	sender1 := &wsPeer{wsPeerCore: wsPeerCore{rootURL: "peer1"}}
+	sender2 := &wsPeer{wsPeerCore: wsPeerCore{rootURL: "peer2"}}
+	sender3 := &wsPeer{wsPeerCore: wsPeerCore{rootURL: "peer3"}}
+
+	nextTickMsgs := func(tick uint64) []IncomingMessage {
+		binary.LittleEndian.PutUint64(data1, tick)
+		binary.LittleEndian.PutUint64(data2, tick)
+		binary.LittleEndian.PutUint64(data3, tick)
+
+		// peer1 sends no duplicates
+		msgs[0] = IncomingMessage{
+			Tag:    protocol.TxnTag,
+			Data:   data1,
+			Sender: sender1,
+		}
+		// peer2 sends 2 duplicates
+		for i := 0; i < 2; i++ {
+			msgs[1+i] = IncomingMessage{
+				Tag:    protocol.TxnTag,
+				Data:   data2,
+				Sender: sender2,
+			}
+		}
+		// peer3 sends 3 "smart" duplicates (like txn with a changed note) - first the same msg and two other slightly different
+		for i := 0; i < 3; i++ {
+			data3[9] = byte(i) // change last byte to make data different
+			msgs[3+i] = IncomingMessage{
+				Tag:    protocol.TxnTag,
+				Data:   data3,
+				Sender: sender3,
+			}
+		}
+
+		// shuffle to simulate different receiving orders
+		rand.Shuffle(len(msgs), func(i, j int) {
+			msgs[i], msgs[j] = msgs[j], msgs[i]
+		})
+		now := time.Now().UnixNano()
+		for i := range msgs {
+			msgs[i].Received = now + int64(i*10)
+		}
+		return msgs
+	}
+
+	i := uint64(0)
+	prevStage := -1
+	mon := makeConnectionPerformanceMonitor([]Tag{protocol.TxnTag})
+	mon.Reset([]Peer{sender1, sender2, sender3})
+
+	for mon.stage != pmStageStopped {
+		if int(mon.stage) != prevStage {
+			t.Logf("Monitor advanced to stage %d at tick %d\n", mon.stage, i)
+			prevStage = int(mon.stage)
+		}
+		msgs := nextTickMsgs(i)
+		for _, msg := range msgs {
+			mon.Notify(&msg)
+		}
+		i++
+	}
+
+	// at the very end get stats
+	stats := mon.GetPeersStatistics()
+	t.Logf("Got %d messages over %d ticks\n", mon.msgCount, i)
+	for _, ps := range stats.peerStatistics {
+		t.Logf("%s: delay=%d firstMessagePercentage=%.2f\n", ps.peer.(*wsPeer).rootURL, ps.peerDelay, ps.peerFirstMessage)
+	}
 }
