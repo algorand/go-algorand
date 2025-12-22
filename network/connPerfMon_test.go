@@ -293,7 +293,7 @@ func shuffleUniform[T any](slice []T) {
 func TestConnMonitor_Simulate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// t.Skip("Use locally for conn perf logic adjustment as needed")
+	t.Skip("Use locally for conn perf logic adjustment as needed")
 
 	const (
 		numNoDupPeers   = 2 // peers that provide only unique msgs
