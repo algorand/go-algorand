@@ -246,45 +246,77 @@ func TestNetworkAdvanceMonitor(t *testing.T) {
 func TestConnMonitor_Simulate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("Use locally for conn perf logic adjustment as needed")
+	// t.Skip("Use locally for conn perf logic adjustment as needed")
 
-	msgs := make([]IncomingMessage, 1+2+3) // 1 + 2 + 3 messages from peers
+	const (
+		numNoDupPeers   = 2 // peers that provide only unique msgs
+		numDupPeers     = 3 // peers that provide duplicate msgs
+		numDupPlusPeers = 3 // peers that provide "smart" duplicate msgs (like txn with changed note field)
+		dupRatio        = 2 // each duplicate peer sends this many duplicates per message
+		smartDupRatio   = 3 // each "smart" duplicate peer sends this many duplicates per message (including the original)
+	)
+	const numMsgsPerTick = 1*numNoDupPeers + (numDupPeers * dupRatio) + (numDupPlusPeers * smartDupRatio)
 
-	data1 := make([]byte, 10) // peer 1 data, 8 bytes for uint64 + 2 bytes for randomness
-	data2 := make([]byte, 10) // peer 2 data
-	data3 := make([]byte, 10) // peer 3 data
-	sender1 := &wsPeer{wsPeerCore: wsPeerCore{rootURL: "peer1"}}
-	sender2 := &wsPeer{wsPeerCore: wsPeerCore{rootURL: "peer2"}}
-	sender3 := &wsPeer{wsPeerCore: wsPeerCore{rootURL: "peer3"}}
+	msgs := make([]IncomingMessage, numMsgsPerTick)
+	data := make([][]byte, numMsgsPerTick)
+	for i := range numMsgsPerTick {
+		data[i] = make([]byte, 10) // each msg data, 8 bytes for uint64 + 2 bytes for randomness
+	}
+
+	senders := make([]*wsPeer, numNoDupPeers+numDupPeers+numDupPlusPeers)
+	for i := range numNoDupPeers {
+		senders[i] = &wsPeer{wsPeerCore: wsPeerCore{rootURL: fmt.Sprintf("noDupPeer%d", i+1)}}
+	}
+	for i := range numDupPeers {
+		senders[numNoDupPeers+i] = &wsPeer{wsPeerCore: wsPeerCore{rootURL: fmt.Sprintf("dupPeer%d", i+1)}}
+	}
+	for i := range numDupPlusPeers {
+		senders[numNoDupPeers+numDupPeers+i] = &wsPeer{wsPeerCore: wsPeerCore{rootURL: fmt.Sprintf("dupPlusPeer%d", i+1)}}
+	}
 
 	nextTickMsgs := func(tick uint64) []IncomingMessage {
-		binary.LittleEndian.PutUint64(data1, tick)
-		binary.LittleEndian.PutUint64(data2, tick)
-		binary.LittleEndian.PutUint64(data3, tick)
+		for i := range data {
+			binary.LittleEndian.PutUint64(data[i], tick)
+		}
 
-		// peer1 sends no duplicates
-		msgs[0] = IncomingMessage{
-			Tag:    protocol.TxnTag,
-			Data:   data1,
-			Sender: sender1,
-		}
-		// peer2 sends 2 duplicates
-		for i := 0; i < 2; i++ {
-			msgs[1+i] = IncomingMessage{
+		// noDup peers
+		for i := range numNoDupPeers {
+			msgs[i] = IncomingMessage{
 				Tag:    protocol.TxnTag,
-				Data:   data2,
-				Sender: sender2,
+				Data:   data[i],
+				Sender: senders[i],
 			}
 		}
-		// peer3 sends 3 "smart" duplicates (like txn with a changed note) - first the same msg and two other slightly different
-		for i := 0; i < 3; i++ {
-			data3[9] = byte(i) // change last byte to make data different
-			msgs[3+i] = IncomingMessage{
-				Tag:    protocol.TxnTag,
-				Data:   data3,
-				Sender: sender3,
+
+		// dup peers
+		for i := range numDupPeers {
+			for j := 0; j < dupRatio; j++ {
+				msgs[numNoDupPeers+i*dupRatio+j] = IncomingMessage{
+					Tag:    protocol.TxnTag,
+					Data:   data[numNoDupPeers+i],
+					Sender: senders[numNoDupPeers+i],
+				}
 			}
 		}
+
+		// "smart" dup peers
+		for i := range numDupPlusPeers {
+			for j := 0; j < smartDupRatio; j++ {
+				// change last byte to make data different
+				idx := numNoDupPeers + numDupPeers*dupRatio + i*smartDupRatio + j
+				data[idx][9] = byte(j)
+
+				msgs[idx] = IncomingMessage{
+					Tag:    protocol.TxnTag,
+					Data:   data[idx],
+					Sender: senders[numNoDupPeers+numDupPeers+i],
+				}
+			}
+		}
+
+		// for i := range msgs {
+		// 	t.Logf("tick %d: msg from %s data=%x\n", tick, msgs[i].Sender.(*wsPeer).rootURL, msgs[i].Data)
+		// }
 
 		// shuffle to simulate different receiving orders
 		rand.Shuffle(len(msgs), func(i, j int) {
@@ -297,11 +329,15 @@ func TestConnMonitor_Simulate(t *testing.T) {
 		return msgs
 	}
 
+	mon := makeConnectionPerformanceMonitor([]Tag{protocol.TxnTag})
+	peers := make([]Peer, len(senders))
+	for i := range senders {
+		peers[i] = senders[i]
+	}
+	mon.Reset(peers)
+
 	i := uint64(0)
 	prevStage := -1
-	mon := makeConnectionPerformanceMonitor([]Tag{protocol.TxnTag})
-	mon.Reset([]Peer{sender1, sender2, sender3})
-
 	for mon.stage != pmStageStopped {
 		if int(mon.stage) != prevStage {
 			t.Logf("Monitor advanced to stage %d at tick %d\n", mon.stage, i)
