@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -243,6 +244,52 @@ func TestNetworkAdvanceMonitor(t *testing.T) {
 	require.True(t, m.lastAdvancedWithin(500*time.Millisecond))
 }
 
+// shuffleNormal reorders elements by assigning each element a priority based on
+// normal distribution centered at its original index, then sorting by priority.
+// The stddevFactor controls how much elements can move from their original position:
+// - smaller values (e.g., 0.1) keep elements closer to original positions
+// - larger values (e.g., 1.0) allow more mixing
+// - very large values approach uniform distribution behavior
+func shuffleNormal[T any](slice []T, stddevFactor float64) {
+	n := len(slice)
+	if n <= 1 {
+		return
+	}
+
+	// Each element gets a priority = originalIndex + normalRandom * stddev
+	// where stddev = stddevFactor * n
+	stddev := stddevFactor * float64(n)
+
+	type indexedItem struct {
+		original int
+		priority float64
+		item     T
+	}
+
+	items := make([]indexedItem, n)
+	for i := range slice {
+		items[i] = indexedItem{
+			original: i,
+			priority: float64(i) + rand.NormFloat64()*stddev,
+			item:     slice[i],
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].priority < items[j].priority
+	})
+
+	for i := range slice {
+		slice[i] = items[i].item
+	}
+}
+
+func shuffleUniform[T any](slice []T) {
+	rand.Shuffle(len(slice), func(i, j int) {
+		slice[i], slice[j] = slice[j], slice[i]
+	})
+}
+
 func TestConnMonitor_Simulate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -274,7 +321,7 @@ func TestConnMonitor_Simulate(t *testing.T) {
 		senders[numNoDupPeers+numDupPeers+i] = &wsPeer{wsPeerCore: wsPeerCore{rootURL: fmt.Sprintf("dupPlusPeer%d", i+1)}}
 	}
 
-	nextTickMsgs := func(tick uint64) []IncomingMessage {
+	nextTickMsgs := func(tick uint64, shuffleFn func([]IncomingMessage)) []IncomingMessage {
 		for i := range data {
 			binary.LittleEndian.PutUint64(data[i], tick)
 		}
@@ -319,9 +366,8 @@ func TestConnMonitor_Simulate(t *testing.T) {
 		// }
 
 		// shuffle to simulate different receiving orders
-		rand.Shuffle(len(msgs), func(i, j int) {
-			msgs[i], msgs[j] = msgs[j], msgs[i]
-		})
+		shuffleFn(msgs)
+
 		now := time.Now().UnixNano()
 		for i := range msgs {
 			msgs[i].Received = now + int64(i*10)
@@ -329,31 +375,50 @@ func TestConnMonitor_Simulate(t *testing.T) {
 		return msgs
 	}
 
-	mon := makeConnectionPerformanceMonitor([]Tag{protocol.TxnTag})
-	peers := make([]Peer, len(senders))
-	for i := range senders {
-		peers[i] = senders[i]
-	}
-	mon.Reset(peers)
-
-	i := uint64(0)
-	prevStage := -1
-	for mon.stage != pmStageStopped {
-		if int(mon.stage) != prevStage {
-			t.Logf("Monitor advanced to stage %d at tick %d\n", mon.stage, i)
-			prevStage = int(mon.stage)
-		}
-		msgs := nextTickMsgs(i)
-		for _, msg := range msgs {
-			mon.Notify(&msg)
-		}
-		i++
+	tests := []struct {
+		name      string
+		shuffleFn func([]IncomingMessage)
+	}{
+		{
+			name:      "normalShuffle",
+			shuffleFn: func(msgs []IncomingMessage) { shuffleNormal(msgs, 0.5) },
+		},
+		{
+			name:      "uniformShuffle",
+			shuffleFn: shuffleUniform[IncomingMessage],
+		},
 	}
 
-	// at the very end get stats
-	stats := mon.GetPeersStatistics()
-	t.Logf("Got %d messages over %d ticks\n", mon.msgCount, i)
-	for _, ps := range stats.peerStatistics {
-		t.Logf("%s: delay=%d firstMessagePercentage=%.2f\n", ps.peer.(*wsPeer).rootURL, ps.peerDelay, ps.peerFirstMessage)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			mon := makeConnectionPerformanceMonitor([]Tag{protocol.TxnTag})
+			peers := make([]Peer, len(senders))
+			for i := range senders {
+				peers[i] = senders[i]
+			}
+			mon.Reset(peers)
+
+			i := uint64(0)
+			prevStage := -1
+			for mon.stage != pmStageStopped {
+				if int(mon.stage) != prevStage {
+					t.Logf("Monitor advanced to stage %d at tick %d\n", mon.stage, i)
+					prevStage = int(mon.stage)
+				}
+				msgs := nextTickMsgs(i, test.shuffleFn)
+				for _, msg := range msgs {
+					mon.Notify(&msg)
+				}
+				i++
+			}
+
+			// at the very end get stats
+			stats := mon.GetPeersStatistics()
+			t.Logf("%s:  %d messages over %d ticks\n", test.name, mon.msgCount, i)
+			for _, ps := range stats.peerStatistics {
+				t.Logf("%s: delay=%d firstMessagePercentage=%.2f\n", ps.peer.(*wsPeer).rootURL, ps.peerDelay, ps.peerFirstMessage)
+			}
+		})
 	}
 }
