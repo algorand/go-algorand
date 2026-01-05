@@ -963,7 +963,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		action = network.Ignore
 	}
 
-	if hybridNet, ok := handler.net.(HybridRelayer); ok {
+	if hybridNet, ok := handler.net.(HybridRelayer); ok && action == network.Accept {
 		_ = hybridNet.BridgeP2PToWS(handler.ctx, protocol.TxnTag, reencoded, false, wi.rawmsg.Sender)
 	}
 
