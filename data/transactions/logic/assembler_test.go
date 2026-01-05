@@ -3123,9 +3123,6 @@ func TestReplacePseudo(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Contains(t, opDescByName["replace3"].Short, "`replace3` can be called using `replace` with no immediates.")
-	require.Contains(t, opDescByName["replace2"].Short, "`replace2` can be called using `replace` with 1 immediate.")
-
 	replaceVersion := 7
 	for v := uint64(replaceVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)

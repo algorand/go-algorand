@@ -199,7 +199,7 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 				Name:  "keyword.other.teal",
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(loading, "|")),
 			})
-		case "State Access", "Box Access":
+		case "Block Access", "Account Access", "Asset Access", "Application Access", "Box Access":
 			allAccess = append(allAccess, names...)
 		// For these, accumulate into allArithmetics,
 		// and only add to keyword.Patterns later, when all

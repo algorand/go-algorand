@@ -486,8 +486,6 @@ func (spec *OpSpec) deadens() bool {
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
-// Any changes should be reflected in README_in.md which serves as the language spec.
-//
 // Note: assembly can specialize an Any return type if known at
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{

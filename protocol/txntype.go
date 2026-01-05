@@ -50,6 +50,9 @@ const (
 	// HeartbeatTx demonstrates the account is alive
 	HeartbeatTx TxType = "hb"
 
+	// Remember to add to TxnTypeNames and txnTypeLongNames in logic/fields.go when
+	// adding a new transaction type!
+
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )
