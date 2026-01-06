@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -963,7 +963,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		action = network.Ignore
 	}
 
-	if hybridNet, ok := handler.net.(HybridRelayer); ok {
+	if hybridNet, ok := handler.net.(HybridRelayer); ok && action == network.Accept {
 		_ = hybridNet.BridgeP2PToWS(handler.ctx, protocol.TxnTag, reencoded, false, wi.rawmsg.Sender)
 	}
 
