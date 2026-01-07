@@ -972,7 +972,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 1,
@@ -1016,7 +1016,7 @@
           "Comment": "a global field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "global"
+          "Reference": "global Fields"
         }
       ],
       "IntroducedVersion": 1,
@@ -1142,7 +1142,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 1,
@@ -1208,13 +1208,13 @@
         "address"
       ],
       "DocCost": "1",
-      "Doc": "Ith value of the array field F of the current transaction\n`txna` can be called using `txn` with 2 immediates.",
+      "Doc": "Ith value of the array field F of the current transaction",
       "ImmediateNote": [
         {
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         },
         {
           "Comment": "transaction field array index",
@@ -1243,7 +1243,7 @@
         "address"
       ],
       "DocCost": "1",
-      "Doc": "Ith value of the array field F from the Tth transaction in the current group\n`gtxna` can be called using `gtxn` with 3 immediates.",
+      "Doc": "Ith value of the array field F from the Tth transaction in the current group",
       "ImmediateNote": [
         {
           "Comment": "transaction group index",
@@ -1254,7 +1254,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         },
         {
           "Comment": "transaction field array index",
@@ -1479,7 +1479,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Account Access"
       ]
     },
     {
@@ -1498,7 +1498,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1517,7 +1517,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1538,7 +1538,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1556,7 +1556,7 @@
       "DocExtra": "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1576,7 +1576,7 @@
       "DocExtra": "params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1593,7 +1593,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1608,7 +1608,7 @@
       "Doc": "write B to key A in the global state of the current application",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1624,7 +1624,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1639,7 +1639,7 @@
       "DocExtra": "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -1670,12 +1670,12 @@
           "Comment": "asset holding field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "asset_holding"
+          "Reference": "asset_holding Fields"
         }
       ],
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Asset Access"
       ]
     },
     {
@@ -1723,12 +1723,12 @@
           "Comment": "asset params field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "asset_params"
+          "Reference": "asset_params Fields"
         }
       ],
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Asset Access"
       ]
     }
   ]
