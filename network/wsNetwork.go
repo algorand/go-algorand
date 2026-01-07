@@ -641,7 +641,7 @@ func (wn *WebsocketNetwork) setup() error {
 	if wn.config.EnableIncomingMessageFilter {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
-	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
+	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 	wn.outgoingConnsCloser = makeOutgoingConnsCloser(wn.log, wn, wn.connPerfMonitor, cliqueResolveInterval)
 
 	// set our supported versions

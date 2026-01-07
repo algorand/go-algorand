@@ -393,7 +393,7 @@ func (n *P2PNetwork) setup() error {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	n.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
+	n.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 	n.outgoingConnsCloser = makeOutgoingConnsCloser(n.log, n, n.connPerfMonitor, cliqueResolveInterval)
 
 	return nil
