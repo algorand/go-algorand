@@ -196,7 +196,7 @@ func (pm *connectionPerformanceMonitor) Notify(msg *IncomingMessage) {
 	}
 }
 
-// notifyPresync waits until pmPresyncTime has passed and monitor the last arrival time
+// notifyPresync waits until pmPresyncTime has passed and monitors the last arrival time
 // of messages from each of the peers.
 func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 	pm.peerLastMsgTime[msg.Sender] = msg.Received
