@@ -1322,7 +1322,7 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			GenesisHash:   prev.GenesisHash,
 			Branch:        prev.Hash(),
 			Branch512:     prev.Hash512(),
-			Load:          500_000, // irrelevant
+			Load:          750_000, // half-way between mid-point and full, so causes 5% fee bump
 			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
 		}
 		current.CurrentProtocol = protoCongestion
@@ -1331,16 +1331,29 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 		// upgrade, because previous round Load appears to be zero (though
 		// actually it simply wasn't measured).
 		require.NoError(t, current.PreCheck(prev))
+		require.Zero(t, current.CongestionTax)
 
 		// Should fail with non-zero CongestionTax, but now the complaint is
 		// that Tax is wrong, not that it shouldn't appear.
 		current.CongestionTax = 1
 		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax: 0.000001 != 0.000000")
-
-		// PreCheck does not check if Load is correct, only that it should not appear when disabled.
 		current.CongestionTax = 0
-		current.Load = 500_000
-		require.NoError(t, current.PreCheck(prev))
+
+		// current's Load wants to make the next basic fee = 1.05 * minfee. So
+		// next tax should be 50,000 micros.
+		next := BlockHeader{
+			Round:         current.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        current.Hash(),
+			Branch512:     current.Hash512(),
+			Load:          10, // irrelevant
+			CongestionTax: NextCongestionTax(current.Load, current.CongestionTax),
+		}
+		next.CurrentProtocol = protoCongestion
+		require.NoError(t, next.PreCheck(current))
+		require.EqualValues(t, 50_000, next.CongestionTax)
+
 	})
 
 }
