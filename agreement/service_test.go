@@ -510,6 +510,9 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 	e.parent.disconnect(e.id, sourceID)
 }
 
+func (e *testingNetworkEndpoint) Ignore(h MessageHandle) {
+}
+
 func (e *testingNetworkEndpoint) Start() {}
 
 type activityMonitor struct {
