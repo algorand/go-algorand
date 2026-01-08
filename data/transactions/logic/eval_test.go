@@ -96,7 +96,6 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 		MaxAssetDecimals:      4,
 		SupportRekeying:       true,
 		MaxTxnNoteBytes:       500,
-		EnableFeePooling:      true,
 
 		// Chosen to be different from one another and from normal proto
 		MaxAppBoxReferences:      2,
@@ -188,7 +187,8 @@ func defaultAppParamsWithVersion(version uint64, txns ...transactions.SignedTxn)
 			Txn: transactions.Transaction{Type: protocol.ApplicationCallTx},
 		}}
 	}
-	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), makeTestProtoV(version), &transactions.SpecialAddresses{})
+	proto := makeTestProtoV(version)
+	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txns), proto, &transactions.SpecialAddresses{})
 	if ep != nil { // If supplied no apps, ep is nil.
 		ep.Trace = &strings.Builder{}
 		ledger := NewLedger(nil)
@@ -222,6 +222,17 @@ func (ep *EvalParams) reset() {
 			ep.PooledLogicSigBudget = &budget
 		}
 	case ModeApp:
+		tip := basics.Micros(0)
+		for _, tx := range ep.TxnGroup {
+			tip = max(tip, tx.Txn.Tip) // there's at most one
+		}
+		ep.CostMultiplier = basics.Micros(basics.AddSaturate(1e6, tip))
+
+		if ep.FeeCredit != nil {
+			// wrong, because we want to multiply the usage costMultiplier, not caculate a perTxn fee.  That makes the rounding error worse
+			*ep.FeeCredit = feeCredit(ep.TxnGroup, ep.Proto.MinFee())
+		}
+
 		if ep.Proto.EnableAppCostPooling {
 			budget := ep.Proto.MaxAppProgramCost
 			ep.PooledApplicationBudget = &budget

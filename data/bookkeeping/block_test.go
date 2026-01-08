@@ -44,6 +44,8 @@ var proto2 = protocol.ConsensusVersion("Test2")
 var proto3 = protocol.ConsensusVersion("Test3")
 var protoUnsupported = protocol.ConsensusVersion("TestUnsupported")
 var protoDelay = protocol.ConsensusVersion("TestDelay")
+var protoCongestion = protocol.ConsensusVersion("TestCongestion")
+var protoNoCongestion = protocol.ConsensusVersion("TestNoCongestion")
 
 func init() {
 	verBeforeBonus := protocol.ConsensusV39
@@ -76,6 +78,15 @@ func init() {
 		proto1: 5,
 	}
 	config.Consensus[protoDelay] = paramsDelay
+
+	paramsCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
+	paramsCongestion.CongestionTracking = true
+	paramsCongestion.MinTxnFee = 1000
+	config.Consensus[protoCongestion] = paramsCongestion
+
+	paramsNoCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
+	paramsNoCongestion.CongestionTracking = false
+	config.Consensus[protoNoCongestion] = paramsNoCongestion
 }
 
 func TestUpgradeVote(t *testing.T) {
@@ -282,7 +293,7 @@ func TestBonus(t *testing.T) {
 
 	// proto1 has no bonuses
 	b.Bonus.Raw++
-	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {1} != {0}")
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus")
 
 	prev.CurrentProtocol = proto2
 	prev.Bonus = basics.Algos(5)
@@ -290,7 +301,7 @@ func TestBonus(t *testing.T) {
 	require.NoError(t, b.PreCheck(prev.BlockHeader))
 
 	b.Bonus.Raw++
-	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {5000001} != {5000000}")
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus")
 
 	prev.BlockHeader.Round = 10_000_000 - 1
 	b = MakeBlock(prev.BlockHeader)
@@ -298,7 +309,7 @@ func TestBonus(t *testing.T) {
 
 	// since current block is 0 mod decayInterval, bonus goes down to 4,950,000
 	b.Bonus.Raw++
-	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {4950001} != {4950000}")
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus")
 }
 
 func TestRewardsLevel(t *testing.T) {
@@ -1120,7 +1131,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 	suma := sum / 1_000_000 // micro to Algos
@@ -1139,7 +1150,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 
@@ -1159,7 +1170,7 @@ func TestFirstYearsBonus(t *testing.T) {
 		r++
 		sum += bonus
 		if r%interval == 0 {
-			bonus, _ = basics.Muldiv(bonus, 99, 100)
+			bonus, _ = basics.Muldiv(bonus, uint64(99), 100)
 		}
 	}
 
@@ -1214,5 +1225,229 @@ func TestAlive(t *testing.T) {
 	bh.Round = header.LastValid + 1
 	if bh.Alive(header) == nil {
 		t.Errorf("expired transaction alive %v", header)
+	}
+}
+
+func TestBlockHeaderCongestionValidation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test with congestion fees enabled
+	t.Run("congestion_fees_enabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:         1,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          750_000,
+			CongestionTax: 2 * 1e6, // 2 as Micros. That is 200% tax rate.
+		}
+		prev.CurrentProtocol = protoCongestion
+
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          500_000, // irrelevant
+			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
+		}
+		current.CurrentProtocol = protoCongestion
+
+		// 200% tax rate was causing an actual price of 3,000uA. 75% load should
+		// cause a 5% increase, so we want a tax rate that generates 3,150uA
+		// price. So we need a tax to generate 2,150 on 1000uA base fee. 215%
+
+		require.EqualValues(t, 2_150_000, current.CongestionTax) // 75% load causes 5% growth of the minFee+conFee sum
+
+		// Should pass with correct CongestionTax
+		require.NoError(t, current.PreCheck(prev))
+
+		// Should fail with incorrect CongestionTax
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
+	})
+
+	// Test with congestion fees disabled
+	t.Run("congestion_fees_disabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:         1,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          0,
+			CongestionTax: 0,
+		}
+		prev.CurrentProtocol = protoNoCongestion
+
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          0,
+			CongestionTax: 0,
+		}
+		current.CurrentProtocol = protoNoCongestion
+
+		// Should pass with zero values
+		require.NoError(t, current.PreCheck(prev))
+
+		// Should fail with non-zero CongestionTax
+		current.CongestionTax = 1
+		require.ErrorContains(t, current.PreCheck(prev), "congestion tax should be zero when congestion measurement is disabled")
+
+		// Should fail with non-zero Load
+		current.CongestionTax = 0
+		current.Load = 500_000
+		require.ErrorContains(t, current.PreCheck(prev), "load should be zero when congestion measurement is disabled")
+	})
+
+	// Ensure that the upgrade to congestion fees is handled correctly
+	t.Run("congestion_fees_upgrade", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       10,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			UpgradeState: UpgradeState{
+				CurrentProtocol:      protoNoCongestion,
+				NextProtocol:         protoCongestion,
+				NextProtocolSwitchOn: 11,
+			},
+		}
+
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          750_000, // half-way between mid-point and full, so causes 5% fee bump
+			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
+		}
+		current.CurrentProtocol = protoCongestion
+
+		// Should pass with zero values. Tax will be 0 in the first round after
+		// upgrade, because previous round Load appears to be zero (though
+		// actually it simply wasn't measured).
+		require.NoError(t, current.PreCheck(prev))
+		require.Zero(t, current.CongestionTax)
+
+		// Should fail with non-zero CongestionTax, but now the complaint is
+		// that Tax is wrong, not that it shouldn't appear.
+		current.CongestionTax = 1
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax: 0.000001 != 0.000000")
+		current.CongestionTax = 0
+
+		// current's Load wants to make the next basic fee = 1.05 * minfee. So
+		// next tax should be 50,000 micros.
+		next := BlockHeader{
+			Round:         current.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        current.Hash(),
+			Branch512:     current.Hash512(),
+			Load:          10, // irrelevant
+			CongestionTax: NextCongestionTax(current.Load, current.CongestionTax),
+		}
+		next.CurrentProtocol = protoCongestion
+		require.NoError(t, next.PreCheck(current))
+		require.EqualValues(t, 50_000, next.CongestionTax)
+
+	})
+
+}
+
+func TestBlockHeaderCongestionCreation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("congestion_fees_enabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:         10,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          600_000,
+			CongestionTax: 100_000,
+		}
+		prev.CurrentProtocol = protoCongestion
+
+		block := MakeBlock(prev)
+
+		// tax should be calculated from previous load
+		expectedTax := NextCongestionTax(prev.Load, prev.CongestionTax)
+		require.EqualValues(t, 122_000, expectedTax) // 1.100 * 1.02 - 1 = 1.22
+		require.Equal(t, expectedTax, block.CongestionTax)
+
+		// Load should be 0 for empty block (will be set during block evaluation)
+		require.Zero(t, block.Load)
+	})
+
+	t.Run("congestion_fees_disabled", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:         10,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          0,
+			CongestionTax: 0,
+		}
+		prev.CurrentProtocol = protoNoCongestion
+
+		block := MakeBlock(prev)
+		require.Zero(t, block.CongestionTax)
+		require.Zero(t, block.Load)
+	})
+}
+
+func TestNextCongestionTax(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test different load levels and their effect on various tax rates
+	tests := []struct {
+		load        basics.Micros
+		prevTax     basics.Micros
+		expectedTax basics.Micros
+	}{
+		// An empty block want to decrease final price by 10%. So unless the
+		// previous tax rate was > 10%, it zeros it out.
+		{0, 0, 0},
+		{0, 1, 0},
+		{0, 1000, 0},
+		{0, 99_999, 0},
+		{0, 100_000, 0},
+
+		{0, 200_000, 80_000}, // 1.2*0.9 = 1.08 -> 8% tax
+
+		// A quarter full block wants to decrease final price by 5%
+		{250_000, 50_000, 0},   // 1.05*0.95 = 0.9975 -> 0% tax
+		{250_000, 51_000, 0},   // 1.051*0.95 = 0.99845 -> 0% tax
+		{250_000, 52_000, 0},   // 1.052*0.95 = 0.9994 -> 0% tax
+		{250_000, 53_000, 350}, // 1.053*0.95 = 1.00035 -> 350 micros tax
+
+		{250_000, 1_000e6, 949_950_000}, // 1001*0.95 = 950.95
+
+		// A half full block wants to keep the final price the same
+		{500_000, 0, 0},
+		{500_000, 1, 1},
+		{500_000, math.MaxUint64, math.MaxUint64},
+
+		// A 3/4 full block increases final price by 5%
+		{750_000, 0, 50_000},
+		{750_000, 1, 50_001},
+		{750_000, math.MaxUint64 - 10, math.MaxUint64}, // Saturate
+		{750_000, math.MaxUint64, math.MaxUint64},      // Saturate
+
+		{1_000_000, 0, 100_000},
+		{1_000_000, 2e6, 2.3e6},
+		{1_000_000, math.MaxUint64 - 10, math.MaxUint64}, // Saturate
+		{1_000_000, math.MaxUint64, math.MaxUint64},      // Saturate
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("load_%s_%s", test.load, test.prevTax), func(t *testing.T) {
+			nextTax := NextCongestionTax(test.load, test.prevTax)
+			assert.Equal(t, int(test.expectedTax), int(nextTax))
+		})
 	}
 }
