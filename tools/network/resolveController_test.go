@@ -118,6 +118,6 @@ func TestRealNamesWithResolver(t *testing.T) {
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 		_, err = r.LookupIPAddr(timeoutCtx, example)
 		cancel()
-		a.Error(err)
+		require.Error(t, err) // timeout or connection refused - error message varies by platform
 	}
 }

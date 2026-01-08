@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -127,7 +128,7 @@ func TestSendingNotClosingAccountErrs(t *testing.T) {
 	a.NoError(err)
 	amt := someBal - params.MinFee - 1
 	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.MinFee, amt, nil, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestClientCanGetPendingTransactions(t *testing.T) {

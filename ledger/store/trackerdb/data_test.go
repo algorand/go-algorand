@@ -1269,10 +1269,10 @@ func TestBaseAccountDataDecodeEmpty(t *testing.T) {
 	var b BaseAccountData
 
 	err := protocol.Decode([]byte{}, &b)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `msgp: too few bytes left to read object`)
 
 	err = protocol.Decode(nil, &b)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `msgp: too few bytes left to read object`)
 
 	err = protocol.Decode([]byte{0x80}, &b)
 	require.NoError(t, err)

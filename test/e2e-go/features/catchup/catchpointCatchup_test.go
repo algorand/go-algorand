@@ -45,6 +45,7 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -814,7 +815,7 @@ func TestReadyEndpoint(t *testing.T) {
 	// The primary node is catching up with its previous catchpoint
 	// Its status contain a catchpoint it is catching-up against,
 	// so it should not be ready, and ready-ness endpoint should 503 err.
-	a.Error(fixture.GetAlgodClientForController(primaryNode).ReadyCheck())
+	errorcontains.CaptureError(t, fixture.GetAlgodClientForController(primaryNode).ReadyCheck())
 
 	status1, err := client1.Status()
 	a.NoError(err)
@@ -957,7 +958,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 
 	// the transaction should not be confirmed yet
 	_, err = fixture.WaitForConfirmedTxn(0, tx.ID().String())
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// Wait for the catchup
 	for t := 0; t < 10; t++ {

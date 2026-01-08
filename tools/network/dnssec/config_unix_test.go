@@ -33,7 +33,7 @@ func TestConfigEmpty(t *testing.T) {
 	a := require.New(t)
 
 	s, tm, err := systemConfig(nil)
-	a.Error(err)
+	require.ErrorContains(t, err, `empty config reader`)
 	a.Empty(s)
 	a.Empty(tm)
 

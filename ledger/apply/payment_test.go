@@ -147,7 +147,7 @@ func TestPaymentSelfClose(t *testing.T) {
 			CloseRemainderTo: self,
 		},
 	}
-	require.Error(t, tx.WellFormed(spec, config.Consensus[protocol.ConsensusCurrentVersion]))
+	require.ErrorContains(t, tx.WellFormed(spec, config.Consensus[protocol.ConsensusCurrentVersion]), `transaction cannot close account to its sender`)
 }
 
 func generateTestPays(numTxs int) []transactions.Transaction {

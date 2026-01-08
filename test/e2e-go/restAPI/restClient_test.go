@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -154,7 +155,7 @@ func TestClientRejectsBadFromAddressWhenSending(t *testing.T) {
 	badAccountAddress := "This is absolutely not a valid account address."
 	goodAccountAddress := addresses[0]
 	_, err = testClient.SendPaymentFromWallet(wh, nil, badAccountAddress, goodAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
@@ -173,7 +174,7 @@ func TestClientRejectsBadToAddressWhenSending(t *testing.T) {
 	badAccountAddress := "This is absolutely not a valid account address."
 	goodAccountAddress := addresses[0]
 	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, badAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
@@ -199,7 +200,7 @@ func TestClientRejectsMutatedFromAddressWhenSending(t *testing.T) {
 	}
 	mutatedAccountAddress := mutateStringAtIndex(unmutatedAccountAddress, 0)
 	_, err = testClient.SendPaymentFromWallet(wh, nil, mutatedAccountAddress, goodAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
@@ -225,7 +226,7 @@ func TestClientRejectsMutatedToAddressWhenSending(t *testing.T) {
 	}
 	mutatedAccountAddress := mutateStringAtIndex(unmutatedAccountAddress, 0)
 	_, err = testClient.SendPaymentFromWallet(wh, nil, goodAccountAddress, mutatedAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
@@ -244,7 +245,7 @@ func TestClientRejectsSendingMoneyFromAccountForWhichItHasNoKey(t *testing.T) {
 	goodAccountAddress := addresses[0]
 	nodeDoesNotHaveKeyForThisAddress := "NJY27OQ2ZXK6OWBN44LE4K43TA2AV3DPILPYTHAJAMKIVZDWTEJKZJKO4A"
 	_, err = testClient.SendPaymentFromWallet(wh, nil, nodeDoesNotHaveKeyForThisAddress, goodAccountAddress, params.MinFee, 100000, nil, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestClientOversizedNote(t *testing.T) {
@@ -272,7 +273,7 @@ func TestClientOversizedNote(t *testing.T) {
 	maxTxnNoteBytes := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxnNoteBytes
 	note := make([]byte, maxTxnNoteBytes+1)
 	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, params.MinFee, 100000, note, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestClientCanSendAndGetNote(t *testing.T) {
@@ -487,22 +488,22 @@ func TestSendingTooMuchErrs(t *testing.T) {
 	// too much amount
 	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, params.MinFee, fromBalance+100, nil, "", 0, 0)
 	t.Log(err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// waaaay too much amount
 	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, params.MinFee, math.MaxUint64, nil, "", 0, 0)
 	t.Log(err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// too much fee
 	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, fromBalance+100, params.MinFee, nil, "", 0, 0)
 	t.Log(err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 	// waaaay too much fee
 	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, math.MaxUint64, params.MinFee, nil, "", 0, 0)
 	t.Log(err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestSendingFromEmptyAccountErrs(t *testing.T) {
@@ -544,7 +545,7 @@ func TestSendingFromEmptyAccountErrs(t *testing.T) {
 	params, err := testClient.SuggestedParams()
 	a.NoError(err)
 	_, err = testClient.SendPaymentFromWallet(wh, nil, fromAddress, toAddress, params.MinFee, 100000, nil, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestSendingTooLittleToEmptyAccountErrs(t *testing.T) {
@@ -579,7 +580,7 @@ func TestSendingTooLittleToEmptyAccountErrs(t *testing.T) {
 	params, err := testClient.SuggestedParams()
 	a.NoError(err)
 	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.MinFee, 1, nil, "", 0, 0)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
 
 func TestSendingLowFeeErrs(t *testing.T) {
@@ -609,11 +610,11 @@ func TestSendingLowFeeErrs(t *testing.T) {
 	a.NoError(err)
 	_, err = testClient.BroadcastTransaction(stx)
 	t.Log(err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 	utx.Fee.Raw = 0
 	stx, err = testClient.SignTransactionWithWallet(wh, nil, utx)
 	a.NoError(err)
 	_, err = testClient.BroadcastTransaction(stx)
 	t.Log(err)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 }
