@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -641,7 +641,7 @@ func (wn *WebsocketNetwork) setup() error {
 	if wn.config.EnableIncomingMessageFilter {
 		wn.incomingMsgFilter = makeMessageFilter(wn.config.IncomingMessageFilterBucketCount, wn.config.IncomingMessageFilterBucketSize)
 	}
-	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
+	wn.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 	wn.outgoingConnsCloser = makeOutgoingConnsCloser(wn.log, wn, wn.connPerfMonitor, cliqueResolveInterval)
 
 	// set our supported versions
@@ -1986,7 +1986,8 @@ func (wn *WebsocketNetwork) tryConnectReleaseAddr(addr, gossipAddr string) {
 func (wn *WebsocketNetwork) numOutgoingPending() int {
 	wn.tryConnectLock.Lock()
 	defer wn.tryConnectLock.Unlock()
-	return len(wn.tryConnectAddrs)
+	// tryConnectAddrs always populates two entries per pending connection: addr and gossipAddr
+	return len(wn.tryConnectAddrs) / 2
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport

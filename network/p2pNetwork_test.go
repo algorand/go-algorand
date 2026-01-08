@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1070,7 +1070,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 		log:             logging.TestingLog(t),
 		ctx:             ctx,
 		nodeInfo:        &nopeNodeInfo{},
-		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag}),
+		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag}),
 	}
 	net.outgoingConnsCloser = makeOutgoingConnsCloser(logging.TestingLog(t), net, net.connPerfMonitor, cliqueResolveInterval)
 

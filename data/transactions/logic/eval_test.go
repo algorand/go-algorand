@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1413,7 +1413,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
 	require.Equal(t, int(invalidOnCompletionConst), last)
-	require.Equal(t, len(onCompletionMap), len(onCompletionDescriptions))
+	require.Equal(t, len(onCompletionMap), len(OnCompletionDescriptions))
 	require.Equal(t, len(OnCompletionNames), last)
 	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])

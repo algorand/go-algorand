@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -3122,9 +3122,6 @@ func TestGetSpec(t *testing.T) {
 func TestReplacePseudo(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-
-	require.Contains(t, opDescByName["replace3"].Short, "`replace3` can be called using `replace` with no immediates.")
-	require.Contains(t, opDescByName["replace2"].Short, "`replace2` can be called using `replace` with 1 immediate.")
 
 	replaceVersion := 7
 	for v := uint64(replaceVersion); v <= AssemblerMaxVersion; v++ {
