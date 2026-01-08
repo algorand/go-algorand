@@ -199,7 +199,7 @@ func (round Round) RoundDownToMultipleOf(n Round) Round {
 	return (round / n) * n
 }
 
-// Micros repesents millionths of something. It's a fixed-point number with 6
+// Micros represents millionths of something. It's a fixed-point number with 6
 // digits of precision.
 type Micros uint64
 

@@ -1252,12 +1252,12 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			Load:          500_000, // irrelevant
 			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
 		}
+		current.CurrentProtocol = protoCongestion
 
 		// 200% tax rate was causing an actual price of 3,000uA. 75% load should
 		// cause a 5% increase, so we want a tax rate that generates 3,150uA
 		// price. So we need a tax to generate 2,150 on 1000uA base fee. 215%
 
-		current.CurrentProtocol = protoCongestion
 		require.EqualValues(t, 2_150_000, current.CongestionTax) // 75% load causes 5% growth of the minFee+conFee sum
 
 		// Should pass with correct CongestionTax
@@ -1302,6 +1302,47 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 		current.Load = 500_000
 		require.ErrorContains(t, current.PreCheck(prev), "load should be zero when congestion measurement is disabled")
 	})
+
+	// Ensure that the upgrade to congestion fees is handled correctly
+	t.Run("congestion_fees_upgrade", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       10,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			UpgradeState: UpgradeState{
+				CurrentProtocol:      protoNoCongestion,
+				NextProtocol:         protoCongestion,
+				NextProtocolSwitchOn: 11,
+			},
+		}
+
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          500_000, // irrelevant
+			CongestionTax: NextCongestionTax(prev.Load, prev.CongestionTax),
+		}
+		current.CurrentProtocol = protoCongestion
+
+		// Should pass with zero values. Tax will be 0 in the first round after
+		// upgrade, because previous round Load appears to be zero (though
+		// actually it simply wasn't measured).
+		require.NoError(t, current.PreCheck(prev))
+
+		// Should fail with non-zero CongestionTax, but now the complaint is
+		// that Tax is wrong, not that it shouldn't appear.
+		current.CongestionTax = 1
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax: 0.000001 != 0.000000")
+
+		// PreCheck does not check if Load is correct, only that it should not appear when disabled.
+		current.CongestionTax = 0
+		current.Load = 500_000
+		require.NoError(t, current.PreCheck(prev))
+	})
+
 }
 
 func TestBlockHeaderCongestionCreation(t *testing.T) {
