@@ -1070,7 +1070,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 		log:             logging.TestingLog(t),
 		ctx:             ctx,
 		nodeInfo:        &nopeNodeInfo{},
-		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag}),
+		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag}),
 	}
 	net.outgoingConnsCloser = makeOutgoingConnsCloser(logging.TestingLog(t), net, net.connPerfMonitor, cliqueResolveInterval)
 

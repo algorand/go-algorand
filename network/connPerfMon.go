@@ -46,7 +46,6 @@ const (
 	pmAccumulationIdlingTime        = 2 * time.Second
 	pmMaxMessageWaitTime            = 15 * time.Second
 	pmUndeliveredMessagePenaltyTime = 5 * time.Second
-	pmDesiredMessegeDelayThreshold  = 50 * time.Millisecond
 	pmMessageBucketDuration         = time.Second
 )
 
@@ -59,7 +58,7 @@ type pmMessage struct {
 // pmPeerStatistics is the per-peer resulting datastructure of the performance analysis.
 type pmPeerStatistics struct {
 	peer             Peer    // the peer interface
-	peerDelay        int64   // the peer avarage relative message delay
+	peerDelay        int64   // the peer average relative message delay
 	peerFirstMessage float32 // what percentage of the messages were delivered by this peer before any other peer
 }
 
@@ -197,7 +196,7 @@ func (pm *connectionPerformanceMonitor) Notify(msg *IncomingMessage) {
 	}
 }
 
-// notifyPresync waits until pmPresyncTime has passed and monitor the last arrivial time
+// notifyPresync waits until pmPresyncTime has passed and monitors the last arrival time
 // of messages from each of the peers.
 func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 	pm.peerLastMsgTime[msg.Sender] = msg.Received
@@ -221,7 +220,7 @@ func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 		return
 	}
 	if len(noMsgPeers) > 0 {
-		// we have one or more peers that did not send a single message thoughtout the presync time.
+		// we have one or more peers that did not send a single message throughout the presync time.
 		// ( but less than half ). since we cannot rely on these to send us messages in the future,
 		// we'll disconnect from these peers.
 		pm.advanceStage(pmStageStopped, msg.Received)
