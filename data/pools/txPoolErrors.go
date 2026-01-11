@@ -1,0 +1,137 @@
+// Copyright (C) 2019-2026 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package pools
+
+import (
+	"errors"
+
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/util/metrics"
+)
+
+// TxPoolErrorTag constants for categorizing transaction pool errors.
+// These are used by both the txHandler (initial remember) and the
+// transaction pool (re-evaluation) to classify errors consistently.
+const (
+	TxPoolErrTagCap         = "cap"
+	TxPoolErrTagPendingEval = "pending_eval"
+	TxPoolErrTagNoSpace     = "no_space"
+	TxPoolErrTagFee         = "fee"
+	TxPoolErrTagTxnDead     = "txn_dead"
+	TxPoolErrTagTxnEarly    = "txn_early"
+	TxPoolErrTagTooLarge    = "too_large"
+	TxPoolErrTagGroupID     = "groupid"
+	TxPoolErrTagTxID        = "txid"
+	TxPoolErrTagLease       = "lease"
+	TxPoolErrTagTxIDEval    = "txid_eval"
+	TxPoolErrTagLeaseEval   = "lease_eval"
+	TxPoolErrTagEvalGeneric = "eval"
+)
+
+// TxPoolErrTags is the list of all error tags for use with TagCounter.
+var TxPoolErrTags = []string{
+	TxPoolErrTagCap, TxPoolErrTagPendingEval, TxPoolErrTagNoSpace, TxPoolErrTagFee,
+	TxPoolErrTagTxnDead, TxPoolErrTagTxnEarly, TxPoolErrTagTooLarge, TxPoolErrTagGroupID,
+	TxPoolErrTagTxID, TxPoolErrTagLease, TxPoolErrTagTxIDEval, TxPoolErrTagLeaseEval,
+	TxPoolErrTagEvalGeneric,
+}
+
+// TxPoolReevalErrTags is the subset of tags applicable to re-evaluation errors.
+// Pool-level errors (cap, pending_eval, no_space, txn_early) don't occur during reeval.
+var TxPoolReevalErrTags = []string{
+	TxPoolErrTagFee, TxPoolErrTagTxnDead, TxPoolErrTagTooLarge, TxPoolErrTagGroupID,
+	TxPoolErrTagTxIDEval, TxPoolErrTagLeaseEval, TxPoolErrTagEvalGeneric,
+}
+
+// txPoolReevalCounter tracks transaction groups that failed during block assembly
+// re-evaluation. These are transactions that were accepted into the pool but
+// failed when re-evaluated against the latest confirmed block.
+var txPoolReevalCounter = metrics.NewTagCounter(
+	"algod_tx_pool_reeval_{TAG}",
+	"Number of transaction groups removed from pool during re-evaluation due to {TAG}",
+	TxPoolReevalErrTags...,
+)
+
+// ClassifyTxPoolError examines an error from BlockEvaluator.TransactionGroup
+// and returns the appropriate tag for metrics. The error may be wrapped
+// (as from Remember) or unwrapped (as from recomputeBlockEvaluator).
+func ClassifyTxPoolError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	// Check pool-level errors first (these are typically not wrapped)
+	if errors.Is(err, ErrPendingQueueReachedMaxCap) {
+		return TxPoolErrTagCap
+	}
+	if errors.Is(err, ErrNoPendingBlockEvaluator) {
+		return TxPoolErrTagPendingEval
+	}
+	if errors.Is(err, ledgercore.ErrNoSpace) {
+		return TxPoolErrTagNoSpace
+	}
+
+	// Try to classify the error directly first, then try unwrapped
+	if tag := classifyUnwrappedError(err); tag != "" {
+		return tag
+	}
+
+	// Try unwrapping (Remember wraps errors)
+	if unwrapped := errors.Unwrap(err); unwrapped != nil {
+		if tag := classifyUnwrappedError(unwrapped); tag != "" {
+			return tag
+		}
+	}
+
+	return TxPoolErrTagEvalGeneric
+}
+
+// classifyUnwrappedError classifies an unwrapped error from the BlockEvaluator.
+func classifyUnwrappedError(err error) string {
+	switch terr := err.(type) {
+	case *ErrTxPoolFeeError:
+		return TxPoolErrTagFee
+	case *transactions.MinFeeError:
+		return TxPoolErrTagFee
+	case *bookkeeping.TxnDeadError:
+		if terr.Early {
+			return TxPoolErrTagTxnEarly
+		}
+		return TxPoolErrTagTxnDead
+	case *ledgercore.TransactionInLedgerError:
+		if terr.InBlockEvaluator {
+			return TxPoolErrTagTxIDEval
+		}
+		return TxPoolErrTagTxID
+	case *ledgercore.LeaseInLedgerError:
+		if terr.InBlockEvaluator {
+			return TxPoolErrTagLeaseEval
+		}
+		return TxPoolErrTagLease
+	case *ledgercore.TxGroupMalformedError:
+		if terr.Reason == ledgercore.TxGroupMalformedErrorReasonExceedMaxSize {
+			return TxPoolErrTagTooLarge
+		}
+		return TxPoolErrTagGroupID
+	case logic.EvalError:
+		return TxPoolErrTagEvalGeneric
+	}
+	return ""
+}

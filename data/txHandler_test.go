@@ -2041,14 +2041,14 @@ func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // 
 	defer func() {
 		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 			"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-			txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-			txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+			pools.TxPoolErrTagCap, pools.TxPoolErrTagPendingEval, pools.TxPoolErrTagNoSpace, pools.TxPoolErrTagFee, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
+			pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval, pools.TxPoolErrTagEvalGeneric,
 		)
 	}()
 	transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 		"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-		txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-		txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+		pools.TxPoolErrTagCap, pools.TxPoolErrTagPendingEval, pools.TxPoolErrTagNoSpace, pools.TxPoolErrTagFee, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
+		pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval, pools.TxPoolErrTagEvalGeneric,
 	)
 
 	var txh TxHandler
@@ -2065,20 +2065,20 @@ func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // 
 	noSpaceErr := ledgercore.ErrNoSpace
 	txh.rememberReportErrors(noSpaceErr)
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagNoSpace))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagNoSpace))
 
 	wrapped := fmt.Errorf("wrap: %w", noSpaceErr) // simulate wrapping
 	txh.rememberReportErrors(wrapped)
 
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
-	require.Equal(t, 2, getMetricCounter(txPoolRememberTagNoSpace))
+	require.Equal(t, 2, getMetricCounter(pools.TxPoolErrTagNoSpace))
 
 	feeErr := pools.ErrTxPoolFeeError{}
 	wrapped = fmt.Errorf("wrap: %w", &feeErr) // simulate wrapping
 	txh.rememberReportErrors(wrapped)
 
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagFee))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagFee))
 }
 
 func makeBlockTicker() *blockTicker {
@@ -2113,24 +2113,24 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	defer func() {
 		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 			"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-			txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-			txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+			pools.TxPoolErrTagCap, pools.TxPoolErrTagPendingEval, pools.TxPoolErrTagNoSpace, pools.TxPoolErrTagFee, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
+			pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval, pools.TxPoolErrTagEvalGeneric,
 		)
 		transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
 			"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
-			txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-			txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+			txPoolCheckTagNotWellFormed, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
+			pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval, pools.TxPoolErrTagEvalGeneric,
 		)
 	}()
 	transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 		"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-		txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-		txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+		pools.TxPoolErrTagCap, pools.TxPoolErrTagPendingEval, pools.TxPoolErrTagNoSpace, pools.TxPoolErrTagFee, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
+		pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval, pools.TxPoolErrTagEvalGeneric,
 	)
 	transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
 		"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
-		txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-		txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+		txPoolCheckTagNotWellFormed, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
+		pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval, pools.TxPoolErrTagEvalGeneric,
 	)
 
 	result := map[string]float64{}
@@ -2195,7 +2195,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	var wi txBacklogMsg
 	wi.unverifiedTxGroup = []transactions.SignedTxn{{}}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxnDead))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagTxnDead))
 
 	txn1 := transactions.Transaction{
 		Type: protocol.PaymentTx,
@@ -2219,23 +2219,23 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 		wi.unverifiedTxGroup = append(wi.unverifiedTxGroup, txn.Sign(secrets[0]))
 	}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagCap))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagCap))
 
 	// trigger not well-formed error
 	txn2 := txn1
 	txn2.Sender = basics.Address{}
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
 	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxnNotWellFormed))
+	require.Equal(t, 1, getCheckMetricCounter(txPoolCheckTagNotWellFormed))
 
 	// trigger group id error
 	txn2 = txn1
 	crypto.RandBytes(txn2.Group[:])
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0]), txn2.Sign(secrets[0])}
 	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagGroupID))
+	require.Equal(t, 1, getCheckMetricCounter(pools.TxPoolErrTagGroupID))
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagGroupID))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagGroupID))
 
 	// trigger group too large error
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
@@ -2245,9 +2245,9 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 		wi.unverifiedTxGroup = append(wi.unverifiedTxGroup, txn.Sign(secrets[0]))
 	}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTooLarge))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagTooLarge))
 	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTooLarge))
+	require.Equal(t, 1, getCheckMetricCounter(pools.TxPoolErrTagTooLarge))
 
 	// trigger eval error
 	secret := keypair()
@@ -2256,36 +2256,36 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	txn2.Sender = addr
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secret)}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagEvalGeneric))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagEvalGeneric))
 
 	// trigger TxnDeadErr from the evaluator for "early" case
 	txn2 = txn1
 	txn2.FirstValid = ledger.LastRound() + 10
-	prevTxnEarly := getMetricCounter(txPoolRememberTagTxnEarly)
+	prevTxnEarly := getMetricCounter(pools.TxPoolErrTagTxnEarly)
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, prevTxnEarly+1, getMetricCounter(txPoolRememberTagTxnEarly))
+	require.Equal(t, prevTxnEarly+1, getMetricCounter(pools.TxPoolErrTagTxnEarly))
 	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxnEarly))
+	require.Equal(t, 1, getCheckMetricCounter(pools.TxPoolErrTagTxnEarly))
 
 	// trigger TxnDeadErr from the evaluator for "late" case
 	txn2 = txn1
 	txn2.LastValid = 0
-	prevTxnDead := getMetricCounter(txPoolRememberTagTxnDead)
+	prevTxnDead := getMetricCounter(pools.TxPoolErrTagTxnDead)
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, prevTxnDead+1, getMetricCounter(txPoolRememberTagTxnDead))
+	require.Equal(t, prevTxnDead+1, getMetricCounter(pools.TxPoolErrTagTxnDead))
 	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxnDead))
+	require.Equal(t, 1, getCheckMetricCounter(pools.TxPoolErrTagTxnDead))
 
 	// trigger TransactionInLedgerError (txid) error
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
 	wi.rawmsg = &network.IncomingMessage{}
 	handler.postProcessCheckedTxn(&wi)
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxIDEval))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagTxIDEval))
 	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxIDEval))
+	require.Equal(t, 1, getCheckMetricCounter(pools.TxPoolErrTagTxIDEval))
 
 	// trigger LeaseInLedgerError (lease) error
 	txn2 = txn1
@@ -2296,9 +2296,9 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	handler.postProcessCheckedTxn(&wi)
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn3.Sign(secrets[0])}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberTagLeaseEval))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagLeaseEval))
 	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagLeaseEval))
+	require.Equal(t, 1, getCheckMetricCounter(pools.TxPoolErrTagLeaseEval))
 
 	// TODO: not sure how to trigger fee error - need to return ErrNoSpace from ledger
 	// trigger pool fee error
@@ -2336,7 +2336,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 
 	wi.unverifiedTxGroup = []transactions.SignedTxn{}
 	handler.postProcessCheckedTxn(&wi)
-	require.Equal(t, 1, getMetricCounter(txPoolRememberPendingEval))
+	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagPendingEval))
 }
 
 func TestMakeTxHandlerErrors(t *testing.T) {
