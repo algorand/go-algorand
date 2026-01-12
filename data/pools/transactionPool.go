@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -295,16 +297,39 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 	return nil
 }
 
+func groupTip(txgroup []transactions.SignedTxn) basics.Micros {
+	for i := range txgroup {
+		if txgroup[i].Txn.Tip != 0 {
+			return txgroup[i].Txn.Tip
+		}
+	}
+	return 0
+}
+
+// groupPriority returns a priority for the group, mostly derived from the Tip.
+func groupPriority(txgroup []transactions.SignedTxn) basics.Micros {
+	return max(specialPriority(txgroup), groupTip(txgroup))
+}
+
+// specialPriority returns a priority value for special transactions or 0
+func specialPriority(txgroup []transactions.SignedTxn) basics.Micros {
+	if len(txgroup) == 1 {
+		// State proof transactions get highest priority
+		if txgroup[0].Txn.Type == protocol.StateProofTx {
+			return math.MaxUint64
+		}
+		// Heartbeat transactions move ahead of transactions with no extra priority
+		if txgroup[0].Txn.Type == protocol.HeartbeatTx {
+			return 1
+		}
+	}
+	return 0
+}
+
 // checkFeeAtIngress take a group of signed transactions and verifies that they
 // are willing to pay the current congestion fee.
 func (pool *TransactionPool) checkFeeAtIngress(txgroup []transactions.SignedTxn) error {
-	var tip basics.Micros
-	for _, stxn := range txgroup {
-		if stxn.Txn.Tip != 0 {
-			tip = stxn.Txn.Tip
-			break
-		}
-	}
+	tip := groupTip(txgroup)
 	tax := pool.pendingBlockEvaluator.CongestionTax()
 	// Simulate tax growth from the blocks of transactions that are ahead.
 	for range pool.numPendingWholeBlocks {
@@ -622,6 +647,33 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 	pendingCount := pool.pendingCountNoLock()
 	pool.pendingMu.RUnlock()
 
+	// Sort transaction groups by priority in descending order (basically,
+	// highest tips first).  Extract priority once per group. Sort the
+	// priorities and access the groups by the associated indices.
+	type txGroupWithTip struct {
+		index int
+		prio  basics.Micros
+	}
+
+	groupsWithTips := make([]txGroupWithTip, len(txgroups))
+	for i := range txgroups {
+		groupsWithTips[i] = txGroupWithTip{
+			index: i,
+			prio:  groupPriority(txgroups[i]),
+		}
+	}
+
+	// Sort by tip descending, stable sort preserves FIFO for equal priority
+	slices.SortStableFunc(groupsWithTips, func(a, b txGroupWithTip) int {
+		if a.prio > b.prio {
+			return -1 // a has higher priority
+		}
+		if a.prio < b.prio {
+			return 1 // b has higher priority
+		}
+		return 0 // equal priority, maintain arrival order
+	})
+
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
 		roundStartedEvaluating: prev.Round + 1,
@@ -657,8 +709,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 
 	firstTxnGrpTime := time.Now()
 
-	// Feed the transactions in order
-	for _, txgroup := range txgroups {
+	// Feed the transactions in priority order (sorted by tip)
+	for _, gwt := range groupsWithTips {
+		txgroup := txgroups[gwt.index]
 		if len(txgroup) == 0 {
 			asmStats.InvalidCount++
 			continue

@@ -1598,3 +1598,130 @@ func generateProofForTesting(
 
 	return proof
 }
+
+func TestGroupPriority(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test single transaction with tip
+	tx1 := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid: 0,
+			LastValid:  basics.Round(proto.MaxTxnLife),
+			Tip:        1000000,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Amount: basics.MicroAlgos{Raw: minBalance},
+		},
+	}
+	stx1 := transactions.SignedTxn{Txn: tx1}
+	prio := groupPriority([]transactions.SignedTxn{stx1})
+	require.Equal(t, basics.Micros(1000000), prio)
+
+	// Test group with one tip, in first txn
+	tx2 := tx1
+	tx2.Tip = 0
+	tx2.Note = []byte("second")
+	stx2 := transactions.SignedTxn{Txn: tx2}
+	prio = groupPriority([]transactions.SignedTxn{stx1, stx2})
+	require.Equal(t, basics.Micros(1000000), prio)
+
+	// Now, no tips
+	stx1.Txn.Tip = 0
+	prio = groupPriority([]transactions.SignedTxn{stx1, stx2})
+	require.Equal(t, basics.Micros(0), prio)
+
+	// Tips in second
+	stx2.Txn.Tip = 10
+	prio = groupPriority([]transactions.SignedTxn{stx1, stx2})
+	require.Equal(t, basics.Micros(10), prio)
+}
+
+func TestTransactionPoolPriorityOrdering(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	secrets, addresses := generateAccounts(5)
+	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base(), nil)
+
+	// Create transactions with different tips
+	makeTx := func(sender int, tip basics.Micros, note string) transactions.SignedTxn {
+		tx := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addresses[sender],
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+				FirstValid:  0,
+				LastValid:   basics.Round(proto.MaxTxnLife),
+				GenesisHash: ledger.GenesisHash(),
+				Note:        []byte(note),
+				Tip:         tip,
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addresses[(sender+1)%len(addresses)],
+				Amount:   basics.MicroAlgos{Raw: minBalance},
+			},
+		}
+		return tx.Sign(secrets[sender])
+	}
+
+	// Add transactions with different tips (values are small enough to not require extra fees)
+	// Tips are in Micros where 1e6 = 1.0, so these are 0.000001, 0.000002, 0.000003
+	lowTip := makeTx(0, 1, "low")
+	medTip := makeTx(1, 2, "med")
+	highTip := makeTx(2, 3, "high")
+	zeroTip := makeTx(3, 0, "zero")
+
+	err := transactionPool.Remember([]transactions.SignedTxn{lowTip})
+	require.NoError(t, err)
+	err = transactionPool.Remember([]transactions.SignedTxn{medTip})
+	require.NoError(t, err)
+	err = transactionPool.Remember([]transactions.SignedTxn{highTip})
+	require.NoError(t, err)
+	err = transactionPool.Remember([]transactions.SignedTxn{zeroTip})
+	require.NoError(t, err)
+
+	// Trigger block assembly by calling OnNewBlock
+	poolSecret := keypair()
+	poolAddr := basics.Address(poolSecret.SignatureVerifier)
+	newBlock := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round:       1,
+			GenesisID:   "pooltest",
+			GenesisHash: ledger.GenesisHash(),
+			RewardsState: bookkeeping.RewardsState{
+				FeeSink:     poolAddr,
+				RewardsPool: poolAddr,
+			},
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion,
+			},
+		},
+	}
+	var err2 error
+	newBlock.TxnCommitments, err2 = newBlock.PaysetCommit()
+	require.NoError(t, err2)
+
+	delta := ledgercore.MakeStateDelta(&newBlock.BlockHeader, 0, 0, 0)
+	transactionPool.OnNewBlock(newBlock, delta)
+
+	// Get pending transactions - they should be sorted by tip (high to low)
+	pending := transactionPool.PendingTxGroups()
+	require.Len(t, pending, 4)
+
+	// Verify order: high, med, low, zero
+	require.Equal(t, basics.Micros(3), groupPriority(pending[0]))
+	require.Equal(t, basics.Micros(2), groupPriority(pending[1]))
+	require.Equal(t, basics.Micros(1), groupPriority(pending[2]))
+	require.Equal(t, basics.Micros(0), groupPriority(pending[3]))
+
+	// Verify specific transactions
+	require.Equal(t, "high", string(pending[0][0].Txn.Note))
+	require.Equal(t, "med", string(pending[1][0].Txn.Note))
+	require.Equal(t, "low", string(pending[2][0].Txn.Note))
+	require.Equal(t, "zero", string(pending[3][0].Txn.Note))
+}
