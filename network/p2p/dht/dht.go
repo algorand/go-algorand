@@ -49,23 +49,21 @@ func dhtProtocolPrefix(networkID algoproto.NetworkID) protocol.ID {
 // dhtMode returns the appropriate DHT mode based on config.
 // If DHTMode is explicitly set, use that. Otherwise:
 // - Nodes with listen addresses (NetAddress or P2PHybridNetAddress) default to ModeServer to be discoverable
-// - Other nodes default to ModeAuto (prefers client mode when uncertain)
+// - Other nodes default to ModeClient
 func dhtMode(cfg config.Local) dht.ModeOpt {
 	switch cfg.DHTMode {
 	case "server":
 		return dht.ModeServer
 	case "client":
 		return dht.ModeClient
-	case "auto":
-		return dht.ModeAuto
 	case "":
 		// Default behavior: nodes with listen addresses should be discoverable
 		if cfg.IsGossipServer() {
 			return dht.ModeServer
 		}
-		return dht.ModeAuto
+		return dht.ModeClient
 	default:
-		return dht.ModeAuto
+		return dht.ModeClient
 	}
 }
 

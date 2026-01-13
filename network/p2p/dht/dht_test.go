@@ -50,7 +50,7 @@ func TestDHTBasic(t *testing.T) {
 func TestMakeDHTWithModes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	modes := []string{"", "auto", "server", "client"}
+	modes := []string{"", "server", "client"}
 	for _, mode := range modes {
 		t.Run("mode_"+mode, func(t *testing.T) {
 			h, err := libp2p.New()
@@ -93,7 +93,7 @@ func TestDHTModeDefaults(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("node without NetAddress defaults to auto mode", func(t *testing.T) {
+	t.Run("node without NetAddress defaults to client mode", func(t *testing.T) {
 		cfg := config.GetDefaultLocal()
 		cfg.NetAddress = ""
 		cfg.DHTMode = ""

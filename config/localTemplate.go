@@ -630,12 +630,9 @@ type Local struct {
 	// DHTMode controls the DHT operation mode.
 	// Valid values:
 	// - "" (default): nodes with a listen address (NetAddress or P2PHybridNetAddress) use "server" mode
-	//   to be discoverable; other nodes use "auto" mode
-	// - "auto": automatically determine mode based on network reachability;
-	//   prefers client mode when reachability is uncertain
+	//   to be discoverable; other nodes use "client" mode
 	// - "server": always operate as DHT server, respond to queries and advertise peer ID
-	// - "client": operate as DHT client only, query the DHT without advertising
-	// Client mode is useful for nodes that want to discover peers without being discoverable themselves.
+	// - "client": operate as DHT client only, query the DHT without advertising or being discoverable
 	DHTMode string `version[38]:""`
 
 	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
