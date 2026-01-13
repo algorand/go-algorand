@@ -241,7 +241,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		return nil, err
 	}
 
-	relayMessages := cfg.IsGossipServer() || cfg.ForceRelayMessages
+	relayMessages := cfg.IsListenServer() || cfg.ForceRelayMessages
 	net := &P2PNetwork{
 		log:           log,
 		config:        cfg,

@@ -765,20 +765,20 @@ func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }
 
-// IsGossipServer returns true if this node supposed to start websocket or p2p server
-func (cfg Local) IsGossipServer() bool {
-	return cfg.IsWsGossipServer() || cfg.IsP2PGossipServer()
+// IsListenServer returns true if this node supposed to start websocket or p2p server
+func (cfg Local) IsListenServer() bool {
+	return cfg.IsWsListenServer() || cfg.IsP2PListenServer()
 }
 
-// IsWsGossipServer returns true if a node is configured to run a listening ws net
-func (cfg Local) IsWsGossipServer() bool {
+// IsWsListenServer returns true if a node is configured to run a listening ws net
+func (cfg Local) IsWsListenServer() bool {
 	// 1. NetAddress is set and EnableP2P is not set
 	// 2. NetAddress is set and EnableP2PHybridMode is set then EnableP2P is overridden  by EnableP2PHybridMode
 	return cfg.NetAddress != "" && (!cfg.EnableP2P || cfg.EnableP2PHybridMode)
 }
 
-// IsP2PGossipServer returns true if a node is configured to run a listening p2p net
-func (cfg Local) IsP2PGossipServer() bool {
+// IsP2PListenServer returns true if a node is configured to run a listening p2p net
+func (cfg Local) IsP2PListenServer() bool {
 	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PHybridNetAddress != "")
 }
 
@@ -1014,7 +1014,7 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 			// split the rest of the delta between ws and p2p evenly
 			splitRatio = 2
 		}
-		if cfg.IsWsGossipServer() || cfg.IsP2PGossipServer() {
+		if cfg.IsWsListenServer() || cfg.IsP2PListenServer() {
 			if cfg.IncomingConnectionsLimit > int(restDelta) {
 				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
