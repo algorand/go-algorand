@@ -61,8 +61,15 @@ type ConsensusParams struct {
 	// in a block must not exceed MaxTxnBytesPerBlock.
 	MaxTxnBytesPerBlock int
 
-	// MaxTxnBytesPerBlock is the maximum size of a transaction's Note field.
+	// MaxTxnBytesPerBlock is the maximum size of a transaction's Note field in
+	// a "basic transaction".  Larger notes require extra fees.
 	MaxTxnNoteBytes int
+
+	// MaxAbsoluteTxnNoteBytes is the absolute maximum size of a transaction's Note field,
+	// even with extra fees paid. Provides DoS protection. When set equal to MaxTxnNoteBytes,
+	// effectively disables large notes. When set higher, allows notes up to this size with
+	// appropriate fees (1000 FeeFactor units per byte over MaxTxnNoteBytes).
+	MaxAbsoluteTxnNoteBytes int
 
 	// MaxTxnLife is how long a transaction can be live for:
 	// the maximum difference between LastValid and FirstValid.
@@ -742,7 +749,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxEvalDeltaAccounts)
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
 	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
-	checkSetMax(p.MaxTxnNoteBytes, &bounds.MaxTxnNoteBytes)
+	checkSetMax(p.MaxAbsoluteTxnNoteBytes, &bounds.MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
 	checkSetMax(p.MaxAppKeyLen, &bounds.MaxBytesKeyValueLen)
@@ -822,12 +829,13 @@ func initConsensusProtocols() {
 		DefaultUpgradeWaitRounds: 10000,
 		MaxVersionStringLen:      64,
 
-		MinBalance:          10000,
-		MinTxnFee:           1000,
-		MaxTxnLife:          1000,
-		MaxTxnNoteBytes:     1024,
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
+		MinBalance:              10000,
+		MinTxnFee:               1000,
+		MaxTxnLife:              1000,
+		MaxTxnNoteBytes:         1024,
+		MaxAbsoluteTxnNoteBytes: 1024,
+		MaxTxnBytesPerBlock:     1000000,
+		DefaultKeyDilution:      10000,
 
 		MaxTimestampIncrement: 25,
 
@@ -1468,6 +1476,7 @@ func initConsensusProtocols() {
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
 	vFuture.CongestionTracking = true
+	vFuture.MaxAbsoluteTxnNoteBytes = 4096 // same as largest AVM value
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

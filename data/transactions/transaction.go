@@ -194,24 +194,38 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // FeeFactor is the factor by which the base transaction fee is multiplied. Some
-// transactions are free, others might cost more (none do yet) because they use
-// extra expensive features.  It is expressed as in fixed-point integer with 6 digits
-// of precision. So 1e6 is a normal base fee transaction.
-func (tx Transaction) FeeFactor() basics.Micros {
+// transactions are free, others might cost more because they use extra expensive
+// features (e.g., large Note fields).  It is expressed as in fixed-point integer
+// with 6 digits of precision. So 1e6 is a normal base fee transaction.
+func (tx Transaction) FeeFactor(proto config.ConsensusParams) basics.Micros {
+	headerCost := tx.Header.FeeContribution(proto)
 	switch tx.Type {
 	case protocol.StateProofTx:
 		return 0
 	case protocol.HeartbeatTx:
 		if tx.Group.IsZero() {
-			// Not every singleton heartbeat is actually free. We confirm a
-			// low/no fee heartbeat is legal in heartbeat's wellFormed() and in
-			// apply/heartbeat.go (for the dynamic check for challenge).
+			// Not every such heartbeat is free. We confirm a
+			// low/no fee singleton heartbeat is legal in heartbeat's
+			// wellFormed() and in apply/heartbeat.go (for the dynamic check for
+			// challenge).
 			return 0
 		}
-		return 1e6
+		return 1e6 + headerCost
 	default:
-		return 1e6
+		return 1e6 + headerCost
 	}
+}
+
+// FeeContribution returns the amount a transaction's basic fee factor should be
+// increased due to contents of the header.
+func (header Header) FeeContribution(proto config.ConsensusParams) basics.Micros {
+	var cost basics.Micros
+	// Add extra cost for Note bytes beyond standard size
+	if len(header.Note) > proto.MaxTxnNoteBytes {
+		extraBytes := len(header.Note) - proto.MaxTxnNoteBytes
+		cost += basics.Micros(extraBytes) * 1000
+	}
+	return cost
 }
 
 // txAllocSize returns the max possible size of a transaction without state proof fields.
@@ -473,8 +487,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if tx.LastValid-tx.FirstValid > basics.Round(proto.MaxTxnLife) {
 		return fmt.Errorf("transaction window size excessive (%v--%v)", tx.FirstValid, tx.LastValid)
 	}
-	if len(tx.Note) > proto.MaxTxnNoteBytes {
-		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxTxnNoteBytes)
+	if len(tx.Note) > proto.MaxAbsoluteTxnNoteBytes {
+		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxAbsoluteTxnNoteBytes)
 	}
 	if tx.Sender == spec.RewardsPool {
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool

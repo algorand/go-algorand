@@ -1160,7 +1160,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	// sure the Fees will be enough if the group contains inner txns, but that
 	// will be checked during AVM execution. But this is the only chance to
 	// check that the top-level fees are enough for the top-level txns.
-	usage, feesPaid, tip := transactions.SummarizeFees(txgroup)
+	usage, feesPaid, tip := transactions.SummarizeFees(txgroup, eval.proto)
 	// In a future consensus version, we would compute the extra amount based on
 	// the `tip`, the group's `tax` field, and the current block's
 	// `CongestionTax`. But for now, just ensure that the sum of fees is enough

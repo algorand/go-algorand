@@ -472,7 +472,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 
 	if apps > 0 { // none of these allocations needed if no apps
 		credit = new(basics.MicroAlgos)
-		*credit = feeCredit(txgroup, proto.MinFee())
+		*credit = feeCredit(txgroup, *proto)
 
 		if proto.EnableAppCostPooling {
 			pooledApplicationBudget = new(int)
@@ -518,9 +518,9 @@ func (ep *EvalParams) computeAvailability() *resources {
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
 // to required fees. feeCredit should not be used on inner groups, since it
 // derives usage from the Tip field of top-level transactions.
-func feeCredit(txgroup []transactions.SignedTxnWithAD, baseFee basics.MicroAlgos) basics.MicroAlgos {
-	usage, feesPaid, tip := transactions.SummarizeFees(txgroup)
-	feeNeeded, _ := baseFee.Mul2Micros(usage, basics.AddSaturate(tip, 1e6))
+func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) basics.MicroAlgos {
+	usage, feesPaid, tip := transactions.SummarizeFees(txgroup, proto)
+	feeNeeded, _ := proto.MinFee().Mul2Micros(usage, basics.AddSaturate(tip, 1e6))
 	return feesPaid.SubSaturate(feeNeeded) // If MulMicros saturates, this is 0
 }
 
@@ -5164,8 +5164,8 @@ func addInnerTxn(cx *EvalContext) error {
 	}
 
 	// Check fees in the existing group first. Allows fee pooling in inner groups.
-	usage, groupPaid, _ := transactions.SummarizeFees(cx.subtxns) // tip does not appear in inner
-	usage = basics.AddSaturate(usage, 1e6)                        // +1e6 because we're adding a txn
+	usage, groupPaid, _ := transactions.SummarizeFees(cx.subtxns, *cx.Proto) // tip does not appear in inner
+	usage = basics.AddSaturate(usage, 1e6)                                   // +1e6 because we're adding a txn
 	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
 	if o {
 		return errors.New("inner group fee saturation")
@@ -5350,8 +5350,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 	// wants to inspect?)  If we set, make sure they are legal, both for current
 	// round, and separation by MaxLifetime (check lifetime in submit, not here)
 	case Note:
-		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
-			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
+		if len(sv.Bytes) > cx.Proto.MaxAbsoluteTxnNoteBytes {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxAbsoluteTxnNoteBytes)
 		}
 		txn.Note = slices.Clone(sv.Bytes)
 	// GenesisID, GenesisHash unsettable: surely makes no sense
@@ -5580,7 +5580,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 	}
 
 	// Check fees across the group first. Allows fee pooling in inner groups.
-	usage, groupPaid, _ := transactions.SummarizeFees(cx.subtxns) // tip won't appear in inners
+	usage, groupPaid, _ := transactions.SummarizeFees(cx.subtxns, *cx.Proto) // tip won't appear in inners
 	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
 	if o {
 		return errors.New("inner group fee saturation")

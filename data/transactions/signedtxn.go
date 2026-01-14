@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -158,14 +159,14 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 // SummarizeFees takes a group and returns required fees, the total amount paid,
 // and the tip promised. The returned `usage` expresses how many basic
 // transaction fees must be paid by the group.
-func SummarizeFees(txgroup []SignedTxnWithAD) (usage basics.Micros, paid basics.MicroAlgos, tip basics.Micros) {
+func SummarizeFees(txgroup []SignedTxnWithAD, proto config.ConsensusParams) (usage basics.Micros, paid basics.MicroAlgos, tip basics.Micros) {
 	// TODO: We want to prevent the 2A fee paid to become incentive eligible
 	// from being reused for inners. Since that is expressed as a fixed fee, the
 	// best way to do it might be to not count it in `paid`.  The "obvious" way
 	// to do it (by adjusting the KeyReg's FeeFactor() is more difficult because
 	// the 2A fee is not defined in unites of MinFee().
 	for _, txad := range txgroup {
-		usage = basics.AddSaturate(usage, txad.SignedTxn.Txn.FeeFactor())
+		usage = basics.AddSaturate(usage, txad.SignedTxn.Txn.FeeFactor(proto))
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
 		// TestTransactionGroup confirms there is only one Tip per group
 		tip = max(tip, txad.Txn.Tip)
