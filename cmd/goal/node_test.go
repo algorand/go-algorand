@@ -99,8 +99,7 @@ func TestGetMissingCatchpointLabel(t *testing.T) {
 			label, err := getMissingCatchpointLabel(test.URL)
 
 			if test.expectedErr != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), test.expectedErr)
+				require.ErrorContains(t, err, test.expectedErr)
 			} else {
 				_, _, err = ledgercore.ParseCatchpointLabel(label)
 				assert.Equal(t, err, nil)

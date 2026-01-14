@@ -1908,36 +1908,31 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 			ops := testProg(t, source, v)
 			ops.Program[len(ops.Program)-1] = 0x50 // txn field
 			dis, err := Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid immediate f for txn")
+			require.ErrorContains(t, err, "invalid immediate f for txn", dis)
 
 			source = `txna Accounts 0`
 			ops = testProg(t, source, v)
 			ops.Program[len(ops.Program)-2] = 0x50 // txn field
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid immediate f for txna")
+			require.ErrorContains(t, err, "invalid immediate f for txna", dis)
 
 			source = `gtxn 0 Sender`
 			ops = testProg(t, source, v)
 			ops.Program[len(ops.Program)-1] = 0x50 // txn field
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid immediate f for gtxn")
+			require.ErrorContains(t, err, "invalid immediate f for gtxn", dis)
 
 			source = `gtxna 0 Accounts 0`
 			ops = testProg(t, source, v)
 			ops.Program[len(ops.Program)-2] = 0x50 // txn field
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid immediate f for gtxna")
+			require.ErrorContains(t, err, "invalid immediate f for gtxna", dis)
 
 			source = `global MinTxnFee`
 			ops = testProg(t, source, v)
 			ops.Program[len(ops.Program)-1] = 0x50 // txn field
 			_, err = Disassemble(ops.Program)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid immediate f for global")
+			require.ErrorContains(t, err, "invalid immediate f for global")
 
 			ops.Program[0] = 0x11 // version
 			out, err := Disassemble(ops.Program)
@@ -1947,54 +1942,45 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 			ops.Program[0] = 0x01 // version
 			ops.Program[1] = 0xFF // first opcode
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid opcode")
+			require.ErrorContains(t, err, "invalid opcode", dis)
 
 			source = "int 0; int 0\nasset_holding_get AssetFrozen"
 			ops = testProg(t, source, v)
 			ops.Program[len(ops.Program)-1] = 0x50 // holding field
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid immediate f for")
+			require.ErrorContains(t, err, "invalid immediate f for", dis)
 
 			source = "int 0\nasset_params_get AssetTotal"
 			ops = testProg(t, source, v)
 			ops.Program[len(ops.Program)-1] = 0x50 // params field
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "invalid immediate f for")
+			require.ErrorContains(t, err, "invalid immediate f for", dis)
 
 			source = "int 0\nasset_params_get AssetTotal"
 			ops = testProg(t, source, v)
 			ops.Program = ops.Program[0 : len(ops.Program)-1]
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate f for")
+			require.ErrorContains(t, err, "program end while reading immediate f for", dis)
 
 			source = "gtxna 0 Accounts 0"
 			ops = testProg(t, source, v)
 			dis, err = Disassemble(ops.Program[0 : len(ops.Program)-1])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate i for gtxna")
+			require.ErrorContains(t, err, "program end while reading immediate i for gtxna", dis)
 			dis, err = Disassemble(ops.Program[0 : len(ops.Program)-2])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate f for gtxna")
+			require.ErrorContains(t, err, "program end while reading immediate f for gtxna", dis)
 			dis, err = Disassemble(ops.Program[0 : len(ops.Program)-3])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate t for gtxna")
+			require.ErrorContains(t, err, "program end while reading immediate t for gtxna", dis)
 
 			source = "txna Accounts 0"
 			ops = testProg(t, source, v)
 			ops.Program = ops.Program[0 : len(ops.Program)-1]
 			dis, err = Disassemble(ops.Program)
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate i for txna")
+			require.ErrorContains(t, err, "program end while reading immediate i for txna", dis)
 
 			source = "byte 0x4141\nsubstring 0 1"
 			ops = testProg(t, source, v)
 			dis, err = Disassemble(ops.Program[0 : len(ops.Program)-1])
-			require.Error(t, err, dis)
-			require.Contains(t, err.Error(), "program end while reading immediate e for substring")
+			require.ErrorContains(t, err, "program end while reading immediate e for substring", dis)
 		})
 	}
 }
@@ -3823,9 +3809,9 @@ func TestDisassembleBadBranch(t *testing.T) {
 
 	for _, br := range []byte{0x40, 0x41, 0x42} {
 		dis, err := Disassemble([]byte{2, br})
-		require.Error(t, err, dis)
+		require.ErrorContains(t, err, `program end while reading label for b`, dis)
 		dis, err = Disassemble([]byte{2, br, 0x01})
-		require.Error(t, err, dis)
+		require.ErrorContains(t, err, `program end while reading label for b`, dis)
 
 		// It would be reasonable to error here, since it's a jump past the end.
 		dis, err = Disassemble([]byte{2, br, 0x00, 0x05})

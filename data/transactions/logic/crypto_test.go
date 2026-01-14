@@ -449,7 +449,7 @@ func TestLeadingZeros(t *testing.T) {
 
 	b := big.NewInt(0x100)
 	r, err := leadingZeros(1, b)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `insufficient buffer size: 1 < 2`)
 	require.Nil(t, r)
 
 	b = big.NewInt(100)

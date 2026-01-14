@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -82,7 +83,7 @@ func TestTealCompile(t *testing.T) {
 	a.Equal("YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646A", hash.String())
 
 	compiledProgram, hash, _, err = libGoalClient.Compile([]byte("bad program"), false)
-	a.Error(err, "An invalid program should result in a compilation failure")
+	errorcontains.CaptureError(t, err, "An invalid program should result in a compilation failure")
 	a.Nil(compiledProgram)
 	a.Equal(crypto.Digest{}, hash)
 }
