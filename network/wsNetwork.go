@@ -580,7 +580,7 @@ func (wn *WebsocketNetwork) setup() error {
 	wn.server.IdleTimeout = httpServerIdleTimeout
 	wn.server.MaxHeaderBytes = httpServerMaxHeaderBytes
 	wn.ctx, wn.ctxCancel = context.WithCancel(context.Background())
-	wn.relayMessages = wn.config.IsGossipServer() || wn.config.ForceRelayMessages
+	wn.relayMessages = wn.config.IsListenServer() || wn.config.ForceRelayMessages
 	if wn.relayMessages || wn.config.ForceFetchTransactions {
 		wn.wantTXGossip.Store(wantTXGossipYes)
 	}
