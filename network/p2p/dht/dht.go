@@ -46,11 +46,31 @@ func dhtProtocolPrefix(networkID algoproto.NetworkID) protocol.ID {
 	return protocol.ID(fmt.Sprintf("/algorand/kad/%s", networkID))
 }
 
+// dhtMode returns the appropriate DHT mode based on config.
+// If DHTMode is explicitly set, use that. Otherwise:
+// - Nodes with listen addresses (NetAddress or P2PHybridNetAddress) default to ModeServer to be discoverable
+// - Other nodes default to ModeClient
+func dhtMode(cfg config.Local) dht.ModeOpt {
+	switch cfg.DHTMode {
+	case "server":
+		return dht.ModeServer
+	case "client":
+		return dht.ModeClient
+	case "":
+		// Default behavior: nodes with listen addresses should be discoverable
+		if cfg.IsGossipServer() {
+			return dht.ModeServer
+		}
+		return dht.ModeClient
+	default:
+		return dht.ModeClient
+	}
+}
+
 // MakeDHT creates the dht.IpfsDHT object
 func MakeDHT(ctx context.Context, h host.Host, networkID algoproto.NetworkID, cfg config.Local, bootstrapFunc func() []peer.AddrInfo) (*dht.IpfsDHT, error) {
 	dhtCfg := []dht.Option{
-		// Automatically determine server or client mode
-		dht.Mode(dht.ModeAutoServer),
+		dht.Mode(dhtMode(cfg)),
 		// We don't need the value store right now
 		dht.DisableValues(),
 		dht.ProtocolPrefix(dhtProtocolPrefix(networkID)),
