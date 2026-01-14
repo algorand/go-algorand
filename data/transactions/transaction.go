@@ -61,7 +61,7 @@ type Header struct {
 	// transaction per group may specify a tip. The Tip does not multiply the
 	// Fee, rather it promises that, with the tip applied, the Fees specified
 	// will still be sufficient.  When congested, `algod` will begin to drop
-	// groups with insifficient tips to cover the block's CongestionTax. Future
+	// groups with insufficient tips to cover the block's CongestionTax. Future
 	// versions may prioritize groups with larger tips.
 	Tip basics.Micros `codec:"tp"` // All costs are multiplied by 1 + Tip
 
