@@ -36,7 +36,9 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 	// is under challenge.
 
 	proto := balances.ConsensusParams()
-	if header.Fee.LessThan(proto.MinFee()) && header.Group.IsZero() {
+	tipFactor := basics.AddSaturate(header.Tip, 1e6)
+	requiredFee, _ := proto.MinFee().MulMicros(tipFactor) // MulMicros saturates
+	if header.Fee.LessThan(requiredFee) && header.Group.IsZero() {
 		kind := "free"
 		if !header.Fee.IsZero() {
 			kind = "cheap"

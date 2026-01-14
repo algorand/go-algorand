@@ -517,7 +517,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
 // to required fees. feeCredit should not be used on inner groups, since it
-// derives usage from the Tip field of top-level transactions.
+// expects the Tip to appear in the group. (For inners, Tip is inherited.)
 func feeCredit(txgroup []transactions.SignedTxnWithAD, baseFee basics.MicroAlgos) basics.MicroAlgos {
 	usage, feesPaid, tip := transactions.SummarizeFees(txgroup)
 	feeNeeded, _ := baseFee.Mul2Micros(usage, basics.AddSaturate(tip, 1e6))

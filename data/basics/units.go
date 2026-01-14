@@ -53,7 +53,7 @@ func (a MicroAlgos) String() string {
 	if fraction == 0 {
 		return fmt.Sprintf("%dA", whole)
 	}
-	return fmt.Sprintf("%d.%06d", whole, fraction)
+	return fmt.Sprintf("%d.%06dA", whole, fraction)
 }
 
 // AddSaturate adds MicroAlgos, and won't rollover.
