@@ -58,7 +58,7 @@ func dhtMode(cfg config.Local) dht.ModeOpt {
 		return dht.ModeClient
 	case "":
 		// Default behavior: nodes with listen addresses should be discoverable
-		if cfg.IsGossipServer() {
+		if cfg.IsListenServer() {
 			return dht.ModeServer
 		}
 		return dht.ModeClient
