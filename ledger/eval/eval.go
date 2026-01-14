@@ -1121,12 +1121,12 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 		}
 	}
 
-	// We can only check against usage for the top-level transactions.  This
-	// check can't know for sure the Fees will be enough if the group contains
-	// inner txns, but that will be checked during AVM execution. But this is
-	// the only chance to check that the top-level fees are enough for the
-	// top-level txns.
-	usage, feesPaid := transactions.SummarizeFees(txgroup)
+	// We check against the group's expressed willingness to pay, which shows up
+	// in `usage`, not the current congestion level.  This check can't know for
+	// sure the Fees will be enough if the group contains inner txns, but that
+	// will be checked during AVM execution. But this is the only chance to
+	// check that the top-level fees are enough for the top-level txns.
+	usage, feesPaid := transactions.SummarizeFees(txgroup, eval.proto)
 	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
 		return err
 	}

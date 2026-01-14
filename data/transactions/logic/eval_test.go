@@ -88,13 +88,14 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 		// With the addition of itxn_field, itxn_submit, which rely on
 		// machinery outside logic package for validity checking, we
 		// need a more realistic set of consensus parameters.
-		Asset:                 true,
-		MaxAssetNameBytes:     12,
-		MaxAssetUnitNameBytes: 6,
-		MaxAssetURLBytes:      32,
-		MaxAssetDecimals:      4,
-		SupportRekeying:       true,
-		MaxTxnNoteBytes:       500,
+		Asset:                   true,
+		MaxAssetNameBytes:       12,
+		MaxAssetUnitNameBytes:   6,
+		MaxAssetURLBytes:        32,
+		MaxAssetDecimals:        4,
+		SupportRekeying:         true,
+		MaxTxnNoteBytes:         500,
+		MaxAbsoluteTxnNoteBytes: 550,
 
 		// Chosen to be different from one another and from normal proto
 		MaxAppBoxReferences:      2,
@@ -222,7 +223,7 @@ func (ep *EvalParams) reset() {
 		}
 	case ModeApp:
 		if ep.FeeCredit != nil {
-			*ep.FeeCredit = feeCredit(ep.TxnGroup, ep.Proto.MinFee())
+			*ep.FeeCredit = feeCredit(ep.TxnGroup, *ep.Proto)
 		}
 
 		if ep.Proto.EnableAppCostPooling {
