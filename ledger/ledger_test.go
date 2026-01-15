@@ -1139,7 +1139,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	correctTxHeader := transactions.Header{
 		Sender:      addrList[0],
-		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		Fee:         proto.MinFee(),
 		FirstValid:  l.Latest() + 1,
 		LastValid:   l.Latest() + 10,
 		GenesisID:   t.Name(),
@@ -1242,7 +1242,12 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	badTx = correctPay
 	badTx.Note = make([]byte, proto.MaxTxnNoteBytes+1)
-	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field")
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with overly large note field, with extra fee")
+
+	badTx = correctPay
+	badTx.Note = make([]byte, proto.MaxAbsoluteTxnNoteBytes+1)
+	badTx.Fee, _ = proto.MinFee().MulMicros(10e6) // 10x the fee, just to show it's not a fee problem
+	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad), "added tx with very very large note field")
 
 	badTx = correctPay
 	badTx.Sender = basics.Address{}

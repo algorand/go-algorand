@@ -554,3 +554,298 @@ func TestSummarizeFees_BigNotes(t *testing.T) {
 		assert.Equal(t, basics.Micros(1000), tip, "Tip should be 1000")
 	})
 }
+
+// TestFeeFactor_BigPrograms tests the FeeFactor calculation with large application programs
+func TestFeeFactor_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	// v41: MaxExtraAppProgramPages = MaxAbsoluteExtraProgramPages = 3
+	// MaxAppProgramLen = 2048, MaxAppTotalProgramLen = 2048
+	// Standard total limit: (1 + 3) * 2048 = 8192 bytes
+
+	// vFuture: MaxAbsoluteExtraProgramPages = 7 (larger)
+	// Standard limit stays the same though
+
+	tests := []struct {
+		name           string
+		proto          config.ConsensusParams
+		approvalSize   int
+		clearSize      int
+		expectedFactor basics.Micros
+	}{
+		{
+			name:           "v41: standard programs (4KB + 4KB = 8KB)",
+			proto:          v41,
+			approvalSize:   4096,
+			clearSize:      4096,
+			expectedFactor: 1e6,
+		},
+		{
+			name:           "vFuture: standard programs (4KB + 4KB = 8KB)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4096,
+			expectedFactor: 1e6,
+		},
+		{
+			name:           "vFuture: 1 extra byte (8193 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4097,
+			expectedFactor: 1e6 + 1000,
+		},
+		{
+			name:           "vFuture: 100 extra bytes (8292 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      4196,
+			expectedFactor: 1e6 + 100000,
+		},
+		{
+			name:           "vFuture: 1024 extra bytes (9216 total)",
+			proto:          vFuture,
+			approvalSize:   4096,
+			clearSize:      5120,
+			expectedFactor: 1e6 + 1024000,
+		},
+		{
+			name:           "vFuture: maximum allowed (16KB total with 7 extra pages)",
+			proto:          vFuture,
+			approvalSize:   8192,
+			clearSize:      8192,
+			expectedFactor: 1e6 + (16384-8192)*1000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 100000},
+					FirstValid: 100,
+					LastValid:  200,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // App creation
+					ApprovalProgram:   make([]byte, tt.approvalSize),
+					ClearStateProgram: make([]byte, tt.clearSize),
+				},
+			}
+
+			factor := tx.FeeFactor(tt.proto)
+			assert.Equal(t, tt.expectedFactor, factor, "FeeFactor mismatch for approval=%d, clear=%d", tt.approvalSize, tt.clearSize)
+		})
+	}
+}
+
+// TestWellFormed_BigPrograms tests application program size validation
+func TestWellFormed_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v41 := config.Consensus[protocol.ConsensusV41]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	spec := SpecialAddresses{
+		FeeSink:     basics.Address{0x01},
+		RewardsPool: basics.Address{0x02},
+	}
+
+	tests := []struct {
+		name         string
+		proto        config.ConsensusParams
+		approvalSize int
+		clearSize    int
+		extraPages   uint32
+		shouldError  bool
+		errorMsg     string
+	}{
+		// v41: MaxAbsoluteExtraProgramPages = 3
+		{
+			name:         "v41: at limit with 3 extra pages",
+			proto:        v41,
+			approvalSize: 8190,
+			clearSize:    2, // Two bytes: version 6, return
+			extraPages:   3,
+			shouldError:  false,
+		},
+		{
+			name:         "v41: exceeds extra pages limit",
+			proto:        v41,
+			approvalSize: 8190,
+			clearSize:    2,
+			extraPages:   4,
+			shouldError:  true,
+			errorMsg:     "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 3",
+		},
+		// vFuture: MaxAbsoluteExtraProgramPages = 7
+		{
+			name:         "vFuture: at limit with 7 extra pages",
+			proto:        vFuture,
+			approvalSize: 16382,
+			clearSize:    2,
+			extraPages:   7,
+			shouldError:  false,
+		},
+		{
+			name:         "vFuture: exceeds extra pages limit",
+			proto:        vFuture,
+			approvalSize: 16382,
+			clearSize:    2,
+			extraPages:   8,
+			shouldError:  true,
+			errorMsg:     "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 7",
+		},
+		{
+			name:         "vFuture: total program size exceeds limit for given pages",
+			proto:        vFuture,
+			approvalSize: 8192,
+			clearSize:    8193,
+			extraPages:   7,
+			shouldError:  true,
+			errorMsg:     "app programs too long",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create programs with valid TEAL opcodes (version 6, padded with int 1)
+			approval := make([]byte, tt.approvalSize)
+			clear := make([]byte, tt.clearSize)
+			if tt.approvalSize > 0 {
+				approval[0] = 6 // Version 6
+				for i := 1; i < tt.approvalSize; i++ {
+					approval[i] = 0x81 // pushint 1
+				}
+			}
+			if tt.clearSize > 0 {
+				clear[0] = 6 // Version 6
+				for i := 1; i < tt.clearSize; i++ {
+					clear[i] = 0x81 // pushint 1
+				}
+			}
+
+			tx := Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr,
+					Fee:        basics.MicroAlgos{Raw: 100000},
+					FirstValid: 100,
+					LastValid:  200,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // App creation
+					ApprovalProgram:   approval,
+					ClearStateProgram: clear,
+					ExtraProgramPages: tt.extraPages,
+				},
+			}
+
+			err := tx.WellFormed(spec, tt.proto)
+			if tt.shouldError {
+				require.Error(t, err, "Expected error for %s", tt.name)
+				assert.Contains(t, err.Error(), tt.errorMsg, "Error message mismatch")
+			} else {
+				require.NoError(t, err, "Unexpected error for %s", tt.name)
+			}
+		})
+	}
+}
+
+// TestSummarizeFees_BigPrograms tests fee summarization with large programs
+func TestSummarizeFees_BigPrograms(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	addr, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+
+	t.Run("vFuture: single app create with large programs", func(t *testing.T) {
+		// Standard limit: 8192 bytes, using 9216 bytes (1024 extra)
+		tx := Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 10000},
+				FirstValid: 100,
+				LastValid:  200,
+			},
+			ApplicationCallTxnFields: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   make([]byte, 5120),
+				ClearStateProgram: make([]byte, 4096),
+				ExtraProgramPages: 4,
+			},
+		}
+
+		stxn := SignedTxn{Txn: tx}
+		stxnAD := SignedTxnWithAD{SignedTxn: stxn}
+
+		usage, paid, tip := SummarizeFees([]SignedTxnWithAD{stxnAD}, vFuture)
+
+		// Expected: 1e6 + 1024*1000 = 2024000
+		assert.Equal(t, basics.Micros(2024000), usage, "Usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 10000}, paid, "Paid amount incorrect")
+		assert.Equal(t, basics.Micros(0), tip, "Tip should be 0")
+	})
+
+	t.Run("vFuture: group with mixed transaction types", func(t *testing.T) {
+		// Transaction 1: payment with large note
+		tx1 := Transaction{
+			Type: protocol.PaymentTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 2024},
+				FirstValid: 100,
+				LastValid:  200,
+				Note:       make([]byte, 2048), // 1024 extra bytes
+			},
+			PaymentTxnFields: PaymentTxnFields{
+				Receiver: addr,
+				Amount:   basics.MicroAlgos{Raw: 1000},
+			},
+		}
+
+		// Transaction 2: app create with large programs
+		tx2 := Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: Header{
+				Sender:     addr,
+				Fee:        basics.MicroAlgos{Raw: 2024},
+				FirstValid: 100,
+				LastValid:  200,
+			},
+			ApplicationCallTxnFields: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   make([]byte, 4608), // Total 9216 bytes = 1024 extra
+				ClearStateProgram: make([]byte, 4608),
+				ExtraProgramPages: 4,
+			},
+		}
+
+		stxn1 := SignedTxn{Txn: tx1}
+		stxn2 := SignedTxn{Txn: tx2}
+		group := []SignedTxnWithAD{
+			{SignedTxn: stxn1},
+			{SignedTxn: stxn2},
+		}
+
+		usage, paid, tip := SummarizeFees(group, vFuture)
+
+		// Expected usage: (1e6 + 1024*1000) + (1e6 + 1024*1000) = 4048000
+		assert.Equal(t, basics.Micros(4048000), usage, "Group usage calculation incorrect")
+		assert.Equal(t, basics.MicroAlgos{Raw: 4048}, paid, "Group paid amount incorrect")
+		assert.Equal(t, basics.Micros(0), tip, "Tip should be 0")
+	})
+}

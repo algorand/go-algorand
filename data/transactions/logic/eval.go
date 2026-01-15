@@ -1163,6 +1163,21 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		used := uint64(0)
 		var surplus int64
 		var overflow bool
+
+		// First count the extra reading required for any large programs that are available.
+		basicAppProgramLimit := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		for appID := range cx.available.sharedApps {
+			params, _, err := cx.Ledger.AppParams(appID)
+			if err != nil {
+				continue // There may be an app reference that doesn't exist
+			}
+			appSize := len(params.ApprovalProgram) + len(params.ClearStateProgram)
+			if appSize > basicAppProgramLimit {
+				used += uint64(appSize - basicAppProgramLimit)
+			}
+		}
+
+		// Then count the total size of available boxes
 		for br := range cx.available.boxes {
 			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
@@ -5589,6 +5604,9 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// See if the FeeCredit is enough to cover the shortfall
 		shortfall := groupFee.SubSaturate(groupPaid)
 		if cx.FeeCredit == nil || cx.FeeCredit.LessThan(shortfall) {
+			if cx.FeeCredit != nil {
+				groupFee = groupFee.SubSaturate(*cx.FeeCredit)
+			}
 			return fmt.Errorf("group fee %s too small (need %s) %#v", groupPaid, groupFee, cx.subtxns)
 		}
 		*cx.FeeCredit = cx.FeeCredit.SubSaturate(shortfall)

@@ -274,6 +274,10 @@ type ConsensusParams struct {
 	// extra length for application program in pages. A page is MaxAppProgramLen bytes
 	MaxExtraAppProgramPages int
 
+	// MaxAbsoluteExtraProgramPages is the absolute maximum number of extra pages allowed,
+	// even with extra fees paid. Provides DoS protection.
+	MaxAbsoluteExtraProgramPages int
+
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
 	// accessed by a single transaction
@@ -1181,6 +1185,7 @@ func initConsensusProtocols() {
 	v28.LogicSigVersion = 4
 	// Enable support for larger app program size
 	v28.MaxExtraAppProgramPages = 3
+	v28.MaxAbsoluteExtraProgramPages = 3
 	v28.MaxAppProgramLen = 2048
 	// Increase asset URL length to allow for IPFS URLs
 	v28.MaxAssetURLBytes = 96
@@ -1476,7 +1481,8 @@ func initConsensusProtocols() {
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
 	vFuture.CongestionTracking = true
-	vFuture.MaxAbsoluteTxnNoteBytes = 4096 // same as largest AVM value
+	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
+	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

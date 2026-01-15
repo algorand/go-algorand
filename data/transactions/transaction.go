@@ -195,10 +195,12 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 
 // FeeFactor is the factor by which the base transaction fee is multiplied. Some
 // transactions are free, others might cost more because they use extra expensive
-// features (e.g., large Note fields).  It is expressed as in fixed-point integer
-// with 6 digits of precision. So 1e6 is a normal base fee transaction.
+// features (e.g., large Note fields, large app programs).  It is expressed as
+// a fixed-point integer with 6 digits of precision. So 1e6 is a normal base fee
+// transaction.
 func (tx Transaction) FeeFactor(proto config.ConsensusParams) basics.Micros {
-	headerCost := tx.Header.FeeContribution(proto)
+	factor := basics.Micros(1e6)
+	factor = basics.AddSaturate(factor, tx.Header.FeeContribution(proto))
 	switch tx.Type {
 	case protocol.StateProofTx:
 		return 0
@@ -210,10 +212,12 @@ func (tx Transaction) FeeFactor(proto config.ConsensusParams) basics.Micros {
 			// challenge).
 			return 0
 		}
-		return 1e6 + headerCost
+	case protocol.ApplicationCallTx:
+		factor = basics.AddSaturate(factor, tx.ApplicationCallTxnFields.feeContribution(proto))
 	default:
-		return 1e6 + headerCost
+		// no exceptional costs
 	}
+	return factor
 }
 
 // FeeContribution returns the amount a transaction's basic fee factor should be
