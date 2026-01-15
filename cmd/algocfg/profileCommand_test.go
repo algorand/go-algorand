@@ -83,6 +83,7 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableP2PHybridMode)
 		require.Equal(t, ":4190", cfg.P2PHybridNetAddress)
 		require.True(t, cfg.EnableDHTProviders)
+		require.Equal(t, "server", cfg.DHTMode)
 	})
 
 	t.Run("valid config test hybrid archival", func(t *testing.T) {
@@ -103,6 +104,7 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableP2PHybridMode)
 		require.Equal(t, ":4190", cfg.P2PHybridNetAddress)
 		require.True(t, cfg.EnableDHTProviders)
+		require.Equal(t, "server", cfg.DHTMode)
 	})
 
 	t.Run("valid config test hybrid client", func(t *testing.T) {
@@ -124,5 +126,6 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableP2PHybridMode)
 		require.Equal(t, "", cfg.P2PHybridNetAddress)
 		require.True(t, cfg.EnableDHTProviders)
+		require.Equal(t, "client", cfg.DHTMode)
 	})
 }

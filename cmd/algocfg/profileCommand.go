@@ -108,6 +108,7 @@ var (
 			cfg.EnableP2PHybridMode = true
 			cfg.P2PHybridNetAddress = ":4190"
 			cfg.EnableDHTProviders = true
+			cfg.DHTMode = "server"
 			return cfg
 		},
 	}
@@ -127,6 +128,7 @@ var (
 			cfg.EnableP2PHybridMode = true
 			cfg.P2PHybridNetAddress = ":4190"
 			cfg.EnableDHTProviders = true
+			cfg.DHTMode = "server"
 			return cfg
 		},
 	}
@@ -138,6 +140,7 @@ var (
 			// P2P config defaults
 			cfg.EnableP2PHybridMode = true
 			cfg.EnableDHTProviders = true
+			cfg.DHTMode = "client"
 			return cfg
 		},
 	}

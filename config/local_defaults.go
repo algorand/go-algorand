@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    37,
+	Version:                                    38,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -50,6 +50,7 @@ var defaultLocal = Local{
 	ConnectionsRateLimitingCount:               60,
 	ConnectionsRateLimitingWindowSeconds:       1,
 	CrashDBDir:                                 "",
+	DHTMode:                                    "",
 	DNSBootstrapID:                             "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)",
 	DNSSecurityFlags:                           9,
 	DeadlockDetection:                          0,
