@@ -1003,7 +1003,8 @@ func TestFieldSetting(t *testing.T) {
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
 	TestApp(t, "itxn_begin; int 500; bzero; itxn_field Note; int 1", ep)
-	TestApp(t, "itxn_begin; int 501; bzero; itxn_field Note; int 1", ep,
+	TestApp(t, "itxn_begin; int 540; bzero; itxn_field Note; int 1", ep) // above basic, under absolute
+	TestApp(t, "itxn_begin; int 551; bzero; itxn_field Note; int 1", ep,
 		"Note may not exceed")
 
 	TestApp(t, "itxn_begin; int 32; bzero; itxn_field VotePK; int 1", ep)
@@ -1045,11 +1046,12 @@ func TestInnerGroup(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	// default sample env starts at 401 (1337+1066-2*1001)
+	// default sample env starts with 401 fee credit (1337+1066-2*1001)
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Need both fees and both payments, 999<1000
-	ledger.NewAccount(appAddr(888), 999+2*MakeTestProto().MinTxnFee-401) // 401 is fee credit
+	minFee := MakeTestProto().MinTxnFee
+	ledger.NewAccount(appAddr(888), 999+2*minFee-401) // 401 is fee credit
 	pay := `
 int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
@@ -1059,9 +1061,31 @@ txn Sender; itxn_field Receiver;
 		"insufficient balance")
 
 	// NewAccount overwrites the existing balance
-	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee-401)
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401)
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
-	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee-401) // replenish
+
+	// Show that inner notes can cause increased fees (values are from the test proto!)
+	//   Note size 500 works fine, no increased fee
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"int 500; bzero; itxn_field Note; itxn_submit; int 1", ep)
+	// Note size 540 increases fee by 1.040_000 factor. But the first problem is
+	// that the default fee population mechanism can't know about the big Note,
+	// so it tries to populate for 2 basic transactions, which is 2002-401=1601.
+	// The "need" is 1.641 because one of the transacvtion's cost goes from 1001
+	// to 1001*1.040 = 1041
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; itxn_submit; int 1", ep,
+		"group fee 1.601mA too small (need 1.641mA)")
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; int 1041; itxn_field Fee; itxn_submit; int 1", ep,
+		"insufficient balance") // the fee was big enough, but now the balance is too small
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401+40) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; int 1041; itxn_field Fee; itxn_submit; int 1", ep)
+
+	// Show some failures
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
 	TestApp(t, "itxn_begin; itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
 		"itxn_begin without itxn_submit")
 	TestApp(t, "itxn_next"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,

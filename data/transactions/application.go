@@ -455,8 +455,8 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		}
 	}
 
-	if ac.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
-		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
+	if ac.ExtraProgramPages > uint32(proto.MaxAbsoluteExtraProgramPages) {
+		return fmt.Errorf("tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = %d", proto.MaxAbsoluteExtraProgramPages)
 	}
 
 	effectiveEPP := ac.ExtraProgramPages
@@ -477,7 +477,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		}
 		// allow maximimum size programs for now, since we have not checked the
 		// app params to know the actual epp.
-		effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
+		effectiveEPP = uint32(proto.MaxAbsoluteExtraProgramPages)
 	}
 
 	if err := ac.WellSizedPrograms(effectiveEPP, proto); err != nil {
@@ -590,6 +590,19 @@ func (ac ApplicationCallTxnFields) WellSizedPrograms(extraPages uint32, proto co
 		return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
 	}
 	return nil
+}
+
+// feeContribution returns the amount an app call's basic fee factor should be
+// increased due to large programs beyond the standard limit.
+func (ac ApplicationCallTxnFields) feeContribution(proto config.ConsensusParams) basics.Micros {
+	totalProgramBytes := len(ac.ApprovalProgram) + len(ac.ClearStateProgram)
+	standardLimit := (1 + proto.MaxExtraAppProgramPages) * proto.MaxAppTotalProgramLen
+
+	if totalProgramBytes > standardLimit {
+		extraBytes := totalProgramBytes - standardLimit
+		return basics.Micros(extraBytes) * 1000
+	}
+	return 0
 }
 
 // AddressByIndex converts an integer index into an address associated with the

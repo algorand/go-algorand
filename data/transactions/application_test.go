@@ -532,7 +532,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ExtraProgramPages: 1,
 			},
 			cv:            cv27,
-			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 0",
+			expectedError: "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 0",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -630,7 +630,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				ExtraProgramPages: 4,
 			},
-			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 3",
+			expectedError: "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 3",
 			cv:            cv28,
 		},
 		{
