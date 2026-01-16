@@ -62,12 +62,25 @@ var TxPoolErrTags = []string{
 }
 
 // TxPoolReevalErrTags is the subset of tags applicable to re-evaluation errors.
-// Pool-level errors (cap, pending_eval, no_space, txn_early) don't occur during reeval.
+// This covers evaluator failures that can arise when replaying already-admitted
+// transactions after a new block commits (duplicates, leases, block full, etc.).
 var TxPoolReevalErrTags = []string{
-	TxPoolErrTagFee, TxPoolErrTagTxnDead, TxPoolErrTagTooLarge, TxPoolErrTagGroupID,
-	TxPoolErrTagTxIDEval, TxPoolErrTagLeaseEval, TxPoolErrTagNotWell,
-	TxPoolErrTagTealErr, TxPoolErrTagTealReject, TxPoolErrTagMinBalance,
-	TxPoolErrTagOverspend, TxPoolErrTagAssetBalance, TxPoolErrTagEvalGeneric,
+	TxPoolErrTagFee,
+	TxPoolErrTagTxnDead,
+	TxPoolErrTagTooLarge,
+	TxPoolErrTagGroupID,
+	TxPoolErrTagTxID,
+	TxPoolErrTagLease,
+	TxPoolErrTagTxIDEval,
+	TxPoolErrTagLeaseEval,
+	TxPoolErrTagNoSpace,
+	TxPoolErrTagNotWell,
+	TxPoolErrTagTealErr,
+	TxPoolErrTagTealReject,
+	TxPoolErrTagMinBalance,
+	TxPoolErrTagOverspend,
+	TxPoolErrTagAssetBalance,
+	TxPoolErrTagEvalGeneric,
 }
 
 // txPoolReevalCounter tracks transaction groups that failed during block assembly

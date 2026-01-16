@@ -2038,6 +2038,7 @@ func TestTxHandlerPostProcessErrorWithVerify(t *testing.T) { //nolint:parallelte
 func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // Not parallel because incomingTxHandlerProcessing mutates global metrics
 	partitiontest.PartitionTest(t)
 
+	// Use fresh metrics to avoid cross-test bleed.
 	defer func() {
 		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 			"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
@@ -2060,6 +2061,7 @@ func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // 
 		return int(result[getMetricName(tag)])
 	}
 
+	// Unwrapped and wrapped pool-level errors should increment the right tag.
 	noSpaceErr := ledgercore.ErrNoSpace
 	txh.rememberReportErrors(noSpaceErr)
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
@@ -2109,6 +2111,7 @@ func (t *blockTicker) Wait() {
 func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:paralleltest // Not parallel because it mutates global metrics
 	partitiontest.PartitionTest(t)
 	defer func() {
+		// Reset metrics so this test can assert exact counts.
 		transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 			"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
 			pools.TxPoolErrTags...,
@@ -2192,6 +2195,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	defer handler.ctxCancel()
 
+	// Trigger a variety of remember/check paths to ensure each tag increments correctly.
 	var wi txBacklogMsg
 	wi.unverifiedTxGroup = []transactions.SignedTxn{{}}
 	handler.postProcessCheckedTxn(&wi)

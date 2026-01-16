@@ -49,6 +49,7 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/stateproof/verify"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
@@ -749,6 +750,84 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	pending = transactionPool.PendingTxGroups()
 	// only one transaction is missing
 	require.Len(t, pending, savedTransactions-1)
+}
+
+func TestTxPoolReevalMetricsRecordLedgerDuplicate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Sanity: ensure tags cover the scenarios we expect to record.
+	require.Contains(t, TxPoolReevalErrTags, TxPoolErrTagTxID)
+	require.Contains(t, TxPoolReevalErrTags, TxPoolErrTagLease)
+	require.Contains(t, TxPoolReevalErrTags, TxPoolErrTagNoSpace)
+
+	// Isolate the counter for this test.
+	origCounter := txPoolReevalCounter
+	txPoolReevalCounter = metrics.NewTagCounter(
+		"algod_tx_pool_reeval_{TAG}",
+		"Number of transaction groups removed from pool during re-evaluation due to {TAG}",
+		TxPoolReevalErrTags...,
+	)
+	t.Cleanup(func() { txPoolReevalCounter = origCounter })
+
+	secrets := make([]*crypto.SignatureSecrets, 2)
+	addresses := make([]basics.Address, 2)
+	for i := 0; i < len(secrets); i++ {
+		secret := keypair()
+		secrets[i] = secret
+		addresses[i] = basics.Address(secret.SignatureVerifier)
+	}
+
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base(), nil)
+
+	base := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  1,
+			LastValid:   20,
+			GenesisHash: mockLedger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: 1},
+		},
+	}
+	txA := base
+	txA.Note = []byte{0xAA}
+	txB := base
+	txB.Note = []byte{0xBB}
+
+	signedA := txA.Sign(secrets[0])
+	signedB := txB.Sign(secrets[0])
+
+	require.NoError(t, transactionPool.RememberOne(signedA))
+	require.NoError(t, transactionPool.RememberOne(signedB))
+
+	eval := newBlockEvaluator(t, mockLedger)
+	require.NoError(t, eval.TransactionGroup(signedB.WithAD()))
+	ufblk, err := eval.GenerateBlock(nil)
+	require.NoError(t, err)
+	vb := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+	require.NoError(t, mockLedger.AddValidatedBlock(vb, agreement.Certificate{}))
+
+	// Intentionally provide a delta without Txids so the recompute path hits the ledger duplicate
+	// detection instead of skipping via committedTxIDs filtering.
+	delta := vb.Delta()
+	delta.Txids = nil
+	transactionPool.OnNewBlock(vb.Block(), delta)
+
+	// Expect a re-eval tag for txid duplicate and that only the uncommitted txn remains pending.
+	metricsMap := map[string]float64{}
+	txPoolReevalCounter.AddMetric(metricsMap)
+	require.Equal(t, float64(1), metricsMap["algod_tx_pool_reeval_"+TxPoolErrTagTxID])
+	pending := transactionPool.PendingTxGroups()
+	require.Len(t, pending, 1)
+	require.Equal(t, signedA.ID(), pending[0][0].ID())
 }
 
 func TestOverspender(t *testing.T) {
