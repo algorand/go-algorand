@@ -1,0 +1,201 @@
+name: Auto-label and prefix PRs
+on:
+  pull_request:
+    branches:
+      - master
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  auto_label_and_prefix:
+    runs-on: ubuntu-latest
+    name: Auto-label and add prefix to PR
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          base_sha: ${{ github.event.pull_request.base.sha }}
+          sha: ${{ github.event.pull_request.head.sha }}
+
+      - name: Analyze PR and determine label/prefix
+        id: analyze
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          #!/bin/bash
+          set -e
+
+          # Convert changed files to array
+          readarray -t files <<< "$CHANGED_FILES"
+
+          # Count changes by top-level directory
+          declare -A dir_counts
+          total_files=0
+          new_files_count=0
+          test_only=true
+          doc_only=true
+
+          for file in "${files[@]}"; do
+            if [[ -z "$file" ]]; then continue; fi
+            total_files=$((total_files + 1))
+
+            # Extract top-level directory
+            if [[ "$file" =~ ^([^/]+)/ ]]; then
+              dir="${BASH_REMATCH[1]}"
+              dir_counts["$dir"]=$((${dir_counts["$dir"]:-0} + 1))
+            fi
+
+            # Check file characteristics
+            if [[ ! "$file" =~ _test\.go$ && ! "$file" =~ ^test/ ]]; then
+              test_only=false
+            fi
+            if [[ ! "$file" =~ \.(md|txt)$ && ! "$file" =~ ^docs?/ ]]; then
+              doc_only=false
+            fi
+            if git diff --name-status ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | grep -q "^A.*$file"; then
+              new_files_count=$((new_files_count + 1))
+            fi
+          done
+
+          # Find most-changed directory
+          max_count=0
+          max_dir=""
+          for dir in "${!dir_counts[@]}"; do
+            if [[ ${dir_counts[$dir]} -gt $max_count ]]; then
+              max_count=${dir_counts[$dir]}
+              max_dir="$dir"
+            fi
+          done
+
+          # Determine prefix based on most-changed directory
+          prefix=""
+          case "$max_dir" in
+            network) prefix="network" ;;
+            ledger) prefix="ledger" ;;
+            agreement) prefix="agreement" ;;
+            data) prefix="data" ;;
+            cmd) prefix="cmd" ;;
+            daemon) prefix="daemon" ;;
+            crypto) prefix="crypto" ;;
+            node) prefix="node" ;;
+            config) prefix="config" ;;
+            util) prefix="util" ;;
+            tools) prefix="tools" ;;
+            test) prefix="test" ;;
+            logging) prefix="logging" ;;
+            rpcs) prefix="rpcs" ;;
+            protocol) prefix="protocol" ;;
+            metrics) prefix="metrics" ;;
+            catchup) prefix="catchup" ;;
+            stateproof) prefix="stateproof" ;;
+            netdeploy) prefix="netdeploy" ;;
+            scripts) prefix="scripts" ;;
+            gen) prefix="gen" ;;
+            *)
+              # If unknown or multiple dirs, try to infer from title/body
+              if [[ "$PR_TITLE $PR_BODY" =~ [Mm]etric ]]; then
+                prefix="metrics"
+              elif [[ "$max_dir" != "" ]]; then
+                prefix="$max_dir"
+              else
+                prefix="misc"
+              fi
+              ;;
+          esac
+
+          # Determine label
+          label=""
+          pr_text_lower=$(echo "$PR_TITLE $PR_BODY" | tr '[:upper:]' '[:lower:]')
+
+          # Check for Bug-Fix indicators
+          if [[ "$pr_text_lower" =~ (fix|bug|regression|crash|panic|deadlock|race|correct) ]]; then
+            label="Bug-Fix"
+          # Check for Skip-Release-Notes indicators
+          elif [[ "$test_only" == "true" || "$doc_only" == "true" ]] || \
+               [[ "$pr_text_lower" =~ (refactor|cleanup|tidy|lint|fmt|format|comment) && $new_files_count -eq 0 ]]; then
+            label="Skip-Release-Notes"
+          # Check for New Feature indicators (conservative: explicit mention or major new code)
+          elif [[ "$pr_text_lower" =~ (new feature|implement.*feature) ]] || \
+               [[ $new_files_count -gt 5 && $total_files -gt 10 ]]; then
+            label="New Feature"
+          # Check for Not-Yet-Enabled
+          elif [[ "$pr_text_lower" =~ (experimental|not.yet.enabled|feature.flag|disabled) ]]; then
+            label="Not-Yet-Enabled"
+          # Default to Enhancement
+          else
+            label="Enhancement"
+          fi
+
+          echo "prefix=$prefix" >> $GITHUB_OUTPUT
+          echo "label=$label" >> $GITHUB_OUTPUT
+          echo "total_files=$total_files" >> $GITHUB_OUTPUT
+
+          # Create summary
+          echo "## 🤖 PR Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Detected prefix**: \`$prefix\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Detected label**: \`$label\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Files changed**: $total_files" >> $GITHUB_STEP_SUMMARY
+          echo "**Most-changed directory**: $max_dir ($max_count files)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Update PR title with prefix
+        if: ${{ !contains(github.event.pull_request.title, ':') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREFIX: ${{ steps.analyze.outputs.prefix }}
+          CURRENT_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          new_title="${PREFIX}: ${CURRENT_TITLE}"
+          gh pr edit "$PR_NUMBER" --title "$new_title"
+          echo "✅ Updated PR title to: $new_title" >> $GITHUB_STEP_SUMMARY
+
+      - name: Apply label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          LABEL: ${{ steps.analyze.outputs.label }}
+        run: |
+          gh pr edit "$PR_NUMBER" --add-label "$LABEL"
+          echo "✅ Applied label: $LABEL" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prefix = '${{ steps.analyze.outputs.prefix }}';
+            const label = '${{ steps.analyze.outputs.label }}';
+            const totalFiles = '${{ steps.analyze.outputs.total_files }}';
+            const hadPrefix = '${{ contains(github.event.pull_request.title, ':') }}' === 'true';
+
+            let message = '## 🤖 Automated PR Classification\n\n';
+
+            if (!hadPrefix) {
+              message += `✏️ **Added prefix**: \`${prefix}:\`\n`;
+            } else {
+              message += `ℹ️ **Detected prefix**: \`${prefix}:\` (already present)\n`;
+            }
+
+            message += `🏷️ **Applied label**: \`${label}\`\n`;
+            message += `📊 **Analysis**: ${totalFiles} file(s) changed\n\n`;
+            message += '---\n';
+            message += '*If the prefix or label is incorrect, please update them manually. This automation learns from the most-changed directory and PR content.*';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
