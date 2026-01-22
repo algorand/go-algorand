@@ -18,6 +18,7 @@ package pools
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -42,7 +43,13 @@ const (
 	TxPoolErrTagLease       = "lease"
 	TxPoolErrTagTxIDEval    = "txid_eval"
 	TxPoolErrTagLeaseEval   = "lease_eval"
-	TxPoolErrTagEvalGeneric = "eval"
+	TxPoolErrTagNotWell     = "not_well"     // TxnNotWellFormedError - malformed transaction
+	TxPoolErrTagTealErr     = "teal_err"     // TEAL runtime error (logic.EvalError)
+	TxPoolErrTagTealReject   = "teal_reject"   // TEAL returned false ("rejected by ApprovalProgram")
+	TxPoolErrTagMinBalance   = "min_balance"  // Account balance below minimum
+	TxPoolErrTagOverspend    = "overspend"    // Insufficient Algo funds
+	TxPoolErrTagAssetBalance = "asset_bal"    // Insufficient asset balance
+	TxPoolErrTagEvalGeneric  = "eval"         // Other evaluation errors (catch-all)
 )
 
 // TxPoolErrTags is the list of all error tags for use with TagCounter.
@@ -50,14 +57,17 @@ var TxPoolErrTags = []string{
 	TxPoolErrTagCap, TxPoolErrTagPendingEval, TxPoolErrTagNoSpace, TxPoolErrTagFee,
 	TxPoolErrTagTxnDead, TxPoolErrTagTxnEarly, TxPoolErrTagTooLarge, TxPoolErrTagGroupID,
 	TxPoolErrTagTxID, TxPoolErrTagLease, TxPoolErrTagTxIDEval, TxPoolErrTagLeaseEval,
-	TxPoolErrTagEvalGeneric,
+	TxPoolErrTagNotWell, TxPoolErrTagTealErr, TxPoolErrTagTealReject,
+	TxPoolErrTagMinBalance, TxPoolErrTagOverspend, TxPoolErrTagAssetBalance, TxPoolErrTagEvalGeneric,
 }
 
 // TxPoolReevalErrTags is the subset of tags applicable to re-evaluation errors.
 // Pool-level errors (cap, pending_eval, no_space, txn_early) don't occur during reeval.
 var TxPoolReevalErrTags = []string{
 	TxPoolErrTagFee, TxPoolErrTagTxnDead, TxPoolErrTagTooLarge, TxPoolErrTagGroupID,
-	TxPoolErrTagTxIDEval, TxPoolErrTagLeaseEval, TxPoolErrTagEvalGeneric,
+	TxPoolErrTagTxIDEval, TxPoolErrTagLeaseEval, TxPoolErrTagNotWell,
+	TxPoolErrTagTealErr, TxPoolErrTagTealReject, TxPoolErrTagMinBalance,
+	TxPoolErrTagOverspend, TxPoolErrTagAssetBalance, TxPoolErrTagEvalGeneric,
 }
 
 // txPoolReevalCounter tracks transaction groups that failed during block assembly
@@ -100,6 +110,11 @@ func ClassifyTxPoolError(err error) string {
 		}
 	}
 
+	// Fall back to message-based classification for untyped errors
+	if tag := classifyByErrorMessage(err.Error()); tag != "" {
+		return tag
+	}
+
 	return TxPoolErrTagEvalGeneric
 }
 
@@ -130,8 +145,42 @@ func classifyUnwrappedError(err error) string {
 			return TxPoolErrTagTooLarge
 		}
 		return TxPoolErrTagGroupID
+	case *ledgercore.TxnNotWellFormedError:
+		return TxPoolErrTagNotWell
 	case logic.EvalError:
-		return TxPoolErrTagEvalGeneric
+		// TEAL runtime error - the AVM encountered an error during execution
+		return TxPoolErrTagTealErr
 	}
+	return ""
+}
+
+// classifyByErrorMessage examines the error message string to classify errors
+// that don't have specific types. This is called after type-based classification
+// fails. The error message patterns are matched in order of specificity.
+func classifyByErrorMessage(errMsg string) string {
+	// TEAL rejection - ApprovalProgram returned false (no runtime error)
+	if strings.Contains(errMsg, "rejected by ApprovalProgram") {
+		return TxPoolErrTagTealReject
+	}
+
+	// Minimum balance violations
+	if strings.Contains(errMsg, "balance") && strings.Contains(errMsg, "below min") {
+		return TxPoolErrTagMinBalance
+	}
+
+	// Asset balance underflow (check before generic overspend)
+	// Pattern: "underflow on subtracting %d from sender amount %d"
+	if strings.Contains(errMsg, "sender amount") ||
+		(strings.Contains(errMsg, "underflow") && strings.Contains(errMsg, "amount")) {
+		return TxPoolErrTagAssetBalance
+	}
+
+	// Algo overspend / insufficient funds
+	// Pattern: "overspend (account %v, data %+v, tried to spend %v)"
+	if strings.Contains(errMsg, "overspend") ||
+		strings.Contains(errMsg, "insufficient") {
+		return TxPoolErrTagOverspend
+	}
+
 	return ""
 }

@@ -77,13 +77,12 @@ var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 	pools.TxPoolErrTags...,
 )
 
-// txPoolCheckTagNotWellFormed is only used by the check counter, not the remember counter.
-const txPoolCheckTagNotWellFormed = "not_well"
-
 var transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
 	"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
-	txPoolCheckTagNotWellFormed, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
-	pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval, pools.TxPoolErrTagEvalGeneric,
+	pools.TxPoolErrTagNotWell, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
+	pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval,
+	pools.TxPoolErrTagTealErr, pools.TxPoolErrTagTealReject, pools.TxPoolErrTagMinBalance,
+	pools.TxPoolErrTagOverspend, pools.TxPoolErrTagAssetBalance, pools.TxPoolErrTagEvalGeneric,
 )
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
@@ -404,7 +403,7 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 func (handler *TxHandler) checkReportErrors(err error) {
 	switch err := err.(type) {
 	case *ledgercore.TxnNotWellFormedError:
-		transactionMessageTxPoolCheckCounter.Add(txPoolCheckTagNotWellFormed, 1)
+		transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagNotWell, 1)
 		return
 	case *bookkeeping.TxnDeadError:
 		if err.Early {
