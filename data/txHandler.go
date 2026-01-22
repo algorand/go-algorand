@@ -102,6 +102,11 @@ const (
 	txPoolRememberTagTxnNotWellFormed = "not_well"
 )
 
+type transactionPool interface {
+	Test(stxns []transactions.SignedTxn) error
+	Remember(stxns []transactions.SignedTxn) error
+}
+
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
 	rawmsg                *network.IncomingMessage      // the raw message from the network
@@ -115,7 +120,7 @@ type txBacklogMsg struct {
 
 // TxHandler handles transaction messages
 type TxHandler struct {
-	txPool                     *pools.TransactionPool
+	txPool                     transactionPool
 	ledger                     *Ledger
 	txVerificationPool         execpool.BacklogPool
 	backlogQueue               chan *txBacklogMsg
@@ -142,7 +147,7 @@ type TxHandler struct {
 
 // TxHandlerOpts is TxHandler configuration options
 type TxHandlerOpts struct {
-	TxPool        *pools.TransactionPool
+	TxPool        transactionPool
 	ExecutionPool execpool.BacklogPool
 	Ledger        *Ledger
 	Net           network.GossipNode
