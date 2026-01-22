@@ -152,50 +152,50 @@ jobs:
 
       - name: Update PR title with prefix
         if: ${{ !contains(github.event.pull_request.title, ':') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PREFIX: ${{ steps.analyze.outputs.prefix }}
-          CURRENT_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          new_title="${PREFIX}: ${CURRENT_TITLE}"
-          gh pr edit "$PR_NUMBER" --title "$new_title"
-          echo "✅ Updated PR title to: $new_title" >> $GITHUB_STEP_SUMMARY
-
-      - name: Apply label
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          LABEL: ${{ steps.analyze.outputs.label }}
-        run: |
-          gh pr edit "$PR_NUMBER" --add-label "$LABEL"
-          echo "✅ Applied label: $LABEL" >> $GITHUB_STEP_SUMMARY
-
-      - name: Comment on PR
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
             const prefix = '${{ steps.analyze.outputs.prefix }}';
-            const label = '${{ steps.analyze.outputs.label }}';
-            const totalFiles = '${{ steps.analyze.outputs.total_files }}';
-            const hadPrefix = '${{ contains(github.event.pull_request.title, ':') }}' === 'true';
+            const currentTitle = context.payload.pull_request.title;
+            const newTitle = `${prefix}: ${currentTitle}`;
 
-            let message = '## 🤖 Automated PR Classification\n\n';
+            try {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                title: newTitle
+              });
 
-            if (!hadPrefix) {
-              message += `✏️ **Added prefix**: \`${prefix}:\`\n`;
-            } else {
-              message += `ℹ️ **Detected prefix**: \`${prefix}:\` (already present)\n`;
+              core.summary.addRaw(`✅ Updated PR title to: ${newTitle}`);
+              await core.summary.write();
+            } catch (error) {
+              core.warning(`Failed to update PR title: ${error.message}`);
+              core.summary.addRaw(`⚠️ Could not update PR title automatically. Suggested: ${newTitle}`);
+              await core.summary.write();
             }
 
-            message += `🏷️ **Applied label**: \`${label}\`\n`;
-            message += `📊 **Analysis**: ${totalFiles} file(s) changed\n\n`;
-            message += '---\n';
-            message += '*If the prefix or label is incorrect, please update them manually. This automation learns from the most-changed directory and PR content.*';
+      - name: Apply label
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = '${{ steps.analyze.outputs.label }}';
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: message
-            });
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: [label]
+              });
+
+              core.summary.addRaw(`\n✅ Applied label: ${label}`);
+              await core.summary.write();
+            } catch (error) {
+              core.warning(`Failed to apply label: ${error.message}`);
+              core.summary.addRaw(`\n⚠️ Could not apply label automatically. Suggested: ${label}`);
+              await core.summary.write();
+            }
+
