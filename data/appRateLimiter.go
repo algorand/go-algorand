@@ -169,6 +169,9 @@ func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []b
 // in order to make it testable
 func (r *appRateLimiter) shouldDropAt(txgroup []transactions.SignedTxn, origin []byte, nowNano int64) bool {
 	keysBuckets := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
+	if keysBuckets == nil {
+		return false
+	}
 	defer putAppKeyBuf(keysBuckets)
 	if len(keysBuckets.keys) == 0 {
 		return false
@@ -199,6 +202,27 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, nowNano i
 	}
 
 	return false
+}
+
+func (r *appRateLimiter) penalizeEvalError(txgroup []transactions.SignedTxn, origin []byte) {
+	keysBuckets := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
+	if keysBuckets == nil {
+		return
+	}
+	defer putAppKeyBuf(keysBuckets)
+	if len(keysBuckets.keys) == 0 {
+		return
+	}
+
+	nowNano := time.Now().UnixNano()
+	curInt := r.interval(nowNano)
+
+	const penaltyFactor = 4 // penalize by 25% of the service rate
+	for i, key := range keysBuckets.keys {
+		b := keysBuckets.buckets[i]
+		entry, _ := r.entry(&r.buckets[b], key, curInt)
+		entry.cur.Add(max(1, int64(r.serviceRatePerWindow)/penaltyFactor))
+	}
 }
 
 func (r *appRateLimiter) len() int {
@@ -241,6 +265,17 @@ func putAppKeyBuf(buf *appKeyBuf) {
 
 // txgroupToKeys converts txgroup data to keys
 func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64, salt [16]byte, numBuckets int) *appKeyBuf {
+	hasApps := false
+	for i := range txgroup {
+		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
+			hasApps = true
+			break
+		}
+	}
+	if !hasApps {
+		return nil
+	}
+
 	keysBuckets := getAppKeyBuf()
 	// since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest down to 8.
 	// Rationale: we expect thousands of apps sent from thousands of peers,

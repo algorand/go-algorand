@@ -152,6 +152,7 @@ var defaultLocal = Local{
 	TrackerDBDir:                               "",
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
+	TxBacklogAppRateLimitingCongestionPct:      10,
 	TxBacklogAppRateLimitingCountERLDrops:      false,
 	TxBacklogAppTxPerSecondRate:                100,
 	TxBacklogAppTxRateLimiterMaxSize:           1048576,
