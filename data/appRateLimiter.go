@@ -201,6 +201,23 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, nowNano i
 	return false
 }
 
+func (r *appRateLimiter) penalizeEvalError(txgroup []transactions.SignedTxn, origin []byte) {
+	keysBuckets := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
+	defer putAppKeyBuf(keysBuckets)
+	if len(keysBuckets.keys) == 0 {
+		return
+	}
+
+	nowNano := time.Now().UnixNano()
+	curInt := r.interval(nowNano)
+
+	for i, key := range keysBuckets.keys {
+		b := keysBuckets.buckets[i]
+		entry, _ := r.entry(&r.buckets[b], key, curInt)
+		entry.cur.Add(int64(r.serviceRatePerWindow) / 4)
+	}
+}
+
 func (r *appRateLimiter) len() int {
 	var count int
 	for i := 0; i < numBuckets; i++ {

@@ -541,6 +541,12 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
+		if handler.appLimiter != nil {
+			handler.appLimiter.penalizeEvalError(
+				wi.unverifiedTxGroup, wi.rawmsg.Sender.RoutingAddr(),
+			)
+		}
+
 		handler.rememberReportErrors(err)
 		logging.Base().Debugf("could not remember tx: %v", err)
 		// if in synchronous mode, signal the completion of the operation
