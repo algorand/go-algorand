@@ -125,3 +125,40 @@ func TestTxPoolReevalCounterCoversReevalTags(t *testing.T) {
 		require.Equal(t, float64(1), metricsMap["algod_tx_pool_reeval_"+tc.tag])
 	}
 }
+
+func TestClassifyByErrorMessage(t *testing.T) {
+	t.Parallel()
+	// Test message-based classification for errors without specific types.
+	// These patterns match actual error messages from the ledger/evaluator.
+	tcases := []struct {
+		name   string
+		errMsg string
+		tag    string
+	}{
+		// TEAL rejection
+		{name: "teal_reject", errMsg: "transaction rejected by ApprovalProgram", tag: TxPoolErrTagTealReject},
+		{name: "teal_reject_context", errMsg: "app 123: rejected by ApprovalProgram", tag: TxPoolErrTagTealReject},
+
+		// Minimum balance violations
+		{name: "min_balance", errMsg: "account XYZ balance 1000 below min 2000", tag: TxPoolErrTagMinBalance},
+		{name: "min_balance_alt", errMsg: "balance would be below min required", tag: TxPoolErrTagMinBalance},
+
+		// Asset balance underflow
+		{name: "asset_underflow", errMsg: "underflow on subtracting 100 from sender amount 50", tag: TxPoolErrTagAssetBalance},
+		{name: "asset_sender_amount", errMsg: "cannot deduct from sender amount", tag: TxPoolErrTagAssetBalance},
+
+		// Algo overspend
+		{name: "overspend", errMsg: "overspend (account ABC, data {...}, tried to spend 1000)", tag: TxPoolErrTagOverspend},
+		{name: "insufficient_balance", errMsg: "insufficient balance", tag: TxPoolErrTagOverspend},
+
+		// Unknown falls through to generic
+		{name: "unknown", errMsg: "some other error", tag: TxPoolErrTagEvalGeneric},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := errors.New(tc.errMsg)
+			require.Equal(t, tc.tag, ClassifyTxPoolError(err))
+		})
+	}
+}

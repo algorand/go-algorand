@@ -49,7 +49,7 @@ const (
 	TxPoolErrTagMinBalance   = "min_balance"  // Account balance below minimum
 	TxPoolErrTagOverspend    = "overspend"    // Insufficient Algo funds
 	TxPoolErrTagAssetBalance = "asset_bal"    // Insufficient asset balance
-	TxPoolErrTagEvalGeneric  = "eval"         // Other evaluation errors (catch-all)
+	TxPoolErrTagEvalGeneric  = "eval"         // Other evaluation errors not matching known patterns
 )
 
 // TxPoolErrTags is the list of all error tags for use with TagCounter.
@@ -64,6 +64,8 @@ var TxPoolErrTags = []string{
 // TxPoolReevalErrTags is the subset of tags applicable to re-evaluation errors.
 // This covers evaluator failures that can arise when replaying already-admitted
 // transactions after a new block commits (duplicates, leases, block full, etc.).
+// Note: TxPoolErrTagCap and TxPoolErrTagPendingEval are excluded because they
+// are pool-level admission errors that cannot occur during re-evaluation.
 var TxPoolReevalErrTags = []string{
 	TxPoolErrTagFee,
 	TxPoolErrTagTxnDead,
@@ -189,9 +191,11 @@ func classifyByErrorMessage(errMsg string) string {
 	}
 
 	// Algo overspend / insufficient funds
-	// Pattern: "overspend (account %v, data %+v, tried to spend %v)"
+	// Patterns:
+	//   - "overspend (account %v, data %+v, tried to spend %v)" from ledger/eval/eval.go
+	//   - "insufficient balance" from inner transaction execution
 	if strings.Contains(errMsg, "overspend") ||
-		strings.Contains(errMsg, "insufficient") {
+		strings.Contains(errMsg, "insufficient balance") {
 		return TxPoolErrTagOverspend
 	}
 
