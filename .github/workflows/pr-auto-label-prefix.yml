@@ -79,41 +79,55 @@ jobs:
             fi
           done
 
+          # Check for special subdirectories first
+          avm_files=0
+          for file in "${files[@]}"; do
+            if [[ "$file" =~ ^data/transactions/logic/ ]]; then
+              avm_files=$((avm_files + 1))
+            fi
+          done
+
           # Determine prefix based on most-changed directory
           prefix=""
-          case "$max_dir" in
-            network) prefix="network" ;;
-            ledger) prefix="ledger" ;;
-            agreement) prefix="agreement" ;;
-            data) prefix="data" ;;
-            cmd) prefix="cmd" ;;
-            daemon) prefix="daemon" ;;
-            crypto) prefix="crypto" ;;
-            node) prefix="node" ;;
-            config) prefix="config" ;;
-            util) prefix="util" ;;
-            tools) prefix="tools" ;;
-            test) prefix="test" ;;
-            logging) prefix="logging" ;;
-            rpcs) prefix="rpcs" ;;
-            protocol) prefix="protocol" ;;
-            metrics) prefix="metrics" ;;
-            catchup) prefix="catchup" ;;
-            stateproof) prefix="stateproof" ;;
-            netdeploy) prefix="netdeploy" ;;
-            scripts) prefix="scripts" ;;
-            gen) prefix="gen" ;;
-            *)
-              # If unknown or multiple dirs, try to infer from title/body
-              if [[ "$PR_TITLE $PR_BODY" =~ [Mm]etric ]]; then
-                prefix="metrics"
-              elif [[ "$max_dir" != "" ]]; then
-                prefix="$max_dir"
-              else
-                prefix="misc"
-              fi
-              ;;
-          esac
+          # Special case: AVM (data/transactions/logic)
+          # If most changes are in data/ and at least one AVM file changed, use AVM prefix
+          if [[ $avm_files -gt 0 && "$max_dir" == "data" ]]; then
+            prefix="AVM"
+          else
+            case "$max_dir" in
+              network) prefix="network" ;;
+              ledger) prefix="ledger" ;;
+              agreement) prefix="agreement" ;;
+              data) prefix="data" ;;
+              cmd) prefix="cmd" ;;
+              daemon) prefix="daemon" ;;
+              crypto) prefix="crypto" ;;
+              node) prefix="node" ;;
+              config) prefix="config" ;;
+              util) prefix="util" ;;
+              tools) prefix="tools" ;;
+              test) prefix="test" ;;
+              logging) prefix="logging" ;;
+              rpcs) prefix="rpcs" ;;
+              protocol) prefix="protocol" ;;
+              metrics) prefix="metrics" ;;
+              catchup) prefix="catchup" ;;
+              stateproof) prefix="stateproof" ;;
+              netdeploy) prefix="netdeploy" ;;
+              scripts) prefix="scripts" ;;
+              gen) prefix="gen" ;;
+              *)
+                # If unknown or multiple dirs, try to infer from title/body
+                if [[ "$PR_TITLE $PR_BODY" =~ [Mm]etric ]]; then
+                  prefix="metrics"
+                elif [[ "$max_dir" != "" ]]; then
+                  prefix="$max_dir"
+                else
+                  prefix="misc"
+                fi
+                ;;
+            esac
+          fi
 
           # Determine label
           label=""
