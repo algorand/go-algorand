@@ -749,6 +749,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		}
 		if _, alreadyCommitted := committedTxIDs[txgroup[0].ID()]; alreadyCommitted {
 			asmStats.EarlyCommittedCount++
+			txPoolReevalCommitted.Inc(nil)
 			continue
 		}
 		err := pool.add(txgroup, &asmStats)
@@ -788,6 +789,8 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			}
+		} else {
+			txPoolReevalSuccess.Inc(nil)
 		}
 	}
 

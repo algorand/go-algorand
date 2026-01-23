@@ -94,6 +94,20 @@ var txPoolReevalCounter = metrics.NewTagCounter(
 	TxPoolReevalErrTags...,
 )
 
+// txPoolReevalSuccess tracks transaction groups successfully re-evaluated
+// after a new block commits.
+var txPoolReevalSuccess = metrics.MakeCounter(metrics.MetricName{
+	Name:        "algod_tx_pool_reeval_success",
+	Description: "Number of transaction groups successfully re-evaluated after new block",
+})
+
+// txPoolReevalCommitted tracks transaction groups removed during re-evaluation
+// because they were already committed in the latest block.
+var txPoolReevalCommitted = metrics.MakeCounter(metrics.MetricName{
+	Name:        "algod_tx_pool_reeval_committed",
+	Description: "Number of transaction groups removed because already committed in latest block",
+})
+
 // ClassifyTxPoolError examines an error from BlockEvaluator.TransactionGroup
 // and returns the appropriate tag for metrics. The error may be wrapped
 // (as from Remember) or unwrapped (as from recomputeBlockEvaluator).
