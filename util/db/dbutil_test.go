@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -417,8 +417,8 @@ func TestSetSynchronousMode(t *testing.T) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	cancelFunc()
 
-	require.Error(t, context.Canceled, setSynchrounousModeHelper(true, ctx, SynchronousModeOff, false))
-	require.Error(t, context.Canceled, setSynchrounousModeHelper(false, ctx, SynchronousModeOff, false))
+	require.ErrorIs(t, setSynchrounousModeHelper(true, ctx, SynchronousModeOff, false), context.Canceled)
+	require.ErrorIs(t, setSynchrounousModeHelper(false, ctx, SynchronousModeOff, false), context.Canceled)
 
 	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeOff-1, false).Error(), "invalid value")
 	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeExtra+1, false).Error(), "invalid value")
@@ -481,11 +481,13 @@ func TestReadingWhileWriting(t *testing.T) {
 
 // using Write-Ahead Logging (WAL)
 func TestLockingTableWhileWritingWAL(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside testLockingTableWhileWriting
 	testLockingTableWhileWriting(t, true)
 }
 
 // using the default Rollback Journal
 func TestLockingTableWhileWritingJournal(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside testLockingTableWhileWriting
 	testLockingTableWhileWriting(t, false)
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -505,8 +505,8 @@ func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (
 	if customFallbackEndpoints == "" {
 		return
 	}
-	endpoints := strings.Split(customFallbackEndpoints, ",")
-	for _, ep := range endpoints {
+	endpoints := strings.SplitSeq(customFallbackEndpoints, ",")
+	for ep := range endpoints {
 		if addr.IsMultiaddr(ep) {
 			fe.endpoints = append(fe.endpoints, ep)
 		} else {

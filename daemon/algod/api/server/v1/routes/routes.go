@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ import (
 )
 
 // V1Routes contains all routes for v1
-// v1 algod paths will route to the sunset message, resulting in a 410 Gone response.
+// These algod paths will route to the sunset message, resulting in a 410 Gone response.
 var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "status",

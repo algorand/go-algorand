@@ -4,9 +4,12 @@ on:
     branches:
       - master
   pull_request:
+
+env:
+  SKIP_GO_INSTALLATION: True
 jobs:
   codegen_verification:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     services:
       converter:
         image: swaggerapi/swagger-converter@sha256:dcfd1c2537f5f271cb4ec942d08aa59ca41b9a24078040061a772afca7e548ae # v1.0.4
@@ -17,15 +20,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          path: go-algorand
-      - name: Uninstall existing go installation
-        run: sudo apt-get -y -q purge golang-go
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
       - name: Run codegen_verification.sh
         env:
           SWAGGER_CONVERTER_API: "http://localhost:8080"
         run: |
-          export GOPATH="${GITHUB_WORKSPACE}/go"
-          cd go-algorand
           scripts/travis/codegen_verification.sh
       - name: Slack Notification
         env:

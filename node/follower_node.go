@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,8 +93,12 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	}
 	node.config = cfg
 
+	var genesisInfo = network.GenesisInfo{
+		GenesisID: genesis.ID(),
+		NetworkID: genesis.Network,
+	}
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, nil, nil)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesisInfo, nil, nil, nil)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -124,7 +128,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 
 	node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node})
 
-	if cfg.IsGossipServer() {
+	if cfg.IsListenServer() {
 		rpcs.MakeHealthService(node.net)
 	}
 

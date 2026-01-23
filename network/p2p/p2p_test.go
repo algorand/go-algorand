@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,12 +21,16 @@ import (
 	"net"
 	"testing"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -240,4 +244,51 @@ func TestP2PMakeHostAddressFilter(t *testing.T) {
 		require.NotEmpty(t, host.Addrs())
 		host.Close()
 	}
+}
+
+func TestP2PPubSubOptions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var opts []pubsub.Option
+	option := DisablePubSubPeerExchange()
+	option(&opts)
+	require.Len(t, opts, 1)
+
+	tracer := &mockRawTracer{}
+	option = SetPubSubMetricsTracer(tracer)
+	option(&opts)
+	require.Len(t, opts, 2)
+
+	filterFunc := func(roleChecker peerstore.RoleChecker, pid peer.ID) bool {
+		return roleChecker.HasRole(pid, phonebook.RelayRole)
+	}
+	checker := &mockRoleChecker{}
+	option = SetPubSubPeerFilter(filterFunc, checker)
+	option(&opts)
+	require.Len(t, opts, 3)
+}
+
+type mockRawTracer struct{}
+
+func (m *mockRawTracer) AddPeer(p peer.ID, proto protocol.ID)             {}
+func (m *mockRawTracer) RemovePeer(p peer.ID)                             {}
+func (m *mockRawTracer) Join(topic string)                                {}
+func (m *mockRawTracer) Leave(topic string)                               {}
+func (m *mockRawTracer) Graft(p peer.ID, topic string)                    {}
+func (m *mockRawTracer) Prune(p peer.ID, topic string)                    {}
+func (m *mockRawTracer) ValidateMessage(msg *pubsub.Message)              {}
+func (m *mockRawTracer) DeliverMessage(msg *pubsub.Message)               {}
+func (m *mockRawTracer) RejectMessage(msg *pubsub.Message, reason string) {}
+func (m *mockRawTracer) DuplicateMessage(msg *pubsub.Message)             {}
+func (m *mockRawTracer) ThrottlePeer(p peer.ID)                           {}
+func (m *mockRawTracer) RecvRPC(rpc *pubsub.RPC)                          {}
+func (m *mockRawTracer) SendRPC(rpc *pubsub.RPC, p peer.ID)               {}
+func (m *mockRawTracer) DropRPC(rpc *pubsub.RPC, p peer.ID)               {}
+func (m *mockRawTracer) UndeliverableMessage(msg *pubsub.Message)         {}
+
+type mockRoleChecker struct{}
+
+func (m *mockRoleChecker) HasRole(pid peer.ID, role phonebook.Role) bool {
+	return true
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -107,10 +107,16 @@ const PlaceholderPublicAddress = "PLEASE_SET_ME"
 // cannot be loaded, the default config is returned (with the error from loading the
 // custom file).
 func LoadConfigFromDisk(custom string) (c Local, err error) {
+	c, _, err = loadConfigFromFile(filepath.Join(custom, ConfigFilename))
+	return
+}
+
+// LoadConfigFromDiskWithMigrations is like LoadConfigFromDisk but also returns migration results
+func LoadConfigFromDiskWithMigrations(custom string) (c Local, migrations []MigrationResult, err error) {
 	return loadConfigFromFile(filepath.Join(custom, ConfigFilename))
 }
 
-func loadConfigFromFile(configFile string) (c Local, err error) {
+func loadConfigFromFile(configFile string) (c Local, migrations []MigrationResult, err error) {
 	c = defaultLocal
 	c.Version = 0 // Reset to 0 so we get the version from the loaded file.
 	c, err = mergeConfigFromFile(configFile, c)
@@ -121,7 +127,7 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	// Migrate in case defaults were changed
 	// If a config file does not have version, it is assumed to be zero.
 	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
-	c, err = migrate(c)
+	c, migrations, err = migrate(c)
 	return
 }
 

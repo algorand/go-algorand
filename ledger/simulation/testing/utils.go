@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -118,7 +118,7 @@ func (env *Environment) Txn(txn transactions.SignedTxn) transactions.ApplyData {
 	env.t.Helper()
 
 	evaluator := env.nextBlock()
-	err := evaluator.Transaction(txn, transactions.ApplyData{})
+	err := evaluator.TransactionGroup(txn.WithAD())
 	require.NoError(env.t, err)
 	newBlock := env.endBlock(evaluator).Block()
 
@@ -239,7 +239,7 @@ func (env *Environment) Rekey(account, rekeyTo basics.Address) {
 // PrepareSimulatorTest creates an environment to test transaction simulations. The caller is
 // responsible for calling Close() on the returned Environment.
 func PrepareSimulatorTest(t *testing.T) Environment {
-	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 100)
+	genesisInitState, keys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 200)
 
 	// Prepare ledger
 	const inMem = true

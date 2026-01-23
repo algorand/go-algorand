@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"strconv"
 	"testing"
@@ -304,7 +305,7 @@ func TestAcctOnline(t *testing.T) {
 				require.NoError(t, err)
 				require.Empty(t, oad)
 			}
-			// check next next account
+			// check next-next account
 			// for the account 2, it set to Offline at round 3
 			// at round 1 + 1 = 2 it online and should te correctly retrieved from DB and lookup
 			nextNextAcctIdx := nextAcctIdx + 1
@@ -871,9 +872,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 	copyGenesisAccts := func() []map[basics.Address]basics.AccountData {
 		accounts := []map[basics.Address]basics.AccountData{{}}
 		accounts[0] = make(map[basics.Address]basics.AccountData, numAccts)
-		for addr, ad := range genesisAccts[0] {
-			accounts[0][addr] = ad
-		}
+		maps.Copy(accounts[0], genesisAccts[0])
 		return accounts
 	}
 

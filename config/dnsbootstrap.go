@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -107,7 +107,7 @@ func parseDNSBootstrap(dnsBootstrapID string, network protocol.NetworkID, defaul
 	}
 
 	// Normalize the dnsBootstrapID and insert the network
-	dnsBootstrapID = strings.Replace(strings.TrimSpace(strings.ToLower(dnsBootstrapID)), "<network>", string(network), -1)
+	dnsBootstrapID = strings.ReplaceAll(strings.TrimSpace(strings.ToLower(dnsBootstrapID)), "<network>", string(network))
 
 	if dnsBootstrapID == "" {
 		return nil, errors.New(bootstrapErrorEmpty)

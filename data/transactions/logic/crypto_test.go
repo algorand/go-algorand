@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -76,7 +76,7 @@ func TestSumhash(t *testing.T) {
 	}
 
 	for _, v := range testVectors {
-		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 12)
+		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 13)
 	}
 }
 
@@ -117,6 +117,18 @@ byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 	testAccepts(t, progText, 1)
 }
 
+func TestSHA512(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// echo -n "hello" | sha512sum
+	progText := `
+byte "hello"; sha512
+byte 0x9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043
+==`
+	testAccepts(t, progText, 13)
+}
+
 func TestMimc(t *testing.T) {
 	// We created test vectors for the MiMC hash function by defining a set of preimages for different
 	// input sizes and calling gnark-crypto's MiMC implementation to compute the expected hash values.
@@ -129,7 +141,7 @@ func TestMimc(t *testing.T) {
 	// output does not change under the hood with new versions.
 	//
 	// We test that malformed inputs panic, in particular we test malfornmed inputs of:
-	// 0 length, lenghts not multiple of 32 bytes, chunks representing values greater than the modulus.
+	// 0 length, lengths not multiple of 32 bytes, chunks representing values greater than the modulus.
 	// We test that well formed inputs hash correctly, testing both single chunk inputs (32-byte) and
 	// multiple chunk inputs (96 bytes).
 	partitiontest.PartitionTest(t)
@@ -246,7 +258,7 @@ func TestVrfVerify(t *testing.T) {
 	testLogic(t, source, LogicVersion, ep)
 }
 
-// BenchMarkVerify is useful to see relative speeds of various crypto verify functions
+// BenchmarkVerify is useful to see relative speeds of various crypto verify functions
 func BenchmarkVerify(b *testing.B) {
 	benches := [][]string{
 		{"pop", "", "int 1234576; int 6712; pop; pop", "int 1"},
@@ -793,7 +805,7 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 }
 
 func BenchmarkHashes(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111"} {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "sha512"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
 			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111") {
 				continue

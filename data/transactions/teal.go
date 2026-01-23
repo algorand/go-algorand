@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,17 +58,18 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 		return false
 	}
 
-	// GlobalDeltas must be equal
 	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
 		return false
 	}
 
-	// Logs must be equal
+	if !slices.Equal(ed.SharedAccts, o.SharedAccts) {
+		return false
+	}
+
 	if !slices.Equal(ed.Logs, o.Logs) {
 		return false
 	}
 
-	// InnerTxns must be equal
 	if len(ed.InnerTxns) != len(o.InnerTxns) {
 		return false
 	}

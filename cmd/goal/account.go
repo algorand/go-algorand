@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -161,16 +161,12 @@ func init() {
 	changeOnlineCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different due to rekeying")
 	changeOnlineCmd.Flags().BoolVarP(&online, "online", "o", true, "Set this account to online or offline")
 	changeOnlineCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
-	changeOnlineCmd.Flags().Uint64VarP((*uint64)(&firstValid), "firstRound", "", 0, "")
 	changeOnlineCmd.Flags().Uint64VarP((*uint64)(&firstValid), "firstvalid", "", 0, "FirstValid for the status change transaction (0 for current)")
-	changeOnlineCmd.Flags().Uint64VarP((*uint64)(&numValidRounds), "validRounds", "", 0, "")
 	changeOnlineCmd.Flags().Uint64VarP((*uint64)(&numValidRounds), "validrounds", "v", 0, "The validity period for the status change transaction")
 	changeOnlineCmd.Flags().Uint64Var((*uint64)(&lastValid), "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	changeOnlineCmd.Flags().StringVarP(&statusChangeLease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
 	changeOnlineCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file")
 	changeOnlineCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	changeOnlineCmd.Flags().MarkDeprecated("firstRound", "use --firstvalid instead")
-	changeOnlineCmd.Flags().MarkDeprecated("validRounds", "use --validrounds instead")
 
 	// addParticipationKey flags
 	addParticipationKeyCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account to associate with the generated partkey")
@@ -217,15 +213,11 @@ func init() {
 	markNonparticipatingCmd.MarkFlagRequired("address")
 	markNonparticipatingCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from address due to rekeying")
 	markNonparticipatingCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
-	markNonparticipatingCmd.Flags().Uint64VarP((*uint64)(&firstValid), "firstRound", "", 0, "")
 	markNonparticipatingCmd.Flags().Uint64VarP((*uint64)(&firstValid), "firstvalid", "", 0, "FirstValid for the status change transaction (0 for current)")
-	markNonparticipatingCmd.Flags().Uint64VarP((*uint64)(&numValidRounds), "validRounds", "", 0, "")
 	markNonparticipatingCmd.Flags().Uint64VarP((*uint64)(&numValidRounds), "validrounds", "v", 0, "The validity period for the status change transaction")
 	markNonparticipatingCmd.Flags().Uint64Var((*uint64)(&lastValid), "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	markNonparticipatingCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file, rather than posting to network")
 	markNonparticipatingCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	markNonparticipatingCmd.Flags().MarkDeprecated("firstRound", "use --firstvalid instead")
-	markNonparticipatingCmd.Flags().MarkDeprecated("validRounds", "use --validrounds instead")
 
 	dumpCmd.Flags().StringVarP(&dumpOutFile, "outfile", "o", "", "Save balance record to specified output file")
 	dumpCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -923,14 +915,14 @@ var changeOnlineCmd = &cobra.Command{
 
 		firstTxRound, lastTxRound, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
-			reportErrorln(err.Error())
+			reportErrorln(err)
 		}
 		err = changeAccountOnlineStatus(
 			accountAddress, online, statusChangeTxFile, walletName,
 			firstTxRound, lastTxRound, transactionFee, scLeaseBytes(cmd), dataDir, client,
 		)
 		if err != nil {
-			reportErrorln(err.Error())
+			reportErrorln(err)
 		}
 	},
 }
@@ -1099,7 +1091,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 
 		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, txRoundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
-			reportErrorln(err.Error())
+			reportErrorln(err)
 		}
 
 		version := config.GetCurrentVersion()

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -185,7 +185,7 @@ func testAccountManagerKeys(t *testing.T, registry account.ParticipationRegistry
 	<-keyDeletionDone
 	testDuration := time.Since(testStartTime)
 	t.Logf("testDuration %v keysTotalDuration %v\n", testDuration, keysTotalDuration)
-	require.Lessf(t, keysTotalDuration, testDuration/100, fmt.Sprintf("the time to aquire the keys via Keys() was %v whereas blocking on keys deletion took %v", keysTotalDuration, testDuration))
+	require.Lessf(t, keysTotalDuration, testDuration/100, fmt.Sprintf("the time to acquire the keys via Keys() was %v whereas blocking on keys deletion took %v", keysTotalDuration, testDuration))
 	t.Logf("Calling AccountManager.Keys() while AccountManager.DeleteOldKeys() was busy, 10 times in a row, resulted in accumulated delay of %v\n", keysTotalDuration)
 }
 

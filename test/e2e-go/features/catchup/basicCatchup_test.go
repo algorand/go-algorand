@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -332,7 +332,7 @@ func shutdownClonedNode(nodeDataDir string, f *fixtures.RestClientFixture, t *te
 	}
 }
 
-// TestBasicCatchupCompletes confirms the the catchup eventually completes and stops.
+// TestBasicCatchupCompletes confirms that catchup eventually completes and stops.
 func TestBasicCatchupCompletes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)

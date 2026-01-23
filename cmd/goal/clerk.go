@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 
 	"github.com/spf13/cobra"
 )
@@ -68,6 +69,7 @@ var (
 	rawOutput          bool
 	requestFilename    string
 	requestOutFilename string
+	inspectTxid        bool
 
 	simulateStartRound            basics.Round
 	simulateAllowEmptySignatures  bool
@@ -97,6 +99,9 @@ func init() {
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+
+	// inspect flags
+	inspectCmd.Flags().BoolVarP(&inspectTxid, "txid", "t", false, "Display the TxID for each transaction")
 
 	// send flags
 	sendCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (If not specified, uses default account)")
@@ -269,6 +274,9 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 		if err != nil {
 			reportErrorf("Signer invalid (%s): %v", signerAddress, err)
 		}
+		if authAddr == tx.Sender {
+			reportErrorf("AuthAddr cannot be the same as the transaction sender")
+		}
 	}
 
 	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, authAddr)
@@ -411,13 +419,13 @@ var sendCmd = &cobra.Command{
 			var err1 error
 			rekeyTo, err1 = basics.UnmarshalChecksumAddress(rekeyToAddress)
 			if err1 != nil {
-				reportErrorln(err1.Error())
+				reportErrorln(err1)
 			}
 		}
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
-			reportErrorln(err.Error())
+			reportErrorln(err)
 		}
 		payment, err := client.ConstructPayment(
 			fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved,
@@ -443,6 +451,9 @@ var sendCmd = &cobra.Command{
 			authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
 			if err != nil {
 				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+			}
+			if authAddr == payment.Sender {
+				reportErrorf("AuthAddr cannot be the same as the transaction sender")
 			}
 		}
 
@@ -526,7 +537,7 @@ var sendCmd = &cobra.Command{
 
 			// Append the signer since it's a rekey txn
 			if basics.Address(addr) == stx.Txn.Sender {
-				reportWarnln(rekeySenderTargetSameError)
+				reportErrorf("AuthAddr cannot be the same as the transaction sender")
 			}
 			stx.AuthAddr = basics.Address(addr)
 		}
@@ -548,7 +559,7 @@ var sendCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err1 = waitForCommit(client, txid, lastValid)
 				if err1 != nil {
-					reportErrorln(err1.Error())
+					reportErrorln(err1)
 				}
 			}
 		} else {
@@ -558,7 +569,7 @@ var sendCmd = &cobra.Command{
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			}
 			if err != nil {
-				reportErrorln(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -723,7 +734,11 @@ var inspectCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(txDecodeError, txFilename, err)
 				}
-				fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				if inspectTxid {
+					fmt.Printf("%s[%d] - %s\n%s\n\n", txFilename, count, sti.Txn.ID(), string(protocol.EncodeJSON(sti)))
+				} else {
+					fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				}
 				count++
 			}
 		}
@@ -853,6 +868,9 @@ var signCmd = &cobra.Command{
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
 					if signerAddress != "" {
+						if authAddr == txn.Txn.Sender {
+							reportErrorf("AuthAddr cannot be the same as the transaction sender")
+						}
 						txn.AuthAddr = authAddr
 					}
 				}
@@ -1150,19 +1168,18 @@ var dryrunCmd = &cobra.Command{
 	Short: "Test a program offline",
 	Long:  "Test a TEAL program offline under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("goal clerk dryrun is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
 		stxns := decodeTxnsFromFile(txFilename)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
 			dataDir := datadir.EnsureSingleDataDir()
 			client := ensureFullClient(dataDir)
-			accts, err := unmarshalSlice(dumpForDryrunAccts)
-			if err != nil {
-				reportErrorln(err.Error())
-			}
+			accts := util.Map(dumpForDryrunAccts, cliAddress)
 			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
-				reportErrorln(err.Error())
+				reportErrorln(err)
 			}
 			writeFile(outFilename, data, 0600)
 			return
@@ -1214,6 +1231,8 @@ var dryrunRemoteCmd = &cobra.Command{
 	Short: "Test a program with algod's dryrun REST endpoint",
 	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("goal clerk dryrun-remote is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
@@ -1373,19 +1392,6 @@ var simulateCmd = &cobra.Command{
 			fmt.Println(string(encodedResponse))
 		}
 	},
-}
-
-// unmarshalSlice converts string addresses to basics.Address
-func unmarshalSlice(accts []string) ([]basics.Address, error) {
-	result := make([]basics.Address, 0, len(accts))
-	for _, acct := range accts {
-		addr, err := basics.UnmarshalChecksumAddress(acct)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, addr)
-	}
-	return result, nil
 }
 
 func decodeTxnsFromFile(file string) []transactions.SignedTxn {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 var log = logging.Base()
@@ -76,9 +77,6 @@ func init() {
 
 	// kmd.go
 	rootCmd.AddCommand(kmdCmd)
-
-	// logging.go
-	rootCmd.AddCommand(loggingCmd)
 
 	// network.go
 	rootCmd.AddCommand(networkCmd)
@@ -437,7 +435,7 @@ func ensurePassword() []byte {
 }
 
 func reportInfoln(args ...interface{}) {
-	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Println(infoNonPrintableCharacters)
@@ -453,7 +451,7 @@ func reportInfof(format string, args ...interface{}) {
 // reportWarnRawln prints a warning message to stderr. Only use this function if that warning
 // message already indicates that it's a warning. Otherwise, use reportWarnln
 func reportWarnRawln(args ...interface{}) {
-	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Fprintln(os.Stderr, infoNonPrintableCharacters)
@@ -483,7 +481,7 @@ func reportWarnf(format string, args ...interface{}) {
 
 func reportErrorln(args ...interface{}) {
 	outStr := fmt.Sprint(args...)
-	for _, line := range strings.Split(outStr, "\n") {
+	for line := range strings.SplitSeq(outStr, "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Fprintln(os.Stderr, errorNonPrintableCharacters)
@@ -524,13 +522,10 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 // writeDryrunReqToFile creates dryrun request object and writes to a file
 func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
 	proto, _ := getProto(protoVersion)
-	accts, err := unmarshalSlice(dumpForDryrunAccts)
-	if err != nil {
-		reportErrorln(err.Error())
-	}
+	accts := util.Map(dumpForDryrunAccts, cliAddress)
 	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
 	if err != nil {
-		reportErrorln(err.Error())
+		reportErrorln(err)
 	}
 	err = writeFile(outFilename, data, 0600)
 	return

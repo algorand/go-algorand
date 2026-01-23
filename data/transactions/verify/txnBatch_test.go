@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -721,8 +721,7 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 	var badSigResultCounter int
 	var goodSigResultCounter int
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	cache := MakeVerifiedTransactionCache(50)
 
 	txBacklogSizeMod := txBacklogSize / 20

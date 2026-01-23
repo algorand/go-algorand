@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -184,7 +184,7 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	require.True(t, drop)
 }
 
-// TestAppRateLimiter_IntervalFull checks the cur counter accounts only admitted requests
+// TestAppRateLimiter_IntervalAdmitted checks the cur counter accounts only admitted requests
 func TestAppRateLimiter_IntervalAdmitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -230,7 +230,7 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC).UnixNano() // 11 sec => 1 sec into the interval
 
 	// fill 80% of the current interval
-	// switch to the next next interval
+	// switch to the next interval
 	// ensure all capacity is available
 
 	for i := 0; i < int(0.8*float64(rate)); i++ {

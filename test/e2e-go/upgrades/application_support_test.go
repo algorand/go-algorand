@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -67,7 +68,7 @@ func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.Consensu
 	return
 }
 
-// TestApplicationsUpgrade tests that we can safely upgrade from a version that doesn't support applications
+// TestApplicationsUpgradeOverREST tests that we can safely upgrade from a version that doesn't support applications
 // to a version that supports applications. It verify that prior to supporting applications, the node would not accept
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverREST(t *testing.T) {
@@ -150,7 +151,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
 	a.NoError(err)
@@ -233,7 +234,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(appIdx, nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppOptInTx(appIdx, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -241,10 +242,10 @@ int 1
 	a.NoError(err)
 	round, err = client.CurrentRound()
 	a.NoError(err)
-	_, err = client.BroadcastTransaction(signedTxn)
+	txid, err := client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
 
-	client.WaitForRound(round + 2)
+	client.WaitForConfirmedTxn(round+10, txid)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -294,7 +295,7 @@ int 1
 	a.Equal(creator, app.Params.Creator)
 }
 
-// TestApplicationsUpgrade tests that we can safely upgrade from a version that doesn't support applications
+// TestApplicationsUpgradeOverGossip tests that we can safely upgrade from a version that doesn't support applications
 // to a version that supports applications. It verify that prior to supporting applications, the node would not accept
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverGossip(t *testing.T) {
@@ -392,7 +393,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, round, round+basics.Round(primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds), fee, tx)
 	a.NoError(err)
@@ -484,7 +485,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(appIdx, nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppOptInTx(appIdx, nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -565,7 +565,7 @@ func TestRememberForget(t *testing.T) {
 				tx.Note[1] = byte(j)
 				signedTx := tx.Sign(secrets[i])
 				transactionPool.RememberOne(signedTx)
-				err := eval.Transaction(signedTx, transactions.ApplyData{})
+				err := eval.TransactionGroup(signedTx.WithAD())
 				require.NoError(t, err)
 			}
 		}
@@ -637,6 +637,8 @@ func TestCleanUp(t *testing.T) {
 		}
 	}
 
+	require.Len(t, transactionPool.PendingTxGroups(), issuedTransactions)
+
 	for mockLedger.Latest() < 6 {
 		eval := newBlockEvaluator(t, mockLedger)
 		ufblk, err := eval.GenerateBlock(nil)
@@ -649,24 +651,7 @@ func TestCleanUp(t *testing.T) {
 		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 	}
 
-	pending := transactionPool.PendingTxGroups()
-	require.Zero(t, len(pending))
-	require.Zero(t, transactionPool.NumExpired(4))
-	require.Equal(t, issuedTransactions, transactionPool.NumExpired(5))
-
-	for mockLedger.Latest() < 6+basics.Round(expiredHistory*proto.MaxTxnLife) {
-		eval := newBlockEvaluator(t, mockLedger)
-		ufblk, err := eval.GenerateBlock(nil)
-		require.NoError(t, err)
-
-		blk := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
-		err = mockLedger.AddValidatedBlock(blk, agreement.Certificate{})
-		require.NoError(t, err)
-
-		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
-		require.Zero(t, transactionPool.NumExpired(blk.Block().Round()))
-	}
-	require.Len(t, transactionPool.expiredTxCount, int(expiredHistory*proto.MaxTxnLife))
+	require.Empty(t, transactionPool.PendingTxGroups())
 }
 
 func TestFixOverflowOnNewBlock(t *testing.T) {
@@ -748,7 +733,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	signedTx := tx.Sign(secrets[0])
 
 	blockEval := newBlockEvaluator(t, mockLedger)
-	err := blockEval.Transaction(signedTx, transactions.ApplyData{})
+	err := blockEval.TransactionGroup(signedTx.WithAD())
 	require.NoError(t, err)
 
 	// simulate this transaction was applied
@@ -1287,7 +1272,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		eval := newBlockEvaluator(b, l)
 		for len(ledgerTxnQueue) > 0 {
 			stx := ledgerTxnQueue[0]
-			err := eval.Transaction(stx, transactions.ApplyData{})
+			err := eval.TransactionGroup(stx.WithAD())
 			if err == ledgercore.ErrNoSpace {
 				break
 			}
@@ -1459,6 +1444,9 @@ func TestStateProofLogging(t *testing.T) {
 	phdr, err := mockLedger.BlockHdr(0)
 	require.NoError(t, err)
 	b.BlockHeader.Branch = phdr.Hash()
+	if proto.EnableSha512BlockHash {
+		b.BlockHeader.Branch512 = phdr.Hash512()
+	}
 
 	_, err = mockLedger.StartEvaluator(b.BlockHeader, 0, 10000, nil)
 	require.NoError(t, err)
@@ -1479,6 +1467,9 @@ func TestStateProofLogging(t *testing.T) {
 		phdr, err := mockLedger.BlockHdr(basics.Round(i))
 		require.NoError(t, err)
 		b.BlockHeader.Branch = phdr.Hash()
+		if proto.EnableSha512BlockHash {
+			b.BlockHeader.Branch512 = phdr.Hash512()
+		}
 		b.BlockHeader.TimeStamp = phdr.TimeStamp + 10
 
 		if i == 513 {
@@ -1531,7 +1522,7 @@ func TestStateProofLogging(t *testing.T) {
 	eval, err := mockLedger.StartEvaluator(b.BlockHeader, 0, 1000000, nil)
 	require.NoError(t, err)
 
-	err = eval.Transaction(stxn, transactions.ApplyData{})
+	err = eval.TransactionGroup(stxn.WithAD())
 	require.NoError(t, err)
 
 	err = transactionPool.RememberOne(stxn)
@@ -1540,7 +1531,7 @@ func TestStateProofLogging(t *testing.T) {
 	_, err = transactionPool.AssembleBlock(514, time.Time{})
 	require.NoError(t, err)
 
-	// parse the log messages and retreive the Metrics for SP in assmbe block
+	// parse the log messages and retrieve the Metrics for SP in assemble block
 	scanner := bufio.NewScanner(strings.NewReader(buf.String()))
 	lines := make([]string, 0)
 	for scanner.Scan() {

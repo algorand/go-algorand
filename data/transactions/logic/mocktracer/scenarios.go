@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package mocktracer
 import (
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"math"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -836,9 +837,7 @@ func MergeStateDeltas(deltas ...ledgercore.StateDelta) ledgercore.StateDelta {
 			includedTx.Intra += txidBase
 			result.Txids[txid] = includedTx
 		}
-		for lease, round := range delta.Txleases {
-			result.Txleases[lease] = round
-		}
+		maps.Copy(result.Txleases, delta.Txleases)
 	}
 	return result
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,19 +48,24 @@ func TestClerkSendNoteEncoding(t *testing.T) {
 	a.NotEmpty(accounts)
 	account := accounts[0].Address
 
+	// Get current MinFee from network
+	client := fixture.LibGoalClient
+	params, err := client.SuggestedParams()
+	a.NoError(err)
+	minFee := int64(params.MinFee)
+
 	const noteText = "Sample Text-based Note"
-	txID, err := fixture.ClerkSend(account, account, 100, 1000, noteText)
+	txID, err := fixture.ClerkSend(account, account, 100, minFee, noteText)
 	a.NoError(err)
 	a.NotEmpty(txID)
 
 	// Send 2nd txn using the note encoded as base-64 (using --noteb64)
 	originalNoteb64Text := "Noteb64-encoded text With Binary \u0001x1x0x3"
 	noteb64 := base64.StdEncoding.EncodeToString([]byte(originalNoteb64Text))
-	txID2, err := fixture.ClerkSendNoteb64(account, account, 100, 1000, noteb64)
+	txID2, err := fixture.ClerkSendNoteb64(account, account, 100, minFee, noteb64)
 	a.NoError(err)
 	a.NotEmpty(txID2)
 
-	client := fixture.LibGoalClient
 	status, err := client.Status()
 	a.NoError(err)
 

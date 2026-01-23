@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -140,7 +140,6 @@ func skipExpectTests() bool {
 // Run Process all expect script files with suffix Test.exp within the current directory
 func (ef *ExpectFixture) Run() {
 	disabledTest := map[string]string{
-		"pingpongTest.exp":                    "broken",
 		"listExpiredParticipationKeyTest.exp": "flaky",
 	}
 	for testName := range ef.expectFiles {
@@ -194,7 +193,7 @@ func (ef *ExpectFixture) Run() {
 					syncTest.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, outBuf, stderr)
 					syncTest.Fail()
 				} else {
-					// t.Logf("stdout: %s", string(outBuf.Bytes()))
+					syncTest.Logf("stdout: %s", outBuf.String())
 					ef.removeTestDir(workingDir)
 				}
 			})

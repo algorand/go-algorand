@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -60,7 +60,7 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, txParams.Fee, txParams.LastRound+1, txParams.LastRound+1, [32]byte{}, true)
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, txParams.MinFee, txParams.LastRound+1, txParams.LastRound+1, [32]byte{}, true)
 	assert.NoError(t, err)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)

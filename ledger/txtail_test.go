@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,7 +87,7 @@ func TestTxTailCheckdup(t *testing.T) {
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-txvalidity-1 {
 			var missingRoundErr *errTxTailMissingRound
-			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxTailMissingRound(%d) : %v ", rnd, err)
+			require.ErrorAsf(t, err, &missingRoundErr, "error a errTxTailMissingRound(%d) : %v ", rnd, err)
 		} else {
 			var txInLedgerErr *ledgercore.TransactionInLedgerError
 			require.Truef(t, errors.As(err, &txInLedgerErr), "error a TransactionInLedgerError(%d) : %v ", rnd, err)
@@ -101,7 +101,7 @@ func TestTxTailCheckdup(t *testing.T) {
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-1 {
 			var missingRoundErr *errTxTailMissingRound
-			require.Truef(t, errors.As(err, &missingRoundErr), "error a errTxTailMissingRound(%d) : %v ", rnd, err)
+			require.ErrorAsf(t, err, &missingRoundErr, "error a errTxTailMissingRound(%d) : %v ", rnd, err)
 		} else {
 			var leaseInLedgerErr *ledgercore.LeaseInLedgerError
 			require.Truef(t, errors.As(err, &leaseInLedgerErr), "error a LeaseInLedgerError(%d) : %v ", rnd, err)

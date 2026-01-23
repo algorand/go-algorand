@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -60,6 +60,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
+	"github.com/algorand/go-algorand/util"
 )
 
 // MaxTealSourceBytes sets a size limit for TEAL source programs for requests
@@ -772,7 +773,7 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round basics.Round) error {
 func NewAppCallLogs(txid string, logs []string, appIndex basics.AppIndex) model.AppCallLogs {
 	return model.AppCallLogs{
 		TxId:             txid,
-		Logs:             convertSlice(logs, func(s string) []byte { return []byte(s) }),
+		Logs:             util.Map(logs, func(s string) []byte { return []byte(s) }),
 		ApplicationIndex: appIndex,
 	}
 }

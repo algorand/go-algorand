@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"testing"
 
@@ -48,12 +49,6 @@ import (
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 var testSinkAddr = basics.Address{0x2c, 0x2a, 0x6c, 0xe9, 0xa9, 0xa7, 0xc2, 0x8c, 0x22, 0x95, 0xfd, 0x32, 0x4f, 0x77, 0xa5, 0x4, 0x8b, 0x42, 0xc2, 0xb7, 0xa8, 0x54, 0x84, 0xb6, 0x80, 0xb1, 0xe1, 0x3d, 0x59, 0x9b, 0xeb, 0x36}
-var minFee basics.MicroAlgos
-
-func init() {
-	params := config.Consensus[protocol.ConsensusCurrentVersion]
-	minFee = basics.MicroAlgos{Raw: params.MinTxnFee}
-}
 
 func TestBlockEvaluatorFeeSink(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -117,7 +112,7 @@ ok:
 	genHash := l.GenesisHash()
 	header := transactions.Header{
 		Sender:      addrs[0],
-		Fee:         minFee,
+		Fee:         basics.MicroAlgos{Raw: eval.proto.MinTxnFee},
 		FirstValid:  newBlock.Round(),
 		LastValid:   newBlock.Round(),
 		GenesisHash: genHash,
@@ -170,7 +165,7 @@ ok:
 	if err != nil {
 		return eval, addrs[0], err
 	}
-	err = eval.TransactionGroup(g)
+	err = eval.TransactionGroup(g...)
 	return eval, addrs[0], err
 }
 
@@ -226,12 +221,12 @@ func TestPrivateTransactionGroup(t *testing.T) {
 
 	var txgroup []transactions.SignedTxnWithAD
 	eval := BlockEvaluator{}
-	err := eval.TransactionGroup(txgroup)
+	err := eval.TransactionGroup(txgroup...)
 	require.NoError(t, err) // nothing to do, no problem
 
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
-	err = eval.TransactionGroup(txgroup)
+	err = eval.TransactionGroup(txgroup...)
 	require.ErrorContains(t, err, "group size")
 }
 
@@ -300,6 +295,7 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 			eval.validate = true
 			eval.generate = true
 
+			minFee := basics.MicroAlgos{Raw: eval.proto.MinTxnFee}
 			genHash := l.GenesisHash()
 
 			var basicAppCallReturn string
@@ -403,7 +399,7 @@ int 1`,
 
 			require.Len(t, eval.block.Payset, 0)
 
-			err = eval.TransactionGroup(txgroup)
+			err = eval.TransactionGroup(txgroup...)
 			switch testCase.firstTxnBehavior {
 			case "approve":
 				if len(scenario.ExpectedError) != 0 {
@@ -659,7 +655,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
 			Sender:      addrs[0],
-			Fee:         minFee,
+			Fee:         basics.MicroAlgos{Raw: eval.proto.MinTxnFee},
 			FirstValid:  newBlock.Round(),
 			LastValid:   newBlock.Round(),
 			GenesisHash: testnetGenesisHash,
@@ -670,7 +666,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 		},
 	}
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.TransactionGroup(st.WithAD())
 	require.NoError(t, err)
 
 	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
@@ -861,7 +857,7 @@ func (ledger *evalTestLedger) GenesisProto() config.ConsensusParams {
 	return config.Consensus[ledger.genesisProtoVersion]
 }
 
-// GenesisProto returns the genesis consensus version for this ledger.
+// GenesisProtoVersion returns the genesis consensus version for this ledger.
 func (ledger *evalTestLedger) GenesisProtoVersion() protocol.ConsensusVersion {
 	return ledger.genesisProtoVersion
 }
@@ -886,9 +882,7 @@ func (ledger *evalTestLedger) AddValidatedBlock(vb ledgercore.ValidatedBlock, ce
 	newBalances := make(map[basics.Address]basics.AccountData)
 
 	// copy the previous balances.
-	for k, v := range ledger.roundBalances[vb.Block().Round()-1] {
-		newBalances[k] = v
-	}
+	maps.Copy(newBalances, ledger.roundBalances[vb.Block().Round()-1])
 
 	// update
 	deltas := vb.Delta()
@@ -1410,7 +1404,8 @@ func TestAbsenteeChecks(t *testing.T) {
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
 				Sender:      addrs[i],
-				Fee:         minFee,
+				Fee:         basics.MicroAlgos{Raw: blkEval.proto.MinTxnFee},
+				FirstValid:  blkEval.Round().SubSaturate(1000),
 				LastValid:   blkEval.Round(),
 				GenesisHash: l.GenesisHash(),
 			},
@@ -1425,12 +1420,11 @@ func TestAbsenteeChecks(t *testing.T) {
 		return pay(i, addrs[i]).Sign(keys[i])
 	}
 
-	require.NoError(t, blkEval.Transaction(selfpay(0), transactions.ApplyData{}))
-	require.NoError(t, blkEval.Transaction(selfpay(1), transactions.ApplyData{}))
-	require.NoError(t, blkEval.Transaction(selfpay(2), transactions.ApplyData{}))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(0).WithAD()))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(1).WithAD()))
+	require.NoError(t, blkEval.TransactionGroup(selfpay(2).WithAD()))
 	for i := 0; i < 32; i++ {
-		require.NoError(t, blkEval.Transaction(pay(0, basics.Address{byte(i << 3), 0xaa}).Sign(keys[0]),
-			transactions.ApplyData{}))
+		require.NoError(t, blkEval.TransactionGroup(pay(0, basics.Address{byte(i << 3), 0xaa}).Sign(keys[0]).WithAD()))
 	}
 
 	// Make sure we validate our block as well

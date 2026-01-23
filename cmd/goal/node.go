@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -100,12 +100,6 @@ func init() {
 	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
 
-	// The flag for enabling an internal indexer is now deprecated, but we keep it for backwards compatibility for now.
-	indexerFlagName := "indexer"
-	_ = createCmd.Flags().BoolP(indexerFlagName, "i", false, "")
-	createCmd.Flags().MarkDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
-	createCmd.Flags().MarkShorthandDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
-
 	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
 	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
 	createCmd.Flags().BoolVar(&newNodeFullConfig, "full-config", false, "Store full config file")
@@ -198,7 +192,7 @@ var catchupCmd = &cobra.Command{
 					fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
 					reader := bufio.NewReader(os.Stdin)
 					text, _ := reader.ReadString('\n')
-					text = strings.Replace(text, "\n", "", -1)
+					text = strings.ReplaceAll(text, "\n", "")
 					if text != "yes" {
 						reportErrorf(errorAbortedPerUserRequest)
 					}
@@ -714,7 +708,7 @@ func verifyPeerDialArg() bool {
 	}
 
 	// make sure that the format of each entry is valid:
-	for _, peer := range strings.Split(peerDial, ";") {
+	for peer := range strings.SplitSeq(peerDial, ";") {
 		_, err := naddr.ParseHostOrURLOrMultiaddr(peer)
 		if err != nil {
 			reportErrorf("Provided peer '%s' is not a valid peer address : %v", peer, err)

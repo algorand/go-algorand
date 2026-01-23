@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ func Initialize(accessor Accessor, migrations []Migration) error {
 		return InitializeWithContext(ctx, tx, migrations)
 	})
 
-	var sqlError *sqlite3.Error
+	var sqlError sqlite3.Error
 	if errors.As(err, &sqlError) {
 		return fmt.Errorf("%w.  Sql error - Code: %d, Extended Code: %d", err, sqlError.Code, sqlError.ExtendedCode)
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -289,6 +289,7 @@ func TestLockdownTagList(t *testing.T) {
 		TxnTag,
 		UniEnsBlockReqTag,
 		VoteBundleTag,
+		VotePackedTag,
 	}
 	require.Equal(t, len(tagList), len(TagList))
 	tagMap := make(map[Tag]bool)

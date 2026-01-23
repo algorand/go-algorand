@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -106,8 +106,8 @@ func (c *CobraStringSliceValue) IsSet() bool { return c.isSet }
 
 // Set sets a value and fails if it is not allowed
 func (c *CobraStringSliceValue) Set(values string) error {
-	others := strings.Split(values, ",")
-	for _, other := range others {
+	others := strings.SplitSeq(values, ",")
+	for other := range others {
 		other = strings.TrimSpace(other)
 		if _, ok := c.allowedMap[other]; ok {
 			c.value = append(c.value, other)

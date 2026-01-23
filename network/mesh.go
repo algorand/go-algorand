@@ -1,0 +1,330 @@
+// Copyright (C) 2019-2026 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package network
+
+import (
+	"context"
+	"errors"
+	"math/rand"
+	"sync"
+	"time"
+
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/p2p"
+	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
+)
+
+const meshThreadInterval = time.Minute
+
+type mesher interface {
+	start()
+	stop()
+}
+
+type baseMesher struct {
+	wg     sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
+	meshConfig
+}
+
+type meshConfig struct {
+	parentCtx          context.Context
+	targetConnCount    int
+	meshUpdateRequests chan meshRequest
+	meshThreadInterval time.Duration
+	backoff            backoff.BackoffStrategy
+	netMeshFn          func(int) int
+	peerStatReporter   func()
+	closer             func()
+
+	// wsnet and p2pnet are used in hybrid relay mode
+	wsnet  *WebsocketNetwork
+	p2pnet *P2PNetwork
+}
+
+type meshOption func(*meshConfig)
+
+func withMeshExpJitterBackoff() meshOption {
+	return func(cfg *meshConfig) {
+		// Add exponential backoff with jitter to the mesh thread to handle new networks startup
+		// when no DNS or DHT peers are available.
+		// The parameters produce approximate the following delays (although they are random but the sequence give the idea):
+		// 2 2.4 4.6 9 20 19.5 28 24 14 14 35 60 60
+		ebf := backoff.NewExponentialDecorrelatedJitter(2*time.Second, meshThreadInterval, 3.0, rand.NewSource(rand.Int63()))
+		eb := ebf()
+		cfg.backoff = eb
+	}
+}
+func withMeshNetMeshFn(netMeshFn func(int) int) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.netMeshFn = netMeshFn
+	}
+}
+func withMeshPeerStatReporter(peerStatReporter func()) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.peerStatReporter = peerStatReporter
+	}
+}
+func withMeshCloser(closer func()) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.closer = closer
+	}
+}
+
+func withMeshUpdateRequest(ch chan meshRequest) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.meshUpdateRequests = ch
+	}
+}
+
+func withMeshUpdateInterval(d time.Duration) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.meshThreadInterval = d
+	}
+}
+
+func withContext(ctx context.Context) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.parentCtx = ctx
+	}
+}
+
+func withTargetConnCount(targetConnCount int) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.targetConnCount = targetConnCount
+	}
+}
+
+func withWebsocketNetwork(wsnet *WebsocketNetwork) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.wsnet = wsnet
+	}
+}
+
+func withP2PNetwork(p2pnet *P2PNetwork) meshOption {
+	return func(cfg *meshConfig) {
+		cfg.p2pnet = p2pnet
+	}
+}
+
+func newBaseMesher(opts ...meshOption) (*baseMesher, error) {
+	var cfg meshConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if cfg.parentCtx == nil {
+		return nil, errors.New("context is not set")
+	}
+	if cfg.netMeshFn == nil {
+		return nil, errors.New("mesh function is not set")
+	}
+	if cfg.meshUpdateRequests == nil {
+		return nil, errors.New("mesh update requests channel is not set")
+	}
+	if cfg.targetConnCount == 0 {
+		logging.Base().Warn("target connection count not set, not connecting to any peers")
+	}
+	if cfg.meshThreadInterval == 0 {
+		cfg.meshThreadInterval = meshThreadInterval
+	}
+
+	ctx, cancel := context.WithCancel(cfg.parentCtx)
+	return &baseMesher{
+		ctx:        ctx,
+		cancel:     cancel,
+		meshConfig: cfg,
+	}, nil
+}
+
+func (m *baseMesher) meshThread() {
+	defer m.wg.Done()
+
+	timer := time.NewTicker(m.meshThreadInterval)
+	defer timer.Stop()
+	for {
+		var request meshRequest
+		select {
+		case <-timer.C:
+			request.done = nil
+		case request = <-m.meshUpdateRequests:
+		case <-m.ctx.Done():
+			return
+		}
+
+		numOutgoing := m.netMeshFn(m.targetConnCount)
+		if m.backoff != nil {
+			if numOutgoing > 0 {
+				// found something, reset timer to the configured value
+				timer.Reset(m.meshThreadInterval)
+				m.backoff.Reset()
+			} else {
+				// no peers found, backoff
+				timer.Reset(m.backoff.Delay())
+			}
+		}
+		if request.done != nil {
+			close(request.done)
+		}
+
+		// send the currently connected peers information to the
+		// telemetry server; that would allow the telemetry server
+		// to construct a cross-node map of all the nodes interconnections.
+		m.peerStatReporter()
+	}
+}
+
+func (m *baseMesher) start() {
+	m.wg.Add(1)
+	go m.meshThread()
+}
+
+func (m *baseMesher) stop() {
+	m.cancel()
+	m.wg.Wait()
+	if m.closer != nil {
+		m.closer()
+	}
+}
+
+type networkConfig struct {
+	pubsubOpts []p2p.PubSubOption // at the moment only pubsub configuration options only
+}
+
+// MeshCreator is an interface for creating mesh strategies.
+type MeshCreator interface {
+	create(opts ...meshOption) (mesher, error)
+	makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig
+}
+
+// baseMeshCreator is a creator for the base mesh strategy used in our standard WS or P2P implementations:
+// run a mesh thread that periodically checks for new peers.
+type baseMeshCreator struct{}
+
+func (c baseMeshCreator) create(opts ...meshOption) (mesher, error) {
+	return newBaseMesher(opts...)
+}
+
+func (c baseMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{}
+}
+
+// hybridRelayMeshCreator is a creator for the hybrid relay mesh strategy used in hybrid relays:
+// always use wsnet nodes
+type hybridRelayMeshCreator struct{}
+
+func (c hybridRelayMeshCreator) create(opts ...meshOption) (mesher, error) {
+	var cfg meshConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	if cfg.wsnet == nil || cfg.p2pnet == nil {
+		return nil, errors.New("both websocket and p2p networks must be provided")
+	}
+
+	out := make(chan meshRequest, 5)
+	var wg sync.WaitGroup
+	var prevP2PConnections = -1 // -1 means not initialized
+
+	meshFn := func(targetConnCount int) int {
+		wsTarget := targetConnCount
+		// skip p2p mesh for the first time to give wsnet to establish connections
+		if prevP2PConnections != -1 && targetConnCount > prevP2PConnections {
+			wsTarget = targetConnCount - prevP2PConnections
+		}
+		wsConnections := cfg.wsnet.meshThreadInner(wsTarget)
+
+		var p2pConnections int
+		p2pTarget := 0 // even if p2pTarget is zero it makes sense to call p2p meshThreadInner to fetch DHT peers
+		if wsConnections < targetConnCount {
+			p2pTarget = targetConnCount - wsConnections
+		}
+		p2pConnections = cfg.p2pnet.meshThreadInner(p2pTarget)
+
+		if cfg.wsnet.log.GetLevel() >= logging.Debug && p2pTarget > 0 {
+			cfg.wsnet.log.Debugf("Hybrid WS-priority mesh: WS out connections=%d, P2P out connections=%d (prev=%d), target=%d",
+				wsConnections, p2pConnections, prevP2PConnections, targetConnCount)
+		}
+		prevP2PConnections = p2pConnections
+		return wsConnections + p2pConnections
+	}
+
+	mesh, err := newBaseMesher(
+		withContext(cfg.wsnet.ctx),
+		withTargetConnCount(cfg.wsnet.config.GossipFanout),
+		withMeshNetMeshFn(meshFn),
+		withMeshPeerStatReporter(func() {
+			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.wsnet)
+			cfg.p2pnet.peerStater.sendPeerConnectionsTelemetryStatus(cfg.p2pnet)
+		}),
+		withMeshCloser(func() {
+			wg.Wait()
+			close(out)
+		}),
+		withMeshUpdateRequest(out),
+		withMeshUpdateInterval(meshThreadInterval),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-mesh.ctx.Done():
+				return
+			case req := <-cfg.wsnet.meshUpdateRequests:
+				out <- req
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-mesh.ctx.Done():
+				return
+			case req := <-cfg.p2pnet.meshUpdateRequests:
+				out <- req
+			}
+		}
+	}()
+
+	return mesh, nil
+}
+
+func (c hybridRelayMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{}
+}
+
+type noopMeshCreator struct{}
+
+func (c noopMeshCreator) create(opts ...meshOption) (mesher, error) {
+	return &noopMesh{}, nil
+}
+func (c noopMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{}
+}
+
+type noopMesh struct{}
+
+func (m *noopMesh) start() {}
+func (m *noopMesh) stop()  {}

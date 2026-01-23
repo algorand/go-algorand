@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -75,7 +75,7 @@ func CustomTestTransaction(t *customT) {
 	})
 	require.NoError(t, err)
 
-	// read the updated record outside the transaction to make sure it was commited
+	// read the updated record outside the transaction to make sure it was committed
 	padA, err := aor.LookupAccount(addrA)
 	require.NoError(t, err)
 	require.Equal(t, uint64(98287), padA.AccountData.RewardsBase) // same updated data

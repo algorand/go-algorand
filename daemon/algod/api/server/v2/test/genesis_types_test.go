@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,10 +48,10 @@ func getJSONTag(field reflect.StructField) string {
 func TestGenesisTypeCompatibility(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// Test Genesis struct compatibility
-	verifyStructCompatibility(t, reflect.TypeOf(bookkeeping.Genesis{}), reflect.TypeOf(model.Genesis{}))
+	verifyStructCompatibility(t, reflect.TypeFor[bookkeeping.Genesis](), reflect.TypeFor[model.Genesis]())
 
 	// Test GenesisAllocation struct compatibility
-	verifyStructCompatibility(t, reflect.TypeOf(bookkeeping.GenesisAllocation{}), reflect.TypeOf(model.GenesisAllocation{}))
+	verifyStructCompatibility(t, reflect.TypeFor[bookkeeping.GenesisAllocation](), reflect.TypeFor[model.GenesisAllocation]())
 }
 
 // isStructOrPtrToStruct returns true if the type is a struct or pointer to struct

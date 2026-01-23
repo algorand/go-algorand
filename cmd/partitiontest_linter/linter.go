@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"go/ast"
 	"strings"
 
+	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 )
 
@@ -30,10 +31,10 @@ const functionNamePrefix string = "Test"
 const parameterType string = "T"
 const parameterName string = "t"
 
-// Analyzer initilization
+// Analyzer initialization
 var Analyzer = &analysis.Analyzer{
-	Name: "lint",
-	Doc:  "This custom linter checks inside files that end in '_test.go', and inside functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'",
+	Name: "partitiontest",
+	Doc:  "This custom linter checks inside files that end in '_test.go', and inside functions that start with 'Test' and have testing argument, for a line 'partitiontest.PartitionTest(<testing arg>)'",
 	Run:  run,
 }
 
@@ -58,7 +59,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			if !isTestParameterInFunction(fn.Type.Params.List[0].Type, parameterType) {
 				continue
 			}
-			if !isSearchLineInFunction(fn) {
+			if !hasPartitionInvocation(f, fn) {
 				pass.Reportf(fn.Pos(), "%s: Add missing partition call to top of test. To disable partitioning, add it as a comment: %s.%s(%s)", fn.Name.Name, packageName, functionName, parameterName)
 			}
 
@@ -83,23 +84,46 @@ func isTestParameterInFunction(typ ast.Expr, wantType string) bool {
 	return false
 }
 
+func hasPartitionInvocation(file *ast.File, fn *ast.FuncDecl) bool {
+	if isSearchLineInFunction(fn) {
+		return true
+	}
+	return hasPartitionComment(file, fn)
+}
+
 func isSearchLineInFunction(fn *ast.FuncDecl) bool {
 	for _, oneline := range fn.Body.List {
 		if exprStmt, ok := oneline.(*ast.ExprStmt); ok {
 			if call, ok := exprStmt.X.(*ast.CallExpr); ok {
-				if fun, ok := call.Fun.(*ast.SelectorExpr); ok {
-					if !doesPackageNameMatch(fun) {
-						continue
-					}
-					if !doesFunctionNameMatch(fun) {
-						continue
-					}
+				fun, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					continue
+				}
+				if !doesPackageNameMatch(fun) {
+					continue
+				}
+				if !doesFunctionNameMatch(fun) {
+					continue
 				}
 
 				if !doesParameterNameMatch(call, fn) {
 					continue
 				}
 
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasPartitionComment(file *ast.File, fn *ast.FuncDecl) bool {
+	for _, commentGroup := range file.Comments {
+		if commentGroup.Pos() < fn.Pos() || commentGroup.Pos() > fn.End() {
+			continue
+		}
+		for _, comment := range commentGroup.List {
+			if strings.Contains(comment.Text, "partitiontest.PartitionTest(") {
 				return true
 			}
 		}
@@ -130,4 +154,25 @@ func doesParameterNameMatch(call *ast.CallExpr, fn *ast.FuncDecl) bool {
 		}
 	}
 	return false
+}
+
+// V2 module plugin registration
+
+func init() {
+	register.Plugin("partitiontest", New)
+}
+
+// PartitionTestPlugin implements the golangci-lint v2 module plugin interface
+type PartitionTestPlugin struct{}
+
+func New(_ any) (register.LinterPlugin, error) {
+	return &PartitionTestPlugin{}, nil
+}
+
+func (p *PartitionTestPlugin) BuildAnalyzers() ([]*analysis.Analyzer, error) {
+	return []*analysis.Analyzer{Analyzer}, nil
+}
+
+func (p *PartitionTestPlugin) GetLoadMode() string {
+	return register.LoadModeSyntax
 }

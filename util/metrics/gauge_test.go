@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -68,7 +68,7 @@ func TestMetricGauge(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created 3 separate gauges
+	// in the loop above we've created 3 separate gauges
 	// let's see if we received all 3 metrics
 	require.Equal(t, 3, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 

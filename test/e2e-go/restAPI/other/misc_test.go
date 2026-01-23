@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -123,8 +123,10 @@ func TestSendingNotClosingAccountErrs(t *testing.T) {
 	if someAddress == "" {
 		t.Error("no addr with funds")
 	}
-	amt := someBal - 10000 - 1
-	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, amt, nil, "", 0, 0)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+	amt := someBal - params.MinFee - 1
+	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.MinFee, amt, nil, "", 0, 0)
 	a.Error(err)
 }
 

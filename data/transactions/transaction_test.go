@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,11 +19,13 @@ package transactions
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -76,6 +78,7 @@ func TestTransactionHash(t *testing.T) {
 
 func TestTransactionIDChanges(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	txn := Transaction{
 		Type: "pay",
@@ -114,4 +117,37 @@ func TestTransactionIDChanges(t *testing.T) {
 	if txn2.ID() == txn.ID() {
 		t.Errorf("txid does not depend on lastvalid")
 	}
+}
+
+func TestApplyDataEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var empty ApplyData
+	for _, ad := range basics_testing.NearZeros(t, ApplyData{}) {
+		assert.False(t, ad.Equal(empty), "Equal() seems to be disregarding something %+v", ad)
+	}
+
+}
+
+func TestEvalDataEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var empty EvalDelta
+	for _, ed := range basics_testing.NearZeros(t, EvalDelta{}) {
+		assert.False(t, ed.Equal(empty), "Equal() seems to be disregarding something %+v", ed)
+	}
+
+}
+
+func TestLogicSigEquality(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var empty LogicSig
+	for _, ls := range basics_testing.NearZeros(t, LogicSig{}) {
+		assert.False(t, ls.Equal(&empty), "Equal() seems to be disregarding something %+v", ls)
+	}
+
 }

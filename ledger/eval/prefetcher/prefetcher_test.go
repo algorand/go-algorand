@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -648,7 +648,7 @@ func TestAssetLookupError(t *testing.T) {
 		receivedNumGroups++
 		if err := loadedTxnGroup.Err; err != nil {
 			errorReceived = true
-			require.Equal(t, "prefetch failed for groupIdx 2, address: AIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGFFWAF4, creatableIndex 1000002, creatableType 0, cause: asset lookup error", err.Error())
+			require.ErrorContains(t, err, "prefetch failed for groupIdx 2, address: AIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGFFWAF4, creatableIndex 1000002, creatableType 0, cause: asset lookup error")
 		}
 		require.Equal(t, txnPerGroup, len(loadedTxnGroup.TxnGroup))
 	}
@@ -701,7 +701,7 @@ func TestGetCreatorForRoundError(t *testing.T) {
 		receivedNumGroups++
 		if err := loadedTxnGroup.Err; err != nil {
 			errorReceived = true
-			require.Equal(t, "prefetch failed for groupIdx 0, address: <nil>, creatableIndex 1000001, creatableType 0, cause: get creator error", err.Error())
+			require.ErrorContains(t, err, "prefetch failed for groupIdx 0, address: <nil>, creatableIndex 1000001, creatableType 0, cause: get creator error")
 		}
 		require.Equal(t, txnPerGroup, len(loadedTxnGroup.TxnGroup))
 	}
@@ -755,7 +755,7 @@ func TestLookupWithoutRewards(t *testing.T) {
 		receivedNumGroups++
 		if err := loadedTxnGroup.Err; err != nil {
 			errorReceived = true
-			require.Equal(t, "prefetch failed for groupIdx 0, address: BIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYVWV3M, creatableIndex 0, creatableType 0, cause: lookup error", err.Error())
+			require.ErrorContains(t, err, "prefetch failed for groupIdx 0, address: BIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYVWV3M, creatableIndex 0, creatableType 0, cause: lookup error")
 		}
 		require.Equal(t, txnPerGroup, len(loadedTxnGroup.TxnGroup))
 	}

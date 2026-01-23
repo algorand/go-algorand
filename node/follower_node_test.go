@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -309,12 +309,13 @@ func TestSimulate(t *testing.T) {
 
 	round := node.ledger.LastRound()
 
+	proto := config.Consensus[protocol.ConsensusFuture]
 	stxn := txntest.Txn{
 		Type:        protocol.PaymentTx,
 		Sender:      testAddr,
 		Receiver:    poolAddr,
 		Amount:      1,
-		Fee:         1000,
+		Fee:         proto.MinTxnFee,
 		FirstValid:  round,
 		LastValid:   round + 1000,
 		GenesisHash: node.ledger.GenesisHash(),

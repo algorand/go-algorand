@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -78,7 +78,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 				fmt.Fprintf(outFile, "%s\r\n%s\r\n", line, packageOutputBuffer)
 				packageOutputBuffer = ""
 			} else {
-				fmt.Fprintf(outFile, line+"\r\n")
+				fmt.Fprint(outFile, line+"\r\n")
 				delete(tests, testName)
 				currentTestName = ""
 			}
@@ -93,8 +93,8 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 				fmt.Fprintf(outFile, "%s\r\n%s\r\n", line, packageOutputBuffer)
 				packageOutputBuffer = ""
 			} else {
-				fmt.Fprintf(outFile, test.outputBuffer+"\r\n")
-				fmt.Fprintf(outFile, line+"\r\n")
+				fmt.Fprint(outFile, test.outputBuffer+"\r\n")
+				fmt.Fprint(outFile, line+"\r\n")
 				test.outputBuffer = ""
 				tests[testName] = test
 				currentTestName = ""
@@ -113,7 +113,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 			continue
 		}
 		if strings.HasPrefix(line, "ok  	") {
-			fmt.Fprintf(outFile, line+"\r\n")
+			fmt.Fprint(outFile, line+"\r\n")
 			packageOutputBuffer = ""
 			continue
 		}
@@ -123,7 +123,7 @@ func logFilter(inFile io.Reader, outFile io.Writer) int {
 				fmt.Fprintf(outFile, line+"...\r\n%s\r\n", packageOutputBuffer)
 			}
 			packageOutputBuffer = ""
-			fmt.Fprintf(outFile, line+"\r\n")
+			fmt.Fprint(outFile, line+"\r\n")
 			continue
 		}
 		// this is package-oriented output

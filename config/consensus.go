@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package config
 
 import (
+	"maps"
 	"time"
 
 	"github.com/algorand/go-algorand/config/bounds"
@@ -237,11 +238,17 @@ type ConsensusParams struct {
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
 
+	LogicSigMsig  bool
+	LogicSigLMsig bool
+
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
 
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
+
+	// EnforceAuthAddrSenderDiff requires that AuthAddr must be empty or different from Sender
+	EnforceAuthAddrSenderDiff bool
 
 	// application support
 	Application bool
@@ -280,8 +287,9 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
-	// maximum number of "foreign references" (accounts, asa, app, boxes)
-	// that can be attached to a single app call.
+	// maximum number of "foreign references" (accounts, asa, app, boxes) that
+	// can be attached to a single app call.  Modern transactions can use
+	// MaxAppAccess references in txn.Access to access more.
 	MaxAppTotalTxnReferences int
 
 	// maximum cost of application approval program or clear state program
@@ -352,6 +360,9 @@ type ConsensusParams struct {
 
 	// Number of box references allowed
 	MaxAppBoxReferences int
+
+	// Number of references allowed in txn.Access
+	MaxAppAccess int
 
 	// Amount added to a txgroup's box I/O budget per box ref supplied.
 	// For reads: the sum of the sizes of all boxes in the group must be less than I/O budget
@@ -448,9 +459,9 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
-	// Allow app updates to specify the extra pages they use.  This allows the
-	// update to pass WellFormed(), but they cannot _change_ the extra pages.
-	EnableExtraPagesOnAppUpdate bool
+	// When extra pages were introduced, a bug prevented the extra pages of an
+	// app from being properly removed from the creator upon deletion.
+	EnableProperExtraPageAccounting bool
 
 	// Autoincrements an app's version when the app is updated, careful callers
 	// may avoid making inner calls to apps that have changed.
@@ -558,6 +569,17 @@ type ConsensusParams struct {
 
 	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
 	EnableSha512BlockHash bool
+
+	// AppSizeUpdates allows application update transactions to change
+	// the extra-program-pages and global schema sizes. Since it enables newly
+	// legal transactions, this parameter can be removed and assumed true after
+	// the first consensus release in which it is set true.
+	AppSizeUpdates bool
+
+	// AllowZeroLocalAppRef allows for a 0 in a LocalRef of the access list to
+	// specify the current app. This parameter can be removed and assumed true
+	// after the first consensus release in which it is set true.
+	AllowZeroLocalAppRef bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -750,13 +772,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	staticConsensus := make(ConsensusProtocols)
 	for consensusVersion, consensusParams := range cp {
 		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
-		if consensusParams.ApprovedUpgrades != nil {
-			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
-			for ver, when := range consensusParams.ApprovedUpgrades {
-				newApprovedUpgrades[ver] = when
-			}
-			consensusParams.ApprovedUpgrades = newApprovedUpgrades
-		}
+		consensusParams.ApprovedUpgrades = maps.Clone(consensusParams.ApprovedUpgrades)
 		staticConsensus[consensusVersion] = consensusParams
 	}
 	return staticConsensus
@@ -970,6 +986,7 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.LogicSigMaxCost = 20000
+	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
 	v18.SupportTxGroups = true
 	v18.MaxTxGroupSize = 16
@@ -1179,8 +1196,8 @@ func initConsensusProtocols() {
 	v29 := v28
 	v29.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// Enable ExtraProgramPages for application update
-	v29.EnableExtraPagesOnAppUpdate = true
+	// Fix the accounting bug
+	v29.EnableProperExtraPageAccounting = true
 
 	Consensus[protocol.ConsensusV29] = v29
 
@@ -1416,14 +1433,38 @@ func initConsensusProtocols() {
 	// our current max is 250000
 	v39.ApprovedUpgrades[protocol.ConsensusV40] = 208000
 
+	v41 := v40
+	v41.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v41.LogicSigVersion = 12
+
+	v41.EnableAppVersioning = true
+	v41.EnableSha512BlockHash = true
+
+	// txn.Access work
+	v41.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
+	v41.MaxAppAccess = 16           // Twice as many, though cross products are explicit
+	v41.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
+	v41.LogicSigMsig = false
+	v41.LogicSigLMsig = true
+
+	Consensus[protocol.ConsensusV41] = v41
+
+	// v40 can be upgraded to v41, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v40.ApprovedUpgrades[protocol.ConsensusV41] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v40
+	vFuture := v41
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
-	vFuture.EnableSha512BlockHash = true
+	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.AppSizeUpdates = true
+	vFuture.AllowZeroLocalAppRef = true
+	vFuture.EnforceAuthAddrSenderDiff = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

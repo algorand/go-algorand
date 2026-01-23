@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,10 +51,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 	last64KIndex = -1
 	for accounts < accountsCount {
 		// generate a chunk;
-		chunkSize := accountsCount - accounts
-		if chunkSize > BalancesPerCatchpointFileChunk {
-			chunkSize = BalancesPerCatchpointFileChunk
-		}
+		chunkSize := min(accountsCount-accounts, BalancesPerCatchpointFileChunk)
 		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
 			last64KIndex = len(encodedAccountChunks)
 		}

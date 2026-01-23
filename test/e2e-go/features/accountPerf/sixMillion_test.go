@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -195,22 +195,26 @@ func signerGrpTxn(
 
 // create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 func Test5MAssetsScenario1(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 1)
 }
 
 // create 6M unique assets, all created by a single account.
 func Test5MAssetsScenario2(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 2)
 }
 
 // create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them.
 // Make an app call to each of them, and make sure the app store some information into the local storage.
 func Test5MAssetsScenario3(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 3)
 }
 
 // create 6M unique apps by a single account. Opt-into all the applications and make sure the app stores information to both the local and global storage.
 func Test5MAssetsScenario4(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 4)
 }
 
@@ -596,7 +600,7 @@ func scenarioA(
 	require.NoError(t, err)
 
 	log.Infof("Verifying assets...")
-	// Verify the assets are transfered here
+	// Verify the assets are transferred here
 	tAssetAmt := uint64(0)
 	for nai, nacc := range keys {
 		if nacc == ownAllAccount {
@@ -1154,7 +1158,7 @@ int 1
 
 	// create the app
 	appTx, err = client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	note := make([]byte, 8)
@@ -1181,7 +1185,7 @@ func makeOptInAppTransaction(
 	tLife basics.Round,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppOptInTx(appIdx, nil, nil, nil, nil, nil, 0)
+	appTx, err := client.MakeUnsignedAppOptInTx(appIdx, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
@@ -1287,7 +1291,7 @@ func callAppTransaction(
 	tLife basics.Round,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppNoOpTx(appIdx, nil, nil, nil, nil, nil, 0)
+	appTx, err := client.MakeUnsignedAppNoOpTx(appIdx, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{

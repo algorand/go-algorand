@@ -1,0 +1,5 @@
+#!/usr/bin/expect -f
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+source pingpongCommon.exp
+pingpongTestMain "AssetSmall" "asset_transfer_small" "--tps 200 --numasset=5 --numaccounts 5 --refresh 10"

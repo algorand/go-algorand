@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -114,7 +114,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, customConsens
 		}
 		return phonebook
 	}
-	nodes, wallets := setupFullNodesEx(t, proto, customConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, proto, customConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, numAccounts)
 	require.Len(t, wallets, numAccounts)
 	return nodes, wallets
@@ -123,15 +123,14 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, customConsens
 func setupFullNodesEx(
 	t *testing.T, proto protocol.ConsensusVersion, customConsensus config.ConsensusProtocols,
 	acctStake []basics.MicroAlgos, configHook configHook, phonebookHook phonebookHook,
+	lp fullNodeLoggerProvider,
 ) ([]*AlgorandFullNode, []string) {
 
 	util.SetFdSoftLimit(1000)
 
-	f, _ := os.Create(t.Name() + ".log")
-	logging.Base().SetJSONFormatter()
-	logging.Base().SetOutput(f)
-	logging.Base().SetLevel(logging.Debug)
-	t.Logf("Logging to %s\n", t.Name()+".log")
+	if lp == nil {
+		lp = &singleFileFullNodeLoggerProvider{t: t}
+	}
 
 	firstRound := basics.Round(0)
 	lastRound := basics.Round(200)
@@ -243,12 +242,59 @@ func setupFullNodesEx(
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		phonebook := phonebookHook(nodeInfos, i)
 		require.NoError(t, err)
-		node, err := MakeFull(logging.Base().With("net", fmt.Sprintf("node%d", i)), rootDirectory, cfg, phonebook, g)
+		node, err := MakeFull(lp.getLogger(i), rootDirectory, cfg, phonebook, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
 
 	return nodes, wallets
+}
+
+// fullNodeLoggerProvider is an interface for providing loggers for full nodes.
+type fullNodeLoggerProvider interface {
+	getLogger(i int) logging.Logger
+	cleanup()
+}
+
+// singleFileFullNodeLoggerProvider is a logger provider that creates a single log file for all nodes.
+type singleFileFullNodeLoggerProvider struct {
+	t *testing.T
+	h *os.File
+	l logging.Logger
+}
+
+func (p *singleFileFullNodeLoggerProvider) getLogger(i int) logging.Logger {
+	if p.l == nil {
+		var err error
+		p.h, err = os.Create(p.t.Name() + ".log")
+		require.NoError(p.t, err, "Failed to create log file for node %d", i)
+		p.l = logging.NewLogger()
+		p.l.SetJSONFormatter()
+		p.l.SetOutput(p.h)
+		p.l.SetLevel(logging.Debug)
+	}
+	return p.l.With("net", fmt.Sprintf("node%d", i))
+}
+
+func (p *singleFileFullNodeLoggerProvider) cleanup() {
+	if p.h != nil {
+		p.h.Close()
+		p.h = nil
+		p.l = nil
+	}
+}
+
+// mixedLogFullNodeLoggerProvider allows some nodes to log to the testing logger and others to a file.
+type mixedLogFullNodeLoggerProvider struct {
+	singleFileFullNodeLoggerProvider
+	stdoutNodes map[int]struct{}
+}
+
+func (p *mixedLogFullNodeLoggerProvider) getLogger(i int) logging.Logger {
+	if _, ok := p.stdoutNodes[i]; ok {
+		return logging.TestingLog(p.t).With("net", fmt.Sprintf("node%d", i))
+	}
+	return p.singleFileFullNodeLoggerProvider.getLogger(i)
 }
 
 func TestSyncingFullNode(t *testing.T) {
@@ -358,9 +404,8 @@ func TestSimpleUpgrade(t *testing.T) {
 		t.Skip("Test takes ~50 seconds.")
 	}
 
-	if (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" && runtime.GOOS != "darwin") &&
-		strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
-		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
+	if runtime.GOOS == "darwin" && strings.ToUpper(os.Getenv("GITHUB_ACTIONS")) == "TRUE" {
+		t.Skip("Test is too heavy for macOS builder running in parallel with other packages")
 	}
 
 	// ConsensusTest0 is a version of ConsensusV0 used for testing
@@ -794,6 +839,8 @@ func TestMaxSizesCorrect(t *testing.T) {
 	 */ ////////////////////////////////////////////////
 	avSize := uint64(agreement.UnauthenticatedVoteMaxSize())
 	require.Equal(t, avSize, protocol.AgreementVoteTag.MaxMessageSize())
+	// VP tag should have the same max size as AV tag
+	require.Equal(t, avSize, protocol.VotePackedTag.MaxMessageSize())
 	miSize := uint64(network.MessageOfInterestMaxSize())
 	require.Equal(t, miSize, protocol.MsgOfInterestTag.MaxMessageSize())
 	npSize := uint64(NetPrioResponseSignedMaxSize())
@@ -822,7 +869,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	// subtract out the two smaller signature sizes (logicsig is biggest, it can *contain* the others)
 	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + crypto.MultisigSigMaxSize())
 	// the logicsig size is *also* an overestimate, because it thinks that the logicsig and
-	// the logicsig args can both be up to to MaxLogicSigMaxSize, but that's the max for
+	// the logicsig args can both be up to MaxLogicSigMaxSize, but that's the max for
 	// them combined, so it double counts and we have to subtract one.
 	maxCombinedTxnSize -= uint64(bounds.MaxLogicSigMaxSize)
 
@@ -941,7 +988,14 @@ func TestNodeHybridTopology(t *testing.T) {
 		return nil
 	}
 
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(
+		t, consensusTest0, configurableConsensus,
+		acctStake, configHook, phonebookHook,
+		// log Node 0 to stdout/testing log for debugging - in order to preserve the log after failure
+		&mixedLogFullNodeLoggerProvider{
+			singleFileFullNodeLoggerProvider: singleFileFullNodeLoggerProvider{t: t},
+			stdoutNodes:                      map[int]struct{}{0: {}},
+		})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
 	for i := 0; i < len(nodes); i++ {
@@ -952,12 +1006,24 @@ func TestNodeHybridTopology(t *testing.T) {
 	startAndConnectNodes(nodes, 10*time.Second)
 
 	// ensure the initial connectivity topology
+	repeatCounter := 0
 	require.Eventually(t, func() bool {
+		repeatCounter++
 		node0Conn := len(nodes[0].net.GetPeers(network.PeersConnectedIn)) > 0                             // has connection from 1
 		node1Conn := len(nodes[1].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) == 2 // connected to 0 and 2
 		node2Conn := len(nodes[2].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) >= 1 // connected to 1
+		if repeatCounter > 100 && !(node0Conn && node1Conn && node2Conn) {
+			t.Logf("IN/OUT connection stats:\nNode0 %d/%d, Node1 %d/%d, Node2 %d/%d",
+				len(nodes[0].net.GetPeers(network.PeersConnectedIn)), len(nodes[0].net.GetPeers(network.PeersConnectedOut)),
+				len(nodes[1].net.GetPeers(network.PeersConnectedIn)), len(nodes[1].net.GetPeers(network.PeersConnectedOut)),
+				len(nodes[2].net.GetPeers(network.PeersConnectedIn)), len(nodes[2].net.GetPeers(network.PeersConnectedOut)))
+		}
 		return node0Conn && node1Conn && node2Conn
 	}, 60*time.Second, 500*time.Millisecond)
+
+	// node 0 has GossipFanout=0 but we still want to run all the machinery to update phonebooks
+	// (it this particular case to update peerstore with DHT nodes)
+	nodes[0].net.RequestConnectOutgoing(false, nil)
 
 	initialRound := nodes[0].ledger.NextRound()
 	targetRound := initialRound + 10
@@ -965,11 +1031,18 @@ func TestNodeHybridTopology(t *testing.T) {
 	// ensure discovery of archival node by tracking its ledger
 	select {
 	case <-nodes[0].ledger.Wait(targetRound):
-		e0, err := nodes[0].ledger.Block(targetRound)
+		b0, err := nodes[0].ledger.Block(targetRound)
 		require.NoError(t, err)
-		e1, err := nodes[1].ledger.Block(targetRound)
-		require.NoError(t, err)
-		require.Equal(t, e1.Hash(), e0.Hash())
+
+		var err1 error
+		var b1 bookkeeping.Block
+		require.Eventually(t, func() bool {
+			// it is possible N0 commits blocks faster than R, so wait a bit
+			b1, err1 = nodes[1].ledger.Block(targetRound)
+			return err1 == nil
+		}, 3*time.Second, 50*time.Millisecond)
+
+		require.Equal(t, b1.Hash(), b0.Hash())
 	case <-time.After(3 * time.Minute): // set it to 1.5x of the dht.periodicBootstrapInterval to give DHT code to rebuild routing table one more time
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
@@ -1041,7 +1114,7 @@ func TestNodeP2PRelays(t *testing.T) {
 		return nil
 	}
 
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
 	for i := 0; i < len(nodes); i++ {
@@ -1195,7 +1268,7 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 		return nil
 	}
 
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
 	for i := 0; i < len(nodes); i++ {
@@ -1232,7 +1305,7 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 			Sender:      addr2,
 			FirstValid:  1,
 			LastValid:   100,
-			Fee:         basics.MicroAlgos{Raw: 1000},
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
 			GenesisID:   nodes[2].genesisID,
 			GenesisHash: nodes[2].genesisHash,
 		},
@@ -1317,7 +1390,7 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 		}
 		return phonebook
 	}
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook, &singleFileFullNodeLoggerProvider{t: t})
 	require.Len(t, nodes, numAccounts)
 	require.Len(t, wallets, numAccounts)
 	for i := 0; i < len(nodes); i++ {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1088,7 +1088,7 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 	require.Less(t, local.LastRound(), remote.LastRound())
 }
 
-// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not avaialble
+// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not available
 func TestServiceNoBlockForRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

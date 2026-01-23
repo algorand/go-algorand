@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ func TestLocal_SaveThenLoad(t *testing.T) {
 
 	c1, err := loadWithoutDefaults(defaultConfig)
 	require.NoError(t, err)
-	c1, err = migrate(c1)
+	c1, _, err = migrate(c1)
 	require.NoError(t, err)
 	var b1 bytes.Buffer
 	ser1 := json.NewEncoder(&b1)
@@ -248,7 +248,7 @@ func loadWithoutDefaults(cfg Local) (Local, error) {
 	if err != nil {
 		return Local{}, err
 	}
-	cfg, err = loadConfigFromFile(name)
+	cfg, _, err = loadConfigFromFile(name)
 	return cfg, err
 }
 
@@ -259,24 +259,46 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	c0, err := loadWithoutDefaults(GetVersionedDefaultLocalConfig(0))
 	a.NoError(err)
-	c0, err = migrate(c0)
+	c0, migrations0, err := migrate(c0)
 	a.NoError(err)
-	cLatest, err := migrate(defaultLocal)
+	a.Empty(migrations0)
+	cLatest, migrationsLatest, err := migrate(defaultLocal)
 	a.NoError(err)
+	a.Empty(migrationsLatest)
 
 	a.Equal(defaultLocal, c0)
 	a.Equal(defaultLocal, cLatest)
 
 	cLatest.Version = getLatestConfigVersion() + 1
-	_, err = migrate(cLatest)
+	_, _, err = migrate(cLatest)
 	a.Error(err)
 
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
 	c0Modified.BaseLoggerDebugLevel = GetVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
-	c0Modified, err = migrate(c0Modified)
+	c0Modified, migrationsModified, err := migrate(c0Modified)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
+
+	// Assert specific important migrations covering different data types
+	a.NotEmpty(migrationsModified)
+	migrationMap := make(map[string]MigrationResult)
+	for _, m := range migrationsModified {
+		a.NotEqual("Version", m.FieldName)
+		a.NotContains(migrationMap, m.FieldName)
+		migrationMap[m.FieldName] = m
+	}
+	for _, expected := range []MigrationResult{
+		{FieldName: "IncomingConnectionsLimit", OldValue: int64(-1), NewValue: int64(2400), OldVersion: 0, NewVersion: 27},
+		{FieldName: "TxPoolSize", OldValue: int64(50000), NewValue: int64(75000), OldVersion: 0, NewVersion: 23},
+		{FieldName: "ProposalAssemblyTime", OldValue: int64(0), NewValue: int64(500000000), OldVersion: 0, NewVersion: 23},
+		{FieldName: "AgreementIncomingVotesQueueLength", OldValue: uint64(0), NewValue: uint64(20000), OldVersion: 0, NewVersion: 27},
+		{FieldName: "EnableTxBacklogRateLimiting", OldValue: false, NewValue: true, OldVersion: 0, NewVersion: 30},
+		{FieldName: "DNSBootstrapID", OldValue: "<network>.algorand.network", NewValue: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)", OldVersion: 0, NewVersion: 28},
+	} {
+		a.Contains(migrationMap, expected.FieldName)
+		a.Equal(expected, migrationMap[expected.FieldName])
+	}
 }
 
 func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
@@ -289,15 +311,50 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
 	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
-		c, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
+		c, migrations, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
 		a.NoError(err)
-		modified, err := migrate(c)
+		modified, _, err := migrate(c)
 		a.NoError(err)
 		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
+
+		if len(migrations) > 0 {
+			t.Logf("Migration results for config-v%d.json:", configVersion)
+			for _, m := range migrations {
+				t.Logf("  Automatically upgraded default value for %s from %v (version %d) to %v (version %d)",
+					m.FieldName, m.OldValue, m.OldVersion, m.NewValue, m.NewVersion)
+			}
+		}
+
+		// Spot-check specific migrations
+		expectedMigrations := map[uint32]MigrationResult{
+			1:  {FieldName: "TxPoolSize", OldValue: 50000, NewValue: 75000, OldVersion: 1, NewVersion: 23},
+			3:  {FieldName: "MaxConnectionsPerIP", OldValue: 30, NewValue: 8, OldVersion: 3, NewVersion: 35},
+			5:  {FieldName: "TxPoolSize", OldValue: 15000, NewValue: 75000, OldVersion: 5, NewVersion: 23},
+			17: {FieldName: "IncomingConnectionsLimit", OldValue: 800, NewValue: 2400, OldVersion: 17, NewVersion: 27},
+			19: {FieldName: "ProposalAssemblyTime", OldValue: 250000000, NewValue: 500000000, OldVersion: 19, NewVersion: 23},
+			21: {FieldName: "AgreementIncomingVotesQueueLength", OldValue: 10000, NewValue: 20000, OldVersion: 21, NewVersion: 27},
+			23: {FieldName: "CadaverSizeTarget", OldValue: 1073741824, NewValue: 0, OldVersion: 23, NewVersion: 24},
+			27: {FieldName: "EnableTxBacklogRateLimiting", OldValue: false, NewValue: true, OldVersion: 27, NewVersion: 30},
+			30: {FieldName: "DNSSecurityFlags", OldValue: 1, NewValue: 9, OldVersion: 30, NewVersion: 34},
+		}
+		if expected, ok := expectedMigrations[configVersion]; ok {
+			found := false
+			for _, m := range migrations {
+				if m.FieldName == expected.FieldName {
+					found = true
+					a.EqualValues(expected.OldValue, m.OldValue)
+					a.EqualValues(expected.NewValue, m.NewValue)
+					a.EqualValues(expected.OldVersion, m.OldVersion)
+					a.EqualValues(expected.NewVersion, m.NewVersion)
+					break
+				}
+			}
+			a.True(found, "v%d should have %s migration", configVersion, expected.FieldName)
+		}
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
-	_, err = migrate(cNext)
+	_, _, err = migrate(cNext)
 	a.Error(err)
 }
 
@@ -468,7 +525,7 @@ func TestLocal_StructTags(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	localType := reflect.TypeOf(Local{})
+	localType := reflect.TypeFor[Local]()
 
 	versionField, ok := localType.FieldByName("Version")
 	require.True(t, ok)
@@ -518,12 +575,12 @@ func TestLocal_GetVersionedDefaultLocalConfig(t *testing.T) {
 	}
 }
 
-// TestLocalVersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
+// TestLocal_VersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
 func TestLocal_VersionField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	localType := reflect.TypeOf(Local{})
+	localType := reflect.TypeFor[Local]()
 	field, ok := localType.FieldByName("Version")
 	require.True(t, true, ok)
 	ver := 0
@@ -596,83 +653,83 @@ func TestLocal_TxFiltering(t *testing.T) {
 	require.True(t, cfg.TxFilterCanonicalEnabled())
 }
 
-func TestLocal_IsGossipServer(t *testing.T) {
+func TestLocal_IsListenServer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	cfg := GetDefaultLocal()
-	require.False(t, cfg.IsGossipServer())
-	require.False(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsListenServer())
+	require.False(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.NetAddress = ":4160"
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableGossipService = false
 	// EnableGossipService does not matter
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
-	require.True(t, cfg.IsGossipServer())
-	require.False(t, cfg.IsWsGossipServer())
-	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.False(t, cfg.IsWsListenServer())
+	require.True(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2P = false
 
 	cfg.EnableP2PHybridMode = true
 	// with net address set it is ws net gossip server
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ""
-	require.False(t, cfg.IsGossipServer())
-	require.False(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsListenServer())
+	require.False(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.P2PHybridNetAddress = ":4190"
-	require.True(t, cfg.IsGossipServer())
-	require.False(t, cfg.IsWsGossipServer())
-	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.False(t, cfg.IsWsListenServer())
+	require.True(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ":4160"
 	cfg.P2PHybridNetAddress = ":4190"
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.True(t, cfg.IsP2PListenServer())
 	require.True(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
 	cfg.P2PHybridNetAddress = ":4190"
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.True(t, cfg.IsP2PListenServer())
 	require.True(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
 	cfg.P2PHybridNetAddress = ""
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 }
 
@@ -801,6 +858,10 @@ func TestEnsureAbsDir(t *testing.T) {
 type tLogger struct{ t *testing.T }
 
 func (l tLogger) Infof(fmts string, args ...interface{}) {
+	l.t.Logf(fmts, args...)
+}
+
+func (l tLogger) Warnf(fmts string, args ...interface{}) {
 	l.t.Logf(fmts, args...)
 }
 

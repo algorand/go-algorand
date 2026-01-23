@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -103,7 +103,7 @@ func (m *migrator) Migrate(ctx context.Context) error {
 	if m.currentVersion > m.targetVersion {
 		return nil
 	}
-	// upgrade the db one version at at time
+	// upgrade the db one version at a time
 	for m.currentVersion < m.targetVersion {
 		// run next version upgrade
 		switch m.currentVersion {

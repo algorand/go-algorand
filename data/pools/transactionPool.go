@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package pools
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -60,7 +61,6 @@ type TransactionPool struct {
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
-	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  BlockEvaluator
 	evalTracer             logic.EvalTracer
 	numPendingWholeBlocks  basics.Round
@@ -109,8 +109,7 @@ type BlockEvaluator interface {
 	TestTransactionGroup(txgroup []transactions.SignedTxn) error
 	Round() basics.Round
 	PaySetSize() int
-	TransactionGroup(txads []transactions.SignedTxnWithAD) error
-	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
+	TransactionGroup(txads ...transactions.SignedTxnWithAD) error
 	GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error)
 	ResetTxnBytes()
 }
@@ -130,7 +129,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
-		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
 		logProcessBlockStats: cfg.EnableProcessBlockStats,
@@ -194,7 +192,6 @@ func (pool *TransactionPool) Reset() {
 	pool.pendingTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 	pool.rememberedTxGroups = nil
-	pool.expiredTxCount = make(map[basics.Round]int)
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
@@ -206,15 +203,6 @@ func (pool *TransactionPool) getVotingAccountsForRound(rnd basics.Round) []basic
 		return nil
 	}
 	return pool.vac.VotingAccountsForRound(rnd)
-}
-
-// NumExpired returns the number of transactions that expired at the
-// end of a round (only meaningful if cleanup has been called for that
-// round).
-func (pool *TransactionPool) NumExpired(round basics.Round) int {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	return pool.expiredTxCount[round]
 }
 
 // PendingTxIDs return the IDs of all pending transactions.
@@ -268,9 +256,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 	} else {
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
 
-		for txid, txn := range pool.rememberedTxids {
-			pool.pendingTxids[txid] = txn
-		}
+		maps.Copy(pool.pendingTxids, pool.rememberedTxids)
 	}
 
 	pool.rememberedTxGroups = nil
@@ -587,10 +573,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 	stats.KnownCommittedCount = knownCommitted
 	stats.UnknownCommittedCount = unknownCommitted
 
-	proto := config.Consensus[block.CurrentProtocol]
-	pool.expiredTxCount[block.Round()] = int(stats.ExpiredCount)
-	delete(pool.expiredTxCount, block.Round()-expiredHistory*basics.Round(proto.MaxTxnLife))
-
 	if pool.logProcessBlockStats {
 		var details struct {
 			Round uint64
@@ -633,7 +615,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		transactionGroupStartsTime = time.Now()
 	}
 
-	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
+	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad...)
 
 	if recomputing {
 		if !pool.assemblyResults.assemblyCompletedOrAbandoned {
@@ -641,7 +623,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 			pool.assemblyMu.Lock()
 			defer pool.assemblyMu.Unlock()
 			if evalRnd := pool.pendingBlockEvaluator.Round(); pool.assemblyRound > evalRnd {
-				// the block we're assembling now isn't the one the the AssembleBlock is waiting for. While it would be really cool
+				// the block we're assembling now isn't the one the AssembleBlock is waiting for. While it would be really cool
 				// to finish generating the block, it would also be pointless to spend time on it.
 				// we're going to set the ok and assemblyCompletedOrAbandoned to "true" so we can complete this loop asap
 				pool.assemblyResults.ok = true

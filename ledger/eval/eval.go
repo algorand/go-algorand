@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -70,7 +70,7 @@ var ErrNotInCowCache = errors.New("can't find object in cow cache")
 // is considerably slower.
 const averageEncodedTxnSizeHint = 150
 
-// Creatable represent a single creatable object.
+// creatable represent a single creatable object.
 type creatable struct {
 	cindex basics.CreatableIndex
 	ctype  basics.CreatableType
@@ -470,13 +470,8 @@ func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global 
 // getStorageCounts counts the storage types used by some account
 // associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	var err error
-	count := basics.StateSchema{}
-	exist := false
-	kv := basics.TealKeyValue{}
 	if global {
-		var app ledgercore.AppParamsDelta
-		app, exist, err = x.lookupAppParams(addr, aidx, false)
+		app, exist, err := x.lookupAppParams(addr, aidx, false)
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
@@ -484,11 +479,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppParams returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 		}
 		if exist {
-			kv = app.Params.GlobalState
+			return app.Params.GlobalState.ToStateSchema()
 		}
 	} else {
-		var ls ledgercore.AppLocalStateDelta
-		ls, exist, err = x.lookupAppLocalState(addr, aidx, false)
+		ls, exist, err := x.lookupAppLocalState(addr, aidx, false)
 		if err != nil {
 			return basics.StateSchema{}, err
 		}
@@ -496,21 +490,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 			return basics.StateSchema{}, fmt.Errorf("getStorageCounts: lookupAppLocalState returned deleted entry for (%s, %d, %v)", addr.String(), aidx, global)
 		}
 		if exist {
-			kv = ls.LocalState.KeyValue
+			return ls.LocalState.KeyValue.ToStateSchema()
 		}
 	}
-	if !exist {
-		return count, nil
-	}
-
-	for _, v := range kv {
-		if v.Type == basics.TealUintType {
-			count.NumUint++
-		} else {
-			count.NumByteSlice++
-		}
-	}
-	return count, nil
+	return basics.StateSchema{}, nil
 }
 
 func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
@@ -919,6 +902,11 @@ func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
 }
 
+// ConsensusParams returns the consensus parameters for the block being evaluated.
+func (eval *BlockEvaluator) ConsensusParams() config.ConsensusParams {
+	return eval.proto
+}
+
 // ResetTxnBytes resets the number of bytes tracked by the BlockEvaluator to
 // zero.  This is a specialized operation used by the transaction pool to
 // simulate the effect of putting pending transactions in multiple blocks.
@@ -944,7 +932,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		err := eval.TestTransaction(txn)
+		err := eval.testTransaction(txn)
 		if err != nil {
 			return err
 		}
@@ -985,10 +973,10 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	return nil
 }
 
-// TestTransaction performs basic duplicate detection and well-formedness checks
+// testTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
+func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
 	err := eval.block.Alive(txn.Txn.Header)
 	if err != nil {
@@ -1011,22 +999,10 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 	return nil
 }
 
-// Transaction tentatively adds a new transaction as part of this block evaluation.
-// If the transaction cannot be added to the block without violating some constraints,
-// an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
-	return eval.TransactionGroup([]transactions.SignedTxnWithAD{
-		{
-			SignedTxn: txn,
-			ApplyData: ad,
-		},
-	})
-}
-
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWithAD) (err error) {
+func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWithAD) (err error) {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -1182,6 +1158,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		err = eval.block.Alive(txn.Txn.Header)
 		if err != nil {
 			return err
+		}
+
+		err = txn.Txn.WellFormed(eval.specials, eval.proto)
+		if err != nil {
+			txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
+			return &txnErr
 		}
 
 		// Transaction already in the ledger?
@@ -2174,7 +2156,7 @@ transactionGroupLoop:
 					}
 				}
 			}
-			err = eval.TransactionGroup(txgroup.TxnGroup)
+			err = eval.TransactionGroup(txgroup.TxnGroup...)
 			if err != nil {
 				return ledgercore.StateDelta{}, err
 			}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ func TestAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	accountDataType := reflect.TypeOf(basics.AccountData{})
+	accountDataType := reflect.TypeFor[basics.AccountData]()
 
 	referencedAccountTypes := make([]reflectionhelpers.TypePath, 0)
 	reflectionhelpers.IterateReferencedTypes(accountDataType, func(path reflectionhelpers.TypePath, stack []reflect.Type) bool {
@@ -39,7 +39,7 @@ func TestAccounts(t *testing.T) {
 			return true
 		}
 		stackTop := stack[len(stack)-1]
-		if path[len(path)-1].FieldName == "_struct" && stackTop == reflect.TypeOf(struct{}{}) {
+		if path[len(path)-1].FieldName == "_struct" && stackTop == reflect.TypeFor[struct{}]() {
 			// Ignore the informational _struct field
 			return true
 		}

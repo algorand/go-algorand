@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 )
 
 // testinterface.go contains interface extensions specific to testing
-// testing interfaces should be made accessible by calling the Testing() method
+// Testing interfaces should be made accessible by calling the Testing() method
 // on the related interface. Example:
 // 		testTx := tx.Testing()
 // these can also be inlined:

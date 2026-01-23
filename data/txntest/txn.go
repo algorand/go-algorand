@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,10 +83,11 @@ type Txn struct {
 	ForeignApps       []basics.AppIndex
 	ForeignAssets     []basics.AssetIndex
 	Boxes             []transactions.BoxRef
+	Access            []transactions.ResourceRef
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
-	ApprovalProgram   interface{} // string, nil, or []bytes if already compiled
-	ClearStateProgram interface{} // string, nil or []bytes if already compiled
+	ApprovalProgram   any // string, nil, or []bytes if already compiled
+	ClearStateProgram any // string, nil or []bytes if already compiled
 	ExtraProgramPages uint32
 
 	StateProofType protocol.StateProofType
@@ -116,6 +117,10 @@ func (tx *Txn) internalCopy() {
 	tx.Boxes = append([]transactions.BoxRef(nil), tx.Boxes...)
 	for i := 0; i < len(tx.Boxes); i++ {
 		tx.Boxes[i].Name = append([]byte(nil), tx.Boxes[i].Name...)
+	}
+	tx.Access = append([]transactions.ResourceRef(nil), tx.Access...)
+	for i := 0; i < len(tx.Access); i++ {
+		tx.Access[i].Box.Name = append([]byte(nil), tx.Access[i].Box.Name...)
 	}
 
 	// Programs may or may not actually be byte slices.  The other
@@ -188,7 +193,11 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 			case []byte:
 			}
 		}
-
+		if tx.ApplicationID == 0 && tx.ExtraProgramPages == 0 {
+			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
+			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
+			tx.ExtraProgramPages = uint32(totalPages - 1)
+		}
 	}
 }
 
@@ -288,6 +297,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			ForeignApps:       append([]basics.AppIndex(nil), tx.ForeignApps...),
 			ForeignAssets:     append([]basics.AssetIndex(nil), tx.ForeignAssets...),
 			Boxes:             tx.Boxes,
+			Access:            tx.Access,
 			LocalStateSchema:  tx.LocalStateSchema,
 			GlobalStateSchema: tx.GlobalStateSchema,
 			ApprovalProgram:   assemble(tx.ApprovalProgram),
@@ -308,13 +318,6 @@ func (tx Txn) Txn() transactions.Transaction {
 // again, for convenience when driving tests.
 func (tx Txn) SignedTxn() transactions.SignedTxn {
 	return transactions.SignedTxn{Txn: tx.Txn()}
-}
-
-// SignedTxnWithAD produces unsigned, transactions.SignedTxnWithAD
-// from the fields in this Txn.  This seemingly pointless operation
-// exists, again, for convenience when driving tests.
-func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
-	return transactions.SignedTxnWithAD{SignedTxn: tx.SignedTxn()}
 }
 
 // Group turns a list of Txns into a slice of SignedTxns with

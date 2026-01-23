@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,7 +42,6 @@ func RunFuncWithSpinningCursor(asyncFunc func()) {
 		case <-doneChan:
 			finished = true
 			ticker.Stop()
-			break
 		case <-ticker.C:
 			fmt.Print(progressStrings[i])
 			fmt.Print("\b")

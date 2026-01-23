@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/util/s3"
-	"github.com/algorand/go-algorand/util/tar"
 )
 
 func downloadAndExtractConfigPackage(channel string, targetDir string, configBucket string) (err error) {
@@ -74,7 +73,7 @@ func downloadConfigPackage(channelName string, targetDir string, configBucket st
 }
 
 func extractConfigPackage(packageFile string, targetDir string) (err error) {
-	err = tar.UncompressFile(packageFile, targetDir)
+	err = UncompressFile(packageFile, targetDir)
 	if err != nil {
 		return
 	}

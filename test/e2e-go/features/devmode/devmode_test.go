@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -101,7 +101,10 @@ func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) 
 	wh, err := fixture.LibGoalClient.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
 
-	fundingTx, err := fixture.LibGoalClient.SendPaymentFromWalletWithLease(wh, nil, sender.Address, receiver.String(), 1000, 100000, nil, "", [32]byte{1, 2, 3}, basics.Round(curRound).SubSaturate(1), 0)
+	params, err := fixture.LibGoalClient.SuggestedParams()
+	require.NoError(t, err)
+
+	fundingTx, err := fixture.LibGoalClient.SendPaymentFromWalletWithLease(wh, nil, sender.Address, receiver.String(), params.MinFee, 100000, nil, "", [32]byte{1, 2, 3}, basics.Round(curRound).SubSaturate(1), 0)
 	require.NoError(t, err)
 	txn, err := fixture.WaitForConfirmedTxn(curRound+5, fundingTx.ID().String())
 	require.NoError(t, err)

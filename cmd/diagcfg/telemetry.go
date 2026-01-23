@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,7 +55,12 @@ func maybeUpdateDataDirFromEnv() {
 
 func readTelemetryConfigOrExit() logging.TelemetryConfig {
 	maybeUpdateDataDirFromEnv()
-	cfg, err := logging.ReadTelemetryConfigOrDefault(dataDir, "")
+	globalDir, err := config.GetGlobalConfigFileRoot()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, telemetryConfigReadError, err)
+		os.Exit(1)
+	}
+	cfg, err := logging.ReadTelemetryConfigOrDefault(dataDir, globalDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, telemetryConfigReadError, err)
 		os.Exit(1)
@@ -112,7 +117,12 @@ var telemetryStatusCmd = &cobra.Command{
 	Long:  `Print the node's telemetry status`,
 	Run: func(cmd *cobra.Command, args []string) {
 		maybeUpdateDataDirFromEnv()
-		cfg, err := logging.ReadTelemetryConfigOrDefault(dataDir, "")
+		globalDir, err := config.GetGlobalConfigFileRoot()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, telemetryConfigReadError, err)
+			os.Exit(1)
+		}
+		cfg, err := logging.ReadTelemetryConfigOrDefault(dataDir, globalDir)
 
 		// If error loading config, can't disable / no need to disable
 		if err != nil {

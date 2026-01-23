@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -391,7 +391,7 @@ func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, ou
 	if errorOutput.output != "" {
 		fmt.Fprintf(os.Stdout, "errorOutput.output: `%s`\n", errorOutput.output)
 		errorCondition = true
-		fmt.Fprintf(os.Stderr, errorOutput.output)
+		fmt.Fprint(os.Stderr, errorOutput.output)
 		details := telemetryspec.ErrorOutputEventDetails{
 			Error:  errorOutput.output,
 			Output: output.output,

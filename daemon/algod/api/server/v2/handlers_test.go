@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -160,10 +160,10 @@ func TestPendingTransactionResponseStruct(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	generatedResponseType := reflect.TypeOf(model.PendingTransactionResponse{})
+	generatedResponseType := reflect.TypeFor[model.PendingTransactionResponse]()
 	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
 
-	customResponseType := reflect.TypeOf(PreEncodedTxInfo{})
+	customResponseType := reflect.TypeFor[PreEncodedTxInfo]()
 	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
 
 	expectedGeneratedTxnGraph := map[string]*tagNode{
@@ -186,10 +186,10 @@ func TestSimulateResponseStruct(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	generatedResponseType := reflect.TypeOf(model.SimulateResponse{})
+	generatedResponseType := reflect.TypeFor[model.SimulateResponse]()
 	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
 
-	customResponseType := reflect.TypeOf(PreEncodedSimulateResponse{})
+	customResponseType := reflect.TypeFor[PreEncodedSimulateResponse]()
 	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
 
 	expectedGeneratedTxnGraph := map[string]*tagNode{
@@ -216,10 +216,10 @@ func TestSimulateRequestStruct(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	generatedResponseType := reflect.TypeOf(model.SimulateRequest{})
+	generatedResponseType := reflect.TypeFor[model.SimulateRequest]()
 	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
 
-	customResponseType := reflect.TypeOf(PreEncodedSimulateRequest{})
+	customResponseType := reflect.TypeFor[PreEncodedSimulateRequest]()
 	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
 
 	expectedGeneratedTxnGraph := map[string]*tagNode{

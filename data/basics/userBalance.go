@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -194,7 +194,7 @@ type AccountData struct {
 	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=bounds.EncodedMaxAssetsPerAccount"`
 
 	// AuthAddr is the address against which signatures/multisigs/logicsigs should be checked.
-	// If empty, the address of the account whose AccountData this is is used.
+	// If empty, the address of the account whose AccountData this is used.
 	// A transaction may change an account's AuthAddr to "re-key" the account.
 	// This allows key rotation, changing the members in a multisig, etc.
 	AuthAddr Address `codec:"spend"`
@@ -250,6 +250,10 @@ type AppParams struct {
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
 	Version           uint64 `codec:"v"`
+
+	// SizeSponsor, if non-zero, is the account that must hold MBR for
+	// extra program pages, and the global schema.
+	SizeSponsor Address `codec:"ss"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the
@@ -309,6 +313,27 @@ type AssetIndex uint64
 // look up the creator of the application, whose balance record contains the
 // AppParams
 type AppIndex uint64
+
+// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual
+// app id, not an index
+type BoxRef struct {
+	App  AppIndex
+	Name string
+}
+
+// HoldingRef is the "hydrated" form of a transactions.HoldingRef - it has the
+// actual asset id and address, not indices
+type HoldingRef struct {
+	Asset   AssetIndex
+	Address Address
+}
+
+// LocalRef is the "hydrated" form of a transactions.LocalRef - it has the
+// actual app id and address, not indices
+type LocalRef struct {
+	App     AppIndex
+	Address Address
+}
 
 // CreatableIndex represents either an AssetIndex or AppIndex, which come from
 // the same namespace of indices as each other (both assets and apps are

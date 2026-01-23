@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -123,10 +123,6 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootConfigDir, rootNodeDir string) (nodeDirs []nodeDir, err error) {
 	rootHostDir := filepath.Join(rootConfigDir, "hosts", nc.config.Name)
-	if err != nil {
-		err = fmt.Errorf("error loading genesis data: %v", err)
-		return
-	}
 	genesisDir := nc.genesisData.ID()
 
 	// Importing root keys is complicated - just use goal's support for it

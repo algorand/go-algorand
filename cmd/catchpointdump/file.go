@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -447,10 +447,7 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		}
 		if time.Since(lastProgressUpdate) > 50*time.Millisecond && catchpointFileSize > 0 {
 			lastProgressUpdate = time.Now()
-			progressRatio := int(float64(progress) * barLength / float64(catchpointFileSize))
-			if progressRatio > barLength {
-				progressRatio = barLength
-			}
+			progressRatio := min(int(float64(progress)*barLength/float64(catchpointFileSize)), barLength)
 			printLoadCatchpointProgressLine(progressRatio, barLength, int64(progress))
 		}
 	}
@@ -466,7 +463,7 @@ func printDumpingCatchpointProgressLine(progress int, barLength int, dld int64) 
 	if dld > 0 {
 		outString = fmt.Sprintf(outString+" %d", dld)
 	}
-	fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
+	fmt.Print(escapeCursorUp + escapeDeleteLine + outString + "\n")
 }
 
 func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader ledger.CatchpointFileHeader, outFile *os.File, excludeFields []string) error {

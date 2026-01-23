@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package ledger
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -358,9 +357,17 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		}
 		a.NotEmpty(wrongVersion)
 		badBlock.BlockHeader.CurrentProtocol = wrongVersion
-		if !config.Consensus[wrongVersion].EnableSha512BlockHash {
+		// Handle Branch512 field mismatch between correctHeader and wrongVersion's expectations
+		// We want to set the Branch512 header to match wrongVersion so that PreCheck will reach
+		// the intended "UpgradeState mismatch" error, which happens after the Branch512 check.
+		if !proto.EnableSha512BlockHash && config.Consensus[wrongVersion].EnableSha512BlockHash {
+			// correctHeader has empty Branch512, but wrongVersion expects it during validation
+			badBlock.BlockHeader.Branch512 = lastBlock.Hash512()
+		} else if proto.EnableSha512BlockHash && !config.Consensus[wrongVersion].EnableSha512BlockHash {
+			// correctHeader has non-zero Branch512, but wrongVersion doesn't support it
 			badBlock.BlockHeader.Branch512 = crypto.Sha512Digest{}
 		}
+		// Otherwise, Branch512 is already correct (both support or both don't support SHA512)
 		a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
 
 		badBlock = bookkeeping.Block{BlockHeader: correctHeader}
@@ -1161,7 +1168,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 		VoteLast:        10000,
 	}
 
-	// depends on what the concensus is need to generate correct KeyregTxnFields.
+	// depends on what the consensus is need to generate correct KeyregTxnFields.
 	if proto.EnableStateProofKeyregCheck {
 		frst, lst := uint64(correctKeyregFields.VoteFirst), uint64(correctKeyregFields.VoteLast)
 		store, err := db.MakeAccessor("test-DB", false, true)
@@ -1753,7 +1760,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	_, err = l.BlockHdr(basics.Round(proto.StateProofInterval))
 	require.Error(t, err)
 	expectedErr := &ledgercore.ErrNoEntry{}
-	require.True(t, errors.As(err, expectedErr), fmt.Sprintf("got error %s", err))
+	require.ErrorAs(t, err, expectedErr, fmt.Sprintf("got error %s", err))
 
 	l.acctsOnline.voters.votersMu.Lock()
 	for k := range l.acctsOnline.voters.votersForRoundCache {
@@ -2260,7 +2267,7 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 }
 
 func resetAccountDBToV6(t *testing.T, l *Ledger) {
-	// reset tables and re-init again, similary to the catchpount apply code
+	// reset tables and re-init again, similarly to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err := l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsWriter()
@@ -2286,7 +2293,7 @@ func resetAccountDBToV6(t *testing.T, l *Ledger) {
 			return err0
 		}
 
-		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
+		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err0 != nil {
 			return err0
 		}
 
@@ -2320,7 +2327,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 		l.Close()
 	}()
 
-	// reset tables and re-init again, similary to the catchpount apply code
+	// reset tables and re-init again, similarly to the catchpount apply code
 	// since the ledger has only genesis accounts, this recreates them
 	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		arw, err := tx.MakeAccountsWriter()

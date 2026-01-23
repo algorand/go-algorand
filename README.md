@@ -13,7 +13,7 @@ Algorand is a permissionless, pure proof-of-stake blockchain that delivers decen
 
 ## Getting Started
 
-Visit our [developer website](https://developer.algorand.org/) for the most up-to-date information about using and installing the Algorand platform.
+Visit our [developer website](https://dev.algorand.co/) for the most up-to-date information about using and installing the Algorand platform.
 
 ## Building from Source
 
@@ -21,7 +21,7 @@ Development is done using the Go Programming Language. The Go version is specifi
 
 ### Linux / OSX
 
-We currently strive to support Debian-based distributions, with Ubuntu 20.04 as our official release target. Building on Arch Linux also works well. Our core engineering team uses Linux and OSX, so both environments are well-supported for development.
+We currently strive to support Debian-based distributions, with Ubuntu 24.04 as our official release target. Building on Arch Linux also works well. Our core engineering team uses Linux and OSX, so both environments are well-supported for development.
 
 **OSX Only**: [Homebrew (brew)](https://brew.sh) must be installed before continuing. [Here](https://docs.brew.sh/Installation) are the installation requirements.
 
@@ -31,7 +31,6 @@ We currently strive to support Debian-based distributions, with Ubuntu 20.04 as 
 git clone https://github.com/algorand/go-algorand
 cd go-algorand
 ./scripts/configure_dev.sh
-./scripts/buildtools/install_buildtools.sh
 ```
 
 At this point, you are ready to build go-algorand. We use `make` and have several targets to automate common tasks.
@@ -136,7 +135,6 @@ Contains the two daemons that provide Algorand clients with services:
 Enables developers to interface with the Algorand system:
 
 - **cmd**: Contains the primary commands defining entry points into the system.
-  - **cmd/catchupsrv** ([README](cmd/catchupsrv/README.md)): A tool to assist with processing historic blocks on a new node.
 - **libgoal**: Exports a Go interface useful for developers of Algorand clients.
 - **tools** ([README](tools/README.md)): Various tools and utilities that don’t have a better place to go.
 - **tools/debug**: Holds secondary commands that assist developers during debugging.
@@ -148,8 +146,6 @@ Helps Algorand developers deploy networks of their own:
 
 - **nodecontrol**
 - **docker**
-- **commandandcontrol** ([README](test/commandandcontrol/README.md)): A tool to automate a network of `algod` instances.
-- **components**
 - **netdeploy**
 
 ### Utilities
@@ -169,5 +165,5 @@ Provides utilities for the various components:
 
 Please see the [COPYING_FAQ](COPYING_FAQ) for details on how to apply our license.
 
-Copyright (C) 2019-2025, Algorand Inc.
+Copyright (C) 2019-2026, Algorand Inc.
 

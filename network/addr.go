@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,6 @@ func (wn *WebsocketNetwork) addrToGossipAddr(a string) (string, error) {
 	if parsedURL.Scheme == "" {
 		parsedURL.Scheme = "ws"
 	}
-	parsedURL.Path = strings.Replace(path.Join(parsedURL.Path, GossipNetworkPath), "{genesisID}", wn.genesisID, -1)
+	parsedURL.Path = strings.ReplaceAll(path.Join(parsedURL.Path, GossipNetworkPath), "{genesisID}", wn.GetGenesisID())
 	return parsedURL.String(), nil
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	_ "net/http/pprof" // net/http/pprof is for registering the pprof URLs with the web server, so http://localhost:8080/debug/pprof/ works.
+	_ "net/http/pprof" //nolint:gosec // registers handlers on http.DefaultServeMux, but we only route to it when Config.EnableProfiler is true
 	"net/url"
 	"os"
 	"os/signal"
@@ -78,7 +78,7 @@ type Server struct {
 }
 
 // Initialize creates a Node instance with applicable network services
-func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genesisText string) error {
+func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genesisText string, migrationResults []config.MigrationResult) error {
 	// set up node
 	s.log = logging.Base()
 
@@ -151,13 +151,13 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		}
 	}
 
-	if cfg.IsGossipServer() {
+	if cfg.IsListenServer() {
 		var ot basics.OverflowTracker
 		fdRequired = ot.Add(fdRequired, network.ReservedHealthServiceConnections)
 		if ot.Overflowed {
 			return errors.New("Initialize() overflowed when adding up ReservedHealthServiceConnections to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit")
 		}
-		if cfg.IsGossipServer() {
+		if cfg.IsListenServer() {
 			fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
 			if ot.Overflowed {
 				return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease IncomingConnectionsLimit")
@@ -189,7 +189,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 					if cfg.IsHybridServer() && cfg.P2PHybridIncomingConnectionsLimit == 0 {
 						return errors.New("Initialize() failed to adjust p2p hybrid connection limits")
 					}
-					if cfg.IsGossipServer() && cfg.IncomingConnectionsLimit == 0 {
+					if cfg.IsListenServer() && cfg.IncomingConnectionsLimit == 0 {
 						return errors.New("Initialize() failed to adjust connection limits")
 					}
 				}
@@ -233,6 +233,11 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		s.log.Infoln("Telemetry Disabled")
 	}
 	s.log.Infoln("++++++++++++++++++++++++++++++++++++++++")
+
+	for _, m := range migrationResults {
+		s.log.Infof("Upgraded default config value for %s from %v (version %d) to %v (version %d)",
+			m.FieldName, m.OldValue, m.OldVersion, m.NewValue, m.NewVersion)
+	}
 
 	metricLabels := map[string]string{}
 	if s.log.GetTelemetryEnabled() {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -175,7 +175,7 @@ func run() int {
 	checkAndDeleteIndexerFile("indexer.sqlite-shm")
 	checkAndDeleteIndexerFile("indexer.sqlite-wal")
 
-	cfg, err := config.LoadConfigFromDisk(absolutePath)
+	cfg, migrationResults, err := config.LoadConfigFromDiskWithMigrations(absolutePath)
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Cannot load config: %v", err)
@@ -209,6 +209,9 @@ func run() int {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Unable to load optional consensus protocols file: %v", err)
 	}
+
+	// Configure batch verifier implementation based on config
+	crypto.SetEd25519BatchVerifier(cfg.EnableBatchVerification)
 
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
@@ -371,7 +374,7 @@ func run() int {
 		cfg.LogSizeLimit = 0
 	}
 
-	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
+	err = s.Initialize(cfg, phonebookAddresses, string(genesisText), migrationResults)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)

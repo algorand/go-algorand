@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -707,13 +707,16 @@ func (eic *erlIPClient) OnClose(f func()) {
 // by adding a helper closer function to track connection closures
 func (eic *erlIPClient) register(ec util.ErlClient) {
 	eic.m.Lock()
-	defer eic.m.Unlock()
 	if _, has := eic.clients[ec]; has {
 		// this peer is known => noop
+		eic.m.Unlock()
 		return
 	}
 	eic.clients[ec] = struct{}{}
+	eic.m.Unlock()
 
+	// Register the OnClose callback without holding eic.m to avoid
+	// lock ordering deadlock with wsPeer.closersMu
 	ec.OnClose(func() {
 		eic.connClosed(ec)
 	})
@@ -960,7 +963,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		action = network.Ignore
 	}
 
-	if hybridNet, ok := handler.net.(HybridRelayer); ok {
+	if hybridNet, ok := handler.net.(HybridRelayer); ok && action == network.Accept {
 		_ = hybridNet.BridgeP2PToWS(handler.ctx, protocol.TxnTag, reencoded, false, wi.rawmsg.Sender)
 	}
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ func TestMetricCounter(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
@@ -113,7 +113,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
@@ -162,7 +162,7 @@ func TestMetricCounterMixed(t *testing.T) {
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 

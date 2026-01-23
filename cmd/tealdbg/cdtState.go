@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -600,8 +600,8 @@ func decodeNestedObjID(objID string) (string, []int, bool) {
 	}
 
 	groupIDs := objID[len(prefix)+1:]
-	parts := strings.Split(groupIDs, "_")
-	for _, id := range parts {
+	parts := strings.SplitSeq(groupIDs, "_")
+	for id := range parts {
 		if val, err := strconv.ParseInt(id, 10, 32); err == nil {
 			parsedIDs = append(parsedIDs, int(val))
 		} else {

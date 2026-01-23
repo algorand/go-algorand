@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -122,6 +122,13 @@ func opSumhash512(cx *EvalContext) error {
 	h := sumhash.New512(nil)
 	h.Write(cx.Stack[last].Bytes)
 	cx.Stack[last].Bytes = h.Sum(nil)
+	return nil
+}
+
+func opSHA512(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	hash := sha512.Sum512(cx.Stack[last].Bytes)
+	cx.Stack[last].Bytes = hash[:]
 	return nil
 }
 

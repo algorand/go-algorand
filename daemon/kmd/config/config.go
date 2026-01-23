@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,7 +104,7 @@ func (k KMDConfig) Validate() error {
 	return nil
 }
 
-// LoadKMDConfig tries to read the the kmd configuration from disk, merging the
+// LoadKMDConfig tries to read the kmd configuration from disk, merging the
 // default kmd configuration with what it finds
 func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 	cfg = defaultConfig(dataDir)

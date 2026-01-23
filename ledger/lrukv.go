@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -131,10 +131,8 @@ func (m *lruKV) prune(newSize int) (removed int) {
 	if m.kvs == nil {
 		return
 	}
-	for {
-		if len(m.kvs) <= newSize {
-			break
-		}
+	for len(m.kvs) > newSize {
+
 		back := m.kvList.Back()
 		delete(m.kvs, back.Value.key)
 		m.kvList.Remove(back)

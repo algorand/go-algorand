@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -256,9 +256,7 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 		mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
 	} else {
 		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[page])
-		for nodeID, pnode := range decodedNodes {
-			mtc.pageToNIDsPtr[page][nodeID] = pnode
-		}
+		maps.Copy(mtc.pageToNIDsPtr[page], decodedNodes)
 		mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
 	}
 
@@ -485,9 +483,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 		delete(createdPages, page)
 	}
 
-	for pageID, page := range mtc.reallocatedPages {
-		createdPages[pageID] = page
-	}
+	maps.Copy(createdPages, mtc.reallocatedPages)
 
 	for _, nodeIDs := range createdPages {
 		for _, node := range nodeIDs {
@@ -693,7 +689,7 @@ func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err erro
 	return nodesMap, nil
 }
 
-// decodePage encodes a page contents into a byte array
+// encodePage encodes a page contents into a byte array
 func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node, serializedBuffer []byte) []byte {
 	version := binary.PutUvarint(serializedBuffer[:], nodePageVersion)
 	length := binary.PutVarint(serializedBuffer[version:], int64(len(nodeIDs)))
