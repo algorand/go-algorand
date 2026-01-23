@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -400,49 +399,6 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 	}
 }
 
-func (handler *TxHandler) checkReportErrors(err error) {
-	switch err := err.(type) {
-	case *ledgercore.TxnNotWellFormedError:
-		transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagNotWell, 1)
-		return
-	case *bookkeeping.TxnDeadError:
-		if err.Early {
-			transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagTxnEarly, 1)
-		} else {
-			transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagTxnDead, 1)
-		}
-		return
-	case *ledgercore.TransactionInLedgerError:
-		if err.InBlockEvaluator {
-			transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagTxIDEval, 1)
-		} else {
-			transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagTxID, 1)
-		}
-		return
-	case *ledgercore.LeaseInLedgerError:
-		if err.InBlockEvaluator {
-			transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagLeaseEval, 1)
-		} else {
-			transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagLease, 1)
-		}
-		return
-	case *ledgercore.TxGroupMalformedError:
-		switch err.Reason {
-		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
-			transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagTooLarge, 1)
-		default:
-			transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagGroupID, 1)
-		}
-		return
-	}
-
-	transactionMessageTxPoolCheckCounter.Add(pools.TxPoolErrTagEvalGeneric, 1)
-}
-
-func (handler *TxHandler) rememberReportErrors(err error) {
-	transactionMessageTxPoolRememberCounter.Add(pools.ClassifyTxPoolError(err), 1)
-}
-
 func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	if wi.verificationErr != nil {
 		// disconnect from peer.
@@ -466,7 +422,7 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
-		handler.rememberReportErrors(err)
+		transactionMessageTxPoolRememberCounter.Add(pools.ClassifyTxPoolError(err), 1)
 		logging.Base().Debugf("could not remember tx: %v", err)
 		// if in synchronous mode, signal the completion of the operation
 		if wi.syncCh != nil {
@@ -933,7 +889,7 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
 	err := handler.txPool.Test(tx.unverifiedTxGroup)
 	if err != nil {
-		handler.checkReportErrors(err)
+		transactionMessageTxPoolCheckCounter.Add(pools.ClassifyTxPoolError(err), 1)
 		logging.Base().Debugf("txPool rejected transaction: %v", err)
 		return true
 	}

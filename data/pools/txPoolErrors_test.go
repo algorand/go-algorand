@@ -65,8 +65,10 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 		{name: "group_too_large_wrapped", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize}, tag: TxPoolErrTagTooLarge, wrap: true},
 		{name: "group_other", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonGeneric}, tag: TxPoolErrTagGroupID},
 		{name: "group_other_wrapped", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonGeneric}, tag: TxPoolErrTagGroupID, wrap: true},
-		{name: "logic_eval", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagEvalGeneric},
-		{name: "logic_eval_wrapped", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagEvalGeneric, wrap: true},
+		{name: "not_well", err: func() error { e := ledgercore.TxnNotWellFormedError("bad txn"); return &e }(), tag: TxPoolErrTagNotWell},
+		{name: "not_well_wrapped", err: func() error { e := ledgercore.TxnNotWellFormedError("bad txn"); return &e }(), tag: TxPoolErrTagNotWell, wrap: true},
+		{name: "logic_eval", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr},
+		{name: "logic_eval_wrapped", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr, wrap: true},
 	}
 
 	for _, tc := range tcases {
@@ -96,7 +98,8 @@ func TestTxPoolReevalCounterCoversReevalTags(t *testing.T) {
 		{name: "lease", err: ledgercore.MakeLeaseInLedgerError(transactions.Txid{}, ledgercore.Txlease{Sender: basics.Address{}, Lease: [32]byte{3}}, false), tag: TxPoolErrTagLease},
 		{name: "lease_eval", err: ledgercore.MakeLeaseInLedgerError(transactions.Txid{}, ledgercore.Txlease{Sender: basics.Address{}, Lease: [32]byte{4}}, true), tag: TxPoolErrTagLeaseEval},
 		{name: "no_space", err: ledgercore.ErrNoSpace, tag: TxPoolErrTagNoSpace},
-		{name: "eval", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagEvalGeneric},
+		{name: "not_well", err: func() error { e := ledgercore.TxnNotWellFormedError("bad"); return &e }(), tag: TxPoolErrTagNotWell},
+		{name: "teal_err", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr},
 	}
 
 	orig := txPoolReevalCounter

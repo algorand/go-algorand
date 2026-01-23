@@ -2050,7 +2050,6 @@ func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // 
 		pools.TxPoolErrTags...,
 	)
 
-	var txh TxHandler
 	result := map[string]float64{}
 
 	getMetricName := func(tag string) string {
@@ -2063,19 +2062,19 @@ func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // 
 
 	// Unwrapped and wrapped pool-level errors should increment the right tag.
 	noSpaceErr := ledgercore.ErrNoSpace
-	txh.rememberReportErrors(noSpaceErr)
+	transactionMessageTxPoolRememberCounter.Add(pools.ClassifyTxPoolError(noSpaceErr), 1)
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
 	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagNoSpace))
 
 	wrapped := fmt.Errorf("wrap: %w", noSpaceErr) // simulate wrapping
-	txh.rememberReportErrors(wrapped)
+	transactionMessageTxPoolRememberCounter.Add(pools.ClassifyTxPoolError(wrapped), 1)
 
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
 	require.Equal(t, 2, getMetricCounter(pools.TxPoolErrTagNoSpace))
 
 	feeErr := pools.ErrTxPoolFeeError{}
 	wrapped = fmt.Errorf("wrap: %w", &feeErr) // simulate wrapping
-	txh.rememberReportErrors(wrapped)
+	transactionMessageTxPoolRememberCounter.Add(pools.ClassifyTxPoolError(wrapped), 1)
 
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
 	require.Equal(t, 1, getMetricCounter(pools.TxPoolErrTagFee))
