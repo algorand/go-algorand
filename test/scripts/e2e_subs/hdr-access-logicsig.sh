@@ -37,8 +37,8 @@ block BlkTimestamp
 dup
 // difference in times is on stack twice
 
-int 1
->
+int 0 // N-1 and N-2 timestamps could be equal
+>=
 assert
 
 int 6
