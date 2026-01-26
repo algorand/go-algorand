@@ -292,6 +292,18 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 					}
 				}
 			}
+			if len(txgroup[i].Txn.Access) > 0 {
+				for _, acc := range txgroup[i].Txn.Access {
+					if acc.App != 0 {
+						appIdx := acc.App
+						if valid(appIdx) {
+							keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
+							keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
+							seen[appIdx] = struct{}{}
+						}
+					}
+				}
+			}
 		}
 	}
 	return keysBuckets

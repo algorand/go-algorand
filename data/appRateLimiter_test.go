@@ -486,6 +486,22 @@ func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
 	require.Equal(t, 2, len(kb.keys))
 	require.Equal(t, len(kb.buckets), len(kb.buckets))
 	putAppKeyBuf(kb)
+
+	// new app if from access list
+	apptxn.Access = []transactions.ResourceRef{{App: 3}}
+	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
+	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 3, len(kb.keys))
+	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	putAppKeyBuf(kb)
+
+	// known app id in access list
+	apptxn.Access = []transactions.ResourceRef{{App: 3}, {App: 2}}
+	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
+	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 3, len(kb.keys))
+	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	putAppKeyBuf(kb)
 }
 
 func BenchmarkAppRateLimiter_TxgroupToKeys(b *testing.B) {
