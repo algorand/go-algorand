@@ -18,7 +18,6 @@ package pools
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -69,6 +68,7 @@ var TxPoolErrTags = []string{
 var TxPoolReevalErrTags = []string{
 	TxPoolErrTagFee,
 	TxPoolErrTagTxnDead,
+	TxPoolErrTagTxnEarly,
 	TxPoolErrTagTooLarge,
 	TxPoolErrTagGroupID,
 	TxPoolErrTagTxID,
@@ -139,11 +139,6 @@ func ClassifyTxPoolError(err error) string {
 		}
 	}
 
-	// Fall back to message-based classification for untyped errors
-	if tag := classifyByErrorMessage(err.Error()); tag != "" {
-		return tag
-	}
-
 	return TxPoolErrTagEvalGeneric
 }
 
@@ -176,42 +171,17 @@ func classifyUnwrappedError(err error) string {
 		return TxPoolErrTagGroupID
 	case *ledgercore.TxnNotWellFormedError:
 		return TxPoolErrTagNotWell
+	case *ledgercore.OverspendError:
+		return TxPoolErrTagOverspend
+	case *ledgercore.MinBalanceError:
+		return TxPoolErrTagMinBalance
+	case *ledgercore.AssetBalanceError:
+		return TxPoolErrTagAssetBalance
+	case *ledgercore.ApprovalProgramRejectedError:
+		return TxPoolErrTagTealReject
 	case logic.EvalError:
 		// TEAL runtime error - the AVM encountered an error during execution
 		return TxPoolErrTagTealErr
 	}
-	return ""
-}
-
-// classifyByErrorMessage examines the error message string to classify errors
-// that don't have specific types. This is called after type-based classification
-// fails. The error message patterns are matched in order of specificity.
-func classifyByErrorMessage(errMsg string) string {
-	// TEAL rejection - ApprovalProgram returned false (no runtime error)
-	if strings.Contains(errMsg, "rejected by ApprovalProgram") {
-		return TxPoolErrTagTealReject
-	}
-
-	// Minimum balance violations
-	if strings.Contains(errMsg, "balance") && strings.Contains(errMsg, "below min") {
-		return TxPoolErrTagMinBalance
-	}
-
-	// Asset balance underflow (check before generic overspend)
-	// Pattern: "underflow on subtracting %d from sender amount %d"
-	if strings.Contains(errMsg, "sender amount") ||
-		(strings.Contains(errMsg, "underflow") && strings.Contains(errMsg, "amount")) {
-		return TxPoolErrTagAssetBalance
-	}
-
-	// Algo overspend / insufficient funds
-	// Patterns:
-	//   - "overspend (account %v, data %+v, tried to spend %v)" from ledger/eval/eval.go
-	//   - "insufficient balance" from inner transaction execution
-	if strings.Contains(errMsg, "overspend") ||
-		strings.Contains(errMsg, "insufficient balance") {
-		return TxPoolErrTagOverspend
-	}
-
 	return ""
 }

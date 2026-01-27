@@ -67,6 +67,14 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 		{name: "group_other_wrapped", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonGeneric}, tag: TxPoolErrTagGroupID, wrap: true},
 		{name: "not_well", err: func() error { e := ledgercore.TxnNotWellFormedError("bad txn"); return &e }(), tag: TxPoolErrTagNotWell},
 		{name: "not_well_wrapped", err: func() error { e := ledgercore.TxnNotWellFormedError("bad txn"); return &e }(), tag: TxPoolErrTagNotWell, wrap: true},
+		{name: "overspend", err: &ledgercore.OverspendError{Account: basics.Address{}, Data: ledgercore.AccountData{}, Tried: basics.MicroAlgos{Raw: 1}}, tag: TxPoolErrTagOverspend},
+		{name: "overspend_wrapped", err: &ledgercore.OverspendError{Account: basics.Address{}, Data: ledgercore.AccountData{}, Tried: basics.MicroAlgos{Raw: 1}}, tag: TxPoolErrTagOverspend, wrap: true},
+		{name: "min_balance", err: &ledgercore.MinBalanceError{Account: basics.Address{}, Balance: 1, MinBalance: 2, TotalAssets: 3}, tag: TxPoolErrTagMinBalance},
+		{name: "min_balance_wrapped", err: &ledgercore.MinBalanceError{Account: basics.Address{}, Balance: 1, MinBalance: 2, TotalAssets: 3}, tag: TxPoolErrTagMinBalance, wrap: true},
+		{name: "asset_balance", err: &ledgercore.AssetBalanceError{Amount: 10, SenderAmount: 5}, tag: TxPoolErrTagAssetBalance},
+		{name: "asset_balance_wrapped", err: &ledgercore.AssetBalanceError{Amount: 10, SenderAmount: 5}, tag: TxPoolErrTagAssetBalance, wrap: true},
+		{name: "approval_reject", err: &ledgercore.ApprovalProgramRejectedError{}, tag: TxPoolErrTagTealReject},
+		{name: "approval_reject_wrapped", err: &ledgercore.ApprovalProgramRejectedError{}, tag: TxPoolErrTagTealReject, wrap: true},
 		{name: "logic_eval", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr},
 		{name: "logic_eval_wrapped", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr, wrap: true},
 	}
@@ -91,6 +99,7 @@ func TestTxPoolReevalCounterCoversReevalTags(t *testing.T) {
 	}{
 		{name: "fee", err: &ErrTxPoolFeeError{}, tag: TxPoolErrTagFee},
 		{name: "txn_dead", err: &bookkeeping.TxnDeadError{}, tag: TxPoolErrTagTxnDead},
+		{name: "txn_early", err: &bookkeeping.TxnDeadError{Early: true}, tag: TxPoolErrTagTxnEarly},
 		{name: "too_large", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize}, tag: TxPoolErrTagTooLarge},
 		{name: "groupid", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonInconsistentGroupID}, tag: TxPoolErrTagGroupID},
 		{name: "txid", err: &ledgercore.TransactionInLedgerError{Txid: transactions.Txid{}, InBlockEvaluator: false}, tag: TxPoolErrTagTxID},
@@ -100,6 +109,10 @@ func TestTxPoolReevalCounterCoversReevalTags(t *testing.T) {
 		{name: "no_space", err: ledgercore.ErrNoSpace, tag: TxPoolErrTagNoSpace},
 		{name: "not_well", err: func() error { e := ledgercore.TxnNotWellFormedError("bad"); return &e }(), tag: TxPoolErrTagNotWell},
 		{name: "teal_err", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr},
+		{name: "teal_reject", err: &ledgercore.ApprovalProgramRejectedError{}, tag: TxPoolErrTagTealReject},
+		{name: "min_balance", err: &ledgercore.MinBalanceError{Account: basics.Address{}, Balance: 1, MinBalance: 2, TotalAssets: 3}, tag: TxPoolErrTagMinBalance},
+		{name: "overspend", err: &ledgercore.OverspendError{Account: basics.Address{}, Data: ledgercore.AccountData{}, Tried: basics.MicroAlgos{Raw: 1}}, tag: TxPoolErrTagOverspend},
+		{name: "asset_balance", err: &ledgercore.AssetBalanceError{Amount: 10, SenderAmount: 5}, tag: TxPoolErrTagAssetBalance},
 	}
 
 	orig := txPoolReevalCounter
@@ -123,42 +136,5 @@ func TestTxPoolReevalCounterCoversReevalTags(t *testing.T) {
 	txPoolReevalCounter.AddMetric(metricsMap)
 	for _, tc := range reevalCases {
 		require.Equal(t, float64(1), metricsMap["algod_tx_pool_reeval_"+tc.tag])
-	}
-}
-
-func TestClassifyByErrorMessage(t *testing.T) {
-	t.Parallel()
-	// Test message-based classification for errors without specific types.
-	// These patterns match actual error messages from the ledger/evaluator.
-	tcases := []struct {
-		name   string
-		errMsg string
-		tag    string
-	}{
-		// TEAL rejection
-		{name: "teal_reject", errMsg: "transaction rejected by ApprovalProgram", tag: TxPoolErrTagTealReject},
-		{name: "teal_reject_context", errMsg: "app 123: rejected by ApprovalProgram", tag: TxPoolErrTagTealReject},
-
-		// Minimum balance violations
-		{name: "min_balance", errMsg: "account XYZ balance 1000 below min 2000", tag: TxPoolErrTagMinBalance},
-		{name: "min_balance_alt", errMsg: "balance would be below min required", tag: TxPoolErrTagMinBalance},
-
-		// Asset balance underflow
-		{name: "asset_underflow", errMsg: "underflow on subtracting 100 from sender amount 50", tag: TxPoolErrTagAssetBalance},
-		{name: "asset_sender_amount", errMsg: "cannot deduct from sender amount", tag: TxPoolErrTagAssetBalance},
-
-		// Algo overspend
-		{name: "overspend", errMsg: "overspend (account ABC, data {...}, tried to spend 1000)", tag: TxPoolErrTagOverspend},
-		{name: "insufficient_balance", errMsg: "insufficient balance", tag: TxPoolErrTagOverspend},
-
-		// Unknown falls through to generic
-		{name: "unknown", errMsg: "some other error", tag: TxPoolErrTagEvalGeneric},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := errors.New(tc.errMsg)
-			require.Equal(t, tc.tag, ClassifyTxPoolError(err))
-		})
 	}
 }
