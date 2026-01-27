@@ -765,6 +765,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxTxnBytesPerBlock, &bounds.MaxTxnBytesPerBlock)
 
 	checkSetMax(p.MaxAppTxnForeignApps, &bounds.MaxAppTxnForeignApps)
+	checkSetMax(p.MaxAppAccess, &bounds.MaxAppAccess)
 }
 
 // DeepCopy creates a deep copy of a consensus protocols map.
