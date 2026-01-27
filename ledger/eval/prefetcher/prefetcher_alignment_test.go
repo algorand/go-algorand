@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/eval/prefetcher"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -312,7 +313,7 @@ type ledgerData struct {
 
 // pretend adds the `before` addresses to the Accounts. It "pretends" that the
 // addresses were prefetched, so we can get agreement with what was actually
-// requested.  We do this to include two addresses that are going to end up
+// requested.  We do this to include the rewards pool which is going to end up
 // requested *before* prefetch is even attempted. So there's no point in
 // PrefetchAccounts being modified to return them, they have been "prefetched"
 // simply by accessing them.
@@ -1279,7 +1280,19 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	appID := basics.AppIndex(5)
+	const appID = 1115
+
+	// We're going to access app1 and app2 to match the prefetcher's assumption
+	// that ot should prefetch apps
+	ops, err := logic.AssembleString(`#pragma version 5
+int 1; byte "A"
+app_global_get_ex; pop; pop
+int 2; byte "A"
+app_global_get_ex; pop; pop
+int 1`)
+	require.NoError(t, err)
+	getGlobals := ops.Program
+
 	l := &prefetcherAlignmentTestLedger{
 		balances: map[basics.Address]ledgercore.AccountData{
 			rewardsPool(): {
@@ -1305,7 +1318,21 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 			makeAddress(1): {
 				appID: {
 					AppParams: &basics.AppParams{
-						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+						ApprovalProgram:   getGlobals,
+						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+					},
+					AppLocalState: &basics.AppLocalState{},
+				},
+				1116: {
+					AppParams: &basics.AppParams{
+						ApprovalProgram:   getGlobals,
+						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+					},
+					AppLocalState: &basics.AppLocalState{},
+				},
+				1118: {
+					AppParams: &basics.AppParams{
+						ApprovalProgram:   getGlobals,
 						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
 					},
 					AppLocalState: &basics.AppLocalState{},
@@ -1318,7 +1345,9 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(appID): makeAddress(1),
+			appID: makeAddress(1),
+			1116:  makeAddress(1),
+			1118:  makeAddress(1),
 		},
 	}
 
@@ -1330,17 +1359,17 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 		},
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
 			ApplicationID: appID,
-			ForeignApps:   []basics.AppIndex{6, 8},
+			ForeignApps:   []basics.AppIndex{1116, 1118},
 		},
 	}
 
 	requested, prefetched := run(t, l, txn)
 
 	prefetched.pretend(rewardsPool())
-	// Foreign apps are not loaded, ensure they are not prefetched
-	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AppCreatable})
-	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AppCreatable})
-	require.Equal(t, requested, prefetched)
+	// Foreign apps are loaded, ensure they are prefetched
+	require.Contains(t, prefetched.Creators, creatable{cindex: 1116, ctype: basics.AppCreatable})
+	require.Contains(t, prefetched.Creators, creatable{cindex: 1118, ctype: basics.AppCreatable})
+	require.Equal(t, requested, prefetched) // Need to make the byte code use those app globals
 }
 
 func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *testing.T) {
@@ -1745,11 +1774,22 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallWithNonExistentBox(t *testin
 func TestEvaluatorPrefetcherAlignmentApplicationCallWithForeignAppBox(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	appID := basics.AppIndex(5)
-	foreignAppID := basics.AppIndex(10)
+	const appID = 1115
+	const foreignAppID = 1110
 	boxName := []byte("foreign-app-box")
-	boxKey := apps.MakeBoxKey(uint64(foreignAppID), string(boxName))
+	boxKey := apps.MakeBoxKey(foreignAppID, string(boxName))
 	boxValue := []byte("foreign-value")
+
+	// We're going to access app1's globals to match our prefetcher's expectation that apps get accessed.
+	ops, err := logic.AssembleString(`#pragma version 5
+int 1
+byte "A"
+app_global_get_ex
+pop
+pop
+int 1`)
+	require.NoError(t, err)
+	globalApp1 := ops.Program
 
 	l := &prefetcherAlignmentTestLedger{
 		balances: map[basics.Address]ledgercore.AccountData{
@@ -1783,7 +1823,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallWithForeignAppBox(t *testing
 			makeAddress(1): {
 				appID: {
 					AppParams: &basics.AppParams{
-						ApprovalProgram:   []byte{0x02, 0x20, 0x01, 0x01, 0x22},
+						ApprovalProgram:   globalApp1,
 						ClearStateProgram: []byte{0x02, 0x20, 0x01, 0x01, 0x22},
 					},
 					AppLocalState: &basics.AppLocalState{},
@@ -1805,8 +1845,8 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallWithForeignAppBox(t *testing
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(appID):        makeAddress(1),
-			basics.CreatableIndex(foreignAppID): makeAddress(3),
+			appID:        makeAddress(1),
+			foreignAppID: makeAddress(3),
 		},
 		kvs: map[string][]byte{
 			boxKey: boxValue,

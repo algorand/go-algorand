@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 // asyncAccountLoadingThreadCount controls how many go routines would be used
@@ -233,6 +234,21 @@ func (pq *preloaderTaskQueue) addAccountTask(addr *basics.Address, wt *groupTask
 	}
 }
 
+func (pq *preloaderTaskQueue) addAssetTask(aid basics.AssetIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
+
+	pq.addResourceTask(nil, basics.CreatableIndex(aid), basics.AssetCreatable, wt, resourceTasks)
+}
+
+func (pq *preloaderTaskQueue) addHoldingTask(addr basics.Address, aid basics.AssetIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
+	pq.addResourceTask(&addr, basics.CreatableIndex(aid), basics.AssetCreatable, wt, resourceTasks)
+}
+func (pq *preloaderTaskQueue) addAppTask(aid basics.AppIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
+	pq.addResourceTask(nil, basics.CreatableIndex(aid), basics.AppCreatable, wt, resourceTasks)
+}
+func (pq *preloaderTaskQueue) addLocalsTask(addr basics.Address, aid basics.AppIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
+	pq.addResourceTask(&addr, basics.CreatableIndex(aid), basics.AppCreatable, wt, resourceTasks)
+}
+
 func (pq *preloaderTaskQueue) addResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
 	if cidx == 0 {
 		return
@@ -329,52 +345,54 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 				queue.addAccountTask(&stxn.Txn.Receiver, task, accountTasks)
 				queue.addAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks)
 			case protocol.AssetConfigTx:
-				queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.ConfigAsset), basics.AssetCreatable, task, resourceTasks)
+				queue.addAssetTask(stxn.Txn.ConfigAsset, task, resourceTasks)
 			case protocol.AssetTransferTx:
 				if !stxn.Txn.AssetSender.IsZero() {
-					queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
-					queue.addResourceTask(&stxn.Txn.AssetSender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
+					queue.addAssetTask(stxn.Txn.XferAsset, task, resourceTasks)
+					queue.addHoldingTask(stxn.Txn.AssetSender, stxn.Txn.XferAsset, task, resourceTasks)
 				} else {
 					if stxn.Txn.AssetAmount == 0 && (stxn.Txn.AssetReceiver == stxn.Txn.Sender) { // opt in
-						queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
+						queue.addAssetTask(stxn.Txn.XferAsset, task, resourceTasks)
 					}
 					if stxn.Txn.AssetAmount != 0 { // zero transfer is noop
-						queue.addResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
+						queue.addHoldingTask(stxn.Txn.Sender, stxn.Txn.XferAsset, task, resourceTasks)
 					}
 				}
 				if !stxn.Txn.AssetReceiver.IsZero() {
 					if stxn.Txn.AssetAmount != 0 || (stxn.Txn.AssetReceiver == stxn.Txn.Sender) {
 						// if not zero transfer or opt in then prefetch
-						queue.addResourceTask(&stxn.Txn.AssetReceiver, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
+						queue.addHoldingTask(stxn.Txn.AssetReceiver, stxn.Txn.XferAsset, task, resourceTasks)
 					}
 				}
 				if !stxn.Txn.AssetCloseTo.IsZero() {
-					queue.addResourceTask(&stxn.Txn.AssetCloseTo, basics.CreatableIndex(stxn.Txn.XferAsset), basics.AssetCreatable, task, resourceTasks)
+					queue.addHoldingTask(stxn.Txn.AssetCloseTo, stxn.Txn.XferAsset, task, resourceTasks)
 				}
 			case protocol.AssetFreezeTx:
 				if !stxn.Txn.FreezeAccount.IsZero() {
-					queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks)
-					queue.addResourceTask(&stxn.Txn.FreezeAccount, basics.CreatableIndex(stxn.Txn.FreezeAsset), basics.AssetCreatable, task, resourceTasks)
-					queue.addAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks)
+					queue.addAssetTask(stxn.Txn.FreezeAsset, task, resourceTasks)
+					queue.addHoldingTask(stxn.Txn.FreezeAccount, stxn.Txn.FreezeAsset, task, resourceTasks)
+					queue.addAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks) // Why do we need the actual freeze account?
 				}
 			case protocol.ApplicationCallTx:
 				if stxn.Txn.ApplicationID != 0 {
 					// load the global - so that we'll have the program
-					queue.addResourceTask(nil, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks)
+					queue.addAppTask(stxn.Txn.ApplicationID, task, resourceTasks)
 					// load the local - so that we'll have the local state
 					// TODO: this is something we need to decide if we want to enable, since not
 					// every application call would use local storage.
 					if (stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC) ||
 						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.CloseOutOC) ||
 						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC) {
-						queue.addResourceTask(&stxn.Txn.Sender, basics.CreatableIndex(stxn.Txn.ApplicationID), basics.AppCreatable, task, resourceTasks)
+						queue.addLocalsTask(stxn.Txn.Sender, stxn.Txn.ApplicationID, task, resourceTasks)
 					}
 				}
 
-				// do not preload Txn.ForeignApps, Txn.ForeignAssets, Txn.Accounts
-				// since they might be non-used arbitrary values
+				// Prefetch ForeignApps since they're likely to be accessed
+				for _, appID := range stxn.Txn.ForeignApps {
+					queue.addAppTask(appID, task, resourceTasks)
+				}
 
-				// prefetch boxes, they ought to be precise
+				// Prefetch boxes, they ought to be precise
 				for _, br := range stxn.Txn.Boxes {
 					if len(br.Name) == 0 {
 						continue
@@ -388,7 +406,56 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 					}
 				}
 
-				// TODO: After tx.Access merge, prefetch everything from the list
+				// With tx.Access, cross-products are explicit, so we fetch them
+				// (and the apps and boxes, as with foriegn arrays).  We also
+				// fetch the accounts and assets if they are NOT used in
+				// cross-products. That implies they are directly needed.
+				if len(stxn.Txn.Access) > 0 {
+					// Track which accounts and assets appear in cross-products
+					accountInCrossProduct := util.MakeSet[basics.Address]()
+					assetInCrossProduct := util.MakeSet[basics.AssetIndex]()
+
+					for _, rr := range stxn.Txn.Access {
+						if rr.App != 0 {
+							queue.addResourceTask(nil, basics.CreatableIndex(rr.App), basics.AppCreatable, task, resourceTasks)
+						}
+						if !rr.Holding.Empty() {
+							addr, asset, err := rr.Holding.Resolve(stxn.Txn.Access, stxn.Txn.Sender)
+							if err == nil {
+								queue.addHoldingTask(addr, asset, task, resourceTasks)
+								accountInCrossProduct.Add(addr)
+								assetInCrossProduct.Add(asset)
+							}
+						}
+						if !rr.Locals.Empty() {
+							addr, app, err := rr.Locals.Resolve(stxn.Txn.Access, stxn.Txn.Sender, stxn.Txn.ApplicationID)
+							if err == nil {
+								queue.addLocalsTask(addr, app, task, resourceTasks)
+								accountInCrossProduct.Add(addr)
+							}
+						}
+						if !rr.Box.Empty() {
+							app, name, err := rr.Box.Resolve(stxn.Txn.Access)
+							if err == nil {
+								if app == 0 {
+									app = stxn.Txn.ApplicationID
+								}
+								queue.addKvTask(app, []byte(name), task, kvTasks)
+							}
+						}
+					}
+
+					// Presumably, Accounts and assets that don't appear in
+					// cross-products are present to be directly accessed.
+					for _, rr := range stxn.Txn.Access {
+						if !rr.Address.IsZero() && !accountInCrossProduct.Contains(rr.Address) {
+							queue.addAccountTask(&rr.Address, task, accountTasks)
+						}
+						if rr.Asset != 0 && !assetInCrossProduct.Contains(rr.Asset) {
+							queue.addAssetTask(rr.Asset, task, resourceTasks)
+						}
+					}
+				}
 
 			case protocol.StateProofTx:
 			case protocol.KeyRegistrationTx: // No extra accounts besides the sender
@@ -548,7 +615,6 @@ func (gt *groupTask) markCompletionError(err error, task *preloaderTask, groupDo
 
 func (p *resourcePrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskIdx *atomic.Int64, groupDoneCh chan groupTaskDone) {
 	var task *preloaderTask
-	var err error
 	for {
 		nextTaskIdx := taskIdx.Add(1)
 		queue, task = queue.getTaskAtIndex(int(nextTaskIdx))
@@ -557,8 +623,7 @@ func (p *resourcePrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, tas
 			return
 		}
 		if task.key != "" {
-			var value []byte
-			value, err = p.ledger.LookupKv(p.rnd, task.key)
+			value, err := p.ledger.LookupKv(p.rnd, task.key)
 			if err != nil {
 				// notify the channel of the error.
 				task.groupTask.markCompletionError(err, task, groupDoneCh)
@@ -573,8 +638,7 @@ func (p *resourcePrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, tas
 		}
 		if task.creatableIndex == 0 {
 			// lookup the account data directly from the ledger.
-			var acctData ledgercore.AccountData
-			acctData, _, err = p.ledger.LookupWithoutRewards(p.rnd, *task.address)
+			acctData, _, err := p.ledger.LookupWithoutRewards(p.rnd, *task.address)
 			if err != nil {
 				// notify the channel of the error.
 				task.groupTask.markCompletionError(err, task, groupDoneCh)
@@ -589,9 +653,7 @@ func (p *resourcePrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, tas
 		}
 		if task.address == nil {
 			// start off by figuring out the creator in case it's a global resource.
-			var creator basics.Address
-			var ok bool
-			creator, ok, err = p.ledger.GetCreatorForRound(p.rnd, task.creatableIndex, task.creatableType)
+			creator, ok, err := p.ledger.GetCreatorForRound(p.rnd, task.creatableIndex, task.creatableType)
 			if err != nil {
 				// there was an error loading that entry.
 				task.groupTask.markCompletionError(err, task, groupDoneCh)
@@ -610,20 +672,24 @@ func (p *resourcePrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, tas
 		}
 		var resource ledgercore.AccountResource
 		if task.creatableType == basics.AppCreatable {
-			var appResource ledgercore.AppResource
-			appResource, err = p.ledger.LookupApplication(p.rnd, *task.address, basics.AppIndex(task.creatableIndex))
+			appResource, err := p.ledger.LookupApplication(p.rnd, *task.address, basics.AppIndex(task.creatableIndex))
+			if err != nil {
+				// notify the channel of the error.
+				task.groupTask.markCompletionError(err, task, groupDoneCh)
+				continue
+			}
 			resource.AppParams = appResource.AppParams
 			resource.AppLocalState = appResource.AppLocalState
 		} else {
 			var assetResource ledgercore.AssetResource
-			assetResource, err = p.ledger.LookupAsset(p.rnd, *task.address, basics.AssetIndex(task.creatableIndex))
+			assetResource, err := p.ledger.LookupAsset(p.rnd, *task.address, basics.AssetIndex(task.creatableIndex))
+			if err != nil {
+				// notify the channel of the error.
+				task.groupTask.markCompletionError(err, task, groupDoneCh)
+				continue
+			}
 			resource.AssetParams = assetResource.AssetParams
 			resource.AssetHolding = assetResource.AssetHolding
-		}
-		if err != nil {
-			// notify the channel of the error.
-			task.groupTask.markCompletionError(err, task, groupDoneCh)
-			continue
 		}
 		re := LoadedResourceEntry{
 			Resource:       &resource,

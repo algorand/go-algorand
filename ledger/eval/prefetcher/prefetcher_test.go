@@ -543,13 +543,14 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				*/
 			},
 			resources: []prefetcher.LoadedResourceEntry{
-				/* - if we'll decide that we want to prefetch the foreign apps/assets, then this should be enabled
+				/* - if we'll decide that we want to prefetch the foreign assets, then this should be enabled
 				{
 					Address:        makeAddressPtr(2),
 					CreatableIndex: 1001,
 					CreatableType:  basics.AssetCreatable,
 					Resource:       &ledgercore.AccountResource{},
 				},
+				*/
 				{
 					Address:        makeAddressPtr(15),
 					CreatableIndex: 2001,
@@ -562,7 +563,6 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 					CreatableType:  basics.AppCreatable,
 					Resource:       nil,
 				},
-				*/
 				/* - if we'll decide that we want to prefetch the account local state, then this should be enabled.
 				{
 					address:        acctAddrPtr(1),
