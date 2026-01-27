@@ -265,7 +265,7 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 	txnToBucket := func(appIdx basics.AppIndex) int {
 		return int(memhash64(uint64(appIdx), seed) % uint64(numBuckets))
 	}
-	seen := make(map[basics.AppIndex]struct{}, len(txgroup)*(1+bounds.MaxAppTxnForeignApps+bounds.MaxAppAccess))
+	seen := make(map[basics.AppIndex]struct{}, len(txgroup)*(1+max(bounds.MaxAppTxnForeignApps, bounds.MaxAppAccess)))
 	valid := func(appIdx basics.AppIndex) bool {
 		if appIdx != 0 {
 			_, ok := seen[appIdx]
@@ -273,32 +273,24 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 		}
 		return false
 	}
+	record := func(appIdx basics.AppIndex) {
+		// hash appIdx into a bucket, do not use modulo without hashing first since it could
+		// assign two vanilla (and presumable, popular) apps to the same bucket.
+		if valid(appIdx) {
+			keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
+			keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
+			seen[appIdx] = struct{}{}
+		}
+	}
 	for i := range txgroup {
 		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
 			appIdx := txgroup[i].Txn.ApplicationID
-			if valid(appIdx) {
-				keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
-				keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
-				seen[appIdx] = struct{}{}
-			}
-			// hash appIdx into a bucket, do not use modulo without hashing first since it could
-			// assign two vanilla (and presumable, popular) apps to the same bucket.
+			record(appIdx)
 			for _, appIdx := range txgroup[i].Txn.ForeignApps {
-				if valid(appIdx) {
-					keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
-					keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
-					seen[appIdx] = struct{}{}
-				}
+				record(appIdx)
 			}
 			for _, acc := range txgroup[i].Txn.Access {
-				if acc.App != 0 {
-					appIdx := acc.App
-					if valid(appIdx) {
-						keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
-						keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
-						seen[appIdx] = struct{}{}
-					}
-				}
+				record(acc.App)
 			}
 		}
 	}
