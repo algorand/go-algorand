@@ -459,32 +459,32 @@ func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
 
 	kb := txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 0, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	txgroup[0].Txn.ApplicationID = 1
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 1, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	txgroup[0].Txn.ForeignApps = append(txgroup[0].Txn.ForeignApps, 1)
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 1, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	txgroup[0].Txn.ForeignApps = append(txgroup[0].Txn.ForeignApps, 2)
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 2, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	apptxn.ApplicationID = 2
 	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 2, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	// new app if from access list
@@ -492,7 +492,7 @@ func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
 	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 3, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	// known app id in access list
@@ -500,7 +500,7 @@ func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
 	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 3, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 }
 
