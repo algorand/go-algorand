@@ -128,7 +128,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 
 	node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node})
 
-	if cfg.IsGossipServer() {
+	if cfg.IsListenServer() {
 		rpcs.MakeHealthService(node.net)
 	}
 

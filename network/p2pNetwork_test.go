@@ -195,7 +195,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	// run netC in NPN mode (no relay => no gossip sup => no TX receiving)
 	cfg.ForceFetchTransactions = false
-	// Have to unset NetAddress to get IsGossipServer to return false
+	// Have to unset NetAddress to get IsListenServer to return false
 	cfg.NetAddress = ""
 	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisInfo, &nopeNodeInfo{}, nil, nil)
 	require.NoError(t, err)
