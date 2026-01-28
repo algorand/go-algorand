@@ -42,6 +42,11 @@ func TestConsensusParams(t *testing.T) {
 		if 2*params.Payouts.ChallengeGracePeriod > params.MaxTxnLife+params.DeeperBlockHeaderHistory {
 			t.Errorf("Protocol %s: Grace period is too long", proto)
 		}
+
+		// It makes no sense to have MaxAbsoluteTxnNoteBytes smaller than MaxTxnNoteBytes
+		if params.MaxAbsoluteTxnNoteBytes < params.MaxTxnNoteBytes {
+			t.Errorf("Protocol %s: MaxAbsoluteTxnNoteBytes is smaller than MaxTxnNoteBytes", proto)
+		}
 	}
 }
 

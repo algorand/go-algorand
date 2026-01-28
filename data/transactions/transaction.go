@@ -54,13 +54,24 @@ type SpecialAddresses struct {
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sender      basics.Address    `codec:"snd"`
-	Fee         basics.MicroAlgos `codec:"fee"`
-	FirstValid  basics.Round      `codec:"fv"`
-	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note,allocbound=bounds.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
-	GenesisID   string            `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
-	GenesisHash crypto.Digest     `codec:"gh"`
+	Sender basics.Address `codec:"snd"`
+
+	Fee basics.MicroAlgos `codec:"fee"`
+	// Tip represents a multiplier for all costs in the same group. Only one
+	// transaction per group may specify a tip. The Tip does not multiply the
+	// Fee, rather it promises that, with the tip applied, the Fees specified
+	// will still be sufficient.  When congested, `algod` will begin to drop
+	// groups with insufficient tips to cover the block's CongestionTax. Future
+	// versions may prioritize groups with larger tips.
+	Tip basics.Micros `codec:"tp"` // All costs are multiplied by 1 + Tip
+
+	FirstValid basics.Round `codec:"fv"`
+	LastValid  basics.Round `codec:"lv"`
+
+	Note []byte `codec:"note,allocbound=bounds.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
+
+	GenesisID   string        `codec:"gen,allocbound=bounds.MaxGenesisIDLen"`
+	GenesisHash crypto.Digest `codec:"gh"`
 
 	// Group specifies that this transaction is part of a
 	// transaction group (and, if so, specifies the hash
@@ -182,6 +193,45 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
+// FeeFactor is the factor by which the base transaction fee is multiplied. Some
+// transactions are free, others might cost more because they use extra expensive
+// features (e.g., large Note fields, large app programs).  It is expressed as
+// a fixed-point integer with 6 digits of precision. So 1e6 is a normal base fee
+// transaction.
+func (tx Transaction) FeeFactor(proto config.ConsensusParams) basics.Micros {
+	factor := basics.Micros(1e6)
+	factor = basics.AddSaturate(factor, tx.Header.FeeContribution(proto))
+	switch tx.Type {
+	case protocol.StateProofTx:
+		return 0
+	case protocol.HeartbeatTx:
+		if tx.Group.IsZero() {
+			// Not every such heartbeat is free. We confirm a
+			// low/no fee singleton heartbeat is legal in heartbeat's
+			// wellFormed() and in apply/heartbeat.go (for the dynamic check for
+			// challenge).
+			return 0
+		}
+	case protocol.ApplicationCallTx:
+		factor = basics.AddSaturate(factor, tx.ApplicationCallTxnFields.feeContribution(proto))
+	default:
+		// no exceptional costs
+	}
+	return factor
+}
+
+// FeeContribution returns the amount a transaction's basic fee factor should be
+// increased due to contents of the header.
+func (header Header) FeeContribution(proto config.ConsensusParams) basics.Micros {
+	var cost basics.Micros
+	// Add extra cost for Note bytes beyond standard size
+	if len(header.Note) > proto.MaxTxnNoteBytes {
+		extraBytes := len(header.Note) - proto.MaxTxnNoteBytes
+		cost += basics.Micros(extraBytes) * 1000
+	}
+	return cost
+}
+
 // txAllocSize returns the max possible size of a transaction without state proof fields.
 // It is used to preallocate a buffer for encoding a transaction.
 func txAllocSize() int {
@@ -279,11 +329,6 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 // This is the account that pays the associated Fee.
 func (tx Header) Src() basics.Address {
 	return tx.Sender
-}
-
-// TxFee returns the fee associated with this transaction.
-func (tx Header) TxFee() basics.MicroAlgos {
-	return tx.Fee
 }
 
 // MatchAddress checks if the transaction touches a given address.  The feesink
@@ -440,21 +485,14 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
-		if tx.Type == protocol.StateProofTx {
-			// Zero fee allowed for stateProof txn.
-		} else {
-			return makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", tx.Fee.Raw, proto.MinTxnFee)
-		}
-	}
 	if tx.LastValid < tx.FirstValid {
 		return fmt.Errorf("transaction invalid range (%v--%v)", tx.FirstValid, tx.LastValid)
 	}
 	if tx.LastValid-tx.FirstValid > basics.Round(proto.MaxTxnLife) {
 		return fmt.Errorf("transaction window size excessive (%v--%v)", tx.FirstValid, tx.LastValid)
 	}
-	if len(tx.Note) > proto.MaxTxnNoteBytes {
-		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxTxnNoteBytes)
+	if len(tx.Note) > proto.MaxAbsoluteTxnNoteBytes {
+		return fmt.Errorf("transaction note too big: %d > %d", len(tx.Note), proto.MaxAbsoluteTxnNoteBytes)
 	}
 	if tx.Sender == spec.RewardsPool {
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool

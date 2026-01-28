@@ -90,7 +90,7 @@ func TestHeartbeat(t *testing.T) {
 
 	// address fee
 	testProto := config.Consensus[testConsensusVersion]
-	tx.Fee = basics.MicroAlgos{Raw: testProto.MinTxnFee}
+	tx.Fee = testProto.MinFee()
 
 	// Seed is missing
 	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)

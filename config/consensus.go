@@ -61,8 +61,15 @@ type ConsensusParams struct {
 	// in a block must not exceed MaxTxnBytesPerBlock.
 	MaxTxnBytesPerBlock int
 
-	// MaxTxnBytesPerBlock is the maximum size of a transaction's Note field.
+	// MaxTxnBytesPerBlock is the maximum size of a transaction's Note field in
+	// a "basic transaction".  Larger notes require extra fees.
 	MaxTxnNoteBytes int
+
+	// MaxAbsoluteTxnNoteBytes is the absolute maximum size of a transaction's Note field,
+	// even with extra fees paid. Provides DoS protection. When set equal to MaxTxnNoteBytes,
+	// effectively disables large notes. When set higher, allows notes up to this size with
+	// appropriate fees (1000 FeeFactor units per byte over MaxTxnNoteBytes).
+	MaxAbsoluteTxnNoteBytes int
 
 	// MaxTxnLife is how long a transaction can be live for:
 	// the maximum difference between LastValid and FirstValid.
@@ -101,11 +108,6 @@ type ConsensusParams struct {
 	// A minimum fee is necessary to prevent DoS. In some sense this is
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
-
-	// EnableFeePooling specifies that the sum of the fees in a
-	// group must exceed one MinTxnFee per Txn, rather than check that
-	// each Txn has a MinFee.
-	EnableFeePooling bool
 
 	// EnableAppCostPooling specifies that the sum of fees for application calls
 	// in a group is checked against the sum of the budget for application calls,
@@ -271,6 +273,10 @@ type ConsensusParams struct {
 
 	// extra length for application program in pages. A page is MaxAppProgramLen bytes
 	MaxExtraAppProgramPages int
+
+	// MaxAbsoluteExtraProgramPages is the absolute maximum number of extra pages allowed,
+	// even with extra fees paid. Provides DoS protection.
+	MaxAbsoluteExtraProgramPages int
 
 	// maximum number of accounts in the ApplicationCall Accounts field.
 	// this determines, in part, the maximum number of balance records
@@ -580,6 +586,10 @@ type ConsensusParams struct {
 	// specify the current app. This parameter can be removed and assumed true
 	// after the first consensus release in which it is set true.
 	AllowZeroLocalAppRef bool
+
+	// CongestionTracking enables header values that track Load and a running
+	// CongestionTax that grows/shrinks when blocks are more/less than half full
+	CongestionTracking bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -666,6 +676,11 @@ type BonusPlan struct {
 	DecayInterval uint64
 }
 
+// MinFee simply returns the MinTxnFee as a basics.MicroAlgos
+func (proto ConsensusParams) MinFee() basics.MicroAlgos {
+	return basics.MicroAlgos{Raw: proto.MinTxnFee}
+}
+
 // EffectiveKeyDilution returns the key dilution for this account,
 // returning the default key dilution if not explicitly specified.
 func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
@@ -738,7 +753,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxEvalDeltaAccounts)
 	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
 	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
-	checkSetMax(p.MaxTxnNoteBytes, &bounds.MaxTxnNoteBytes)
+	checkSetMax(p.MaxAbsoluteTxnNoteBytes, &bounds.MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
 	checkSetMax(p.MaxAppKeyLen, &bounds.MaxBytesKeyValueLen)
@@ -818,12 +833,13 @@ func initConsensusProtocols() {
 		DefaultUpgradeWaitRounds: 10000,
 		MaxVersionStringLen:      64,
 
-		MinBalance:          10000,
-		MinTxnFee:           1000,
-		MaxTxnLife:          1000,
-		MaxTxnNoteBytes:     1024,
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
+		MinBalance:              10000,
+		MinTxnFee:               1000,
+		MaxTxnLife:              1000,
+		MaxTxnNoteBytes:         1024,
+		MaxAbsoluteTxnNoteBytes: 1024,
+		MaxTxnBytesPerBlock:     1000000,
+		DefaultKeyDilution:      10000,
 
 		MaxTimestampIncrement: 25,
 
@@ -1169,6 +1185,7 @@ func initConsensusProtocols() {
 	v28.LogicSigVersion = 4
 	// Enable support for larger app program size
 	v28.MaxExtraAppProgramPages = 3
+	v28.MaxAbsoluteExtraProgramPages = 3
 	v28.MaxAppProgramLen = 2048
 	// Increase asset URL length to allow for IPFS URLs
 	v28.MaxAssetURLBytes = 96
@@ -1184,7 +1201,6 @@ func initConsensusProtocols() {
 	// "reachability" between accounts and creatables, so we
 	// retain 4 x 4 as worst case.
 
-	v28.EnableFeePooling = true
 	v28.EnableKeyregCoherencyCheck = true
 
 	Consensus[protocol.ConsensusV28] = v28
@@ -1461,10 +1477,12 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
-
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
+	vFuture.CongestionTracking = true
+	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
+	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
