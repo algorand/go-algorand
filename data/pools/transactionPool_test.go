@@ -756,16 +756,16 @@ func TestTxPoolReevalMetricsRecordLedgerDuplicate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Sanity: ensure tags cover the scenarios we expect to record.
-	require.Contains(t, TxPoolReevalErrTags, TxPoolErrTagTxID)
-	require.Contains(t, TxPoolReevalErrTags, TxPoolErrTagLease)
-	require.Contains(t, TxPoolReevalErrTags, TxPoolErrTagNoSpace)
+	require.Contains(t, TxPoolErrTags, TxPoolErrTagTxID)
+	require.Contains(t, TxPoolErrTags, TxPoolErrTagLease)
+	require.Contains(t, TxPoolErrTags, TxPoolErrTagNoSpace)
 
 	// Isolate the counter for this test.
 	origCounter := txPoolReevalCounter
 	txPoolReevalCounter = metrics.NewTagCounter(
 		"algod_tx_pool_reeval_{TAG}",
 		"Number of transaction groups removed from pool during re-evaluation due to {TAG}",
-		TxPoolReevalErrTags...,
+		TxPoolErrTags...,
 	)
 	t.Cleanup(func() { txPoolReevalCounter = origCounter })
 

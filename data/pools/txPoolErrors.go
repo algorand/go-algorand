@@ -60,38 +60,13 @@ var TxPoolErrTags = []string{
 	TxPoolErrTagMinBalance, TxPoolErrTagOverspend, TxPoolErrTagAssetBalance, TxPoolErrTagEvalGeneric,
 }
 
-// TxPoolReevalErrTags is the subset of tags applicable to re-evaluation errors.
-// This covers evaluator failures that can arise when replaying already-admitted
-// transactions after a new block commits (duplicates, leases, block full, etc.).
-// Note: TxPoolErrTagCap and TxPoolErrTagPendingEval are excluded because they
-// are pool-level admission errors that cannot occur during re-evaluation.
-var TxPoolReevalErrTags = []string{
-	TxPoolErrTagFee,
-	TxPoolErrTagTxnDead,
-	TxPoolErrTagTxnEarly,
-	TxPoolErrTagTooLarge,
-	TxPoolErrTagGroupID,
-	TxPoolErrTagTxID,
-	TxPoolErrTagLease,
-	TxPoolErrTagTxIDEval,
-	TxPoolErrTagLeaseEval,
-	TxPoolErrTagNoSpace,
-	TxPoolErrTagNotWell,
-	TxPoolErrTagTealErr,
-	TxPoolErrTagTealReject,
-	TxPoolErrTagMinBalance,
-	TxPoolErrTagOverspend,
-	TxPoolErrTagAssetBalance,
-	TxPoolErrTagEvalGeneric,
-}
-
 // txPoolReevalCounter tracks transaction groups that failed during block assembly
 // re-evaluation. These are transactions that were accepted into the pool but
 // failed when re-evaluated against the latest confirmed block.
 var txPoolReevalCounter = metrics.NewTagCounter(
 	"algod_tx_pool_reeval_{TAG}",
 	"Number of transaction groups removed from pool during re-evaluation due to {TAG}",
-	TxPoolReevalErrTags...,
+	TxPoolErrTags...,
 )
 
 // txPoolReevalSuccess tracks transaction groups successfully re-evaluated

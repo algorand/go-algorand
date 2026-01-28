@@ -2117,10 +2117,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 		)
 		transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
 			"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
-			pools.TxPoolErrTagNotWell, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
-			pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval,
-			pools.TxPoolErrTagTealErr, pools.TxPoolErrTagTealReject, pools.TxPoolErrTagMinBalance,
-			pools.TxPoolErrTagOverspend, pools.TxPoolErrTagAssetBalance, pools.TxPoolErrTagEvalGeneric,
+			pools.TxPoolErrTags...,
 		)
 	}()
 	transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
@@ -2129,10 +2126,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	)
 	transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
 		"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
-		pools.TxPoolErrTagNotWell, pools.TxPoolErrTagTxnDead, pools.TxPoolErrTagTxnEarly, pools.TxPoolErrTagTooLarge, pools.TxPoolErrTagGroupID,
-		pools.TxPoolErrTagTxID, pools.TxPoolErrTagLease, pools.TxPoolErrTagTxIDEval, pools.TxPoolErrTagLeaseEval,
-		pools.TxPoolErrTagTealErr, pools.TxPoolErrTagTealReject, pools.TxPoolErrTagMinBalance,
-		pools.TxPoolErrTagOverspend, pools.TxPoolErrTagAssetBalance, pools.TxPoolErrTagEvalGeneric,
+		pools.TxPoolErrTags...,
 	)
 
 	result := map[string]float64{}

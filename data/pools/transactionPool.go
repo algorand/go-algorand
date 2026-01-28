@@ -758,7 +758,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				pool.statusCache.put(tx, err.Error())
 			}
 
-			// Increment the shared reeval metrics counter
 			txPoolReevalCounter.Add(ClassifyTxPoolError(err), 1)
 
 			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats

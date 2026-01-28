@@ -90,8 +90,8 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 	}
 }
 
-func TestTxPoolReevalCounterCoversReevalTags(t *testing.T) {
-	// Re-eval counter should only record tags from TxPoolReevalErrTags even when classification sees various errors.
+func TestTxPoolReevalCounterCoversAllTags(t *testing.T) {
+	// Re-eval counter uses TxPoolErrTags to ensure all possible classification results are predeclared.
 	reevalCases := []struct {
 		name string
 		err  error
@@ -119,7 +119,7 @@ func TestTxPoolReevalCounterCoversReevalTags(t *testing.T) {
 	txPoolReevalCounter = metrics.NewTagCounter(
 		"algod_tx_pool_reeval_{TAG}",
 		"Number of transaction groups removed from pool during re-evaluation due to {TAG}",
-		TxPoolReevalErrTags...,
+		TxPoolErrTags...,
 	)
 	t.Cleanup(func() { txPoolReevalCounter = orig })
 
@@ -127,7 +127,7 @@ func TestTxPoolReevalCounterCoversReevalTags(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tag := ClassifyTxPoolError(tc.err)
 			require.Equal(t, tc.tag, tag)
-			require.Contains(t, TxPoolReevalErrTags, tag)
+			require.Contains(t, TxPoolErrTags, tag)
 			txPoolReevalCounter.Add(tag, 1)
 		})
 	}
