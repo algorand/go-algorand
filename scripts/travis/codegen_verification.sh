@@ -49,7 +49,7 @@ touch daemon/algod/api/algod.oas2.json
 make -C daemon/algod/api generate
 
 echo "Regenerate msgp files"
-make msgp
+make -j6 msgp
 
 echo Checking Enlistment...
 if [[ -n $(git status --porcelain) ]]; then

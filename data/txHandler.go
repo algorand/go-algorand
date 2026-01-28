@@ -74,7 +74,7 @@ var ErrInvalidLedger = errors.New("MakeTxHandler: ledger is nil on initializatio
 
 var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 	"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
+	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
 	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
 )
 
@@ -88,7 +88,6 @@ const (
 	txPoolRememberTagCap         = "cap"
 	txPoolRememberPendingEval    = "pending_eval"
 	txPoolRememberTagNoSpace     = "no_space"
-	txPoolRememberTagFee         = "fee"
 	txPoolRememberTagTxnDead     = "txn_dead"
 	txPoolRememberTagTxnEarly    = "txn_early"
 	txPoolRememberTagTooLarge    = "too_large"
@@ -399,8 +398,6 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 		switch txGroupErr.Reason {
 		case verify.TxGroupErrorReasonNotWellFormed:
 			transactionMessagesTxnNotWellFormed.Inc(nil)
-		case verify.TxGroupErrorReasonInvalidFee:
-			transactionMessagesTxGroupInvalidFee.Inc(nil)
 		case verify.TxGroupErrorReasonHasNoSig:
 			fallthrough
 		case verify.TxGroupErrorReasonSigNotWellFormed:
@@ -481,9 +478,6 @@ func (handler *TxHandler) rememberReportErrors(err error) {
 	}
 
 	switch err := underlyingErr.(type) {
-	case *pools.ErrTxPoolFeeError:
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagFee, 1)
-		return
 	case *bookkeeping.TxnDeadError:
 		if err.Early {
 			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnEarly, 1)

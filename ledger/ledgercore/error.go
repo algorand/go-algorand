@@ -133,9 +133,13 @@ const (
 	TxGroupMalformedErrorReasonEmptyGroupID
 	// TxGroupMalformedErrorReasonIncompleteGroup indicates expected group ID does not match to provided
 	TxGroupMalformedErrorReasonIncompleteGroup
+	// TxGroupMalformedErrorReasonMultipleTips indicates multiple transactions specify a CostIncrement
+	TxGroupMalformedErrorReasonMultipleTips
+	// TxGroupErrorReasonInvalidFee indicates a group with improper fees
+	TxGroupErrorReasonInvalidFee
 )
 
-// TxGroupMalformedError indicates txgroup has group ID problems or too large
+// TxGroupMalformedError indicates txgroup violates a group-wide rule (size, group hash, etc)
 type TxGroupMalformedError struct {
 	Msg    string
 	Reason TxGroupMalformedErrorReasonCode

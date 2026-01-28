@@ -20,8 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
+	"slices"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -55,18 +56,15 @@ type TransactionPool struct {
 	// const
 	logProcessBlockStats bool
 	logAssembleStats     bool
-	expFeeFactor         uint64
 	txPoolMaxSize        int
 	ledger               *ledger.Ledger
 
-	mu                     deadlock.Mutex
-	cond                   sync.Cond
-	pendingBlockEvaluator  BlockEvaluator
-	evalTracer             logic.EvalTracer
-	numPendingWholeBlocks  basics.Round
-	feePerByte             atomic.Uint64
-	feeThresholdMultiplier uint64
-	statusCache            *statusCache
+	mu                    deadlock.Mutex
+	cond                  sync.Cond
+	pendingBlockEvaluator BlockEvaluator
+	evalTracer            logic.EvalTracer
+	numPendingWholeBlocks basics.Round
+	statusCache           *statusCache
 
 	assemblyMu       deadlock.Mutex
 	assemblyCond     sync.Cond
@@ -112,6 +110,7 @@ type BlockEvaluator interface {
 	TransactionGroup(txads ...transactions.SignedTxnWithAD) error
 	GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error)
 	ResetTxnBytes()
+	CongestionTax() basics.Micros
 }
 
 // VotingAccountSupplier provides a list of possible participating account addresses valid for a given round.
@@ -123,9 +122,6 @@ var errPoolShutdown = errors.New("transaction pool is shutting down")
 
 // MakeTransactionPool makes a transaction pool.
 func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, vac VotingAccountSupplier) *TransactionPool {
-	if cfg.TxPoolExponentialIncreaseFactor < 1 {
-		cfg.TxPoolExponentialIncreaseFactor = 1
-	}
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
@@ -133,7 +129,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
 		logProcessBlockStats: cfg.EnableProcessBlockStats,
 		logAssembleStats:     cfg.EnableAssembleStats,
-		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        cfg.TxPoolSize,
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
@@ -289,7 +284,7 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 	txCount := len(txnGroup)
 	if pendingSize+txCount > pool.txPoolMaxSize {
 		// Allow the state proof transaction to go over the txPoolMaxSize if it already didn't
-		if len(txnGroup) == 1 && txnGroup[0].Txn.Type == protocol.StateProofTx {
+		if txCount == 1 && txnGroup[0].Txn.Type == protocol.StateProofTx {
 			pool.pendingMu.Lock()
 			defer pool.pendingMu.Unlock()
 			if !pool.stateproofOverflowed {
@@ -302,79 +297,48 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 	return nil
 }
 
-// FeePerByte returns the current minimum microalgos per byte a transaction
-// needs to pay in order to get into the pool.
-func (pool *TransactionPool) FeePerByte() uint64 {
-	return pool.feePerByte.Load()
+func groupTip(txgroup []transactions.SignedTxn) basics.Micros {
+	for i := range txgroup {
+		if txgroup[i].Txn.Tip != 0 {
+			return txgroup[i].Txn.Tip
+		}
+	}
+	return 0
 }
 
-// computeFeePerByte computes and returns the current minimum microalgos per byte a transaction
-// needs to pay in order to get into the pool. It also updates the atomic counter that holds
-// the current fee per byte
-func (pool *TransactionPool) computeFeePerByte() uint64 {
-	// The baseline threshold fee per byte is 1, the smallest fee we can
-	// represent.  This amounts to a fee of 100 for a 100-byte txn, which
-	// is well below MinTxnFee (1000).  This means that, when the pool
-	// is not under load, the total MinFee dominates for small txns,
-	// but once the pool comes under load, the fee-per-byte will quickly
-	// come to dominate.
-	feePerByte := uint64(1)
-
-	// The threshold is multiplied by the feeThresholdMultiplier that
-	// tracks the load on the transaction pool over time.  If the pool
-	// is mostly idle, feeThresholdMultiplier will be 0, and all txns
-	// are accepted (assuming the BlockEvaluator approves them, which
-	// requires a flat MinTxnFee).
-	feePerByte = feePerByte * pool.feeThresholdMultiplier
-
-	// The feePerByte should be bumped to 1 to make the exponentially
-	// threshold growing valid.
-	if feePerByte == 0 && pool.numPendingWholeBlocks > 1 {
-		feePerByte = uint64(1)
-	}
-
-	// The threshold grows exponentially if there are multiple blocks
-	// pending in the pool.
-	// golang has no convenient integer exponentiation, so we just
-	// do this in a loop
-	for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
-		feePerByte *= pool.expFeeFactor
-	}
-
-	// Update the counter for fast reads
-	pool.feePerByte.Store(feePerByte)
-
-	return feePerByte
+// groupPriority returns a priority for the group, mostly derived from the Tip.
+func groupPriority(txgroup []transactions.SignedTxn) basics.Micros {
+	return max(specialPriority(txgroup), groupTip(txgroup))
 }
 
-// checkSufficientFee take a set of signed transactions and verifies that each transaction has
-// sufficient fee to get into the transaction pool
-func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
-	// Special case: the state proof transaction, if issued from the
-	// special state-proof-sender address, in a singleton group, pays
-	// no fee.
+// specialPriority returns a priority value for special transactions or 0
+func specialPriority(txgroup []transactions.SignedTxn) basics.Micros {
 	if len(txgroup) == 1 {
-		t := txgroup[0].Txn
-		if t.Type == protocol.StateProofTx && t.Sender == transactions.StateProofSender && t.Fee.IsZero() {
-			return nil
+		// State proof transactions get highest priority
+		if txgroup[0].Txn.Type == protocol.StateProofTx {
+			return math.MaxUint64
+		}
+		// Heartbeat transactions move ahead of transactions with no extra priority
+		if txgroup[0].Txn.Type == protocol.HeartbeatTx {
+			return 1
 		}
 	}
+	return 0
+}
 
-	// get the current fee per byte
-	feePerByte := pool.computeFeePerByte()
-
-	for _, t := range txgroup {
-		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
-		if t.Txn.Fee.Raw < feeThreshold {
-			return &ErrTxPoolFeeError{
-				fee:           t.Txn.Fee,
-				feeThreshold:  feeThreshold,
-				feePerByte:    feePerByte,
-				encodedLength: t.GetEncodedLength(),
-			}
-		}
+// checkFeeAtIngress take a group of signed transactions and verifies that they
+// are willing to pay the current congestion fee.
+func (pool *TransactionPool) checkFeeAtIngress(txgroup []transactions.SignedTxn) error {
+	tip := groupTip(txgroup)
+	tax := pool.pendingBlockEvaluator.CongestionTax()
+	// Simulate tax growth from the blocks of transactions that are ahead.
+	for range pool.numPendingWholeBlocks {
+		tax = bookkeeping.NextCongestionTax(1e6, tax)
 	}
-
+	if tax > tip {
+		return fmt.Errorf("group has insufficient extra fees to cover %s congestion tax",
+			tax)
+	}
 	return nil
 }
 
@@ -449,8 +413,7 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 			}
 		}
 
-		err := pool.checkSufficientFee(txgroup)
-		if err != nil {
+		if err := pool.checkFeeAtIngress(txgroup); err != nil {
 			return err
 		}
 	}
@@ -467,14 +430,8 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 	return nil
 }
 
-// RememberOne stores the provided transaction.
-// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	return pool.Remember([]transactions.SignedTxn{t})
-}
-
 // Remember stores the provided transaction group.
-// Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
+// Precondition: Only Remember() properly-signed and well-formed transaction groups (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
@@ -541,28 +498,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 
 	defer pool.cond.Broadcast()
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
-		// Adjust the pool fee threshold.  The rules are:
-		// - If there was less than one full block in the pool, reduce
-		//   the multiplier by 2x.  It will eventually go to 0, so that
-		//   only the flat MinTxnFee matters if the pool is idle.
-		// - If there were less than two full blocks in the pool, keep
-		//   the multiplier as-is.
-		// - If there were two or more full blocks in the pool, grow
-		//   the multiplier by 2x (or increment by 1, if 0).
-		switch pool.numPendingWholeBlocks {
-		case 0:
-			pool.feeThresholdMultiplier = pool.feeThresholdMultiplier / pool.expFeeFactor
-
-		case 1:
-			// Keep the fee multiplier the same.
-
-		default:
-			if pool.feeThresholdMultiplier == 0 {
-				pool.feeThresholdMultiplier = 1
-			} else {
-				pool.feeThresholdMultiplier = pool.feeThresholdMultiplier * pool.expFeeFactor
-			}
-		}
 
 		// Recompute the pool by starting from the new latest block.
 		// This has the side-effect of discarding transactions that
@@ -666,6 +601,12 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 	if err == ledgercore.ErrNoSpace {
 		pool.numPendingWholeBlocks++
 		pool.pendingBlockEvaluator.ResetTxnBytes()
+		// Since we're now in a new block with new CongestionTax, we need to recheck fees
+		if !recomputing {
+			if err = pool.checkFeeAtIngress(txgroup); err != nil {
+				return err
+			}
+		}
 		err = pool.addToPendingBlockEvaluatorOnce(txgroup, recomputing, stats)
 	}
 	return err
@@ -706,9 +647,36 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 	pendingCount := pool.pendingCountNoLock()
 	pool.pendingMu.RUnlock()
 
+	// Sort transaction groups by priority in descending order (basically,
+	// highest tips first).  Extract priority once per group. Sort the
+	// priorities and access the groups by the associated indices.
+	type txGroupWithTip struct {
+		index int
+		prio  basics.Micros
+	}
+
+	groupsWithTips := make([]txGroupWithTip, len(txgroups))
+	for i := range txgroups {
+		groupsWithTips[i] = txGroupWithTip{
+			index: i,
+			prio:  groupPriority(txgroups[i]),
+		}
+	}
+
+	// Sort by tip descending, stable sort preserves FIFO for equal priority
+	slices.SortStableFunc(groupsWithTips, func(a, b txGroupWithTip) int {
+		if a.prio > b.prio {
+			return -1 // a has higher priority
+		}
+		if a.prio < b.prio {
+			return 1 // b has higher priority
+		}
+		return 0 // equal priority, maintain arrival order
+	})
+
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
-		roundStartedEvaluating: prev.Round + basics.Round(1),
+		roundStartedEvaluating: prev.Round + 1,
 	}
 	pool.assemblyMu.Unlock()
 
@@ -741,8 +709,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 
 	firstTxnGrpTime := time.Now()
 
-	// Feed the transactions in order
-	for _, txgroup := range txgroups {
+	// Feed the transactions in priority order (sorted by tip)
+	for _, gwt := range groupsWithTips {
+		txgroup := txgroups[gwt.index]
 		if len(txgroup) == 0 {
 			asmStats.InvalidCount++
 			continue
@@ -770,10 +739,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				stats.ExpiredCount++
 			case *ledgercore.LeaseInLedgerError:
 				asmStats.LeaseErrorCount++
-				stats.RemovedInvalidCount++
-				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
-			case *transactions.MinFeeError:
-				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case logic.EvalError:
@@ -826,7 +791,7 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 		TxnSize:        encodedLen,
 	}
 
-	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
+	lastSPRound := txib.Txn.StateProofTxnFields.Message.LastAttestedRound
 	verificationCtx, err := pool.ledger.GetStateProofVerificationContext(lastSPRound)
 	if err != nil {
 		return stateProofStats

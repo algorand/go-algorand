@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/algorand/go-codec/codec"
@@ -25,13 +26,44 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
-// RoundInterval is a number of rounds
-type RoundInterval uint64
-
 // MicroAlgos is our unit of currency.  It is wrapped in a struct to nudge
 // developers to use an overflow-checking library for any arithmetic.
 type MicroAlgos struct {
 	Raw uint64
+}
+
+// String returns a human-readable representation of MicroAlgos
+func (a MicroAlgos) String() string {
+	if a.Raw == 0 {
+		return "0.0A"
+	}
+	if a.Raw < 1_000 {
+		return fmt.Sprintf("%duA", a.Raw)
+	}
+	if a.Raw < 1_000_000 {
+		millis := a.Raw / 1_000
+		fraction := a.Raw % 1_000
+		if fraction == 0 {
+			return fmt.Sprintf("%dmA", millis)
+		}
+		return fmt.Sprintf("%d.%03dmA", millis, fraction)
+	}
+	whole := a.Raw / 1_000_000
+	fraction := a.Raw % 1_000_000
+	if fraction == 0 {
+		return fmt.Sprintf("%dA", whole)
+	}
+	return fmt.Sprintf("%d.%06d", whole, fraction)
+}
+
+// AddSaturate adds MicroAlgos, and won't rollover.
+func (a MicroAlgos) AddSaturate(b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: AddSaturate(a.Raw, b.Raw)}
+}
+
+// SubSaturate subtracts MicroAlgos, and won't rollover.
+func (a MicroAlgos) SubSaturate(b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: SubSaturate(a.Raw, b.Raw)}
 }
 
 // LessThan implements arithmetic comparison for MicroAlgos
@@ -165,4 +197,21 @@ func (round Round) RoundUpToMultipleOf(n Round) Round {
 // RoundDownToMultipleOf rounds down round to a multiple of n.
 func (round Round) RoundDownToMultipleOf(n Round) Round {
 	return (round / n) * n
+}
+
+// Micros represents millionths of something. It's a fixed-point number with 6
+// digits of precision.
+type Micros uint64
+
+func (m Micros) String() string {
+	return fmt.Sprintf("%d.%06d", m/1e6, m%1e6)
+}
+
+// Mul multiplies Micros. It saturates and reports overflow.
+func (m Micros) Mul(m2 Micros) (Micros, bool) {
+	u64, o := Muldiv(m, m2, 1e6)
+	if o {
+		u64 = math.MaxUint64
+	}
+	return Micros(u64), o
 }

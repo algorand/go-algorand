@@ -440,7 +440,7 @@ var sendCmd = &cobra.Command{
 
 		// ConstructPayment fills in the suggested fee when fee=0. But if the user actually used --fee=0 on the
 		// commandline, we ought to do what they asked (especially now that zero or low fees make sense in
-		// combination with other txns that cover the groups's fee.
+		// combination with other txns that cover the groups's fee).
 		explicitFee := cmd.Flags().Changed("fee")
 		if explicitFee {
 			payment.Fee = basics.MicroAlgos{Raw: fee}

@@ -137,7 +137,13 @@ func txns(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txnt
 func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
-	err := eval.TransactionGroup(txn.SignedTxn().WithAD())
+	txgroup := []transactions.SignedTxn{txn.SignedTxn()}
+
+	err := eval.TestTransactionGroup(txgroup)
+	if err == nil {
+		err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
+	}
+
 	if err != nil {
 		if len(problem) == 1 && problem[0] != "" {
 			require.Contains(t, err.Error(), problem[0])
@@ -155,6 +161,10 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 		fillDefaults(t, ledger, eval, txn)
 	}
 	txgroup := txntest.Group(txns...)
+
+	if err := eval.TestTransactionGroup(txgroup); err != nil {
+		return err
+	}
 
 	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
 }
