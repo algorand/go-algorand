@@ -203,7 +203,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	if proto.TxnCounter {
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
-	if proto.CongestionTracking {
+	if proto.LoadTracking {
 		blk.Load = eval.ComputeLoad(txib.GetEncodedLength(), proto.MaxTxnBytesPerBlock)
 	}
 	require.NoError(t, endOfBlock(&blk))
@@ -225,7 +225,7 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 	if proto.TxnCounter {
 		blk.TxnCounter += uint64(len(stxns))
 	}
-	if proto.CongestionTracking {
+	if proto.LoadTracking {
 		blk.Load = eval.ComputeLoad(blkSize, proto.MaxTxnBytesPerBlock)
 	}
 	var err error
