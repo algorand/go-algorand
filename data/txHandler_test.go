@@ -2521,8 +2521,8 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
-	cfg.TxBacklogServiceRateWindowSeconds = 1
-	cfg.TxBacklogAppTxPerSecondRate = 3
+	cfg.TxBacklogServiceRateWindowSeconds = 3
+	cfg.TxBacklogAppTxPerSecondRate = 1
 	cfg.TxBacklogSize = 3
 	l, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
@@ -2633,8 +2633,8 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableTxBacklogRateLimiting = true
 	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
-	cfg.TxBacklogServiceRateWindowSeconds = 1
-	cfg.TxBacklogAppTxPerSecondRate = 3
+	cfg.TxBacklogServiceRateWindowSeconds = 3
+	cfg.TxBacklogAppTxPerSecondRate = 1
 	l, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer l.Close()
