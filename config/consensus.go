@@ -576,9 +576,9 @@ type ConsensusParams struct {
 	// after the first consensus release in which it is set true.
 	AllowZeroLocalAppRef bool
 
-	// CongestionTracking enables header values that track Load and a running
-	// CongestionTax that grows/shrinks when blocks are more/less than half full
-	CongestionTracking bool
+	// LoadTracking enables header values that track Load that grows/shrinks
+	// when blocks are more/less than half full.
+	LoadTracking bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1467,7 +1467,7 @@ func initConsensusProtocols() {
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
-	vFuture.CongestionTracking = true
+	vFuture.LoadTracking = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

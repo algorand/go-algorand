@@ -1452,7 +1452,7 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 		}
 
 		// Calculate and set the Load field for on-chain congestion measurement
-		if eval.proto.CongestionTracking {
+		if eval.proto.LoadTracking {
 			eval.block.BlockHeader.Load = ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
 		}
 
@@ -2269,7 +2269,7 @@ transactionGroupLoop:
 	// If validating, do final block checks that depend on our new state
 	if validate {
 		// Validate Load field for on-chain congestion measurement
-		if eval.proto.CongestionTracking {
+		if eval.proto.LoadTracking {
 			expectedLoad := ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
 			if eval.block.BlockHeader.Load != expectedLoad {
 				return ledgercore.StateDelta{}, fmt.Errorf("bad load: %d != %d", eval.block.BlockHeader.Load, expectedLoad)

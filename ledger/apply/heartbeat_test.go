@@ -213,7 +213,7 @@ func TestCheapRules(t *testing.T) {
 		// If there's a Tip, then MinFee() is still cheap/underpaid, so we
 		// should get the same errors for error cases. (For no error cases, we
 		// can't run the same test again, because the sender is no longer
-		// challeneged.
+		// challenged.
 		testProto := config.Consensus[testConsensusVersion]
 		tx.Fee = testProto.MinFee()
 		tx.Tip = basics.Micros(1_100_000)

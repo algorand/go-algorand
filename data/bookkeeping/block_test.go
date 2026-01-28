@@ -80,12 +80,12 @@ func init() {
 	config.Consensus[protoDelay] = paramsDelay
 
 	paramsCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
-	paramsCongestion.CongestionTracking = true
+	paramsCongestion.LoadTracking = true
 	paramsCongestion.MinTxnFee = 1000
 	config.Consensus[protoCongestion] = paramsCongestion
 
 	paramsNoCongestion := config.Consensus[protocol.ConsensusCurrentVersion]
-	paramsNoCongestion.CongestionTracking = false
+	paramsNoCongestion.LoadTracking = false
 	config.Consensus[protoNoCongestion] = paramsNoCongestion
 }
 
@@ -1275,7 +1275,7 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			GenesisID:     "test",
 			GenesisHash:   crypto.Digest{0x02, 0x02},
 			Load:          0,
-			CongestionTax: 0,
+			CongestionTax: 2_000_000, // Weird, but allowed (maybe there was a downgrade?)
 		}
 		prev.CurrentProtocol = protoNoCongestion
 
@@ -1286,25 +1286,21 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			Branch:        prev.Hash(),
 			Branch512:     prev.Hash512(),
 			Load:          0,
-			CongestionTax: 0,
+			CongestionTax: 1_700_000, // Tapers from above.  (3*.9)-1=1.7
 		}
 		current.CurrentProtocol = protoNoCongestion
 
 		// Should pass with zero values
 		require.NoError(t, current.PreCheck(prev))
 
-		// Should fail with non-zero CongestionTax
-		current.CongestionTax = 1
-		require.ErrorContains(t, current.PreCheck(prev), "congestion tax should be zero when congestion measurement is disabled")
-
 		// Should fail with non-zero Load
-		current.CongestionTax = 0
 		current.Load = 500_000
 		require.ErrorContains(t, current.PreCheck(prev), "load should be zero when congestion measurement is disabled")
+		current.Load = 0
 	})
 
 	// Ensure that the upgrade to congestion fees is handled correctly
-	t.Run("congestion_fees_upgrade", func(t *testing.T) {
+	t.Run("congestion_tracking_upgrade", func(t *testing.T) {
 		prev := BlockHeader{
 			Round:       10,
 			GenesisID:   "test",
@@ -1356,6 +1352,52 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 
 	})
 
+	// Show that turning off congestion tracking leads to blocks w/o Load or Tax
+	t.Run("congestion_tracking_downgrade", func(t *testing.T) {
+		prev := BlockHeader{
+			Round:       10,
+			GenesisID:   "test",
+			GenesisHash: crypto.Digest{0x02, 0x02},
+			UpgradeState: UpgradeState{
+				CurrentProtocol:      protoCongestion,
+				NextProtocol:         protoNoCongestion,
+				NextProtocolSwitchOn: 11,
+			},
+			Load:          750_000, // but give the pre-upgrade block some Load
+			CongestionTax: 200_000, // and current tax level
+		}
+
+		// We're no longer tracking load, so it goes to 0. But CongestionTax is
+		// still allowed, but it will naturally fall after this block (no load measured)
+		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			CongestionTax: 260_000, // (1.2*1.05)-1 = 0.26
+		}
+		current.CurrentProtocol = protoNoCongestion
+
+		require.NoError(t, current.PreCheck(prev))
+
+		// Should fail with non-zero Load
+		current.Load = 1
+		require.ErrorContains(t, current.PreCheck(prev), "load should be zero")
+		current.Load = 0
+
+		next := BlockHeader{
+			Round:         current.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        current.Hash(),
+			Branch512:     current.Hash512(),
+			CongestionTax: 134_000, // (1.26*0.9)-1 = 0.134
+		}
+		next.CurrentProtocol = protoNoCongestion
+		require.NoError(t, next.PreCheck(current))
+	})
+
 }
 
 func TestBlockHeaderCongestionCreation(t *testing.T) {
@@ -1395,6 +1437,20 @@ func TestBlockHeaderCongestionCreation(t *testing.T) {
 
 		block := MakeBlock(prev)
 		require.Zero(t, block.CongestionTax)
+		require.Zero(t, block.Load)
+
+		// If there is still congestion tax (maybe downgrade to no load tracking) tax tapers
+		prev = BlockHeader{
+			Round:         10,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          0,
+			CongestionTax: 2_000_000,
+		}
+		prev.CurrentProtocol = protoNoCongestion
+
+		block = MakeBlock(prev)
+		require.Equal(t, basics.Micros(1_700_000), block.CongestionTax)
 		require.Zero(t, block.Load)
 	})
 }

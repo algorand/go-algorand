@@ -828,20 +828,14 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 		return fmt.Errorf("bad bonus: %s != %s ", bh.Bonus, expectedBonus)
 	}
 
-	if params.CongestionTracking {
-		expectedConTax := NextCongestionTax(prev.Load, prev.CongestionTax)
-		if bh.CongestionTax != expectedConTax {
-			return fmt.Errorf("bad congestion tax: %s != %s", bh.CongestionTax, expectedConTax)
-		}
-		// bh.Load is checked in endOfBlock after we accumulate the payset byte length
-	} else {
-		// When congestion measurement is disabled, these fields should be empty
-		if bh.CongestionTax != 0 {
-			return fmt.Errorf("congestion tax should be zero when congestion measurement is disabled, got %s", bh.CongestionTax)
-		}
-		if bh.Load != 0 {
-			return fmt.Errorf("load should be zero when congestion measurement is disabled, got %s", bh.Load)
-		}
+	// check congestion tax
+	expectedConTax := NextCongestionTax(prev.Load, prev.CongestionTax)
+	if bh.CongestionTax != expectedConTax {
+		return fmt.Errorf("bad congestion tax: %s != %s", bh.CongestionTax, expectedConTax)
+	}
+
+	if !params.LoadTracking && bh.Load != 0 {
+		return fmt.Errorf("load should be zero when congestion measurement is disabled, got %s", bh.Load)
 	}
 
 	// Check genesis ID value against previous block, if set
