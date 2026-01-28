@@ -761,13 +761,14 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 			// Increment the shared reeval metrics counter
 			txPoolReevalCounter.Add(ClassifyTxPoolError(err), 1)
 
-			// Update telemetry stats (duplicated for historic reasons, should be consolidated)
+			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
 			switch terr := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
 				asmStats.CommittedCount++
 				stats.RemovedInvalidCount++
 			case *bookkeeping.TxnDeadError:
 				if int(terr.LastValid-terr.FirstValid) > 20 {
+					// cutoff value  here is picked as a somewhat arbitrary cutoff trying to separate longer lived transactions from very short lived ones
 					asmStats.ExpiredLongLivedCount++
 				}
 				asmStats.ExpiredCount++
