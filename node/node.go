@@ -763,6 +763,11 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	return res, found
 }
 
+// GetPeers returns the node's peers
+func (node *AlgorandFullNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
+	return node.net.GetPeers(network.PeersConnectedIn), node.net.GetPeers(network.PeersConnectedOut), nil
+}
+
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFullNode) Status() (StatusReport, error) {
 	node.syncStatusMu.Lock()

@@ -21,6 +21,18 @@ const (
 	AccountSigTypeSig  AccountSigType = "sig"
 )
 
+// Defines values for PeerStatusConnectionType.
+const (
+	PeerStatusConnectionTypeInbound  PeerStatusConnectionType = "inbound"
+	PeerStatusConnectionTypeOutbound PeerStatusConnectionType = "outbound"
+)
+
+// Defines values for PeerStatusNetworkType.
+const (
+	PeerStatusNetworkTypeP2p PeerStatusNetworkType = "p2p"
+	PeerStatusNetworkTypeWs  PeerStatusNetworkType = "ws"
+)
+
 // Defines values for TransactionProofHashtype.
 const (
 	TransactionProofHashtypeSha256    TransactionProofHashtype = "sha256"
@@ -740,6 +752,24 @@ type ParticipationKey struct {
 	LastVote *basics.Round `json:"last-vote,omitempty"`
 }
 
+// PeerStatus The status of a connected peer in the P2P network
+type PeerStatus struct {
+	// ConnectionType Connection type
+	ConnectionType PeerStatusConnectionType `json:"connection-type"`
+
+	// NetworkAddress Network address of the peer
+	NetworkAddress string `json:"network-address"`
+
+	// NetworkType Network type
+	NetworkType PeerStatusNetworkType `json:"network-type"`
+}
+
+// PeerStatusConnectionType Connection type
+type PeerStatusConnectionType string
+
+// PeerStatusNetworkType Network type
+type PeerStatusNetworkType string
+
 // PendingTransactionResponse Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.
 type PendingTransactionResponse struct {
 	// ApplicationIndex The application index if the transaction was found and it created an application.
@@ -1245,6 +1275,11 @@ type GetBlockTimeStampOffsetResponse struct {
 	Offset uint64 `json:"offset"`
 }
 
+// GetPeersResponse defines model for GetPeersResponse.
+type GetPeersResponse struct {
+	Peers []PeerStatus `json:"Peers"`
+}
+
 // GetSyncRoundResponse defines model for GetSyncRoundResponse.
 type GetSyncRoundResponse struct {
 	// Round The minimum sync round for the ledger.
@@ -1569,6 +1604,11 @@ type GetTransactionGroupLedgerStateDeltasForRoundParams struct {
 
 // GetTransactionGroupLedgerStateDeltasForRoundParamsFormat defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
 type GetTransactionGroupLedgerStateDeltasForRoundParamsFormat string
+
+// ShutdownNode2Params defines parameters for ShutdownNode2.
+type ShutdownNode2Params struct {
+	Timeout *int `form:"timeout,omitempty" json:"timeout,omitempty"`
+}
 
 // GenerateParticipationKeysParams defines parameters for GenerateParticipationKeys.
 type GenerateParticipationKeysParams struct {
