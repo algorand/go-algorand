@@ -116,7 +116,7 @@ func ClassifyTxPoolError(err error) string {
 		return ""
 	}
 
-	// Check pool-level errors first (these are typically not wrapped)
+	// Check pool-level errors first (using errors.Is for wrapped errors)
 	if errors.Is(err, ErrPendingQueueReachedMaxCap) {
 		return TxPoolErrTagCap
 	}
@@ -127,61 +127,88 @@ func ClassifyTxPoolError(err error) string {
 		return TxPoolErrTagNoSpace
 	}
 
-	// Try to classify the error directly first, then try unwrapped
+	// Classify typed errors (errors.As handles wrapped errors)
 	if tag := classifyUnwrappedError(err); tag != "" {
 		return tag
-	}
-
-	// Try unwrapping (Remember wraps errors)
-	if unwrapped := errors.Unwrap(err); unwrapped != nil {
-		if tag := classifyUnwrappedError(unwrapped); tag != "" {
-			return tag
-		}
 	}
 
 	return TxPoolErrTagEvalGeneric
 }
 
-// classifyUnwrappedError classifies an unwrapped error from the BlockEvaluator.
+// classifyUnwrappedError classifies an error from the BlockEvaluator.
+// Uses errors.As to traverse wrapped error chains.
 func classifyUnwrappedError(err error) string {
-	switch terr := err.(type) {
-	case *ErrTxPoolFeeError:
+	var feeErr *ErrTxPoolFeeError
+	if errors.As(err, &feeErr) {
 		return TxPoolErrTagFee
-	case *transactions.MinFeeError:
+	}
+
+	var minFeeErr *transactions.MinFeeError
+	if errors.As(err, &minFeeErr) {
 		return TxPoolErrTagFee
-	case *bookkeeping.TxnDeadError:
-		if terr.Early {
+	}
+
+	var deadErr *bookkeeping.TxnDeadError
+	if errors.As(err, &deadErr) {
+		if deadErr.Early {
 			return TxPoolErrTagTxnEarly
 		}
 		return TxPoolErrTagTxnDead
-	case *ledgercore.TransactionInLedgerError:
-		if terr.InBlockEvaluator {
+	}
+
+	var txInLedgerErr *ledgercore.TransactionInLedgerError
+	if errors.As(err, &txInLedgerErr) {
+		if txInLedgerErr.InBlockEvaluator {
 			return TxPoolErrTagTxIDEval
 		}
 		return TxPoolErrTagTxID
-	case *ledgercore.LeaseInLedgerError:
-		if terr.InBlockEvaluator {
+	}
+
+	var leaseErr *ledgercore.LeaseInLedgerError
+	if errors.As(err, &leaseErr) {
+		if leaseErr.InBlockEvaluator {
 			return TxPoolErrTagLeaseEval
 		}
 		return TxPoolErrTagLease
-	case *ledgercore.TxGroupMalformedError:
-		if terr.Reason == ledgercore.TxGroupMalformedErrorReasonExceedMaxSize {
+	}
+
+	var groupErr *ledgercore.TxGroupMalformedError
+	if errors.As(err, &groupErr) {
+		if groupErr.Reason == ledgercore.TxGroupMalformedErrorReasonExceedMaxSize {
 			return TxPoolErrTagTooLarge
 		}
 		return TxPoolErrTagGroupID
-	case *ledgercore.TxnNotWellFormedError:
+	}
+
+	var notWellErr *ledgercore.TxnNotWellFormedError
+	if errors.As(err, &notWellErr) {
 		return TxPoolErrTagNotWell
-	case *ledgercore.OverspendError:
+	}
+
+	var overspendErr *ledgercore.OverspendError
+	if errors.As(err, &overspendErr) {
 		return TxPoolErrTagOverspend
-	case *ledgercore.MinBalanceError:
+	}
+
+	var minBalErr *ledgercore.MinBalanceError
+	if errors.As(err, &minBalErr) {
 		return TxPoolErrTagMinBalance
-	case *ledgercore.AssetBalanceError:
+	}
+
+	var assetBalErr *ledgercore.AssetBalanceError
+	if errors.As(err, &assetBalErr) {
 		return TxPoolErrTagAssetBalance
-	case *ledgercore.ApprovalProgramRejectedError:
+	}
+
+	var approvalErr *ledgercore.ApprovalProgramRejectedError
+	if errors.As(err, &approvalErr) {
 		return TxPoolErrTagTealReject
-	case logic.EvalError:
-		// TEAL runtime error - the AVM encountered an error during execution
+	}
+
+	var evalErr logic.EvalError
+	if errors.As(err, &evalErr) {
 		return TxPoolErrTagTealErr
 	}
+
 	return ""
 }
