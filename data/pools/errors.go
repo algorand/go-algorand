@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -130,11 +129,6 @@ func ClassifyTxPoolError(err error) string {
 	// Typed errors
 	var feeErr *ErrTxPoolFeeError
 	if errors.As(err, &feeErr) {
-		return TxPoolErrTagFee
-	}
-
-	var minFeeErr *transactions.MinFeeError
-	if errors.As(err, &minFeeErr) {
 		return TxPoolErrTagFee
 	}
 

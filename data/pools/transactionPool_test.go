@@ -55,6 +55,8 @@ import (
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
+const testPoolSize = 1000
+
 func keypair() *crypto.SignatureSecrets {
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
@@ -833,8 +835,8 @@ func TestTxPoolReevalMetricsRecordLedgerDuplicate(t *testing.T) {
 	signedA := txA.Sign(secrets[0])
 	signedB := txB.Sign(secrets[0])
 
-	require.NoError(t, transactionPool.RememberOne(signedA))
-	require.NoError(t, transactionPool.RememberOne(signedB))
+	require.NoError(t, transactionPool.rememberOne(signedA))
+	require.NoError(t, transactionPool.rememberOne(signedB))
 
 	eval := newBlockEvaluator(t, mockLedger)
 	require.NoError(t, eval.TransactionGroup(signedB.WithAD()))
@@ -1695,79 +1697,6 @@ func commitTxns(t TestingT, l *ledger.Ledger, pool *TransactionPool, txns ...tra
 	pool.OnNewBlock(vb.Block(), vb.Delta())
 }
 
-func TestPoolFeeClassification(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// Fill pool past one block to trigger fee escalation, then submit a txn
-	// with MinTxnFee which will be below the escalated threshold.
-	numOfAccounts := 5
-	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
-	addresses := make([]basics.Address, numOfAccounts)
-	for i := 0; i < numOfAccounts; i++ {
-		secret := keypair()
-		secrets[i] = secret
-		addresses[i] = basics.Address(secret.SignatureVerifier)
-	}
-
-	l := makeMockLedger(t, initAccFixed(addresses, 1<<32))
-	cfg := config.GetDefaultLocal()
-	cfg.TxPoolSize = testPoolSize * 30
-	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(l, cfg, logging.Base(), nil)
-
-	// Fill pool with enough large txns to fill multiple blocks (triggering fee escalation)
-	// but stay under the pool's capacity limit.
-	for i, sender := range addresses {
-		for j := 0; j < testPoolSize*15/len(addresses); j++ {
-			var receiver basics.Address
-			crypto.RandBytes(receiver[:])
-			tx := transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Sender:      sender,
-					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 100},
-					FirstValid:  0,
-					LastValid:   basics.Round(proto.MaxTxnLife),
-					GenesisHash: l.GenesisHash(),
-				},
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: receiver,
-					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
-				},
-			}
-			tx.Note = make([]byte, 1024)
-			crypto.RandBytes(tx.Note)
-			signedTx := tx.Sign(secrets[i])
-			require.NoError(t, transactionPool.RememberOne(signedTx))
-		}
-	}
-
-	require.True(t, transactionPool.numPendingWholeBlocks > 0, "pool should have >0 whole blocks pending")
-
-	// Submit a txn with MinTxnFee but a large note so the fee-per-byte
-	// threshold exceeds MinTxnFee under fee escalation.
-	var receiver basics.Address
-	crypto.RandBytes(receiver[:])
-	tx := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      addresses[0],
-			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
-			FirstValid:  0,
-			LastValid:   basics.Round(proto.MaxTxnLife),
-			GenesisHash: l.GenesisHash(),
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: receiver,
-			Amount:   basics.MicroAlgos{Raw: 0},
-		},
-	}
-	tx.Note = make([]byte, 1024)
-	err := transactionPool.RememberOne(tx.Sign(secrets[0]))
-	require.Error(t, err)
-	require.Equal(t, TxPoolErrTagFee, ClassifyTxPoolError(err))
-}
-
 func TestPoolLeaseReevalClassification(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1813,7 +1742,7 @@ func TestPoolLeaseReevalClassification(t *testing.T) {
 		},
 	}
 	signedA := txA.Sign(secrets[0])
-	require.NoError(t, transactionPool.RememberOne(signedA))
+	require.NoError(t, transactionPool.rememberOne(signedA))
 
 	// Commit the txn in a block
 	eval := newBlockEvaluator(t, mockLedger)
@@ -1904,7 +1833,7 @@ func TestPoolAssetBalanceClassification(t *testing.T) {
 			AssetReceiver: creatorAddr,
 		},
 	}
-	err := transactionPool.RememberOne(xferTx.Sign(senderSecret))
+	err := transactionPool.rememberOne(xferTx.Sign(senderSecret))
 	require.Error(t, err)
 	require.Equal(t, TxPoolErrTagAssetBalance, ClassifyTxPoolError(err))
 }
@@ -1972,7 +1901,7 @@ int 1`
 			ApplicationID: 1,
 		},
 	}
-	err = transactionPool.RememberOne(callTx.Sign(callerSecret))
+	err = transactionPool.rememberOne(callTx.Sign(callerSecret))
 	require.Error(t, err)
 	require.Equal(t, TxPoolErrTagTealReject, ClassifyTxPoolError(err))
 }
@@ -2039,7 +1968,7 @@ int 1`
 			ApplicationID: 1,
 		},
 	}
-	err = transactionPool.RememberOne(callTx.Sign(callerSecret))
+	err = transactionPool.rememberOne(callTx.Sign(callerSecret))
 	require.Error(t, err)
 	require.Equal(t, TxPoolErrTagTealErr, ClassifyTxPoolError(err))
 }

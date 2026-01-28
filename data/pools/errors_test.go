@@ -50,8 +50,6 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 		{name: "no_space_wrapped", err: ledgercore.ErrNoSpace, tag: TxPoolErrTagNoSpace, wrap: true},
 		{name: "fee_escalation", err: &ErrTxPoolFeeError{}, tag: TxPoolErrTagFee},
 		{name: "fee_escalation_wrapped", err: &ErrTxPoolFeeError{}, tag: TxPoolErrTagFee, wrap: true},
-		{name: "fee_min_fee", err: func() error { e := transactions.MinFeeError("min"); return &e }(), tag: TxPoolErrTagFee},
-		{name: "fee_min_fee_wrapped", err: func() error { e := transactions.MinFeeError("min"); return &e }(), tag: TxPoolErrTagFee, wrap: true},
 		{name: "txn_dead", err: &bookkeeping.TxnDeadError{}, tag: TxPoolErrTagTxnDead},
 		{name: "txn_dead_wrapped", err: &bookkeeping.TxnDeadError{}, tag: TxPoolErrTagTxnDead, wrap: true},
 		{name: "txn_early", err: &bookkeeping.TxnDeadError{Early: true}, tag: TxPoolErrTagTxnEarly},
