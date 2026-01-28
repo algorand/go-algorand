@@ -50,6 +50,7 @@ import (
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/stateproof/verify"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
@@ -232,7 +233,9 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 		},
 	}
 	signedTx := tx.Sign(secrets[0])
-	require.Error(t, transactionPool.RememberOne(signedTx))
+	err := transactionPool.RememberOne(signedTx)
+	require.Error(t, err)
+	require.Equal(t, TxPoolErrTagMinBalance, ClassifyTxPoolError(err))
 }
 
 func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
@@ -750,6 +753,84 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	pending = transactionPool.PendingTxGroups()
 	// only one transaction is missing
 	require.Len(t, pending, savedTransactions-1)
+}
+
+func TestTxPoolReevalMetricsRecordLedgerDuplicate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Sanity: ensure tags cover the scenarios we expect to record.
+	require.Contains(t, TxPoolErrTags, TxPoolErrTagTxID)
+	require.Contains(t, TxPoolErrTags, TxPoolErrTagLease)
+	require.Contains(t, TxPoolErrTags, TxPoolErrTagNoSpace)
+
+	// Isolate the counter for this test.
+	origCounter := txPoolReevalCounter
+	txPoolReevalCounter = metrics.NewTagCounter(
+		"algod_tx_pool_reeval_{TAG}",
+		"Number of transaction groups removed from pool during re-evaluation due to {TAG}",
+		TxPoolErrTags...,
+	)
+	t.Cleanup(func() { txPoolReevalCounter = origCounter })
+
+	secrets := make([]*crypto.SignatureSecrets, 2)
+	addresses := make([]basics.Address, 2)
+	for i := 0; i < len(secrets); i++ {
+		secret := keypair()
+		secrets[i] = secret
+		addresses[i] = basics.Address(secret.SignatureVerifier)
+	}
+
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base(), nil)
+
+	base := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  1,
+			LastValid:   20,
+			GenesisHash: mockLedger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: 1},
+		},
+	}
+	txA := base
+	txA.Note = []byte{0xAA}
+	txB := base
+	txB.Note = []byte{0xBB}
+
+	signedA := txA.Sign(secrets[0])
+	signedB := txB.Sign(secrets[0])
+
+	require.NoError(t, transactionPool.RememberOne(signedA))
+	require.NoError(t, transactionPool.RememberOne(signedB))
+
+	eval := newBlockEvaluator(t, mockLedger)
+	require.NoError(t, eval.TransactionGroup(signedB.WithAD()))
+	ufblk, err := eval.GenerateBlock(nil)
+	require.NoError(t, err)
+	vb := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+	require.NoError(t, mockLedger.AddValidatedBlock(vb, agreement.Certificate{}))
+
+	// Intentionally provide a delta without Txids so the recompute path hits the ledger duplicate
+	// detection instead of skipping via committedTxIDs filtering.
+	delta := vb.Delta()
+	delta.Txids = nil
+	transactionPool.OnNewBlock(vb.Block(), delta)
+
+	// Expect a re-eval tag for txid duplicate and that only the uncommitted txn remains pending.
+	metricsMap := map[string]float64{}
+	txPoolReevalCounter.AddMetric(metricsMap)
+	require.Equal(t, float64(1), metricsMap["algod_tx_pool_reeval_"+TxPoolErrTagTxID])
+	pending := transactionPool.PendingTxGroups()
+	require.Len(t, pending, 1)
+	require.Equal(t, signedA.ID(), pending[0][0].ID())
 }
 
 func TestOverspender(t *testing.T) {
@@ -1611,6 +1692,370 @@ func generateProofForTesting(
 	require.NoError(t, err)
 
 	return proof
+}
+
+// commitTxns evaluates transactions into a new block, commits it to the ledger,
+// and notifies the pool. This is used by classification integration tests that
+// need block progression.
+func commitTxns(t TestingT, l *ledger.Ledger, pool *TransactionPool, txns ...transactions.SignedTxn) {
+	eval := newBlockEvaluator(t, l)
+	for _, txn := range txns {
+		require.NoError(t, eval.TransactionGroup(transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{txn})...))
+	}
+	ufblk, err := eval.GenerateBlock(nil)
+	require.NoError(t, err)
+	vb := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+	require.NoError(t, l.AddValidatedBlock(vb, agreement.Certificate{}))
+	pool.OnNewBlock(vb.Block(), vb.Delta())
+}
+
+func TestPoolFeeClassification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Fill pool past one block to trigger fee escalation, then submit a txn
+	// with MinTxnFee which will be below the escalated threshold.
+	numOfAccounts := 5
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		secrets[i] = secret
+		addresses[i] = basics.Address(secret.SignatureVerifier)
+	}
+
+	l := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize * 30
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(l, cfg, logging.Base(), nil)
+
+	// Fill pool with enough large txns to fill multiple blocks (triggering fee escalation)
+	// but stay under the pool's capacity limit.
+	for i, sender := range addresses {
+		for j := 0; j < testPoolSize*15/len(addresses); j++ {
+			var receiver basics.Address
+			crypto.RandBytes(receiver[:])
+			tx := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:      sender,
+					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 100},
+					FirstValid:  0,
+					LastValid:   basics.Round(proto.MaxTxnLife),
+					GenesisHash: l.GenesisHash(),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
+				},
+			}
+			tx.Note = make([]byte, 1024)
+			crypto.RandBytes(tx.Note)
+			signedTx := tx.Sign(secrets[i])
+			require.NoError(t, transactionPool.RememberOne(signedTx))
+		}
+	}
+
+	require.True(t, transactionPool.numPendingWholeBlocks > 0, "pool should have >0 whole blocks pending")
+
+	// Submit a txn with MinTxnFee but a large note so the fee-per-byte
+	// threshold exceeds MinTxnFee under fee escalation.
+	var receiver basics.Address
+	crypto.RandBytes(receiver[:])
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			GenesisHash: l.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: receiver,
+			Amount:   basics.MicroAlgos{Raw: 0},
+		},
+	}
+	tx.Note = make([]byte, 1024)
+	err := transactionPool.RememberOne(tx.Sign(secrets[0]))
+	require.Error(t, err)
+	require.Equal(t, TxPoolErrTagFee, ClassifyTxPoolError(err))
+}
+
+func TestPoolLeaseReevalClassification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	origCounter := txPoolReevalCounter
+	txPoolReevalCounter = metrics.NewTagCounter(
+		"algod_tx_pool_reeval_{TAG}",
+		"Number of transaction groups removed from pool during re-evaluation due to {TAG}",
+		TxPoolErrTags...,
+	)
+	t.Cleanup(func() { txPoolReevalCounter = origCounter })
+
+	secrets := make([]*crypto.SignatureSecrets, 2)
+	addresses := make([]basics.Address, 2)
+	for i := range secrets {
+		secret := keypair()
+		secrets[i] = secret
+		addresses[i] = basics.Address(secret.SignatureVerifier)
+	}
+
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base(), nil)
+
+	var lease [32]byte
+	lease[0] = 0x01
+
+	// Remember a txn with a lease
+	txA := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[0],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  1,
+			LastValid:   20,
+			Lease:       lease,
+			GenesisHash: mockLedger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: 1},
+		},
+	}
+	signedA := txA.Sign(secrets[0])
+	require.NoError(t, transactionPool.RememberOne(signedA))
+
+	// Commit the txn in a block
+	eval := newBlockEvaluator(t, mockLedger)
+	require.NoError(t, eval.TransactionGroup(signedA.WithAD()))
+	ufblk, err := eval.GenerateBlock(nil)
+	require.NoError(t, err)
+	vb := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+	require.NoError(t, mockLedger.AddValidatedBlock(vb, agreement.Certificate{}))
+
+	// Nil out Txids so the pool re-evaluates instead of filtering by committed txids
+	delta := vb.Delta()
+	delta.Txids = nil
+	transactionPool.OnNewBlock(vb.Block(), delta)
+
+	metricsMap := map[string]float64{}
+	txPoolReevalCounter.AddMetric(metricsMap)
+	require.Equal(t, float64(1), metricsMap["algod_tx_pool_reeval_"+TxPoolErrTagLease])
+}
+
+func TestPoolAssetBalanceClassification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	creatorSecret := keypair()
+	creatorAddr := basics.Address(creatorSecret.SignatureVerifier)
+	senderSecret := keypair()
+	senderAddr := basics.Address(senderSecret.SignatureVerifier)
+
+	l := makeMockLedgerFuture(t, initAcc(map[basics.Address]uint64{
+		creatorAddr: 1 << 32,
+		senderAddr:  1 << 32,
+	}))
+	futureProto := config.Consensus[protocol.ConsensusFuture]
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(l, cfg, logging.Base(), nil)
+
+	// Block 1: creator creates asset, sender opts in
+	createTx := transactions.Transaction{
+		Type: protocol.AssetConfigTx,
+		Header: transactions.Header{
+			Sender:      creatorAddr,
+			Fee:         basics.MicroAlgos{Raw: futureProto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(futureProto.MaxTxnLife),
+			GenesisHash: l.GenesisHash(),
+		},
+		AssetConfigTxnFields: transactions.AssetConfigTxnFields{
+			AssetParams: basics.AssetParams{
+				Total:    100,
+				Manager:  creatorAddr,
+				Clawback: creatorAddr,
+			},
+		},
+	}
+
+	optInTx := transactions.Transaction{
+		Type: protocol.AssetTransferTx,
+		Header: transactions.Header{
+			Sender:      senderAddr,
+			Fee:         basics.MicroAlgos{Raw: futureProto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(futureProto.MaxTxnLife),
+			GenesisHash: l.GenesisHash(),
+		},
+		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+			XferAsset:     1, // first asset created gets index 1
+			AssetAmount:   0,
+			AssetReceiver: senderAddr,
+		},
+	}
+
+	commitTxns(t, l, transactionPool, createTx.Sign(creatorSecret), optInTx.Sign(senderSecret))
+
+	// Sender transfers more than they hold (0)
+	xferTx := transactions.Transaction{
+		Type: protocol.AssetTransferTx,
+		Header: transactions.Header{
+			Sender:      senderAddr,
+			Fee:         basics.MicroAlgos{Raw: futureProto.MinTxnFee},
+			FirstValid:  1,
+			LastValid:   basics.Round(futureProto.MaxTxnLife),
+			GenesisHash: l.GenesisHash(),
+		},
+		AssetTransferTxnFields: transactions.AssetTransferTxnFields{
+			XferAsset:     1,
+			AssetAmount:   10,
+			AssetReceiver: creatorAddr,
+		},
+	}
+	err := transactionPool.RememberOne(xferTx.Sign(senderSecret))
+	require.Error(t, err)
+	require.Equal(t, TxPoolErrTagAssetBalance, ClassifyTxPoolError(err))
+}
+
+func TestPoolTealRejectClassification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	creatorSecret := keypair()
+	creatorAddr := basics.Address(creatorSecret.SignatureVerifier)
+	callerSecret := keypair()
+	callerAddr := basics.Address(callerSecret.SignatureVerifier)
+
+	l := makeMockLedgerFuture(t, initAcc(map[basics.Address]uint64{
+		creatorAddr: 1 << 32,
+		callerAddr:  1 << 32,
+	}))
+	futureProto := config.Consensus[protocol.ConsensusFuture]
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(l, cfg, logging.Base(), nil)
+
+	// Block 1: create app whose approval accepts creation but rejects calls
+	approvalSrc := `#pragma version 2
+txn ApplicationID
+bz accept
+int 0
+return
+accept:
+int 1`
+	clearSrc := `#pragma version 2
+int 1`
+	approvalOps, err := logic.AssembleString(approvalSrc)
+	require.NoError(t, err)
+	clearOps, err := logic.AssembleString(clearSrc)
+	require.NoError(t, err)
+
+	createAppTx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      creatorAddr,
+			Fee:         basics.MicroAlgos{Raw: futureProto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(futureProto.MaxTxnLife),
+			GenesisHash: l.GenesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApprovalProgram:   approvalOps.Program,
+			ClearStateProgram: clearOps.Program,
+		},
+	}
+	commitTxns(t, l, transactionPool, createAppTx.Sign(creatorSecret))
+
+	// Call the app -- approval returns 0 => rejected
+	callTx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      callerAddr,
+			Fee:         basics.MicroAlgos{Raw: futureProto.MinTxnFee},
+			FirstValid:  1,
+			LastValid:   basics.Round(futureProto.MaxTxnLife),
+			GenesisHash: l.GenesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+	err = transactionPool.RememberOne(callTx.Sign(callerSecret))
+	require.Error(t, err)
+	require.Equal(t, TxPoolErrTagTealReject, ClassifyTxPoolError(err))
+}
+
+func TestPoolTealErrClassification(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	creatorSecret := keypair()
+	creatorAddr := basics.Address(creatorSecret.SignatureVerifier)
+	callerSecret := keypair()
+	callerAddr := basics.Address(callerSecret.SignatureVerifier)
+
+	l := makeMockLedgerFuture(t, initAcc(map[basics.Address]uint64{
+		creatorAddr: 1 << 32,
+		callerAddr:  1 << 32,
+	}))
+	futureProto := config.Consensus[protocol.ConsensusFuture]
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(l, cfg, logging.Base(), nil)
+
+	// Block 1: create app whose approval accepts creation but errs on calls
+	approvalSrc := `#pragma version 2
+txn ApplicationID
+bz accept
+err
+accept:
+int 1`
+	clearSrc := `#pragma version 2
+int 1`
+	approvalOps, err := logic.AssembleString(approvalSrc)
+	require.NoError(t, err)
+	clearOps, err := logic.AssembleString(clearSrc)
+	require.NoError(t, err)
+
+	createAppTx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      creatorAddr,
+			Fee:         basics.MicroAlgos{Raw: futureProto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   basics.Round(futureProto.MaxTxnLife),
+			GenesisHash: l.GenesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApprovalProgram:   approvalOps.Program,
+			ClearStateProgram: clearOps.Program,
+		},
+	}
+	commitTxns(t, l, transactionPool, createAppTx.Sign(creatorSecret))
+
+	// Call the app -- approval hits `err` opcode
+	callTx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      callerAddr,
+			Fee:         basics.MicroAlgos{Raw: futureProto.MinTxnFee},
+			FirstValid:  1,
+			LastValid:   basics.Round(futureProto.MaxTxnLife),
+			GenesisHash: l.GenesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+	err = transactionPool.RememberOne(callTx.Sign(callerSecret))
+	require.Error(t, err)
+	require.Equal(t, TxPoolErrTagTealErr, ClassifyTxPoolError(err))
 }
 
 // TestRememberTxnDeadError tests that when a transaction has invalid FirstValid/LastValid

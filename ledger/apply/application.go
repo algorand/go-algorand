@@ -504,7 +504,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	}
 
 	if !approved {
-		return fmt.Errorf("transaction rejected by ApprovalProgram")
+		return &ledgercore.ApprovalProgramRejectedError{}
 	}
 
 	switch ac.OnCompletion {
