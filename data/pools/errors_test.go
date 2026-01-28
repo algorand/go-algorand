@@ -28,10 +28,13 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
 func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Table mirrors the distinct branches inside ClassifyTxPoolError/classifyUnwrappedError.
 	tcases := []struct {
 		name string
@@ -93,6 +96,8 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 }
 
 func TestTxPoolReevalCounterCoversAllTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Re-eval counter uses TxPoolErrTags to ensure all possible classification results are predeclared.
 	reevalCases := []struct {
 		name string
