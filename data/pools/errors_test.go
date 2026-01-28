@@ -77,6 +77,8 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 		{name: "approval_reject_wrapped", err: &ledgercore.ApprovalProgramRejectedError{}, tag: TxPoolErrTagTealReject, wrap: true},
 		{name: "logic_eval", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr},
 		{name: "logic_eval_wrapped", err: logic.EvalError{Err: errors.New("logic")}, tag: TxPoolErrTagTealErr, wrap: true},
+		{name: "unknown_error", err: errors.New("unknown"), tag: TxPoolErrTagEvalGeneric},
+		{name: "unknown_error_wrapped", err: errors.New("unknown"), tag: TxPoolErrTagEvalGeneric, wrap: true},
 	}
 
 	for _, tc := range tcases {
