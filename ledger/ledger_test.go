@@ -1514,10 +1514,6 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 
 // triggerTrackerFlush is based in the commit flow but executed it in a single (this) goroutine.
 func triggerTrackerFlush(t *testing.T, l *Ledger) {
-	l.trackers.mu.Lock()
-	dbRound := l.trackers.dbRound
-	l.trackers.mu.Unlock()
-
 	rnd := l.Latest()
 	minBlock := rnd
 	maxLookback := basics.Round(0)
@@ -1538,6 +1534,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger) {
 	}
 
 	l.trackers.mu.RLock()
+	dbRound := l.trackers.dbRound
 	cdr := l.trackers.produceCommittingTask(rnd, dbRound, &dcc.deferredCommitRange)
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
