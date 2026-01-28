@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -2055,4 +2056,79 @@ int 1`
 	err = transactionPool.RememberOne(callTx.Sign(callerSecret))
 	require.Error(t, err)
 	require.Equal(t, TxPoolErrTagTealErr, ClassifyTxPoolError(err))
+}
+
+// TestRememberTxnDeadError tests that when a transaction has invalid FirstValid/LastValid
+// the Remember call returns a TxnDeadError that can be detected
+// using errors.As. This is used in txHandler to avoid penalizing nodes
+// that might be out of sync.
+func TestRememberTxnDeadError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfAccounts := 2
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	mockLedger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base(), nil)
+
+	// Advance the ledger by a few blocks so we can create an expired transaction
+	for i := 0; i < 10; i++ {
+		eval := newBlockEvaluator(t, mockLedger)
+		ufblk, err := eval.GenerateBlock(nil)
+		require.NoError(t, err)
+
+		blk := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+		err = mockLedger.AddValidatedBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
+	}
+
+	currentRound := mockLedger.Latest()
+	require.Equal(t, basics.Round(10), currentRound)
+
+	sender := addresses[0]
+	receiver := addresses[1]
+
+	// Create a transaction with LastValid in the past (expired)
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      sender,
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee},
+			FirstValid:  0,
+			LastValid:   5,
+			Note:        []byte{1},
+			GenesisHash: mockLedger.GenesisHash(),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: receiver,
+			Amount:   basics.MicroAlgos{Raw: 1},
+		},
+	}
+	signedTx := tx.Sign(secrets[0])
+
+	err := transactionPool.Remember([]transactions.SignedTxn{signedTx})
+	require.Error(t, err)
+
+	//nolint:testifylint
+	{
+		// The error should be detectable as TxnDeadError using errors.As
+		// in a way transaction pool clients use it.
+		var tde *bookkeeping.TxnDeadError
+		require.True(t, errors.As(err, &tde), "error should be TxnDeadError, got: %v", err)
+		require.False(t, tde.Early)
+		require.Equal(t, basics.Round(5), tde.LastValid)
+	}
 }

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sync"
 	"time"
 
@@ -81,6 +82,11 @@ var transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
 	pools.TxPoolErrTags...,
 )
 
+type transactionPool interface {
+	Test(stxns []transactions.SignedTxn) error
+	Remember(stxns []transactions.SignedTxn) error
+}
+
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
 	rawmsg                *network.IncomingMessage      // the raw message from the network
@@ -94,11 +100,11 @@ type txBacklogMsg struct {
 
 // TxHandler handles transaction messages
 type TxHandler struct {
-	txPool                     *pools.TransactionPool
+	txPool                     transactionPool
 	ledger                     *Ledger
 	txVerificationPool         execpool.BacklogPool
 	backlogQueue               chan *txBacklogMsg
-	backlogCongestionThreshold float64
+	backlogCongestionThreshold int
 	postVerificationQueue      chan *verify.VerificationResult
 	backlogWg                  sync.WaitGroup
 	net                        network.GossipNode
@@ -121,7 +127,7 @@ type TxHandler struct {
 
 // TxHandlerOpts is TxHandler configuration options
 type TxHandlerOpts struct {
-	TxPool        *pools.TransactionPool
+	TxPool        transactionPool
 	ExecutionPool execpool.BacklogPool
 	Ledger        *Ledger
 	Net           network.GossipNode
@@ -137,6 +143,10 @@ type HybridRelayer interface {
 func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
 	if opts.TxPool == nil {
+		return nil, ErrInvalidTxPool
+	}
+	txPoolValue := reflect.ValueOf(opts.TxPool)
+	if txPoolValue.Kind() == reflect.Ptr && txPoolValue.IsNil() {
 		return nil, ErrInvalidTxPool
 	}
 
@@ -172,10 +182,13 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		if opts.Config.TxBacklogRateLimitingCongestionPct > 100 || opts.Config.TxBacklogRateLimitingCongestionPct < 0 {
 			return nil, fmt.Errorf("invalid value for TxBacklogRateLimitingCongestionPct: %d", opts.Config.TxBacklogRateLimitingCongestionPct)
 		}
+		if opts.Config.TxBacklogAppRateLimitingCongestionPct > 100 || opts.Config.TxBacklogAppRateLimitingCongestionPct < 0 {
+			return nil, fmt.Errorf("invalid value for TxBacklogAppRateLimitingCongestionPct: %d", opts.Config.TxBacklogAppRateLimitingCongestionPct)
+		}
 		if opts.Config.EnableTxBacklogAppRateLimiting && opts.Config.TxBacklogAppTxRateLimiterMaxSize == 0 {
 			return nil, fmt.Errorf("invalid value for TxBacklogAppTxRateLimiterMaxSize: %d. App rate limiter enabled with zero size", opts.Config.TxBacklogAppTxRateLimiterMaxSize)
 		}
-		handler.backlogCongestionThreshold = float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100
+		handler.backlogCongestionThreshold = int(float64(txBacklogSize*opts.Config.TxBacklogRateLimitingCongestionPct) / 100)
 		if opts.Config.EnableTxBacklogRateLimiting {
 			handler.erl = util.NewElasticRateLimiter(
 				txBacklogSize,
@@ -194,8 +207,8 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 				uint64(opts.Config.TxBacklogAppTxPerSecondRate),
 				time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
 			)
-			// set appLimiter triggering threshold at 50% of the base backlog size
-			handler.appLimiterBacklogThreshold = int(float64(opts.Config.TxBacklogSize) * float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100)
+			// set appLimiter triggering threshold at TxBacklogAppRateLimitingCongestionPct (current default is 10) percent of the base backlog size
+			handler.appLimiterBacklogThreshold = int(float64(opts.Config.TxBacklogSize) * float64(opts.Config.TxBacklogAppRateLimitingCongestionPct) / 100)
 			handler.appLimiterCountERLDrops = opts.Config.TxBacklogAppRateLimitingCountERLDrops
 		}
 	}
@@ -419,6 +432,16 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
+		if handler.appLimiter != nil && !wi.rawmsg.Outgoing && wi.rawmsg.Sender != nil {
+			var tde *bookkeeping.TxnDeadError
+			// explicitly avoid penalizing for TxDeadError since another node can be out of sync
+			if !errors.As(err, &tde) {
+				handler.appLimiter.penalizeEvalError(
+					wi.unverifiedTxGroup, wi.rawmsg.Sender.RoutingAddr(),
+				)
+			}
+		}
+
 		transactionMessageTxPoolRememberCounter.Add(pools.ClassifyTxPoolError(err), 1)
 		logging.Base().Debugf("could not remember tx: %v", err)
 		// if in synchronous mode, signal the completion of the operation
@@ -620,7 +643,7 @@ func (eic *erlIPClient) connClosed(ec util.ErlClient) {
 // - the capacity guard returned by the elastic rate limiter
 // - a boolean indicating if the sender is rate limited
 func (handler *TxHandler) incomingMsgErlCheck(sender util.ErlClient) (*util.ErlCapacityGuard, bool) {
-	congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
+	congestedERL := handler.backlogCongestionThreshold < len(handler.backlogQueue)
 	// consume a capacity unit
 	// if the elastic rate limiter cannot vend a capacity, the error it returns
 	// is sufficient to indicate that we should enable Congestion Control, because
