@@ -232,7 +232,7 @@ func computeAccountMinBalance(client *libgoal.Client, cfg PpConfig) (fundingRequ
 		fee = cfg.MaxFee
 	} else {
 		// follow the same logic as constructTxn
-		fee, err = client.SuggestedFee()
+		fee, _, err = client.SuggestedFee()
 		if err != nil {
 			return
 		}
@@ -993,7 +993,7 @@ weightdone:
 	// if pps.cfg.MaxFee == 0, automatically adjust the fee amount to required min fee
 	if pps.cfg.MaxFee == 0 {
 		var suggestedFee uint64
-		suggestedFee, err = client.SuggestedFee()
+		suggestedFee, _, err = client.SuggestedFee()
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stdout, "error retrieving suggestedFee: %v\n", err)
 			return

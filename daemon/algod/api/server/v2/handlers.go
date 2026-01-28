@@ -135,7 +135,7 @@ type NodeInterface interface {
 	Simulate(request simulation.Request) (result simulation.Result, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
-	SuggestedFee() basics.MicroAlgos
+	CongestionTax() basics.Micros
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
 	Config() config.Local
@@ -1473,11 +1473,12 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 
 	response := model.TransactionParametersResponse{
 		ConsensusVersion: string(stat.LastVersion),
-		Fee:              v2.Node.SuggestedFee().Raw,
+		Fee:              0, // This is the old-style "fee per byte escalation"
 		GenesisHash:      gh[:],
 		GenesisId:        v2.Node.GenesisID(),
 		LastRound:        stat.LastRound,
 		MinFee:           proto.MinTxnFee,
+		CongestionTax:    omitEmpty(v2.Node.CongestionTax()),
 	}
 
 	return ctx.JSON(http.StatusOK, response)

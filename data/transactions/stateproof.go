@@ -37,6 +37,7 @@ type StateProofTxnFields struct {
 
 var errBadSenderInStateProofTxn = errors.New("sender must be the state-proof sender")
 var errFeeMustBeZeroInStateproofTxn = errors.New("fee must be zero in state-proof transaction")
+var errTipMustBeZeroInStateproofTxn = errors.New("tip must be zero in state-proof transaction")
 var errNoteMustBeEmptyInStateproofTxn = errors.New("note must be empty in state-proof transaction")
 var errGroupMustBeZeroInStateproofTxn = errors.New("group must be zero in state-proof transaction")
 var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in state-proof transaction")
@@ -53,6 +54,9 @@ func (sp StateProofTxnFields) wellFormed(header Header) error {
 	}
 	if !header.Fee.IsZero() {
 		return errFeeMustBeZeroInStateproofTxn
+	}
+	if header.Tip != 0 {
+		return errTipMustBeZeroInStateproofTxn
 	}
 	if len(header.Note) != 0 {
 		return errNoteMustBeEmptyInStateproofTxn

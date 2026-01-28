@@ -90,7 +90,7 @@ func TestHeartbeat(t *testing.T) {
 
 	// address fee
 	testProto := config.Consensus[testConsensusVersion]
-	tx.Fee = basics.MicroAlgos{Raw: testProto.MinTxnFee}
+	tx.Fee = testProto.MinFee()
 
 	// Seed is missing
 	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
@@ -162,6 +162,7 @@ func TestCheapRules(t *testing.T) {
 		id := basics.OneTimeIDForRound(lv, keyDilution)
 		otss := crypto.GenerateOneTimeSignatureSecrets(1, 10) // This will cover rounds 1-10*777
 
+		// Make sender in each test unique, but all with same first byte
 		sender := basics.Address{0x01}
 		voter := basics.Address{tc.addrStart}
 		mockBal := makeMockBalancesWithAccounts(testConsensusVersion, map[basics.Address]basics.AccountData{
@@ -207,6 +208,23 @@ func TestCheapRules(t *testing.T) {
 			assert.NoError(t, err)
 		} else {
 			assert.ErrorContains(t, err, tc.err, "%+v", tc)
+		}
+
+		// If there's a Tip, then MinFee() is still cheap/underpaid, so we
+		// should get the same errors for error cases. (For no error cases, we
+		// can't run the same test again, because the sender is no longer
+		// challenged.
+		testProto := config.Consensus[testConsensusVersion]
+		tx.Fee = testProto.MinFee()
+		tx.Tip = basics.Micros(1_100_000)
+		if tc.err != "" {
+			err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, tc.rnd)
+			assert.ErrorContains(t, err, tc.err, "%+v", tc)
+
+			// But now we should have success by paying the right amount.
+			tx.Fee, _ = tx.Fee.MulMicros(1e6 + tx.Tip)
+			err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, tc.rnd)
+			assert.NoError(t, err)
 		}
 	}
 }

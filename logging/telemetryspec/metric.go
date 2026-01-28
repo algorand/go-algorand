@@ -45,7 +45,6 @@ type AssembleBlockStats struct {
 	StartCount                int
 	IncludedCount             int // number of transactions that are included in a block
 	InvalidCount              int // number of transaction groups that are included in a block
-	MinFeeErrorCount          int // number of transactions excluded because the fee is too low
 	LogicErrorCount           int // number of transactions excluded due to logic error (contract no longer valid)
 	ExpiredCount              int // number of transactions removed because of expiration
 	ExpiredLongLivedCount     int // number of expired transactions with non-super short LastValid values
@@ -57,7 +56,7 @@ type AssembleBlockStats struct {
 	MaxLength                 int
 	MinPriority               uint64
 	MaxPriority               uint64
-	CommittedCount            int // number of transaction blocks that are included in a block
+	CommittedCount            int // number of transactions removed b/c they were already included in a block
 	StopReason                string
 	TotalLength               uint64
 	EarlyCommittedCount       uint64 // number of transaction groups that were pending on the transaction pool but have been included in previous block
@@ -115,7 +114,6 @@ func (m AssembleBlockStats) String() string {
 	fmt.Fprintf(b, "StartCount:%d, ", m.StartCount)
 	fmt.Fprintf(b, "IncludedCount:%d, ", m.IncludedCount)
 	fmt.Fprintf(b, "InvalidCount:%d, ", m.InvalidCount)
-	fmt.Fprintf(b, "MinFeeErrorCount:%d, ", m.MinFeeErrorCount)
 	fmt.Fprintf(b, "LogicErrorCount:%d, ", m.LogicErrorCount)
 	fmt.Fprintf(b, "ExpiredCount:%d, ", m.ExpiredCount)
 	fmt.Fprintf(b, "ExpiredLongLivedCount:%d, ", m.ExpiredLongLivedCount)

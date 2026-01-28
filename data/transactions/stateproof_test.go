@@ -35,6 +35,7 @@ type stateproofTxnTestCase struct {
 
 	StateProofInterval uint64
 	fee                basics.MicroAlgos
+	tip                basics.Micros
 	note               []byte
 	group              crypto.Digest
 	lease              [32]byte
@@ -67,6 +68,7 @@ func (s *stateproofTxnTestCase) runIsWellFormedForTestCase() error {
 		Header: Header{
 			Sender:  s.sender,
 			Fee:     s.fee,
+			Tip:     s.tip,
 			Note:    s.note,
 			Group:   s.group,
 			Lease:   s.lease,
@@ -86,7 +88,8 @@ func TestWellFormedStateProofTxn(t *testing.T) {
 		/* 3 */ {expectedError: errGroupMustBeZeroInStateproofTxn, sender: StateProofSender, group: crypto.Digest{1, 2, 3}},
 		/* 4 */ {expectedError: errRekeyToMustBeZeroInStateproofTxn, sender: StateProofSender, rekeyValue: basics.Address{1, 2, 3, 4}},
 		/* 5 */ {expectedError: errLeaseMustBeZeroInStateproofTxn, sender: StateProofSender, lease: [32]byte{1, 2, 3, 4}},
-		/* 6 */ {expectedError: nil, fee: basics.MicroAlgos{Raw: 0}, note: nil, group: crypto.Digest{}, lease: [32]byte{}, rekeyValue: basics.Address{}, sender: StateProofSender},
+		/* 6 */ {expectedError: errTipMustBeZeroInStateproofTxn, sender: StateProofSender, tip: 2},
+		/* 7 */ {expectedError: nil, sender: StateProofSender},
 	}
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
