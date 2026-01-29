@@ -48,8 +48,8 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 		{name: "pending_eval_wrapped", err: ErrNoPendingBlockEvaluator, tag: TxPoolErrTagPendingEval, wrap: true},
 		{name: "no_space", err: ledgercore.ErrNoSpace, tag: TxPoolErrTagNoSpace},
 		{name: "no_space_wrapped", err: ledgercore.ErrNoSpace, tag: TxPoolErrTagNoSpace, wrap: true},
-		{name: "fee_escalation", err: &ErrTxPoolFeeError{}, tag: TxPoolErrTagFee},
-		{name: "fee_escalation_wrapped", err: &ErrTxPoolFeeError{}, tag: TxPoolErrTagFee, wrap: true},
+		{name: "fee_escalation", err: &ErrCongestionFeeError{}, tag: TxPoolErrTagFee},
+		{name: "fee_escalation_wrapped", err: &ErrCongestionFeeError{}, tag: TxPoolErrTagFee, wrap: true},
 		{name: "txn_dead", err: &bookkeeping.TxnDeadError{}, tag: TxPoolErrTagTxnDead},
 		{name: "txn_dead_wrapped", err: &bookkeeping.TxnDeadError{}, tag: TxPoolErrTagTxnDead, wrap: true},
 		{name: "txn_early", err: &bookkeeping.TxnDeadError{Early: true}, tag: TxPoolErrTagTxnEarly},
@@ -64,6 +64,8 @@ func TestClassifyTxPoolErrorGeneralCoverage(t *testing.T) {
 		{name: "lease_eval_wrapped", err: ledgercore.MakeLeaseInLedgerError(transactions.Txid{}, ledgercore.Txlease{Lease: [32]byte{2}}, true), tag: TxPoolErrTagLeaseEval, wrap: true},
 		{name: "group_too_large", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize}, tag: TxPoolErrTagTooLarge},
 		{name: "group_too_large_wrapped", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize}, tag: TxPoolErrTagTooLarge, wrap: true},
+		{name: "group_invalid_fee", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupErrorReasonInvalidFee}, tag: TxPoolErrTagFee},
+		{name: "group_invalid_fee_wrapped", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupErrorReasonInvalidFee}, tag: TxPoolErrTagFee, wrap: true},
 		{name: "group_other", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonGeneric}, tag: TxPoolErrTagGroupID},
 		{name: "group_other_wrapped", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonGeneric}, tag: TxPoolErrTagGroupID, wrap: true},
 		{name: "not_well", err: func() error { e := ledgercore.TxnNotWellFormedError("bad txn"); return &e }(), tag: TxPoolErrTagNotWell},
@@ -102,7 +104,7 @@ func TestTxPoolReevalCounterCoversAllTags(t *testing.T) {
 		err  error
 		tag  string
 	}{
-		{name: "fee", err: &ErrTxPoolFeeError{}, tag: TxPoolErrTagFee},
+		{name: "fee", err: &ErrCongestionFeeError{}, tag: TxPoolErrTagFee},
 		{name: "txn_dead", err: &bookkeeping.TxnDeadError{}, tag: TxPoolErrTagTxnDead},
 		{name: "txn_early", err: &bookkeeping.TxnDeadError{Early: true}, tag: TxPoolErrTagTxnEarly},
 		{name: "too_large", err: &ledgercore.TxGroupMalformedError{Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize}, tag: TxPoolErrTagTooLarge},
