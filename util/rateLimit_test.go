@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,7 +53,7 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	// give the ERL a congestion controler with well defined behavior for testing
 	erl.cm = mockCongestionControl{}
 
-	_, err := erl.ConsumeCapacity(client)
+	_, _, err := erl.ConsumeCapacity(client)
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
 	// wait a moment before testing the size of the sharedCapacity
 	time.Sleep(100 * time.Millisecond)
@@ -62,18 +62,18 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	assert.NoError(t, err)
 
 	erl.EnableCongestionControl()
-	_, err = erl.ConsumeCapacity(client)
+	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
-	_, err = erl.ConsumeCapacity(client)
+	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.Error(t, err)
 
 	erl.DisableCongestionControl()
-	_, err = erl.ConsumeCapacity(client)
+	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
 	assert.NoError(t, err)
@@ -85,14 +85,14 @@ func TestReservations(t *testing.T) {
 	client2 := mockClient("client2")
 	erl := NewElasticRateLimiter(4, 1, time.Second, nil)
 
-	_, err := erl.ConsumeCapacity(client1)
+	_, _, err := erl.ConsumeCapacity(client1)
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
 	// wait a moment before testing the size of the sharedCapacity
 	time.Sleep(100 * time.Millisecond)
 	assert.Equal(t, 1, len(erl.capacityByClient))
 	assert.NoError(t, err)
 
-	_, err = erl.ConsumeCapacity(client2)
+	_, _, err = erl.ConsumeCapacity(client2)
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
 	// wait a moment before testing the size of the sharedCapacity
 	time.Sleep(100 * time.Millisecond)
@@ -105,12 +105,36 @@ func TestReservations(t *testing.T) {
 	assert.Equal(t, 0, len(erl.capacityByClient))
 }
 
+// When there is no reservation per client, the reservation map is not used
+// This is so we never wait on a capacity queue which would not ever vend
+func TestZeroSizeReservations(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	client1 := mockClient("client1")
+	client2 := mockClient("client2")
+	erl := NewElasticRateLimiter(4, 0, time.Second, nil)
+
+	_, _, err := erl.ConsumeCapacity(client1)
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+	assert.NoError(t, err)
+
+	_, _, err = erl.ConsumeCapacity(client2)
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+	assert.NoError(t, err)
+
+	erl.closeReservation(client1)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+	erl.closeReservation(client2)
+	assert.Equal(t, 0, len(erl.capacityByClient))
+}
+
 func TestConsumeReleaseCapacity(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	client := mockClient("client")
 	erl := NewElasticRateLimiter(4, 3, time.Second, nil)
 
-	c1, err := erl.ConsumeCapacity(client)
+	c1, _, err := erl.ConsumeCapacity(client)
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
 	// wait a moment before testing the size of the sharedCapacity
 	time.Sleep(100 * time.Millisecond)
@@ -118,23 +142,23 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
-	_, err = erl.ConsumeCapacity(client)
+	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 1, len(erl.capacityByClient[client]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
-	_, err = erl.ConsumeCapacity(client)
+	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
 	// remember this capacity, as it is a shared capacity
-	c4, err := erl.ConsumeCapacity(client)
+	c4, _, err := erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
-	_, err = erl.ConsumeCapacity(client)
+	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
 	assert.Error(t, err)

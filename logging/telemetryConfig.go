@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,13 +20,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/util/uuid"
 )
 
@@ -56,8 +54,9 @@ func TelemetryOverride(env string, telemetryConfig *TelemetryConfig) bool {
 
 // createTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint.
 // Note: This should only be used/persisted when initially creating 'TelemetryConfigFilename'. Because the methods are called
-//       from various tools and goal commands and affect the future default settings for telemetry, we need to inject
-//       a "dev" branch check.
+//
+//	from various tools and goal commands and affect the future default settings for telemetry, we need to inject
+//	a "dev" branch check.
 func createTelemetryConfig() TelemetryConfig {
 	enable := false
 
@@ -71,11 +70,6 @@ func createTelemetryConfig() TelemetryConfig {
 		UserName: defaultTelemetryUsername,
 		Password: defaultTelemetryPassword,
 	}
-}
-
-// LoadTelemetryConfig loads the TelemetryConfig from the config file
-func LoadTelemetryConfig(configPath string) (TelemetryConfig, error) {
-	return loadTelemetryConfig(configPath)
 }
 
 // Save saves the TelemetryConfig to the config file
@@ -116,16 +110,15 @@ func (cfg TelemetryConfig) getHostGUID() string {
 
 // getInstanceName allows us to distinguish between multiple instances running on the same node.
 func (cfg TelemetryConfig) getInstanceName() string {
-	p := config.GetCurrentVersion().DataDirectory
 	hash := sha256.New()
 	hash.Write([]byte(cfg.GUID))
-	hash.Write([]byte(p))
+	hash.Write([]byte(cfg.DataDirectory))
 	pathHash := sha256.Sum256(hash.Sum(nil))
 	pathHashStr := base64.StdEncoding.EncodeToString(pathHash[:])
 
 	// NOTE: We used to report HASH:DataDir but DataDir is Personally Identifiable Information (PII)
 	// So we're removing it entirely to avoid GDPR issues.
-	return fmt.Sprintf("%s", pathHashStr[:16])
+	return pathHashStr[:16]
 }
 
 // SanitizeTelemetryString applies sanitization rules and returns the sanitized string.
@@ -138,8 +131,9 @@ func SanitizeTelemetryString(input string, maxParts int) string {
 	return input
 }
 
-// Returns err if os.Open fails or if config is mal-formed
-func loadTelemetryConfig(path string) (TelemetryConfig, error) {
+// LoadTelemetryConfig loads the TelemetryConfig from the config file. It
+// returns err if os.Open fails or if config is mal-formed
+func LoadTelemetryConfig(path string) (TelemetryConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return createTelemetryConfig(), err

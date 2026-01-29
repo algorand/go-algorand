@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package encoded
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/msgp/msgp"
 )
 
@@ -61,4 +62,33 @@ type KVRecordV6 struct {
 
 	Key   []byte `codec:"k,allocbound=KVRecordV6MaxKeyLength"`
 	Value []byte `codec:"v,allocbound=KVRecordV6MaxValueLength"`
+}
+
+// OnlineAccountRecordV6 is an encoded row from the onlineaccounts table, used for catchpoint files.
+type OnlineAccountRecordV6 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Address                 basics.Address `codec:"addr,allocbound=crypto.DigestSize"`
+	UpdateRound             basics.Round   `codec:"upd"`
+	NormalizedOnlineBalance uint64         `codec:"nob"`
+	VoteLastValid           basics.Round   `codec:"vlv"`
+	Data                    msgp.Raw       `codec:"data"` // encoding of BaseOnlineAccountData
+}
+
+// ToBeHashed implements crypto.Hashable.
+func (r OnlineAccountRecordV6) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.OnlineAccount, protocol.Encode(&r)
+}
+
+// OnlineRoundParamsRecordV6 is an encoded row from the onlineroundparams table, used for catchpoint files.
+type OnlineRoundParamsRecordV6 struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Round basics.Round `codec:"rnd"`
+	Data  msgp.Raw     `codec:"data"` // encoding of OnlineRoundParamsData
+}
+
+// ToBeHashed implements crypto.Hashable.
+func (r OnlineRoundParamsRecordV6) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.OnlineRoundParams, protocol.Encode(&r)
 }

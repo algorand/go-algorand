@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,12 +22,15 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
+	"net"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -41,17 +44,17 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 
 	now := time.Now()
 	peer := wsPeer{
-		intermittentOutgoingMessageEnqueueTime: 0,
+		intermittentOutgoingMessageEnqueueTime: atomic.Int64{},
 		wsPeerCore: wsPeerCore{net: &WebsocketNetwork{
 			log: logging.TestingLog(t),
 		}},
 	}
 	require.Equal(t, peer.CheckSlowWritingPeer(now), false)
 
-	peer.intermittentOutgoingMessageEnqueueTime = now.UnixNano()
+	peer.intermittentOutgoingMessageEnqueueTime.Store(now.UnixNano())
 	require.Equal(t, peer.CheckSlowWritingPeer(now), false)
 
-	peer.intermittentOutgoingMessageEnqueueTime = now.Add(-maxMessageQueueDuration * 2).UnixNano()
+	peer.intermittentOutgoingMessageEnqueueTime.Store(now.Add(-maxMessageQueueDuration * 2).UnixNano())
 	require.Equal(t, peer.CheckSlowWritingPeer(now), true)
 
 }
@@ -97,24 +100,6 @@ func TestDefaultMessageTagsLength(t *testing.T) {
 	for tag := range defaultSendMessageTags {
 		require.Equal(t, 2, len(tag))
 	}
-}
-
-// TestAtomicVariablesAlignment ensures that the 64-bit atomic variables
-// offsets are 64-bit aligned. This is required due to go atomic library
-// limitation.
-func TestAtomicVariablesAlignment(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	p := wsPeer{}
-	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.intermittentOutgoingMessageEnqueueTime)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.duplicateFilterCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.txMessageCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.miMessageCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.ppMessageCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.avMessageCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.unkMessageCount)%8) == 0)
 }
 
 func TestTagCounterFiltering(t *testing.T) {
@@ -175,14 +160,16 @@ func TestVersionToFeature(t *testing.T) {
 		{"1.2.3", "", peerFeatureFlag(0)},
 		{"a.b", "", peerFeatureFlag(0)},
 		{"2.1", "", peerFeatureFlag(0)},
-		{"2.1", PeerFeatureProposalCompression, peerFeatureFlag(0)},
+		{"2.1", peerFeatureProposalCompression, peerFeatureFlag(0)},
 		{"2.2", "", peerFeatureFlag(0)},
 		{"2.2", "test", peerFeatureFlag(0)},
 		{"2.2", strings.Join([]string{"a", "b"}, ","), peerFeatureFlag(0)},
-		{"2.2", PeerFeatureProposalCompression, pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
-		{"2.3", PeerFeatureProposalCompression, pfCompressedProposal},
+		{"2.2", peerFeatureProposalCompression, pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
+		{"2.2", strings.Join([]string{peerFeatureProposalCompression, peerFeatureVoteVpackCompression}, ","), pfCompressedVoteVpack | pfCompressedProposal},
+		{"2.2", peerFeatureVoteVpackCompression, pfCompressedVoteVpack},
+		{"2.3", peerFeatureProposalCompression, pfCompressedProposal},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
@@ -247,6 +234,8 @@ func TestPeerReadLoopSwitchAllTags(t *testing.T) {
 	})
 	require.True(t, readLoopFound)
 	require.NotEmpty(t, foundTags)
+	// Filter out VP, it's normalized to AV before the switch statement
+	allTags = slices.DeleteFunc(allTags, func(tag string) bool { return tag == "VotePackedTag" })
 	sort.Strings(allTags)
 	sort.Strings(foundTags)
 	require.Equal(t, allTags, foundTags)
@@ -257,25 +246,108 @@ func getProtocolTags(t *testing.T) []string {
 	fset := token.NewFileSet()
 	f, _ := parser.ParseFile(fset, file, nil, parser.ParseComments)
 
+	// get deprecated tags
+	deprecatedTags := make(map[string]bool)
+	for _, d := range f.Decls {
+		genDecl, ok := d.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			if valueSpec, ok := spec.(*ast.ValueSpec); ok && len(valueSpec.Names) > 0 &&
+				valueSpec.Names[0].Name == "DeprecatedTagList" {
+				for _, v := range valueSpec.Values {
+					cl, ok := v.(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					for _, elt := range cl.Elts {
+						if ce, ok := elt.(*ast.Ident); ok {
+							deprecatedTags[ce.Name] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// look for const declarations in protocol/tags.go
 	var declaredTags []string
 	// Iterate through the declarations in the file
 	for _, d := range f.Decls {
 		genDecl, ok := d.(*ast.GenDecl)
-		// Check if the declaration is a constant and if not, continue
+		// Check if the declaration is a constant
 		if !ok || genDecl.Tok != token.CONST {
 			continue
 		}
 		// Iterate through the specs (specifications) in the declaration
 		for _, spec := range genDecl.Specs {
 			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+				if ident, isIdent := valueSpec.Type.(*ast.Ident); !isIdent || ident.Name != "Tag" {
+					continue // skip all but Tag constants
+				}
 				for _, n := range valueSpec.Names {
+					if deprecatedTags[n.Name] {
+						continue // skip deprecated tags
+					}
 					declaredTags = append(declaredTags, n.Name)
 				}
 			}
 		}
 	}
 	// assert these AST-discovered tags are complete (match the size of protocol.TagList)
-	require.Len(t, declaredTags, len(protocol.TagList))
+	require.Len(t, protocol.TagList, len(declaredTags))
+	require.Len(t, protocol.DeprecatedTagList, len(deprecatedTags))
 	return declaredTags
+}
+
+type tcpipMockConn struct{ addr net.TCPAddr }
+
+func (m *tcpipMockConn) RemoteAddr() net.Addr                     { return &m.addr }
+func (m *tcpipMockConn) RemoteAddrString() string                 { return "" }
+func (m *tcpipMockConn) NextReader() (int, io.Reader, error)      { return 0, nil, nil }
+func (m *tcpipMockConn) WriteMessage(int, []byte) error           { return nil }
+func (m *tcpipMockConn) CloseWithMessage([]byte, time.Time) error { return nil }
+func (m *tcpipMockConn) SetReadLimit(int64)                       {}
+func (m *tcpipMockConn) CloseWithoutFlush() error                 { return nil }
+func (m *tcpipMockConn) UnderlyingConn() net.Conn                 { return nil }
+
+func TestWsPeerIPAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	conn := &tcpipMockConn{}
+	peer := wsPeer{
+		conn: conn,
+	}
+	// some raw IPv4 address
+	conn.addr.IP = []byte{127, 0, 0, 1}
+	require.Equal(t, []byte{127, 0, 0, 1}, peer.ipAddr())
+	require.Equal(t, []byte{127, 0, 0, 1}, peer.RoutingAddr())
+
+	// IPv4 constructed from net.IPv4
+	conn.addr.IP = net.IPv4(127, 0, 0, 2)
+	require.Equal(t, []byte{127, 0, 0, 2}, peer.ipAddr())
+	require.Equal(t, []byte{127, 0, 0, 2}, peer.RoutingAddr())
+
+	// some IPv6 address
+	conn.addr.IP = net.IPv6linklocalallrouters
+	require.Equal(t, []byte(net.IPv6linklocalallrouters), peer.ipAddr())
+	require.Equal(t, []byte(net.IPv6linklocalallrouters[0:8]), peer.RoutingAddr())
+
+	// embedded IPv4 into IPv6
+	conn.addr.IP = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 127, 0, 0, 3}
+	require.Equal(t, 16, len(conn.addr.IP))
+	require.Equal(t, []byte{127, 0, 0, 3}, peer.ipAddr())
+	require.Equal(t, []byte{127, 0, 0, 3}, peer.RoutingAddr())
+	conn.addr.IP = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}
+	require.Equal(t, 16, len(conn.addr.IP))
+	require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}, peer.ipAddr())
+	require.Equal(t, []byte{127, 0, 0, 4}, peer.RoutingAddr())
+
+	// check incoming peer with originAddress set
+	conn.addr.IP = []byte{127, 0, 0, 1}
+	peer.wsPeerCore.originAddress = "127.0.0.2"
+	require.Equal(t, []byte{127, 0, 0, 1}, peer.ipAddr())
+	require.Equal(t, []byte{127, 0, 0, 2}, peer.RoutingAddr())
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,15 +18,12 @@ package testing
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-
-	//"github.com/algorand/go-algorand/data/bookkeeping"
 
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
@@ -58,49 +55,64 @@ func RandomNote() []byte {
 	return note[:]
 }
 
-// RandomAccountData generates a random AccountData
+// RandomAccountData generates a random AccountData with no associated resources.
 func RandomAccountData(rewardsBase uint64) basics.AccountData {
 	var data basics.AccountData
 
 	// Avoid overflowing totals
 	data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
+	// 0 is an invalid round, but would be right if never proposed
+	data.LastProposed = basics.Round(crypto.RandUint64() % 10)
+	// 0 is an invalid round, but would be right if never needed a heartbeat
+	data.LastHeartbeat = basics.Round(crypto.RandUint64() % 10)
 
 	switch crypto.RandUint64() % 3 {
 	case 0:
 		data.Status = basics.Online
-		data.VoteLastValid = 10000
+		data.IncentiveEligible = crypto.RandUint64()%5 == 0
 	case 1:
 		data.Status = basics.Offline
-		data.VoteLastValid = 0
-	default:
+	case 2:
 		data.Status = basics.NotParticipating
 	}
 
-	data.VoteFirstValid = 0
+	// Give online accounts voting data, and some of the offline too. They are "suspended".
+	if data.Status == basics.Online || (data.Status == basics.Offline && crypto.RandUint64()%5 == 1) {
+		crypto.RandBytes(data.VoteID[:])
+		crypto.RandBytes(data.SelectionID[:])
+		crypto.RandBytes(data.StateProofID[:])
+		data.VoteFirstValid = basics.Round(crypto.RandUint64())
+		data.VoteLastValid = basics.Round(crypto.RandUint63()) // int64 is the max sqlite can store
+		data.VoteKeyDilution = crypto.RandUint64()
+	}
+
 	data.RewardsBase = rewardsBase
 	return data
 }
 
 // RandomOnlineAccountData is similar to RandomAccountData but always creates online account
 func RandomOnlineAccountData(rewardsBase uint64) basics.AccountData {
-	var data basics.AccountData
-	data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
-	data.Status = basics.Online
-	data.VoteLastValid = 1000
-	data.VoteFirstValid = 0
-	data.RewardsBase = rewardsBase
-	return data
+	for {
+		data := RandomAccountData(rewardsBase)
+		if data.Status == basics.Online {
+			return data
+		}
+	}
 }
 
-// RandomAssetParams creates a randim basics.AssetParams
+// RandomAssetParams creates a random basics.AssetParams
 func RandomAssetParams() basics.AssetParams {
 	ap := basics.AssetParams{
 		Total:         crypto.RandUint64(),
 		Decimals:      uint32(crypto.RandUint64() % 20),
 		DefaultFrozen: crypto.RandUint64()%2 == 0,
 	}
+	// Since 0 and 1 Total assets seem extra interesting, make them more often.
 	if crypto.RandUint64()%5 != 0 {
-		ap.UnitName = fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff))
+		ap.Total = crypto.RandUint64() % 2
+	}
+	if crypto.RandUint64()%5 != 0 {
+		ap.UnitName = fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffff))
 	}
 	if crypto.RandUint64()%5 != 0 {
 		ap.AssetName = fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff))
@@ -163,11 +175,12 @@ func RandomAppParams() basics.AppParams {
 	}
 
 	ap := basics.AppParams{
-		ApprovalProgram:   make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
-		ClearStateProgram: make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+		ApprovalProgram:   make([]byte, int(crypto.RandUint63())%bounds.MaxAppProgramLen),
+		ClearStateProgram: make([]byte, int(crypto.RandUint63())%bounds.MaxAppProgramLen),
 		GlobalState:       make(basics.TealKeyValue),
 		StateSchemas:      schemas,
 		ExtraProgramPages: uint32(crypto.RandUint64() % 4),
+		Version:           crypto.RandUint64() % 10,
 	}
 	if len(ap.ApprovalProgram) > 0 {
 		crypto.RandBytes(ap.ApprovalProgram[:])
@@ -178,6 +191,13 @@ func RandomAppParams() basics.AppParams {
 		crypto.RandBytes(ap.ClearStateProgram[:])
 	} else {
 		ap.ClearStateProgram = nil
+	}
+
+	// The can only be a sponsor if there's extra storage
+	if ap.ExtraProgramPages > 0 && !ap.StateSchemas.GlobalStateSchema.Empty() {
+		if crypto.RandUint63()%2 == 0 {
+			crypto.RandBytes(ap.SizeSponsor[:])
+		}
 	}
 
 	for i := uint64(0); i < ap.StateSchemas.GlobalStateSchema.NumUint; i++ {
@@ -202,7 +222,7 @@ func RandomAppParams() basics.AppParams {
 
 		var bytes []byte
 		if crypto.RandUint64()%5 != 0 {
-			bytes = make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen-len(keyName)))
+			bytes = make([]byte, crypto.RandUint64()%uint64(bounds.MaxBytesKeyValueLen-len(keyName)))
 			crypto.RandBytes(bytes[:])
 		}
 
@@ -248,7 +268,7 @@ func RandomAppLocalState() basics.AppLocalState {
 		}
 		var bytes []byte
 		if crypto.RandUint64()%5 != 0 {
-			bytes = make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen-len(keyName)))
+			bytes = make([]byte, crypto.RandUint64()%uint64(bounds.MaxBytesKeyValueLen-len(keyName)))
 			crypto.RandBytes(bytes[:])
 		}
 
@@ -268,21 +288,6 @@ func RandomAppLocalState() basics.AppLocalState {
 func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.CreatableIndex, assets map[basics.AssetIndex]struct{}, apps map[basics.AppIndex]struct{}) basics.AccountData {
 	data := RandomAccountData(rewardsLevel)
 
-	if data.Status == basics.Online {
-		crypto.RandBytes(data.VoteID[:])
-		crypto.RandBytes(data.SelectionID[:])
-		crypto.RandBytes(data.StateProofID[:])
-		data.VoteFirstValid = basics.Round(crypto.RandUint64())
-		data.VoteLastValid = basics.Round(crypto.RandUint64() % uint64(math.MaxInt64)) // int64 is the max sqlite can store
-		data.VoteKeyDilution = crypto.RandUint64()
-	} else {
-		data.VoteID = crypto.OneTimeSignatureVerifier{}
-		data.SelectionID = crypto.VRFVerifier{}
-		data.StateProofID = merklesignature.Commitment{}
-		data.VoteFirstValid = 0
-		data.VoteLastValid = 0
-		data.VoteKeyDilution = 0
-	}
 	if (crypto.RandUint64() % 2) == 1 {
 		// if account has created assets, have these defined.
 		createdAssetsCount := crypto.RandUint64()%20 + 1
@@ -337,7 +342,7 @@ func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.Creatabl
 					break
 				}
 			}
-			data.AppLocalStates[basics.AppIndex(aidx)] = ap
+			data.AppLocalStates[aidx] = ap
 		}
 	}
 
@@ -391,7 +396,7 @@ func RandomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rew
 
 // RandomDeltasImpl generates a random set of accounts delta
 func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableID *basics.CreatableIndex) (updates ledgercore.AccountDeltas, totals map[basics.Address]ledgercore.AccountData, imbalance int64) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	rewardUnit := config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit
 	totals = make(map[basics.Address]ledgercore.AccountData)
 
 	updates = ledgercore.MakeAccountDeltas(len(base))
@@ -510,7 +515,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 					updates.UpsertAssetResource(addr, aidx, res.Params, res.Holding)
 				}
 			}
-			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
+			imbalance += int64(old.WithUpdatedRewards(rewardUnit, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
 		}
 	}
@@ -564,7 +569,7 @@ func RandomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 				updates.UpsertAssetResource(addr, aidx, res.Params, res.Holding)
 			}
 		}
-		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
+		imbalance += int64(old.WithUpdatedRewards(rewardUnit, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 		totals[addr] = new
 	}
 

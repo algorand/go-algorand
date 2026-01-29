@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
@@ -117,39 +118,32 @@ func (balances keyregTestBalances) StatefulEval(int, *logic.EvalParams, basics.A
 func TestKeyregApply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
+	src := ledgertesting.RandomAddress()
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	secretParticipation := keypair()
+	sigVerifier := crypto.SignatureVerifier{0x02, 0x03, 0x04}
 
-	tx := createTestTxn(t, src, secretParticipation, vrfSecrets)
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	tx := createTestKeyreg(t, src, sigVerifier, vrfSecrets)
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), spec, nil, basics.Round(0))
 	require.NoError(t, err)
-
-	tx.Sender = feeSink
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
-	require.Error(t, err)
-
-	tx.Sender = src
 
 	mockBal := newKeyregTestBalances()
 
 	// Going from offline to online should be okay
 	mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	// Going from online to nonparticipatory should be okay, if the protocol supports that
 	if mockBal.ConsensusParams().SupportBecomeNonParticipatingTransactions {
 		tx.KeyregTxnFields = transactions.KeyregTxnFields{}
 		tx.KeyregTxnFields.Nonparticipation = true
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 		require.NoError(t, err)
 
 		// Nonparticipatory accounts should not be able to change status
 		mockBal.addrs[src] = basics.AccountData{Status: basics.NotParticipating}
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
-		require.Error(t, err)
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
+		require.ErrorContains(t, err, "cannot change online/offline status of non-participating account")
 	}
 
 	mockBal.version = "future"
@@ -163,7 +157,7 @@ func TestKeyregApply(t *testing.T) {
 				LastValid:  basics.Round(1200),
 			},
 			KeyregTxnFields: transactions.KeyregTxnFields{
-				VotePK:          crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
+				VotePK:          crypto.OneTimeSignatureVerifier(sigVerifier),
 				SelectionPK:     vrfSecrets.PK,
 				VoteKeyDilution: 1000,
 				VoteFirst:       500,
@@ -171,25 +165,25 @@ func TestKeyregApply(t *testing.T) {
 			},
 		}
 		mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(999))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(999))
 		require.NoError(t, err)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1000))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1000))
 		require.Equal(t, errKeyregGoingOnlineExpiredParticipationKey, err)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1001))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1001))
 		require.Equal(t, errKeyregGoingOnlineExpiredParticipationKey, err)
 
 		tx.KeyregTxnFields.VoteFirst = basics.Round(1100)
 		tx.KeyregTxnFields.VoteLast = basics.Round(1200)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1098))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1098))
 		require.Equal(t, errKeyregGoingOnlineFirstVotingInFuture, err)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1099))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1099))
 		require.NoError(t, err)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1100))
 		require.NoError(t, err)
 
 		testStateProofPKBeingStored(t, tx, mockBal)
@@ -197,7 +191,7 @@ func TestKeyregApply(t *testing.T) {
 }
 
 func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal *keyregTestBalances) {
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1100))
 	require.NoError(t, err) // expects no error with empty keyRegistration attempt
 
 	rec, err := mockBal.Get(tx.Header.Sender, false)
@@ -208,14 +202,13 @@ func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mock
 func TestStateProofPKKeyReg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
+	src := ledgertesting.RandomAddress()
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	secretParticipation := keypair()
+	sigVerifier := crypto.SignatureVerifier{0x01, 0x02}
 
-	tx := createTestTxn(t, src, secretParticipation, vrfSecrets)
+	tx := createTestKeyreg(t, src, sigVerifier, vrfSecrets)
 	mockBal := makeMockBalances(protocol.ConsensusV30)
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err := mockBal.Get(tx.Src(), false)
@@ -223,7 +216,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	require.True(t, acct.StateProofID.IsEmpty())
 
 	mockBal = makeMockBalances(protocol.ConsensusCurrentVersion)
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
@@ -232,7 +225,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 	// go offline in current consensus version: StateProofID should be empty
 	emptyKeyreg := transactions.KeyregTxnFields{}
-	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
@@ -241,7 +234,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 	// run same test using vFuture
 	mockBal = makeMockBalances(protocol.ConsensusFuture)
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
@@ -249,7 +242,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	require.False(t, acct.StateProofID.IsEmpty())
 
 	// go offline in vFuture: StateProofID should be empty
-	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
@@ -258,11 +251,11 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 }
 
-func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
-	return createTestTxnWithPeriod(t, src, secretParticipation, vrfSecrets, defaultParticipationFirstRound, defaultParticipationLastRound)
+func createTestKeyreg(t *testing.T, src basics.Address, sigVerifier crypto.SignatureVerifier, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
+	return createTestKeyregWithPeriod(t, src, sigVerifier, vrfSecrets, defaultParticipationFirstRound, defaultParticipationLastRound)
 }
 
-func createTestTxnWithPeriod(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets, firstRound basics.Round, lastRound basics.Round) transactions.Transaction {
+func createTestKeyregWithPeriod(t *testing.T, src basics.Address, sigVerifier crypto.SignatureVerifier, vrfSecrets *crypto.VRFSecrets, firstRound basics.Round, lastRound basics.Round) transactions.Transaction {
 	store, err := db.MakeAccessor("test-DB", false, true)
 	require.NoError(t, err)
 	defer store.Close()
@@ -276,11 +269,11 @@ func createTestTxnWithPeriod(t *testing.T, src basics.Address, secretParticipati
 		Header: transactions.Header{
 			Sender:     src,
 			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: basics.Round(defaultParticipationFirstRound),
-			LastValid:  basics.Round(defaultParticipationLastRound),
+			FirstValid: defaultParticipationFirstRound,
+			LastValid:  defaultParticipationLastRound,
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
-			VotePK:       crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
+			VotePK:       crypto.OneTimeSignatureVerifier(sigVerifier),
 			SelectionPK:  vrfSecrets.PK,
 			StateProofPK: signer.GetVerifier().Commitment,
 			VoteFirst:    0,

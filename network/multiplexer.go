@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,78 +17,97 @@
 package network
 
 import (
+	"fmt"
+	"maps"
 	"sync/atomic"
-
-	"github.com/algorand/go-algorand/logging"
 )
 
 // Multiplexer is a message handler that sorts incoming messages by Tag and passes
 // them along to the relevant message handler for that type of message.
 type Multiplexer struct {
-	msgHandlers atomic.Value // stores map[Tag]MessageHandler, an immutable map.
-
-	log logging.Logger
+	msgHandlers          atomic.Value // stores map[Tag]MessageHandler, an immutable map.
+	msgValidatorHandlers atomic.Value // stores map[Tag]MessageValidatorHandler, an immutable map.
 }
 
 // MakeMultiplexer creates an empty Multiplexer
-func MakeMultiplexer(log logging.Logger) *Multiplexer {
-	m := &Multiplexer{
-		log: log,
-	}
-	m.ClearHandlers([]Tag{}) // allocate the map
+func MakeMultiplexer() *Multiplexer {
+	m := &Multiplexer{}
+	m.ClearHandlers(nil)          // allocate the map
+	m.ClearValidatorHandlers(nil) // allocate the map
 	return m
 }
 
-// getHandlersMap retrieves the handlers map.
-func (m *Multiplexer) getHandlersMap() map[Tag]MessageHandler {
-	handlersVal := m.msgHandlers.Load()
-	if handlers, valid := handlersVal.(map[Tag]MessageHandler); valid {
+// getMap retrieves a typed map from an atomic.Value.
+func getMap[T any](source *atomic.Value) map[Tag]T {
+	mp := source.Load()
+	if handlers, valid := mp.(map[Tag]T); valid {
 		return handlers
 	}
 	return nil
 }
 
-// Retrives the handler for the given message Tag from the handlers array while taking a read lock.
-func (m *Multiplexer) getHandler(tag Tag) (MessageHandler, bool) {
-	if handlers := m.getHandlersMap(); handlers != nil {
+// Retrieves the handler for the given message Tag from the given value while.
+func getHandler[T any](source *atomic.Value, tag Tag) (T, bool) {
+	if handlers := getMap[T](source); handlers != nil {
 		handler, ok := handlers[tag]
 		return handler, ok
 	}
-	return nil, false
+	var empty T
+	return empty, false
+}
+
+// Retrieves the handler for the given message Tag from the handlers array.
+func (m *Multiplexer) getHandler(tag Tag) (MessageHandler, bool) {
+	return getHandler[MessageHandler](&m.msgHandlers, tag)
+}
+
+// Retrieves the validating handler for the given message Tag from the validating handlers array.
+func (m *Multiplexer) getValidatorHandler(tag Tag) (MessageValidatorHandler, bool) {
+	return getHandler[MessageValidatorHandler](&m.msgValidatorHandlers, tag)
 }
 
 // Handle is the "input" side of the multiplexer. It dispatches the message to the previously defined handler.
 func (m *Multiplexer) Handle(msg IncomingMessage) OutgoingMessage {
-	handler, ok := m.getHandler(msg.Tag)
-
-	if ok {
-		outmsg := handler.Handle(msg)
-		return outmsg
+	if handler, ok := m.getHandler(msg.Tag); ok {
+		return handler.Handle(msg)
 	}
 	return OutgoingMessage{}
 }
 
-// RegisterHandlers registers the set of given message handlers.
-func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
-	mp := make(map[Tag]MessageHandler)
-	if existingMap := m.getHandlersMap(); existingMap != nil {
-		for k, v := range existingMap {
-			mp[k] = v
-		}
+// ValidateHandle is an alternative "input" side of the multiplexer. It dispatches the message to the previously defined validator.
+func (m *Multiplexer) ValidateHandle(msg IncomingMessage) OutgoingMessage {
+	if handler, ok := m.getValidatorHandler(msg.Tag); ok {
+		return handler.ValidateHandle(msg)
 	}
+	return OutgoingMessage{}
+}
+
+func registerMultiplexer[T any](target *atomic.Value, dispatch []taggedMessageDispatcher[T]) {
+	mp := make(map[Tag]T)
+	existingMap := getMap[T](target)
+	maps.Copy(mp, existingMap)
 	for _, v := range dispatch {
 		if _, has := mp[v.Tag]; has {
-			m.log.Panicf("Already registered a handler for tag %v", v.Tag)
+			panic(fmt.Sprintf("Already registered a handler for tag %v", v.Tag))
 		}
 		mp[v.Tag] = v.MessageHandler
 	}
-	m.msgHandlers.Store(mp)
+	target.Store(mp)
 }
 
-// ClearHandlers deregisters all the existing message handlers other than the one provided in the excludeTags list
-func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
+// RegisterHandlers registers the set of given message handlers.
+func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
+	registerMultiplexer(&m.msgHandlers, dispatch)
+}
+
+// RegisterValidatorHandlers registers the set of given message handlers.
+func (m *Multiplexer) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
+	registerMultiplexer(&m.msgValidatorHandlers, dispatch)
+}
+
+func clearMultiplexer[T any](target *atomic.Value, excludeTags []Tag) {
 	if len(excludeTags) == 0 {
-		m.msgHandlers.Store(make(map[Tag]MessageHandler))
+		target.Store(make(map[Tag]T))
 		return
 	}
 
@@ -98,13 +117,23 @@ func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
 		excludeTagsMap[tag] = true
 	}
 
-	currentHandlersMap := m.getHandlersMap()
-	newMap := make(map[Tag]MessageHandler, len(excludeTagsMap))
-	for tag, handler := range currentHandlersMap {
+	currentMap := getMap[T](target)
+	newMap := make(map[Tag]T, len(excludeTagsMap))
+	for tag, handler := range currentMap {
 		if excludeTagsMap[tag] {
 			newMap[tag] = handler
 		}
 	}
 
-	m.msgHandlers.Store(newMap)
+	target.Store(newMap)
+}
+
+// ClearHandlers deregisters all the existing message handlers other than the one provided in the excludeTags list
+func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
+	clearMultiplexer[MessageHandler](&m.msgHandlers, excludeTags)
+}
+
+// ClearValidatorHandlers deregisters all the existing message handlers other than the one provided in the excludeTags list
+func (m *Multiplexer) ClearValidatorHandlers(excludeTags []Tag) {
+	clearMultiplexer[MessageValidatorHandler](&m.msgValidatorHandlers, excludeTags)
 }

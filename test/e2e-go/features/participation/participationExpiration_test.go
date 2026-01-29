@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,15 +69,15 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.Equal(basics.Offline.String(), newAccountStatus.Status)
 
 	var onlineTxID string
-	var partKeyLastValid uint64
+	var partKeyLastValid basics.Round
 
 	startTime := time.Now()
 	for time.Since(startTime) < 2*time.Minute {
 		currentRound := fetchLatestRound(fixture, a)
 
 		// account adds part key
-		partKeyFirstValid := uint64(0)
-		partKeyValidityPeriod := uint64(10)
+		const partKeyFirstValid = 0
+		const partKeyValidityPeriod = 10
 		partKeyLastValid = currentRound + partKeyValidityPeriod
 		partkeyResponse, _, err := sClient.GenParticipationKeys(sAccount, partKeyFirstValid, partKeyLastValid, 0)
 		a.NoError(err)
@@ -105,13 +105,13 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	}
 
 	fixture.AssertValidTxid(onlineTxID)
-	maxRoundsToWaitForTxnConfirm := uint64(3)
+	const maxRoundsToWaitForTxnConfirm = 3
 
 	sNodeStatus, err := sClient.Status()
 	a.NoError(err)
 	seededRound := sNodeStatus.LastRound
 
-	txnConfirmed := fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, sAccount, onlineTxID)
+	txnConfirmed := fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	a.True(txnConfirmed)
 
 	newAccountStatus, err = pClient.AccountInformation(sAccount, false)
@@ -131,10 +131,10 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.NoError(err)
 	lastValidRound := sAccountData.VoteLastValid
 
-	a.Equal(basics.Round(partKeyLastValid), lastValidRound)
+	a.Equal(partKeyLastValid, lastValidRound)
 
 	// We want to wait until we get to one round past the last valid round
-	err = fixture.WaitForRoundWithTimeout(uint64(lastValidRound) + 1)
+	err = fixture.WaitForRoundWithTimeout(lastValidRound + 1)
 	newAccountStatus, err = pClient.AccountInformation(sAccount, false)
 	a.NoError(err)
 
@@ -147,7 +147,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	latestRound = fetchLatestRound(fixture, a)
 
 	// making certain sClient has the same blocks as pClient.
-	_, err = sClient.WaitForRound(uint64(lastValidRound + 1))
+	_, err = sClient.WaitForRound(lastValidRound + 1)
 	a.NoError(err)
 
 	blk, err := sClient.BookkeepingBlock(latestRound)
@@ -156,7 +156,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	sendMoneyTxn := fixture.SendMoneyAndWait(latestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
-	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.Txn.ID().String())
+	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sendMoneyTxn.Txn.ID().String())
 	a.True(txnConfirmed)
 
 	newAccountStatus, err = pClient.AccountInformation(sAccount, false)
@@ -166,7 +166,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.Equal(finalStatus.String(), newAccountStatus.Status)
 }
 
-func fetchLatestRound(fixture *fixtures.RestClientFixture, a *require.Assertions) uint64 {
+func fetchLatestRound(fixture *fixtures.RestClientFixture, a *require.Assertions) basics.Round {
 	status, err := fixture.LibGoalClient.Status()
 	a.NoError(err)
 	return status.LastRound

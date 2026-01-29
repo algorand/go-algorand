@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,10 +17,11 @@
 package basics
 
 import (
+	"math"
+
 	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -54,8 +55,8 @@ func (a MicroAlgos) ToUint64() uint64 {
 }
 
 // RewardUnits returns the number of reward units in some number of algos
-func (a MicroAlgos) RewardUnits(proto config.ConsensusParams) uint64 {
-	return a.Raw / proto.RewardUnit
+func (a MicroAlgos) RewardUnits(unitSize uint64) uint64 {
+	return a.Raw / unitSize
 }
 
 // We generate our own encoders and decoders for MicroAlgos
@@ -94,6 +95,14 @@ func (*MicroAlgos) CanUnmarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (a *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return a.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+
+// UnmarshalMsgWithState implements msgp.Unmarshaler
+func (a *MicroAlgos) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		return nil, msgp.ErrMaxDepthExceeded{}
+	}
 	a.Raw, o, err = msgp.ReadUint64Bytes(bts)
 	return
 }
@@ -106,6 +115,23 @@ func (a MicroAlgos) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (a MicroAlgos) MsgIsZero() bool {
 	return a.Raw == 0
+}
+
+// MicroAlgosMaxSize returns maximum possible msgp encoded size of MicroAlgos in bytes.
+// It is expected by msgp generated MaxSize functions
+func MicroAlgosMaxSize() (s int) {
+	return msgp.Uint64Size
+}
+
+// Algos is a convenience function so that whole Algos can be written easily. It
+// panics on overflow because it should only be used for constants - things that
+// are best human-readable in source code - not used on arbitrary values from,
+// say, transactions.
+func Algos(algos uint64) MicroAlgos {
+	if algos > math.MaxUint64/1_000_000 {
+		panic(algos)
+	}
+	return MicroAlgos{Raw: algos * 1_000_000}
 }
 
 // Round represents a protocol round index
@@ -134,4 +160,9 @@ func (round Round) SubSaturate(x Round) Round {
 // RoundUpToMultipleOf rounds up round to the next multiple of n.
 func (round Round) RoundUpToMultipleOf(n Round) Round {
 	return (round + n - 1) / n * n
+}
+
+// RoundDownToMultipleOf rounds down round to a multiple of n.
+func (round Round) RoundDownToMultipleOf(n Round) Round {
+	return (round / n) * n
 }

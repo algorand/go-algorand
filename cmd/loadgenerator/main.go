@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,14 +69,14 @@ func findRootKeys(algodDir string) []*crypto.SignatureSecrets {
 		var handle db.Accessor
 		handle, err := db.MakeErasableAccessor(path)
 		if err != nil {
-			return nil // don't care, move on
+			return nil
 		}
 		defer handle.Close()
 
 		// Fetch an account.Participation from the database
 		root, err := algodAcct.RestoreRoot(handle)
 		if err != nil {
-			return nil // don't care, move on
+			return nil
 		}
 		keylist = append(keylist, root.Secrets())
 		return nil
@@ -106,11 +106,11 @@ func main() {
 	if (cfg.ClientURL == nil || cfg.ClientURL.String() == "") || cfg.APIToken == "" {
 		if algodDir != "" {
 			path := filepath.Join(algodDir, "algod.net")
-			net, err := os.ReadFile(path)
-			maybefail(err, "%s: %v\n", path, err)
+			net, osErr := os.ReadFile(path)
+			maybefail(osErr, "%s: %v\n", path, osErr)
 			path = filepath.Join(algodDir, "algod.token")
-			token, err := os.ReadFile(path)
-			maybefail(err, "%s: %v\n", path, err)
+			token, osErr := os.ReadFile(path)
+			maybefail(osErr, "%s: %v\n", path, osErr)
 			cfg.ClientURL, err = url.Parse(fmt.Sprintf("http://%s", string(strings.TrimSpace(string(net)))))
 			maybefail(err, "bad net url %v\n", err)
 			cfg.APIToken = string(token)
@@ -163,11 +163,11 @@ func main() {
 	os.Exit(0)
 }
 
-func isSpendRound(cfg config, round uint64) bool {
+func isSpendRound(cfg config, round basics.Round) bool {
 	return cfg.RoundModulator == 0 || ((round+cfg.RoundOffset)%cfg.RoundModulator == 0)
 }
 
-func nextSpendRound(cfg config, round uint64) uint64 {
+func nextSpendRound(cfg config, round basics.Round) basics.Round {
 	if cfg.RoundModulator == 0 {
 		return round
 	}
@@ -200,22 +200,23 @@ func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) 
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		if isSpendRound(cfg, nodeStatus.LastRound) == spendingRound {
+		lastRound := nodeStatus.LastRound
+		if isSpendRound(cfg, lastRound) == spendingRound {
 			// time to send transactions.
 			return
 		}
 		if spendingRound {
-			fmt.Printf("Last round %d, waiting for spending round %d\n", nodeStatus.LastRound, nextSpendRound(cfg, nodeStatus.LastRound))
+			fmt.Printf("Last round %d, waiting for spending round %d\n", lastRound, nextSpendRound(cfg, nodeStatus.LastRound))
 		}
 		for {
 			// wait for the next round.
-			nodeStatus, err = restClient.WaitForBlock(basics.Round(nodeStatus.LastRound))
+			err = restClient.WaitForRoundWithTimeout(lastRound + 1)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "unable to wait for next round node status : %v", err)
-				time.Sleep(1 * time.Second)
 				break
 			}
-			if isSpendRound(cfg, nodeStatus.LastRound) == spendingRound {
+			lastRound++
+			if isSpendRound(cfg, lastRound) == spendingRound {
 				// time to send transactions.
 				return
 			}
@@ -247,8 +248,8 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 			Header: transactions.Header{
 				Sender:      publicKeys[i%len(publicKeys)],
 				Fee:         basics.MicroAlgos{Raw: cfg.Fee},
-				FirstValid:  basics.Round(nodeStatus.LastRound),
-				LastValid:   basics.Round(nodeStatus.LastRound + 2),
+				FirstValid:  nodeStatus.LastRound,
+				LastValid:   nodeStatus.LastRound + 2,
 				Note:        make([]byte, 4),
 				GenesisID:   vers.GenesisID,
 				GenesisHash: genesisHash,
@@ -267,7 +268,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKeys 
 	// each thread makes new HTTP connections per API call
 	var sendWaitGroup sync.WaitGroup
 	sendWaitGroup.Add(nroutines)
-	sent := make([]int, nroutines, nroutines)
+	sent := make([]int, nroutines)
 	for i := 0; i < nroutines; i++ {
 		go func(base int) {
 			defer sendWaitGroup.Done()

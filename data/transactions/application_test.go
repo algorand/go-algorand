@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,92 +17,48 @@
 package transactions
 
 import (
-	"reflect"
+	"fmt"
+	"slices"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestApplicationCallFieldsNotChanged(t *testing.T) {
+func TestResourceRefEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	af := ApplicationCallTxnFields{}
-	s := reflect.ValueOf(&af).Elem()
-
-	if s.NumField() != 13 {
-		t.Errorf("You added or removed a field from transactions.ApplicationCallTxnFields. " +
-			"Please ensure you have updated the Empty() method and then " +
-			"fix this test")
+	assert.True(t, ResourceRef{}.Empty())
+	for _, rr := range basics_testing.NearZeros(t, ResourceRef{}) {
+		assert.False(t, rr.Empty(), "Empty is disregarding a non-zero field in %+v", rr)
 	}
 }
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	a := require.New(t)
+	a := assert.New(t)
 
 	ac := ApplicationCallTxnFields{}
 	a.True(ac.Empty())
 
-	ac.ApplicationID = 1
-	a.False(ac.Empty())
-
-	ac.ApplicationID = 0
-	ac.OnCompletion = 1
-	a.False(ac.Empty())
-
-	ac.OnCompletion = 0
-	ac.ApplicationArgs = make([][]byte, 1)
-	a.False(ac.Empty())
-
-	ac.ApplicationArgs = nil
-	ac.Accounts = make([]basics.Address, 1)
-	a.False(ac.Empty())
-
-	ac.Accounts = nil
-	ac.ForeignApps = make([]basics.AppIndex, 1)
-	a.False(ac.Empty())
-
-	ac.ForeignApps = nil
-	ac.ForeignAssets = make([]basics.AssetIndex, 1)
-	a.False(ac.Empty())
-
-	ac.ForeignAssets = nil
-	ac.LocalStateSchema = basics.StateSchema{NumUint: 1}
-	a.False(ac.Empty())
-
-	ac.LocalStateSchema = basics.StateSchema{}
-	ac.Boxes = make([]BoxRef, 1)
-	a.False(ac.Empty())
-
-	ac.Boxes = nil
-	ac.GlobalStateSchema = basics.StateSchema{NumUint: 1}
-	a.False(ac.Empty())
-
-	ac.GlobalStateSchema = basics.StateSchema{}
-	ac.ApprovalProgram = []byte{1}
-	a.False(ac.Empty())
-
-	ac.ApprovalProgram = []byte{}
-	a.False(ac.Empty())
-
-	ac.ApprovalProgram = nil
-	ac.ClearStateProgram = []byte{1}
-	a.False(ac.Empty())
-
-	ac.ClearStateProgram = []byte{}
-	a.False(ac.Empty())
-
-	ac.ClearStateProgram = nil
-	a.True(ac.Empty())
+	for _, fields := range basics_testing.NearZeros(t, ac) {
+		a.False(fields.Empty(), "Empty is disregarding a non-zero field in %+v", fields)
+	}
 }
 
 func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
@@ -122,32 +78,806 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		if proto.MaxAppBoxReferences > encodedMaxBoxes {
 			require.Failf(t, "proto.MaxAppBoxReferences > encodedMaxBoxes", "protocol version = %s", protoVer)
 		}
+		if proto.MaxAppAccess > encodedMaxAccess {
+			require.Failf(t, "proto.MaxAppAccess > encodedMaxAccess", "protocol version = %s", protoVer)
+		}
 	}
 }
 
-func TestIDByIndex(t *testing.T) {
+func TestAppCallAccessWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	a := require.New(t)
-	ac := ApplicationCallTxnFields{}
-	ac.ApplicationID = 1
-	appID, err := ac.AppIDByIndex(0)
-	a.NoError(err)
-	a.Equal(basics.AppIndex(1), appID)
-	appID, err = ac.AppIDByIndex(1)
-	a.Contains(err.Error(), "invalid Foreign App reference")
+	preAccessCV := protocol.ConsensusV40
+	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
 
+	cases := []struct {
+		expectedError string
+		cv            protocol.ConsensusVersion // defaults to future if not set
+		ac            ApplicationCallTxnFields
+	}{
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        slices.Repeat([]ResourceRef{{}}, 16),
+			},
+		},
+		{
+			expectedError: "tx.Access too long, max number of references is 0",
+			cv:            preAccessCV,
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{}},
+			},
+		},
+		{
+			expectedError: "tx.Access too long, max number of references is 16",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        slices.Repeat([]ResourceRef{{}}, 17),
+			},
+		},
+		{
+			expectedError: "tx.Accounts can't be used when tx.Access is used",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{}},
+				Accounts:      []basics.Address{addr1},
+			},
+		},
+		{
+			expectedError: "tx.ForeignAssets can't be used when tx.Access is used",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{}},
+				ForeignAssets: []basics.AssetIndex{2},
+			},
+		},
+		{
+			expectedError: "tx.ForeignApps can't be used when tx.Access is used",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{}},
+				ForeignApps:   []basics.AppIndex{3},
+			},
+		},
+		{
+			expectedError: "tx.Boxes can't be used when tx.Access is used",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{}},
+				Boxes:         []BoxRef{{Index: 0}},
+			},
+		},
+
+		// Exercise holdings
+		{
+			expectedError: "holding Asset reference 2 outside tx.Access",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Holding: HoldingRef{Asset: 2}}},
+			},
+		},
+		{
+			expectedError: "holding Asset reference 1 is not an Asset",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Holding: HoldingRef{Asset: 1}}},
+			},
+		},
+		{
+			expectedError: "holding Asset reference 0 outside tx.Access",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access: []ResourceRef{
+					{Address: basics.Address{0xaa}},
+					{Holding: HoldingRef{Address: 1}},
+				},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access: []ResourceRef{
+					{Address: basics.Address{0xaa}},
+					{Asset: 99},
+					{Holding: HoldingRef{Address: 1, Asset: 2}},
+				},
+			},
+		},
+
+		// Exercise locals
+		{
+			expectedError: "locals App reference 2 outside tx.Access",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Locals: LocalsRef{App: 2}}},
+			},
+		},
+		{
+			expectedError: "locals App reference 1 is not an App",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Locals: LocalsRef{App: 1}}},
+			},
+		},
+		{
+			// eliminate this test after AllowZeroAppInLocalsRef is removed
+			expectedError: "0 App in LocalsRef is not supported",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access: []ResourceRef{
+					{Address: basics.Address{0xaa}},
+					{Locals: LocalsRef{Address: 1}},
+				},
+			},
+			cv: protocol.ConsensusV41,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access: []ResourceRef{
+					{Address: basics.Address{0xaa}},
+					{Locals: LocalsRef{Address: 1}},
+				},
+			},
+		},
+		{
+			expectedError: "0 App in LocalsRef during app create is not allowed or necessary",
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   []byte{0x05},
+				ClearStateProgram: []byte{0x05},
+				Access: []ResourceRef{
+					{Address: basics.Address{0xaa}},
+					{Locals: LocalsRef{Address: 1}},
+				},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access: []ResourceRef{
+					{Address: basics.Address{0xaa}},
+					{App: 99},
+					{Locals: LocalsRef{Address: 1, App: 2}},
+				},
+			},
+		},
+
+		// Exercise boxes
+		{
+			expectedError: "box Index 2 outside tx.Access",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Box: BoxRef{Index: 2}}},
+			},
+		},
+		{
+			expectedError: "box Index reference 1 is not an App",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Box: BoxRef{Index: 1}}},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{App: 20}, {Box: BoxRef{Index: 1}}},
+			},
+		},
+		{
+			expectedError: "tx.Access box Name too long, max len 64 bytes",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Box: BoxRef{Name: make([]byte, 65)}}},
+			},
+		},
+
+		// Multiple uses in ResourceRef
+		{
+			expectedError: "tx.Access element has fields from multiple types",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Address: basics.Address{0x01}, Box: BoxRef{Name: []byte("a")}}},
+			},
+		},
+		{
+			expectedError: "tx.Access element has fields from multiple types",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{App: 10, Locals: LocalsRef{App: 1}}},
+			},
+		},
+		{
+			expectedError: "tx.Access element has fields from multiple types",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Asset: 10, Holding: HoldingRef{Asset: 1}}},
+			},
+		},
+	}
+	for i, tc := range cases {
+		name := fmt.Sprintf("i=%d", i)
+		if tc.expectedError != "" {
+			name = tc.expectedError
+		}
+		t.Run(name, func(t *testing.T) {
+			cv := tc.cv
+			if cv == "" {
+				cv = protocol.ConsensusFuture
+			}
+			err := tc.ac.wellFormed(config.Consensus[cv])
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestIndexByID(t *testing.T) {
+func TestAppCallVersioningWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	a := require.New(t)
-	ac := ApplicationCallTxnFields{}
-	ac.ApplicationID = 1
-	aidx, err := ac.IndexByAppID(1)
-	a.NoError(err)
-	a.Equal(uint64(0), aidx)
-	aidx, err = ac.IndexByAppID(2)
-	a.Contains(err.Error(), "invalid Foreign App reference")
+	preVersion := protocol.ConsensusV40
+	v5 := []byte{0x05}
+
+	cases := []struct {
+		expectedError string
+		cv            protocol.ConsensusVersion // defaults to future if not set
+		ac            ApplicationCallTxnFields
+	}{
+		{
+			cv: preVersion,
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				RejectVersion: 0,
+			},
+		},
+		{
+			expectedError: "tx.RejectVersion is not supported",
+			cv:            preVersion,
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				RejectVersion: 1,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				RejectVersion: 0,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				RejectVersion: 1,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				RejectVersion:     0,
+			},
+		},
+		{
+			expectedError: "tx.RejectVersion cannot be set during creation",
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				RejectVersion:     1,
+			},
+		},
+	}
+	for i, tc := range cases {
+		name := fmt.Sprintf("i=%d", i)
+		if tc.expectedError != "" {
+			name = tc.expectedError
+		}
+		t.Run(name, func(t *testing.T) {
+			cv := tc.cv
+			if cv == "" {
+				cv = protocol.ConsensusFuture
+			}
+			err := tc.ac.wellFormed(config.Consensus[cv])
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAppCallCreateWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	v5 := []byte{0x05}
+	v6 := []byte{0x06}
+	cases := []struct {
+		expectedError string
+		cv            protocol.ConsensusVersion // defaults to future if not set
+		ac            ApplicationCallTxnFields
+	}{
+		{
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 0,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 3,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+			},
+		},
+		{
+			expectedError: "program version mismatch",
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v6,
+			},
+		},
+	}
+	for i, tc := range cases {
+		name := fmt.Sprintf("i=%d", i)
+		if tc.expectedError != "" {
+			name = tc.expectedError
+		}
+		t.Run(name, func(t *testing.T) {
+			cv := tc.cv
+			if cv == "" {
+				cv = protocol.ConsensusFuture
+			}
+			err := tc.ac.wellFormed(config.Consensus[cv])
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+			// test the same thing for update, unless test has epp, which is illegal in update
+			if tc.ac.ExtraProgramPages != 0 {
+				return
+			}
+			tc.ac.OnCompletion = UpdateApplicationOC
+			tc.ac.ApplicationID = 1
+			err = tc.ac.wellFormed(config.Consensus[cv])
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestWellFormedErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cv27 := protocol.ConsensusV27
+	cv28 := protocol.ConsensusV28
+	cv32 := protocol.ConsensusV32
+	cv36 := protocol.ConsensusV36
+
+	v5 := []byte{0x05}
+	cases := []struct {
+		ac            ApplicationCallTxnFields
+		cv            protocol.ConsensusVersion
+		expectedError string
+	}{
+		{
+			expectedError: "invalid application OnCompletion (6)",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 99,
+				OnCompletion:  DeleteApplicationOC + 1,
+			},
+		},
+		{
+			expectedError: "programs may only be specified during application creation or update",
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     99,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				OnCompletion:      NoOpOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     99,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				OnCompletion:      UpdateApplicationOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0, // creation
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 1,
+			},
+			cv:            cv27,
+			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 0",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0, // creation
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte("Xjunk"),
+			},
+			cv:            cv27,
+			expectedError: "approval program too long. max len 1024 bytes",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0, // creation
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte("Xjunk"),
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0, // creation
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+			},
+			expectedError: "app programs too long. max total len 2048 bytes",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0, // creation
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				ExtraProgramPages: 1,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+			},
+			expectedError: "inappropriate non-zero tx.GlobalStateSchema",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				LocalStateSchema: basics.StateSchema{NumUint: 1},
+			},
+			expectedError: "inappropriate non-zero tx.LocalStateSchema",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 30, NumUint: 35},
+			},
+			expectedError: "tx.GlobalStateSchema is too large. 65 > 64",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				LocalStateSchema: basics.StateSchema{NumUint: 17},
+			},
+			expectedError: "tx.LocalStateSchema is too large. 17 > 16",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 1,
+			},
+			expectedError: "inappropriate non-zero tx.ExtraProgramPages",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     0,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 4,
+			},
+			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 3",
+			cv:            cv28,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				ExtraProgramPages: 0,
+				OnCompletion:      UpdateApplicationOC,
+			},
+			cv: protocol.ConsensusFuture,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: slices.Repeat([][]byte{[]byte("arg")}, 16),
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: slices.Repeat([][]byte{[]byte("arg")}, 17),
+			},
+			expectedError: "tx.ApplicationArgs has too many arguments. 17 > 16",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: [][]byte{make([]byte, 1500), make([]byte, 548)},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: [][]byte{make([]byte, 1501), make([]byte, 548)},
+			},
+			expectedError: "tx.ApplicationArgs total length is too long. 2049 > 2048",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				ForeignApps:   []basics.AppIndex{10, 11},
+			},
+			cv: cv27,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				ForeignApps:   []basics.AppIndex{10, 11, 12},
+			},
+			cv:            cv27,
+			expectedError: "tx.ForeignApps too long, max number of foreign apps is 2",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Accounts:      slices.Repeat([]basics.Address{{}}, 4),
+			},
+			cv: protocol.ConsensusV40,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Accounts:      slices.Repeat([]basics.Address{{}}, 5),
+			},
+			cv:            protocol.ConsensusV40,
+			expectedError: "tx.Accounts too long, max number of accounts is 4",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Accounts:      slices.Repeat([]basics.Address{{}}, 9),
+			},
+			expectedError: "tx.Accounts too long, max number of accounts is 8",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
+			},
+			expectedError: "tx.ForeignAssets too long, max number of foreign assets is 8",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Accounts:      []basics.Address{{}, {}, {}},
+				ForeignApps:   []basics.AppIndex{14, 15, 16, 17},
+				ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
+			},
+			expectedError: "tx references exceed MaxAppTotalTxnReferences = 8",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				ExtraProgramPages: 0,
+				OnCompletion:      UpdateApplicationOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				ExtraProgramPages: 0,
+				// Since we are updating the size, that includes epp, so programs are too big.
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+				OnCompletion:      UpdateApplicationOC,
+			},
+			expectedError: "app programs too long. max total len 2048 bytes",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+				ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				ExtraProgramPages: 1,
+				// Since we are updating epp, size is checked, but is big enough
+				OnCompletion: UpdateApplicationOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   []byte(strings.Repeat("X", 2048)),
+				ClearStateProgram: []byte(strings.Repeat("X", 2049)),
+				ExtraProgramPages: 1,
+				// Now we update epp, but not big enough for programs in txn
+				OnCompletion: UpdateApplicationOC,
+			},
+			expectedError: "app programs too long. max total len 4096 bytes",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 1,
+				OnCompletion:      UpdateApplicationOC,
+			},
+			cv:            cv28,
+			expectedError: "inappropriate non-zero tx.ExtraProgramPages",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+				OnCompletion:      UpdateApplicationOC,
+			},
+			cv:            cv28,
+			expectedError: "inappropriate non-zero tx.GlobalStateSchema",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				ExtraProgramPages: 1,
+				OnCompletion:      UpdateApplicationOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:     1,
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				ApplicationArgs: [][]byte{
+					[]byte("write"),
+				},
+				GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+				OnCompletion:      UpdateApplicationOC,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+			},
+			expectedError: "tx.Boxes[0].Index is 1. Exceeds len(tx.ForeignApps)",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+				ForeignApps:   []basics.AppIndex{1},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+				ForeignApps:   []basics.AppIndex{1},
+			},
+			cv:            cv32,
+			expectedError: "tx.Boxes too long, max number of box references is 0",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Boxes:         []BoxRef{{Index: 1, Name: make([]byte, 65)}},
+				ForeignApps:   []basics.AppIndex{1},
+			},
+			expectedError: "tx.Boxes[0].Name too long, max len 64 bytes",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Boxes:         []BoxRef{{Index: 1, Name: make([]byte, 65)}},
+				ForeignApps:   []basics.AppIndex{1},
+			},
+			cv: cv36,
+		},
+	}
+	for i, tc := range cases {
+		name := fmt.Sprintf("i=%d", i)
+		if tc.expectedError != "" {
+			name = tc.expectedError
+		}
+		t.Run(name, func(t *testing.T) {
+			cv := tc.cv
+			if cv == "" {
+				cv = protocol.ConsensusFuture
+			}
+			err := tc.ac.wellFormed(config.Consensus[cv])
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

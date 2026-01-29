@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
@@ -46,7 +45,6 @@ func init() {
 
 // GenerateInitState generates testing init state
 func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoPerAccount int) (genesisInitState ledgercore.InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
-	params := config.Consensus[proto]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
 
@@ -76,40 +74,19 @@ func GenerateInitState(tb testing.TB, proto protocol.ConsensusVersion, baseAlgoP
 	initKeys[sinkAddr] = sinkSecret
 	initAccounts[sinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
 
-	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
-	var initialRewardsPerRound uint64
-	if params.InitialRewardsRateCalculation {
-		initialRewardsPerRound = basics.SubSaturate(incentivePoolBalanceAtGenesis.Raw, params.MinBalance) / uint64(params.RewardsRateRefreshInterval)
-	} else {
-		initialRewardsPerRound = incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
-	}
+	genesisBalances := bookkeeping.MakeTimestampedGenesisBalances(initAccounts, sinkAddr, poolAddr, 0)
+	genesisID := tb.Name()
+	genesisHash := crypto.Hash([]byte(genesisID))
 
-	initBlock := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			GenesisID: tb.Name(),
-			Round:     0,
-			RewardsState: bookkeeping.RewardsState{
-				RewardsRate: initialRewardsPerRound,
-				RewardsPool: poolAddr,
-				FeeSink:     sinkAddr,
-			},
-			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: proto,
-			},
-		},
-	}
+	initBlock, err := bookkeeping.MakeGenesisBlock(proto, genesisBalances, genesisID, genesisHash)
+	require.NoError(tb, err)
 
-	var err error
 	initBlock.TxnCommitments, err = initBlock.PaysetCommit()
 	require.NoError(tb, err)
 
-	if params.SupportGenesisHash {
-		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(tb.Name()))
-	}
-
 	genesisInitState.Block = initBlock
 	genesisInitState.Accounts = initAccounts
-	genesisInitState.GenesisHash = crypto.Hash([]byte(tb.Name()))
+	genesisInitState.GenesisHash = genesisHash
 
 	return
 }

@@ -43,17 +43,14 @@ func New(sizeBits int, numHashes uint32, prefix uint32) *Filter {
 // These parameters are optimal for small bloom filters as
 // described in section 4.1 of this paper:
 //
-//   https://web.stanford.edu/~ashishg/papers/inverted.pdf
+//	https://web.stanford.edu/~ashishg/papers/inverted.pdf
 func Optimal(numElements int, falsePositiveRate float64) (sizeBits int, numHashes uint32) {
 	n := float64(numElements)
 	p := falsePositiveRate
 	m := -(n+0.5)*math.Log(p)/math.Pow(math.Log(2), 2) + 1
 	k := -math.Log(p) / math.Log(2)
 
-	numHashes = uint32(math.Ceil(k))
-	if numHashes > maxHashes {
-		numHashes = maxHashes
-	}
+	numHashes = min(uint32(math.Ceil(k)), maxHashes)
 
 	return int(math.Ceil(m)), numHashes
 }

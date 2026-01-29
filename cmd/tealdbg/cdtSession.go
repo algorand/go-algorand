@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,8 +51,8 @@ type cdtSession struct {
 	verbose bool
 }
 
-var contextCounter int32 = 0
-var scriptCounter int32 = 0
+var contextCounter atomic.Int32
+var scriptCounter atomic.Int32
 
 func makeCdtSession(uuid string, debugger Control, ch chan Notification) *cdtSession {
 	s := new(cdtSession)
@@ -60,8 +60,8 @@ func makeCdtSession(uuid string, debugger Control, ch chan Notification) *cdtSes
 	s.debugger = debugger
 	s.notifications = ch
 	s.done = make(chan struct{})
-	s.contextID = int(atomic.AddInt32(&contextCounter, 1))
-	s.scriptID = strconv.Itoa(int(atomic.AddInt32(&scriptCounter, 1)))
+	s.contextID = int(contextCounter.Add(1))
+	s.scriptID = strconv.Itoa(int(scriptCounter.Add(1)))
 	return s
 }
 
@@ -74,14 +74,12 @@ func (s *cdtSession) sourceMapHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(sm)
-	return
 }
 
 func (s *cdtSession) sourceHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, source := s.debugger.GetSource()
 	w.Write(source)
-	return
 }
 
 func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
@@ -267,11 +265,8 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		s.debugger.SetBreakpointsActive(false)
 		s.debugger.Resume()
 		defer func() {
-			for {
-				select {
-				case <-notifications:
-					return
-				}
+			for range notifications {
+				return
 			}
 		}()
 	}
@@ -383,7 +378,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		var desc []cdt.RuntimePropertyDescriptor
 		desc, err = state.getObjectDescriptor(objID, preview)
 		if err != nil {
-			err = fmt.Errorf("getObjectDescriptor error: " + err.Error())
+			err = fmt.Errorf("getObjectDescriptor error: %w", err)
 			return
 		}
 
@@ -391,7 +386,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 			var data []byte
 			data, err = json.Marshal(desc)
 			if err != nil {
-				err = fmt.Errorf("getObjectDescriptor json error: " + err.Error())
+				err = fmt.Errorf("getObjectDescriptor json error: %w", err)
 				return
 			}
 			log.Printf("Desc object: %s", string(data))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,16 +17,17 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -84,7 +85,7 @@ func makeTelemetryTestFixtureWithConfig(minLevel logrus.Level, cfg *TelemetryCon
 	f.l = Base().(logger)
 	f.l.SetLevel(Debug) // Ensure logging doesn't filter anything out
 
-	f.telem, _ = makeTelemetryState(lcfg, func(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+	f.telem, _ = makeTelemetryStateContext(context.Background(), lcfg, func(ctx context.Context, cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return &f.hook, nil
 	})
 	f.l.loggerState.telemetry = f.telem
@@ -138,7 +139,7 @@ func TestCreateHookError(t *testing.T) {
 
 	cfg := createTelemetryConfig()
 	cfg.Enable = true
-	telem, err := makeTelemetryState(cfg, func(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+	telem, err := makeTelemetryStateContext(context.Background(), cfg, func(ctx context.Context, cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return nil, fmt.Errorf("failed")
 	})
 
@@ -291,13 +292,9 @@ func runLogLevelsTest(t *testing.T, minLevel logrus.Level, expected int) {
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	// See if we got the expected number of entries
 	a.Equal(expected, len(f.hookEntries()))
@@ -319,13 +316,9 @@ func TestLogHistoryLevels(t *testing.T) {
 	f.l.Error("error")
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	data := f.hookData()
 	a.Nil(data[0]["log"]) // Debug
@@ -347,12 +340,9 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	tempDir := os.TempDir()
-	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()
-	config.SetGlobalConfigFileRoot(tempDir)
 
-	cfg, err := ReadTelemetryConfigOrDefault("", "")
+	cfg, err := ReadTelemetryConfigOrDefault("", tempDir)
 	defaultCfgSettings := createTelemetryConfig()
-	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
 
 	a.Nil(err)
 	a.NotNil(cfg)

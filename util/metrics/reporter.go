@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -210,7 +210,7 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 	var err error
 	if nil == reporter.neSync {
 		// try to create it.
-		if reporter.neSync, err = net.Listen("tcp", nodeExporterSyncAddr); err != nil {
+		if reporter.neSync, err = net.Listen("tcp", nodeExporterSyncAddr); err != nil { //nolint:gosec // OK to bind to all interfaces
 			// we couldn't get a hold of this port number; that's an expected behaviour for any algod instance that isn't the first one..
 			return
 		}
@@ -252,5 +252,4 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 		// logging.Base().Debugf("Node exporter process ended : %v", status)
 		(*proc) = nil
 	}(&reporter.neProcess)
-	return
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,8 +53,23 @@ func persistent(as []action) bool {
 }
 
 // encode serializes the current state into a byte array.
-func encode(t timers.Clock, rr rootRouter, p player, a []action, reflect bool) (raw []byte) {
+func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, reflect bool) (raw []byte) {
 	var s diskState
+
+	// Don't persist state for old rounds
+	// rootRouter.update() may preserve roundRouters from credentialRoundLag rounds ago
+	children := make(map[round]*roundRouter)
+	for rnd, rndRouter := range rr.Children {
+		if rnd >= p.Round {
+			children[rnd] = rndRouter
+		}
+	}
+	if len(children) == 0 {
+		rr.Children = nil
+	} else {
+		rr.Children = children
+	}
+
 	if reflect {
 		s.Router = protocol.EncodeReflect(rr)
 		s.Player = protocol.EncodeReflect(p)
@@ -92,8 +107,8 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 	}()
 
 	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
-		return err
+		_, err1 := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
+		return err1
 	})
 	if err == nil {
 		return
@@ -194,8 +209,8 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 // decode process the incoming raw bytes array and attempt to reconstruct the agreement state objects.
 //
 // In all decoding errors, it returns the error code in err
-func decode(raw []byte, t0 timers.Clock, log serviceLogger, reflect bool) (t timers.Clock, rr rootRouter, p player, a []action, err error) {
-	var t2 timers.Clock
+func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect bool) (t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, err error) {
+	var t2 timers.Clock[TimeoutType]
 	var rr2 rootRouter
 	var p2 player
 	a2 := []action{}
@@ -228,7 +243,7 @@ func decode(raw []byte, t0 timers.Clock, log serviceLogger, reflect bool) (t tim
 		if err != nil {
 			return
 		}
-
+		p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
 		rr2 = makeRootRouter(p2)
 		err = protocol.DecodeReflect(s.Router, &rr2)
 		if err != nil {
@@ -243,6 +258,11 @@ func decode(raw []byte, t0 timers.Clock, log serviceLogger, reflect bool) (t tim
 				log.Errorf("decode (agreement): failed to decode Player using either reflection or msgp: %v", err)
 				return
 			}
+		}
+		p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+		if p2.OldDeadline != 0 {
+			p2.Deadline = Deadline{Duration: p2.OldDeadline, Type: TimeoutDeadline}
+			p2.OldDeadline = 0 // clear old value
 		}
 		rr2 = makeRootRouter(p2)
 		err = protocol.Decode(s.Router, &rr2)
@@ -280,7 +300,7 @@ type persistentRequest struct {
 	step   step
 	raw    []byte
 	done   chan error
-	clock  timers.Clock
+	clock  timers.Clock[TimeoutType]
 	events chan<- externalEvent
 }
 
@@ -302,7 +322,7 @@ func makeAsyncPersistenceLoop(log serviceLogger, crash db.Accessor, ledger Ledge
 	}
 }
 
-func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock, round basics.Round, period period, step step, raw []byte, done chan error) (events <-chan externalEvent) {
+func (p *asyncPersistenceLoop) Enqueue(clock timers.Clock[TimeoutType], round basics.Round, period period, step step, raw []byte, done chan error) (events <-chan externalEvent) {
 	eventsChannel := make(chan externalEvent, 1)
 	p.pending <- persistentRequest{
 		round:  round,
@@ -335,7 +355,7 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case s, _ = <-p.pending:
+		case s = <-p.pending:
 		}
 
 		// make sure that the ledger finished writing the previous round to disk.

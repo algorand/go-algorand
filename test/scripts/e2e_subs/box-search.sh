@@ -20,7 +20,7 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 # Version 8 clear program
 printf '#pragma version 8\nint 1' > "${TEMPDIR}/clear.teal"
 
-APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/boxes.teal --clear-prog "$TEMPDIR/clear.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator "$ACCOUNT" --approval-prog=${TEAL}/boxes.teal --clear-prog "$TEMPDIR/clear.teal" | grep Created | awk '{ print $6 }')
 
 # Fund the app account 10 algos
 APP_ACCOUNT=$(${gcmd} app info --app-id "$APPID" | grep "Application account" | awk '{print $3}')
@@ -37,6 +37,16 @@ BOX_INFO=$(${gcmd} app box info --app-id "$APPID" --name "str:not_found" 2>&1 ||
 EXPECTED="No box found for appid $APPID with name str:not_found"
 
 [ "$BOX_INFO" = "$EXPECTED" ]
+
+# Confirm that we error for an invalid box name
+BOX_NAME="str:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+RES=$(${gcmd} app call --from "$ACCOUNT" --app-id "$APPID" --box "$BOX_NAME" --app-arg "str:create" --app-arg "$BOX_NAME" 2>&1 || true)
+EXPECTED="invalid : tx.Boxes[0].Name too long, max len 64 bytes"
+
+if [[ "$RES" != *"$EXPECTED" ]]; then
+  date "+${scriptname} unexpected response from goal app call with invalid box name %Y%m%d_%H%M%S"
+  false
+fi
 
 # Create several boxes
 BOX_NAMES=("str:box1" "str:with spaces" "b64:YmFzZTY0" "b64:AQIDBA==") # b64:YmFzZTY0 == str:base64, b64:AQIDBA== is not unicode

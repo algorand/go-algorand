@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,10 +19,14 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,11 +36,13 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
+	apiClient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
@@ -53,8 +59,8 @@ var (
 	transactionFee     uint64
 	statusChangeLease  string
 	statusChangeTxFile string
-	roundFirstValid    uint64
-	roundLastValid     uint64
+	roundFirstValid    basics.Round
+	roundLastValid     basics.Round
 	keyDilution        uint64
 	threshold          uint8
 	partKeyOutDir      string
@@ -64,8 +70,11 @@ var (
 	mnemonic           string
 	dumpOutFile        string
 	listAccountInfo    bool
-	onlyShowAssetIds   bool
+	onlyShowAssetIDs   bool
 	partKeyIDToDelete  string
+
+	next  string
+	limit uint64
 )
 
 func init() {
@@ -74,6 +83,7 @@ func init() {
 	accountCmd.AddCommand(listCmd)
 	accountCmd.AddCommand(renameCmd)
 	accountCmd.AddCommand(infoCmd)
+	accountCmd.AddCommand(assetDetailsCmd)
 	accountCmd.AddCommand(balanceCmd)
 	accountCmd.AddCommand(rewardsCmd)
 	accountCmd.AddCommand(changeOnlineCmd)
@@ -129,7 +139,13 @@ func init() {
 	// Info flags
 	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
 	infoCmd.MarkFlagRequired("address")
-	infoCmd.Flags().BoolVar(&onlyShowAssetIds, "onlyShowAssetIds", false, "Only show ASA IDs and not pull asset metadata")
+	infoCmd.Flags().BoolVar(&onlyShowAssetIDs, "onlyShowAssetIDs", false, "Only show ASA IDs and not pull asset metadata")
+
+	// Asset details flags
+	assetDetailsCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
+	assetDetailsCmd.MarkFlagRequired("address")
+	assetDetailsCmd.Flags().StringVarP(&next, "next", "n", "", "The next asset index to use for pagination")
+	assetDetailsCmd.Flags().Uint64VarP(&limit, "limit", "l", 0, "The maximum number of assets to return")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -145,23 +161,19 @@ func init() {
 	changeOnlineCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different due to rekeying")
 	changeOnlineCmd.Flags().BoolVarP(&online, "online", "o", true, "Set this account to online or offline")
 	changeOnlineCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
-	changeOnlineCmd.Flags().Uint64VarP(&firstValid, "firstRound", "", 0, "")
-	changeOnlineCmd.Flags().Uint64VarP(&firstValid, "firstvalid", "", 0, "FirstValid for the status change transaction (0 for current)")
-	changeOnlineCmd.Flags().Uint64VarP(&numValidRounds, "validRounds", "", 0, "")
-	changeOnlineCmd.Flags().Uint64VarP(&numValidRounds, "validrounds", "v", 0, "The validity period for the status change transaction")
-	changeOnlineCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
+	changeOnlineCmd.Flags().Uint64VarP((*uint64)(&firstValid), "firstvalid", "", 0, "FirstValid for the status change transaction (0 for current)")
+	changeOnlineCmd.Flags().Uint64VarP((*uint64)(&numValidRounds), "validrounds", "v", 0, "The validity period for the status change transaction")
+	changeOnlineCmd.Flags().Uint64Var((*uint64)(&lastValid), "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	changeOnlineCmd.Flags().StringVarP(&statusChangeLease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
 	changeOnlineCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file")
 	changeOnlineCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	changeOnlineCmd.Flags().MarkDeprecated("firstRound", "use --firstvalid instead")
-	changeOnlineCmd.Flags().MarkDeprecated("validRounds", "use --validrounds instead")
 
 	// addParticipationKey flags
 	addParticipationKeyCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account to associate with the generated partkey")
 	addParticipationKeyCmd.MarkFlagRequired("address")
-	addParticipationKeyCmd.Flags().Uint64VarP(&roundFirstValid, "roundFirstValid", "", 0, "The first round for which the generated partkey will be valid")
+	addParticipationKeyCmd.Flags().Uint64VarP((*uint64)(&roundFirstValid), "roundFirstValid", "", 0, "The first round for which the generated partkey will be valid")
 	addParticipationKeyCmd.MarkFlagRequired("roundFirstValid")
-	addParticipationKeyCmd.Flags().Uint64VarP(&roundLastValid, "roundLastValid", "", 0, "The last round for which the generated partkey will be valid")
+	addParticipationKeyCmd.Flags().Uint64VarP((*uint64)(&roundLastValid), "roundLastValid", "", 0, "The last round for which the generated partkey will be valid")
 	addParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	addParticipationKeyCmd.Flags().StringVarP(&partKeyOutDir, "outdir", "o", "", "Save participation key file to specified output directory to (for offline creation)")
 	addParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys (defaults to sqrt of validity window)")
@@ -184,14 +196,14 @@ func init() {
 	renewParticipationKeyCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to update (required)")
 	renewParticipationKeyCmd.MarkFlagRequired("address")
 	renewParticipationKeyCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
-	renewParticipationKeyCmd.Flags().Uint64VarP(&roundLastValid, "roundLastValid", "", 0, "The last round for which the generated partkey will be valid")
+	renewParticipationKeyCmd.Flags().Uint64VarP((*uint64)(&roundLastValid), "roundLastValid", "", 0, "The last round for which the generated partkey will be valid")
 	renewParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	renewParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
 	renewParticipationKeyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 
 	// renewAllParticipationKeyCmd
 	renewAllParticipationKeyCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transactions (defaults to suggested fee)")
-	renewAllParticipationKeyCmd.Flags().Uint64VarP(&roundLastValid, "roundLastValid", "", 0, "The last round for which the generated partkeys will be valid")
+	renewAllParticipationKeyCmd.Flags().Uint64VarP((*uint64)(&roundLastValid), "roundLastValid", "", 0, "The last round for which the generated partkeys will be valid")
 	renewAllParticipationKeyCmd.MarkFlagRequired("roundLastValid")
 	renewAllParticipationKeyCmd.Flags().Uint64VarP(&keyDilution, "keyDilution", "", 0, "Key dilution for two-level participation keys")
 	renewAllParticipationKeyCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
@@ -201,15 +213,11 @@ func init() {
 	markNonparticipatingCmd.MarkFlagRequired("address")
 	markNonparticipatingCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from address due to rekeying")
 	markNonparticipatingCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
-	markNonparticipatingCmd.Flags().Uint64VarP(&firstValid, "firstRound", "", 0, "")
-	markNonparticipatingCmd.Flags().Uint64VarP(&firstValid, "firstvalid", "", 0, "FirstValid for the status change transaction (0 for current)")
-	markNonparticipatingCmd.Flags().Uint64VarP(&numValidRounds, "validRounds", "", 0, "")
-	markNonparticipatingCmd.Flags().Uint64VarP(&numValidRounds, "validrounds", "v", 0, "The validity period for the status change transaction")
-	markNonparticipatingCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
+	markNonparticipatingCmd.Flags().Uint64VarP((*uint64)(&firstValid), "firstvalid", "", 0, "FirstValid for the status change transaction (0 for current)")
+	markNonparticipatingCmd.Flags().Uint64VarP((*uint64)(&numValidRounds), "validrounds", "v", 0, "The validity period for the status change transaction")
+	markNonparticipatingCmd.Flags().Uint64Var((*uint64)(&lastValid), "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	markNonparticipatingCmd.Flags().StringVarP(&statusChangeTxFile, "txfile", "t", "", "Write status change transaction to this file, rather than posting to network")
 	markNonparticipatingCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
-	markNonparticipatingCmd.Flags().MarkDeprecated("firstRound", "use --firstvalid instead")
-	markNonparticipatingCmd.Flags().MarkDeprecated("validRounds", "use --validrounds instead")
 
 	dumpCmd.Flags().StringVarP(&dumpOutFile, "outfile", "o", "", "Save balance record to specified output file")
 	dumpCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -534,6 +542,33 @@ var listCmd = &cobra.Command{
 	},
 }
 
+var assetDetailsCmd = &cobra.Command{
+	Use:   "assetdetails",
+	Short: "Retrieve information about the assets belonging to the specified account inclusive of asset metadata",
+	Long:  `Retrieve information about the assets the specified account has created or opted into, inclusive of asset metadata.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := datadir.EnsureSingleDataDir()
+		client := ensureAlgodClient(dataDir)
+
+		var nextPtr *string
+		var limitPtr *uint64
+		if next != "" {
+			nextPtr = &next
+		}
+		if limit != 0 {
+			limitPtr = &limit
+		}
+		response, err := client.AccountAssetsInformation(accountAddress, nextPtr, limitPtr)
+
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		printAccountAssetsInformation(accountAddress, response)
+
+	},
+}
 var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Retrieve information about the assets and applications belonging to the specified account",
@@ -547,18 +582,17 @@ var infoCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		hasError := printAccountInfo(client, accountAddress, onlyShowAssetIds, response)
+		hasError := printAccountInfo(client, accountAddress, onlyShowAssetIDs, response)
 		if hasError {
 			os.Exit(1)
 		}
 	},
 }
 
-func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account model.Account) bool {
+func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIDs bool, account model.Account) bool {
 	var createdAssets []model.Asset
 	if account.CreatedAssets != nil {
-		createdAssets = make([]model.Asset, len(*account.CreatedAssets))
-		copy(createdAssets, *account.CreatedAssets)
+		createdAssets = slices.Clone(*account.CreatedAssets)
 		sort.Slice(createdAssets, func(i, j int) bool {
 			return createdAssets[i].Index < createdAssets[j].Index
 		})
@@ -566,8 +600,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 
 	var heldAssets []model.AssetHolding
 	if account.Assets != nil {
-		heldAssets = make([]model.AssetHolding, len(*account.Assets))
-		copy(heldAssets, *account.Assets)
+		heldAssets = slices.Clone(*account.Assets)
 		sort.Slice(heldAssets, func(i, j int) bool {
 			return heldAssets[i].AssetID < heldAssets[j].AssetID
 		})
@@ -575,8 +608,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 
 	var createdApps []model.Application
 	if account.CreatedApps != nil {
-		createdApps = make([]model.Application, len(*account.CreatedApps))
-		copy(createdApps, *account.CreatedApps)
+		createdApps = slices.Clone(*account.CreatedApps)
 		sort.Slice(createdApps, func(i, j int) bool {
 			return createdApps[i].Id < createdApps[j].Id
 		})
@@ -584,8 +616,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 
 	var optedInApps []model.ApplicationLocalState
 	if account.AppsLocalState != nil {
-		optedInApps = make([]model.ApplicationLocalState, len(*account.AppsLocalState))
-		copy(optedInApps, *account.AppsLocalState)
+		optedInApps = slices.Clone(*account.AppsLocalState)
 		sort.Slice(optedInApps, func(i, j int) bool {
 			return optedInApps[i].Id < optedInApps[j].Id
 		})
@@ -626,15 +657,21 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, assetHolding := range heldAssets {
-		if onlyShowAssetIds {
+		if onlyShowAssetIDs {
 			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetID)
 			continue
 		}
 		assetParams, err := client.AssetInformation(assetHolding.AssetID)
 		if err != nil {
-			hasError = true
-			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetID, address, err)
-			fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetID)
+			var httpError apiClient.HTTPError
+			if errors.As(err, &httpError) && httpError.StatusCode == http.StatusNotFound {
+				fmt.Fprintf(report, "\tID %d, <deleted/unknown asset>\n", assetHolding.AssetID)
+			} else {
+				fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", assetHolding.AssetID, address, err)
+				fmt.Fprintf(report, "\tID %d, error\n", assetHolding.AssetID)
+				hasError = true
+			}
+			continue
 		}
 
 		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Params.Decimals)
@@ -690,7 +727,12 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 			extraPages = fmt.Sprintf(", %d extra page%s", *app.Params.ExtraProgramPages, plural)
 		}
 
-		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes)
+		version := uint64(0)
+		if app.Params.Version != nil {
+			version = *app.Params.Version
+		}
+
+		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices, version %d\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes, version)
 	}
 
 	fmt.Fprintln(report, "Opted In Apps:")
@@ -722,6 +764,48 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 	}
 	fmt.Print(report.String())
 	return hasError
+}
+
+func printAccountAssetsInformation(address string, response model.AccountAssetsInformationResponse) {
+	fmt.Printf("Account: %s\n", address)
+	fmt.Printf("Round: %d\n", response.Round)
+	if response.NextToken != nil {
+		fmt.Printf("NextToken (to retrieve more account assets): %s\n", *response.NextToken)
+	}
+	fmt.Printf("Assets:\n")
+	for _, asset := range *response.AssetHoldings {
+		fmt.Printf("  Asset ID: %d\n", asset.AssetHolding.AssetID)
+
+		if asset.AssetParams != nil {
+			amount := assetDecimalsFmt(asset.AssetHolding.Amount, asset.AssetParams.Decimals)
+			fmt.Printf("    Amount: %s\n", amount)
+			fmt.Printf("    IsFrozen: %t\n", asset.AssetHolding.IsFrozen)
+			fmt.Printf("  Asset Params:\n")
+			fmt.Printf("    Creator: %s\n", asset.AssetParams.Creator)
+
+			name := "<unnamed>"
+			if asset.AssetParams.Name != nil {
+				_, name = unicodePrintable(*asset.AssetParams.Name)
+			}
+			fmt.Printf("    Name: %s\n", name)
+
+			units := "units"
+			if asset.AssetParams.UnitName != nil {
+				_, units = unicodePrintable(*asset.AssetParams.UnitName)
+			}
+			fmt.Printf("    Units: %s\n", units)
+			fmt.Printf("    Total: %d\n", asset.AssetParams.Total)
+			fmt.Printf("    Decimals: %d\n", asset.AssetParams.Decimals)
+			safeURL := ""
+			if asset.AssetParams.Url != nil {
+				_, safeURL = unicodePrintable(*asset.AssetParams.Url)
+			}
+			fmt.Printf("    URL: %s\n", safeURL)
+		} else {
+			fmt.Printf("    Amount (without formatting): %d\n", asset.AssetHolding.Amount)
+			fmt.Printf("    IsFrozen: %t\n", asset.AssetHolding.IsFrozen)
+		}
+	}
 }
 
 var balanceCmd = &cobra.Command{
@@ -831,21 +915,21 @@ var changeOnlineCmd = &cobra.Command{
 
 		firstTxRound, lastTxRound, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err)
 		}
 		err = changeAccountOnlineStatus(
 			accountAddress, online, statusChangeTxFile, walletName,
 			firstTxRound, lastTxRound, transactionFee, scLeaseBytes(cmd), dataDir, client,
 		)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err)
 		}
 	},
 }
 
 func changeAccountOnlineStatus(
 	acct string, goOnline bool, txFile string, wallet string,
-	firstTxRound, lastTxRound, fee uint64, leaseBytes [32]byte,
+	firstTxRound, lastTxRound basics.Round, fee uint64, leaseBytes [32]byte,
 	dataDir string, client libgoal.Client,
 ) error {
 	// Generate an unsigned online/offline tx
@@ -906,7 +990,11 @@ var addParticipationKeyCmd = &cobra.Command{
 		var err error
 		var part algodAcct.Participation
 		participationGen := func() {
-			part, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+			installFunc := func(keyPath string) error {
+				_, installErr := client.AddParticipationKey(keyPath)
+				return installErr
+			}
+			part, _, err = participation.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir, installFunc)
 		}
 
 		util.RunFuncWithSpinningCursor(participationGen)
@@ -948,16 +1036,16 @@ No --delete-input flag specified, exiting without installing key.`)
 			reportErrorf(errorRequestFail, err)
 		}
 		// In an abundance of caution, check for ourselves that the key has been installed.
-		if err := client.VerifyParticipationKey(time.Minute, addResponse.PartId); err != nil {
-			err = fmt.Errorf("unable to verify key installation. Verify key installation with 'goal account partkeyinfo' and delete '%s', or retry the command. Error: %w", partKeyFile, err)
-			reportErrorf(errorRequestFail, err)
+		if vErr := client.VerifyParticipationKey(time.Minute, addResponse.PartId); vErr != nil {
+			vErr = fmt.Errorf("unable to verify key installation. Verify key installation with 'goal account partkeyinfo' and delete '%s', or retry the command. Error: %w", partKeyFile, vErr)
+			reportErrorf(errorRequestFail, vErr)
 		}
 
 		reportInfof("Participation key installed successfully, Participation ID: %s\n", addResponse.PartId)
 
 		// Delete partKeyFile
-		if nil != os.Remove(partKeyFile) {
-			reportErrorf("An error occurred while removing the partkey file, please delete it manually: %s", err)
+		if osErr := os.Remove(partKeyFile); osErr != nil {
+			reportErrorf("An error occurred while removing the partkey file, please delete it manually: %s", osErr)
 		}
 	},
 }
@@ -983,10 +1071,10 @@ var renewParticipationKeyCmd = &cobra.Command{
 		}
 		proto := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 
-		if roundLastValid <= (currentRound + proto.MaxTxnLife) {
+		if roundLastValid <= (currentRound + basics.Round(proto.MaxTxnLife)) {
 			reportErrorf(errLastRoundInvalid, currentRound)
 		}
-		txRoundLastValid := currentRound + proto.MaxTxnLife
+		txRoundLastValid := currentRound + basics.Round(proto.MaxTxnLife)
 
 		// Make sure we don't already have a partkey valid for (or after) specified roundLastValid
 		parts, err := client.ListParticipationKeys()
@@ -1003,7 +1091,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 
 		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, txRoundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err)
 		}
 
 		version := config.GetCurrentVersion()
@@ -1011,7 +1099,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 	},
 }
 
-func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
+func generateAndRegisterPartKey(address string, currentRound, keyLastValidRound, txLastValidRound basics.Round, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string, dataDir string, client libgoal.Client) error {
 	// Generate a participation keys database and install it
 	var part algodAcct.Participation
 	var keyPath string
@@ -1057,7 +1145,7 @@ var renewAllParticipationKeyCmd = &cobra.Command{
 	},
 }
 
-func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string) error {
+func renewPartKeysInDir(dataDir string, lastValidRound basics.Round, fee uint64, leaseBytes [32]byte, dilution uint64, wallet string) error {
 	client := ensureAlgodClient(dataDir)
 
 	// Build list of accounts to renew from all accounts with part keys present
@@ -1087,10 +1175,10 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	}
 	proto := config.Consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 
-	if lastValidRound <= (currentRound + proto.MaxTxnLife) {
+	if lastValidRound <= (currentRound + basics.Round(proto.MaxTxnLife)) {
 		return fmt.Errorf(errLastRoundInvalid, currentRound)
 	}
-	txLastValidRound := currentRound + proto.MaxTxnLife
+	txLastValidRound := currentRound + basics.Round(proto.MaxTxnLife)
 
 	var anyErrors bool
 
@@ -1122,15 +1210,11 @@ func renewPartKeysInDir(dataDir string, lastValidRound uint64, fee uint64, lease
 	return nil
 }
 
-func maxRound(current uint64, next *uint64) uint64 {
+func maxRound(current basics.Round, next *basics.Round) basics.Round {
 	if next != nil && *next > current {
 		return *next
 	}
 	return current
-}
-
-func uintToStr(number uint64) string {
-	return fmt.Sprintf("%d", number)
 }
 
 var listParticipationKeysCmd = &cobra.Command{
@@ -1148,12 +1232,13 @@ var listParticipationKeysCmd = &cobra.Command{
 		}
 
 		// Squeezed this into 77 characters.
-		rowFormat := "%-10s  %-11s  %-15s  %10s  %11s  %10s\n"
-		fmt.Printf(rowFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
+		hdrFormat := "%-10s  %-11s  %-15s  %10s  %11s  %10s\n"
+		rowFormat := "%-10s  %-11s  %-15s  %10s  %11d  %10d\n"
+		fmt.Printf(hdrFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
 		for _, part := range parts {
-			onlineInfoStr := "unknown"
 			onlineAccountInfo, err := client.AccountInformation(part.Address, false)
 			if err == nil {
+				onlineInfoStr := "no"
 				votingBytes := part.Key.VoteParticipationKey
 				vrfBytes := part.Key.SelectionParticipationKey
 				if onlineAccountInfo.Participation != nil &&
@@ -1163,8 +1248,6 @@ var listParticipationKeysCmd = &cobra.Command{
 					(onlineAccountInfo.Participation.VoteLastValid == part.Key.VoteLastValid) &&
 					(onlineAccountInfo.Participation.VoteKeyDilution == part.Key.VoteKeyDilution) {
 					onlineInfoStr = "yes"
-				} else {
-					onlineInfoStr = "no"
 				}
 
 				/*
@@ -1182,17 +1265,14 @@ var listParticipationKeysCmd = &cobra.Command{
 				lastUsed := maxRound(0, part.LastVote)
 				lastUsed = maxRound(lastUsed, part.LastBlockProposal)
 				lastUsed = maxRound(lastUsed, part.LastStateProof)
-				lastUsedString := "N/A"
-				if lastUsed != 0 {
-					lastUsedString = uintToStr(lastUsed)
-				}
+				lastUsedString := roundOrNA(&lastUsed)
 				fmt.Printf(rowFormat,
 					onlineInfoStr,
 					fmt.Sprintf("%s...%s", part.Address[:4], part.Address[len(part.Address)-4:]),
 					fmt.Sprintf("%s...", part.Id[:8]),
 					lastUsedString,
-					uintToStr(part.Key.VoteFirstValid),
-					uintToStr(part.Key.VoteLastValid))
+					part.Key.VoteFirstValid,
+					part.Key.VoteLastValid)
 			}
 		}
 	},
@@ -1374,11 +1454,11 @@ var importRootKeysCmd = &cobra.Command{
 	},
 }
 
-func strOrNA(value *uint64) string {
-	if value == nil {
+func roundOrNA(value *basics.Round) string {
+	if value == nil || *value == 0 {
 		return "N/A"
 	}
-	return uintToStr(*value)
+	return strconv.FormatUint(uint64(*value), 10)
 }
 
 var partkeyInfoCmd = &cobra.Command{
@@ -1401,12 +1481,12 @@ var partkeyInfoCmd = &cobra.Command{
 				fmt.Println()
 				fmt.Printf("Participation ID:          %s\n", part.Id)
 				fmt.Printf("Parent address:            %s\n", part.Address)
-				fmt.Printf("Last vote round:           %s\n", strOrNA(part.LastVote))
-				fmt.Printf("Last block proposal round: %s\n", strOrNA(part.LastBlockProposal))
+				fmt.Printf("Last vote round:           %s\n", roundOrNA(part.LastVote))
+				fmt.Printf("Last block proposal round: %s\n", roundOrNA(part.LastBlockProposal))
 				// PKI TODO: enable with state proof support.
 				//fmt.Printf("Last state proof round:    %s\n", strOrNA(part.LastStateProof))
-				fmt.Printf("Effective first round:     %s\n", strOrNA(part.EffectiveFirstValid))
-				fmt.Printf("Effective last round:      %s\n", strOrNA(part.EffectiveLastValid))
+				fmt.Printf("Effective first round:     %s\n", roundOrNA(part.EffectiveFirstValid))
+				fmt.Printf("Effective last round:      %s\n", roundOrNA(part.EffectiveLastValid))
 				fmt.Printf("First round:               %d\n", part.Key.VoteFirstValid)
 				fmt.Printf("Last round:                %d\n", part.Key.VoteLastValid)
 				fmt.Printf("Key dilution:              %d\n", part.Key.VoteKeyDilution)

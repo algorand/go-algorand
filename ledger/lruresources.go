@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,13 +18,14 @@ package ledger
 
 import (
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/util"
 )
 
 //msgp:ignore cachedResourceData
 type cachedResourceData struct {
-	store.PersistedResourcesData
+	trackerdb.PersistedResourcesData
 
 	address basics.Address
 }
@@ -35,11 +36,11 @@ type cachedResourceData struct {
 type lruResources struct {
 	// resourcesList contain the list of persistedResourceData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
-	resourcesList *persistedResourcesDataList
+	resourcesList *util.List[*cachedResourceData]
 
 	// resources provides fast access to the various elements in the list by using the account address
 	// if lruResources is set with pendingWrites 0, then resources is nil
-	resources map[accountCreatable]*persistedResourcesDataListNode
+	resources map[accountCreatable]*util.ListNode[*cachedResourceData]
 
 	// pendingResources are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the resources/resourcesList
@@ -61,8 +62,8 @@ type lruResources struct {
 // thread locking semantics : write lock
 func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	if pendingWrites > 0 {
-		m.resourcesList = newPersistedResourcesList().allocateFreeNodes(pendingWrites)
-		m.resources = make(map[accountCreatable]*persistedResourcesDataListNode, pendingWrites)
+		m.resourcesList = util.NewList[*cachedResourceData]().AllocateFreeNodes(pendingWrites)
+		m.resources = make(map[accountCreatable]*util.ListNode[*cachedResourceData], pendingWrites)
 		m.pendingResources = make(chan cachedResourceData, pendingWrites)
 		m.notFound = make(map[accountCreatable]struct{}, pendingWrites)
 		m.pendingNotFound = make(chan accountCreatable, pendingWrites)
@@ -73,11 +74,11 @@ func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWrites
 
 // read the persistedResourcesData object that the lruResources has for the given address and creatable index.
 // thread locking semantics : read lock
-func (m *lruResources) read(addr basics.Address, aidx basics.CreatableIndex) (data store.PersistedResourcesData, has bool) {
+func (m *lruResources) read(addr basics.Address, aidx basics.CreatableIndex) (data trackerdb.PersistedResourcesData, has bool) {
 	if el := m.resources[accountCreatable{address: addr, index: aidx}]; el != nil {
 		return el.Value.PersistedResourcesData, true
 	}
-	return store.PersistedResourcesData{}, false
+	return trackerdb.PersistedResourcesData{}, false
 }
 
 // readNotFound returns whether we have attempted to read this address but it did not exist in the db.
@@ -89,7 +90,7 @@ func (m *lruResources) readNotFound(addr basics.Address, idx basics.CreatableInd
 
 // read the persistedResourcesData object that the lruResources has for the given address.
 // thread locking semantics : read lock
-func (m *lruResources) readAll(addr basics.Address) (ret []store.PersistedResourcesData) {
+func (m *lruResources) readAll(addr basics.Address) (ret []trackerdb.PersistedResourcesData) {
 	for ac, pd := range m.resources {
 		if ac.address == addr {
 			ret = append(ret, pd.Value.PersistedResourcesData)
@@ -103,7 +104,7 @@ func (m *lruResources) readAll(addr basics.Address) (ret []store.PersistedResour
 func (m *lruResources) flushPendingWrites() {
 	pendingEntriesCount := len(m.pendingResources)
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
-		m.log.Warnf("lruResources: number of entries in pendingResources(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
+		m.log.Infof("lruResources: number of entries in pendingResources(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}
 
 outer:
@@ -131,7 +132,7 @@ outer2:
 // writePending write a single persistedAccountData entry to the pendingResources buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *lruResources) writePending(acct store.PersistedResourcesData, addr basics.Address) {
+func (m *lruResources) writePending(acct trackerdb.PersistedResourcesData, addr basics.Address) {
 	select {
 	case m.pendingResources <- cachedResourceData{PersistedResourcesData: acct, address: addr}:
 	default:
@@ -153,7 +154,7 @@ func (m *lruResources) writeNotFoundPending(addr basics.Address, idx basics.Crea
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruResources) write(resData store.PersistedResourcesData, addr basics.Address) {
+func (m *lruResources) write(resData trackerdb.PersistedResourcesData, addr basics.Address) {
 	if m.resources == nil {
 		return
 	}
@@ -163,10 +164,10 @@ func (m *lruResources) write(resData store.PersistedResourcesData, addr basics.A
 			// we update with a newer version.
 			el.Value = &cachedResourceData{PersistedResourcesData: resData, address: addr}
 		}
-		m.resourcesList.moveToFront(el)
+		m.resourcesList.MoveToFront(el)
 	} else {
 		// new entry.
-		m.resources[accountCreatable{address: addr, index: resData.Aidx}] = m.resourcesList.pushFront(&cachedResourceData{PersistedResourcesData: resData, address: addr})
+		m.resources[accountCreatable{address: addr, index: resData.Aidx}] = m.resourcesList.PushFront(&cachedResourceData{PersistedResourcesData: resData, address: addr})
 	}
 }
 
@@ -177,13 +178,11 @@ func (m *lruResources) prune(newSize int) (removed int) {
 	if m.resources == nil {
 		return
 	}
-	for {
-		if len(m.resources) <= newSize {
-			break
-		}
-		back := m.resourcesList.back()
+	for len(m.resources) > newSize {
+
+		back := m.resourcesList.Back()
 		delete(m.resources, accountCreatable{address: back.Value.address, index: back.Value.Aidx})
-		m.resourcesList.remove(back)
+		m.resourcesList.Remove(back)
 		removed++
 	}
 

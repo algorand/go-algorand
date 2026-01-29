@@ -71,7 +71,8 @@ while [ $CROUND -lt $TIMEOUT_ROUND ]; do
     CROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
-${gcmd} clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
+# send txn that valid right after the TIMEOUT_ROUND
+${gcmd} clerk send --firstvalid $((${TIMEOUT_ROUND} + 1))  --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
 
 cat >${TEMPDIR}/true.teal<<EOF
 #pragma version 2
@@ -119,6 +120,28 @@ ${gcmd} clerk send --amount 1000000 --from ${ACCOUNT} --to ${ACCOUNTM}
 
 ${gcmd} clerk send --amount 200000 --from ${ACCOUNTM} --to ${ACCOUNTC} -L ${TEMPDIR}/mtrue.lsig
 
+# Test new multisig mode (e2e using vFuture)
+echo "Testing multisig mode..."
+${gcmd} clerk multisig signprogram --legacy-msig=false -p ${TEMPDIR}/true.teal -a ${ACCOUNT} -A ${ACCOUNTM} -o ${TEMPDIR}/mtrue_new.lsig
+${gcmd} clerk multisig signprogram --legacy-msig=false -L ${TEMPDIR}/mtrue_new.lsig -a ${ACCOUNTB} -o ${TEMPDIR}/mtrue_new2.lsig
+${gcmd} clerk send --amount 100000 --from ${ACCOUNTM} --to ${ACCOUNTB} -L ${TEMPDIR}/mtrue_new2.lsig
+
+# Test that mixing modes fails: since this is vFuture, mtrue.lsig has LMsig field
+# Try to use it with --legacy-msig=true (which expects Msig field)
+set +e
+OUTPUT=$(${gcmd} clerk multisig signprogram --legacy-msig=true -L ${TEMPDIR}/mtrue.lsig -a ${ACCOUNTB} -o ${TEMPDIR}/mtrue_mixed.lsig 2>&1)
+if [ $? -eq 0 ]; then
+    echo "ERROR: Expected failure when mixing new signature with legacy mode, but command succeeded"
+    exit 1
+fi
+echo "$OUTPUT" | grep -q "LogicSig file contains LMsig field"
+if [ $? -ne 0 ]; then
+    echo "ERROR: Expected error message about LMsig field, got: $OUTPUT"
+    exit 1
+fi
+echo "Correctly rejected mixing new signature with legacy mode"
+set -e
+
 echo "#pragma version 1" | ${gcmd} clerk compile -
 echo "#pragma version 2" | ${gcmd} clerk compile -
 
@@ -156,7 +179,14 @@ printf '\x02' | dd of=${TEMPDIR}/true2.lsig bs=1 seek=0 count=1 conv=notrunc
 ${gcmd} clerk compile ${TEAL}/quine.teal -m
 trap 'rm ${TEAL}/quine.teal.*' EXIT
 if ! diff ${TEAL}/quine.map ${TEAL}/quine.teal.tok.map; then
-    echo "produced source maps do not match"
+    echo "produced source maps do not match: ${TEAL}/quine.map vs ${TEAL}/quine.teal.tok.map"
+    exit 1
+fi
+
+${gcmd} clerk compile ${TEAL}/sourcemap-test.teal -m
+trap 'rm ${TEAL}/sourcemap-test.teal.*' EXIT
+if ! diff ${TEAL}/sourcemap-test.map ${TEAL}/sourcemap-test.teal.tok.map; then
+    echo "produced source maps do not match: ${TEAL}/sourcemap-test.map vs ${TEAL}/sourcemap-test.teal.tok.map"
     exit 1
 fi
 

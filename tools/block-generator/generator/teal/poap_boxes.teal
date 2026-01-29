@@ -1,0 +1,551 @@
+// SOURCE: https://algoscan.app/app/946441472
+#pragma version 8
+
+intcblock 0 2 1 6 2000 5 4
+bytecblock 0x151f7c75 0x706f61705f6f6e626f6172645f636f756e74 0x706f61705f636f756e74 0x706f61705f617574686f725f61646472657373
+txn RekeyTo
+global ZeroAddress
+==
+assert
+
+txn CloseRemainderTo
+global ZeroAddress
+==
+assert
+
+txn AssetCloseTo
+global ZeroAddress
+==
+assert
+
+txn TypeEnum
+intc_3 // 6
+==
+assert
+
+txn Fee
+global MinTxnFee
+>=
+txn Fee
+intc_0 // 0
+==
+||
+assert
+
+txn ApplicationID
+bz label1
+
+txn OnCompletion
+intc 5 // 5
+==
+bnz label2
+
+txn OnCompletion
+intc 6 // 4
+==
+bnz label3
+
+txn OnCompletion
+intc_1 // 2
+==
+bnz label4
+
+txn OnCompletion
+intc_2 // 1 == OptInOC
+==
+bnz label5
+
+txn NumAppArgs
+intc_0 // 0
+==
+bz label6 // if have some app args ... continue ...
+b label7  // if no app app args: error
+
+label6:
+
+	pushbytes 0x53743e2e // "St>."
+	txna ApplicationArgs 0
+	==
+	bnz label8
+
+	pushbytes 0xddc3d103 // 0xddc3d103
+	txna ApplicationArgs 0
+	==
+	bnz label9 // create an app with approval in arg1 and clear in arg2 and return the new appID
+
+	pushbytes 0x935e5c25 // 0x935e5c25
+	txna ApplicationArgs 0
+	==
+	bnz label10 // lets you call an arbitrary app with appid provided in arg1, approval program arg2, and clear program arg3
+
+	pushbytes 0xedbb9ab8 // 0xedbb9ab8
+	txna ApplicationArgs 0
+	==
+	bnz label11 // delete case
+
+	pushbytes 0xe1f93f1d // 0xe1f93f1d <--- what we want to call
+	txna ApplicationArgs 0
+	==
+	bnz label12
+	b label7
+
+label17:
+
+	txn Sender
+	global CreatorAddress
+	==
+	assert
+	retsub
+
+label1: // App Creation
+
+	bytec_0 // 0x151f7c75
+	global CurrentApplicationID
+	itob
+	concat
+	b globalset
+
+label15: // trying to optin with non-zero balance and when app already exists
+
+	global GroupSize
+	intc_1 // 2
+	==
+	assert // must be in a group of 2
+
+	gtxn 1 Amount
+	int 2000000 // pay 2 algo
+	// intc 4 // 2000
+	==
+
+	gtxn 1 Receiver
+	global CurrentApplicationAddress
+	==
+	&&
+	assert
+
+	// we don't want to limit the generator to only allow the creator to be the sender
+	// so the following is commented out:
+	// gtxn 1 Sender
+	// global CreatorAddress
+	// ==
+	// assert // 2nd txn in the group must be a pymt to the app for .002 Algos from the creator
+	gtxn 1 Fee
+
+	intc 4 // 2000
+	==
+	assert // fee must be 2000
+
+	itxn_begin
+	intc_2 // 1
+	itxn_field TypeEnum // payment txn
+	txn Sender
+	itxn_field Receiver
+	pushint 764000
+	itxn_field Amount
+	global MinTxnFee
+	itxn_field Fee
+	itxn_submit  // send 0.764 Algos from the app account to the Sender!!!
+
+	itxn_begin
+	intc_2 // 1
+	itxn_field TypeEnum // payment txn
+	global CreatorAddress
+	itxn_field Receiver
+	pushint 4000
+	itxn_field Amount
+	global MinTxnFee
+	itxn_field Fee
+	itxn_submit // send .004 Algos to the creator
+	retsub
+
+label5:
+
+	txn Sender
+	store 3
+
+	load 3 // Sender
+	balance
+	store 4 // SenderBalance
+
+	load 4
+	bz label7
+	callsub label15 // This introduces 2 inner txns
+
+	bytec_1 // "poap_onboard_count"
+	dup
+	app_global_get
+	intc_2 // 1
+	+
+	app_global_put
+	callsub label16
+
+	bytec_0 // 0x151f7c75
+	pushbytes 0x616c676f706f61705f6f7074696e // "algopoap_optin"
+	concat
+	b label13
+
+label16:
+
+	load 3 // Sender
+	// 992 = 1024 - 32 bytes:
+	byte "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+
+	box_put  // boxes[Sender] = "z" * 992 - our box of size 1024 has MBR 412,100 µA
+	retsub
+
+label2:
+
+	callsub label17
+
+	bytec_0 // 0x151f7c75
+	global CurrentApplicationID
+	itob
+	concat
+	b label13
+
+label3:
+
+	callsub label17
+
+	bytec_0 // 0x151f7c75
+	global CurrentApplicationID
+	itob
+	concat
+	b label13
+
+label4:
+
+	txn Sender
+	store 3  // 3 -> Sender
+
+	load 3
+	box_del
+	pop
+	bytec_0 // 0x151f7c75
+	pushbytes 0x616c676f706f61705f636c6f73656f7574 // "algopoap_closeout"
+	concat
+	b label13
+
+label8:
+
+	callsub label17
+
+	bytec_1 // "poap_onboard_count"
+	intc_0 // 0
+	app_global_put
+
+	bytec_2 // "poap_count"
+	intc_0 // 0
+	app_global_put
+
+	bytec_0 // 0x151f7c75
+	txna ApplicationArgs 1
+	concat
+	b label13
+
+label9:
+
+	intc_0 // 0
+	global CurrentApplicationID
+	app_opted_in
+	assert
+
+	global GroupSize
+	intc_1 // 2
+	==
+	assert
+
+	gtxn 0 RekeyTo
+	global ZeroAddress
+	==
+	assert
+
+	gtxn 0 CloseRemainderTo
+	global ZeroAddress
+	==
+	assert
+
+	gtxn 0 AssetCloseTo
+	global ZeroAddress
+	==
+	assert
+
+	gtxn 0 TypeEnum
+	intc_2 // 1  // first txn in group is a payment
+	==
+	assert
+
+	gtxn 0 Fee
+	global MinTxnFee
+	>=
+	assert
+
+	gtxn 0 Amount
+	intc 4 // 2000
+	>=
+	assert
+
+	txn GroupIndex
+	intc_2 // 1
+	-
+	dup
+	gtxns Receiver
+	global CurrentApplicationAddress
+	==
+	assert
+
+	gtxns Amount
+	global MinTxnFee
+	intc_1 // 2
+	*
+	>=
+	assert
+
+	itxn_begin
+	intc_3 // 6
+	itxn_field TypeEnum // app call type
+	intc_0 // 0
+	itxn_field OnCompletion
+	txna ApplicationArgs 1
+	dup
+	len
+	intc_1 // 2
+	swap
+	substring3
+	itxn_field ApprovalProgram
+	txna ApplicationArgs 2
+	dup
+	len
+	intc_1 // 2
+	swap
+	substring3
+	itxn_field ClearStateProgram
+	pushint 12
+	itxn_field GlobalNumByteSlice
+	pushint 18
+	itxn_field GlobalNumUint
+	intc_1 // 2
+	itxn_field LocalNumUint
+	intc_2 // 1
+	itxn_field LocalNumByteSlice
+	txn Sender
+	itxn_field Note
+	itxn_submit
+
+	itxn CreatedApplicationID
+	store 2
+
+	bytec_2 // "poap_count"
+	dup
+	app_global_get
+	intc_2 // 1
+	+
+	app_global_put
+
+	bytec_0 // 0x151f7c75
+	load 2
+	itob
+	concat
+	b label13
+
+label10:
+
+	intc_0 // 0
+	global CurrentApplicationID
+	app_opted_in
+	assert
+
+	itxn_begin
+	intc_3 // 6
+	itxn_field TypeEnum // app call type
+	intc 6 // 4
+	itxn_field OnCompletion
+	txna ApplicationArgs 1
+	btoi
+	txnas Applications
+	dup
+	store 1
+
+	itxn_field ApplicationID
+	load 1
+	bytec_3 // "poap_author_address"
+	app_global_get_ex
+	assert
+
+	txn Sender
+	==
+	assert
+
+	txna ApplicationArgs 2
+	dup
+	len
+	intc_1 // 2
+	swap
+	substring3
+	itxn_field ApprovalProgram
+	txna ApplicationArgs 3
+	dup
+	len
+	intc_1 // 2
+	swap
+	substring3
+	itxn_field ClearStateProgram
+	txn Sender
+	itxn_field Note
+	itxn_submit
+
+	bytec_0 // 0x151f7c75
+	load 1
+	itob
+	concat
+	b label13
+
+label11:
+
+	intc_0 // 0
+	global CurrentApplicationID
+	app_opted_in
+	assert
+
+	itxn_begin
+	txna Assets 0
+	itxn_field Assets
+	intc_3 // 6
+	itxn_field TypeEnum // 6 => app call
+	intc 5 // 5
+	itxn_field OnCompletion // 5 => delete application
+	txna ApplicationArgs 1
+	btoi
+	txnas Applications
+	dup
+	store 1
+
+	itxn_field ApplicationID
+	load 1
+	bytec_3 // "poap_author_address"
+	app_global_get_ex
+	assert
+
+	txn Sender
+	==
+	assert
+	itxn_submit
+
+	bytec_0 // 0x151f7c75
+	b label13
+
+label12:
+
+	// intc_0 // 0
+	txn Sender
+
+	global CurrentApplicationID
+	app_opted_in
+	assert
+
+	bytec_0 // 0x151f7c75
+	txn Sender
+	box_get
+	assert
+
+	concat
+	b label13
+
+label7:
+
+	err
+
+label13:
+
+	log
+
+	intc_2 // 1
+	return
+
+globalset:
+
+	// 64 bytes
+	byte "Why did the chicken cross the road? The answer has been omitted."
+
+	txn Sender
+	byte "0000000000000000000000000000000000000000000000000000000000000000"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "1111111111111111111111111111111111111111111111111111111111111111"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "2222222222222222222222222222222222222222222222222222222222222222"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "3333333333333333333333333333333333333333333333333333333333333332"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "4444444444444444444444444444444444444444444444444444444444444444"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "5555555555555555555555555555555555555555555555555555555555555555"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "6666666666666666666666666666666666666666666666666666666666666666"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "7777777777777777777777777777777777777777777777777777777777777777"
+	uncover 2
+	app_global_put
+
+	int 1337
+	txn Sender
+	byte "8888888888888888888888888888888888888888888888888888888888888888"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "9999999999999999999999999999999999999999999999999999999999999999"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	dig 2
+	app_global_put
+
+	txn Sender
+	byte "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	uncover 2
+	app_global_put
+	b label13
+

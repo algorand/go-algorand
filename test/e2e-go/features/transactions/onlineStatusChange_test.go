@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -24,11 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-const transactionValidityPeriod = uint64(100) // rounds
+const transactionValidityPeriod = basics.Round(100)
 const transactionFee = uint64(0)
 
 func TestAccountsCanChangeOnlineState(t *testing.T) {
@@ -124,12 +126,12 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	if doNonparticipationTest {
 		txidsForStatusChange[nonparticipatingTxID] = becomesNonparticipating
 	}
-	txnConfirmationDeadline := curRound + uint64(5)
+	txnConfirmationDeadline := curRound + 5
 	confirmed := fixture.WaitForAllTxnsToConfirm(txnConfirmationDeadline, txidsForStatusChange)
 	a.True(confirmed, "Transactions failed to confirm.")
 
 	_, curRound = fixture.GetBalanceAndRound(initiallyOnline)
-	fixture.WaitForRoundWithTimeout(curRound + uint64(1))
+	fixture.WaitForRoundWithTimeout(curRound + 1)
 
 	// assert that initiallyOffline is now online
 	initiallyOfflineAccountStatus, err = client.AccountInformation(initiallyOffline, false)
@@ -171,7 +173,10 @@ func TestCloseOnError(t *testing.T) {
 	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
 
 	var partkeyFile string
-	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir())
+	installFunc := func(keyPath string) error {
+		return errors.New("the install directory is provided, so keys should not be installed")
+	}
+	_, partkeyFile, err = participation.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir(), installFunc)
 	a.NoError(err)
 
 	// make a participation key for initiallyOffline

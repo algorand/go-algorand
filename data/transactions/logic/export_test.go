@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,21 +16,18 @@
 
 package logic
 
-import "github.com/algorand/go-algorand/data/basics"
+import (
+	"testing"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+)
 
 // Export for testing only.  See
 // https://medium.com/@robiplus/golang-trick-export-for-test-aa16cbd7b8cd for a
 // nice explanation. tl;dr: Since some of our testing is in logic_test package,
 // we export some extra things to make testing easier there. But we do it in a
 // _test.go file, so they are only exported during testing.
-
-func NewExpect(l int, s string) Expect {
-	return Expect{l, s}
-}
-
-func (ep *EvalParams) Reset() {
-	ep.reset()
-}
 
 // Inefficient (hashing), just a testing convenience
 func (l *Ledger) CreateBox(app basics.AppIndex, name string, size uint64) {
@@ -44,20 +41,33 @@ func (l *Ledger) DelBoxes(app basics.AppIndex, names ...string) {
 	}
 }
 
-var DefaultEvalParams = defaultEvalParams
+var ConvertEPToAccess = convertEPToAccess
+var DefaultSigParams = defaultSigParams
+var DefaultAppParams = defaultAppParams
+var Exp = exp
 var MakeSampleEnv = makeSampleEnv
 var MakeSampleEnvWithVersion = makeSampleEnvWithVersion
 var MakeSampleTxn = makeSampleTxn
 var MakeSampleTxnGroup = makeSampleTxnGroup
 var MakeTestProto = makeTestProto
-var MakeTestProtoV = makeTestProtoV
 var NoTrack = notrack
 var TestLogic = testLogic
 var TestApp = testApp
 var TestAppBytes = testAppBytes
-var TestApps = testApps
+var TestAppFull = testAppFull
+var TestLogicRange = testLogicRange
 var TestProg = testProg
 var WithPanicOpcode = withPanicOpcode
+
+// TryApps exports "testApps" while accepting a simple uint64. Annoying, we
+// can't export call this "TestApps" because it looks like a Test function with
+// the wrong signature. But we can get that effect with the alias below.
+func TryApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, ver uint64, ledger *Ledger, expected ...expect) (*EvalParams, error) {
+	t.Helper()
+	return testApps(t, programs, txgroup, protoVer(ver), ledger, expected...)
+}
+
+var TestApps = TryApps
 
 const CreatedResourcesVersion = createdResourcesVersion
 const AssemblerNoVersion = assemblerNoVersion

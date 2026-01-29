@@ -17,19 +17,20 @@ jobs:
     name: Performance regression check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
-        with:
-          go-version-file: 'go.mod'
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
       - run: go version
       - name: Build go-algorand
-        run: scripts/travis/build.sh
+        run: |
+          export SKIP_GO_INSTALLATION=True
+          scripts/travis/build.sh
       # BenchmarkUintMath - Serves as a proxy for AVM `eval` performance.
       # Performance degradations suggest either or both:  (1) op code
       # degradation, (2) `eval` degradation.  (2) suggests a broader performance
       # issue. 
       - name: Run benchmark
-        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
+        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' -run=^$ | tee benchmark_output.txt
       - name: Push benchmark result to gh-pages branch
         if: github.event_name == 'push'
         uses: benchmark-action/github-action-benchmark@v1

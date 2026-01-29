@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -103,19 +102,18 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	if !ok {
 		return nil, fmt.Errorf("cannot HTTPTxSync non http peer %T %#v", peer, peer)
 	}
+	var syncURL string
 	hts.rootURL = hpeer.GetAddress()
+
 	client := hpeer.GetHTTPClient()
 	if client == nil {
-		client = &http.Client{}
-		client.Transport = hts.peers.GetRoundTripper()
+		client, err = hts.peers.GetHTTPClient(hts.rootURL)
+		if err != nil {
+			return nil, fmt.Errorf("HTTPTxSync cannot create a HTTP client for a peer %T %#v: %s", peer, peer, err.Error())
+		}
 	}
-	parsedURL, err := network.ParseHostOrURL(hts.rootURL)
-	if err != nil {
-		hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err)
-		return nil, err
-	}
-	parsedURL.Path = hts.peers.SubstituteGenesisID(path.Join(parsedURL.Path, TxServiceHTTPPath))
-	syncURL := parsedURL.String()
+	syncURL = network.SubstituteGenesisID(hts.peers, TxServiceHTTPPath)
+
 	hts.log.Infof("http sync from %s", syncURL)
 	params := url.Values{}
 	params.Set("bf", bloomParam)

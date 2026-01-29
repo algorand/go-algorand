@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
+	"sync/atomic"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -117,5 +118,25 @@ func TestSetJSONFormatter(t *testing.T) {
 	nl.SetJSONFormatter()
 	nl.WithFields(Fields{"1": 4, "2": "testNew"}).Info("ABCDEFG")
 	a.True(isJSON(bufNewLogger.String()))
+
+}
+
+// This test ensures that handler functions registered to Fatal Logging trigger
+// when Fatal logs are emitted. We attach graceful service shutdown to Fatal logging,
+// and we want to notice if changes to our logging dependencies change how these handlers are called
+func TestFatalExitHandler(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nl := TestingLogWithoutFatalExit(t)
+
+	// Make an exit handler that sets a flag to demonstrate it was called
+	var flag atomic.Bool
+	RegisterExitHandler(func() {
+		flag.Store(true)
+	})
+	nl.Fatal("OH NO")
+
+	// Check that the exit handler was called
+	require.True(t, flag.Load())
 
 }

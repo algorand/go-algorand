@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+import base64
 import os
 import sys
 from goal import Goal
+import algosdk.encoding as enc
 
 from datetime import datetime
 
@@ -43,13 +45,10 @@ teal = """
 txinfo, err = goal.app_create(joe, goal.assemble(teal))
 assert "not available" in str(err), err
 
-# We want to manipulate lastvalid, so we need to turn off autosend
-goal.autosend = False
-
-# We will be able to access two blocks, by setting lv explcitly. So we
-# test that the block timestamp from two blocks ago is between 2 and 5
-# (inclusive) seconds before the previous block timestamp. devMode
-# might mess this test up.
+# We will be able to access more than one previous block by using a
+# shorter tx liftetime. So we test that the block timestamp from two
+# blocks ago is between 2 and 5 (inclusive) seconds before the
+# previous block timestamp. devMode might mess this test up.
 teal = """
 #pragma version 7
  txn FirstValid
@@ -73,10 +72,7 @@ teal = """
  int 6
  <
 """
-checktimes = goal.assemble(teal)
-tx = goal.app_create(joe, goal.assemble(teal))
-tx.last_valid_round = tx.last_valid_round - 800
-txinfo, err = goal.send(tx)
+txinfo, err = goal.app_create(joe, goal.assemble(teal), lifetime=100)
 assert not err, err
 
 # block 0 is not accessible even with a low LastValid
@@ -85,10 +81,33 @@ teal = """
  int 0
  block BlkTimestamp
 """
-tx = goal.app_create(joe, goal.assemble(teal))
-tx.last_valid_round = tx.last_valid_round - 800
-txinfo, err = goal.send(tx)
+txinfo, err = goal.app_create(joe, goal.assemble(teal), lifetime=100)
 assert "round 0 is not available" in str(err), err
 assert "outside [1-" in str(err), err  # confirms that we can look back to 1
 
+
+# Get FeeSink from `block` opcode, compare to REST API
+teal = """
+#pragma version 11
+ txn FirstValid
+ int 2
+ -
+ block BlkFeeSink
+ log
+ int 1
+ return
+"""
+txinfo, err = goal.app_create(joe, goal.assemble(teal), lifetime=100)
+assert not err, err
+assert len(txinfo["logs"]) == 1
+opcode = txinfo["logs"][0]
+
+block = goal.algod.block_info(txinfo['confirmed-round']-2)['block']
+api = base64.b64encode(enc.decode_address(block['fees'])).decode("utf-8")
+
+print(opcode, api)
+
+assert opcode == api
+
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

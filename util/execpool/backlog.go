@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,8 @@ package execpool
 import (
 	"context"
 	"sync"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // A backlog for an execution pool. The typical usage of this is to
@@ -47,7 +49,7 @@ type BacklogPool interface {
 }
 
 // MakeBacklog creates a backlog
-func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, owner interface{}) BacklogPool {
+func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, owner interface{}, profLabels ...string) BacklogPool {
 	if backlogSize < 0 {
 		return nil
 	}
@@ -59,7 +61,7 @@ func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, own
 	bl.ctx, bl.ctxCancel = context.WithCancel(context.Background())
 	if bl.pool == nil {
 		// create one internally.
-		bl.pool = MakePool(bl)
+		bl.pool = MakePool(bl, append(profLabels, "execpool", "internal")...)
 	}
 	if backlogSize == 0 {
 		// use the number of cpus in the system.
@@ -68,7 +70,7 @@ func MakeBacklog(execPool ExecutionPool, backlogSize int, priority Priority, own
 	bl.buffer = make(chan backlogItemTask, backlogSize)
 
 	bl.wg.Add(1)
-	go bl.worker()
+	go bl.worker(profLabels)
 	return bl
 }
 
@@ -100,7 +102,7 @@ func (b *backlog) BufferSize() (length, capacity int) {
 	return len(b.buffer), cap(b.buffer)
 }
 
-// Enqueue enqueues a single task into the backlog
+// EnqueueBacklog enqueues a single task into the backlog
 func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error {
 	select {
 	case b.buffer <- backlogItemTask{
@@ -129,10 +131,11 @@ func (b *backlog) Shutdown() {
 	}
 }
 
-func (b *backlog) worker() {
+func (b *backlog) worker(profLabels []string) {
 	var t backlogItemTask
 	var ok bool
 	defer b.wg.Done()
+	util.SetGoroutineLabels(profLabels...)
 
 	for {
 

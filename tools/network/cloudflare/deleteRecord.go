@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,7 +52,7 @@ type DeleteDNSRecordResult struct {
 	ID string `json:"id"`
 }
 
-// ParseDeleteDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
+// parseDeleteDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseDeleteDNSRecordResponse(response *http.Response) (*DeleteDNSRecordResponse, error) {
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)

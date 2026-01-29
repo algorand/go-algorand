@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,8 @@ import (
 // Component is an enum identifying a specific type of Event
 // TODO Maybe this should be called ComponentEventType (and change Event to ComponentEvent),
 // since these are not actually types of components
-//go:generate stringer -type=Component
+//
+//go:generate go tool -modfile=../../tool.mod stringer -type=Component
 type Component int
 
 const (

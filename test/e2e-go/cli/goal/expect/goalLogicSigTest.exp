@@ -1,0 +1,77 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # rekey address to logic sig
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+    set TEAL_SOURCE "$TEST_ROOT_DIR/int1.teal"
+    exec cp "$TEAL_PROGS_DIR/int1.teal" $TEAL_SOURCE
+    set CONTRACT_ADDRESS [::AlgorandGoal::TealCompile $TEAL_SOURCE]
+    spawn goal clerk send -a 0 -f $PRIMARY_ACCOUNT_ADDRESS -t $PRIMARY_ACCOUNT_ADDRESS --rekey-to $CONTRACT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "goal clerk send timeout" }
+        -re {Transaction ([A-Z0-9]+) expired before it could be included in a block} {
+            break;
+            close;
+        }
+        -re {Transaction ([A-Z0-9]+) kicked out of local node pool} {
+            # this is a legit possible case, so just keep iterating if we hit this one.
+            close;
+        }
+        -re {Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: txn dead: round ([0-9]+) outside of ([0-9]+)--([0-9]+)} {
+            # this is a legit possible case, so just keep iterating if we hit this one.
+            close;
+        }
+        eof { ::AlgorandGoal::CheckEOF "Failed to send a rekey transaction" }
+    }
+
+    # create transaction with logic sig and signer
+    set TXN_WITH_SIGNER "$TEST_ROOT_DIR/txn_with_signer.txn"
+    spawn goal clerk send --from-program $TEAL_SOURCE --from $PRIMARY_ACCOUNT_ADDRESS --to $PRIMARY_ACCOUNT_ADDRESS --rekey-to $PRIMARY_ACCOUNT_ADDRESS -S $CONTRACT_ADDRESS --amount 1 -d $TEST_PRIMARY_NODE_DIR -o $TXN_WITH_SIGNER
+    expect {
+        timeout { ::AlgorandGoal::Abort "Timed out Teal transaction create"  }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to create teal transaction: error code [lindex $result 3]"} }
+    }
+    set RAW_TRANSACTION_ID [::AlgorandGoal::RawSend $TXN_WITH_SIGNER $TEST_PRIMARY_NODE_DIR]
+    puts "send transaction in $RAW_TRANSACTION_ID"
+    puts "TxnWithSigner Test Successful"
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
+
+    puts "Goal LogicSig with Signer Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in goalLogicSigTest: $EXCEPTION"
+}

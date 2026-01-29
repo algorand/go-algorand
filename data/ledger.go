@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,16 +51,17 @@ type Ledger struct {
 	lastRoundSeed atomic.Value
 }
 
-// roundCirculationPair used to hold a pair of matching round number and the amount of online money
-type roundCirculationPair struct {
+// roundCirculationItem used to hold matching round number, vote round and the amount of online money
+type roundCirculationItem struct {
 	round       basics.Round
+	voteRound   basics.Round
 	onlineMoney basics.MicroAlgos
 }
 
 // roundCirculation is the cache for the circulating coins
 type roundCirculation struct {
 	// elements holds several round-onlineMoney pairs
-	elements [2]roundCirculationPair
+	elements [2]roundCirculationItem
 }
 
 // roundSeedPair is the cache for a single seed at a given round
@@ -77,10 +78,10 @@ type roundSeed struct {
 
 // LoadLedger creates a Ledger object to represent the ledger with the
 // specified database file prefix, initializing it if necessary.
-func LoadLedger(
-	log logging.Logger, dbFilenamePrefix string, memory bool,
+func LoadLedger[T string | ledger.DirsAndPrefix](
+	log logging.Logger, dir T, memory bool,
 	genesisProto protocol.ConsensusVersion, genesisBal bookkeeping.GenesisBalances, genesisID string, genesisHash crypto.Digest,
-	blockListeners []ledgercore.BlockListener, cfg config.Local,
+	cfg config.Local,
 ) (*Ledger, error) {
 	if genesisBal.Balances == nil {
 		genesisBal.Balances = make(map[basics.Address]basics.AccountData)
@@ -106,37 +107,32 @@ func LoadLedger(
 		Accounts:    genesisBal.Balances,
 		GenesisHash: genesisHash,
 	}
-	l.log.Debugf("Initializing Ledger(%s)", dbFilenamePrefix)
+	l.log.Debugf("Initializing Ledger(%v)", dir)
 
-	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genesisInitState, cfg)
+	ll, err := ledger.OpenLedger(log, dir, memory, genesisInitState, cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	l.Ledger = ll
-	l.RegisterBlockListeners(blockListeners)
 	return l, nil
 }
 
-// AddressTxns returns the list of transactions to/from a given address in specific round
-func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
+// TxnsFrom returns the list of transactions sent by a given address in a round
+func (l *Ledger) TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error) {
 	blk, err := l.Block(r)
 	if err != nil {
 		return nil, err
 	}
-	spec := transactions.SpecialAddresses{
-		FeeSink:     blk.FeeSink,
-		RewardsPool: blk.RewardsPool,
-	}
 
-	var res []transactions.SignedTxnWithAD
+	var res []transactions.Transaction
 	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return nil, err
 	}
 	for _, tx := range payset {
-		if tx.Txn.MatchAddress(id, spec) {
-			res = append(res, tx)
+		if id == tx.Txn.Sender {
+			res = append(res, tx.Txn)
 		}
 	}
 	return res, nil
@@ -174,28 +170,29 @@ func (l *Ledger) NextRound() basics.Round {
 }
 
 // Circulation implements agreement.Ledger.Circulation.
-func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *Ledger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	circulation, cached := l.lastRoundCirculation.Load().(roundCirculation)
 	if cached && r != basics.Round(0) {
 		for _, element := range circulation.elements {
-			if element.round == r {
+			if element.round == r && element.voteRound == voteRnd {
 				return element.onlineMoney, nil
 			}
 		}
 	}
 
-	totals, err := l.OnlineTotals(r)
+	totals, err := l.OnlineCirculation(r, voteRnd)
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
 
-	if !cached || r > circulation.elements[1].round {
+	if !cached || r > circulation.elements[1].round || voteRnd > circulation.elements[1].voteRound {
 		l.lastRoundCirculation.Store(
 			roundCirculation{
-				elements: [2]roundCirculationPair{
+				elements: [2]roundCirculationItem{
 					circulation.elements[1],
 					{
 						round:       r,
+						voteRound:   voteRnd,
 						onlineMoney: totals},
 				},
 			})
@@ -288,7 +285,7 @@ func (l *Ledger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, er
 			// no protocol upgrade taking place, we have *at least* UpgradeVoteRounds before the protocol version would get changed.
 			// it's safe to ignore the error case here since we know that we couldn't reached to this "known" round
 			// without having the binary supporting this protocol version.
-			currentConsensusParams, _ := config.Consensus[latestBlockhdr.CurrentProtocol]
+			currentConsensusParams := config.Consensus[latestBlockhdr.CurrentProtocol]
 			// we're using <= here since there is no current upgrade on this round, and if there will be one on the subsequent round
 			// it would still be correct until (latestBlockhdr.Round + currentConsensusParams.UpgradeVoteRounds)
 			if r <= latestBlockhdr.Round+basics.Round(currentConsensusParams.UpgradeVoteRounds) {

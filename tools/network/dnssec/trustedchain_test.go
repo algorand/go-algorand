@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -274,7 +274,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	a.Contains(err.Error(), "failed to verify test. KSK against digest in parent DS")
 }
 
-func TestEnsureTrustChainFailures(t *testing.T) {
+func TestEnsureTrustChainError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)

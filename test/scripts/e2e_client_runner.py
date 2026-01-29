@@ -106,7 +106,7 @@ def _script_thread_inner(runset, scriptname, timeout):
 
     # create a wallet for the test
     walletname = base64.b16encode(os.urandom(16)).decode()
-    winfo = kmd.create_wallet(walletname, '')
+    winfo = kmd.create_wallet(walletname, '', timeout=120) # 2 minute timeout
     handle = kmd.init_wallet_handle(winfo['id'], '')
     addr = kmd.generate_key(handle)
 
@@ -114,20 +114,22 @@ def _script_thread_inner(runset, scriptname, timeout):
     params = algod.suggested_params()
     round = params.first
     max_init_wait_rounds = 5
-    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params.min_fee, first=round, last=round+max_init_wait_rounds, gh=params.gh, receiver=addr, amt=1000000000000, flat_fee=True)
+    params.last = params.first + max_init_wait_rounds
+    txn = algosdk.transaction.PaymentTxn(maxpubaddr, params, addr, 1_000_000_000_000)
     stxn = kmd.sign_transaction(pubw, '', txn)
     txid = algod.send_transaction(stxn)
-    ptxinfo = None
-    for i in range(max_init_wait_rounds):
+    txinfo = None
+    for _ in range(max_init_wait_rounds):
         txinfo = algod.pending_transaction_info(txid)
-        if txinfo.get('round'):
+        if txinfo.get('confirmed-round'):
             break
         status = algod.status_after_block(round_num=round)
         round = status['last-round']
 
-    if ptxinfo is not None:
-        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname, max_init_wait_rounds))
+    if not txinfo or not txinfo.get('confirmed-round'):
+        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds. txinfo: {}\n'.format(scriptname, max_init_wait_rounds, txinfo))
         runset.done(scriptname, False, time.time() - start)
+        return
 
     env = dict(runset.env)
     env['TEMPDIR'] = os.path.join(env['TEMPDIR'], walletname)
@@ -446,11 +448,25 @@ def main():
     retcode = 0
     capv = args.version.capitalize()
     xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, f'test/testdata/nettemplates/TwoNodes50Each{capv}.json')], timeout=90)
+    nodeDataDir = os.path.join(netdir, 'Node')
+    primaryDataDir = os.path.join(netdir, 'Primary')
+
+    # Set EnableDeveloperAPI to true for both nodes
+    for dataDir in (nodeDataDir, primaryDataDir):
+        configFile = os.path.join(dataDir, 'config.json')
+        with open(configFile, 'r') as f:
+            configOptions = json.load(f)
+
+        configOptions['EnableDeveloperAPI'] = True
+
+        with open(configFile, 'w') as f:
+            json.dump(configOptions, f)
+
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
     atexit.register(goal_network_stop, netdir, env)
 
-    env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')
-    env['ALGORAND_DATA2'] = os.path.join(netdir, 'Primary')
+    env['ALGORAND_DATA'] = nodeDataDir
+    env['ALGORAND_DATA2'] = primaryDataDir
 
     if args.unsafe_scrypt:
         create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA'])
@@ -468,7 +484,7 @@ def main():
         trdir = os.path.join(trdir, package)
         os.makedirs(trdir, exist_ok=True)
 
-        jsonpath = os.path.join(trdir, "results.json")
+        jsonpath = os.path.join(trdir, "testresults.json")
         rs.jsonfile = open(jsonpath, "w")
         junitpath = os.path.join(trdir, "testresults.xml")
         atexit.register(finish_test_results, rs.jsonfile, jsonpath, junitpath)
@@ -498,9 +514,9 @@ def main():
 def finish_test_results(jsonfile, jsonpath, junitpath):
     # This only runs in CI, since TEST_RESULTS env var controls the
     # block that opens the jsonfile, and registers this atexit. So we
-    # assume jsonfile is open, and gotestsum available.
+    # assume jsonfile is open.
     jsonfile.close()
-    xrun(["gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
+    xrun(["go", "tool", "-modfile=tool.mod", "gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
 
 
 if __name__ == '__main__':

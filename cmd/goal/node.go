@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package main
 //go:generate ./bundle_genesis_json.sh
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -38,7 +39,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
-	"github.com/algorand/go-algorand/network"
+	naddr "github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -55,11 +56,12 @@ var waitSec uint32
 var newNodeNetwork string
 var newNodeDestination string
 var newNodeArchival bool
-var newNodeIndexer bool
 var newNodeRelay string
 var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
+var fastCatchupForce bool
+var minCatchupRounds uint64
 
 const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
 
@@ -77,6 +79,7 @@ func init() {
 	nodeCmd.AddCommand(catchupCmd)
 	// Once the server-side implementation of the shutdown command is ready, we should enable this one.
 	//nodeCmd.AddCommand(shutdownCmd)
+	nodeCmd.AddCommand(p2pID)
 
 	startCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	startCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
@@ -96,7 +99,7 @@ func init() {
 	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
 	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
-	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", localDefaults.IsIndexerActive, "Configure the new node to enable the indexer feature (implies --archival)")
+
 	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
 	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
 	createCmd.Flags().BoolVar(&newNodeFullConfig, "full-config", false, "Store full config file")
@@ -108,6 +111,8 @@ func init() {
 	statusCmd.Flags().Uint64VarP(&watchMillisecond, "watch", "w", 0, "Time (in milliseconds) between two successive status updates")
 
 	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
+	catchupCmd.Flags().BoolVar(&fastCatchupForce, "force", false, "Forces fast catchup with implicit catchpoint to start without a consent prompt")
+	catchupCmd.Flags().Uint64VarP(&minCatchupRounds, "min", "m", 0, "Catchup only if the catchpoint would advance the node by the specified minimum number of rounds")
 
 }
 
@@ -149,26 +154,58 @@ func getMissingCatchpointLabel(URL string) (label string, err error) {
 var catchupCmd = &cobra.Command{
 	Use:     "catchup",
 	Short:   "Catchup the Algorand node to a specific catchpoint",
-	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round. If no catchpoint is provided, this command attempts to lookup the latest catchpoint from algorand-catchpoints.s3.us-east-2.amazonaws.com.",
+	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round. Using external catchpoints is not a secure practice and should not be done for consensus participating nodes.\nIf no catchpoint is provided, this command attempts to lookup the latest catchpoint from algorand-catchpoints.s3.us-east-2.amazonaws.com.",
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
+		var catchpoint string
+		// assume first positional parameter is the catchpoint
+		if len(args) != 0 {
+			catchpoint = args[0]
+		}
 		datadir.OnDataDirs(func(dataDir string) {
-			if !abortCatchup && len(args) == 0 {
-				client := ensureAlgodClient(dataDir)
+			client := ensureAlgodClient(dataDir)
+
+			if abortCatchup {
+				err := client.AbortCatchup()
+				if err != nil {
+					reportErrorf(errorNodeStatus, err)
+				}
+				return
+			}
+
+			// lookup missing catchpoint
+			if catchpoint == "" {
 				vers, err := client.AlgodVersions()
 				if err != nil {
 					reportErrorf(errorNodeStatus, err)
 				}
 				genesis := strings.Split(vers.GenesisID, "-")[0]
 				URL := fmt.Sprintf(catchpointURL, genesis)
-				label, err := getMissingCatchpointLabel(URL)
+				catchpoint, err = getMissingCatchpointLabel(URL)
 				if err != nil {
-					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel)
+					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel, err.Error())
 				}
-				args = append(args, label)
+
+				// Prompt user to confirm using an implicit catchpoint.
+				if !fastCatchupForce {
+					fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
+					reader := bufio.NewReader(os.Stdin)
+					text, _ := reader.ReadString('\n')
+					text = strings.ReplaceAll(text, "\n", "")
+					if text != "yes" {
+						reportErrorf(errorAbortedPerUserRequest)
+					}
+				}
 			}
-			catchup(dataDir, args)
+
+			resp, err := client.Catchup(catchpoint, minCatchupRounds)
+			if err != nil {
+				reportErrorf(errorNodeStatus, err)
+			}
+			if resp.CatchupMessage != catchpoint {
+				reportInfof("node response: %s", resp.CatchupMessage)
+			}
 		})
 	},
 }
@@ -234,28 +271,6 @@ var startCmd = &cobra.Command{
 				} else {
 					reportInfoln(infoNodeStart)
 				}
-			}
-		})
-	},
-}
-
-var shutdownCmd = &cobra.Command{
-	Use:   "shutdown",
-	Short: "Shut down the node",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, _ []string) {
-		binDir, err := util.ExeDir()
-		if err != nil {
-			panic(err)
-		}
-		datadir.OnDataDirs(func(dataDir string) {
-			nc := nodecontrol.MakeNodeController(binDir, dataDir)
-			err := nc.Shutdown()
-
-			if err == nil {
-				reportInfoln(infoNodeShuttingDown)
-			} else {
-				reportErrorf(errorNodeFailedToShutdown, err)
 			}
 		})
 	},
@@ -461,29 +476,18 @@ func makeStatusString(stat model.NodeStatusResponse) string {
 			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
 		}
 
-		upgradeNextProtocolVoteBefore := uint64(0)
-		if stat.UpgradeNextProtocolVoteBefore != nil {
-			upgradeNextProtocolVoteBefore = *stat.UpgradeNextProtocolVoteBefore
-		}
+		upgradeNextProtocolVoteBefore := nilToZero(stat.UpgradeNextProtocolVoteBefore)
 
 		if upgradeNextProtocolVoteBefore > stat.LastRound {
-			upgradeVotesRequired := uint64(0)
-			upgradeNoVotes := uint64(0)
-			upgradeYesVotes := uint64(0)
-			if stat.UpgradeVotesRequired != nil {
-				upgradeVotesRequired = *stat.UpgradeVotesRequired
-			}
-			if stat.UpgradeNoVotes != nil {
-				upgradeNoVotes = *stat.UpgradeNoVotes
-			}
-			if stat.UpgradeYesVotes != nil {
-				upgradeYesVotes = *stat.UpgradeYesVotes
-			}
+			upgradeVotesRequired := nilToZero(stat.UpgradeVotesRequired)
+			upgradeNoVotes := nilToZero(stat.UpgradeNoVotes)
+			upgradeYesVotes := nilToZero(stat.UpgradeYesVotes)
+			upgradeVoteRounds := nilToZero(stat.UpgradeVoteRounds)
 			statusString = statusString + "\n" + fmt.Sprintf(
 				infoNodeStatusConsensusUpgradeVoting,
 				upgradeYesVotes,
 				upgradeNoVotes,
-				upgradeNextProtocolVoteBefore-stat.LastRound,
+				upgradeVoteRounds-upgradeYesVotes-upgradeNoVotes,
 				upgradeVotesRequired,
 				upgradeNextProtocolVoteBefore,
 			)
@@ -664,8 +668,7 @@ var createCmd = &cobra.Command{
 				reportErrorf(errorNodeCreationIPFailure, listenIP)
 			}
 		}
-		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
-		localConfig.IsIndexerActive = newNodeIndexer
+		localConfig.Archival = newNodeArchival || newNodeRelay != ""
 		localConfig.RunHosted = runUnderHost
 		localConfig.EnableLedgerService = localConfig.Archival
 		localConfig.EnableBlockService = localConfig.Archival
@@ -698,21 +701,6 @@ var createCmd = &cobra.Command{
 	},
 }
 
-func catchup(dataDir string, args []string) {
-	client := ensureAlgodClient(datadir.EnsureSingleDataDir())
-	if abortCatchup {
-		err := client.AbortCatchup()
-		if err != nil {
-			reportErrorf(errorNodeStatus, err)
-		}
-		return
-	}
-	err := client.Catchup(args[0])
-	if err != nil {
-		reportErrorf(errorNodeStatus, err)
-	}
-}
-
 // verifyPeerDialArg verifies that the peers provided in peerDial are valid peers.
 func verifyPeerDialArg() bool {
 	if peerDial == "" {
@@ -720,8 +708,8 @@ func verifyPeerDialArg() bool {
 	}
 
 	// make sure that the format of each entry is valid:
-	for _, peer := range strings.Split(peerDial, ";") {
-		_, err := network.ParseHostOrURL(peer)
+	for peer := range strings.SplitSeq(peerDial, ";") {
+		_, err := naddr.ParseHostOrURLOrMultiaddr(peer)
 		if err != nil {
 			reportErrorf("Provided peer '%s' is not a valid peer address : %v", peer, err)
 			return false

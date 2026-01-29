@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -178,7 +178,6 @@ func (a *CdtFrontend) versionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(enc)
-	return
 }
 
 func (a *CdtFrontend) jsonHandler(w http.ResponseWriter, r *http.Request) {
@@ -198,5 +197,4 @@ func (a *CdtFrontend) jsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(enc)
-	return
 }

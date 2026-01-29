@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package ledger
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -126,7 +128,11 @@ var passThruSource = main(`
   itxn_submit
 `)
 
-const boxVersion = 36
+const (
+	boxVersion          = 36
+	accessVersion       = 41
+	boxQuotaBumpVersion = 41
+)
 
 func boxFee(p config.ConsensusParams, nameAndValueSize uint64) uint64 {
 	return p.BoxFlatMinBalance + p.BoxByteMinBalance*(nameAndValueSize)
@@ -146,21 +152,19 @@ func TestBoxCreate(t *testing.T) {
 		proto := config.Consensus[cv]
 		mbr := boxFee(proto, 28)
 
-		appIndex := dl.fundedApp(addrs[0], proto.MinBalance+3*mbr, boxAppSource)
+		appID := dl.fundedApp(addrs[0], proto.MinBalance+3*mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 		}
 
 		adam := call.Args("create", "adam")
-		dl.txn(adam, "invalid Box reference adam")
+		dl.txn(adam, fmt.Sprintf("invalid Box reference %#x", "adam"))
 		adam.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("adam")}}
 
-		dl.beginBlock()
-		dl.txn(adam)
-		vb := dl.endBlock()
+		vb := dl.fullBlock(adam)
 
 		// confirm the deltas has the creation
 		require.Len(t, vb.Delta().KvMods, 1)
@@ -170,28 +174,28 @@ func TestBoxCreate(t *testing.T) {
 		}
 
 		dl.txn(adam.Args("check", "adam", "\x00\x00"))
-		dl.txgroup("box_create\nassert", adam.Noted("one"), adam.Noted("two"))
+		dl.txgroup("box_create; assert", adam.Noted("one"), adam.Noted("two"))
 
 		bobo := call.Args("create", "bobo")
-		dl.txn(bobo, "invalid Box reference bobo")
+		dl.txn(bobo, fmt.Sprintf("invalid Box reference %#x", "bobo"))
 		bobo.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("bobo")}}
 		dl.txn(bobo)
-		dl.txgroup("box_create\nassert", bobo.Noted("one"), bobo.Noted("two"))
+		dl.txgroup("box_create; assert", bobo.Noted("one"), bobo.Noted("two"))
 
 		dl.beginBlock()
 		chaz := call.Args("create", "chaz")
 		chaz.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("chaz")}}
 		dl.txn(chaz)
-		dl.txn(chaz.Noted("again"), "box_create\nassert")
+		dl.txn(chaz.Noted("again"), "box_create; assert")
 		dl.endBlock()
 
 		// new block
-		dl.txn(chaz.Noted("again"), "box_create\nassert")
+		dl.txn(chaz.Noted("again"), "box_create; assert")
 		dogg := call.Args("create", "dogg")
 		dogg.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("dogg")}}
 		dl.txn(dogg, "below min")
 		dl.txn(chaz.Args("delete", "chaz"))
-		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "box_del\nassert")
+		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "box_del; assert")
 		dl.txn(dogg)
 		dl.txn(bobo.Args("delete", "bobo"))
 
@@ -218,19 +222,19 @@ func TestBoxRecreate(t *testing.T) {
 		proto := config.Consensus[cv]
 		mbr := boxFee(proto, 8)
 
-		appIndex := dl.fundedApp(addrs[0], proto.MinBalance+mbr, boxAppSource)
+		appID := dl.fundedApp(addrs[0], proto.MinBalance+mbr, boxAppSource)
 
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("adam")}},
 		}
 
 		create := call.Args("create", "adam", "\x04") // box value size is 4 bytes
 		recreate := call.Args("recreate", "adam", "\x04")
 
-		dl.txn(recreate, "box_create\n!\nassert")
+		dl.txn(recreate, "box_create; !; assert")
 		dl.txn(create)
 		dl.txn(recreate)
 		dl.txn(call.Args("set", "adam", "\x01\x02\x03\x04"))
@@ -277,15 +281,19 @@ func TestBoxCreateAvailability(t *testing.T) {
 `,
 		}
 
-		// We know box_create worked because we finished and checked MBR
+		// We know box_create worked because this failure (checking the MBR)
+		// happens at the end of the group evaluation.
 		dl.txn(&accessInCreate, "balance 0 below min")
 
 		// But let's fund it and be sure. This is "psychic". We're going to fund
 		// the app address that we know the app will get. So this is a nice
 		// test, but unrealistic way to actual create a box.
 		psychic := basics.AppIndex(2)
-
 		proto := config.Consensus[cv]
+		if proto.AppForbidLowResources {
+			psychic += 1000
+		}
+
 		dl.txn(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
@@ -337,7 +345,7 @@ func TestBoxCreateAvailability(t *testing.T) {
              itxn_field TypeEnum
             itxn_submit
 
-            // Now invoke it, so it can intialize (and create the "hello" box)
+            // Now invoke it, so it can initialize (and create the "hello" box)
             itxn_begin
              itxn_field ApplicationID
              int appl
@@ -351,12 +359,10 @@ func TestBoxCreateAvailability(t *testing.T) {
 			ApplicationID: trampoline,
 		}
 
-		dl.beginBlock()
-		dl.txgroup("", &accessWhenCalled, &call)
-		vb := dl.endBlock()
+		payset := dl.txgroup("", &accessWhenCalled, &call)
 
 		// Make sure that we actually did it.
-		require.Equal(t, "we did it", vb.Block().Payset[1].ApplyData.EvalDelta.InnerTxns[1].EvalDelta.Logs[0])
+		require.Equal(t, "we did it", payset[1].ApplyData.EvalDelta.InnerTxns[1].EvalDelta.Logs[0])
 	})
 }
 
@@ -375,18 +381,16 @@ func TestBoxRW(t *testing.T) {
 		log := logging.NewLogger()
 		log.SetOutput(&bufNewLogger)
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
+		appID := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
 
-		dl.txn(call.Args("create", "x", "\x10")) // 16
-		dl.beginBlock()
-		dl.txn(call.Args("set", "x", "ABCDEFGHIJ")) // 10 long
-		vb := dl.endBlock()
+		dl.txn(call.Args("create", "x", "\x10"))                // 16
+		vb := dl.fullBlock(call.Args("set", "x", "ABCDEFGHIJ")) // 10 long
 		// confirm the deltas has the change, including the old value
 		require.Len(t, vb.Delta().KvMods, 1)
 		for _, kvDelta := range vb.Delta().KvMods { // There's only one
@@ -420,7 +424,7 @@ func TestBoxRW(t *testing.T) {
 		time.Sleep(100 * time.Millisecond) // give commit time to run, and prune au caches
 		dl.fullBlock(call.Args("check", "x", "ABCDEFGH"))
 
-		dl.txn(call.Args("create", "yy"), "invalid Box reference yy")
+		dl.txn(call.Args("create", "yy"), fmt.Sprintf("invalid Box reference %#x", "yy"))
 		withBr := call.Args("create", "yy")
 		withBr.Boxes = append(withBr.Boxes, transactions.BoxRef{Index: 1, Name: []byte("yy")})
 		require.Error(dl.t, withBr.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.GenesisProto()))
@@ -451,11 +455,11 @@ func TestBoxAccountData(t *testing.T) {
 		log := logging.NewLogger()
 		log.SetOutput(&bufNewLogger)
 
-		appIndex := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
+		appID := dl.fundedApp(addrs[0], 1_000_000, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}, {Index: 0, Name: []byte("y")}},
 		}
 
@@ -484,12 +488,12 @@ assert
 ==
 assert
 `)
-		verifyAppIndex := dl.fundedApp(addrs[0], 0, verifyAppSrc)
+		verifyAppID := dl.fundedApp(addrs[0], 0, verifyAppSrc)
 		verifyAppCall := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: verifyAppIndex,
-			Accounts:      []basics.Address{appIndex.Address()},
+			ApplicationID: verifyAppID,
+			Accounts:      []basics.Address{appID.Address()},
 		}
 
 		// The app account has no box data initially
@@ -533,23 +537,27 @@ func TestBoxIOBudgets(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		appIndex := dl.fundedApp(addrs[0], 0, boxAppSource)
+		appID := dl.fundedApp(addrs[0], 0, boxAppSource)
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appIndex,
+			ApplicationID: appID,
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (1024) exceeded")
-		call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (1024) exceeded")
+			call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
 			"write budget (2048) exceeded")
 		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (3072) exceeded")
-		call.Boxes = append(call.Boxes, transactions.BoxRef{})
-		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are 4 box refs
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (3072) exceeded")
+			call.Boxes = append(call.Boxes, transactions.BoxRef{})
+		}
+		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are enough box refs
 			"below min") // big box would need more balance
 		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
 			"write budget (4096) exceeded")
@@ -559,7 +567,7 @@ func TestBoxIOBudgets(t *testing.T) {
 		fundApp := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
-			Receiver: appIndex.Address(),
+			Receiver: appID.Address(),
 			Amount:   proto.MinBalance + boxFee(proto, 4096+1), // remember key len!
 		}
 		create := call.Args("create", "x", "\x10\x00")
@@ -573,17 +581,39 @@ func TestBoxIOBudgets(t *testing.T) {
 		dl.txgroup("", &fundApp, create)
 
 		// Now that we've created a 4,096 byte box, test READ budget
-		// It works at the start, because call still has 4 brs.
+		// It works at the start, because call still has enough brs.
 		dl.txn(call.Args("check", "x", "\x00"))
-		call.Boxes = call.Boxes[:3]
-		dl.txn(call.Args("check", "x", "\x00"),
-			"box read budget (3072) exceeded")
+		call.Boxes = call.Boxes[:len(call.Boxes)-1] // remove one ref
+		dl.txn(call.Args("check", "x", "\x00"), "box read budget")
 
 		// Give a budget over 32768, confirm failure anyway
-		empties := [32]transactions.BoxRef{}
-		// These tests skip WellFormed, so the huge Boxes is ok
-		call.Boxes = append(call.Boxes, empties[:]...)
-		dl.txn(call.Args("create", "x", "\x80\x01"), "box size too large") // 32769
+		// Use a transaction group with 5 txns, each with 8 box refs (except the last one)
+		// to accumulate enough box references (33 total) for the quota test
+		txns := make([]*txntest.Txn, 5)
+		for i := 0; i < 4; i++ {
+			// Create 8 valid box references to the existing box "x"
+			boxes := make([]transactions.BoxRef, 8)
+			for j := 0; j < 8; j++ {
+				boxes[j] = transactions.BoxRef{Index: 0, Name: []byte("x")}
+			}
+			txns[i] = &txntest.Txn{
+				Type:            "appl",
+				Sender:          addrs[0],
+				ApplicationID:   appID,
+				Boxes:           boxes,
+				ApplicationArgs: [][]byte{[]byte("check"), []byte("x"), []byte("\x00")}, // box contains zeros
+				Note:            []byte{byte(i)},                                        // vary the note to make txns unique
+			}
+		}
+		// Last transaction tries to create a box > 32K, which should fail even with enough quota
+		txns[4] = &txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApplicationID:   appID,
+			Boxes:           []transactions.BoxRef{{Index: 0, Name: []byte("y")}},        // 1 ref, total 33 refs in group
+			ApplicationArgs: [][]byte{[]byte("create"), []byte("y"), []byte("\x80\x01")}, // 32769 bytes
+		}
+		dl.txgroup("box size too large", txns...)
 	})
 }
 
@@ -596,6 +626,7 @@ func TestBoxInners(t *testing.T) {
 	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
+		proto := config.Consensus[cv]
 
 		// Advance the creatable counter, so we don't have very low app ids that
 		// could be mistaken for indices into ForeignApps.
@@ -604,29 +635,37 @@ func TestBoxInners(t *testing.T) {
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: addrs[0]})
 
-		boxIndex := dl.fundedApp(addrs[0], 2_000_000, boxAppSource)  // there are some big boxes made
-		passIndex := dl.fundedApp(addrs[0], 120_000, passThruSource) // lowish, show it's not paying for boxes
+		boxID := dl.fundedApp(addrs[0], 4_000_000, boxAppSource)                     // there are some big boxes made
+		passID := dl.fundedApp(addrs[0], 100_000+20*proto.MinTxnFee, passThruSource) // lowish, show it's not paying for boxes
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: passIndex,
-			ForeignApps:   []basics.AppIndex{boxIndex},
+			ApplicationID: passID,
+			ForeignApps:   []basics.AppIndex{boxID},
 			Boxes:         []transactions.BoxRef{{Index: 0, Name: []byte("x")}},
 		}
 		// The current Boxes gives top-level access to "x", not the inner app
 		dl.txn(call.Args("create", "x", "\x10"), // 8
-			"invalid Box reference x")
+			fmt.Sprintf("invalid Box reference %#x", 'x'))
 
 		// This isn't right: Index should be index into ForeignApps
-		call.Boxes = []transactions.BoxRef{{Index: uint64(boxIndex), Name: []byte("x")}}
+		call.Boxes = []transactions.BoxRef{{Index: uint64(boxID), Name: []byte("x")}}
 		require.Error(t, call.Txn().WellFormed(transactions.SpecialAddresses{}, dl.generator.genesisProto))
 
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
-		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (1024) exceeded")
-		dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
-		call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
-		dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+		if ver < boxQuotaBumpVersion {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (1024) exceeded")
+			dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
+			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+			dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
+		} else {
+			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
+				"write budget (2048) exceeded")
+			dl.txn(call.Args("create", "x", "\x08\x00")) // 2048
+			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
+			dl.txn(call.Args("create", "y", "\x10\x00")) // 4096
+		}
 
 		require.Len(t, call.Boxes, 2)
 		setX := call.Args("set", "x", "A")
@@ -657,7 +696,7 @@ func TestBoxInners(t *testing.T) {
 		dl.txgroup("", checkX, checkY)
 
 		require.Len(t, setY.Boxes, 2) // recall that setY has ("y", "nope") right now. no "x"
-		dl.txgroup("invalid Box reference x", checkX, setY)
+		dl.txgroup(fmt.Sprintf("invalid Box reference %#x", 'x'), checkX, setY)
 
 		setY.Boxes = append(setY.Boxes, transactions.BoxRef{Index: 1, Name: []byte("x")})
 		dl.txgroup("", checkX, setY)
@@ -671,18 +710,199 @@ func TestBoxInners(t *testing.T) {
 
 		// Try some get/put action
 		dl.txn(call.Args("put", "x", "john doe"))
-		vb := dl.fullBlock(call.Args("get", "x"))
+		tib := dl.txn(call.Args("get", "x"))
 		// we are passing this thru to the underlying box app which logs the get
-		require.Equal(t, "john doe", vb.Block().Payset[0].ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
+		require.Equal(t, "john doe", tib.ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
 		dl.txn(call.Args("check", "x", "john"))
 
 		// bad change because of length
 		dl.txn(call.Args("put", "x", "steve doe"), "box_put wrong size")
-		vb = dl.fullBlock(call.Args("get", "x"))
-		require.Equal(t, "john doe", vb.Block().Payset[0].ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
+		tib = dl.txn(call.Args("get", "x"))
+		require.Equal(t, "john doe", tib.ApplyData.EvalDelta.InnerTxns[0].EvalDelta.Logs[0])
 
 		// good change
 		dl.txn(call.Args("put", "x", "mark doe"))
 		dl.txn(call.Args("check", "x", "mark d"))
+	})
+}
+
+// Create the app with bytecode in txn.ApplicationArgs[0], pass my arg[1] as created arg[0]
+var passThruCreator = main(`
+  itxn_begin
+  txn TypeEnum; itxn_field TypeEnum
+  txn ApplicationArgs 0; itxn_field ApprovalProgram
+  txn ApplicationArgs 0; itxn_field ClearStateProgram // need something, won't be used
+  txn ApplicationArgs 1; itxn_field ApplicationArgs
+  itxn_submit
+`)
+
+// TestNewAppBoxCreate exercises the creation of boxes in newly created apps
+func TestNewAppBoxCreate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("current", func(t *testing.T) { testNewAppBoxCreate(t, 0) })
+	t.Run("tealv9", func(t *testing.T) { testNewAppBoxCreate(t, 9) })
+	t.Run("tealv12", func(t *testing.T) { testNewAppBoxCreate(t, 12) })
+}
+
+func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, boxVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		proto := config.Consensus[cv]
+
+		tealVersion := requestedTealVersion
+		if tealVersion == 0 {
+			tealVersion = int(proto.LogicSigVersion)
+		}
+
+		// Skip for combinations of tealVersion and cv that aren't possible
+		if uint64(tealVersion) > proto.LogicSigVersion {
+			t.Skipf("TEAL v%d not available in %s (LogicSigVersion=%d)", tealVersion, cv, proto.LogicSigVersion)
+		}
+
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// We're going to create an app that will, during its own creation,
+		// create a box.  That requires two tricks.
+
+		// 1) Figure out the appID it will have and prefund it.  This _could_ be
+		// done within the group itself - an early transaction deduces the
+		// transaction counter, so it can know what the later create will be,
+		// and compute it's app address.
+
+		// 2) a) Use the predicted appID to name the box ref.
+		// or b) Use 0 as the app in the box ref, meaning "this app"
+		// or c) v41 (accessVersion) will allow it if there are empty box refs.
+
+		// 2a is pretty much impossible in practice, we can only do it here
+		// because our blockchain is "quiet" we know the upcoming appID.
+
+		// 2b won't work for inner app creates, since the 0 appID gets replaced
+		// with the _top-level_ app's ID.
+
+		// 2c would allow newly created apps, even if inners, to create boxes.
+		// It also has the nice property of not needing to know the box's
+		// name. So it can be computed in app.  We don't need the name because
+		// we can short-circuit the lookup - the box _must_ be empty.
+
+		// boxCreate is an app that tries to make a box from its first argument, even during its own creation.
+		boxCreate := "txn ApplicationArgs 0; int 24; box_create;" // Succeeds if the box is created and did not already exist
+
+		// boxPut is an app that tries to make a box from its first argument, even during its own creation (but using box_put)
+		boxPut := "txn ApplicationArgs 0; int 24; bzero; box_put; int 1;"
+
+		for _, createSrc := range []string{boxCreate, boxPut} {
+			// createSrcVer is the versioned source for the current test's TEAL version
+			createSrcVer := fmt.Sprintf("#pragma version %d\n%s", tealVersion, createSrc)
+
+			// doubleSrc tries to create TWO boxes. The second is always named by ApplicationArgs 1
+			doubleSrc := createSrcVer + `txn ApplicationArgs 1; int 24; box_create; pop;` // return result of FIRST box_create
+			// need to call one inner txn, and have mbr for itself and inner created app
+			passID := dl.fundedApp(addrs[0], 200_000+proto.MinTxnFee, passThruCreator) // Will be used to show inners have same power
+
+			// Since we used fundedApp, the next app created would be passID+2.
+			// We'll prefund a whole bunch of the next apps that we can then create
+			// at will below.
+
+			var testTxns = basics.AppIndex(20)
+			for i := range testTxns {
+				dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[0], Receiver: (passID + 2 + testTxns + i).Address(), Amount: 500_000})
+			}
+
+			// Try to create it. It will fail because there's no box ref. (does not increment txncounter)
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}}},
+				"invalid Box reference 0x01")
+
+			// 2a. Create it with a box ref of the predicted appID
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+				ForeignApps: []basics.AppIndex{passID + testTxns + 2},
+				Boxes:       []transactions.BoxRef{{Index: 1, Name: []byte{0x01}}}})
+
+			// 2a. Create it with a box ref of the predicted appID (Access list)
+			if proto.MaxAppAccess > 0 {
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{
+						{App: passID + testTxns + 3},
+						{Box: transactions.BoxRef{Index: 1, Name: []byte{0x01}}}}})
+			}
+
+			// 2b. Create it with a box ref of 0, which means "this app"
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}})
+
+			// 2b. Create it with a box ref of 0, which means "this app" (Access List)
+			if proto.MaxAppAccess > 0 {
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{
+						{Box: transactions.BoxRef{Index: 0, Name: []byte{0x01}}}}})
+			}
+
+			// you can manipulate it twice if you want (this tries to create it twice)
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x01}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}})
+
+			// but you still can't make a second box
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{Index: 0, Name: []byte{0x01}}}},
+				"invalid Box reference 0x02")
+
+			// until you list it as well
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{
+					{Index: 0, Name: []byte{0x01}},
+					{Index: 0, Name: []byte{0x02}},
+				}})
+
+			// 2c. Create it with an empty box ref
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+				Boxes: []transactions.BoxRef{{}}})
+
+			if ver >= accessVersion {
+				// 2c. Create it with an empty box ref
+				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+					Access: []transactions.ResourceRef{{Box: transactions.BoxRef{}}}})
+			}
+
+			// but you can't do a second create
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{}}},
+				"invalid Box reference 0x02")
+
+			// until you add a second box ref
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{}, {}}})
+
+			// Now confirm that 2c also works for an inner created app
+			ops, err := logic.AssembleString("#pragma version 8\n" + createSrc)
+			require.NoError(t, err, ops.Errors)
+			createSrcByteCode := ops.Program
+			// create app as an inner, fails w/o empty box ref
+			dl.txn(&txntest.Txn{Sender: addrs[0],
+				Type:            "appl",
+				ApplicationID:   passID,
+				ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
+			}, "invalid Box reference 0x01")
+			// create app as an inner, succeeds w/ empty box ref
+			dl.txn(&txntest.Txn{Sender: addrs[0],
+				Type:            "appl",
+				ApplicationID:   passID,
+				ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
+				Boxes:           []transactions.BoxRef{{}},
+			})
+		}
 	})
 }

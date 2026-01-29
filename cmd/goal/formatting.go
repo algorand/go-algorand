@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -154,7 +154,7 @@ func jsonPrintable(str string) bool {
 		if r >= utf8.RuneSelf {
 			return false
 		}
-		if htmlSafeSet[r] == false {
+		if !htmlSafeSet[r] {
 			return false
 		}
 	}
@@ -206,4 +206,12 @@ func encodeBytesAsAppCallBytes(value []byte) string {
 	}
 
 	return "b64:" + base64.StdEncoding.EncodeToString(value)
+}
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/ledger/store"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
 type blockDeltaPair struct {
@@ -74,6 +74,8 @@ func (bn *blockNotifier) worker() {
 
 func (bn *blockNotifier) close() {
 	bn.mu.Lock()
+	bn.pendingBlocks = nil
+	bn.listeners = nil
 	if bn.running {
 		bn.running = false
 		bn.cond.Broadcast()
@@ -113,17 +115,11 @@ func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (bn *blockNotifier) commitRound(context.Context, store.TransactionScope, *deferredCommitContext) error {
+func (bn *blockNotifier) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 
 func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (bn *blockNotifier) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (bn *blockNotifier) handleUnorderedCommit(*deferredCommitContext) {
 }
 
 func (bn *blockNotifier) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

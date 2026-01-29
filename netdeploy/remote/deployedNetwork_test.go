@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 
 func TestCreateSignedTxBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var networkState netState
 	networkState.nApplications = 2
@@ -90,6 +91,7 @@ func TestCreateSignedTxBasic(t *testing.T) {
 func TestCreateSignedTxAssets(t *testing.T) {
 	//	assets per account should not exceed limit
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	secretDst := keypair()
@@ -127,6 +129,7 @@ func TestCreateSignedTxAssets(t *testing.T) {
 
 func TestAccountsNeeded(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	params.MaxAppsCreated = 10

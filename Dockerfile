@@ -1,6 +1,6 @@
-FROM ubuntu:18.04 as builder
+FROM ubuntu:24.04 AS builder
 
-ARG GO_VERSION="1.17.13"
+ARG GO_VERSION="1.25.3"
 
 ARG CHANNEL
 ARG URL
@@ -41,19 +41,19 @@ RUN /dist/files/build/install.sh \
     -b "${BRANCH}" \
     -s "${SHA}"
 
-FROM debian:bullseye-slim as final
+FROM debian:bookworm-20250630-slim AS final
 
 ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" KMD_PORT="7833" ALGORAND_DATA="/algod/data"
 
 # curl is needed to lookup the fast catchup url
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && \
+    update-ca-certificates && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p "$ALGORAND_DATA" && \
-    groupadd --system algorand && \
-    useradd --no-log-init --create-home --system --gid algorand algorand && \
+    groupadd --gid=999 --system algorand && \
+    useradd --uid=999 --no-log-init --create-home --system --gid algorand algorand && \
     chown -R algorand:algorand /algod
-
-USER algorand
 
 COPY --chown=algorand:algorand --from=builder "/dist/bin/" "/node/bin/"
 COPY --chown=algorand:algorand --from=builder "/dist/files/run/" "/node/run/"

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"testing"
 	"time"
@@ -73,7 +74,10 @@ func TestUGetBlockWs(t *testing.T) {
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, up)
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "requested block is not available")
+	var noBlockErr noBlockForRoundError
+	require.ErrorAs(t, err, &noBlockErr)
+	require.Equal(t, next+1, err.(noBlockForRoundError).round)
+	require.Equal(t, next, err.(noBlockForRoundError).latest)
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
@@ -93,13 +97,12 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 	blockServiceConfig := config.GetDefaultLocal()
 	blockServiceConfig.EnableBlockService = true
-	blockServiceConfig.EnableBlockServiceFallbackToArchiver = false
 
 	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -118,8 +121,11 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, net.GetPeers()[0])
 
-	require.Error(t, errNoBlockForRound, err)
-	require.Contains(t, err.Error(), "No block available for given round")
+	var noBlockErr noBlockForRoundError
+	require.ErrorAs(t, err, &noBlockErr)
+	require.Equal(t, next+1, err.(noBlockForRoundError).round)
+	require.Equal(t, next, err.(noBlockForRoundError).latest)
+	require.Contains(t, err.Error(), "no block available for given round")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
@@ -200,7 +206,7 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	cancel()
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
 	var wrfe errWsFetcherRequestFailed
-	require.True(t, errors.As(err, &wrfe), "unexpected err: %w", wrfe)
+	require.ErrorAs(t, err, &wrfe)
 	require.Equal(t, "context canceled", err.(errWsFetcherRequestFailed).cause)
 
 	ctx = context.Background()
@@ -209,14 +215,14 @@ func TestRequestBlockBytesErrors(t *testing.T) {
 	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
 
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
-	require.True(t, errors.As(err, &wrfe))
+	require.ErrorAs(t, err, &wrfe)
 	require.Equal(t, "Cert data not found", err.(errWsFetcherRequestFailed).cause)
 
 	responseOverride = network.Response{Topics: network.Topics{network.MakeTopic(rpcs.CertDataKey, make([]byte, 0))}}
 	up = makeTestUnicastPeerWithResponseOverride(net, t, &responseOverride)
 
 	_, _, _, err = fetcher.fetchBlock(ctx, next, up)
-	require.True(t, errors.As(err, &wrfe))
+	require.ErrorAs(t, err, &wrfe)
 	require.Equal(t, "Block data not found", err.(errWsFetcherRequestFailed).cause)
 }
 
@@ -236,7 +242,6 @@ func (thh *TestHTTPHandler) ServeHTTP(response http.ResponseWriter, request *htt
 		bytes = make([]byte, fetcherMaxBlockBytes+1)
 	}
 	response.Write(bytes)
-	return
 }
 
 // TestGetBlockBytesHTTPErrors tests the errors reported from getblockBytes for http peer
@@ -260,25 +265,25 @@ func TestGetBlockBytesHTTPErrors(t *testing.T) {
 	ls.status = http.StatusBadRequest
 	_, _, _, err := fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
 	var hre errHTTPResponse
-	require.True(t, errors.As(err, &hre))
+	require.ErrorAs(t, err, &hre)
 	require.Equal(t, "Response body '\x00'", err.(errHTTPResponse).cause)
 
 	ls.exceedLimit = true
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	require.True(t, errors.As(err, &hre))
+	require.ErrorAs(t, err, &hre)
 	require.Equal(t, "read limit exceeded", err.(errHTTPResponse).cause)
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined")
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
 	var cte errHTTPResponseContentType
-	require.True(t, errors.As(err, &cte))
+	require.ErrorAs(t, err, &cte)
 	require.Equal(t, "undefined", err.(errHTTPResponseContentType).contentType)
 
 	ls.status = http.StatusOK
 	ls.content = append(ls.content, "undefined2")
 	_, _, _, err = fetcher.fetchBlock(context.Background(), 1, net.GetPeers()[0])
-	require.True(t, errors.As(err, &cte))
+	require.ErrorAs(t, err, &cte)
 	require.Equal(t, 2, err.(errHTTPResponseContentType).contentTypeCount)
 }
 
@@ -311,4 +316,19 @@ func TestErrorTypes(t *testing.T) {
 
 	err6 := errHTTPResponseContentType{contentTypeCount: 1, contentType: "UNDEFINED"}
 	require.Equal(t, "HTTPFetcher.getBlockBytes: invalid content type: UNDEFINED", err6.Error())
+}
+
+// Block Request topics request is a handrolled msgpack message with deterministic size. This test ensures that it matches the defined
+// constant in protocol
+func TestMaxBlockRequestSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	round := rand.Uint64()
+	topics := makeBlockRequestTopics(basics.Round(round))
+	nonce := rand.Uint64() - 1
+	nonceTopic := network.MakeNonceTopic(nonce)
+	topics = append(topics, nonceTopic)
+	serializedMsg := topics.MarshallTopics()
+	require.Equal(t, uint64(len(serializedMsg)), protocol.UniEnsBlockReqTag.MaxMessageSize())
+
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package merklesignature
 
 import (
 	"crypto/rand"
-	"errors"
 	"math"
 	"testing"
 
@@ -329,7 +328,7 @@ func TestBadRound(t *testing.T) {
 	err = signer.GetVerifier().VerifyBytes(start+2, msg, &sig)
 	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
-	a.True(errors.Is(err, ErrSignatureSchemeVerificationFailed))
+	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {
@@ -509,7 +508,7 @@ func TestGetAllKeys(t *testing.T) {
 	a.Equal(0, len(keys))
 }
 
-//#region Helper Functions
+// #region Helper Functions
 func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) ([]byte, Signature) {
 	msg := genMsgForTest()
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,12 +17,12 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 var log = logging.Base()
@@ -76,9 +77,6 @@ func init() {
 
 	// kmd.go
 	rootCmd.AddCommand(kmdCmd)
-
-	// logging.go
-	rootCmd.AddCommand(loggingCmd)
 
 	// network.go
 	rootCmd.AddCommand(networkCmd)
@@ -259,18 +257,15 @@ func resolveKmdDataDir(dataDir string) string {
 		algodKmdPath, _ := filepath.Abs(filepath.Join(dataDir, libgoal.DefaultKMDDataDir))
 		return algodKmdPath
 	}
-	cu, err := user.Current()
+	cfgRoot, err := config.GetGlobalConfigFileRoot()
 	if err != nil {
-		reportErrorf("could not look up current user while looking for kmd dir: %s", err)
-	}
-	if cu.HomeDir == "" {
-		reportErrorln("user has no home dir while looking for kmd dir")
+		reportErrorf("unable to find config root: %v", err)
 	}
 	genesis, err := readGenesis(dataDir)
 	if err != nil {
 		reportErrorf("could not read genesis.json: %s", err)
 	}
-	return filepath.Join(cu.HomeDir, ".algorand", genesis.ID(), libgoal.DefaultKMDDataDir)
+	return filepath.Join(cfgRoot, genesis.ID(), libgoal.DefaultKMDDataDir)
 }
 
 func ensureCacheDir(dataDir string) string {
@@ -284,7 +279,7 @@ func ensureCacheDir(dataDir string) string {
 		return cacheDir
 	}
 	// Put the cache in the user's home directory
-	algorandDir, err := config.GetDefaultConfigFilePath()
+	algorandDir, err := config.GetGlobalConfigFileRoot()
 	if err != nil {
 		reportErrorf("config error %s", err)
 	}
@@ -360,18 +355,18 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 		if len(walletID) == 0 {
 			// If we still don't have a default, check if there's only one wallet.
 			// If there is, make it the default and continue
-			wallets, err := kmd.ListWallets()
-			if err != nil {
-				return nil, nil, fmt.Errorf(errCouldNotListWallets, err)
+			wallets, err1 := kmd.ListWallets()
+			if err1 != nil {
+				return nil, nil, fmt.Errorf(errCouldNotListWallets, err1)
 			}
 			if len(wallets) == 1 {
 				// Only one wallet, so it's unambigious
 				walletID = []byte(wallets[0].ID)
 				accountList.setDefaultWalletID(walletID)
 			} else if len(wallets) == 0 {
-				return nil, nil, fmt.Errorf(errNoWallets)
+				return nil, nil, errors.New(errNoWallets)
 			} else {
-				return nil, nil, fmt.Errorf(errNoDefaultWallet)
+				return nil, nil, errors.New(errNoDefaultWallet)
 			}
 		}
 		// Fetch the wallet name (useful for error messages, and to check
@@ -440,7 +435,7 @@ func ensurePassword() []byte {
 }
 
 func reportInfoln(args ...interface{}) {
-	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Println(infoNonPrintableCharacters)
@@ -456,7 +451,7 @@ func reportInfof(format string, args ...interface{}) {
 // reportWarnRawln prints a warning message to stderr. Only use this function if that warning
 // message already indicates that it's a warning. Otherwise, use reportWarnln
 func reportWarnRawln(args ...interface{}) {
-	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Fprintln(os.Stderr, infoNonPrintableCharacters)
@@ -486,7 +481,7 @@ func reportWarnf(format string, args ...interface{}) {
 
 func reportErrorln(args ...interface{}) {
 	outStr := fmt.Sprint(args...)
-	for _, line := range strings.Split(outStr, "\n") {
+	for line := range strings.SplitSeq(outStr, "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Fprintln(os.Stderr, errorNonPrintableCharacters)
@@ -527,13 +522,10 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 // writeDryrunReqToFile creates dryrun request object and writes to a file
 func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
 	proto, _ := getProto(protoVersion)
-	accts, err := unmarshalSlice(dumpForDryrunAccts)
-	if err != nil {
-		reportErrorf(err.Error())
-	}
+	accts := util.Map(dumpForDryrunAccts, cliAddress)
 	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
 	if err != nil {
-		reportErrorf(err.Error())
+		reportErrorln(err)
 	}
 	err = writeFile(outFilename, data, 0600)
 	return

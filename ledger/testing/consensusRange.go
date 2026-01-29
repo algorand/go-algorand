@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,9 +47,9 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV23,
 	protocol.ConsensusV24, // AVM v2 (apps)
 	protocol.ConsensusV25,
-	protocol.ConsensusV26,
+	protocol.ConsensusV26, // AVM v3
 	protocol.ConsensusV27,
-	protocol.ConsensusV28,
+	protocol.ConsensusV28, // AVM v4 (direct refs)
 	protocol.ConsensusV29,
 	protocol.ConsensusV30, // AVM v5 (inner txs)
 	protocol.ConsensusV31, // AVM v6 (inner txs with appls)
@@ -57,7 +57,12 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV33, // 320 rounds
 	protocol.ConsensusV34, // AVM v7, stateproofs
 	protocol.ConsensusV35, // minor, double upgrade withe v34
-	protocol.ConsensusV36, // box storage
+	protocol.ConsensusV36, // AVM v8, box storage
+	protocol.ConsensusV37,
+	protocol.ConsensusV38, // AVM v9, ECDSA pre-check, stateproofs recoverability
+	protocol.ConsensusV39, // AVM v10, logicsig opcode budget pooling, elliptic curve ops, dynamic round times
+	protocol.ConsensusV40, // Consensus incentives, AVM v11, mimc
+	protocol.ConsensusV41, // AVM v12, txn access, Sha512BlockHash, AppVersioning
 	protocol.ConsensusFuture,
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -78,7 +78,7 @@ func (r *Router) GetDownstreamFilter() DownstreamFilter {
 	return nil
 }
 
-// SendMessage routes messages sent to message received.
+// sendMessageToNode routes messages sent to message received.
 func (r *Router) sendMessageToNode(sourceNode, targetNode int, tag protocol.Tag, data []byte) {
 	upstreamFilter := r.getUpstreamFilter(targetNode)
 	if upstreamFilter == nil {

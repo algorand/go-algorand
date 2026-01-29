@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ var isAlnum = regexp.MustCompile(`^[a-zA-Z0-9_]*$`)
 
 func TestGetMissingCatchpointLabel(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	tests := []struct {
 		name        string
 		URL         string
@@ -85,6 +86,7 @@ func TestGetMissingCatchpointLabel(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, test.expectedErr, test.statusCode)
 			}))

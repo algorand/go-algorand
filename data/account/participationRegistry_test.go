@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -99,7 +98,7 @@ func makeTestParticipationWithLifetime(a *require.Assertions, addrID int, first,
 
 	// Generate part keys like in partGenerateCmd and FillDBWithParticipationKeys
 	if dilution == 0 {
-		dilution = 1 + uint64(math.Sqrt(float64(last-first)))
+		dilution = DefaultKeyDilution(first, last)
 	}
 
 	// Compute how many distinct participation keys we should generate
@@ -1342,13 +1341,13 @@ func BenchmarkDeleteExpired(b *testing.B) {
 			}()
 
 			// make participation key
-			lastValid := 3000000
+			lastValid := basics.Round(3000000)
 			keyDilution := 10000
 			if kd, err := strconv.Atoi(os.Getenv("DILUTION")); err == nil { // allow setting key dilution via env var
 				keyDilution = kd
 			}
 			if lv, err := strconv.Atoi(os.Getenv("LASTVALID")); err == nil { // allow setting last valid via env var
-				lastValid = lv
+				lastValid = basics.Round(lv)
 			}
 			var part Participation
 
@@ -1360,7 +1359,7 @@ func BenchmarkDeleteExpired(b *testing.B) {
 				if os.Getenv("SLOWKEYS") == "" {
 					// makeTestParticipation makes small state proof secrets to save time
 					b.Log("making fast part key", i, "for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
-					part = makeTestParticipation(a, i+1, 0, basics.Round(lastValid), uint64(keyDilution))
+					part = makeTestParticipation(a, i+1, 0, lastValid, uint64(keyDilution))
 					a.NotNil(part)
 				} else {
 					// generate key the same way as BenchmarkOldKeysDeletion
@@ -1375,7 +1374,7 @@ func BenchmarkDeleteExpired(b *testing.B) {
 					}()
 
 					b.Log("making part key", i, "for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
-					ppart, err := FillDBWithParticipationKeys(ppartDB, rootAddr, 0, basics.Round(lastValid), uint64(keyDilution))
+					ppart, err := FillDBWithParticipationKeys(ppartDB, rootAddr, 0, lastValid, uint64(keyDilution))
 					ppartDB.Close()
 					a.NoError(err)
 					part = ppart.Participation

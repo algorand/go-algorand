@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/node"
 )
 
 // GenesisJSONText is initialized when the node starts.
@@ -32,6 +33,7 @@ var GenesisJSONText string
 type NodeInterface interface {
 	GenesisHash() crypto.Digest
 	GenesisID() string
+	Status() (s node.StatusReport, err error)
 }
 
 // HandlerFunc defines a wrapper for http.HandlerFunc that includes a context
@@ -57,8 +59,8 @@ type ReqContext struct {
 	Shutdown <-chan struct{}
 }
 
-// ErrorResponse sets the specified status code (should != 200), and fills in the
-// a human readable error.
+// ErrorResponse sets the specified status code (should != 200), and fills in
+// a human-readable error.
 func ErrorResponse(w http.ResponseWriter, status int, internalErr error, publicErr string, logger logging.Logger) {
 	logger.Info(internalErr)
 

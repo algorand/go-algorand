@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -175,13 +175,13 @@ func parseInput() (genesis bookkeeping.Genesis) {
 		alloc := bookkeeping.GenesisAllocation{
 			Address: record.Address,
 			Comment: record.Comment,
-			State: basics.AccountData{
+			State: bookkeeping.GenesisAccountData{
 				Status:          record.Status,
 				MicroAlgos:      basics.MicroAlgos{Raw: record.Algos * 1e6},
 				VoteID:          record.VoteID,
 				SelectionID:     record.SelectionID,
-				VoteFirstValid:  basics.Round(record.VoteFirstValid),
-				VoteLastValid:   basics.Round(record.VoteLastValid),
+				VoteFirstValid:  record.VoteFirstValid,
+				VoteLastValid:   record.VoteLastValid,
 				VoteKeyDilution: record.VoteKeyDilution,
 			},
 		}
@@ -259,14 +259,16 @@ func parseRecord(cols []string) (rec record) {
 	}
 	copy(rec.VoteID[:], vote)
 
-	rec.VoteFirstValid, err = strconv.ParseUint(cols[6], 10, 64)
+	fv, err := strconv.ParseUint(cols[6], 10, 64)
 	if cols[6] != "" && err != nil {
 		log.Fatal(err)
 	}
-	rec.VoteLastValid, err = strconv.ParseUint(cols[7], 10, 64)
+	rec.VoteFirstValid = basics.Round(fv)
+	lv, err := strconv.ParseUint(cols[7], 10, 64)
 	if cols[7] != "" && err != nil {
 		log.Fatal(err)
 	}
+	rec.VoteLastValid = basics.Round(lv)
 	rec.VoteKeyDilution, err = strconv.ParseUint(cols[8], 10, 64)
 	if cols[8] != "" && err != nil {
 		log.Fatal(err)
@@ -282,7 +284,7 @@ type record struct {
 	Status          basics.Status
 	SelectionID     crypto.VRFVerifier
 	VoteID          crypto.OneTimeSignatureVerifier
-	VoteFirstValid  uint64
-	VoteLastValid   uint64
+	VoteFirstValid  basics.Round
+	VoteLastValid   basics.Round
 	VoteKeyDilution uint64
 }

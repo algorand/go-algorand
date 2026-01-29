@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,12 +19,13 @@ package ledger
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
@@ -42,12 +43,15 @@ import (
 // then temporarily placed in `generate` mode so that the entire block can be
 // generated in the copy second ledger, and compared.
 type DoubleLedger struct {
-	t *testing.T
+	t testing.TB
 
 	generator *Ledger
 	validator *Ledger
 
-	eval *internal.BlockEvaluator
+	eval *eval.BlockEvaluator
+
+	// proposer is the default proposer unless one is supplied to endBlock.
+	proposer basics.Address
 }
 
 func (dl DoubleLedger) Close() {
@@ -56,18 +60,23 @@ func (dl DoubleLedger) Close() {
 }
 
 // NewDoubleLedger creates a new DoubleLedger with the supplied balances and consensus version.
-func NewDoubleLedger(t *testing.T, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local) DoubleLedger {
-	g := newSimpleLedgerWithConsensusVersion(t, balances, cv, cfg)
-	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash(), cfg)
-	return DoubleLedger{t, g, v, nil}
+func NewDoubleLedger(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) DoubleLedger {
+	g := newSimpleLedgerWithConsensusVersion(t, balances, cv, cfg, opts...)
+	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash(), cfg, opts...)
+	// FeeSink as proposer will make old tests work as expected, because payouts will stay put.
+	return DoubleLedger{t, g, v, nil, balances.FeeSink}
 }
 
-func (dl *DoubleLedger) beginBlock() *internal.BlockEvaluator {
+func (dl *DoubleLedger) beginBlock() *eval.BlockEvaluator {
 	dl.eval = nextBlock(dl.t, dl.generator)
 	return dl.eval
 }
 
-func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) {
+// txn will add a transaction to the current block. If no block is
+// currently being built, it will start one, and end it after the
+// transaction is added. If a problem is specified, it will be
+// expected to fail, and the block will not be ended.
+func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) (stib *transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
@@ -76,25 +85,34 @@ func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) {
 			if len(problem) > 0 {
 				dl.eval = nil
 			} else {
-				dl.endBlock()
+				vb := dl.endBlock()
+				// It should have a stib, but don't panic here because of an earlier problem.
+				if len(vb.Block().Payset) > 0 {
+					stib = &vb.Block().Payset[0]
+				}
 			}
 		}()
 	}
 	txn(dl.t, dl.generator, dl.eval, tx, problem...)
+	return nil
 }
 
-func (dl *DoubleLedger) txns(txns ...*txntest.Txn) {
+func (dl *DoubleLedger) txns(txns ...*txntest.Txn) (payset []transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
-		defer dl.endBlock()
+		defer func() {
+			vb := dl.endBlock()
+			payset = vb.Block().Payset
+		}()
 	}
 	for _, tx := range txns {
 		dl.txn(tx)
 	}
+	return nil
 }
 
-func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
+func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) (payset []transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
 		dl.beginBlock()
@@ -103,7 +121,8 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
 			if problem != "" {
 				dl.eval = nil
 			} else {
-				dl.endBlock()
+				vb := dl.endBlock()
+				payset = vb.Block().Payset
 			}
 		}()
 	}
@@ -114,6 +133,7 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) {
 		require.Error(dl.t, err)
 		require.Contains(dl.t, err.Error(), problem)
 	}
+	return nil
 }
 
 func (dl *DoubleLedger) fullBlock(txs ...*txntest.Txn) *ledgercore.ValidatedBlock {
@@ -123,8 +143,13 @@ func (dl *DoubleLedger) fullBlock(txs ...*txntest.Txn) *ledgercore.ValidatedBloc
 	return dl.endBlock()
 }
 
-func (dl *DoubleLedger) endBlock() *ledgercore.ValidatedBlock {
-	vb := endBlock(dl.t, dl.generator, dl.eval)
+func (dl *DoubleLedger) endBlock(proposer ...basics.Address) *ledgercore.ValidatedBlock {
+	prp := dl.proposer
+	if len(proposer) > 0 {
+		require.Len(dl.t, proposer, 1, "endBlock() cannot specify multiple proposers")
+		prp = proposer[0]
+	}
+	vb := endBlock(dl.t, dl.generator, dl.eval, prp)
 	if dl.validator != nil { // Allows setting to nil while debugging, to simplify
 		checkBlock(dl.t, dl.validator, vb)
 	}
@@ -132,23 +157,34 @@ func (dl *DoubleLedger) endBlock() *ledgercore.ValidatedBlock {
 	return vb
 }
 
-func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {
+func (dl *DoubleLedger) createApp(sender basics.Address, source string, schemas ...basics.StateSchema) basics.AppIndex {
 	createapp := txntest.Txn{
 		Type:            "appl",
 		Sender:          sender,
 		ApprovalProgram: source,
 	}
+	switch len(schemas) {
+	case 0:
+	case 1:
+		createapp.GlobalStateSchema = schemas[0]
+	case 2:
+		createapp.GlobalStateSchema = schemas[0]
+		createapp.LocalStateSchema = schemas[1]
+	}
 	vb := dl.fullBlock(&createapp)
-	appIndex := vb.Block().Payset[0].ApplyData.ApplicationID
+	return basics.AppIndex(vb.Block().BlockHeader.TxnCounter)
+	// The following only works for v30 and above, when we start recording the id in AD.
+	// return vb.Block().Payset[0].ApplyData.ApplicationID
+}
 
-	fund := txntest.Txn{
+func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {
+	appIndex := dl.createApp(sender, source)
+	dl.fullBlock(&txntest.Txn{
 		Type:     "pay",
 		Sender:   sender,
 		Receiver: appIndex.Address(),
 		Amount:   amount,
-	}
-
-	dl.txn(&fund)
+	})
 	return appIndex
 }
 
@@ -157,52 +193,37 @@ func (dl *DoubleLedger) reloadLedgers() {
 	require.NoError(dl.t, dl.validator.reloadLedger())
 }
 
-func checkBlock(t *testing.T, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {
-	bl := vb.Block()
+func checkBlock(t testing.TB, checkLedger *Ledger, gvb *ledgercore.ValidatedBlock) {
+	bl := gvb.Block()
 	msg := bl.MarshalMsg(nil)
 	var reconstituted bookkeeping.Block
 	_, err := reconstituted.UnmarshalMsg(msg)
 	require.NoError(t, err)
 
-	check := nextCheckBlock(t, checkLedger, reconstituted.RewardsState)
-	var group []transactions.SignedTxnWithAD
-	for _, stib := range reconstituted.Payset {
-		stxn, ad, err := reconstituted.BlockHeader.DecodeSignedTxn(stib)
-		require.NoError(t, err)
-		stad := transactions.SignedTxnWithAD{SignedTxn: stxn, ApplyData: ad}
-		// If txn we're looking at belongs in the current group, append
-		if group == nil || (!stxn.Txn.Group.IsZero() && group[0].Txn.Group == stxn.Txn.Group) {
-			group = append(group, stad)
-		} else if group != nil {
-			err := check.TransactionGroup(group)
-			require.NoError(t, err)
-			group = []transactions.SignedTxnWithAD{stad}
-		}
-	}
-	if group != nil {
-		err := check.TransactionGroup(group)
-		require.NoError(t, err, "%+v", reconstituted.Payset)
-	}
-	check.SetGenerateForTesting(true)
-	cb := endBlock(t, checkLedger, check)
-	check.SetGenerateForTesting(false)
-	require.Equal(t, vb.Block(), cb.Block())
+	cvb, err := validateWithoutSignatures(t, checkLedger, reconstituted)
+	require.NoError(t, err)
+	cvbd := cvb.Delta()
+	cvbd.Dehydrate()
+	gvbd := gvb.Delta()
+	gvbd.Dehydrate()
 
-	// vb.Delta() need not actually be Equal, in the sense of require.Equal
-	// because the order of the records in Accts is determined by the way the
-	// cb.sdeltas map (and then the maps in there) is iterated when the
-	// StateDelta is constructed by roundCowState.deltas().  They should be
-	// semantically equivalent, but those fields are not exported, so checking
-	// equivalence is hard.  If vb.Delta() is, in fact, different, even though
-	// vb.Block() is the same, then there is something seriously broken going
-	// on, that is unlikely to have anything to do with these tests.  So upshot:
-	// we skip trying a complicated equality check.
+	// There are some things in the deltas that won't be identical. Erase them.
+	// Hdr was put in here at _start_ of block, and not updated. So gvb is in
+	// initial state, cvd got to see the whole thing.
+	gvbd.Hdr = nil
+	cvbd.Hdr = nil
 
-	// This is the part of checking Delta() equality that wouldn't work right.
-	// require.Equal(t, vb.Delta().Accts, cb.Delta().Accts)
+	require.Equal(t, gvbd, cvbd)
+
+	// Hydration/Dehydration is done in-place, so rehydrate so to avoid external evidence
+	cvbd.Hydrate()
+	gvbd.Hydrate()
+
+	err = checkLedger.AddValidatedBlock(*cvb, agreement.Certificate{})
+	require.NoError(t, err)
 }
 
-func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *internal.BlockEvaluator {
+func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *eval.BlockEvaluator {
 	rnd := ledger.Latest()
 	hdr, err := ledger.BlockHdr(rnd)
 	require.NoError(t, err)
@@ -211,7 +232,7 @@ func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *
 	nextHdr.RewardsState = rs
 	// follow nextBlock, which does this for determinism
 	nextHdr.TimeStamp = hdr.TimeStamp + 1
-	eval, err := internal.StartEvaluator(ledger, nextHdr, internal.EvaluatorOptions{
+	eval, err := eval.StartEvaluator(ledger, nextHdr, eval.EvaluatorOptions{
 		Generate: false,
 		Validate: true, // Do the complete checks that a new txn would be subject to
 	})

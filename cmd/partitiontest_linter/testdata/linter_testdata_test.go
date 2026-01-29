@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,19 +42,21 @@ func notTestFunctionWithCorrectParamWrongLine(t *testing.T) {
 	println("something")
 }
 
-func TestFunctionWithCorrectParamOnly(t *testing.T) {} // want "function is missing partitiontest.PartitionTest"
+func TestFunctionWithCorrectParamOnly(t *testing.T) {} // want "Add missing partition call to top of test"
 
 func TestFunctionWithCorrectParamCorrectLine(t *testing.T) {
 	partitiontest.PartitionTest(t)
 }
 
-func TestFunctionWithCorrectParamBadLine(t *testing.T) { // want "function is missing partitiontest.PartitionTest"
+func TestFunctionWithCorrectParamBadLine(t *testing.T) { // want "Add missing partition call to top of test"
 	println("something")
 }
 
 func TestFunctionWithDifferentName(n *testing.T) {
 	partitiontest.PartitionTest(n)
 }
+
+func helperFunction(t *testing.T) {}
 
 func TestFunctionWithCorrectParamNotFirstCorrectLine(t *testing.T) {
 	println("something")
@@ -69,5 +71,14 @@ func TestFunctionWithCorrectParamNotLastCorrectLine(t *testing.T) {
 func TestFunctionWithCorrectParamMiddleCorrectLine(t *testing.T) {
 	println("something")
 	partitiontest.PartitionTest(t)
+	println("something")
+}
+
+func TestFunctionWithCorrectParamLeadingDifferentCall(t *testing.T) { // want "Add missing partition call to top of test"
+	helperFunction(t)
+}
+
+func TestFunctionWithPartitionComment(t *testing.T) {
+	// partitiontest.PartitionTest(t)
 	println("something")
 }

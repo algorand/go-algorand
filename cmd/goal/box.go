@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ func init() {
 
 	appBoxCmd.AddCommand(appBoxInfoCmd)
 	appBoxCmd.AddCommand(appBoxListCmd)
-	appBoxCmd.PersistentFlags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	appBoxCmd.PersistentFlags().Uint64Var((*uint64)(&appIdx), "app-id", 0, "Application ID")
 	appBoxCmd.MarkFlagRequired("app-id")
 
 	appBoxInfoCmd.Flags().StringVarP(&boxName, "name", "n", "", "Application box name. Use the same form as app-arg to name the box.")

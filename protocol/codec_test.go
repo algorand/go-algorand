@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -161,7 +161,7 @@ func TestEncodeJSON(t *testing.T) {
 
 	type ar []string
 	type mp struct {
-		Map map[int]ar `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+		Map map[int]ar `codec:"ld,allocbound=bounds.MaxEvalDeltaAccounts"`
 	}
 
 	var v mp

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,12 +25,15 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestAccount(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	proto := config.Consensus[protocol.ConsensusFuture]
 	appIdx1 := basics.AppIndex(1)
 	appIdx2 := basics.AppIndex(2)
@@ -51,6 +54,7 @@ func TestAccount(t *testing.T) {
 			GlobalStateSchema: basics.StateSchema{NumUint: 2},
 		},
 		ExtraProgramPages: 1,
+		Version:           2,
 	}
 
 	totalAppSchema := basics.StateSchema{
@@ -99,7 +103,7 @@ func TestAccount(t *testing.T) {
 		},
 		AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx1: assetParams1, assetIdx2: assetParams2},
 	}
-	b := a.WithUpdatedRewards(proto, 100)
+	b := a.WithUpdatedRewards(proto.RewardUnit, 100)
 
 	addr := basics.Address{}.String()
 	conv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
@@ -114,8 +118,14 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, uint64(totalAppExtraPages), *conv.AppsTotalExtraPages)
 
 	verifyCreatedApp := func(index int, appIdx basics.AppIndex, params basics.AppParams) {
-		require.Equal(t, uint64(appIdx), (*conv.CreatedApps)[index].Id)
+		require.Equal(t, appIdx, (*conv.CreatedApps)[index].Id)
 		require.Equal(t, params.ApprovalProgram, (*conv.CreatedApps)[index].Params.ApprovalProgram)
+		if params.Version != 0 {
+			require.NotNil(t, (*conv.CreatedApps)[index].Params.Version)
+			require.Equal(t, params.Version, *(*conv.CreatedApps)[index].Params.Version)
+		} else {
+			require.Nil(t, (*conv.CreatedApps)[index].Params.Version)
+		}
 		if params.ExtraProgramPages != 0 {
 			require.NotNil(t, (*conv.CreatedApps)[index].Params.ExtraProgramPages)
 			require.Equal(t, uint64(params.ExtraProgramPages), *(*conv.CreatedApps)[index].Params.ExtraProgramPages)
@@ -154,7 +164,7 @@ func TestAccount(t *testing.T) {
 	}
 
 	verifyAppLocalState := func(index int, appIdx basics.AppIndex, numUints, numByteSlices uint64, keyValues model.TealKeyValueStore) {
-		require.Equal(t, uint64(appIdx), (*conv.AppsLocalState)[index].Id)
+		require.Equal(t, appIdx, (*conv.AppsLocalState)[index].Id)
 		require.Equal(t, numUints, (*conv.AppsLocalState)[index].Schema.NumUint)
 		require.Equal(t, numByteSlices, (*conv.AppsLocalState)[index].Schema.NumByteSlice)
 		require.Equal(t, len(keyValues), len(*(*conv.AppsLocalState)[index].KeyValue))
@@ -169,7 +179,7 @@ func TestAccount(t *testing.T) {
 	verifyAppLocalState(1, appIdx2, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value2"), makeTKV("uint", 2)})
 
 	verifyCreatedAsset := func(index int, assetIdx basics.AssetIndex, params basics.AssetParams) {
-		require.Equal(t, uint64(assetIdx), (*conv.CreatedAssets)[index].Index)
+		require.Equal(t, assetIdx, (*conv.CreatedAssets)[index].Index)
 		require.Equal(t, params.Total, (*conv.CreatedAssets)[index].Params.Total)
 		require.NotNil(t, (*conv.CreatedAssets)[index].Params.DefaultFrozen)
 		require.Equal(t, params.DefaultFrozen, *(*conv.CreatedAssets)[index].Params.DefaultFrozen)
@@ -202,4 +212,22 @@ func TestAccount(t *testing.T) {
 			require.Equal(t, protocol.EncodeJSON(conv), protocol.EncodeJSON(anotherConv))
 		}
 	})
+}
+
+func TestAccountRandomRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, simple := range []bool{true, false} {
+		accts := ledgertesting.RandomAccounts(20, simple)
+		for addr, acct := range accts {
+			round := basics.Round(2)
+			proto := config.Consensus[protocol.ConsensusFuture]
+			conv, err := AccountDataToAccount(addr.String(), &acct, round, &proto, acct.MicroAlgos)
+			require.NoError(t, err)
+			c, err := AccountToAccountData(&conv)
+			require.NoError(t, err)
+			require.Equal(t, acct, c)
+		}
+	}
 }

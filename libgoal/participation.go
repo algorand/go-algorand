@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,15 +18,11 @@ package libgoal
 
 import (
 	"fmt"
-	"math"
-	"os"
-	"path/filepath"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/libgoal/participation"
 )
 
 // chooseParticipation chooses which participation keys to use for going online
@@ -38,14 +34,14 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 	}
 
 	// Loop through each of the participation keys; pick the one that expires farthest in the future.
-	var expiry uint64 = 0
+	expiry := basics.Round(0)
 	for _, info := range parts {
 		// Choose the Participation valid for this round that relates to the passed address
 		// that expires farthest in the future.
 		// Note that algod will sign votes with all possible Participations. so any should work
 		// in the short-term.
 		// In the future we should allow the user to specify exactly which partkeys to register.
-		if info.Key.VoteFirstValid <= uint64(round) && uint64(round) <= info.Key.VoteLastValid && info.Address == address.String() && info.Key.VoteLastValid > expiry {
+		if info.Key.VoteFirstValid <= round && round <= info.Key.VoteLastValid && info.Address == address.String() && info.Key.VoteLastValid > expiry {
 			part = info
 			expiry = part.Key.VoteLastValid
 		}
@@ -59,83 +55,14 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 	return
 }
 
-func participationKeysPath(dataDir string, address basics.Address, firstValid, lastValid basics.Round) (string, error) {
-	// Build /<dataDir>/<genesisID>/<address>.<first_round>.<last_round>.partkey
-	first := uint64(firstValid)
-	last := uint64(lastValid)
-	fileName := config.PartKeyFilename(address.String(), first, last)
-	return filepath.Join(dataDir, fileName), nil
-}
-
 // GenParticipationKeys creates a .partkey database for a given address, fills
 // it with keys, and installs it in the right place
-func (c *Client) GenParticipationKeys(address string, firstValid, lastValid, keyDilution uint64) (part account.Participation, filePath string, err error) {
-	return c.GenParticipationKeysTo(address, firstValid, lastValid, keyDilution, "")
-}
-
-// GenParticipationKeysTo creates a .partkey database for a given address, fills
-// it with keys, and saves it in the specified output directory. If the output
-// directory is empty, the key will be installed.
-func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, keyDilution uint64, outDir string) (part account.Participation, filePath string, err error) {
-
-	install := outDir == ""
-
-	// Parse the address
-	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
-	if err != nil {
-		return
+func (c *Client) GenParticipationKeys(address string, firstValid, lastValid basics.Round, keyDilution uint64) (part account.Participation, filePath string, err error) {
+	installFunc := func(keyPath string) error {
+		_, err := c.AddParticipationKey(keyPath)
+		return err
 	}
-
-	firstRound, lastRound := basics.Round(firstValid), basics.Round(lastValid)
-
-	// If we are installing, generate in the temp dir
-	if install {
-		outDir = os.TempDir()
-	}
-	// Connect to the database
-	partKeyPath, err := participationKeysPath(outDir, parsedAddr, firstRound, lastRound)
-	if err != nil {
-		return
-	}
-	_, err = os.Stat(partKeyPath)
-	if err == nil {
-		err = fmt.Errorf("ParticipationKeys exist for the range %d to %d", firstRound, lastRound)
-		return
-	} else if !os.IsNotExist(err) {
-		err = fmt.Errorf("participation key file '%s' cannot be accessed : %w", partKeyPath, err)
-		return
-	}
-
-	// If the key is being installed, remove it afterwards.
-	if install {
-		// Explicitly ignore any errors
-		defer func(name string) {
-			_ = os.Remove(name)
-		}(partKeyPath)
-	}
-
-	partdb, err := db.MakeErasableAccessor(partKeyPath)
-	if err != nil {
-		return
-	}
-
-	if keyDilution == 0 {
-		keyDilution = 1 + uint64(math.Sqrt(float64(lastRound-firstRound)))
-	}
-
-	// Fill the database with new participation keys
-	newPart, err := account.FillDBWithParticipationKeys(partdb, parsedAddr, firstRound, lastRound, keyDilution)
-	part = newPart.Participation
-	partdb.Close()
-
-	if err != nil {
-		return
-	}
-
-	if install {
-		_, err = c.AddParticipationKey(partKeyPath)
-	}
-	return part, partKeyPath, err
+	return participation.GenParticipationKeysTo(address, firstValid, lastValid, keyDilution, "", installFunc)
 }
 
 // ListParticipationKeys returns the available participation keys,

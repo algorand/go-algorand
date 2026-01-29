@@ -24,6 +24,9 @@ cmd/algod/algod
 cmd/goal/goal
 cmd/updater/updater
 
+# custom golangci-lint binary with plugins
+custom-golangci-lint
+
 # Exclude our local temp directory
 tmp/
 
@@ -55,6 +58,7 @@ crypto/libs
 
 # doc intermediates
 data/transactions/logic/*.md
+!data/transactions/logic/TEAL_opcodes*.md
 
 *.pem
 
@@ -68,3 +72,16 @@ index.html
 
 # test summary
 testresults.json
+
+# block generator binary
+tools/block-generator/block-generator
+
+# cross repo types tool binary
+tools/x-repo-types/x-repo-types
+
+# python virtual environment
+.venv
+
+# ignore local claude config changes
+CLAUDE.local.md
+.claude

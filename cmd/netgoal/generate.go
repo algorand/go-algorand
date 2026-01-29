@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/netdeploy/remote"
@@ -52,6 +53,8 @@ var accountsCount uint64
 var assetsCount uint64
 var applicationCount uint64
 var balRange []string
+var lastPartKeyRound basics.Round
+var deterministicKeys bool
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
@@ -77,6 +80,8 @@ func init() {
 	generateCmd.Flags().Uint64VarP(&assetsCount, "nassets", "", 5, "Asset count")
 	generateCmd.Flags().Uint64VarP(&applicationCount, "napps", "", 7, "Application Count")
 	generateCmd.Flags().StringArrayVar(&balRange, "bal", []string{}, "Application Count")
+	generateCmd.Flags().BoolVarP(&deterministicKeys, "deterministic", "", false, "Whether to generate deterministic keys")
+	generateCmd.Flags().Uint64VarP((*uint64)(&lastPartKeyRound), "last-part-key-round", "", uint64(gen.DefaultGenesis.LastPartKeyRound), "LastPartKeyRound in genesis.json")
 
 	longParts := make([]string, len(generateTemplateLines)+1)
 	longParts[0] = generateCmd.Long
@@ -107,38 +112,38 @@ template modes for -t:`,
 		baseRelay := remote.NodeConfig{}
 		baseNonParticipatingNode := remote.NodeConfig{}
 		if nodeTemplatePath != "" {
-			fin, err := os.Open(nodeTemplatePath)
-			if err != nil {
-				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err)
+			fin, err1 := os.Open(nodeTemplatePath)
+			if err1 != nil {
+				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err1)
 			}
 			dec := json.NewDecoder(fin)
-			err = dec.Decode(&baseNode)
-			if err != nil {
-				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err)
+			err1 = dec.Decode(&baseNode)
+			if err1 != nil {
+				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err1)
 			}
 		}
 		if nonParticipatingNodeTemplatePath != "" {
-			fin, err := os.Open(nonParticipatingNodeTemplatePath)
-			if err != nil {
-				reportErrorf("%s: bad npnode template, %s", nonParticipatingNodeTemplatePath, err)
+			fin, err1 := os.Open(nonParticipatingNodeTemplatePath)
+			if err1 != nil {
+				reportErrorf("%s: bad npnode template, %s", nonParticipatingNodeTemplatePath, err1)
 			}
 			dec := json.NewDecoder(fin)
-			err = dec.Decode(&baseNonParticipatingNode)
-			if err != nil {
-				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err)
+			err1 = dec.Decode(&baseNonParticipatingNode)
+			if err1 != nil {
+				reportErrorf("%s: bad node template, %s", nodeTemplatePath, err1)
 			}
 		} else {
 			baseNonParticipatingNode = baseNode
 		}
 		if relayTemplatePath != "" {
-			fin, err := os.Open(relayTemplatePath)
-			if err != nil {
-				reportErrorf("%s: bad relay template, %s", relayTemplatePath, err)
+			fin, err1 := os.Open(relayTemplatePath)
+			if err1 != nil {
+				reportErrorf("%s: bad relay template, %s", relayTemplatePath, err1)
 			}
 			dec := json.NewDecoder(fin)
-			err = dec.Decode(&baseRelay)
-			if err != nil {
-				reportErrorf("%s: bad relay template, %s", relayTemplatePath, err)
+			err1 = dec.Decode(&baseRelay)
+			if err1 != nil {
+				reportErrorf("%s: bad relay template, %s", relayTemplatePath, err1)
 			}
 		} else {
 			baseRelay = baseNode
@@ -184,7 +189,7 @@ template modes for -t:`,
 			if len(balRange) < 2 {
 				reportErrorf("must specify account balance range with --bal.")
 			}
-			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount, balRange)
+			err = generateAccountsLoadingFileTemplate(outputFilename, sourceWallet, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount, balRange, deterministicKeys)
 		default:
 			reportInfoln("Please specify a valid template name.\nSupported templates are:")
 			for _, line := range generateTemplateLines {
@@ -471,6 +476,9 @@ func saveTemplateToDisk(template remote.DeployedNetworkConfig, filename string) 
 }
 
 func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string) error {
+	if lastPartKeyRound != 0 {
+		template.Genesis.LastPartKeyRound = lastPartKeyRound
+	}
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
@@ -528,6 +536,9 @@ func generateWalletGenesis(filename string, wallets, npnNodes int) error {
 }
 
 func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
+	if lastPartKeyRound != 0 {
+		genesisData.LastPartKeyRound = lastPartKeyRound
+	}
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
@@ -538,7 +549,7 @@ func saveGenesisDataToDisk(genesisData gen.GenesisData, filename string) error {
 	return err
 }
 
-func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64, balRange []string) error {
+func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, rounds, roundTxnCount, accountsCount, assetsCount, applicationCount uint64, balRange []string, deterministicKeys bool) error {
 
 	min, err := strconv.ParseInt(balRange[0], 0, 64)
 	if err != nil {
@@ -557,6 +568,7 @@ func generateAccountsLoadingFileTemplate(templateFilename, sourceWallet string, 
 		GeneratedApplicationCount: applicationCount,
 		SourceWalletName:          sourceWallet,
 		BalanceRange:              []int64{min, max},
+		DeterministicKeys:         deterministicKeys,
 	}
 	return saveLoadingFileDataToDisk(data, templateFilename)
 }

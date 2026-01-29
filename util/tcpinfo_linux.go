@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,6 +55,7 @@ func getConnTCPInfo(raw syscall.RawConn) (*TCPInfo, error) {
 }
 
 // linuxTCPInfo is based on linux include/uapi/linux/tcp.h struct tcp_info
+//
 //revive:disable:var-naming
 //nolint:structcheck // complains about unused fields that are rqeuired to match C tcp_info struct
 type linuxTCPInfo struct {

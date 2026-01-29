@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package cmdutil
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -49,12 +50,10 @@ func (c *CobraStringValue) IsSet() bool { return c.isSet }
 
 // Set sets a value and fails if it is not allowed
 func (c *CobraStringValue) Set(other string) error {
-	for _, s := range c.allowed {
-		if other == s {
-			c.value = other
-			c.isSet = true
-			return nil
-		}
+	if slices.Contains(c.allowed, other) {
+		c.value = other
+		c.isSet = true
+		return nil
 	}
 	return fmt.Errorf("value %s not allowed", other)
 }
@@ -107,8 +106,8 @@ func (c *CobraStringSliceValue) IsSet() bool { return c.isSet }
 
 // Set sets a value and fails if it is not allowed
 func (c *CobraStringSliceValue) Set(values string) error {
-	others := strings.Split(values, ",")
-	for _, other := range others {
+	others := strings.SplitSeq(values, ",")
+	for other := range others {
 		other = strings.TrimSpace(other)
 		if _, ok := c.allowedMap[other]; ok {
 			c.value = append(c.value, other)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ func TestDupPopN(t *testing.T) {
 	testAccepts(t, "int 1; int 1; int 1; popn 2", fpVersion)
 	testAccepts(t, "int 1; int 0; popn 1", fpVersion)
 	testPanics(t, "int 1; int 0; popn 2", fpVersion)
-	testProg(t, "int 1; int 0; popn 3", LogicVersion, Expect{1, "popn 3 expects 3..."})
+	testProg(t, "int 1; int 0; popn 3", LogicVersion, exp(1, "popn 3 expects 3..."))
 	testPanics(t, notrack("int 1; int 0; popn 3"), fpVersion)
 
 	testAccepts(t, `int 7; dupn 250; dupn 250; dupn 250; dupn 249;
@@ -69,9 +69,9 @@ func TestDupPopNTyping(t *testing.T) {
 	t.Parallel()
 
 	testProg(t, "int 8; dupn 2; +; pop", LogicVersion)
-	testProg(t, "int 8; dupn 2; concat; pop", LogicVersion, Expect{1, "...wanted type []byte..."})
+	testProg(t, "int 8; dupn 2; concat; pop", LogicVersion, exp(1, "...wanted type []byte..."))
 
-	testProg(t, "popn 1", LogicVersion, Expect{1, "...expects 1 stack argument..."})
+	testProg(t, "popn 1", LogicVersion, exp(1, "...expects 1 stack argument..."))
 }
 
 func TestSimpleFrame(t *testing.T) {
@@ -342,7 +342,7 @@ func TestFrameAccess(t *testing.T) {
         int 1
         return
 `
-	testProg(t, source, fpVersion, Expect{4, "frame_dig above stack"})
+	testProg(t, source, fpVersion, exp(4, "frame_dig above stack"))
 	testPanics(t, notrack(source), fpVersion, "frame_dig above stack")
 
 	source = `
@@ -357,7 +357,7 @@ func TestFrameAccess(t *testing.T) {
         int 1
         return
 `
-	testProg(t, source, fpVersion, Expect{5, "frame_dig above stack"})
+	testProg(t, source, fpVersion, exp(5, "frame_dig above stack"))
 	testPanics(t, notrack(source), fpVersion, "frame_dig above stack")
 
 	// Note that at the moment of frame_bury, the stack IS big enough, because
@@ -376,7 +376,7 @@ func TestFrameAccess(t *testing.T) {
         int 1
         return
 `
-	testProg(t, source, fpVersion, Expect{6, "frame_bury above stack"})
+	testProg(t, source, fpVersion, exp(6, "frame_bury above stack"))
 	testPanics(t, notrack(source), fpVersion, "frame_bury above stack")
 }
 
@@ -400,7 +400,7 @@ main:
      pop						// argument popped
      frame_dig -1				// but then frame_dig used to get at it
 `
-	testProg(t, source, fpVersion, Expect{7, "frame_dig above stack"})
+	testProg(t, source, fpVersion, exp(7, "frame_dig above stack"))
 	testPanics(t, notrack(source), fpVersion, "frame_dig above stack")
 
 	testAccepts(t, `
@@ -427,7 +427,7 @@ main:
      frame_bury 1;
      retsub
 `
-	testProg(t, source, fpVersion, Expect{8, "frame_dig above stack"})
+	testProg(t, source, fpVersion, exp(8, "frame_dig above stack"))
 	testPanics(t, notrack(source), fpVersion)
 }
 
@@ -442,7 +442,7 @@ main:
      proto 1 1
      frame_dig -10				// digging down below arguments
 `
-	testProg(t, source, fpVersion, Expect{6, "frame_dig -10 in sub with 1 arg..."})
+	testProg(t, source, fpVersion, exp(6, "frame_dig -10 in sub with 1 arg..."))
 	testPanics(t, notrack(source), fpVersion, "frame_dig -10 in sub with 1 arg")
 
 	testPanics(t, `
@@ -459,7 +459,7 @@ main:
      proto 1 15
      frame_bury -10				// burying down below arguments
 `
-	testProg(t, source, fpVersion, Expect{6, "frame_bury -10 in sub with 1 arg..."})
+	testProg(t, source, fpVersion, exp(6, "frame_bury -10 in sub with 1 arg..."))
 	testPanics(t, notrack(source), fpVersion, "frame_bury -10 in sub with 1 arg")
 
 	// Without `proto`, frame_bury can't be checked by assembler, but still panics

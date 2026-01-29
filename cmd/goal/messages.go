@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -62,13 +62,15 @@ const (
 	infoNodeShuttingDown                    = "Algorand node is shutting down..."
 	infoNodeSuccessfullyStopped             = "The node was successfully stopped."
 	infoNodeStatus                          = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
-	infoNodeStatusConsensusUpgradeVoting    = "Consensus upgrate state: Voting\nYes votes: %d\nNo votes: %d\nVotes remaining: %d\nYes votes required: %d\nVote window close round: %d"
+	infoNodeStatusConsensusUpgradeVoting    = "Consensus upgrade state: Voting\nYes votes: %d\nNo votes: %d\nVotes remaining: %d\nYes votes required: %d\nVote window close round: %d"
 	infoNodeStatusConsensusUpgradeScheduled = "Consensus upgrade state: Scheduled"
 	catchupStoppedOnUnsupported             = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
 	infoNodeCatchpointCatchupStatus         = "Last committed block: %d\nSync Time: %s\nCatchpoint: %s"
 	infoNodeCatchpointCatchupAccounts       = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d\nCatchpoint accounts verified: %d\nCatchpoint total KVs: %d\nCatchpoint KVs processed: %d\nCatchpoint KVs verified: %d"
 	infoNodeCatchpointCatchupBlocks         = "Catchpoint total blocks: %d\nCatchpoint downloaded blocks: %d"
 	nodeLastCatchpoint                      = "Last Catchpoint: %s"
+	nodeConfirmImplicitCatchpoint           = "Fast catchup to %s is about to start.\nUsing external catchpoints is not a secure practice and should not be done for consensus participating nodes.\nType 'yes' to accept the risk and continue: "
+	errorAbortedPerUserRequest              = "Aborted"
 	errorNodeCreationIPFailure              = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected                    = "Algorand node does not appear to be running: %s"
 	errorNodeStatus                         = "Cannot contact Algorand node: %s"
@@ -87,7 +89,7 @@ const (
 	errLoadingConfig                        = "Error loading Config file from '%s': %v"
 	errorNodeFailedToShutdown               = "Unable to shut down node: %v"
 	errorCatchpointLabelParsingFailed       = "The provided catchpoint is not a valid one"
-	errorCatchpointLabelMissing             = "A catchpoint argument is needed: %s"
+	errorCatchpointLabelMissing             = "A catchpoint argument is needed: %s: %s"
 	errorUnableToLookupCatchpointLabel      = "Unable to fetch catchpoint label"
 	errorTooManyCatchpointLabels            = "The catchup command expect a single catchpoint"
 
@@ -163,29 +165,30 @@ const (
 	tealsignTooManyArg    = "--set-lsig-arg-idx too large, maximum of %d arguments"
 	tealsignInfoWroteSig  = "Wrote signature for %s to LSig.Args[%d]"
 
-	tealLogicSigSize = "%s: logicsig program size too large: %d > %d"
-	tealAppSize      = "%s: app program size too large: %d > %d"
-
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "
 	infoChoosePasswordPrompt     = "Please choose a password for wallet '%s': "
 	infoPasswordConfirmation     = "Please confirm the password: "
 	infoCreatingWallet           = "Creating wallet..."
 	infoCreatedWallet            = "Created wallet '%s'"
+	infoUnencrypted              = "Creating unencrypted wallet"
 	infoBackupExplanation        = "Your new wallet has a backup phrase that can be used for recovery.\nKeeping this backup phrase safe is extremely important.\nWould you like to see it now? (Y/n): "
 	infoPrintedBackupPhrase      = "Your backup phrase is printed below.\nKeep this information safe -- never share it with anyone!"
 	infoBackupPhrase             = "\n%s"
 	infoNoWallets                = "No wallets found. You can create a wallet with `goal wallet new`"
+	infoRenamedWallet            = "Renamed wallet '%s' to '%s'"
 	errorCouldntCreateWallet     = "Couldn't create wallet: %s"
 	errorCouldntInitializeWallet = "Couldn't initialize wallet: %s"
 	errorCouldntExportMDK        = "Couldn't export master derivation key: %s"
 	errorCouldntMakeMnemonic     = "Couldn't make mnemonic: %s"
 	errorCouldntListWallets      = "Couldn't list wallets: %s"
+	errorCouldntFindWallet       = "Couldn't find wallet: %s"
 	errorPasswordConfirmation    = "Password confirmation did not match"
 	errorBadMnemonic             = "Problem with mnemonic: %s"
 	errorBadRecoveredKey         = "Recovered invalid key"
 	errorFailedToReadResponse    = "Couldn't read response: %s"
 	errorFailedToReadPassword    = "Couldn't read password: %s"
+	errorCouldntRenameWallet     = "Couldn't rename wallet: %s"
 
 	// Commands
 	infoPasswordPrompt       = "Please enter the password for wallet '%s': "

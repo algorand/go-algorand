@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir := "~/.algorand"
 	os.Setenv("ALGORAND_DATA", expectedDir)
@@ -33,7 +33,7 @@ func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir, err := os.Getwd()
 	if err != nil {
@@ -44,7 +44,7 @@ func TestEnsureDataDirReturnsWhenWorkDirIsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir, err := os.Getwd()
 	if err != nil {
@@ -55,7 +55,7 @@ func TestEnsureDataDirReturnsWhenRelPath1IsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir, err := os.Getwd()
 	if err != nil {
@@ -66,7 +66,7 @@ func TestEnsureDataDirReturnsWhenRelPath2IsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsureDataDirReturnsWhenRelPath3IsProvided(t *testing.T) {
+func TestEnsureDataDirReturnsWhenRelPath3IsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.
 	partitiontest.PartitionTest(t)
 	expectedDir, err := os.Getwd()
 	if err != nil {

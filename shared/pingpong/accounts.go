@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,9 +20,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"maps"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -160,13 +162,13 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 	}
 
 	if pps.cinfo.OptIns == nil {
-		pps.cinfo.OptIns = make(map[uint64][]string, pps.cfg.NumAsset+pps.cfg.NumApp)
+		pps.cinfo.OptIns = make(map[any][]string, pps.cfg.NumAsset+pps.cfg.NumApp)
 	}
 	if pps.cinfo.AssetParams == nil {
-		pps.cinfo.AssetParams = make(map[uint64]model.AssetParams, pps.cfg.NumAsset)
+		pps.cinfo.AssetParams = make(map[basics.AssetIndex]model.AssetParams, pps.cfg.NumAsset)
 	}
 	if pps.cinfo.AppParams == nil {
-		pps.cinfo.AppParams = make(map[uint64]model.ApplicationParams, pps.cfg.NumApp)
+		pps.cinfo.AppParams = make(map[basics.AppIndex]model.ApplicationParams, pps.cfg.NumApp)
 	}
 
 	sources := make([]<-chan *crypto.SignatureSecrets, 0, 2)
@@ -197,9 +199,9 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 				srcAcctPresent = true
 			}
 
-			ai, err := ac.AccountInformation(addr, true)
-			if err != nil {
-				return err
+			ai, aiErr := ac.AccountInformation(addr, true)
+			if aiErr != nil {
+				return aiErr
 			}
 			amt := ai.Amount
 
@@ -209,10 +211,10 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 			}
 
 			ppa := &pingPongAccount{
-				balance: amt,
-				sk:      secret,
-				pk:      accountAddress,
+				sk: secret,
+				pk: accountAddress,
 			}
+			ppa.balance.Store(amt)
 
 			pps.integrateAccountInfo(addr, ppa, ai)
 
@@ -246,7 +248,7 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 }
 
 func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, ai model.Account) {
-	ppa.balance = ai.Amount
+	ppa.balance.Store(ai.Amount)
 	// assets this account has created
 	if ai.CreatedAssets != nil {
 		for _, ap := range *ai.CreatedAssets {
@@ -261,7 +263,7 @@ func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, 
 			assetID := holding.AssetID
 			pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
 			if ppa.holdings == nil {
-				ppa.holdings = make(map[uint64]uint64)
+				ppa.holdings = make(map[basics.AssetIndex]uint64)
 			}
 			ppa.holdings[assetID] = holding.Amount
 		}
@@ -284,7 +286,7 @@ func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, 
 }
 
 type assetopti struct {
-	assetID uint64
+	assetID basics.AssetIndex
 	params  model.AssetParams
 	optins  []string // addr strings
 }
@@ -311,10 +313,10 @@ func (as *assetSet) Swap(a, b int) {
 
 func (pps *WorkerState) prepareAssets(client *libgoal.Client) (err error) {
 	if pps.cinfo.AssetParams == nil {
-		pps.cinfo.AssetParams = make(map[uint64]model.AssetParams)
+		pps.cinfo.AssetParams = make(map[basics.AssetIndex]model.AssetParams)
 	}
 	if pps.cinfo.OptIns == nil {
-		pps.cinfo.OptIns = make(map[uint64][]string)
+		pps.cinfo.OptIns = make(map[any][]string)
 	}
 
 	// create new assets as needed
@@ -336,7 +338,7 @@ func (pps *WorkerState) prepareAssets(client *libgoal.Client) (err error) {
 	sort.Sort(&ta)
 	if len(assets) > int(pps.cfg.NumAsset) {
 		assets = assets[:pps.cfg.NumAsset]
-		nap := make(map[uint64]model.AssetParams, pps.cfg.NumAsset)
+		nap := make(map[basics.AssetIndex]model.AssetParams, pps.cfg.NumAsset)
 		for _, asset := range assets {
 			nap[asset.assetID] = asset.params
 		}
@@ -384,6 +386,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 		return
 	}
 	assetsNeeded := int(pps.cfg.NumAsset) - len(pps.cinfo.AssetParams)
+	assetsToCreate := assetsNeeded // Save original count for later use
 	newAssetAddrs := make(map[string]*pingPongAccount, assetsNeeded)
 	for addr, acct := range pps.accounts {
 		if assetsNeeded <= 0 {
@@ -417,9 +420,9 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 		newAssetAddrs[addr] = acct
 	}
 	// wait for new assets to be created, fetch account data for them
-	newAssets := make(map[uint64]model.AssetParams, assetsNeeded)
+	newAssets := make(map[basics.AssetIndex]model.AssetParams, assetsToCreate)
 	timeout := time.Now().Add(10 * time.Second)
-	for len(newAssets) < assetsNeeded {
+	for len(newAssets) < assetsToCreate {
 		for addr, acct := range newAssetAddrs {
 			ai, err := client.AccountInformation(addr, true)
 			if err != nil {
@@ -442,7 +445,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 					assetID := holding.AssetID
 					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
 					if acct.holdings == nil {
-						acct.holdings = make(map[uint64]uint64)
+						acct.holdings = make(map[basics.AssetIndex]uint64)
 					}
 					acct.holdings[assetID] = holding.Amount
 				}
@@ -455,9 +458,7 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 			break
 		}
 	}
-	for assetID, ap := range newAssets {
-		pps.cinfo.AssetParams[assetID] = ap
-	}
+	maps.Copy(pps.cinfo.AssetParams, newAssets)
 	return nil
 }
 
@@ -470,28 +471,6 @@ func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx transactions
 	}
 	senderAccount.addBalance(-int64(tx.Fee.Raw))
 	return
-}
-
-func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []byte {
-	var progParts []string
-	progParts = append(progParts, `#pragma version 2`)
-	progParts = append(progParts, `byte base64 AA==`)
-
-	for i := uint32(0); i < numHashes; i++ {
-		progParts = append(progParts, hashSize)
-	}
-	for i := uint32(0); i < numOps/2; i++ {
-		progParts = append(progParts, `int 1`)
-		progParts = append(progParts, `pop`)
-	}
-	progParts = append(progParts, `int 1`)
-	progParts = append(progParts, `return`)
-	progAsm := strings.Join(progParts, "\n")
-	ops, err := logic.AssembleString(progAsm)
-	if err != nil {
-		panic(err)
-	}
-	return ops.Program
 }
 
 func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys, numLocalKeys, numBoxUpdate, numBoxRead uint32) ([]byte, string) {
@@ -752,11 +731,11 @@ func getProto(client *libgoal.Client) (config.ConsensusParams, error) {
 // ensure that cfg.NumPartAccounts have cfg.NumAppOptIn opted in selecting from cfg.NumApp
 func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 	if pps.cinfo.AppParams == nil {
-		pps.cinfo.AppParams = make(map[uint64]model.ApplicationParams)
+		pps.cinfo.AppParams = make(map[basics.AppIndex]model.ApplicationParams)
 	}
 
 	if pps.cinfo.OptIns == nil {
-		pps.cinfo.OptIns = make(map[uint64][]string, pps.cfg.NumAsset+pps.cfg.NumApp)
+		pps.cinfo.OptIns = make(map[any][]string, pps.cfg.NumAsset+pps.cfg.NumApp)
 	}
 
 	// generate new apps
@@ -891,7 +870,7 @@ func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transact
 	globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
 	locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
 
-	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, libgoal.RefBundle{}, 0)
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
 		panic(err)
@@ -911,8 +890,8 @@ func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transact
 	return tx, err
 }
 
-func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Client) (tx transactions.Transaction, err error) {
-	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil)
+func (pps *WorkerState) appOptIn(addr string, appID basics.AppIndex, client *libgoal.Client) (tx transactions.Transaction, err error) {
+	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, libgoal.RefBundle{}, 0)
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
 		panic(err)
@@ -929,7 +908,7 @@ func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Clie
 	return
 }
 
-func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.Client) (err error) {
+func (pps *WorkerState) appFundFromSourceAccount(appID basics.AppIndex, client *libgoal.Client) (err error) {
 	// currently, apps only need to be funded if boxes are used
 	if pps.getNumBoxes() > 0 {
 		var srcFunds uint64
@@ -938,7 +917,7 @@ func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.C
 			return err
 		}
 
-		appAddr := basics.AppIndex(appID).Address()
+		appAddr := appID.Address()
 		mbr := proto.MinBalance +
 			proto.BoxFlatMinBalance*uint64(pps.getNumBoxes()) +
 			proto.BoxByteMinBalance*(proto.MaxBoxSize+uint64(proto.MaxAppKeyLen))*uint64(pps.getNumBoxes())
@@ -958,7 +937,7 @@ func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.C
 	return nil
 }
 
-func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) {
+func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) { //nolint:unused // TODO
 	allAddrs := make([]string, len(allAccounts))
 	var i int
 	for addr := range allAccounts {
@@ -1003,10 +982,8 @@ func (pps *WorkerState) generateAccounts() {
 }
 
 func uniqueAppend(they []string, x string) []string {
-	for _, v := range they {
-		if v == x {
-			return they
-		}
+	if slices.Contains(they, x) {
+		return they
 	}
 	return append(they, x)
 }

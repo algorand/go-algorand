@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,9 @@ var versionCheck bool
 func init() {
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(netCmd)
+	rootCmd.AddCommand(benchCmd)
 	rootCmd.AddCommand(databaseCmd)
+	rootCmd.AddCommand(infoCmd)
 }
 
 var rootCmd = &cobra.Command{

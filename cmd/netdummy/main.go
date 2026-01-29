@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -47,7 +48,7 @@ func main() {
 	log.SetLevel(logging.Debug)
 	log.SetOutput(os.Stderr)
 
-	var nodes []network.GossipNode
+	var p runtime.Pinner
 	for i := 0; i < *numClients; i++ {
 		n, _ := network.NewWebsocketGossipNode(log,
 			conf,
@@ -55,7 +56,7 @@ func main() {
 			*genesisID,
 			protocol.NetworkID(*networkID))
 		n.Start()
-		nodes = append(nodes, n)
+		p.Pin(n)
 	}
 
 	fmt.Printf("Created %d clients\n", *numClients)

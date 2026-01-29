@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,12 +19,13 @@ package agreement
 import (
 	"context"
 	"fmt"
-	"time"
+	"io"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 const (
@@ -113,6 +114,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 		defer func() {
 			close(decoded)
 		}()
+		util.SetGoroutineLabels("tokenizeTag", string(tag))
 		for {
 			select {
 			case raw, ok := <-networkMessages:
@@ -125,9 +127,9 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 				if err != nil {
 					warnMsg := fmt.Sprintf("disconnecting from peer: error decoding message tagged %v: %v", tag, err)
 					// check protocol version
-					cv, err := d.ledger.ConsensusVersion(d.ledger.NextRound())
-					if err == nil {
-						if _, ok := config.Consensus[cv]; !ok {
+					cv, cvErr := d.ledger.ConsensusVersion(d.ledger.NextRound())
+					if cvErr == nil {
+						if _, found := config.Consensus[cv]; !found {
 							warnMsg = fmt.Sprintf("received proposal message was ignored. The node binary doesn't support the next network consensus (%v) and would no longer be able to process agreement messages", cv)
 						}
 					}
@@ -190,7 +192,7 @@ func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, 
 // next blocks until it observes an external input event of interest for the state machine.
 //
 // If ok is false, there are no more events so the agreement service should quit.
-func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Duration, currentRound round) (e externalEvent, ok bool) {
+func (d *demux) next(s *Service, deadline Deadline, fastDeadline Deadline, currentRound round) (e externalEvent, ok bool) {
 	defer func() {
 		if !ok {
 			return
@@ -200,9 +202,14 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 
 		switch e.t() {
 		case payloadVerified:
-			e = e.(messageEvent).AttachValidatedAt(s.Clock.Since())
-		case payloadPresent:
-			e = e.(messageEvent).AttachReceivedAt(s.Clock.Since())
+			e = e.(messageEvent).AttachValidatedAt(clockForRound(currentRound, s.Clock, s.historicalClocks))
+		case payloadPresent, votePresent:
+			e = e.(messageEvent).AttachReceivedAt(clockForRound(currentRound, s.Clock, s.historicalClocks))
+		case voteVerified:
+			// if this is a proposal vote (step 0), record the validatedAt time on the vote
+			if e.(messageEvent).Input.Vote.R.Step == 0 {
+				e = e.(messageEvent).AttachValidatedAt(clockForRound(currentRound, s.Clock, s.historicalClocks))
+			}
 		}
 	}()
 
@@ -250,8 +257,8 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	}
 
 	ledgerNextRoundCh := s.Ledger.Wait(nextRound)
-	deadlineCh := s.Clock.TimeoutAt(deadline)
-	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline)
+	deadlineCh := s.Clock.TimeoutAt(deadline.Duration, deadline.Type)
+	fastDeadlineCh := s.Clock.TimeoutAt(fastDeadline.Duration, fastDeadline.Type)
 
 	d.UpdateEventsQueue(eventQueueDemux, 0)
 	d.monitor.dec(demuxCoserviceType)
@@ -355,6 +362,17 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 	}
 
 	return
+}
+
+// dumpQueues dumps the current state of the demux queues to the given writer.
+func (d *demux) dumpQueues(w io.Writer) {
+	fmt.Fprintf(w, "rawVotes: %d\n", len(d.rawVotes))
+	fmt.Fprintf(w, "rawProposals: %d\n", len(d.rawProposals))
+	fmt.Fprintf(w, "rawBundles: %d\n", len(d.rawBundles))
+
+	fmt.Fprintf(w, "cryptoVerifiedVotes: %d\n", len(d.crypto.VerifiedVotes()))
+	fmt.Fprintf(w, "cryptoVerified ProposalPayloadTag: %d\n", len(d.crypto.Verified(protocol.ProposalPayloadTag)))
+	fmt.Fprintf(w, "cryptoVerified VoteBundleTag: %d\n", len(d.crypto.Verified(protocol.VoteBundleTag)))
 }
 
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together

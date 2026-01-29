@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,6 +52,8 @@ func makeTestBlock(round uint64) rpcs.EncodedBlockCert {
 
 func TestConsecutiveBlocks(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
@@ -68,12 +70,14 @@ func TestConsecutiveBlocks(t *testing.T) {
 
 func TestEventWithDetails(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sender := MockEventSender{}
 	bs := blockstats{log: &sender}
 
 	// Create blocks with some senders in the payload.
 	makeStxnWithAddr := func(addr basics.Address) transactions.SignedTxnInBlock {
-		return transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: addr}}}}}
+		return transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxn{Txn: transactions.Transaction{Header: transactions.Header{Sender: addr}}}.WithAD()}
 	}
 	addr := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	otherAddr := basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
@@ -108,6 +112,8 @@ func TestEventWithDetails(t *testing.T) {
 
 func TestAgreementTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sleepTime := 50 * time.Millisecond
 	testAttempts := 0
 	const maxTestAttempts = 10

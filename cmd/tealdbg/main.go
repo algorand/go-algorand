@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,17 +17,23 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 func main() {
+	fmt.Println("tealdbg is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+	time.Sleep(3 * time.Second)
+
 	// Hidden command to generate docs in a given directory
 	// tealdbg generate-docs [path]
 	if len(os.Args) == 3 && os.Args[1] == "generate-docs" {
@@ -119,7 +125,7 @@ var noBrowserCheck bool
 var noSourceMap bool
 var verbose bool
 var painless bool
-var appID uint64
+var appID basics.AppIndex
 var listenForDrReq bool
 
 func init() {
@@ -138,7 +144,7 @@ func init() {
 	debugCmd.Flags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
 	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
 	debugCmd.Flags().StringVarP(&ddrFile, "dryrun-req", "d", "", "Program(s) and state(s) in dryrun REST request format")
-	debugCmd.Flags().Uint64VarP(&appID, "app-id", "a", 1380011588, "Application ID for stateful TEAL if not set in transaction(s)")
+	debugCmd.Flags().Uint64VarP((*uint64)(&appID), "app-id", "a", 1380011588, "Application ID for stateful TEAL if not set in transaction(s)")
 	debugCmd.Flags().Uint64VarP(&roundNumber, "round", "r", 0, "Ledger round number to evaluate stateful TEAL on")
 	debugCmd.Flags().Int64VarP(&timestamp, "latest-timestamp", "l", 0, "Latest confirmed timestamp to evaluate stateful TEAL on")
 	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
@@ -160,11 +166,6 @@ func debugRemote() {
 }
 
 func debugLocal(args []string) {
-	// simple pre-invalidation
-	if roundNumber < 0 {
-		log.Fatalln("Invalid round")
-	}
-
 	// local debugging works in two modes:
 	// - listening for upcoming Dryrun Requests
 	// - or taking program, transaction or Dryrun Request from command line
@@ -248,7 +249,7 @@ func debugLocal(args []string) {
 		DdrBlob:          ddrBlob,
 		IndexerURL:       indexerURL,
 		IndexerToken:     indexerToken,
-		Round:            uint64(roundNumber),
+		Round:            basics.Round(roundNumber),
 		LatestTimestamp:  timestamp,
 		RunMode:          runMode.String(),
 		DisableSourceMap: noSourceMap,

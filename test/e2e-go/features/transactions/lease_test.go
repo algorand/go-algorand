@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,11 +136,11 @@ func TestLeaseRegressionFaultyFirstValidCheckOld_2f3880f7(t *testing.T) {
 	a.True(confirmed, "lease txn confirmed")
 
 	bal1, _ := fixture.GetBalanceAndRound(account1)
-	bal2, _ := fixture.GetBalanceAndRound(account2)
+	bal2, curRound := fixture.GetBalanceAndRound(account2)
 	a.Equal(bal1, uint64(1000000))
 	a.Equal(bal2, uint64(0))
 
-	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, 0, 0)
+	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, basics.Round(curRound)+1, 0)
 	a.NoError(err)
 
 	stx2, err := client.SignTransactionWithWallet(wh, nil, tx2)
@@ -410,10 +410,10 @@ func TestOverlappingLeases(t *testing.T) {
 
 	// construct transactions for sending money to account1 and account2
 	// from same sender with identical lease, but different, overlapping ranges
-	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", lease, basics.Round(leaseStart), basics.Round(leaseStart+firstTxLeaseLife))
+	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", lease, leaseStart, leaseStart+firstTxLeaseLife)
 	a.NoError(err)
 
-	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, basics.Round(leaseStart), basics.Round(leaseStart+secondTxLeaseLife))
+	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, leaseStart, leaseStart+secondTxLeaseLife)
 	a.NoError(err)
 
 	stx1, err := client.SignTransactionWithWallet(wh, nil, tx1)

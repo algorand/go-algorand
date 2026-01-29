@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -86,7 +87,7 @@ func TestAccountsCanSendMoneyAcrossUpgradeV32toV35(t *testing.T) {
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV32Upgrade.json"), targetVersion)
 }
 
-// ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
+// consensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
 // of the upgrade parameters, which allow for upgrades to take place after
 // only a few rounds.
@@ -184,7 +185,7 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 	pingWalletHandle, err := pingClient.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	startTime := time.Now()
-	var lastTxnSendRound uint64
+	var lastTxnSendRound basics.Round
 	for curStatus.LastVersion == initialStatus.LastVersion {
 		iterationStartTime := time.Now()
 		if lastTxnSendRound != curStatus.LastRound {
@@ -278,12 +279,12 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 
 	// wait for all transactions to confirm
 	for _, txid := range pingTxids {
-		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, pingAccount, txid)
+		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, txid)
 		a.NoError(err, "waiting for txn")
 	}
 
 	for _, txid := range pongTxids {
-		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, pongAccount, txid)
+		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, txid)
 		a.NoError(err, "waiting for txn")
 	}
 

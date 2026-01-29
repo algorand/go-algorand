@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetParams, creator basics.Address, err error) {
@@ -110,9 +111,9 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
-	params, creator, err := getParams(balances, cc.ConfigAsset)
-	if err != nil {
-		return err
+	params, creator, paramsErr := getParams(balances, cc.ConfigAsset)
+	if paramsErr != nil {
+		return paramsErr
 	}
 
 	if params.Manager.IsZero() || (header.Sender != params.Manager) {
@@ -186,9 +187,9 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			params.Clawback = cc.AssetParams.Clawback
 		}
 
-		err = balances.PutAssetParams(creator, cc.ConfigAsset, params)
-		if err != nil {
-			return err
+		paramsErr = balances.PutAssetParams(creator, cc.ConfigAsset, params)
+		if paramsErr != nil {
+			return paramsErr
 		}
 	}
 
@@ -214,7 +215,10 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 
 	newAmount, overflowed := basics.OSub(sndHolding.Amount, amount)
 	if overflowed {
-		return fmt.Errorf("underflow on subtracting %d from sender amount %d", amount, sndHolding.Amount)
+		return &ledgercore.AssetBalanceError{
+			Amount:       amount,
+			SenderAmount: sndHolding.Amount,
+		}
 	}
 	sndHolding.Amount = newAmount
 

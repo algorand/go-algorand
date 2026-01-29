@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,7 +44,6 @@ var (
 )
 
 var nameRecordTypes = []string{"A", "CNAME", "SRV"}
-var srvRecordTypes = []string{"SRV"}
 
 const metricsPort = uint16(9100)
 
@@ -356,6 +355,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 	// Error if target has another name entry - target should be relay provider's domain so shouldn't be possible
 	if mapsTo, has := ctx.nameEntries[target]; has {
 		err = fmt.Errorf("relay target has a DNS Name entry and should not (%s -> %s)", target, mapsTo)
+		return
 	}
 
 	names, err := getTargetDNSChain(ctx.nameEntries, target)
@@ -375,6 +375,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 
 	if relay.DNSAlias == "" {
 		err = fmt.Errorf("missing DNSAlias name")
+		return
 	}
 
 	targetDomainAlias := relay.DNSAlias + "." + nameDomain
@@ -523,9 +524,6 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 // Returns an array of names starting with the target ip/name and ending with the outermost reference
 func getTargetDNSChain(nameEntries map[string]string, target string) (names []string, err error) {
 	target = strings.ToLower(target)
-	if err != nil {
-		return
-	}
 
 	names = append(names, target)
 	for {

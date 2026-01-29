@@ -6,7 +6,7 @@ import os
 import subprocess
 
 import algosdk
-import algosdk.future.transaction as txn
+import algosdk.transaction as txn
 import algosdk.encoding as enc
 
 
@@ -121,8 +121,8 @@ class Goal:
                     wallet = w
 
             assert wallet, f"No wallet named '{name}'"
-            self.handle = self.kmd.init_wallet_handle(wallet["id"], "")
-            keys = self.kmd.list_keys(self.handle)
+            self.handle = self.kmd.init_wallet_handle(wallet["id"], "", timeout=120)
+            keys = self.kmd.list_keys(self.handle, timeout=120)
             assert len(keys) == 1
             self.account = keys[0]
 
@@ -144,10 +144,10 @@ class Goal:
             self.open_wallet(self.wallet_name)
             return self.kmd.sign_transaction(self.handle, "", tx)
 
-    def sign_with_program(self, tx, program, delegator=None):
+    def sign_with_program(self, tx, program, args=None, delegator=None):
         if delegator:
             raise Exception("haven't implemented delgated logicsig yet")
-        return txn.LogicSigTransaction(tx, txn.LogicSig(program))
+        return txn.LogicSigTransaction(tx, txn.LogicSig(program, args))
 
     def send(self, tx, confirm=True):
         try:
@@ -157,6 +157,19 @@ class Goal:
             return self.confirm(txid), ""
         except algosdk.error.AlgodHTTPError as e:
             return (None, e)
+
+    def send_details(self, tx):
+        stx = self.sign(tx)
+        headers = {"Content-Type": "application/x-binary",
+                   "X-Algo-API-Token": self.algod.algod_token,
+        }
+        url = self.algod.algod_address + "/v2/transactions"
+        return (url, headers, enc.msgpack_encode(stx))
+
+    def curl_command(self, tx):
+        (url, headers, b64data) = self.send_details(tx)
+        H = " ".join(['-H "' + k + ':' + v + '"' for k,v in headers.items()])
+        return f"echo {b64data} | base64 -d | curl -s {url} {H} --data-binary @-"
 
     def send_group(self, txns, confirm=True):
         # Need unsigned transactions to calculate the group This pulls
@@ -227,21 +240,21 @@ class Goal:
         return tx
 
     def keyreg(self, sender, votekey=None, selkey=None, votefst=None,
-               votelst=None, votekd=None,
+               votelst=None, votekd=None, sprfkey=None,
                send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.KeyregTxn(sender, params,
-                           votekey, selkey, votefst, votelst, votekd,
+                           votekey, selkey, votefst, votelst, votekd, sprfkey=sprfkey,
                            **kwargs)
         return self.finish(tx, send)
 
     def pay(self, sender, receiver, amt: int, send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.PaymentTxn(sender, params, receiver, amt, **kwargs)
         return self.finish(tx, send)
 
     def acfg(self, sender, send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.AssetConfigTxn(
             sender, params, **kwargs, strict_empty_address_check=False
         )
@@ -252,7 +265,7 @@ class Goal:
         return self.acfg(sender, **kwargs)
 
     def axfer(self, sender, receiver, amt: int, index: int, send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.AssetTransferTxn(
             sender, params, receiver, amt, index, **kwargs
         )
@@ -263,7 +276,7 @@ class Goal:
         return self.axfer(sender, sender, 0, index, **kwargs)
 
     def afrz(self, sender, index: int, target, frozen, send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.AssetFreezeTxn(sender, params, index, target, frozen, **kwargs)
         return self.finish(tx, send)
 
@@ -274,9 +287,19 @@ class Goal:
             return values
         return txn.StateSchema(num_uints=values[0], num_byte_slices=values[1])
 
+
+    def params(self, lifetime=None, fee=None):
+        params = self.algod.suggested_params()
+        if lifetime is not None:
+            params.last = params.first + lifetime
+        if fee is not None:
+            params.flat_fee = True
+            params.fee = fee
+        return params
+
     def appl(self, sender, index: int, on_complete=txn.OnComplete.NoOpOC,
              send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         local_schema = self.coerce_schema(kwargs.pop("local_schema", None))
         global_schema = self.coerce_schema(kwargs.pop("global_schema", None))
         tx = txn.ApplicationCallTxn(

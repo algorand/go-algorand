@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,15 +90,6 @@ func blockToPath(blk uint64) string {
 	)
 }
 
-// stringBlockToPath is the same as blockToPath except it takes a (non-padded) base-36 block
-func stringBlockToPath(s string) (string, error) {
-	blk, err := stringToBlock(s)
-	if err != nil {
-		return "", err
-	}
-	return blockToPath(blk), nil
-}
-
 // blockDir returns the root folder where all the blocks are stored
 func blockDir() string {
 	return filepath.Join(*dirFlag, fmt.Sprintf("v1/%s/block", *genesisFlag))
@@ -175,6 +166,7 @@ func fetcher(server string, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
+// TODO: We may want to implement conditional fallback to backup bootstrap logic here
 func download() {
 	if *genesisFlag == "" {
 		panic("Must specify -genesis")
@@ -184,8 +176,9 @@ func download() {
 		serverList = strings.Split(*serversFlag, ";")
 	} else if *networkFlag != "" {
 		cfg := config.GetDefaultLocal()
-		bootstrapID := cfg.DNSBootstrap(protocol.NetworkID(*networkFlag))
-		_, records, err := net.LookupSRV("algobootstrap", "tcp", bootstrapID)
+		// only using first dnsBootstrap entry (if more than one are configured) and just the primary SRV, not backup
+		dnsBootstrap := cfg.DNSBootstrapArray(protocol.NetworkID(*networkFlag))[0]
+		_, records, err := net.LookupSRV("algobootstrap", "tcp", dnsBootstrap.PrimarySRVBootstrap)
 		if err != nil {
 			dnsAddr, err2 := net.ResolveIPAddr("ip", cfg.FallbackDNSResolverAddress)
 			if err2 != nil {
@@ -195,7 +188,7 @@ func download() {
 
 			var resolver tools_network.Resolver
 			resolver.SetFallbackResolverAddress(*dnsAddr)
-			_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", bootstrapID)
+			_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", dnsBootstrap.PrimarySRVBootstrap)
 			if err != nil {
 				panic(err)
 			}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 //go:build !windows
-// +build !windows
 
 package util
 
@@ -34,6 +33,24 @@ func GetFdLimits() (soft uint64, hard uint64, err error) {
 		return 0, 0, fmt.Errorf("GetFdSoftLimit() err: %w", err)
 	}
 	return rLimit.Cur, rLimit.Max, nil
+}
+
+// RaiseFdSoftLimit raises the file descriptors soft limit to the specified value,
+// or leave it unchanged if the value is less than the current.
+func RaiseFdSoftLimit(newLimit uint64) error {
+	soft, hard, err := GetFdLimits()
+	if err != nil {
+		return fmt.Errorf("RaiseFdSoftLimit() err: %w", err)
+	}
+	if newLimit <= soft {
+		// Current limit is sufficient; no need to change it.
+		return nil
+	}
+	if newLimit > hard {
+		// New limit exceeds the hard limit; set it to the hard limit.
+		newLimit = hard
+	}
+	return SetFdSoftLimit(newLimit)
 }
 
 // SetFdSoftLimit sets a new file descriptors soft limit.
@@ -71,4 +88,9 @@ func GetCurrentProcessTimes() (utime int64, stime int64, err error) {
 		stime = 0
 	}
 	return
+}
+
+// GetTotalMemory gets total system memory
+func GetTotalMemory() uint64 {
+	return getTotalMemory()
 }

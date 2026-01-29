@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,10 +48,13 @@ const (
 	MerkleArrayNode                  HashID = "MA"
 	MerkleVectorCommitmentBottomLeaf HashID = "MB"
 	Message                          HashID = "MX"
+	MultisigProgram                  HashID = "MsigProgram"
 	NetIdentityChallenge             HashID = "NIC"
 	NetIdentityChallengeResponse     HashID = "NIR"
 	NetIdentityVerificationMessage   HashID = "NIV"
 	NetPrioResponse                  HashID = "NPR"
+	OnlineAccount                    HashID = "OA"
+	OnlineRoundParams                HashID = "ORP"
 	OneTimeSigKey1                   HashID = "OT1"
 	OneTimeSigKey2                   HashID = "OT2"
 	PaysetFlat                       HashID = "PF"
@@ -68,6 +71,7 @@ const (
 	StateProofMessage HashID = "spm"
 	StateProofPart    HashID = "spp"
 	StateProofSig     HashID = "sps"
+	StateProofVerCtx  HashID = "spv"
 
 	TestHashable  HashID = "TE"
 	TxGroup       HashID = "TG"

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,18 +17,25 @@
 package mocktracer
 
 import (
+	"encoding/hex"
 	"fmt"
+	"maps"
 	"math"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 const programTemplate string = `#pragma version 6
+pushbytes "a"
+log
+
 %s
 
 itxn_begin
@@ -41,6 +48,9 @@ itxn_field ApprovalProgram
 pushbytes 0x068101 // #pragma version 6; int 1;
 itxn_field ClearStateProgram
 itxn_submit
+
+pushbytes "b"
+log
 
 %s
 
@@ -60,23 +70,38 @@ global CurrentApplicationAddress
 itxn_field Receiver
 itxn_submit
 
+pushbytes "c"
+log
+
 %s`
+
+func fillProgramTemplate(beforeInnersOps, innerApprovalProgram, betweenInnersOps string, innerPay1Amount, innerPay2Amount uint64, afterInnersOps string) string {
+	return fmt.Sprintf(programTemplate, beforeInnersOps, innerApprovalProgram, betweenInnersOps, innerPay1Amount, innerPay2Amount, afterInnersOps)
+}
 
 // TestScenarioInfo holds arguments used to call a TestScenarioGenerator
 type TestScenarioInfo struct {
-	CallingTxn   transactions.Transaction
-	MinFee       basics.MicroAlgos
-	CreatedAppID basics.AppIndex
+	CallingTxn     transactions.Transaction
+	SenderData     ledgercore.AccountData
+	AppAccountData ledgercore.AccountData
+	FeeSinkData    ledgercore.AccountData
+	FeeSinkAddr    basics.Address
+	MinFee         basics.MicroAlgos
+	CreatedAppID   basics.AppIndex
+	BlockHeader    bookkeeping.BlockHeader
+	PrevTimestamp  int64
 }
 
-func expectedApplyData(info TestScenarioInfo) transactions.ApplyData {
+func expectedApplyDataAndStateDelta(info TestScenarioInfo, appCallProgram string, innerProgramBytes []byte) (transactions.ApplyData, ledgercore.StateDelta, ledgercore.StateDelta, ledgercore.StateDelta, ledgercore.StateDelta) {
 	expectedInnerAppCall := txntest.Txn{
 		Type:   protocol.ApplicationCallTx,
 		Sender: info.CreatedAppID.Address(),
 		ApprovalProgram: `#pragma version 6
-int 1`,
+pushbytes "x"
+log
+pushint 1`,
 		ClearStateProgram: `#pragma version 6
-int 1`,
+pushint 1`,
 
 		FirstValid: info.CallingTxn.FirstValid,
 		LastValid:  info.CallingTxn.LastValid,
@@ -87,6 +112,7 @@ int 1`,
 		EvalDelta: transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{},
 			LocalDeltas: map[uint64]basics.StateDelta{},
+			Logs:        []string{"x"},
 		},
 	}
 	expectedInnerPay1 := txntest.Txn{
@@ -111,7 +137,8 @@ int 1`,
 		Fee:        info.MinFee,
 	}
 	expectedInnerPay2AD := transactions.ApplyData{}
-	return transactions.ApplyData{
+
+	expectedAD := transactions.ApplyData{
 		ApplicationID: info.CreatedAppID,
 		EvalDelta: transactions.EvalDelta{
 			GlobalDelta: basics.StateDelta{},
@@ -130,8 +157,156 @@ int 1`,
 					ApplyData: expectedInnerPay2AD,
 				},
 			},
+			Logs: []string{"a", "b", "c"},
 		},
 	}
+
+	ops, err := logic.AssembleString(appCallProgram)
+	if err != nil {
+		panic(err)
+	}
+
+	expectedSenderData := info.SenderData
+	expectedSenderData.MicroAlgos.Raw -= info.CallingTxn.Fee.Raw
+	expectedSenderData.TotalAppParams++
+	expectedFeeSinkData := info.FeeSinkData
+	expectedFeeSinkData.MicroAlgos.Raw += info.CallingTxn.Fee.Raw
+
+	expectedDeltaCallingTxn := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        info.CallingTxn.Sender,
+					AccountData: expectedSenderData,
+				},
+				{
+					Addr:        info.FeeSinkAddr,
+					AccountData: expectedFeeSinkData,
+				},
+			},
+			AppResources: []ledgercore.AppResourceRecord{
+				{
+					Aidx: info.CreatedAppID,
+					Addr: info.CallingTxn.Sender,
+					Params: ledgercore.AppParamsDelta{
+						Params: &basics.AppParams{
+							ApprovalProgram:   ops.Program,
+							ClearStateProgram: info.CallingTxn.ClearStateProgram,
+							StateSchemas: basics.StateSchemas{
+								LocalStateSchema:  info.CallingTxn.LocalStateSchema,
+								GlobalStateSchema: info.CallingTxn.GlobalStateSchema,
+							},
+							ExtraProgramPages: info.CallingTxn.ExtraProgramPages,
+						},
+					},
+				},
+			},
+		},
+		Creatables: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+			basics.CreatableIndex(info.CreatedAppID): {
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: info.CallingTxn.Sender,
+			},
+		},
+		Txids: map[transactions.Txid]ledgercore.IncludedTransactions{
+			// Cannot call info.CallingTxn.ID() yet, since the txn and its group are not yet final. Instead,
+			// use the Txid zero value as a placeholder. It's up to the caller to update this if they need it.
+			{}: {
+				LastValid: info.CallingTxn.LastValid,
+				Intra:     0,
+			},
+		},
+		Hdr:           &info.BlockHeader,
+		PrevTimestamp: info.PrevTimestamp,
+	}
+	expectedDeltaCallingTxn.Hydrate()
+
+	expectedAppAccountData := info.AppAccountData
+	expectedAppAccountData.TotalAppParams++
+	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
+	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
+
+	expectedDeltaInnerAppCall := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        info.CreatedAppID.Address(),
+					AccountData: expectedAppAccountData,
+				},
+				{
+					Addr:        info.FeeSinkAddr,
+					AccountData: expectedFeeSinkData,
+				},
+			},
+			AppResources: []ledgercore.AppResourceRecord{
+				{
+					Aidx: info.CreatedAppID + 1,
+					Addr: info.CreatedAppID.Address(),
+					Params: ledgercore.AppParamsDelta{
+						Params: &basics.AppParams{
+							ApprovalProgram:   innerProgramBytes,
+							ClearStateProgram: []byte{0x06, 0x81, 0x01}, // #pragma version 6; int 1;
+						},
+					},
+				},
+			},
+		},
+		Creatables: map[basics.CreatableIndex]ledgercore.ModifiedCreatable{
+			basics.CreatableIndex(info.CreatedAppID + 1): {
+				Ctype:   basics.AppCreatable,
+				Created: true,
+				Creator: info.CreatedAppID.Address(),
+			},
+		},
+		Hdr:           &info.BlockHeader,
+		PrevTimestamp: info.PrevTimestamp,
+	}
+	expectedDeltaInnerAppCall.Hydrate()
+
+	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
+	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
+
+	expectedDeltaInnerPay1 := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        info.CreatedAppID.Address(),
+					AccountData: expectedAppAccountData,
+				},
+				{
+					Addr:        info.FeeSinkAddr,
+					AccountData: expectedFeeSinkData,
+				},
+			},
+		},
+		Hdr:           &info.BlockHeader,
+		PrevTimestamp: info.PrevTimestamp,
+	}
+	expectedDeltaInnerPay1.Hydrate()
+
+	expectedAppAccountData.MicroAlgos.Raw -= info.MinFee.Raw
+	expectedFeeSinkData.MicroAlgos.Raw += info.MinFee.Raw
+
+	expectedDeltaInnerPay2 := ledgercore.StateDelta{
+		Accts: ledgercore.AccountDeltas{
+			Accts: []ledgercore.BalanceRecord{
+				{
+					Addr:        info.CreatedAppID.Address(),
+					AccountData: expectedAppAccountData,
+				},
+				{
+					Addr:        info.FeeSinkAddr,
+					AccountData: expectedFeeSinkData,
+				},
+			},
+		},
+		Hdr:           &info.BlockHeader,
+		PrevTimestamp: info.PrevTimestamp,
+	}
+	expectedDeltaInnerPay2.Hydrate()
+
+	return expectedAD, expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPay1, expectedDeltaInnerPay2
 }
 
 // TestScenarioOutcome represents an outcome of a TestScenario
@@ -148,10 +323,16 @@ const (
 
 // TestScenario represents a testing scenario. See GetTestScenarios for more details.
 type TestScenario struct {
-	Outcome        TestScenarioOutcome
-	Program        string
-	ExpectedError  string
-	ExpectedEvents []Event
+	Outcome              TestScenarioOutcome
+	Program              string
+	ExpectedError        string
+	FailedAt             []int
+	ExpectedEvents       []Event
+	ExpectedSimulationAD transactions.ApplyData
+	ExpectedStateDelta   ledgercore.StateDelta
+	AppBudgetAdded       int
+	AppBudgetConsumed    int
+	TxnAppBudgetConsumed []int
 }
 
 // TestScenarioGenerator is a function which instantiates a TestScenario
@@ -161,7 +342,7 @@ type TestScenarioGenerator func(info TestScenarioInfo) TestScenario
 // scenarios are all app calls which invoke inner transactions under various failure conditions.
 // The scenarios follow this format:
 //
-//   1. An app call transaction that spawns inners. They are:
+//  1. An app call transaction that spawns inners. They are:
 //     a. A basic app call transaction
 //     b. A payment transaction [grouped with c]
 //     c. A payment transaction [grouped with b]
@@ -171,34 +352,40 @@ type TestScenarioGenerator func(info TestScenarioInfo) TestScenario
 // groups, and after all inners. For app call failures, there are scenarios for both rejection and
 // runtime errors, which should invoke tracer hooks slightly differently.
 func GetTestScenarios() map[string]TestScenarioGenerator {
+	successInnerProgramBytes := []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x01} // #pragma version 6; pushbytes "x"; log; pushint 1
+	successInnerProgram := "0x" + hex.EncodeToString(successInnerProgramBytes)
+
 	noFailureName := "none"
 	noFailure := func(info TestScenarioInfo) TestScenario {
-		expectedAD := expectedApplyData(info)
-		program := fmt.Sprintf(programTemplate, "", "0x068101", "", 1, 2, "pushint 1")
+		program := fillProgramTemplate("", successInnerProgram, "", 1, 2, "pushint 1")
+		expectedAD, expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPay1, expectedDeltaInnerPay2 := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+		expectedDelta := MergeStateDeltas(expectedDeltaCallingTxn, expectedDeltaInnerAppCall, expectedDeltaInnerPay1, expectedDeltaInnerPay2)
+
 		return TestScenario{
 			Outcome:       ApprovalOutcome,
 			Program:       program,
+			FailedAt:      nil,
 			ExpectedError: "", // no error
 			ExpectedEvents: FlattenEvents([][]Event{
 				{
 					BeforeTxn(protocol.ApplicationCallTx),
 					BeforeProgram(logic.ModeApp),
 				},
-				OpcodeEvents(9, false),
+				OpcodeEvents(11, false),
 				{
 					BeforeOpcode(),
 					BeforeTxnGroup(1), // start first itxn group
 					BeforeTxn(protocol.ApplicationCallTx),
 					BeforeProgram(logic.ModeApp),
 				},
-				OpcodeEvents(1, false),
+				OpcodeEvents(3, false),
 				{
-					AfterProgram(logic.ModeApp, false),
+					AfterProgram(logic.ModeApp, ProgramResultPass),
 					AfterTxn(protocol.ApplicationCallTx, expectedAD.EvalDelta.InnerTxns[0].ApplyData, false),
-					AfterTxnGroup(1, false), // end first itxn group
+					AfterTxnGroup(1, nil, false), // end first itxn group
 					AfterOpcode(false),
 				},
-				OpcodeEvents(14, false),
+				OpcodeEvents(16, false),
 				{
 					BeforeOpcode(),
 					BeforeTxnGroup(2), // start second itxn group
@@ -206,15 +393,20 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[1].ApplyData, false),
 					BeforeTxn(protocol.PaymentTx),
 					AfterTxn(protocol.PaymentTx, expectedAD.EvalDelta.InnerTxns[2].ApplyData, false),
-					AfterTxnGroup(2, false), // end second itxn group
+					AfterTxnGroup(2, nil, false), // end second itxn group
 					AfterOpcode(false),
 				},
-				OpcodeEvents(1, false),
+				OpcodeEvents(3, false),
 				{
-					AfterProgram(logic.ModeApp, false),
+					AfterProgram(logic.ModeApp, ProgramResultPass),
 					AfterTxn(protocol.ApplicationCallTx, expectedAD, false),
 				},
 			}),
+			ExpectedSimulationAD: expectedAD,
+			ExpectedStateDelta:   expectedDelta,
+			AppBudgetAdded:       2100,
+			AppBudgetConsumed:    35,
+			TxnAppBudgetConsumed: []int{0, 35},
 		}
 	}
 
@@ -223,121 +415,174 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 	}
 
 	for _, shouldError := range []bool{true, false} {
-		shouldError := shouldError
 		failureOps := "pushint 0\nreturn"
 		singleFailureOp := "pushint 0"
-		failureInnerProgram := "0x068100"
+		failureInnerProgramBytes := []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x00} // #pragma version 6; pushbytes "x"; log; pushint 0
 		failureMessage := "transaction rejected by ApprovalProgram"
 		outcome := RejectionOutcome
+		programFailingResult := ProgramResultReject
 		if shouldError {
 			// We could use just the err opcode here, but we want to use two opcodes to maintain
 			// trace event consistency with rejections.
 			failureOps = "pushint 0\nerr"
 			singleFailureOp = "err"
-			failureInnerProgram = "0x0600"
+			failureInnerProgramBytes = []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x00} // #pragma version 6; pushbytes "x"; log; err
 			failureMessage = "err opcode executed"
 			outcome = ErrorOutcome
+			programFailingResult = ProgramResultError
 		}
+		failureInnerProgram := "0x" + hex.EncodeToString(failureInnerProgramBytes)
 
 		beforeInnersName := fmt.Sprintf("before inners,error=%t", shouldError)
 		beforeInners := func(info TestScenarioInfo) TestScenario {
-			expectedAD := expectedApplyData(info)
-			program := fmt.Sprintf(programTemplate, failureOps, "0x068101", "", 1, 2, "pushint 1")
+			program := fillProgramTemplate(failureOps, successInnerProgram, "", 1, 2, "pushint 1")
+			expectedAD, expectedDeltaCallingTxn, _, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+			expectedDelta := expectedDeltaCallingTxn
+
+			// remove failed txids from delta
+			expectedDeltaCallingTxn.Txids = nil
+
 			// EvalDeltas are removed from failed app call transactions
-			expectedAD.EvalDelta = transactions.EvalDelta{}
+			expectedADNoED := expectedAD
+			expectedADNoED.EvalDelta = transactions.EvalDelta{}
+			// Only first log happens
+			expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:1]
+			expectedAD.EvalDelta.InnerTxns = nil
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
+				FailedAt:      []int{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(2, shouldError),
+					OpcodeEvents(4, shouldError),
 					{
-						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+						AfterProgram(logic.ModeApp, programFailingResult),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
+				ExpectedSimulationAD: expectedAD,
+				ExpectedStateDelta:   expectedDelta,
+				AppBudgetAdded:       700,
+				AppBudgetConsumed:    4,
+				TxnAppBudgetConsumed: []int{0, 4},
 			}
 		}
 		scenarios[beforeInnersName] = beforeInners
 
 		firstInnerName := fmt.Sprintf("first inner,error=%t", shouldError)
 		firstInner := func(info TestScenarioInfo) TestScenario {
-			expectedAD := expectedApplyData(info)
+			program := fillProgramTemplate("", failureInnerProgram, "", 1, 2, "pushint 1")
+			expectedAD, expectedDeltaCallingTxn, _, _, _ := expectedApplyDataAndStateDelta(info, program, failureInnerProgramBytes)
+			expectedDelta := expectedDeltaCallingTxn
+
+			// remove failed txids from delta
+			expectedDeltaCallingTxn.Txids = nil
+
 			// EvalDeltas are removed from failed app call transactions
 			expectedInnerAppCallADNoEvalDelta := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 			expectedInnerAppCallADNoEvalDelta.EvalDelta = transactions.EvalDelta{}
-			expectedAD.EvalDelta = transactions.EvalDelta{}
-			program := fmt.Sprintf(programTemplate, "", failureInnerProgram, "", 1, 2, "pushint 1")
+			expectedADNoED := expectedAD
+			expectedADNoED.EvalDelta = transactions.EvalDelta{}
+
+			// Only first log happens
+			expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:1]
+
+			expectedAD.EvalDelta.InnerTxns = expectedAD.EvalDelta.InnerTxns[:1]
+			expectedAD.EvalDelta.InnerTxns[0].Txn.ApprovalProgram = failureInnerProgramBytes
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
+				FailedAt:      []int{0, 0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(9, false),
+					OpcodeEvents(11, false),
 					{
 						BeforeOpcode(),
 						BeforeTxnGroup(1), // start first itxn group
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(1, shouldError),
+					OpcodeEvents(3, shouldError),
 					{
-						AfterProgram(logic.ModeApp, shouldError),
+						AfterProgram(logic.ModeApp, programFailingResult),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallADNoEvalDelta, true),
-						AfterTxnGroup(1, true), // end first itxn group
+						AfterTxnGroup(1, nil, true), // end first itxn group
 						AfterOpcode(true),
-						AfterProgram(logic.ModeApp, true),
-						AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+						AfterProgram(logic.ModeApp, ProgramResultError),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
+				ExpectedSimulationAD: expectedAD,
+				ExpectedStateDelta:   expectedDelta,
+				AppBudgetAdded:       1400,
+				AppBudgetConsumed:    15,
+				TxnAppBudgetConsumed: []int{0, 15},
 			}
 		}
 		scenarios[firstInnerName] = firstInner
 
 		betweenInnersName := fmt.Sprintf("between inners,error=%t", shouldError)
 		betweenInners := func(info TestScenarioInfo) TestScenario {
-			expectedAD := expectedApplyData(info)
+			program := fillProgramTemplate("", successInnerProgram, failureOps, 1, 2, "pushint 1")
+			expectedAD, expectedDeltaCallingTxn, _, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+			expectedDelta := expectedDeltaCallingTxn
+
+			// remove failed txids from delta
+			expectedDeltaCallingTxn.Txids = nil
+
 			expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
+
 			// EvalDeltas are removed from failed app call transactions
-			expectedAD.EvalDelta = transactions.EvalDelta{}
-			program := fmt.Sprintf(programTemplate, "", "0x068101", failureOps, 1, 2, "pushint 1")
+			expectedADNoED := expectedAD
+			expectedADNoED.EvalDelta = transactions.EvalDelta{}
+
+			// Only first two logs happen
+			expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
+
+			expectedAD.EvalDelta.InnerTxns = expectedAD.EvalDelta.InnerTxns[:1]
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
+				FailedAt:      []int{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(9, false),
+					OpcodeEvents(11, false),
 					{
 						BeforeOpcode(),
 						BeforeTxnGroup(1), // start first itxn group
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(1, false),
+					OpcodeEvents(3, false),
 					{
-						AfterProgram(logic.ModeApp, false),
+						AfterProgram(logic.ModeApp, ProgramResultPass),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-						AfterTxnGroup(1, false), // end first itxn group
+						AfterTxnGroup(1, nil, false), // end first itxn group
 						AfterOpcode(false),
 					},
-					OpcodeEvents(2, shouldError),
+					OpcodeEvents(4, shouldError),
 					{
-						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+						AfterProgram(logic.ModeApp, programFailingResult),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
+				ExpectedSimulationAD: expectedAD,
+				ExpectedStateDelta:   expectedDelta,
+				AppBudgetAdded:       1400,
+				AppBudgetConsumed:    19,
+				TxnAppBudgetConsumed: []int{0, 19},
 			}
 		}
 		scenarios[betweenInnersName] = betweenInners
@@ -345,84 +590,115 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 		if shouldError {
 			secondInnerName := "second inner"
 			secondInner := func(info TestScenarioInfo) TestScenario {
-				expectedAD := expectedApplyData(info)
+				program := fillProgramTemplate("", successInnerProgram, "", math.MaxUint64, 2, "pushint 1")
+				expectedAD, expectedDeltaCallingTxn, _, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+				expectedDelta := expectedDeltaCallingTxn
+
+				// remove failed txids from delta
+				expectedDeltaCallingTxn.Txids = nil
+
 				expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 				expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
+
 				// EvalDeltas are removed from failed app call transactions
-				expectedAD.EvalDelta = transactions.EvalDelta{}
-				program := fmt.Sprintf(programTemplate, "", "0x068101", "", uint64(math.MaxUint64), 2, "pushint 1")
+				expectedADNoED := expectedAD
+				expectedADNoED.EvalDelta = transactions.EvalDelta{}
+
+				// Only first two logs happen
+				expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
+
+				expectedAD.EvalDelta.InnerTxns[1].Txn.Amount.Raw = math.MaxUint64
 				return TestScenario{
 					Outcome:       ErrorOutcome,
 					Program:       program,
 					ExpectedError: "overspend",
+					FailedAt:      []int{0, 1},
 					ExpectedEvents: FlattenEvents([][]Event{
 						{
 							BeforeTxn(protocol.ApplicationCallTx),
 							BeforeProgram(logic.ModeApp),
 						},
-						OpcodeEvents(9, false),
+						OpcodeEvents(11, false),
 						{
 							BeforeOpcode(),
 							BeforeTxnGroup(1), // start first itxn group
 							BeforeTxn(protocol.ApplicationCallTx),
 							BeforeProgram(logic.ModeApp),
 						},
-						OpcodeEvents(1, false),
+						OpcodeEvents(3, false),
 						{
-							AfterProgram(logic.ModeApp, false),
+							AfterProgram(logic.ModeApp, ProgramResultPass),
 							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-							AfterTxnGroup(1, false), // end first itxn group
+							AfterTxnGroup(1, nil, false), // end first itxn group
 							AfterOpcode(false),
 						},
-						OpcodeEvents(14, false),
+						OpcodeEvents(16, false),
 						{
 							BeforeOpcode(),
 							BeforeTxnGroup(2), // start second itxn group
 							BeforeTxn(protocol.PaymentTx),
 							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, true),
-							AfterTxnGroup(2, true), // end second itxn group
+							AfterTxnGroup(2, nil, true), // end second itxn group
 							AfterOpcode(true),
-							AfterProgram(logic.ModeApp, true),
-							AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+							AfterProgram(logic.ModeApp, ProgramResultError),
+							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 						},
 					}),
+					ExpectedSimulationAD: expectedAD,
+					ExpectedStateDelta:   expectedDelta,
+					AppBudgetAdded:       2100,
+					AppBudgetConsumed:    32,
+					TxnAppBudgetConsumed: []int{0, 32},
 				}
 			}
 			scenarios[secondInnerName] = secondInner
 
 			thirdInnerName := "third inner"
 			thirdInner := func(info TestScenarioInfo) TestScenario {
-				expectedAD := expectedApplyData(info)
+				program := fillProgramTemplate("", successInnerProgram, "", 1, math.MaxUint64, "pushint 1")
+				expectedAD, expectedDeltaCallingTxn, _, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+				expectedDelta := expectedDeltaCallingTxn
+
+				// remove failed txids from delta
+				expectedDeltaCallingTxn.Txids = nil
+
 				expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 				expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
 				expectedInnerPay2AD := expectedAD.EvalDelta.InnerTxns[2].ApplyData
+
 				// EvalDeltas are removed from failed app call transactions
-				expectedAD.EvalDelta = transactions.EvalDelta{}
-				program := fmt.Sprintf(programTemplate, "", "0x068101", "", 1, uint64(math.MaxUint64), "pushint 1")
+				expectedADNoED := expectedAD
+				expectedADNoED.EvalDelta = transactions.EvalDelta{}
+
+				// Only first two logs happen
+				expectedAD.EvalDelta.Logs = expectedAD.EvalDelta.Logs[:2]
+
+				expectedAD.EvalDelta.InnerTxns[2].Txn.Amount.Raw = math.MaxUint64
 				return TestScenario{
 					Outcome:       ErrorOutcome,
 					Program:       program,
 					ExpectedError: "overspend",
+					FailedAt:      []int{0, 2},
 					ExpectedEvents: FlattenEvents([][]Event{
 						{
 							BeforeTxn(protocol.ApplicationCallTx),
 							BeforeProgram(logic.ModeApp),
 						},
-						OpcodeEvents(9, false),
+						OpcodeEvents(11, false),
 						{
 							BeforeOpcode(),
 							BeforeTxnGroup(1), // start first itxn group
 							BeforeTxn(protocol.ApplicationCallTx),
 							BeforeProgram(logic.ModeApp),
 						},
-						OpcodeEvents(1, false),
+						OpcodeEvents(3, false),
 						{
-							AfterProgram(logic.ModeApp, false),
+							AfterProgram(logic.ModeApp, ProgramResultPass),
 							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-							AfterTxnGroup(1, false), // end first itxn group
+							AfterTxnGroup(1, nil, false), // end first itxn group
 							AfterOpcode(false),
 						},
-						OpcodeEvents(14, false),
+						OpcodeEvents(16, false),
 						{
 							BeforeOpcode(),
 							BeforeTxnGroup(2), // start second itxn group
@@ -430,12 +706,17 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, false),
 							BeforeTxn(protocol.PaymentTx),
 							AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, true),
-							AfterTxnGroup(2, true), // end second itxn group
+							AfterTxnGroup(2, nil, true), // end second itxn group
 							AfterOpcode(true),
-							AfterProgram(logic.ModeApp, true),
-							AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+							AfterProgram(logic.ModeApp, ProgramResultError),
+							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 						},
 					}),
+					ExpectedSimulationAD: expectedAD,
+					ExpectedStateDelta:   expectedDelta,
+					AppBudgetAdded:       2100,
+					AppBudgetConsumed:    32,
+					TxnAppBudgetConsumed: []int{0, 32},
 				}
 			}
 			scenarios[thirdInnerName] = thirdInner
@@ -443,37 +724,44 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 
 		afterInnersName := fmt.Sprintf("after inners,error=%t", shouldError)
 		afterInners := func(info TestScenarioInfo) TestScenario {
-			expectedAD := expectedApplyData(info)
+			program := fillProgramTemplate("", successInnerProgram, "", 1, 2, singleFailureOp)
+			expectedAD, expectedDeltaCallingTxn, _, _, _ := expectedApplyDataAndStateDelta(info, program, successInnerProgramBytes)
+			expectedDelta := expectedDeltaCallingTxn
+
+			// remove failed txids from delta
+			expectedDeltaCallingTxn.Txids = nil
+
 			expectedInnerAppCallAD := expectedAD.EvalDelta.InnerTxns[0].ApplyData
 			expectedInnerPay1AD := expectedAD.EvalDelta.InnerTxns[1].ApplyData
 			expectedInnerPay2AD := expectedAD.EvalDelta.InnerTxns[2].ApplyData
 			// EvalDeltas are removed from failed app call transactions
-			expectedAD.EvalDelta = transactions.EvalDelta{}
-			program := fmt.Sprintf(programTemplate, "", "0x068101", "", 1, 2, singleFailureOp)
+			expectedADNoED := expectedAD
+			expectedADNoED.EvalDelta = transactions.EvalDelta{}
 			return TestScenario{
 				Outcome:       outcome,
 				Program:       program,
 				ExpectedError: failureMessage,
+				FailedAt:      []int{0},
 				ExpectedEvents: FlattenEvents([][]Event{
 					{
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(9, false),
+					OpcodeEvents(11, false),
 					{
 						BeforeOpcode(),
 						BeforeTxnGroup(1), // start first itxn group
 						BeforeTxn(protocol.ApplicationCallTx),
 						BeforeProgram(logic.ModeApp),
 					},
-					OpcodeEvents(1, false),
+					OpcodeEvents(3, false),
 					{
-						AfterProgram(logic.ModeApp, false),
+						AfterProgram(logic.ModeApp, ProgramResultPass),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
-						AfterTxnGroup(1, false), // end first itxn group
+						AfterTxnGroup(1, nil, false), // end first itxn group
 						AfterOpcode(false),
 					},
-					OpcodeEvents(14, false),
+					OpcodeEvents(16, false),
 					{
 						BeforeOpcode(),
 						BeforeTxnGroup(2), // start second itxn group
@@ -481,15 +769,20 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, false),
 						BeforeTxn(protocol.PaymentTx),
 						AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, false),
-						AfterTxnGroup(2, false), // end second itxn group
+						AfterTxnGroup(2, nil, false), // end second itxn group
 						AfterOpcode(false),
 					},
-					OpcodeEvents(1, shouldError),
+					OpcodeEvents(3, shouldError),
 					{
-						AfterProgram(logic.ModeApp, shouldError),
-						AfterTxn(protocol.ApplicationCallTx, expectedAD, true),
+						AfterProgram(logic.ModeApp, programFailingResult),
+						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
+				ExpectedSimulationAD: expectedAD,
+				ExpectedStateDelta:   expectedDelta,
+				AppBudgetAdded:       2100,
+				AppBudgetConsumed:    35,
+				TxnAppBudgetConsumed: []int{0, 35},
 			}
 		}
 		scenarios[afterInnersName] = afterInners
@@ -512,4 +805,39 @@ func StripInnerTxnGroupIDsFromEvents(events []Event) []Event {
 		stripInnerTxnGroupIDs(&events[i].TxnApplyData)
 	}
 	return events
+}
+
+// MergeStateDeltas merges multiple state deltas into one. The arguments are not modified, but the
+// first delta is used to populate non-mergeable fields in the result.
+func MergeStateDeltas(deltas ...ledgercore.StateDelta) ledgercore.StateDelta {
+	if len(deltas) == 0 {
+		return ledgercore.StateDelta{}
+	}
+
+	result := ledgercore.StateDelta{
+		// copy basic fields from the first delta
+		Hdr:            deltas[0].Hdr,
+		StateProofNext: deltas[0].StateProofNext,
+		PrevTimestamp:  deltas[0].PrevTimestamp,
+		Totals:         deltas[0].Totals,
+
+		// initialize structure for later use
+		Txids: make(map[transactions.Txid]ledgercore.IncludedTransactions),
+	}
+	for _, delta := range deltas {
+		result.Accts.MergeAccounts(delta.Accts)
+		for key, delta := range delta.KvMods {
+			result.AddKvMod(key, delta)
+		}
+		for id, delta := range delta.Creatables {
+			result.AddCreatable(id, delta)
+		}
+		txidBase := uint64(len(result.Txids))
+		for txid, includedTx := range delta.Txids {
+			includedTx.Intra += txidBase
+			result.Txids[txid] = includedTx
+		}
+		maps.Copy(result.Txleases, delta.Txleases)
+	}
+	return result
 }

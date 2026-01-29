@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,12 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestMetricsFetcher(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// this test function was meant for local development test and not as an official unit test.
 	t.Skip()
 	//host := "3.81.68.74"

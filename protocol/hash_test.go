@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ func TestHashIDPrefix(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 
-	values := getConstValues(t, "hash.go", "HashID")
+	values := getConstValues(t, "hash.go", "HashID", false)
 	for i, v1 := range values {
 		for j, v2 := range values {
 			if i == j {

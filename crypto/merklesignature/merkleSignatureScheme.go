@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -253,7 +253,7 @@ func (s *Signature) ValidateSaltVersion(version byte) error {
 	return nil
 }
 
-// FirstRoundInKeyLifetime calculates the round of the valid key for a given round by lowering to the closest KeyLiftime divisor.
+// FirstRoundInKeyLifetime calculates the round of the valid key for a given round by lowering to the closest KeyLifetime divisor.
 func (v *Verifier) FirstRoundInKeyLifetime(round uint64) (uint64, error) {
 	if v.KeyLifetime == 0 {
 		return 0, ErrKeyLifetimeIsZero

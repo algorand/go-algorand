@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -37,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -58,7 +57,7 @@ type AlgorandFollowerNode struct {
 	catchpointCatchupService *catchup.CatchpointCatchupService
 	blockService             *rpcs.BlockService
 
-	rootDir     string
+	genesisDirs config.ResolvedGenesisDirs
 	genesisID   string
 	genesisHash crypto.Digest
 	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
@@ -79,20 +78,27 @@ type AlgorandFollowerNode struct {
 // MakeFollower sets up an Algorand data node
 func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFollowerNode, error) {
 	node := new(AlgorandFollowerNode)
-	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
+	var err error
+	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID(), log)
+	if err != nil {
+		return nil, err
+	}
 
 	if node.devMode {
-		log.Errorf("Cannot run follower node in devMode--submitting txns won't work")
-		return nil, fmt.Errorf("cannot run with both EnableFollowMode and DevMode")
+		log.Warn("Follower running on a devMode network. Must submit txns to a different node.")
 	}
 	node.config = cfg
 
+	var genesisInfo = network.GenesisInfo{
+		GenesisID: genesis.ID(),
+		NetworkID: genesis.Network,
+	}
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, nil)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesisInfo, nil, nil, nil)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -102,16 +108,6 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	p2pNode.DeregisterMessageInterest(protocol.VoteBundleTag)
 	node.net = p2pNode
 
-	// load stored data
-	genesisDir := filepath.Join(rootDir, genesis.ID())
-	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
-
-	// create initial ledger, if it doesn't exist
-	err = os.Mkdir(genesisDir, 0700)
-	if err != nil && !os.IsExist(err) {
-		log.Errorf("Unable to create genesis directory: %v", err)
-		return nil, err
-	}
 	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
@@ -120,25 +116,30 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	ledgerPaths := ledger.DirsAndPrefix{
+		DBFilePrefix:        config.LedgerFilenamePrefix,
+		ResolvedGenesisDirs: node.genesisDirs,
+	}
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, cfg)
 	if err != nil {
-		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
+		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
 	}
 
-	blockListeners := []ledgercore.BlockListener{
-		node,
+	node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node})
+
+	if cfg.IsListenServer() {
+		rpcs.MakeHealthService(node.net)
 	}
 
-	node.ledger.RegisterBlockListeners(blockListeners)
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)
 
-	// Initialize sync round to the next round so that nothing falls out of the cache on Start
-	err = node.SetSyncRound(uint64(node.Ledger().NextRound()))
+	// Initialize sync round to the latest db round + 1 so that nothing falls out of the cache on Start
+	err = node.SetSyncRound(node.Ledger().LatestTrackerCommitted() + 1)
 	if err != nil {
-		log.Errorf("unable to set sync round to Ledger.NextRound %v", err)
+		log.Errorf("unable to set sync round to Ledger.DBRound %v", err)
 		return nil, err
 	}
 
@@ -166,7 +167,7 @@ func (node *AlgorandFollowerNode) Config() config.Local {
 }
 
 // Start the node: connect to peers while obtaining a lock. Doesn't wait for initial sync.
-func (node *AlgorandFollowerNode) Start() {
+func (node *AlgorandFollowerNode) Start() error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -176,22 +177,30 @@ func (node *AlgorandFollowerNode) Start() {
 	// The start network is being called only after the various services start up.
 	// We want to do so in order to let the services register their callbacks with the
 	// network package before any connections are being made.
-	startNetwork := func() {
+	startNetwork := func() error {
 		if !node.config.DisableNetworking {
 			// start accepting connections
-			node.net.Start()
+			err := node.net.Start()
+			if err != nil {
+				return err
+			}
 			node.config.NetAddress, _ = node.net.Address()
 		}
+		return nil
 	}
 
+	var err error
 	if node.catchpointCatchupService != nil {
-		startNetwork()
-		node.catchpointCatchupService.Start(node.ctx)
+		err = startNetwork()
+		if err == nil {
+			err = node.catchpointCatchupService.Start(node.ctx)
+		}
 	} else {
 		node.catchupService.Start()
 		node.blockService.Start()
-		startNetwork()
+		err = startNetwork()
 	}
+	return err
 }
 
 // ListeningAddress retrieves the node's current listening address, if any.
@@ -230,19 +239,24 @@ func (node *AlgorandFollowerNode) Ledger() *data.Ledger {
 
 // BroadcastSignedTxGroup errors in follower mode
 func (node *AlgorandFollowerNode) BroadcastSignedTxGroup(_ []transactions.SignedTxn) (err error) {
-	return fmt.Errorf("cannot broadcast txns in sync mode")
+	return fmt.Errorf("cannot broadcast txns in follower mode")
+}
+
+// AsyncBroadcastSignedTxGroup errors in follower mode
+func (node *AlgorandFollowerNode) AsyncBroadcastSignedTxGroup(_ []transactions.SignedTxn) (err error) {
+	return fmt.Errorf("cannot broadcast txns in follower mode")
 }
 
 // BroadcastInternalSignedTxGroup errors in follower mode
 func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transactions.SignedTxn) (err error) {
-	return fmt.Errorf("cannot broadcast internal signed txn group in sync mode")
+	return fmt.Errorf("cannot broadcast internal signed txn group in follower mode")
 }
 
 // Simulate speculatively runs a transaction group against the current
 // blockchain state and returns the effects and/or errors that would result.
-func (node *AlgorandFollowerNode) Simulate(_ []transactions.SignedTxn) (vb *ledgercore.ValidatedBlock, missingSignatures bool, err error) {
-	err = fmt.Errorf("cannot simulate in data mode")
-	return
+func (node *AlgorandFollowerNode) Simulate(request simulation.Request) (result simulation.Result, err error) {
+	simulator := simulation.MakeSimulator(node.ledger, node.config.EnableDeveloperAPI)
+	return simulator.Simulate(request)
 }
 
 // GetPendingTransaction no-ops in follower mode
@@ -342,21 +356,18 @@ func (node *AlgorandFollowerNode) StartCatchup(catchpoint string) error {
 		}
 		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
 	}
-	cpRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
-	if err != nil {
-		return err
-	}
-	sRound := node.GetSyncRound()
-	if sRound > 0 && uint64(cpRound) > sRound {
-		return MakeCatchpointSyncRoundFailure(catchpoint, sRound)
-	}
+	var err error
 	accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
 	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, accessor, node.config)
 	if err != nil {
 		node.log.Warnf("unable to create catchpoint catchup service : %v", err)
 		return err
 	}
-	node.catchpointCatchupService.Start(node.ctx)
+	err = node.catchpointCatchupService.Start(node.ctx)
+	if err != nil {
+		node.log.Warn(err.Error())
+		return MakeStartCatchpointError(catchpoint, err)
+	}
 	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)
 	return nil
 }
@@ -389,7 +400,7 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 	outCtxCh = ctxCh
 	go func() {
 		node.mu.Lock()
-		// check that the node wasn't canceled. If it have been canceled, it means that the node.Stop() was called, in which case
+		// check that the node wasn't canceled. If it has been canceled, it means that the node.Stop() was called, in which case
 		// we should close the channel.
 		if node.ctx.Err() == context.Canceled {
 			close(ctxCh)
@@ -414,7 +425,15 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 			prevNodeCancelFunc()
 			return
 		}
+
+		// Catchup finished, resume.
 		defer node.mu.Unlock()
+
+		// update sync round before starting services
+		if err := node.SetSyncRound(node.ledger.LastRound()); err != nil {
+			node.log.Warnf("unable to set sync round while resuming fast catchup: %v", err)
+		}
+
 		// start
 		node.catchupService.Start()
 		node.blockService.Start()
@@ -431,19 +450,31 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 }
 
 // SetSyncRound sets the minimum sync round on the catchup service
-func (node *AlgorandFollowerNode) SetSyncRound(rnd uint64) error {
+func (node *AlgorandFollowerNode) SetSyncRound(rnd basics.Round) error {
 	// Calculate the first round for which we want to disable catchup from the network.
 	// This is based on the size of the cache used in the ledger.
-	disableSyncRound := rnd + node.Config().MaxAcctLookback
+	disableSyncRound := rnd + basics.Round(node.Config().MaxAcctLookback)
 	return node.catchupService.SetDisableSyncRound(disableSyncRound)
 }
 
 // GetSyncRound retrieves the sync round, removes cache offset used during SetSyncRound
-func (node *AlgorandFollowerNode) GetSyncRound() uint64 {
-	return basics.SubSaturate(node.catchupService.GetDisableSyncRound(), node.Config().MaxAcctLookback)
+func (node *AlgorandFollowerNode) GetSyncRound() basics.Round {
+	return basics.SubSaturate(node.catchupService.GetDisableSyncRound(), basics.Round(node.Config().MaxAcctLookback))
 }
 
 // UnsetSyncRound removes the sync round constraint on the catchup service
 func (node *AlgorandFollowerNode) UnsetSyncRound() {
 	node.catchupService.UnsetDisableSyncRound()
+}
+
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset int64) error {
+	return fmt.Errorf("cannot set block timestamp offset in follower mode")
+}
+
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() (*int64, error) {
+	return nil, fmt.Errorf("cannot get block timestamp offset in follower mode")
 }

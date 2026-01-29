@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -169,7 +169,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		comment               = genData.Comment
 
 		genesisAddrs = make(map[string]basics.Address)
-		records      = make(map[string]basics.AccountData)
+		records      = make(map[string]bookkeeping.GenesisAccountData)
 	)
 
 	if partKeyDilution == 0 {
@@ -193,7 +193,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 	var writeMu deadlock.Mutex
 
 	createWallet := func() {
-		var err error
+		var err1 error
 		defer creatingWalletsWaitGroup.Done()
 		for {
 			var wallet genesisAllocation
@@ -206,7 +206,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 			var part account.PersistedParticipation
 
 			wfilename := filepath.Join(outDir, config.RootKeyFilename(wallet.Name))
-			pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, firstWalletValid, lastWalletValid))
+			pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, uint64(firstWalletValid), uint64(lastWalletValid)))
 
 			root, rootDB, rootkeyErr := loadRootKey(wfilename)
 			if rootkeyErr != nil && !os.IsNotExist(rootkeyErr) {
@@ -230,15 +230,15 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 				if rootkeyErr != nil {
 					os.Remove(wfilename)
 
-					rootDB, err = db.MakeErasableAccessor(wfilename)
-					if err != nil {
-						err = fmt.Errorf("couldn't open root DB accessor %s: %v", wfilename, err)
+					rootDB, err1 = db.MakeErasableAccessor(wfilename)
+					if err1 != nil {
+						err1 = fmt.Errorf("couldn't open root DB accessor %s: %v", wfilename, err1)
 					} else {
-						root, err = account.GenerateRoot(rootDB)
+						root, err1 = account.GenerateRoot(rootDB)
 					}
-					if err != nil {
+					if err1 != nil {
 						os.Remove(wfilename)
-						errorsChannel <- err
+						errorsChannel <- err1
 						return
 					}
 					if verbose {
@@ -250,22 +250,22 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 				if partkeyErr != nil && wallet.Online == basics.Online {
 					os.Remove(pfilename)
 
-					partDB, err = db.MakeErasableAccessor(pfilename)
-					if err != nil {
-						err = fmt.Errorf("couldn't open participation DB accessor %s: %v", pfilename, err)
+					partDB, err1 = db.MakeErasableAccessor(pfilename)
+					if err1 != nil {
+						err1 = fmt.Errorf("couldn't open participation DB accessor %s: %v", pfilename, err1)
 						os.Remove(pfilename)
-						errorsChannel <- err
+						errorsChannel <- err1
 						return
 					}
 					if verbose {
-						verbosedOutput <- fmt.Sprintf("Generating %s's keys for a period of %d rounds", wallet.Name, basics.Round(lastWalletValid).SubSaturate(basics.Round(firstWalletValid)))
+						verbosedOutput <- fmt.Sprintf("Generating %s's keys for a period of %d rounds", wallet.Name, lastWalletValid.SubSaturate(firstWalletValid))
 					}
 
-					part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
-					if err != nil {
-						err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
+					part, err1 = account.FillDBWithParticipationKeys(partDB, root.Address(), firstWalletValid, lastWalletValid, partKeyDilution)
+					if err1 != nil {
+						err1 = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err1)
 						os.Remove(pfilename)
-						errorsChannel <- err
+						errorsChannel <- err1
 						return
 					}
 					if verbose {
@@ -275,7 +275,7 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 				}
 			}
 
-			var data basics.AccountData
+			var data bookkeeping.GenesisAccountData
 			data.Status = wallet.Online
 			data.MicroAlgos.Raw = wallet.Stake
 			if wallet.Online == basics.Online {
@@ -328,8 +328,8 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 
 	// check to see if we had any errors.
 	select {
-	case err := <-errorsChannel:
-		return err
+	case err1 := <-errorsChannel:
+		return err1
 	default:
 	}
 
@@ -345,12 +345,12 @@ func generateGenesisFiles(protoVersion protocol.ConsensusVersion, protoParams co
 		rewardsBalance = protoParams.MinBalance
 	}
 
-	records["FeeSink"] = basics.AccountData{
+	records["FeeSink"] = bookkeeping.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: protoParams.MinBalance},
 	}
 
-	records["RewardsPool"] = basics.AccountData{
+	records["RewardsPool"] = bookkeeping.GenesisAccountData{
 		Status:     basics.NotParticipating,
 		MicroAlgos: basics.MicroAlgos{Raw: rewardsBalance},
 	}
@@ -414,7 +414,7 @@ func loadRootKey(filename string) (root account.Root, rootDB db.Accessor, err er
 
 	root, err = account.RestoreRoot(rootDB)
 	if err == nil {
-		return
+		return //nolint:nilerr // intentional
 	}
 
 	err = fmt.Errorf("could not restore existing root file %s: %v", filename, err)
@@ -436,7 +436,7 @@ func loadPartKeys(filename string) (part account.PersistedParticipation, partDB 
 
 	part, err = account.RestoreParticipation(partDB)
 	if err == nil {
-		return
+		return //nolint:nilerr // intentional
 	}
 
 	// Don't override 'unsupported schema' error

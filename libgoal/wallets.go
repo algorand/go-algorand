@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,6 +43,24 @@ func (c *Client) CreateWallet(name []byte, password []byte, mdk crypto.MasterDer
 	}
 
 	return []byte(resp.Wallet.ID), nil
+}
+
+// RenameWallet renames a kmd wallet
+func (c *Client) RenameWallet(wid []byte, name []byte, password []byte) error {
+	// Pull the list of all wallets from kmd
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return err
+	}
+
+	// Rename the wallet
+	_, err = kmd.RenameWallet(wid, name, password)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // GetWalletHandleToken inits the wallet with the given id, returning a wallet handle token

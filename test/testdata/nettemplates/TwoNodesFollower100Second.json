@@ -13,12 +13,12 @@
   "Nodes": [
     {
       "Name": "Follower",
-      "IsRelay": true,
       "Wallets": [],
       "ConfigJSONOverride": "{\"EnableFollowMode\":true}"
     },
     {
       "Name": "Primary",
+      "IsRelay": true,
       "Wallets": [
         { "Name": "Wallet1",
           "ParticipationOnly": false }

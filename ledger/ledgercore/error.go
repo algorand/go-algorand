@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,12 +27,68 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
+// Verify each custom error type implements the error interface, and declare which are pointer/value receivers.
+var (
+	_ error = (*TxnNotWellFormedError)(nil)
+	_ error = (*OverspendError)(nil)
+	_ error = (*MinBalanceError)(nil)
+	_ error = (*AssetBalanceError)(nil)
+	_ error = (*ApprovalProgramRejectedError)(nil)
+	_ error = (*TransactionInLedgerError)(nil)
+	_ error = (*LeaseInLedgerError)(nil)
+	_ error = BlockInLedgerError{}
+	_ error = ErrNoEntry{}
+	_ error = ErrNonSequentialBlockEval{}
+	_ error = (*TxGroupMalformedError)(nil)
+)
+
 // TxnNotWellFormedError indicates a transaction was not well-formed when evaluated by the BlockEvaluator
+//
 //msgp:ignore TxnNotWellFormedError
 type TxnNotWellFormedError string
 
 func (err *TxnNotWellFormedError) Error() string {
 	return string(*err)
+}
+
+// OverspendError indicates a transaction attempted to spend more than available funds.
+type OverspendError struct {
+	Account basics.Address
+	Data    AccountData
+	Tried   basics.MicroAlgos
+}
+
+func (err *OverspendError) Error() string {
+	return fmt.Sprintf("overspend (account %v, data %+v, tried to spend %v)", err.Account, err.Data, err.Tried)
+}
+
+// MinBalanceError indicates a transaction would drop an account below minimum balance.
+type MinBalanceError struct {
+	Account     basics.Address
+	Balance     uint64
+	MinBalance  uint64
+	TotalAssets uint64
+}
+
+func (err *MinBalanceError) Error() string {
+	return fmt.Sprintf("account %v balance %d below min %d (%d assets)", err.Account, err.Balance, err.MinBalance, err.TotalAssets)
+}
+
+// AssetBalanceError indicates a transaction attempted to transfer more of an asset than held.
+type AssetBalanceError struct {
+	Amount       uint64
+	SenderAmount uint64
+}
+
+func (err *AssetBalanceError) Error() string {
+	return fmt.Sprintf("underflow on subtracting %d from sender amount %d", err.Amount, err.SenderAmount)
+}
+
+// ApprovalProgramRejectedError indicates an app call was rejected by its approval program.
+type ApprovalProgramRejectedError struct{}
+
+func (err *ApprovalProgramRejectedError) Error() string {
+	return "transaction rejected by ApprovalProgram"
 }
 
 // TransactionInLedgerError is returned when a transaction cannot be added because it has already been committed, either
@@ -43,7 +99,7 @@ type TransactionInLedgerError struct {
 }
 
 // Error satisfies builtin interface `error`
-func (tile TransactionInLedgerError) Error() string {
+func (tile *TransactionInLedgerError) Error() string {
 	return fmt.Sprintf("transaction already in ledger: %v", tile.Txid)
 }
 
@@ -93,21 +149,6 @@ func (err ErrNoEntry) Error() string {
 	return fmt.Sprintf("ledger does not have entry %d (latest %d, committed %d)", err.Round, err.Latest, err.Committed)
 }
 
-// LogicEvalError indicates TEAL evaluation failure
-type LogicEvalError struct {
-	Err     error
-	Details string
-}
-
-// Error satisfies builtin interface `error`
-func (err LogicEvalError) Error() string {
-	msg := fmt.Sprintf("logic eval error: %v", err.Err)
-	if len(err.Details) > 0 {
-		msg = fmt.Sprintf("%s. Details: %s", msg, err.Details)
-	}
-	return msg
-}
-
 // ErrNonSequentialBlockEval provides feedback when the evaluator cannot be created for
 // stale/future rounds.
 type ErrNonSequentialBlockEval struct {
@@ -121,6 +162,7 @@ func (err ErrNonSequentialBlockEval) Error() string {
 }
 
 // TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
+//
 //msgp:ignore TxGroupMalformedErrorReasonCode
 type TxGroupMalformedErrorReasonCode int
 

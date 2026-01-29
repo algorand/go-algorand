@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,7 +45,8 @@ type AccountManager struct {
 	log      logging.Logger
 }
 
-// DeleteStateProofKey deletes all keys connected to ParticipationID that came before (including) the given round.
+// DeleteStateProofKey deletes keys related to a ParticipationID. The function removes
+// all keys up to, and not including, the given round.
 func (manager *AccountManager) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
 	return manager.registry.DeleteStateProofKeys(id, round)
 }
@@ -82,7 +83,7 @@ func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.S
 		if part.StateProof != nil && part.OverlapsInterval(rnd, rnd) {
 			partRndSecrets, err := manager.registry.GetStateProofSecretsForRound(part.ParticipationID, rnd)
 			if err != nil {
-				manager.log.Errorf("error while loading round secrets from participation registry: %v", err)
+				manager.log.Warnf("could not load state proof keys from participation registry: %v", err)
 				continue
 			}
 			out = append(out, partRndSecrets)

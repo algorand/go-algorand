@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -35,12 +36,12 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/e2e-go/globals"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -65,20 +66,48 @@ func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 	f.consensus = consensus
 }
 
+// AlterConsensus allows the caller to modify the consensus settings for a given version.
+func (f *RestClientFixture) AlterConsensus(ver protocol.ConsensusVersion, alter func(config.ConsensusParams) config.ConsensusParams) {
+	if f.consensus == nil {
+		f.consensus = make(config.ConsensusProtocols)
+	}
+	f.consensus[ver] = alter(f.ConsensusParamsFromVer(ver))
+}
+
+// FasterConsensus speeds up the given consensus version in two ways. The seed
+// refresh lookback is set to 8 (instead of 80), so the 320 round balance
+// lookback becomes 32.  And, if the architecture implies it can be handled,
+// round times are shortened by lowering vote timeouts.
+func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion, timeout time.Duration, lookback basics.Round) {
+	f.AlterConsensus(ver, func(fast config.ConsensusParams) config.ConsensusParams {
+		// balanceRound is 4 * SeedRefreshInterval
+		if lookback%4 != 0 {
+			panic(fmt.Sprintf("lookback must be a multiple of 4, got %d", lookback))
+		}
+		fast.SeedRefreshInterval = uint64(lookback) / 4
+		// and speed up the rounds while we're at it
+		if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+			fast.AgreementFilterTimeoutPeriod0 = timeout
+			fast.AgreementFilterTimeout = timeout
+		}
+		return fast
+	})
+}
+
 // Setup is called to initialize the test fixture for the test(s)
-func (f *LibGoalFixture) Setup(t TestingTB, templateFile string) {
-	f.setup(t, t.Name(), templateFile, true)
+func (f *LibGoalFixture) Setup(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(t, t.Name(), templateFile, true, overrides...)
 }
 
 // SetupNoStart is called to initialize the test fixture for the test(s)
 // but does not start the network before returning.  Call NC.Start() to start later.
-func (f *LibGoalFixture) SetupNoStart(t TestingTB, templateFile string) {
-	f.setup(t, t.Name(), templateFile, false)
+func (f *LibGoalFixture) SetupNoStart(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(t, t.Name(), templateFile, false, overrides...)
 }
 
 // SetupShared is called to initialize the test fixture that will be used for multiple tests
-func (f *LibGoalFixture) SetupShared(testName string, templateFile string) {
-	f.setup(nil, testName, templateFile, true)
+func (f *LibGoalFixture) SetupShared(testName string, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(nil, testName, templateFile, true, overrides...)
 }
 
 // Genesis returns the genesis data for this fixture
@@ -86,7 +115,7 @@ func (f *LibGoalFixture) Genesis() gen.GenesisData {
 	return f.network.Genesis()
 }
 
-func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile string, startNetwork bool) {
+func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile string, startNetwork bool, overrides ...netdeploy.TemplateOverride) {
 	// Call initialize for our base implementation
 	f.initialize(f)
 	f.t = SynchronizedTest(test)
@@ -98,7 +127,15 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
 	file, err := os.Open(templateFile)
 	f.failOnError(err, "Template file could not be opened: %v")
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, false)
+	defer file.Close()
+
+	// Override the kmd session lifetime to 5 minutes to prevent kmd wallet handles from expiring
+	kmdConfOverride := netdeploy.OverrideKmdConfig(netdeploy.TemplateKMDConfig{SessionLifetimeSecs: 300})
+	// copy overrides to prevent caller's data from being modified
+	extraOverrides := append([]netdeploy.TemplateOverride(nil), overrides...)
+	extraOverrides = append(extraOverrides, kmdConfOverride)
+
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, extraOverrides...)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 
@@ -119,15 +156,24 @@ func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err e
 	if f.t == nil {
 		return
 	}
+
+	debugLog := func() {
+		fmt.Fprintf(os.Stderr, "Node at %s has terminated with an error: %v. Dumping logs...\n", nc.GetDataDir(), err)
+		f.dumpLogs(filepath.Join(nc.GetDataDir(), "node.log"))
+	}
+
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
-		require.NoError(f.t, err, "Node at %s has terminated with an error", nc.GetDataDir())
+		debugLog()
+		require.NoError(f.t, err)
 		return
 	}
 	ws := exitError.Sys().(syscall.WaitStatus)
 	exitCode := ws.ExitStatus()
 
-	require.NoError(f.t, err, "Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode)
+	fmt.Fprintf(os.Stderr, "Node at %s has terminated with error code %d (%v)\n", nc.GetDataDir(), exitCode, *exitError)
+	debugLog()
+	require.NoError(f.t, err)
 }
 
 func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
@@ -161,18 +207,18 @@ func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
 			}
 
 			// Fetch an account.Root from the database
-			root, err := account.RestoreRoot(handle)
-			if err != nil {
+			root, err1 := account.RestoreRoot(handle)
+			if err1 != nil {
 				// Couldn't read it, skip it
 				continue
 			}
 
 			secretKey := root.Secrets().SK
-			wh, err := lg.GetUnencryptedWalletHandle()
-			f.failOnError(err, "couldn't get default wallet handle: %v")
-			_, err = lg.ImportKey(wh, secretKey[:])
-			if err != nil && !strings.Contains(err.Error(), "key already exists") {
-				f.failOnError(err, "couldn't import secret: %v")
+			wh, err1 := lg.GetUnencryptedWalletHandle()
+			f.failOnError(err1, "couldn't get default wallet handle: %v")
+			_, err1 = lg.ImportKey(wh, secretKey[:])
+			if err1 != nil && !strings.Contains(err1.Error(), "key already exists") {
+				f.failOnError(err1, "couldn't import secret: %v")
 			}
 			accountsWithRootKeys[root.Address().String()] = true
 			handle.Close()
@@ -312,20 +358,33 @@ func (f *LibGoalFixture) Shutdown() {
 func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	f.NC.StopKMD()
 	if preserveData {
-		f.network.Stop(f.binDir)
-		f.dumpLogs(filepath.Join(f.PrimaryDataDir(), "node.log"))
+		err := f.network.Stop(f.binDir)
+		if err != nil {
+			f.t.Logf("Fixture %s shutdown caught a network stop error: %v", f.Name, err)
+		}
+		for _, relayDir := range f.RelayDataDirs() {
+			f.dumpLogs(filepath.Join(relayDir, "node.log"))
+		}
 		for _, nodeDir := range f.NodeDataDirs() {
 			f.dumpLogs(filepath.Join(nodeDir, "node.log"))
 		}
 	} else {
-		f.network.Delete(f.binDir)
-
-		// Remove the test dir, if it was created by us as a temporary
-		// directory and it is empty.  If there's anything still in the
-		// test dir, os.Remove()'s rmdir will fail and have no effect;
-		// we ignore this error.
-		if f.testDirTmp {
-			os.Remove(f.testDir)
+		err := f.network.Stop(f.binDir)
+		if err == nil {
+			// no error, proceed with cleanup
+			delErr := f.network.Delete(f.binDir)
+			if delErr != nil {
+				f.t.Logf("Fixture %s shutdown caught a network delete error: %v", f.Name, delErr)
+			}
+			// Remove the test dir, if it was created by us as a temporary
+			// directory and it is empty.  If there's anything still in the
+			// test dir, os.Remove()'s rmdir will fail and have no effect;
+			// we ignore this error.
+			if f.testDirTmp {
+				os.Remove(f.testDir)
+			}
+		} else {
+			f.t.Logf("Fixture %s shutdown caught a network stop error: %v", f.Name, err)
 		}
 	}
 }
@@ -334,18 +393,19 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 func (f *LibGoalFixture) dumpLogs(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		f.t.Logf("could not open %s", filePath)
+		fmt.Fprintf(os.Stderr, "could not open %s\n", filePath)
 		return
 	}
 	defer file.Close()
 
-	f.t.Log("=================================\n")
+	fmt.Fprintf(os.Stderr, "=================================\n")
 	parts := strings.Split(filePath, "/")
-	f.t.Logf("%s/%s:", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
+	fmt.Fprintf(os.Stderr, "%s/%s:\n", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		f.t.Logf(scanner.Text())
+		fmt.Fprintln(os.Stderr, scanner.Text())
 	}
+	fmt.Fprintln(os.Stderr)
 }
 
 // intercept baseFixture.failOnError so we can clean up any algods that are still alive
@@ -359,6 +419,11 @@ func (f *LibGoalFixture) failOnError(err error, message string) {
 // PrimaryDataDir returns the data directory for the PrimaryNode for the network
 func (f *LibGoalFixture) PrimaryDataDir() string {
 	return f.network.PrimaryDataDir()
+}
+
+// RelayDataDirs returns the relays data directories for the network (including the primary relay)
+func (f *LibGoalFixture) RelayDataDirs() []string {
+	return f.network.RelayDataDirs()
 }
 
 // NodeDataDirs returns the (non-Primary) data directories for the network
@@ -400,75 +465,6 @@ func (f *LibGoalFixture) GetParticipationOnlyAccounts(lg libgoal.Client) []accou
 	return f.clientPartKeys[lg.DataDir()]
 }
 
-// WaitForRoundWithTimeout waits for a given round to reach. The implementation also ensures to limit the wait time for each round to the
-// globals.MaxTimePerRound so we can alert when we're getting "hung" before waiting for all the expected rounds to reach.
-func (f *LibGoalFixture) WaitForRoundWithTimeout(roundToWaitFor uint64) error {
-	return f.ClientWaitForRoundWithTimeout(f.LibGoalClient, roundToWaitFor)
-}
-
-// ClientWaitForRoundWithTimeout waits for a given round to be reached by the specific client/node. The implementation
-// also ensures to limit the wait time for each round to the globals.MaxTimePerRound so we can alert when we're
-// getting "hung" before waiting for all the expected rounds to reach.
-func (f *LibGoalFixture) ClientWaitForRoundWithTimeout(client libgoal.Client, roundToWaitFor uint64) error {
-	status, err := client.Status()
-	require.NoError(f.t, err)
-	lastRound := status.LastRound
-
-	// If node is already at or past target round, we're done
-	if lastRound >= roundToWaitFor {
-		return nil
-	}
-
-	roundTime := globals.MaxTimePerRound * 10 // For first block, we wait much longer
-	roundComplete := make(chan error, 2)
-
-	for nextRound := lastRound + 1; lastRound < roundToWaitFor; {
-		roundStarted := time.Now()
-
-		go func(done chan error) {
-			err := f.ClientWaitForRound(client, nextRound, roundTime)
-			done <- err
-		}(roundComplete)
-
-		select {
-		case lastError := <-roundComplete:
-			if lastError != nil {
-				close(roundComplete)
-				return lastError
-			}
-		case <-time.After(roundTime):
-			// we've timed out.
-			time := time.Now().Sub(roundStarted)
-			return fmt.Errorf("fixture.WaitForRound took %3.2f seconds between round %d and %d", time.Seconds(), lastRound, nextRound)
-		}
-
-		roundTime = singleRoundMaxTime
-		lastRound++
-		nextRound++
-	}
-	return nil
-}
-
-// ClientWaitForRound waits up to the specified amount of time for
-// the network to reach or pass the specified round, on the specific client/node
-func (f *LibGoalFixture) ClientWaitForRound(client libgoal.Client, round uint64, waitTime time.Duration) error {
-	timeout := time.NewTimer(waitTime)
-	for {
-		status, err := client.Status()
-		if err != nil {
-			return err
-		}
-		if status.LastRound >= round {
-			return nil
-		}
-		select {
-		case <-timeout.C:
-			return fmt.Errorf("timeout waiting for round %v", round)
-		case <-time.After(200 * time.Millisecond):
-		}
-	}
-}
-
 // CurrentConsensusParams returns the consensus parameters for the currently active protocol
 func (f *LibGoalFixture) CurrentConsensusParams() (consensus config.ConsensusParams, err error) {
 	status, err := f.LibGoalClient.Status()
@@ -480,20 +476,20 @@ func (f *LibGoalFixture) CurrentConsensusParams() (consensus config.ConsensusPar
 }
 
 // ConsensusParams returns the consensus parameters for the protocol from the specified round
-func (f *LibGoalFixture) ConsensusParams(round uint64) (consensus config.ConsensusParams, err error) {
+func (f *LibGoalFixture) ConsensusParams(round basics.Round) (config.ConsensusParams, error) {
 	block, err := f.LibGoalClient.BookkeepingBlock(round)
 	if err != nil {
-		return
+		return config.ConsensusParams{}, err
 	}
-	version := protocol.ConsensusVersion(block.CurrentProtocol)
-	if f.consensus != nil {
-		consensus, has := f.consensus[version]
-		if has {
-			return consensus, nil
-		}
+	return f.ConsensusParamsFromVer(block.CurrentProtocol), nil
+}
+
+// ConsensusParamsFromVer looks up a consensus version, allowing for override
+func (f *LibGoalFixture) ConsensusParamsFromVer(cv protocol.ConsensusVersion) config.ConsensusParams {
+	if consensus, has := f.consensus[cv]; has {
+		return consensus
 	}
-	consensus = config.Consensus[version]
-	return
+	return config.Consensus[cv]
 }
 
 // CurrentMinFeeAndBalance returns the MinTxnFee and MinBalance for the currently active protocol
@@ -515,7 +511,7 @@ func (f *LibGoalFixture) CurrentMinFeeAndBalance() (minFee, minBalance uint64, e
 // MinFeeAndBalance returns the MinTxnFee and MinBalance for the protocol from the specified round
 // If MinBalance is 0, we provide a resonable default of 1000 to ensure accounts have funds when
 // MinBalance is used to fund new accounts
-func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint64, err error) {
+func (f *LibGoalFixture) MinFeeAndBalance(round basics.Round) (minFee, minBalance uint64, err error) {
 	params, err := f.ConsensusParams(round)
 	if err != nil {
 		return
@@ -528,13 +524,13 @@ func (f *LibGoalFixture) MinFeeAndBalance(round uint64) (minFee, minBalance uint
 }
 
 // TransactionProof returns a proof for usage in merkle array verification for the provided transaction.
-func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType crypto.HashType) (model.TransactionProofResponse, merklearray.SingleLeafProof, error) {
+func (f *LibGoalFixture) TransactionProof(txid string, round basics.Round, hashType crypto.HashType) (model.TransactionProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.TransactionProof(txid, round, hashType)
 	if err != nil {
 		return model.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
-	proof, err := merklearray.ProofDataToSingleLeafProof(string(proofResp.Hashtype), proofResp.Treedepth, proofResp.Proof)
+	proof, err := merklearray.ProofDataToSingleLeafProof(string(proofResp.Hashtype), proofResp.Proof)
 	if err != nil {
 		return model.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
@@ -543,14 +539,14 @@ func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType cr
 }
 
 // LightBlockHeaderProof returns a proof for usage in merkle array verification for the provided block's light block header.
-func (f *LibGoalFixture) LightBlockHeaderProof(round uint64) (model.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
+func (f *LibGoalFixture) LightBlockHeaderProof(round basics.Round) (model.LightBlockHeaderProofResponse, merklearray.SingleLeafProof, error) {
 	proofResp, err := f.LibGoalClient.LightBlockHeaderProof(round)
 
 	if err != nil {
 		return model.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
-	proof, err := merklearray.ProofDataToSingleLeafProof(crypto.Sha256.String(), proofResp.Treedepth, proofResp.Proof)
+	proof, err := merklearray.ProofDataToSingleLeafProof(crypto.Sha256.String(), proofResp.Proof)
 	if err != nil {
 		return model.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
 	}

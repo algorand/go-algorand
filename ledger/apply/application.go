@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,9 +25,9 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
-// getAppParams fetches the creator address and basics.AppParams for the app index,
-// if they exist. It does *not* clone the basics.AppParams, so the returned params
-// must not be modified directly.
+// getAppParams fetches the creator address and basics.AppParams for the app
+// index, if they exist. It does not deep copy the basics.AppParams, so internal
+// reference types (programs, globals) must not be modified directly.
 func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
 	creator, exists, err = balances.GetCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
@@ -97,6 +97,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 			GlobalStateSchema: ac.GlobalStateSchema,
 		},
 		ExtraProgramPages: ac.ExtraProgramPages,
+		Version:           0,
 	}
 
 	// Update the cached TotalStateSchema for this account, used
@@ -110,7 +111,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// Update the cached TotalExtraAppPages for this account, used
 	// when computing MinBalance
 	totalExtraPages := record.TotalExtraAppPages
-	totalExtraPages = basics.AddSaturate32(totalExtraPages, ac.ExtraProgramPages)
+	totalExtraPages = basics.AddSaturate(totalExtraPages, ac.ExtraProgramPages)
 	record.TotalExtraAppPages = totalExtraPages
 
 	// Write back to the creator's balance record
@@ -135,38 +136,38 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 }
 
 func deleteApplication(balances Balances, creator basics.Address, appIdx basics.AppIndex) error {
-	// Deleting the application. Fetch the creator's balance record
+	// We need the AppParams to know how much space/MBR to deallocate
+	params, _, err := balances.GetAppParams(creator, appIdx)
+	if err != nil {
+		return err
+	}
+
+	// Remove the MBR for application creation
 	record, err := balances.Get(creator, false)
 	if err != nil {
 		return err
 	}
-
-	var params basics.AppParams
-	params, _, err = balances.GetAppParams(creator, appIdx)
+	record.TotalAppParams = basics.SubSaturate(record.TotalAppParams, 1)
+	err = balances.Put(creator, record)
 	if err != nil {
 		return err
 	}
 
-	// Update the TotalAppSchema used for MinBalance calculation,
-	// since the creator no longer has to store the GlobalState
-	totalSchema := record.TotalAppSchema
-	globalSchema := params.GlobalStateSchema
-	totalSchema = totalSchema.SubSchema(globalSchema)
-	record.TotalAppSchema = totalSchema
-	record.TotalAppParams = basics.SubSaturate(record.TotalAppParams, 1)
-
-	// Delete app's extra program pages
-	totalExtraPages := record.TotalExtraAppPages
-	if totalExtraPages > 0 {
-		proto := balances.ConsensusParams()
-		if proto.EnableExtraPagesOnAppUpdate {
-			extraPages := params.ExtraProgramPages
-			totalExtraPages = basics.SubSaturate32(totalExtraPages, extraPages)
-		}
-		record.TotalExtraAppPages = totalExtraPages
+	// Remove the MBR for globals and pages for the app from the sponsor
+	sponsor := params.SizeSponsor
+	if sponsor.IsZero() {
+		sponsor = creator
 	}
-
-	err = balances.Put(creator, record)
+	record, err = balances.Get(sponsor, false)
+	if err != nil {
+		return err
+	}
+	record.TotalAppSchema = record.TotalAppSchema.SubSchema(params.GlobalStateSchema)
+	// There was a short-lived bug so in one version, pages were not deallocated.
+	if balances.ConsensusParams().EnableProperExtraPageAccounting {
+		record.TotalExtraAppPages = basics.SubSaturate(record.TotalExtraAppPages, params.ExtraProgramPages)
+	}
+	err = balances.Put(sponsor, record)
 	if err != nil {
 		return err
 	}
@@ -186,33 +187,84 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 	return nil
 }
 
-func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, appIdx basics.AppIndex) error {
+func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, appIdx basics.AppIndex, updater basics.Address) error {
 	// Updating the application. Fetch the creator's balance record
 	params, _, err := balances.GetAppParams(creator, appIdx)
 	if err != nil {
 		return err
 	}
 
-	// Fill in the new programs
 	proto := balances.ConsensusParams()
-	// when proto.EnableExtraPageOnAppUpdate is false, WellFormed rejects all updates with a multiple-page program
-	if proto.EnableExtraPagesOnAppUpdate {
-		lap := len(ac.ApprovalProgram)
-		lcs := len(ac.ClearStateProgram)
-		pages := int(1 + params.ExtraProgramPages)
-		if lap > pages*proto.MaxAppProgramLen {
-			return fmt.Errorf("updateApplication approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-		}
-		if lcs > pages*proto.MaxAppProgramLen {
-			return fmt.Errorf("updateApplication clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-		}
-		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
-			return fmt.Errorf("updateApplication app programs too long, %d. max total len %d bytes", lap+lcs, pages*proto.MaxAppTotalProgramLen)
+	sizeChange := ac.UpdatingSizes()
+
+	if !sizeChange {
+		// The wellFormed() check rejects big programs conservatively, but it
+		// doesn't know the actual params.ExtraProgramPages, so it allows any
+		// programs that fit under the absolute max. (if there is a size change,
+		// that check is precise because the programs are in the transaction)
+		if err = ac.WellSizedPrograms(params.ExtraProgramPages, proto); err != nil {
+			return err
 		}
 	}
-
 	params.ApprovalProgram = ac.ApprovalProgram
 	params.ClearStateProgram = ac.ClearStateProgram
+	if proto.EnableAppVersioning {
+		params.Version++
+	}
+
+	// Install the new epp and schema (if its sufficient for current globals)
+	if sizeChange {
+		// We'll call the account that is currently on the hook for MBR space
+		// the "size sponsor".  It begins as the creator, but changes whenever
+		// there is a sizeChange update.
+
+		sponsor := params.SizeSponsor
+		if sponsor.IsZero() {
+			sponsor = creator
+		}
+
+		// Since the sponsor and the updater may be the same account, we make the
+		// entire change to the sponsor, including Put(), before we Get() the
+		// updater. (similar to how Move() works)
+
+		sponsorRecord, err := balances.Get(sponsor, false)
+		if err != nil {
+			return err
+		}
+		sponsorRecord.TotalAppSchema =
+			sponsorRecord.TotalAppSchema.SubSchema(params.GlobalStateSchema)
+		sponsorRecord.TotalExtraAppPages =
+			basics.SubSaturate(sponsorRecord.TotalExtraAppPages, params.ExtraProgramPages)
+		err = balances.Put(sponsor, sponsorRecord)
+		if err != nil {
+			return err
+		}
+
+		err = balances.SetAppGlobalSchema(creator, appIdx, ac.GlobalStateSchema)
+		if err != nil {
+			return fmt.Errorf("unable to change global schema: %w", err)
+		}
+		params.GlobalStateSchema = ac.GlobalStateSchema
+		params.ExtraProgramPages = ac.ExtraProgramPages
+		if updater == creator {
+			params.SizeSponsor = basics.Address{}
+		} else {
+			params.SizeSponsor = updater
+		}
+
+		updaterRecord, err := balances.Get(updater, false)
+		if err != nil {
+			return err
+		}
+		updaterRecord.TotalAppSchema =
+			updaterRecord.TotalAppSchema.AddSchema(params.GlobalStateSchema)
+		updaterRecord.TotalExtraAppPages =
+			basics.AddSaturate(updaterRecord.TotalExtraAppPages, params.ExtraProgramPages)
+		err = balances.Put(updater, updaterRecord)
+		if err != nil {
+			return err
+		}
+	}
 
 	return balances.PutAppParams(creator, appIdx, params)
 }
@@ -322,13 +374,13 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	return nil
 }
 
-func checkPrograms(ac *transactions.ApplicationCallTxnFields, evalParams *logic.EvalParams) error {
-	err := logic.CheckContract(ac.ApprovalProgram, evalParams)
+func checkPrograms(ac *transactions.ApplicationCallTxnFields, gi int, evalParams *logic.EvalParams) error {
+	err := logic.CheckContract(ac.ApprovalProgram, gi, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
 	}
 
-	err = logic.CheckContract(ac.ClearStateProgram, evalParams)
+	err = logic.CheckContract(ac.ClearStateProgram, gi, evalParams)
 	if err != nil {
 		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
 	}
@@ -376,21 +428,25 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		return err
 	}
 
+	if ac.RejectVersion > 0 && params.Version >= ac.RejectVersion {
+		return fmt.Errorf("app version (%d) >= reject version (%d)", params.Version, ac.RejectVersion)
+	}
+
 	// Ensure that the only operation we can do is ClearState if the application
 	// does not exist
 	if !exists && ac.OnCompletion != transactions.ClearStateOC {
-		return fmt.Errorf("only clearing out is supported for applications that do not exist")
+		return fmt.Errorf("only ClearState is supported for an application (%d) that does not exist", appIdx)
 	}
 
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
-		err := transactions.CheckContractVersions(ac.ApprovalProgram, ac.ClearStateProgram, params, evalParams.Proto)
+		err = transactions.CheckContractVersions(ac.ApprovalProgram, ac.ClearStateProgram, params, evalParams.Proto)
 		if err != nil {
 			return err
 		}
 
-		err = checkPrograms(&ac, evalParams)
+		err = checkPrograms(&ac, gi, evalParams)
 		if err != nil {
 			return err
 		}
@@ -401,9 +457,9 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == transactions.ClearStateOC {
 		// Ensure that the user is already opted in
-		ok, err := balances.HasAppLocalState(header.Sender, appIdx)
-		if err != nil {
-			return err
+		ok, hasErr := balances.HasAppLocalState(header.Sender, appIdx)
+		if hasErr != nil {
+			return hasErr
 		}
 		if !ok {
 			return fmt.Errorf("cannot clear state: %v is not currently opted in to app %d", header.Sender, appIdx)
@@ -411,22 +467,21 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 
 		// If the app still exists, run the ClearStateProgram
 		if exists {
-			pass, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
-			if err != nil {
-				// Fail on non-logic eval errors and ignore LogicEvalError errors
-				if _, ok := err.(ledgercore.LogicEvalError); !ok {
-					return err
+			pass, evalDelta, evalErr := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
+			if evalErr != nil {
+				// ClearStateProgram evaluation can't make the txn fail.
+				if _, ok := evalErr.(logic.EvalError); !ok {
+					return evalErr
 				}
 			}
 
 			// We will have applied any changes if and only if we passed
-			if err == nil && pass {
+			if evalErr == nil && pass {
 				// Fill in applyData, so that consumers don't have to implement a
 				// stateful TEAL interpreter to apply state changes
 				ad.EvalDelta = evalDelta
-			} else {
-				// Ignore logic eval errors and rejections from the ClearStateProgram
 			}
+			// Ignore logic eval errors and rejections from the ClearStateProgram
 		}
 
 		return closeOutApplication(balances, header.Sender, appIdx)
@@ -449,7 +504,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	}
 
 	if !approved {
-		return fmt.Errorf("transaction rejected by ApprovalProgram")
+		return &ledgercore.ApprovalProgramRejectedError{}
 	}
 
 	switch ac.OnCompletion {
@@ -472,7 +527,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		}
 
 	case transactions.UpdateApplicationOC:
-		err = updateApplication(&ac, balances, creator, appIdx)
+		err = updateApplication(&ac, balances, creator, appIdx, header.Sender)
 		if err != nil {
 			return err
 		}

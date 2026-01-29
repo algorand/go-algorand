@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -103,7 +103,7 @@ func spinNetwork(t *testing.T, nodesCount int, cfg config.Local) ([]*networkImpl
 			break
 		}
 	}
-	log.Infof("network established, %d nodes connected in %s", nodesCount, time.Now().Sub(start).String())
+	log.Infof("network established, %d nodes connected in %s", nodesCount, time.Since(start).String())
 	return networkImpls, msgCounters
 }
 
@@ -322,10 +322,7 @@ func testNetworkImplRebroadcast(t *testing.T, nodesCount int, cfg config.Local) 
 	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
-	rebroadcastNodes := nodesCount
-	if rebroadcastNodes > 3 {
-		rebroadcastNodes = 3
-	}
+	rebroadcastNodes := min(nodesCount, 3)
 	for i := byte(0); i < byte(rebroadcastNodes); i++ {
 		ok := nets[i].Broadcast(protocol.AgreementVoteTag, []byte{i, i + 1})
 		assert.NoError(t, ok)
@@ -362,6 +359,7 @@ func testNetworkImplFull(t *testing.T, nodesCount int) {
 	// which is a different test of logic that agremeent needs to
 	// deal with.
 	cfg := config.GetDefaultLocal()
+	cfg.MaxConnectionsPerIP = nodesCount
 	cfg.AgreementIncomingVotesQueueLength = 100
 	cfg.AgreementIncomingProposalsQueueLength = 100
 	cfg.AgreementIncomingBundlesQueueLength = 100

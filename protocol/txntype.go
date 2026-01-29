@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,9 @@ package protocol
 // TxType is the type of the transaction written to the ledger
 type TxType string
 
+//msgp:allocbound TxType txTypeMaxLen
+const txTypeMaxLen = 7
+
 const (
 	// PaymentTx indicates a payment transaction
 	PaymentTx TxType = "pay"
@@ -43,6 +46,12 @@ const (
 
 	// StateProofTx records a state proof
 	StateProofTx TxType = "stpf"
+
+	// HeartbeatTx demonstrates the account is alive
+	HeartbeatTx TxType = "hb"
+
+	// Remember to add to TxnTypeNames and txnTypeLongNames in logic/fields.go when
+	// adding a new transaction type!
 
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"

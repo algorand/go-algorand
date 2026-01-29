@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,6 +40,7 @@ type KMDConfig struct {
 	SessionLifetimeSecs uint64       `json:"session_lifetime_secs"`
 	Address             string       `json:"address"`
 	AllowedOrigins      []string     `json:"allowed_origins"`
+	AllowHeaderPNA      bool         `json:"allow_header_pna"`
 }
 
 // DriverConfig contains config info specific to each wallet driver
@@ -66,6 +67,11 @@ type ScryptParams struct {
 	ScryptN int `json:"scrypt_n"`
 	ScryptR int `json:"scrypt_r"`
 	ScryptP int `json:"scrypt_p"`
+}
+
+// DefaultConfig returns the default KMDConfig
+func DefaultConfig(dataDir string) KMDConfig {
+	return defaultConfig(dataDir)
 }
 
 // defaultConfig returns the default KMDConfig
@@ -98,7 +104,7 @@ func (k KMDConfig) Validate() error {
 	return nil
 }
 
-// LoadKMDConfig tries to read the the kmd configuration from disk, merging the
+// LoadKMDConfig tries to read the kmd configuration from disk, merging the
 // default kmd configuration with what it finds
 func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 	cfg = defaultConfig(dataDir)
@@ -110,7 +116,7 @@ func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 		// SaveObjectToFile may return an unhandled error because
 		// there is nothing to do if an error occurs
 		codecs.SaveObjectToFile(exampleFilename, cfg, true)
-		return cfg, nil
+		return cfg, nil //nolint:nilerr // intentional
 	}
 	// Fill in the non-default values
 	err = json.Unmarshal(dat, &cfg)
@@ -119,4 +125,15 @@ func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 	}
 	err = cfg.Validate()
 	return
+}
+
+// SaveKMDConfig writes the kmd configuration to disk
+func SaveKMDConfig(dataDir string, cfg KMDConfig) error {
+	err := cfg.Validate()
+	if err != nil {
+		return err
+	}
+	configFilename := filepath.Join(dataDir, kmdConfigFilename)
+
+	return codecs.SaveObjectToFile(configFilename, cfg, true)
 }

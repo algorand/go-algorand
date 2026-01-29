@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,22 +18,17 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	makeRepeatSlice := func(size int, value string) []string {
-		slice := make([]string, size)
-		for i := range slice {
-			slice[i] = value
-		}
-		return slice
-	}
+	t.Parallel()
 
 	tests := []struct {
 		argTypes        []string
@@ -56,7 +51,7 @@ func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 			expectedAppArgs: [][]byte{{100}, {255, 255}},
 		},
 		{
-			argTypes: makeRepeatSlice(15, "string"),
+			argTypes: slices.Repeat([]string{"string"}, 15),
 			jsonArgs: []string{
 				`"a"`,
 				`"b"`,
@@ -93,7 +88,7 @@ func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 			},
 		},
 		{
-			argTypes: makeRepeatSlice(16, "string"),
+			argTypes: slices.Repeat([]string{"string"}, 16),
 			jsonArgs: []string{
 				`"a"`,
 				`"b"`,
@@ -134,10 +129,39 @@ func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("index=%d", i), func(t *testing.T) {
+			t.Parallel()
 			applicationArgs := [][]byte{}
 			err := parseMethodArgJSONtoByteSlice(test.argTypes, test.jsonArgs, &applicationArgs)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedAppArgs, applicationArgs)
 		})
+	}
+}
+
+func TestCliAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	type testCase struct {
+		address string
+		valid   bool
+		value   basics.Address
+	}
+	tests := []testCase{
+		{"", true, basics.Address{}},
+		{"invalid", false, basics.Address{}},
+		{"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ", true, basics.Address{}},
+		{"app(10)", true, basics.AppIndex(10).Address()},
+		{basics.Address{0x07}.String(), true, basics.Address{0x07}},
+	}
+
+	for _, tc := range tests {
+		if tc.valid {
+			value := cliAddress(tc.address)
+			a.Equal(tc.value, value)
+		} else {
+			a.Panics(func() { cliAddress(tc.address) })
+		}
 	}
 }

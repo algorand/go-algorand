@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -198,7 +198,7 @@ func indexOf(arr []string, s string) int {
 	return -1
 }
 
-// Checksum returns a word that represents the 11 bit checksum of the data
+// checksum returns a word that represents the 11 bit checksum of the data
 func checksum(data []byte) string {
 	// Compute the full hash of the data to checksum
 	fullHash := sha512.Sum512_256(data)

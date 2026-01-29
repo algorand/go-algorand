@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -209,7 +209,7 @@ func TestCacheEvictionFuzzer(t *testing.T) {
 	}
 }
 
-// TestCacheEvictionFuzzer generates bursts of random Add/Delete operations on the trie, and
+// TestCacheEvictionFuzzer2 generates bursts of random Add/Delete operations on the trie, and
 // testing the correctness of the cache internal buffers priodically.
 func TestCacheEvictionFuzzer2(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -298,7 +298,7 @@ func (mt *Trie) TestDeleteRollback(d []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	found, err := pnode.find(mt.cache, d[:])
+	found, err := pnode.find(&mt.cache, d[:])
 	if !found || err != nil {
 		return false, err
 	}
@@ -311,7 +311,7 @@ func (mt *Trie) TestDeleteRollback(d []byte) (bool, error) {
 		mt.elementLength = 0
 		return true, nil
 	}
-	_, err = pnode.remove(mt.cache, d[:], make([]byte, 0, len(d)))
+	_, err = pnode.remove(&mt.cache, d[:], make([]byte, 0, len(d)))
 	// unlike the "real" function, we want always to fail here to test the rollbackTransaction() functionality.
 	mt.cache.rollbackTransaction()
 	return false, fmt.Errorf("this is a test for failing a Delete request")
@@ -396,7 +396,7 @@ func TestCacheDeleteNodeMidTransaction(t *testing.T) {
 	}
 }
 
-// TestCachePageLoading ensures that during page loading, the number of cachedNodeCount is not
+// TestCachePageReloading ensures that during page loading, the number of cachedNodeCount is not
 // increased if the page was already loaded previously into memory.
 func TestCachePageReloading(t *testing.T) {
 	partitiontest.PartitionTest(t)

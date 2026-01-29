@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -68,7 +68,7 @@ func TestAssembleBlockStatsString(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var abs AssembleBlockStats
-	localType := reflect.TypeOf(abs)
+	localType := reflect.TypeFor[AssembleBlockStats]()
 
 	// Empty StateProofStats will not be reported. Set a filed to check it printed
 	abs.StateProofStats.ProvenWeight = 1

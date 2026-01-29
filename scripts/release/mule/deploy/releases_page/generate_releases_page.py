@@ -24,7 +24,7 @@ html_tpl = "html.tpl"
 # Nit: should be styles_file
 styles_url = "releases_page.css"
 # May want to call these channels instead
-tokens = ["stable", "beta", "indexer"]
+tokens = ["stable", "beta"]
 
 
 def get_stage_release_set(response):
@@ -201,7 +201,7 @@ def main():
     channels = {}
 
     # Should use tokens array instead
-    for channel in ["stable", "beta", "indexer"]:
+    for channel in ["stable", "beta"]:
         # Fetch contents of e.g. s3://algorand-dev-deb-repo/releases/beta/
         # Note: MaxKeys will limit to last 100 releases, which is more than
         # enough. Consider dropping this to 2.
@@ -213,12 +213,19 @@ def main():
         # 'releases/beta/f9fa9a084_2.5.2' => [file_obj1, file_obj2, ...]
         release_sets = get_stage_release_set(staging_response)
 
+        release_contents = []
         # List everything from the releases bucket s3://algorand-releases/
         releases_response = s3.list_objects_v2(Bucket=releases_bucket)
+        release_contents.extend(releases_response["Contents"])
+
+        # If response was truncated, keep looping and appending
+        while releases_response["IsTruncated"] == True:
+            releases_response = s3.list_objects_v2(Bucket=releases_bucket, ContinuationToken=releases_response["NextContinuationToken"])
+            release_contents.extend(releases_response["Contents"])
 
         # Return dict keyed by filename of file_objs from
         # s3://algorand-releases/
-        release_files = objects_by_fname(releases_response["Contents"])
+        release_files = objects_by_fname(release_contents)
 
         table = []
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,10 +59,7 @@ type fuzzReader struct {
 }
 
 func (f *fuzzReader) Read(b []byte) (n int, err error) {
-	s := int(crypto.RandUint64() % 19)
-	if s > len(b) {
-		s = len(b)
-	}
+	s := min(int(crypto.RandUint64()%19), len(b))
 	if f.pos >= len(f.buf) {
 		return 0, io.EOF
 	}
@@ -114,7 +111,7 @@ func benchmarkLimitedReaderSlurper(b *testing.B, arraySize uint64) {
 		err := reader.Read(buffers[i])
 		require.NoError(b, err)
 		reader.Bytes()
-		reader.Reset()
+		reader.Reset(0)
 	}
 }
 func BenchmarkLimitedReaderSlurper(b *testing.B) {
@@ -151,6 +148,49 @@ func TestLimitedReaderSlurperBufferAllocations(t *testing.T) {
 			}
 			require.Equal(t, allocationNeeds, len(lrs.buffers))
 
+		}
+	}
+}
+
+func TestLimitedReaderSlurperPerMessageMaxSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type randMode int
+
+	const (
+		modeLessThan randMode = iota
+		modeEqual
+		modeGreaterThan
+	)
+
+	maxMessageSize := 1024
+	slurper := MakeLimitedReaderSlurper(512, uint64(maxMessageSize))
+	for i := 0; i < 30; i++ {
+		var b []byte
+		randPick := randMode(crypto.RandUint64() % uint64(3))
+		currentSize := crypto.RandUint64()%uint64(maxMessageSize) + 1
+		slurper.Reset(currentSize)
+		if randPick == modeLessThan {
+			dataSize := crypto.RandUint64() % currentSize
+			b = make([]byte, dataSize)
+			crypto.RandBytes(b[:])
+			err := slurper.Read(bytes.NewBuffer(b))
+			require.NoError(t, err)
+			require.Len(t, slurper.Bytes(), int(dataSize))
+		} else if randPick == modeEqual {
+			dataSize := currentSize
+			b = make([]byte, dataSize)
+			crypto.RandBytes(b[:])
+			err := slurper.Read(bytes.NewBuffer(b))
+			require.NoError(t, err)
+			require.Len(t, slurper.Bytes(), int(currentSize))
+		} else if randPick == modeGreaterThan {
+			dataSize := currentSize + 1
+			b = make([]byte, dataSize)
+			crypto.RandBytes(b[:])
+			err := slurper.Read(bytes.NewBuffer(b))
+			require.Error(t, err)
 		}
 	}
 }

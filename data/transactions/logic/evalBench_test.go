@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,16 +33,11 @@ func BenchmarkCheckSignature(b *testing.B) {
 	ops, err := logic.AssembleString(txntest.TmLsig)
 	require.NoError(b, err)
 	stxns := []transactions.SignedTxn{{Txn: txns[3].Txn(), Lsig: transactions.LogicSig{Logic: ops.Program}}}
-	txgroup := transactions.WrapSignedTxnsWithAD(stxns)
-	ep := logic.EvalParams{
-		Proto:     &proto,
-		TxnGroup:  txgroup,
-		SigLedger: &logic.NoHeaderLedger{},
-	}
+	ep := logic.NewSigEvalParams(stxns, &proto, &logic.NoHeaderLedger{})
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err = logic.CheckSignature(0, &ep)
+		err = logic.CheckSignature(0, ep)
 		require.NoError(b, err)
 	}
 }

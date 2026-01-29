@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,20 +43,15 @@ func BenchmarkTinyMan(b *testing.B) {
 		require.NotEmpty(b, stxns[1].Lsig.Logic)
 		require.NotEmpty(b, stxns[2].Sig)
 		require.NotEmpty(b, stxns[3].Lsig.Logic)
-		txgroup := transactions.WrapSignedTxnsWithAD(stxns)
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			proto := config.Consensus[protocol.ConsensusCurrentVersion]
-			ep := logic.EvalParams{
-				Proto:     &proto,
-				TxnGroup:  txgroup,
-				SigLedger: &logic.NoHeaderLedger{},
-			}
-			pass, err := logic.EvalSignature(1, &ep)
+			ep := logic.NewSigEvalParams(stxns, &proto, &logic.NoHeaderLedger{})
+			pass, err := logic.EvalSignature(1, ep)
 			require.NoError(b, err)
 			require.True(b, pass)
-			pass, err = logic.EvalSignature(3, &ep)
+			pass, err = logic.EvalSignature(3, ep)
 			require.NoError(b, err)
 			require.True(b, pass)
 		}

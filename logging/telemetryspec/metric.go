@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,6 +46,7 @@ type AssembleBlockStats struct {
 	IncludedCount             int // number of transactions that are included in a block
 	InvalidCount              int // number of transaction groups that are included in a block
 	MinFeeErrorCount          int // number of transactions excluded because the fee is too low
+	LogicErrorCount           int // number of transactions excluded due to logic error (contract no longer valid)
 	ExpiredCount              int // number of transactions removed because of expiration
 	ExpiredLongLivedCount     int // number of expired transactions with non-super short LastValid values
 	LeaseErrorCount           int // number of transactions removed because it has an already used lease
@@ -77,21 +78,30 @@ type StateProofStats struct {
 	TxnSize        int
 }
 
-// AssembleBlockTimeout represents AssemblePayset exiting due to timeout
+// AssembleBlockTimeout represents AssembleBlock exiting due to timeout
 const AssembleBlockTimeout = "timeout"
 
-// AssembleBlockFull represents AssemblePayset exiting due to block being full
+// AssembleBlockTimeoutEmpty represents AssembleBlock giving up after a timeout and returning an empty block
+const AssembleBlockTimeoutEmpty = "timeout-empty"
+
+// AssembleBlockFull represents AssembleBlock exiting due to block being full
 const AssembleBlockFull = "block-full"
 
-// AssembleBlockEmpty represents AssemblePayset exiting due to no more txns
+// AssembleBlockEmpty represents AssembleBlock exiting due to no more txns
 const AssembleBlockEmpty = "pool-empty"
+
+// AssembleBlockPoolBehind represents the transaction pool being more than two roudns behind
+const AssembleBlockPoolBehind = "pool-behind"
+
+// AssembleBlockEvalOld represents the assembled block that was returned being a round too old
+const AssembleBlockEvalOld = "eval-old"
 
 // AssembleBlockAbandon represents the block generation being abandoned since it won't be needed.
 const AssembleBlockAbandon = "block-abandon"
 
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
-// AssembleBlockMetrics is the set of metrics captured when we compute AssemblePayset
+// AssembleBlockMetrics is the set of metrics captured when we compute AssembleBlock
 type AssembleBlockMetrics struct {
 	AssembleBlockStats
 }
@@ -102,36 +112,37 @@ func (m AssembleBlockMetrics) Identifier() Metric {
 }
 func (m AssembleBlockStats) String() string {
 	b := &bytes.Buffer{}
-	b.WriteString(fmt.Sprintf("StartCount:%d, ", m.StartCount))
-	b.WriteString(fmt.Sprintf("IncludedCount:%d, ", m.IncludedCount))
-	b.WriteString(fmt.Sprintf("InvalidCount:%d, ", m.InvalidCount))
-	b.WriteString(fmt.Sprintf("MinFeeErrorCount:%d, ", m.MinFeeErrorCount))
-	b.WriteString(fmt.Sprintf("ExpiredCount:%d, ", m.ExpiredCount))
-	b.WriteString(fmt.Sprintf("ExpiredLongLivedCount:%d, ", m.ExpiredLongLivedCount))
-	b.WriteString(fmt.Sprintf("LeaseErrorCount:%d, ", m.LeaseErrorCount))
-	b.WriteString(fmt.Sprintf("MinFee:%d, ", m.MinFee))
-	b.WriteString(fmt.Sprintf("MaxFee:%d, ", m.MaxFee))
-	b.WriteString(fmt.Sprintf("AverageFee:%d, ", m.AverageFee))
-	b.WriteString(fmt.Sprintf("MinLength:%d, ", m.MinLength))
-	b.WriteString(fmt.Sprintf("MaxLength:%d, ", m.MaxLength))
-	b.WriteString(fmt.Sprintf("MinPriority:%d, ", m.MinPriority))
-	b.WriteString(fmt.Sprintf("MaxPriority:%d, ", m.MaxPriority))
-	b.WriteString(fmt.Sprintf("CommittedCount:%d, ", m.CommittedCount))
-	b.WriteString(fmt.Sprintf("StopReason:%s, ", m.StopReason))
-	b.WriteString(fmt.Sprintf("TotalLength:%d, ", m.TotalLength))
-	b.WriteString(fmt.Sprintf("EarlyCommittedCount:%d, ", m.EarlyCommittedCount))
-	b.WriteString(fmt.Sprintf("Nanoseconds:%d, ", m.Nanoseconds))
-	b.WriteString(fmt.Sprintf("ProcessingTime:%v, ", m.ProcessingTime))
-	b.WriteString(fmt.Sprintf("BlockGenerationDuration:%d, ", m.BlockGenerationDuration))
-	b.WriteString(fmt.Sprintf("TransactionsLoopStartTime:%d, ", m.TransactionsLoopStartTime))
-	b.WriteString(fmt.Sprintf("StateProofNextRound:%d, ", m.StateProofNextRound))
+	fmt.Fprintf(b, "StartCount:%d, ", m.StartCount)
+	fmt.Fprintf(b, "IncludedCount:%d, ", m.IncludedCount)
+	fmt.Fprintf(b, "InvalidCount:%d, ", m.InvalidCount)
+	fmt.Fprintf(b, "MinFeeErrorCount:%d, ", m.MinFeeErrorCount)
+	fmt.Fprintf(b, "LogicErrorCount:%d, ", m.LogicErrorCount)
+	fmt.Fprintf(b, "ExpiredCount:%d, ", m.ExpiredCount)
+	fmt.Fprintf(b, "ExpiredLongLivedCount:%d, ", m.ExpiredLongLivedCount)
+	fmt.Fprintf(b, "LeaseErrorCount:%d, ", m.LeaseErrorCount)
+	fmt.Fprintf(b, "MinFee:%d, ", m.MinFee)
+	fmt.Fprintf(b, "MaxFee:%d, ", m.MaxFee)
+	fmt.Fprintf(b, "AverageFee:%d, ", m.AverageFee)
+	fmt.Fprintf(b, "MinLength:%d, ", m.MinLength)
+	fmt.Fprintf(b, "MaxLength:%d, ", m.MaxLength)
+	fmt.Fprintf(b, "MinPriority:%d, ", m.MinPriority)
+	fmt.Fprintf(b, "MaxPriority:%d, ", m.MaxPriority)
+	fmt.Fprintf(b, "CommittedCount:%d, ", m.CommittedCount)
+	fmt.Fprintf(b, "StopReason:%s, ", m.StopReason)
+	fmt.Fprintf(b, "TotalLength:%d, ", m.TotalLength)
+	fmt.Fprintf(b, "EarlyCommittedCount:%d, ", m.EarlyCommittedCount)
+	fmt.Fprintf(b, "Nanoseconds:%d, ", m.Nanoseconds)
+	fmt.Fprintf(b, "ProcessingTime:%v, ", m.ProcessingTime)
+	fmt.Fprintf(b, "BlockGenerationDuration:%d, ", m.BlockGenerationDuration)
+	fmt.Fprintf(b, "TransactionsLoopStartTime:%d, ", m.TransactionsLoopStartTime)
+	fmt.Fprintf(b, "StateProofNextRound:%d, ", m.StateProofNextRound)
 	emptySPStats := StateProofStats{}
 	if m.StateProofStats != emptySPStats {
-		b.WriteString(fmt.Sprintf("ProvenWeight:%d, ", m.StateProofStats.ProvenWeight))
-		b.WriteString(fmt.Sprintf("SignedWeight:%d, ", m.StateProofStats.SignedWeight))
-		b.WriteString(fmt.Sprintf("NumReveals:%d, ", m.StateProofStats.NumReveals))
-		b.WriteString(fmt.Sprintf("NumPosToReveal:%d, ", m.StateProofStats.NumPosToReveal))
-		b.WriteString(fmt.Sprintf("TxnSize:%d", m.StateProofStats.TxnSize))
+		fmt.Fprintf(b, "ProvenWeight:%d, ", m.StateProofStats.ProvenWeight)
+		fmt.Fprintf(b, "SignedWeight:%d, ", m.StateProofStats.SignedWeight)
+		fmt.Fprintf(b, "NumReveals:%d, ", m.StateProofStats.NumReveals)
+		fmt.Fprintf(b, "NumPosToReveal:%d, ", m.StateProofStats.NumPosToReveal)
+		fmt.Fprintf(b, "TxnSize:%d", m.StateProofStats.TxnSize)
 	}
 	return b.String()
 }
@@ -193,7 +204,7 @@ func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
 }
 
-//-------------------------------------------------------
+// -------------------------------------------------------
 // AccountsUpdate
 const accountsUpdateMetricsIdentifier Metric = "AccountsUpdate"
 

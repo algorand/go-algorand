@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,23 +63,25 @@ func (e *CatchpointUnableToStartError) Error() string {
 		e.catchpointRunning)
 }
 
-// CatchpointSyncRoundFailure indicates that the requested catchpoint is beyond the currently set sync round
-type CatchpointSyncRoundFailure struct {
-	catchpoint string
-	syncRound  uint64
+// StartCatchpointError is returned when the catchpoint service cannot start up.
+type StartCatchpointError struct {
+	catchpointRequested string
+	err                 error
 }
 
-// MakeCatchpointSyncRoundFailure creates the error type
-func MakeCatchpointSyncRoundFailure(catchpoint string, syncRound uint64) *CatchpointSyncRoundFailure {
-	return &CatchpointSyncRoundFailure{
-		catchpoint: catchpoint,
-		syncRound:  syncRound,
+// MakeStartCatchpointError creates a StartCatchpointError for a given catchpoint
+func MakeStartCatchpointError(catchpointRequested string, err error) *StartCatchpointError {
+	return &StartCatchpointError{
+		catchpointRequested: catchpointRequested,
+		err:                 err,
 	}
 }
 
-// Error satisfies the builtin `error` interface
-func (e *CatchpointSyncRoundFailure) Error() string {
+// Error satisfies the builtin interface `error`
+func (e *StartCatchpointError) Error() string {
 	return fmt.Sprintf(
-		"unable to start catchpoint catchup for '%s' - resulting round is beyond current sync round '%v'",
-		e.catchpoint, e.syncRound)
+		"unable to start catchpoint service for requested catchpoint %s: %s",
+		e.catchpointRequested,
+		e.err,
+	)
 }

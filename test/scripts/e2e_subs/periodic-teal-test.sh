@@ -2,6 +2,9 @@
 
 date '+periodic-teal-test start %Y%m%d_%H%M%S'
 
+my_dir="$(dirname "$0")"
+source "$my_dir/rest.sh" "$@"
+
 set -e
 set -x
 set -o pipefail
@@ -11,12 +14,16 @@ WALLET=$1
 
 gcmd="goal -w ${WALLET}"
 
+# Get network's minimum fee
+MIN_FEE=$(get_min_fee)
+echo "Network MinFee: $MIN_FEE"
+
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
 
-sed s/TMPL_RCV/${ACCOUNTB}/g < tools/teal/templates/periodic-payment-escrow.teal.tmpl | sed s/TMPL_PERIOD/5/g | sed s/TMPL_DUR/2/g | sed s/TMPL_AMT/100000/g | sed s/TMPL_LEASE/${LEASE}/g | sed s/TMPL_TIMEOUT/16/g | sed s/TMPL_FEE/10000/g > ${TEMPDIR}/periodic.teal
+sed s/TMPL_RCV/${ACCOUNTB}/g < tools/teal/templates/periodic-payment-escrow.teal.tmpl | sed s/TMPL_PERIOD/5/g | sed s/TMPL_DUR/2/g | sed s/TMPL_AMT/100000/g | sed s/TMPL_LEASE/${LEASE}/g | sed s/TMPL_TIMEOUT/16/g | sed s/TMPL_FEE/${MIN_FEE}/g > ${TEMPDIR}/periodic.teal
 
 ACCOUNT_PERIODIC=$(${gcmd} clerk compile ${TEMPDIR}/periodic.teal -o ${TEMPDIR}/periodic.tealc|awk '{ print $2 }')
 
@@ -48,7 +55,7 @@ done
 BALANCEB=$(${gcmd} account balance -a ${ACCOUNTB}|awk '{ print $1 }')
 
 if [ $BALANCEB -ne 300000 ]; then
-    date '+periodic-teal-test FAIL wanted balance=3000000 but got ${BALANCEB} %Y%m%d_%H%M%S'
+    date "+periodic-teal-test FAIL wanted balance=3000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 

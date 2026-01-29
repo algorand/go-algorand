@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,7 +104,6 @@ func metricEnableDisable(enable bool) {
 	if err != nil {
 		fmt.Printf(metricSaveConfigFailed, fmt.Sprintf("%v", err))
 	}
-	return
 }
 
 func getConfigFilePath() (string, error) {

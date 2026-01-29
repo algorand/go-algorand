@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/algorand/go-algorand/util/codecs"
@@ -74,6 +75,7 @@ type PpConfig struct {
 	AppLocalKeys    uint32
 	Rekey           bool
 	MaxRuntime      time.Duration
+	AsyncSending    bool
 
 	// asset spam; make lots of NFT ASAs
 	NftAsaPerSecond       uint32 // e.g. 100
@@ -102,7 +104,7 @@ var DefaultConfig = PpConfig{
 	RandomizeDst:    false,
 	MaxRandomDst:    200000,
 	MaxFee:          10000,
-	MinFee:          1000,
+	MinFee:          0,
 	MaxAmt:          1000,
 	TxnPerSec:       200,
 	NumPartAccounts: 10,
@@ -191,14 +193,7 @@ var accountSampleMethods = []string{
 
 // Check returns an error if config is invalid.
 func (cfg *PpConfig) Check() error {
-	sampleOk := false
-	for _, v := range accountSampleMethods {
-		if v == cfg.GeneratedAccountSampleMethod {
-			sampleOk = true
-			break
-		}
-	}
-	if !sampleOk {
+	if !slices.Contains(accountSampleMethods, cfg.GeneratedAccountSampleMethod) {
 		return fmt.Errorf("unknown GeneratedAccountSampleMethod: %s", cfg.GeneratedAccountSampleMethod)
 	}
 	if cfg.DeterministicKeys && (cfg.GeneratedAccountsOffset+uint64(cfg.NumPartAccounts) > cfg.GeneratedAccountsCount) {

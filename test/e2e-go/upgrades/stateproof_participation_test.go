@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package upgrades
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,7 +43,7 @@ func waitUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClie
 	startTime := time.Now()
 
 	// while consensus version has not upgraded
-	for strings.Compare(string(curProtocol), string(consensusTestFastUpgrade(protocol.ConsensusV30))) == 0 {
+	for curProtocol == consensusTestFastUpgrade(protocol.ConsensusV30) {
 		curRound = curRound + 1
 		fixture.WaitForRoundWithTimeout(curRound + 1)
 
@@ -71,7 +70,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	fixture.SetConsensus(consensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesWithoutStateProofPartkeys.json"))
 	defer fixture.Shutdown()
-	lastValid := uint64(1000 * 5)
+	const lastValid = 5000
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
@@ -90,7 +89,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV30.json"))
 	defer fixture.Shutdown()
-	lastValid := uint64(1000 * 5)
+	const lastValid = 5000
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
@@ -98,7 +97,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV31))
 }
 
-func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
+func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid basics.Round, ver protocol.ConsensusVersion) error {
 
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
@@ -115,8 +114,11 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ui
 
 	cparams := config.Consensus[ver]
 
+	prms, err := client.SuggestedParams()
+	a.NoError(err)
+
 	tx := partKey.GenerateRegistrationTransaction(
-		basics.MicroAlgos{Raw: 1000},
+		basics.MicroAlgos{Raw: prms.MinFee},
 		0,
 		100,
 		[32]byte{},
@@ -124,9 +126,6 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ui
 	)
 
 	if cparams.SupportGenesisHash {
-		prms, err := client.SuggestedParams()
-		a.NoError(err)
-
 		var genHash crypto.Digest
 		copy(genHash[:], prms.GenesisHash)
 		tx.GenesisHash = genHash
@@ -144,8 +143,9 @@ func getStateProofConsensus() config.ConsensusProtocols {
 	return consensus
 }
 
-//TODO: copied code from other test: onlineOfflineParticipation_test.go.
-//  consider how to avoid duplication
+// TODO: copied code from other test: onlineOfflineParticipation_test.go.
+//
+//	consider how to avoid duplication
 func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestClientFixture, account string, window int) bool {
 	client := fixture.AlgodClient
 
@@ -172,7 +172,8 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 }
 
 // This test starts with participation keys in Version30, then attempts to let the richest user participate even after
-//  consensus upgrade.
+//
+//	consensus upgrade.
 func TestParticipationWithoutStateProofKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)

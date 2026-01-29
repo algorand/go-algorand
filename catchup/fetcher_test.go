@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -47,15 +46,15 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	genesis := make(map[basics.Address]basics.AccountData)
 	genesis[user] = basics.AccountData{
-		Status:     basics.Online,
+		Status:     basics.Offline,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 	genesis[sinkAddr] = basics.AccountData{
-		Status:     basics.Online,
+		Status:     basics.Offline,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 	genesis[poolAddr] = basics.AccountData{
-		Status:     basics.Online,
+		Status:     basics.Offline,
 		MicroAlgos: basics.MicroAlgos{Raw: proto.MinBalance * 2000000},
 	}
 
@@ -66,8 +65,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ledger, err = data.LoadLedger(
-		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
-		nil, cfg,
+		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash, cfg,
 	)
 	if err != nil {
 		t.Fatal("couldn't build ledger", err)
@@ -111,15 +109,15 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	return
 }
 
-func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks int) {
-	var err error
-	for i := 0; i < numBlocks; i++ {
+func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks basics.Round) {
+	for range numBlocks {
+		var err error
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.TxnCommitments, err = blk.PaysetCommit()
 		require.NoError(t, err)
 
-		err := ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
+		err = ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
 		require.NoError(t, err)
 
 		hdr, err := ledger.BlockHdr(blk.BlockHeader.Round)
@@ -141,6 +139,13 @@ func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
 		b.rmux = mux.NewRouter()
 	}
 	b.rmux.Handle(path, handler)
+}
+
+func (b *basicRPCNode) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.rmux.HandleFunc(path, handler)
 }
 
 func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
@@ -174,8 +179,8 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
 
-func (b *basicRPCNode) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+func (b *basicRPCNode) GetGenesisID() string {
+	return "test genesisID"
 }
 
 type httpTestPeerSource struct {
@@ -192,8 +197,8 @@ func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHa
 	s.dispatchHandlers = append(s.dispatchHandlers, dispatch...)
 }
 
-func (s *httpTestPeerSource) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+func (s *httpTestPeerSource) GetGenesisID() string {
+	return "test genesisID"
 }
 
 // implement network.HTTPPeer
@@ -202,8 +207,13 @@ type testHTTPPeer string
 func (p *testHTTPPeer) GetAddress() string {
 	return string(*p)
 }
+
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
-	return &http.Client{}
+	return &http.Client{
+		Transport: &network.HTTPPAddressBoundTransport{
+			Addr:           p.GetAddress(),
+			InnerTransport: http.DefaultTransport},
+	}
 }
 func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p
@@ -239,6 +249,12 @@ func (p *testUnicastPeer) GetAddress() string {
 	return "test"
 }
 
+func (p *testUnicastPeer) GetNetwork() network.GossipNode { return p.gn }
+
+func (p *testUnicastPeer) RoutingAddr() []byte {
+	panic("not implemented")
+}
+
 func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
 
 	responseChannel := make(chan *network.Response, 1)
@@ -268,36 +284,17 @@ func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics 
 	}
 }
 
-func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, responseTopics network.Topics) (e error) {
+func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, outMsg network.OutgoingMessage) (e error) {
 
 	hashKey := uint64(0)
-	channel, found := p.responseChannels[hashKey]
-	if !found {
-	}
+	require.Contains(p.t, p.responseChannels, hashKey)
+	channel := p.responseChannels[hashKey]
 
 	select {
-	case channel <- &network.Response{Topics: responseTopics}:
+	case channel <- &network.Response{Topics: outMsg.Topics}:
 	default:
 	}
 
-	return nil
-}
-
-func (p *testUnicastPeer) Version() string {
-	return p.version
-}
-
-func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
-	ps := p.gn.(*httpTestPeerSource)
-	var dispather network.MessageHandler
-	for _, v := range ps.dispatchHandlers {
-		if v.Tag == tag {
-			dispather = v.MessageHandler
-			break
-		}
-	}
-	require.NotNil(p.t, dispather)
-	dispather.Handle(network.IncomingMessage{Tag: tag, Data: msg, Sender: p, Net: p.gn})
 	return nil
 }
 

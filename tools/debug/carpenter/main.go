@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,7 +136,6 @@ func (rps roundperiodstep) Format(f fmt.State, c rune) {
 	fmt.Fprintf(f, "%s%s.%s.%s", leadingspaces, colorize(r), colorize(p), colorize(s))
 }
 
-//
 func setupInputStream() io.ReadCloser {
 	var inputStream io.ReadCloser = os.Stdin
 
@@ -306,10 +305,7 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 	maxLen := len(out)
 	for i := 0; i < rowCount; i++ {
 		start := i * columnWidth
-		end := start + columnWidth
-		if end > maxLen {
-			end = maxLen
-		}
+		end := min(start+columnWidth, maxLen)
 		if start < len(out) {
 			row := strings.TrimSpace(out[start:end])
 			output := ""
@@ -322,8 +318,6 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 			outputRow(bodyTabWriter, output)
 		}
 	}
-
-	return
 }
 
 func outputRow(tabWriter *tabwriter.Writer, rowContent string) {

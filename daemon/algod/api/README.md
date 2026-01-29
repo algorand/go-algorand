@@ -43,10 +43,17 @@ containing per-round ledger differences that get compacted when actually written
 
 ## What codegen tool is used?
 
-We found that [oapi-codegen](https://github.com/deepmap/oapi-codegen) produced the cleanest code, and had an easy to work with codebase. There is an algorand fork of this project which contains a couple modifications that were needed to properly support our needs.
-
-Specifically, `uint64` types aren't strictly supported by OpenAPI. So we added a type-mapping feature to oapi-codegen.
+We found that [oapi-codegen](https://github.com/deepmap/oapi-codegen)
+produced the cleanest code, and had an easy to work with codebase. We
+initially forked it in `algorand/oapi-codegen` but found that features
+we added are now available in the upstream repo, so have migrated
+back.
 
 ## Why do we have algod.oas2.json and algod.oas3.yml?
 
-We chose to maintain V2 and V3 versions of the spec because OpenAPI v3 doesn't seem to be widely supported. Some tools worked better with V3 and others with V2, so having both available has been useful. To reduce developer burdon, the v2 specfile is automatically converted v3 using [converter.swagger.io](http://converter.swagger.io/).
+We chose to maintain V2 and V3 versions of the spec because OpenAPI v3 doesn't seem to be widely supported. Some tools worked better with V3 and others with V2, so having both available has been useful. To reduce developer burden, the v2 specfile is automatically converted v3 using [converter.swagger.io](http://converter.swagger.io/).
+
+If you want to run the converter locally, you can build the [swagger-converter](https://github.com/swagger-api/swagger-converter) project or run its [docker image](https://hub.docker.com/r/swaggerapi/swagger-converter) and specify the `SWAGGER_CONVERTER_API` environment variable when using this Makefile, for example by running:
+```
+SWAGGER_CONVERTER_API=http://localhost:8080 make
+```

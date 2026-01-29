@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,6 +43,7 @@ const (
 	Sha512_256 HashType = iota
 	Sumhash
 	Sha256
+	Sha512
 	MaxHashType
 )
 
@@ -50,14 +51,19 @@ const (
 // a longer output is introduced.
 const MaxHashDigestSize = SumhashDigestSize
 
-//size of each hash
+// size of each hash
 const (
 	Sha512_256Size    = sha512.Size256
 	SumhashDigestSize = sumhash.Sumhash512DigestSize
 	Sha256Size        = sha256.Size
+	Sha512Size        = sha512.Size
 )
 
+// Sha512Digest is a 64-byte digest produced by the SHA-512 hash function.
+type Sha512Digest [Sha512Size]byte
+
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
+//
 //msgp:postunmarshalcheck HashFactory Validate
 type HashFactory struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -75,6 +81,8 @@ func (h HashType) String() string {
 		return "sumhash"
 	case Sha256:
 		return "sha256"
+	case Sha512:
+		return "sha512"
 	default:
 		return ""
 	}
@@ -89,6 +97,8 @@ func UnmarshalHashType(s string) (HashType, error) {
 		return Sumhash, nil
 	case "sha256":
 		return Sha256, nil
+	case "sha512":
+		return Sha512, nil
 	default:
 		return 0, fmt.Errorf("HashType not supported: %s", s)
 	}
@@ -104,6 +114,8 @@ func (z HashFactory) NewHash() hash.Hash {
 		return sumhash.New512(nil)
 	case Sha256:
 		return sha256.New()
+	case Sha512:
+		return sha512.New()
 	// This shouldn't be reached, when creating a new hash, one would know the type of hash they wanted,
 	// in addition to that, unmarshalling of the hashFactory verifies the HashType of the factory.
 	default:
@@ -117,7 +129,7 @@ func (z *HashFactory) Validate() error {
 }
 
 // GenericHashObj Makes it easier to sum using hash interface and Hashable interface
-func GenericHashObj(hsh hash.Hash, h Hashable) []byte {
+func GenericHashObj[H Hashable](hsh hash.Hash, h H) []byte {
 	rep := HashRep(h)
 	return hashBytes(hsh, rep)
 }
@@ -129,7 +141,7 @@ func hashBytes(hash hash.Hash, m []byte) []byte {
 	return outhash
 }
 
-// InvalidHash is used to identify errors on the factory.
+// invalidHash is used to identify errors on the factory.
 // this function will return nil slice
 type invalidHash struct {
 }

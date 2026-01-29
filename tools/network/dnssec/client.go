@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,7 +87,7 @@ func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp 
 	return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v", name, qtype, r.servers)
 }
 
-// QueryRRSet returns resource records of qtype for name and and its signatures
+// QueryRRSet returns resource records of qtype for name and its signatures
 func (r *dnsClient) QueryRRSet(ctx context.Context, name string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
 	msg, err := r.query(ctx, name, qtype)
 	if err != nil {

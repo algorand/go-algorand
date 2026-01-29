@@ -68,7 +68,7 @@ TEALDIR=cmd/goal/examples
 echo $TEALDIR
 
 # create the app and TAKE NOTE of its "app index"
-goal app create --creator ${ACCOUNT} --approval-prog ${TEALDIR}/boxes.teal --clear-prog ${TEALDIR}/clear.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0
+goal app create --creator ${ACCOUNT} --approval-prog ${TEALDIR}/boxes.teal --clear-prog ${TEALDIR}/clear.teal
 ```
 
 For the following questions, you'll need to use the app index. That will be shown in the last line printed. EG:
