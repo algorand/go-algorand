@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sync"
 	"time"
 
@@ -32,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -74,33 +74,18 @@ var ErrInvalidLedger = errors.New("MakeTxHandler: ledger is nil on initializatio
 
 var transactionMessageTxPoolRememberCounter = metrics.NewTagCounter(
 	"algod_transaction_messages_txpool_remember_err_{TAG}", "Number of transaction messages not remembered by txpool b/c of {TAG}",
-	txPoolRememberTagCap, txPoolRememberPendingEval, txPoolRememberTagNoSpace, txPoolRememberTagFee, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+	pools.TxPoolErrTags...,
 )
 
 var transactionMessageTxPoolCheckCounter = metrics.NewTagCounter(
 	"algod_transaction_messages_txpool_check_err_{TAG}", "Number of transaction messages that didn't pass check by txpool b/c of {TAG}",
-	txPoolRememberTagTxnNotWellFormed, txPoolRememberTagTxnDead, txPoolRememberTagTxnEarly, txPoolRememberTagTooLarge, txPoolRememberTagGroupID,
-	txPoolRememberTagTxID, txPoolRememberTagLease, txPoolRememberTagTxIDEval, txPoolRememberTagLeaseEval, txPoolRememberTagEvalGeneric,
+	pools.TxPoolErrTags...,
 )
 
-const (
-	txPoolRememberTagCap         = "cap"
-	txPoolRememberPendingEval    = "pending_eval"
-	txPoolRememberTagNoSpace     = "no_space"
-	txPoolRememberTagFee         = "fee"
-	txPoolRememberTagTxnDead     = "txn_dead"
-	txPoolRememberTagTxnEarly    = "txn_early"
-	txPoolRememberTagTooLarge    = "too_large"
-	txPoolRememberTagGroupID     = "groupid"
-	txPoolRememberTagTxID        = "txid"
-	txPoolRememberTagLease       = "lease"
-	txPoolRememberTagTxIDEval    = "txid_eval"
-	txPoolRememberTagLeaseEval   = "lease_eval"
-	txPoolRememberTagEvalGeneric = "eval"
-
-	txPoolRememberTagTxnNotWellFormed = "not_well"
-)
+type transactionPool interface {
+	Test(stxns []transactions.SignedTxn) error
+	Remember(stxns []transactions.SignedTxn) error
+}
 
 // The txBacklogMsg structure used to track a single incoming transaction from the gossip network,
 type txBacklogMsg struct {
@@ -115,11 +100,11 @@ type txBacklogMsg struct {
 
 // TxHandler handles transaction messages
 type TxHandler struct {
-	txPool                     *pools.TransactionPool
+	txPool                     transactionPool
 	ledger                     *Ledger
 	txVerificationPool         execpool.BacklogPool
 	backlogQueue               chan *txBacklogMsg
-	backlogCongestionThreshold float64
+	backlogCongestionThreshold int
 	postVerificationQueue      chan *verify.VerificationResult
 	backlogWg                  sync.WaitGroup
 	net                        network.GossipNode
@@ -142,7 +127,7 @@ type TxHandler struct {
 
 // TxHandlerOpts is TxHandler configuration options
 type TxHandlerOpts struct {
-	TxPool        *pools.TransactionPool
+	TxPool        transactionPool
 	ExecutionPool execpool.BacklogPool
 	Ledger        *Ledger
 	Net           network.GossipNode
@@ -158,6 +143,10 @@ type HybridRelayer interface {
 func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
 	if opts.TxPool == nil {
+		return nil, ErrInvalidTxPool
+	}
+	txPoolValue := reflect.ValueOf(opts.TxPool)
+	if txPoolValue.Kind() == reflect.Ptr && txPoolValue.IsNil() {
 		return nil, ErrInvalidTxPool
 	}
 
@@ -193,10 +182,13 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		if opts.Config.TxBacklogRateLimitingCongestionPct > 100 || opts.Config.TxBacklogRateLimitingCongestionPct < 0 {
 			return nil, fmt.Errorf("invalid value for TxBacklogRateLimitingCongestionPct: %d", opts.Config.TxBacklogRateLimitingCongestionPct)
 		}
+		if opts.Config.TxBacklogAppRateLimitingCongestionPct > 100 || opts.Config.TxBacklogAppRateLimitingCongestionPct < 0 {
+			return nil, fmt.Errorf("invalid value for TxBacklogAppRateLimitingCongestionPct: %d", opts.Config.TxBacklogAppRateLimitingCongestionPct)
+		}
 		if opts.Config.EnableTxBacklogAppRateLimiting && opts.Config.TxBacklogAppTxRateLimiterMaxSize == 0 {
 			return nil, fmt.Errorf("invalid value for TxBacklogAppTxRateLimiterMaxSize: %d. App rate limiter enabled with zero size", opts.Config.TxBacklogAppTxRateLimiterMaxSize)
 		}
-		handler.backlogCongestionThreshold = float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100
+		handler.backlogCongestionThreshold = int(float64(txBacklogSize*opts.Config.TxBacklogRateLimitingCongestionPct) / 100)
 		if opts.Config.EnableTxBacklogRateLimiting {
 			handler.erl = util.NewElasticRateLimiter(
 				txBacklogSize,
@@ -215,8 +207,8 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 				uint64(opts.Config.TxBacklogAppTxPerSecondRate),
 				time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
 			)
-			// set appLimiter triggering threshold at 50% of the base backlog size
-			handler.appLimiterBacklogThreshold = int(float64(opts.Config.TxBacklogSize) * float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100)
+			// set appLimiter triggering threshold at TxBacklogAppRateLimitingCongestionPct (current default is 10) percent of the base backlog size
+			handler.appLimiterBacklogThreshold = int(float64(opts.Config.TxBacklogSize) * float64(opts.Config.TxBacklogAppRateLimitingCongestionPct) / 100)
 			handler.appLimiterCountERLDrops = opts.Config.TxBacklogAppRateLimitingCountERLDrops
 		}
 	}
@@ -417,107 +409,6 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 	}
 }
 
-func (handler *TxHandler) checkReportErrors(err error) {
-	switch err := err.(type) {
-	case *ledgercore.TxnNotWellFormedError:
-		transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnNotWellFormed, 1)
-		return
-	case *bookkeeping.TxnDeadError:
-		if err.Early {
-			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnEarly, 1)
-		} else {
-			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnDead, 1)
-		}
-		return
-	case *ledgercore.TransactionInLedgerError:
-		if err.InBlockEvaluator {
-			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxIDEval, 1)
-		} else {
-			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxID, 1)
-		}
-		return
-	case *ledgercore.LeaseInLedgerError:
-		if err.InBlockEvaluator {
-			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagLeaseEval, 1)
-		} else {
-			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagLease, 1)
-		}
-		return
-	case *ledgercore.TxGroupMalformedError:
-		switch err.Reason {
-		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
-			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTooLarge, 1)
-		default:
-			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagGroupID, 1)
-		}
-		return
-	}
-
-	transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagEvalGeneric, 1)
-}
-
-func (handler *TxHandler) rememberReportErrors(err error) {
-	if errors.Is(err, pools.ErrPendingQueueReachedMaxCap) {
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagCap, 1)
-		return
-	}
-
-	if errors.Is(err, pools.ErrNoPendingBlockEvaluator) {
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberPendingEval, 1)
-		return
-	}
-
-	if errors.Is(err, ledgercore.ErrNoSpace) {
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagNoSpace, 1)
-		return
-	}
-
-	// it is possible to call errors.As but it requires additional allocations
-	// instead, unwrap and type assert.
-	underlyingErr := errors.Unwrap(err)
-	if underlyingErr == nil {
-		// something went wrong
-		return
-	}
-
-	switch err := underlyingErr.(type) {
-	case *pools.ErrTxPoolFeeError:
-		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagFee, 1)
-		return
-	case *bookkeeping.TxnDeadError:
-		if err.Early {
-			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnEarly, 1)
-		} else {
-			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnDead, 1)
-		}
-		return
-	case *ledgercore.TransactionInLedgerError:
-		if err.InBlockEvaluator {
-			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxIDEval, 1)
-		} else {
-			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxID, 1)
-		}
-		return
-	case *ledgercore.LeaseInLedgerError:
-		if err.InBlockEvaluator {
-			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLeaseEval, 1)
-		} else {
-			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagLease, 1)
-		}
-		return
-	case *ledgercore.TxGroupMalformedError:
-		switch err.Reason {
-		case ledgercore.TxGroupMalformedErrorReasonExceedMaxSize:
-			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTooLarge, 1)
-		default:
-			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagGroupID, 1)
-		}
-		return
-	}
-
-	transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagEvalGeneric, 1)
-}
-
 func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	if wi.verificationErr != nil {
 		// disconnect from peer.
@@ -541,7 +432,17 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
-		handler.rememberReportErrors(err)
+		if handler.appLimiter != nil && !wi.rawmsg.Outgoing && wi.rawmsg.Sender != nil {
+			var tde *bookkeeping.TxnDeadError
+			// explicitly avoid penalizing for TxDeadError since another node can be out of sync
+			if !errors.As(err, &tde) {
+				handler.appLimiter.penalizeEvalError(
+					wi.unverifiedTxGroup, wi.rawmsg.Sender.RoutingAddr(),
+				)
+			}
+		}
+
+		transactionMessageTxPoolRememberCounter.Add(pools.ClassifyTxPoolError(err), 1)
 		logging.Base().Debugf("could not remember tx: %v", err)
 		// if in synchronous mode, signal the completion of the operation
 		if wi.syncCh != nil {
@@ -742,7 +643,7 @@ func (eic *erlIPClient) connClosed(ec util.ErlClient) {
 // - the capacity guard returned by the elastic rate limiter
 // - a boolean indicating if the sender is rate limited
 func (handler *TxHandler) incomingMsgErlCheck(sender util.ErlClient) (*util.ErlCapacityGuard, bool) {
-	congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
+	congestedERL := handler.backlogCongestionThreshold < len(handler.backlogQueue)
 	// consume a capacity unit
 	// if the elastic rate limiter cannot vend a capacity, the error it returns
 	// is sufficient to indicate that we should enable Congestion Control, because
@@ -1008,7 +909,7 @@ func (handler *TxHandler) checkAlreadyCommitted(tx *txBacklogMsg) (processingDon
 	// do a quick test to check that this transaction could potentially be committed, to reject dup pending transactions
 	err := handler.txPool.Test(tx.unverifiedTxGroup)
 	if err != nil {
-		handler.checkReportErrors(err)
+		transactionMessageTxPoolCheckCounter.Add(pools.ClassifyTxPoolError(err), 1)
 		logging.Base().Debugf("txPool rejected transaction: %v", err)
 		return true
 	}

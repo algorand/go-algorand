@@ -570,7 +570,10 @@ func (wp *wsPeer) readLoop() {
 		msg.Data = slurper.Bytes()
 		msg.Net = wp.net
 		wp.lastPacketTime.Store(msg.Received)
+
 		if wp.peerType == peerTypeWs {
+			msg.Outgoing = wp.outgoing
+
 			networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
 			networkMessageReceivedTotal.AddUint64(1, nil)
 			networkReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
