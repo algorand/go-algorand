@@ -21,6 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/blake2b"
+	"golang.org/x/exp/rand"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
@@ -28,9 +32,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/blake2b"
-	"golang.org/x/exp/rand"
 )
 
 func TestAppRateLimiter_Make(t *testing.T) {

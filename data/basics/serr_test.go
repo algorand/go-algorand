@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestNew(t *testing.T) {

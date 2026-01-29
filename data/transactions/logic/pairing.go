@@ -21,13 +21,12 @@ import (
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark-crypto/ecc/bn254"
-	bn254fp "github.com/consensys/gnark-crypto/ecc/bn254/fp"
-	bn254fr "github.com/consensys/gnark-crypto/ecc/bn254/fr"
-
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	bls12381fp "github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	bls12381fr "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"github.com/consensys/gnark-crypto/ecc/bn254"
+	bn254fp "github.com/consensys/gnark-crypto/ecc/bn254/fp"
+	bn254fr "github.com/consensys/gnark-crypto/ecc/bn254/fr"
 )
 
 type sError string

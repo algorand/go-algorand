@@ -28,10 +28,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/websocket"
+
 	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/websocket"
-	"github.com/stretchr/testify/require"
 )
 
 var testProxyUpgrader = websocket.Upgrader{

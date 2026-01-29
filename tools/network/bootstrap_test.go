@@ -20,8 +20,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestReadFromSRVPriority(t *testing.T) {

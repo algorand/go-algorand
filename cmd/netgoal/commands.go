@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-deadlock"
 )
 
 var log *logrus.Logger

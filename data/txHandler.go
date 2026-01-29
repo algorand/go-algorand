@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
@@ -39,7 +41,6 @@ import (
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
-	"github.com/algorand/go-deadlock"
 )
 
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)

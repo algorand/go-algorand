@@ -23,12 +23,13 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"pgregory.net/rapid"
 )
 
 // TestCheckStatelessEncoder tests the StatelessEncoder/Decoder using randomly generated votes

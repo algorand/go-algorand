@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/avm-abi/apps"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"

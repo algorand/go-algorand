@@ -21,13 +21,15 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-deadlock"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
 // streamManager implements network.Notifiee to create and manage streams for use with non-gossipsub protocols.

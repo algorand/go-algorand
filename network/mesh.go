@@ -23,9 +23,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p"
-	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 )
 
 const meshThreadInterval = time.Minute
