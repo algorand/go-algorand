@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -587,7 +587,11 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		var overflowed bool
 		fromBalNew.MicroAlgos, overflowed = basics.OSubA(fromBalNew.MicroAlgos, amt)
 		if overflowed {
-			return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
+			return &ledgercore.OverspendError{
+				Account: from,
+				Data:    fromBal,
+				Tried:   amt,
+			}
 		}
 		fromBalNew = cs.autoHeartbeat(fromBal, fromBalNew)
 		err = cs.putAccount(from, fromBalNew)
@@ -1130,8 +1134,12 @@ func (eval *BlockEvaluator) checkMinBalance(cow *roundCowState) error {
 		dataNew := data.WithUpdatedRewards(eval.proto.RewardUnit, rewardlvl)
 		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
 		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
-			return fmt.Errorf("account %v balance %d below min %d (%d assets)",
-				addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, dataNew.TotalAssets)
+			return &ledgercore.MinBalanceError{
+				Account:     addr,
+				Balance:     dataNew.MicroAlgos.Raw,
+				MinBalance:  effectiveMinBalance.Raw,
+				TotalAssets: dataNew.TotalAssets,
+			}
 		}
 
 		// Check if we have exceeded the maximum minimum balance

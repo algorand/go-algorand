@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -4895,4 +4895,69 @@ func TestMaybeSendMessagesOfInterestLegacyPeer(t *testing.T) {
 		default:
 		}
 	})
+}
+
+// TestNumOutgoingPending tests that numOutgoingPending returns the correct count
+// of pending connections, accounting for the fact that tryConnectAddrs always
+// stores two entries per pending connection (addr and gossipAddr).
+func TestNumOutgoingPending(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	netA := makeTestWebsocketNode(t)
+	netA.Start()
+	defer netA.Stop()
+
+	assertEvenEntries := func() {
+		netA.tryConnectLock.Lock()
+		mapLen := len(netA.tryConnectAddrs)
+		netA.tryConnectLock.Unlock()
+		require.Equal(t, 0, mapLen%2, "tryConnectAddrs should always have even number of entries, got %d", mapLen)
+	}
+
+	require.Equal(t, 0, netA.numOutgoingPending())
+	assertEvenEntries()
+
+	gossipAddr1, ok := netA.tryConnectReserveAddr("127.0.0.1:4161")
+	require.True(t, ok)
+	require.NotEmpty(t, gossipAddr1)
+	require.Equal(t, 1, netA.numOutgoingPending())
+	assertEvenEntries()
+
+	netA.tryConnectLock.Lock()
+	require.Equal(t, 2, len(netA.tryConnectAddrs))
+	netA.tryConnectLock.Unlock()
+
+	gossipAddr2, ok := netA.tryConnectReserveAddr("127.0.0.1:4162")
+	require.True(t, ok)
+	require.NotEmpty(t, gossipAddr2)
+	require.Equal(t, 2, netA.numOutgoingPending())
+	assertEvenEntries()
+
+	netA.tryConnectLock.Lock()
+	require.Equal(t, 4, len(netA.tryConnectAddrs))
+	netA.tryConnectLock.Unlock()
+
+	// Trying to reserve the same address should fail
+	_, ok = netA.tryConnectReserveAddr("127.0.0.1:4161")
+	require.False(t, ok)
+	require.Equal(t, 2, netA.numOutgoingPending(), "count should not change after failed reserve")
+	assertEvenEntries()
+
+	// Release addresses
+	netA.tryConnectReleaseAddr("127.0.0.1:4161", gossipAddr1)
+	require.Equal(t, 1, netA.numOutgoingPending())
+	assertEvenEntries()
+
+	netA.tryConnectLock.Lock()
+	require.Equal(t, 2, len(netA.tryConnectAddrs))
+	netA.tryConnectLock.Unlock()
+
+	netA.tryConnectReleaseAddr("127.0.0.1:4162", gossipAddr2)
+	require.Equal(t, 0, netA.numOutgoingPending())
+	assertEvenEntries()
+
+	netA.tryConnectLock.Lock()
+	require.Equal(t, 0, len(netA.tryConnectAddrs), "map should be empty after all releases")
+	netA.tryConnectLock.Unlock()
 }

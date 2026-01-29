@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package logic
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -46,6 +47,16 @@ type FieldGroup struct {
 	Doc   string
 	Names []string
 	specs fieldSpecMap
+}
+
+// Heading returns a documentation heading for this FieldGroup.
+func (fg FieldGroup) Heading() string {
+	heading := fg.Name
+	if fg.Doc != "" {
+		word, _, _ := strings.Cut(fg.Doc, " ")
+		heading += " " + word
+	}
+	return heading
 }
 
 // SpecByName returns a FieldsSpec for a name, respecting the "sparseness" of
@@ -453,6 +464,20 @@ var TxnTypeNames = [...]string{
 	string(protocol.AssetTransferTx),
 	string(protocol.AssetFreezeTx),
 	string(protocol.ApplicationCallTx),
+	string(protocol.StateProofTx),
+	string(protocol.HeartbeatTx),
+}
+
+// txnTypeLongNames provide a friendlier type constant name in assembler.
+var txnTypeLongNames = map[string]string{
+	string(protocol.PaymentTx):         "Payment",
+	string(protocol.KeyRegistrationTx): "KeyRegistration",
+	string(protocol.AssetConfigTx):     "AssetConfig",
+	string(protocol.AssetTransferTx):   "AssetTransfer",
+	string(protocol.AssetFreezeTx):     "AssetFreeze",
+	string(protocol.ApplicationCallTx): "ApplicationCall",
+	string(protocol.StateProofTx):      "State Proof",
+	string(protocol.HeartbeatTx):       "Consensus heartbeat",
 }
 
 // map txn type names (long and short) to index/enum value
@@ -482,7 +507,7 @@ const (
 var OnCompletionNames [invalidOnCompletionConst]string
 
 // onCompletionMap maps symbolic name to uint64 for assembleInt
-var onCompletionMap map[string]uint64
+var onCompletionMap = make(map[string]uint64)
 
 // GlobalField is an enum for `global` opcode
 type GlobalField uint64
@@ -847,7 +872,7 @@ func (s mimcConfigNameSpecMap) get(name string) (FieldSpec, bool) {
 
 // MimcConfigs collects details about the constants used to describe MimcConfigs
 var MimcConfigs = FieldGroup{
-	"Mimc Configurations", "Parameters",
+	"MimcConfigurations", "Parameters",
 	mimcConfigNames[:],
 	mimcConfigSpecByName,
 }
@@ -1709,15 +1734,15 @@ func init() {
 		voterParamsFieldSpecByName[s.field.String()] = s
 	}
 
-	txnTypeMap = make(map[string]uint64)
 	for i, tt := range TxnTypeNames {
 		txnTypeMap[tt] = uint64(i)
 	}
-	for k, v := range TypeNameDescriptions {
+	for k, v := range txnTypeLongNames {
 		txnTypeMap[v] = txnTypeMap[k]
 	}
+	// unknown does not have a long name, hence +1
+	equal(len(TxnTypeNames), len(txnTypeLongNames)+1)
 
-	onCompletionMap = make(map[string]uint64, len(OnCompletionNames))
 	for oc := NoOp; oc < invalidOnCompletionConst; oc++ {
 		symbol := oc.String()
 		OnCompletionNames[oc] = symbol

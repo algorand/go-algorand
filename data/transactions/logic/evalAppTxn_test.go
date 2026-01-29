@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package logic_test
 import (
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -132,7 +133,7 @@ func TestFieldLimits(t *testing.T) {
 
 	ep, _, _ := MakeSampleEnv()
 
-	intProgram := "itxn_begin; int %d; itxn_field %s; int 1"
+	intProgram := "itxn_begin; int %v; itxn_field %s; int 1"
 	goodInt := func(field string, value interface{}) {
 		TestApp(t, fmt.Sprintf(intProgram, value, field), ep)
 	}
@@ -168,7 +169,10 @@ func TestFieldLimits(t *testing.T) {
 
 	// header
 	badInt("TypeEnum", 0)
-	testInt("TypeEnum", len(TxnTypeNames)-1)
+	testInt("TypeEnum", slices.Index(TxnTypeNames[:], "appl")) // later ints are illegal for itxn
+	badInt("TypeEnum", "hb")
+	badInt("TypeEnum", "stpf")
+	badInt("TypeEnum", 0)
 	//keyreg
 	testBool("Nonparticipation")
 	//acfg

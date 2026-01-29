@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -241,7 +241,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		return nil, err
 	}
 
-	relayMessages := cfg.IsGossipServer() || cfg.ForceRelayMessages
+	relayMessages := cfg.IsListenServer() || cfg.ForceRelayMessages
 	net := &P2PNetwork{
 		log:           log,
 		config:        cfg,
@@ -393,7 +393,7 @@ func (n *P2PNetwork) setup() error {
 		return fmt.Errorf("failed to create mesh: %w", err)
 	}
 
-	n.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag})
+	n.connPerfMonitor = makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 	n.outgoingConnsCloser = makeOutgoingConnsCloser(n.log, n, n.connPerfMonitor, cliqueResolveInterval)
 
 	return nil
@@ -471,8 +471,8 @@ func (n *P2PNetwork) Start() error {
 	n.meshUpdateRequests <- meshRequest{}
 	n.mesher.start()
 
-	if n.capabilitiesDiscovery != nil {
-		n.capabilitiesDiscovery.AdvertiseCapabilities(n.nodeInfo.Capabilities()...)
+	if caps := n.nodeInfo.Capabilities(); len(caps) > 0 && n.capabilitiesDiscovery != nil {
+		n.capabilitiesDiscovery.AdvertiseCapabilities(caps...)
 	}
 
 	return nil

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -765,6 +765,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxTxnBytesPerBlock, &bounds.MaxTxnBytesPerBlock)
 
 	checkSetMax(p.MaxAppTxnForeignApps, &bounds.MaxAppTxnForeignApps)
+	checkSetMax(p.MaxAppAccess, &bounds.MaxAppAccess)
 }
 
 // DeepCopy creates a deep copy of a consensus protocols map.

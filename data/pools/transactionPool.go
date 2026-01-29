@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -749,6 +749,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		}
 		if _, alreadyCommitted := committedTxIDs[txgroup[0].ID()]; alreadyCommitted {
 			asmStats.EarlyCommittedCount++
+			txPoolReevalCommitted.Inc(nil)
 			continue
 		}
 		err := pool.add(txgroup, &asmStats)
@@ -756,6 +757,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
 			}
+
+			txPoolReevalCounter.Add(ClassifyTxPoolError(err), 1)
+
 			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
 			switch terr := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
@@ -785,6 +789,8 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			}
+		} else {
+			txPoolReevalSuccess.Inc(nil)
 		}
 	}
 

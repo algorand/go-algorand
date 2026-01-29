@@ -165,5 +165,5 @@ Provides utilities for the various components:
 
 Please see the [COPYING_FAQ](COPYING_FAQ) for details on how to apply our license.
 
-Copyright (C) 2019-2025, Algorand Inc.
+Copyright (C) 2019-2026, Algorand Inc.
 
