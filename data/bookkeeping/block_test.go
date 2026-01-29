@@ -1275,11 +1275,42 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 			GenesisID:     "test",
 			GenesisHash:   crypto.Digest{0x02, 0x02},
 			Load:          0,
-			CongestionTax: 2_000_000, // Weird, but allowed (maybe there was a downgrade?)
+			CongestionTax: 0,
 		}
 		prev.CurrentProtocol = protoNoCongestion
 
 		current := BlockHeader{
+			Round:         prev.Round + 1,
+			GenesisID:     prev.GenesisID,
+			GenesisHash:   prev.GenesisHash,
+			Branch:        prev.Hash(),
+			Branch512:     prev.Hash512(),
+			Load:          0,
+			CongestionTax: 0,
+		}
+		current.CurrentProtocol = protoNoCongestion
+
+		// Should pass with 0 CongestionTax
+		require.NoError(t, current.PreCheck(prev))
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
+		current.CongestionTax--
+
+		// Should fail with non-zero Load
+		current.Load = 500_000
+		require.ErrorContains(t, current.PreCheck(prev), "load should be zero when congestion measurement is disabled")
+		current.Load = 0
+
+		prev = BlockHeader{
+			Round:         1,
+			GenesisID:     "test",
+			GenesisHash:   crypto.Digest{0x02, 0x02},
+			Load:          0,
+			CongestionTax: 2_000_000, // Weird, but allowed (maybe there was a downgrade?)
+		}
+		prev.CurrentProtocol = protoNoCongestion
+
+		current = BlockHeader{
 			Round:         prev.Round + 1,
 			GenesisID:     prev.GenesisID,
 			GenesisHash:   prev.GenesisHash,
