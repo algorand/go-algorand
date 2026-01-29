@@ -2,7 +2,7 @@ codecov:
   require_ci_to_pass: yes
 
 flags:
-  nightly:
+  full_coverage:
     joined: false
 
 ignore:
