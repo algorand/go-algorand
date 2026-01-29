@@ -1290,8 +1290,11 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 		}
 		current.CurrentProtocol = protoNoCongestion
 
-		// Should pass with zero values
+		// Should pass with only the correct CongestionTax
 		require.NoError(t, current.PreCheck(prev))
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
+		current.CongestionTax--
 
 		// Should fail with non-zero Load
 		current.Load = 500_000
@@ -1379,7 +1382,11 @@ func TestBlockHeaderCongestionValidation(t *testing.T) {
 		}
 		current.CurrentProtocol = protoNoCongestion
 
+		// Should pass with only the correct CongestionTax
 		require.NoError(t, current.PreCheck(prev))
+		current.CongestionTax++
+		require.ErrorContains(t, current.PreCheck(prev), "bad congestion tax")
+		current.CongestionTax--
 
 		// Should fail with non-zero Load
 		current.Load = 1
