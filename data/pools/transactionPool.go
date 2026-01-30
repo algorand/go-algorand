@@ -311,8 +311,7 @@ func (pool *TransactionPool) checkFeeAtIngress(txgroup []transactions.SignedTxn)
 		tax = bookkeeping.NextCongestionTax(1e6, tax)
 	}
 	if tax > tip {
-		return fmt.Errorf("group has insufficient extra fees to cover %s congestion tax",
-			tax)
+		return &ErrCongestionFeeError{Tip: tip, Tax: tax}
 	}
 	return nil
 }

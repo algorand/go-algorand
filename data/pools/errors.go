@@ -37,17 +37,15 @@ var ErrPendingQueueReachedMaxCap = errors.New("TransactionPool.checkPendingQueue
 // ErrNoPendingBlockEvaluator indicates there is no pending block evaluator to accept a new tx group
 var ErrNoPendingBlockEvaluator = errors.New("TransactionPool.ingest: no pending block evaluator")
 
-// ErrTxPoolFeeError is an error type for txpool fee escalation checks
-type ErrTxPoolFeeError struct {
-	fee           basics.MicroAlgos
-	feeThreshold  uint64
-	feePerByte    uint64
-	encodedLength int
+// ErrCongestionFeeError is returned when a transaction group's tip is
+// insufficient to cover the current congestion tax.
+type ErrCongestionFeeError struct {
+	Tip basics.Micros
+	Tax basics.Micros
 }
 
-func (e *ErrTxPoolFeeError) Error() string {
-	return fmt.Sprintf("fee %d below threshold %d (%d per byte * %d bytes)",
-		e.fee, e.feeThreshold, e.feePerByte, e.encodedLength)
+func (e *ErrCongestionFeeError) Error() string {
+	return fmt.Sprintf("group tip %s is less than congestion tax %s", e.Tip, e.Tax)
 }
 
 // TxPoolErrorTag constants for categorizing transaction pool errors.
@@ -127,7 +125,7 @@ func ClassifyTxPoolError(err error) string {
 	}
 
 	// Typed errors
-	var feeErr *ErrTxPoolFeeError
+	var feeErr *ErrCongestionFeeError
 	if errors.As(err, &feeErr) {
 		return TxPoolErrTagFee
 	}
@@ -160,6 +158,9 @@ func ClassifyTxPoolError(err error) string {
 	if errors.As(err, &groupErr) {
 		if groupErr.Reason == ledgercore.TxGroupMalformedErrorReasonExceedMaxSize {
 			return TxPoolErrTagTooLarge
+		}
+		if groupErr.Reason == ledgercore.TxGroupErrorReasonInvalidFee {
+			return TxPoolErrTagFee
 		}
 		return TxPoolErrTagGroupID
 	}

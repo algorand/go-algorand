@@ -2071,7 +2071,7 @@ func TestTxHandlerRememberReportErrors(t *testing.T) { //nolint:paralleltest // 
 	transactionMessageTxPoolRememberCounter.AddMetric(result)
 	require.Equal(t, 2, getMetricCounter(pools.TxPoolErrTagNoSpace))
 
-	feeErr := pools.ErrTxPoolFeeError{}
+	feeErr := pools.ErrCongestionFeeError{}
 	wrapped = fmt.Errorf("wrap: %w", &feeErr) // simulate wrapping
 	transactionMessageTxPoolRememberCounter.Add(pools.ClassifyTxPoolError(wrapped), 1)
 
