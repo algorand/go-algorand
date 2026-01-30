@@ -32,8 +32,8 @@ func MakeGauge(metric MetricName) *Gauge {
 	return c
 }
 
-// MakeGaugeUnregistered creates a new gauge without registering it.
-// Use Register() to add it to a specific registry.
+// MakeGaugeUnregistered creates a new gauge with the provided name and description
+// but does not register it with the default registry.
 func MakeGaugeUnregistered(metric MetricName) *Gauge {
 	c := &Gauge{g: couge{
 		values:        make([]*cougeValues, 0),

@@ -33,8 +33,8 @@ func MakeCounter(metric MetricName) *Counter {
 	return c
 }
 
-// MakeCounterUnregistered creates a new counter without registering it.
-// Use Register() to add it to a specific registry.
+// makeCounter creates a new counter with the provided name and description
+// but does not register it with the default registry.
 func MakeCounterUnregistered(metric MetricName) *Counter {
 	c := &Counter{c: couge{
 		values:        make([]*cougeValues, 0),
