@@ -163,7 +163,7 @@ func SummarizeFees(txgroup []SignedTxnWithAD) (usage basics.Micros, paid basics.
 	// from being reused for inners. Since that is expressed as a fixed fee, the
 	// best way to do it might be to not count it in `paid`.  The "obvious" way
 	// to do it (by adjusting the KeyReg's FeeFactor() is more difficult because
-	// the 2A fee is not defined in unites of MinFee().
+	// the 2A fee is not defined in units of MinFee().
 	for _, txad := range txgroup {
 		usage = basics.AddSaturate(usage, txad.SignedTxn.Txn.FeeFactor())
 		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)

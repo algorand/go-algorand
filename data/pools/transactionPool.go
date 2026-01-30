@@ -298,6 +298,17 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 // checkFeeAtIngress take a group of signed transactions and verifies that they
 // are willing to pay the current congestion fee.
 func (pool *TransactionPool) checkFeeAtIngress(txgroup []transactions.SignedTxn) error {
+	// There exist some transactions that pay no fee. (StateProof, certain
+	// heartbeats) If this is one of them, let it in regardless of Tip.  In the
+	// case of HB, apply-time checks will confirm it was eligible for 0 fee.
+	if len(txgroup) == 1 && txgroup[0].Txn.Fee.IsZero() {
+		// We don't bother to check the type or other details because
+		// eval.TransactionGroup is never going to let a zero fee singleton
+		// through that isn't allowed. We're trying not to sprinkle the same
+		// checks in multiple places.
+		return nil
+	}
+
 	var tip basics.Micros
 	for _, stxn := range txgroup {
 		if stxn.Txn.Tip != 0 {
