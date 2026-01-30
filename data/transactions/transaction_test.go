@@ -153,6 +153,96 @@ func TestLogicSigEquality(t *testing.T) {
 
 }
 
+// TestHeaderWellFormed tests WellFormed for things that are not transaction
+// specific (which get tested for the specific transactions).
+func TestHeaderWellFormed(t *testing.T) {
+	correctTxn := Transaction{
+		Type: protocol.PaymentTx,
+		Header: Header{
+			Sender:     basics.Address{0x01},
+			Fee:        basics.MicroAlgos{Raw: 1000},
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       []byte{0x02},
+		},
+		PaymentTxnFields: PaymentTxnFields{
+			Receiver: basics.Address{0x03},
+			Amount:   basics.MicroAlgos{Raw: 1000},
+		},
+	}
+
+	sp := SpecialAddresses{
+		RewardsPool: basics.Address{0xEE},
+		FeeSink:     basics.Address{0xFF},
+	}
+
+	current := config.Consensus[protocol.ConsensusCurrentVersion]
+	future := config.Consensus[protocol.ConsensusFuture]
+
+	a := assert.New(t)
+
+	testGood := func(msg string, fn func(tx *Transaction), protos ...config.ConsensusParams) {
+		for _, p := range protos {
+			t.Helper()
+			copy := correctTxn
+			fn(&correctTxn)
+			defer func() { correctTxn = copy }()
+			err := correctTxn.WellFormed(sp, p)
+			a.NoError(err, msg)
+		}
+	}
+
+	testGood("base case", func(tx *Transaction) {}, current, future)
+
+	testBad := func(msg string, fn func(tx *Transaction), protos ...config.ConsensusParams) {
+		for _, p := range protos {
+			t.Helper()
+			copy := correctTxn
+			fn(&correctTxn)
+			defer func() { correctTxn = copy }()
+			err := correctTxn.WellFormed(sp, p)
+			a.ErrorContains(err, msg)
+		}
+	}
+	testBad("invalid range", func(tx *Transaction) {
+		tx.FirstValid = tx.LastValid + 1
+	}, current, future)
+	testBad("window size excessive", func(tx *Transaction) {
+		tx.LastValid = tx.FirstValid + 10_000
+	}, current, future)
+	testBad("note too big", func(tx *Transaction) {
+		tx.Note = make([]byte, 10_000)
+	}, current, future)
+	testBad("from incentive pool is invalid", func(tx *Transaction) {
+		tx.Sender = sp.RewardsPool
+	}, current, future)
+	testBad("cannot have zero sender", func(tx *Transaction) {
+		tx.CloseRemainderTo = basics.Address{0x88} // to avoid the early error that sender != closeTo
+		tx.Sender = basics.Address{}
+	}, current, future)
+
+	// Now test some fields that were added in certain releases
+	testAdded := func(msg string, fn func(tx *Transaction), lastBad protocol.ConsensusVersion) {
+		t.Helper()
+		testBad(msg, fn, config.Consensus[lastBad])
+		if lastBad != protocol.ConsensusFuture {
+			testGood(msg, fn, future)
+		}
+	}
+	testAdded("tried to acquire lease", func(tx *Transaction) {
+		tx.Lease = [32]byte{0x77}
+	}, protocol.ConsensusV17)
+	testAdded("groups not yet enabled", func(tx *Transaction) {
+		tx.Group = crypto.Digest{0x11}
+	}, protocol.ConsensusV17)
+	testAdded("rekeying not yet enabled", func(tx *Transaction) {
+		tx.RekeyTo = basics.Address{0x22}
+	}, protocol.ConsensusV23)
+	testAdded("tips not yet enabled", func(tx *Transaction) {
+		tx.Tip = 10
+	}, protocol.ConsensusCurrentVersion) // make explicit after release
+}
+
 func TestHeaderFieldCount(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -161,5 +251,8 @@ func TestHeaderFieldCount(t *testing.T) {
 	// a reminder to consider whether the field should be banned from use by
 	// stateproofs and/or free heartbeats. Adjust their wellFormed methods and
 	// then change the value in the test.
+
+	// Such a new field should probably also be consensus flagged at the end of
+	// transaction.WellFormed()
 	assert.Equal(t, 12, reflect.TypeFor[Header]().NumField())
 }

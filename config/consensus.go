@@ -579,6 +579,10 @@ type ConsensusParams struct {
 	// LoadTracking enables header values that track Load that grows/shrinks
 	// when blocks are more/less than half full.
 	LoadTracking bool
+
+	// SupportTips indicates the tx.Tip field can be used to promise additional
+	// fees are included.
+	SupportTips bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1469,6 +1473,7 @@ func initConsensusProtocols() {
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
 	vFuture.LoadTracking = true
+	vFuture.SupportTips = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
