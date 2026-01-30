@@ -140,10 +140,10 @@ sanity: fix lint fmt tidy modernize
 # across all packages that are dependencies of that package.
 cover:
 ifeq ($(PACKAGE),)
-	go test -v $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES) -covermode=atomic -coverpkg=$(shell echo $(COVERPKG_PACKAGES) | sed 's/ /,/g')
+	$(GOTESTCOMMAND) $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES) -covermode=atomic -coverpkg=$(shell echo $(COVERPKG_PACKAGES) | sed 's/ /,/g')
 else
 	cd $(PACKAGE); \
-	go test -v $(GOTAGS) -coverprofile=cover.out ./... -covermode=atomic -coverpkg=$$( (go list -f '{{ join .Deps "\n" }}' ./...; go list -f '{{ join .TestImports "\n" }}' ./...) | grep 'github.com/algorand/go-algorand' | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' | sort | uniq | paste -sd ',' -); \
+	$(GOTESTCOMMAND) $(GOTAGS) -coverprofile=cover.out ./... -covermode=atomic -coverpkg=$$( (go list -f '{{ join .Deps "\n" }}' ./...; go list -f '{{ join .TestImports "\n" }}' ./...) | grep 'github.com/algorand/go-algorand' | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' | sort | uniq | paste -sd ',' -); \
 	go tool cover -html cover.out
 endif
 
