@@ -156,6 +156,9 @@ func TestLogicSigEquality(t *testing.T) {
 // TestHeaderWellFormed tests WellFormed for things that are not transaction
 // specific (which get tested for the specific transactions).
 func TestHeaderWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	correctTxn := Transaction{
 		Type: protocol.PaymentTx,
 		Header: Header{
