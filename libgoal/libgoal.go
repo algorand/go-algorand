@@ -640,10 +640,12 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 }
 
 // suggestedFee returns the amount to use for the fee field of a transaction and
-// the tip to specify to allow entry into a congestion algod.
+// the tax expected to be paid based on the suggested parameters.
 func suggestedFee(tx transactions.Transaction, suggested model.TransactionParametersResponse) (basics.MicroAlgos, basics.Micros) {
-	// Default to the suggested tax rate, if the caller didn't supply it
-	return basics.MicroAlgos{Raw: suggested.MinFee}, nilToZero(suggested.CongestionTax)
+	baseFee := basics.MicroAlgos{Raw: suggested.MinFee}
+	tax := nilToZero(suggested.CongestionTax)
+	afterTax, _ := baseFee.MulMicros(basics.AddSaturate(1e6, tax))
+	return afterTax, tax
 }
 
 /* Algod Wrappers */
