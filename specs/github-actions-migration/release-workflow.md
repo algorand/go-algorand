@@ -31,13 +31,23 @@ on:
 
 ## Version/Channel Parsing
 
+**Tag Format**: `v{major}.{minor}.{patch}-{channel}`
+
+Examples:
+- `v4.5.0-beta` → version `4.5.0`, channel `beta`
+- `v4.5.0-stable` → version `4.5.0`, channel `stable`
+- `v4.5.0-nightly` → version `4.5.0`, channel `nightly`
+- `v4.5.0-dev` → version `4.5.0`, channel `dev`
+
+Valid channels: `beta`, `stable`, `nightly`, `dev` (the last component after the final hyphen).
+
 For tag triggers, parse from the tag:
 ```bash
 # Tag: v4.5.0-beta
 TAG="${GITHUB_REF_NAME}"           # v4.5.0-beta
+CHANNEL="${TAG##*-}"                # beta (extract channel first)
 VERSION="${TAG#v}"                  # 4.5.0-beta
-VERSION="${VERSION%-*}"             # 4.5.0
-CHANNEL="${TAG##*-}"                # beta
+VERSION="${VERSION%-${CHANNEL}}"    # 4.5.0 (remove known channel suffix)
 ```
 
 For manual triggers, use inputs directly.
@@ -46,9 +56,10 @@ For manual triggers, use inputs directly.
 
 ```bash
 case "$CHANNEL" in
-  beta)   NETWORK="betanet" ;;
-  stable) NETWORK="mainnet" ;;
-  *)      NETWORK="devnet"  ;;
+  beta)    NETWORK="betanet" ;;
+  stable)  NETWORK="mainnet" ;;
+  nightly) NETWORK="devnet" ;;
+  dev)     NETWORK="devnet" ;;
 esac
 ```
 
