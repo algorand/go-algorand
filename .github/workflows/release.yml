@@ -5,6 +5,8 @@ on:
     tags:
       - 'v*-beta'
       - 'v*-stable'
+      - 'v*-nightly'
+      - 'v*-dev'
   workflow_dispatch:
     inputs:
       version:
@@ -18,6 +20,8 @@ on:
         options:
           - beta
           - stable
+          - nightly
+          - dev
 
 permissions:
   contents: read
@@ -48,28 +52,44 @@ jobs:
             CHANNEL="${{ inputs.channel }}"
           else
             # Tag trigger - parse from tag
+            # Expected format: v{major}.{minor}.{patch}-{channel}
+            # Examples: v4.5.0-beta, v4.5.0-stable
             TAG="${GITHUB_REF_NAME}"
             echo "Parsing tag: ${TAG}"
 
-            # Extract version: v4.5.0-beta -> 4.5.0
-            VERSION="${TAG#v}"
-            VERSION="${VERSION%-*}"
-
-            # Extract channel: v4.5.0-beta -> beta
+            # Extract channel (last component after final hyphen): v4.5.0-beta -> beta
             CHANNEL="${TAG##*-}"
+
+            # Validate channel first
+            case "$CHANNEL" in
+              beta|stable|nightly|dev) ;;
+              *)
+                echo "Error: Tag must end with -beta, -stable, -nightly, or -dev"
+                echo "Got: ${TAG}"
+                exit 1
+                ;;
+            esac
+
+            # Extract version: v4.5.0-beta -> 4.5.0
+            # Remove the 'v' prefix and the '-channel' suffix
+            VERSION="${TAG#v}"
+            VERSION="${VERSION%-${CHANNEL}}"
           fi
 
           # Validate version format (major.minor.patch)
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "Error: Invalid version format: ${VERSION}"
             echo "Expected format: major.minor.patch (e.g., 4.5.0)"
+            echo "Tag format should be: v{major}.{minor}.{patch}-{channel}"
             exit 1
           fi
 
           # Map channel to network
           case "$CHANNEL" in
-            beta)   NETWORK="betanet" ;;
-            stable) NETWORK="mainnet" ;;
+            beta)    NETWORK="betanet" ;;
+            stable)  NETWORK="mainnet" ;;
+            nightly) NETWORK="devnet" ;;
+            dev)     NETWORK="devnet" ;;
             *)
               echo "Error: Invalid channel: ${CHANNEL}"
               exit 1
