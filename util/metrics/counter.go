@@ -28,14 +28,14 @@ type Counter struct {
 
 // MakeCounter create a new counter with the provided name and description.
 func MakeCounter(metric MetricName) *Counter {
-	c := makeCounter(metric)
+	c := MakeCounterUnregistered(metric)
 	c.Register(nil)
 	return c
 }
 
-// makeCounter create a new counter with the provided name and description
-// but does not register it with the default registry.
-func makeCounter(metric MetricName) *Counter {
+// MakeCounterUnregistered creates a new counter without registering it.
+// Use Register() to add it to a specific registry.
+func MakeCounterUnregistered(metric MetricName) *Counter {
 	c := &Counter{c: couge{
 		values:        make([]*cougeValues, 0),
 		description:   metric.Description,

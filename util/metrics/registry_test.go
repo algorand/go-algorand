@@ -31,14 +31,12 @@ func TestWriteAdd(t *testing.T) {
 	registry := MakeRegistry()
 
 	// Test AddMetrics and WriteMetrics with a counter
-	counter := MakeCounter(MetricName{Name: "gauge-name", Description: "gauge description"})
-	counter.Deregister(nil)
+	counter := MakeCounterUnregistered(MetricName{Name: "gauge-name", Description: "gauge description"})
 	counter.Register(registry)
 
 	counter.AddUint64(12, nil)
 
-	labelCounter := MakeCounter(MetricName{Name: "label-counter", Description: "counter with labels"})
-	labelCounter.Deregister(nil)
+	labelCounter := MakeCounterUnregistered(MetricName{Name: "label-counter", Description: "counter with labels"})
 	labelCounter.Register(registry)
 
 	labelCounter.AddUint64(5, map[string]string{"label": "a label value"})

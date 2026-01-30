@@ -54,8 +54,7 @@ func TestMetricGauge(t *testing.T) {
 	metricService.Start(context.Background())
 	gauges := make([]*Gauge, 3)
 	for i := 0; i < 3; i++ {
-		gauges[i] = MakeGauge(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
-		gauges[i].Deregister(nil)
+		gauges[i] = MakeGaugeUnregistered(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
 		gauges[i].Register(registry)
 	}
 	for i := 0; i < 9; i++ {

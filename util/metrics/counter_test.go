@@ -53,8 +53,7 @@ func TestMetricCounter(t *testing.T) {
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
-	counter.Deregister(nil)
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
 	counter.Register(registry)
 
 	for i := 0; i < 20; i++ {
@@ -105,8 +104,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
-	counter.Deregister(nil)
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
 	counter.Register(registry)
 
 	for i := 0; i < 20; i++ {
@@ -158,8 +156,7 @@ func TestMetricCounterMixed(t *testing.T) {
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
-	counter.Deregister(nil)
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
 	counter.Register(registry)
 
 	counter.AddUint64(5, nil)
