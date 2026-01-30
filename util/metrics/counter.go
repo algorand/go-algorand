@@ -33,7 +33,7 @@ func MakeCounter(metric MetricName) *Counter {
 	return c
 }
 
-// makeCounter creates a new counter with the provided name and description
+// MakeCounterUnregistered creates a new counter with the provided name and description
 // but does not register it with the default registry.
 func MakeCounterUnregistered(metric MetricName) *Counter {
 	c := &Counter{c: couge{
