@@ -549,7 +549,7 @@ func TestSingleTip(t *testing.T) {
 
 	secrets, addresses := generateAccounts(5)
 
-	ledger := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	ledger := makeMockLedgerFuture(t, initAccFixed(addresses, 1<<32))
 	cfg := config.GetDefaultLocal()
 	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base(), nil)
 
@@ -1059,12 +1059,12 @@ func TestTransactionPoolEnforcesTax(t *testing.T) {
 	crypto.RandBytes(tx.Note)
 	signedTx = tx.Sign(secrets[1])
 	err := transactionPool.rememberOne(signedTx)
-	require.ErrorContains(t, err, "insufficient extra fees to cover 0.100000 congestion tax")
+	require.ErrorContains(t, err, "group tip 0.000000 is less than congestion tax 0.100000")
 
 	tx.Tip = 99_999
 	signedTx = tx.Sign(secrets[1])
 	err = transactionPool.rememberOne(signedTx)
-	require.ErrorContains(t, err, "insufficient extra fees to cover 0.100000 congestion tax")
+	require.ErrorContains(t, err, "group tip 0.099999 is less than congestion tax 0.100000")
 
 	// Now we've specified a Tip, so the failure is that the fee wasn't enough to
 	// pay that much.
