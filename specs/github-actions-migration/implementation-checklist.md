@@ -3,28 +3,28 @@
 ## Phase 1: Build Workflow Foundation
 
 ### Setup
-- [ ] Create `.github/workflows/release.yml` skeleton
-- [ ] Create `.github/actions/setup-build/action.yml` composite action
+- [x] Create `.github/workflows/release.yml` skeleton
+- [x] Create `.github/actions/setup-build/action.yml` composite action
 - [ ] Test workflow triggers (tag push, workflow_dispatch)
 
 ### Prepare Job
-- [ ] Implement version parsing from tags (`v4.5.0-beta` → `4.5.0`, `beta`)
-- [ ] Implement channel-to-network mapping
-- [ ] Set up job outputs for downstream jobs
+- [x] Implement version parsing from tags (`v4.5.0-beta` → `4.5.0`, `beta`)
+- [x] Implement channel-to-network mapping
+- [x] Set up job outputs for downstream jobs
 - [ ] Test with manual dispatch inputs
 
 ### Build Jobs
-- [ ] Linux amd64 build on `ubuntu-24.04`
-  - [ ] Setup Go
-  - [ ] Build libsodium
-  - [ ] Run `make ci-build`
-  - [ ] Upload artifacts
-- [ ] Linux arm64 build on `ubuntu-24.04-arm`
+- [x] Linux amd64 build on `ubuntu-24.04`
+  - [x] Setup Go
+  - [x] Build libsodium
+  - [x] Run `make ci-build`
+  - [x] Upload artifacts
+- [x] Linux arm64 build on `ubuntu-24.04-arm`
   - [ ] Verify native ARM runner works
-  - [ ] Same steps as amd64
-- [ ] macOS universal build on `macos-14`
+  - [x] Same steps as amd64
+- [x] macOS universal build on `macos-14`
   - [ ] Verify M1 runner works
-  - [ ] Run `make ci-build-universal`
+  - [x] Run `make ci-build-universal`
   - [ ] Verify lipo produces universal binary
 
 ### Validation
