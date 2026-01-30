@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2156,7 +2156,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 	}
 }
 
-// TestAccountTopOnline ensures accountsOnlineTop return a right subset of accounts
+// TestAccountOnlineQueries ensures accountsOnlineTop return a right subset of accounts
 // from the history table.
 // Start with two online accounts A, B at round 1
 // At round 2 make A offline.

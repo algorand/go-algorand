@@ -1399,6 +1399,11 @@
           "local-state-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
           },
+          "size-sponsor": {
+            "description": "\\[ss\\] the account responsible for extra pages and global state MBR",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "version": {
             "description": "\\[v\\] the number of updates to the application programs",
             "type": "integer",

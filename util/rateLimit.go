@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,7 +59,7 @@ type ErlClient interface {
 type capacity struct {
 }
 
-// Capacity Queue wraps and maintains a channel of opaque capacity structs
+// capacityQueue wraps and maintains a channel of opaque capacity structs
 type capacityQueue chan capacity
 
 // ErlCapacityGuard is the structure returned to clients so they can release the capacity when needed

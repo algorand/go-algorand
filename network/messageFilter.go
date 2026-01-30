@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,7 @@ func makeMessageFilter(bucketsCount, maxBucketSize int) *messageFilter {
 	return mf
 }
 
-// CheckMessage checks if the given tag/msg already in the collection, and return true if it was there before the call.
+// CheckIncomingMessage checks if the given tag/msg already in the collection, and return true if it was there before the call.
 // Prepends our own random secret to the message to make it hard to abuse hash collisions.
 func (f *messageFilter) CheckIncomingMessage(tag protocol.Tag, msg []byte, add bool, promote bool) bool {
 	hasher := crypto.NewHash()

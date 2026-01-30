@@ -202,7 +202,7 @@
           "Comment": "curve index",
           "Encoding": "uint8",
           "Name": "V",
-          "Reference": "ECDSA"
+          "Reference": "ECDSA Curves"
         }
       ],
       "IntroducedVersion": 5,
@@ -233,7 +233,7 @@
           "Comment": "curve index",
           "Encoding": "uint8",
           "Name": "V",
-          "Reference": "ECDSA"
+          "Reference": "ECDSA Curves"
         }
       ],
       "IntroducedVersion": 5,
@@ -267,7 +267,7 @@
           "Comment": "curve index",
           "Encoding": "uint8",
           "Name": "V",
-          "Reference": "ECDSA"
+          "Reference": "ECDSA Curves"
         }
       ],
       "IntroducedVersion": 5,
@@ -1137,7 +1137,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 1,
@@ -1193,7 +1193,7 @@
           "Comment": "a global field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "global"
+          "Reference": "global Fields"
         }
       ],
       "IntroducedVersion": 1,
@@ -1361,7 +1361,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 1,
@@ -1437,13 +1437,13 @@
         "[]byte"
       ],
       "DocCost": "1",
-      "Doc": "Ith value of the array field F of the current transaction\n`txna` can be called using `txn` with 2 immediates.",
+      "Doc": "Ith value of the array field F of the current transaction",
       "ImmediateNote": [
         {
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         },
         {
           "Comment": "transaction field array index",
@@ -1482,7 +1482,7 @@
         "[]byte"
       ],
       "DocCost": "1",
-      "Doc": "Ith value of the array field F from the Tth transaction in the current group\n`gtxna` can be called using `gtxn` with 3 immediates.",
+      "Doc": "Ith value of the array field F from the Tth transaction in the current group",
       "ImmediateNote": [
         {
           "Comment": "transaction group index",
@@ -1493,7 +1493,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         },
         {
           "Comment": "transaction field array index",
@@ -1664,7 +1664,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 3,
@@ -1701,13 +1701,13 @@
         "[]byte"
       ],
       "DocCost": "1",
-      "Doc": "Ith value of the array field F from the Ath transaction in the current group\n`gtxnsa` can be called using `gtxns` with 2 immediates.",
+      "Doc": "Ith value of the array field F from the Ath transaction in the current group",
       "ImmediateNote": [
         {
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         },
         {
           "Comment": "transaction field array index",
@@ -2344,7 +2344,7 @@
       ],
       "Size": 1,
       "DocCost": "1",
-      "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails\n`extract3` can be called using `extract` with no immediates.",
+      "Doc": "A range of bytes from A starting at B up to but not including B+C. If B+C is larger than the array length, the program fails",
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
@@ -2416,7 +2416,7 @@
       ],
       "Size": 2,
       "DocCost": "1",
-      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)\n`replace2` can be called using `replace` with 1 immediate.",
+      "Doc": "Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)",
       "ImmediateNote": [
         {
           "Comment": "start position",
@@ -2442,7 +2442,7 @@
       ],
       "Size": 1,
       "DocCost": "1",
-      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)\n`replace3` can be called using `replace` with no immediates.",
+      "Doc": "Copy of A with the bytes starting at B replaced by the bytes of C. Fails if B+len(C) exceeds len(A)",
       "IntroducedVersion": 7,
       "Groups": [
         "Byte Array Manipulation"
@@ -2468,13 +2468,13 @@
       ],
       "DocCost": "1 + 1 per 16 bytes of A",
       "Doc": "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
-      "DocExtra": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.\tThis opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
+      "DocExtra": "_Warning_: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings. This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
       "ImmediateNote": [
         {
           "Comment": "encoding index",
           "Encoding": "uint8",
           "Name": "E",
-          "Reference": "base64"
+          "Reference": "base64 Encodings"
         }
       ],
       "IntroducedVersion": 7,
@@ -2505,13 +2505,13 @@
       ],
       "DocCost": "25 + 2 per 7 bytes of A",
       "Doc": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
-      "DocExtra": "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
+      "DocExtra": "_Warning_: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
       "ImmediateNote": [
         {
           "Comment": "return type index",
           "Encoding": "uint8",
           "Name": "R",
-          "Reference": "json_ref"
+          "Reference": "json_ref Types"
         }
       ],
       "IntroducedVersion": 7,
@@ -2534,7 +2534,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Account Access"
       ]
     },
     {
@@ -2553,7 +2553,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2572,7 +2572,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2593,7 +2593,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2611,7 +2611,7 @@
       "DocExtra": "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2631,7 +2631,7 @@
       "DocExtra": "params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2648,7 +2648,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2663,7 +2663,7 @@
       "Doc": "write B to key A in the global state of the current application",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2679,7 +2679,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2694,7 +2694,7 @@
       "DocExtra": "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2725,12 +2725,12 @@
           "Comment": "asset holding field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "asset_holding"
+          "Reference": "asset_holding Fields"
         }
       ],
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Asset Access"
       ]
     },
     {
@@ -2780,12 +2780,12 @@
           "Comment": "asset params field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "asset_params"
+          "Reference": "asset_params Fields"
         }
       ],
       "IntroducedVersion": 2,
       "Groups": [
-        "State Access"
+        "Asset Access"
       ]
     },
     {
@@ -2829,12 +2829,12 @@
           "Comment": "app params field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "app_params"
+          "Reference": "app_params Fields"
         }
       ],
       "IntroducedVersion": 5,
       "Groups": [
-        "State Access"
+        "Application Access"
       ]
     },
     {
@@ -2883,12 +2883,12 @@
           "Comment": "account params field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "acct_params"
+          "Reference": "acct_params Fields"
         }
       ],
       "IntroducedVersion": 6,
       "Groups": [
-        "State Access"
+        "Account Access"
       ]
     },
     {
@@ -2906,7 +2906,7 @@
       "DocExtra": "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
       "IntroducedVersion": 3,
       "Groups": [
-        "State Access"
+        "Account Access"
       ]
     },
     {
@@ -3607,7 +3607,7 @@
       "DocExtra": "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
       "IntroducedVersion": 5,
       "Groups": [
-        "State Access"
+        "Block Access"
       ]
     },
     {
@@ -3917,7 +3917,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txn"
+          "Reference": "txn Fields"
         }
       ],
       "IntroducedVersion": 5,
@@ -3957,7 +3957,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         },
         {
           "Comment": "a transaction field array index",
@@ -4186,7 +4186,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         },
         {
           "Comment": "transaction field array index",
@@ -4358,7 +4358,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         }
       ],
       "IntroducedVersion": 5,
@@ -4406,7 +4406,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         }
       ],
       "IntroducedVersion": 5,
@@ -4450,7 +4450,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         }
       ],
       "IntroducedVersion": 5,
@@ -4510,7 +4510,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         }
       ],
       "IntroducedVersion": 6,
@@ -4540,7 +4540,7 @@
           "Comment": "transaction field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "txna"
+          "Reference": "txna Fields"
         }
       ],
       "IntroducedVersion": 6,
@@ -4572,7 +4572,7 @@
           "Comment": " parameters index",
           "Encoding": "uint8",
           "Name": "S",
-          "Reference": "vrf_verify"
+          "Reference": "vrf_verify Standards"
         }
       ],
       "IntroducedVersion": 7,
@@ -4605,12 +4605,12 @@
           "Comment": " block field index",
           "Encoding": "uint8",
           "Name": "F",
-          "Reference": "block"
+          "Reference": "block Fields"
         }
       ],
       "IntroducedVersion": 7,
       "Groups": [
-        "State Access"
+        "Block Access"
       ]
     }
   ]

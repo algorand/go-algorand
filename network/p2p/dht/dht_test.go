@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,6 +45,69 @@ func TestDHTBasic(t *testing.T) {
 	require.NoError(t, err)
 	err = dht.Bootstrap(context.Background())
 	require.NoError(t, err)
+}
+
+func TestMakeDHTWithModes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	modes := []string{"", "server", "client"}
+	for _, mode := range modes {
+		t.Run("mode_"+mode, func(t *testing.T) {
+			h, err := libp2p.New()
+			require.NoError(t, err)
+			defer h.Close()
+
+			cfg := config.GetDefaultLocal()
+			cfg.DHTMode = mode
+
+			dht, err := MakeDHT(
+				context.Background(),
+				h,
+				"devtestnet",
+				cfg,
+				func() []peer.AddrInfo { return nil })
+			require.NoError(t, err)
+			require.NotNil(t, dht)
+			err = dht.Close()
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestDHTModeDefaults(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Run("node with NetAddress defaults to server mode", func(t *testing.T) {
+		cfg := config.GetDefaultLocal()
+		cfg.NetAddress = ":4160"
+		cfg.DHTMode = ""
+
+		h, err := libp2p.New()
+		require.NoError(t, err)
+		defer h.Close()
+
+		dht, err := MakeDHT(context.Background(), h, "devtestnet", cfg, func() []peer.AddrInfo { return nil })
+		require.NoError(t, err)
+		require.NotNil(t, dht)
+		err = dht.Close()
+		require.NoError(t, err)
+	})
+
+	t.Run("node without NetAddress defaults to client mode", func(t *testing.T) {
+		cfg := config.GetDefaultLocal()
+		cfg.NetAddress = ""
+		cfg.DHTMode = ""
+
+		h, err := libp2p.New()
+		require.NoError(t, err)
+		defer h.Close()
+
+		dht, err := MakeDHT(context.Background(), h, "devtestnet", cfg, func() []peer.AddrInfo { return nil })
+		require.NoError(t, err)
+		require.NotNil(t, dht)
+		err = dht.Close()
+		require.NoError(t, err)
+	})
 }
 
 func TestDHTBasicAlgodev(t *testing.T) {
