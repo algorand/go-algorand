@@ -118,7 +118,7 @@ tmp/node_pkgs/
 │   └── {os}-{arch}/
 │       ├── bin/
 │       ├── data/
-│       ├── genesis/
+│       ├── bin/genesisfiles/
 │       ├── tools/
 │       └── test-utils/
 ```
