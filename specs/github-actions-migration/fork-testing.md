@@ -77,12 +77,16 @@ The workflows use repository variables and secrets that need to be configured pe
 Test builds without S3 publishing:
 
 1. Push branch to your fork
-2. Create a test tag:
+2. Create a test tag (must follow `v{version}-{channel}` format):
    ```bash
-   git tag v0.0.1-test-beta
-   git push origin v0.0.1-test-beta
+   git tag v0.0.1-dev
+   git push origin v0.0.1-dev
    ```
-3. Or use workflow_dispatch from GitHub UI
+   Valid channels: `-beta`, `-stable`, `-nightly`, `-dev`
+
+   Note: Do not add extra components like `v0.0.1-test-beta` as this will fail
+   version parsing. Use `-dev` channel for testing.
+3. Or use workflow_dispatch from GitHub UI (only available on default branch)
 
 The build and package jobs will run; S3 publish will be skipped if not configured.
 
