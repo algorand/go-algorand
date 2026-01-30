@@ -107,16 +107,16 @@ bin/
 ├── systemd-setup.sh
 ├── algorand@.service.template
 ├── sudoers.template
-└── COPYING
+├── COPYING
+└── genesisfiles/
+    ├── devnet/genesis.json
+    ├── testnet/genesis.json
+    ├── mainnet/genesis.json
+    ├── betanet/genesis.json
+    └── alphanet/genesis.json
 data/
-└── config.json.example
-genesis/
-├── genesis.json (default for channel)
-├── devnet/genesis.json
-├── testnet/genesis.json
-├── mainnet/genesis.json
-├── betanet/genesis.json
-└── alphanet/genesis.json
+├── config.json.example
+└── genesis.json (default for channel)
 test-utils/
 ├── algotmpl
 └── COPYING
