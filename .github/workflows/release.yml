@@ -1,0 +1,179 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*-beta'
+      - 'v*-stable'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 4.5.0)'
+        required: true
+        type: string
+      channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
+
+permissions:
+  contents: read
+
+env:
+  # Disable deadlock detection for release builds
+  ALGORAND_DEADLOCK: disable
+  KMD_NOUSB: True
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      channel: ${{ steps.parse.outputs.channel }}
+      network: ${{ steps.parse.outputs.network }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Parse version and channel
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - use inputs directly
+            VERSION="${{ inputs.version }}"
+            CHANNEL="${{ inputs.channel }}"
+          else
+            # Tag trigger - parse from tag
+            TAG="${GITHUB_REF_NAME}"
+            echo "Parsing tag: ${TAG}"
+
+            # Extract version: v4.5.0-beta -> 4.5.0
+            VERSION="${TAG#v}"
+            VERSION="${VERSION%-*}"
+
+            # Extract channel: v4.5.0-beta -> beta
+            CHANNEL="${TAG##*-}"
+          fi
+
+          # Validate version format (major.minor.patch)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: Invalid version format: ${VERSION}"
+            echo "Expected format: major.minor.patch (e.g., 4.5.0)"
+            exit 1
+          fi
+
+          # Map channel to network
+          case "$CHANNEL" in
+            beta)   NETWORK="betanet" ;;
+            stable) NETWORK="mainnet" ;;
+            *)
+              echo "Error: Invalid channel: ${CHANNEL}"
+              exit 1
+              ;;
+          esac
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
+          echo "network=${NETWORK}" >> "$GITHUB_OUTPUT"
+
+          echo "Release Configuration:"
+          echo "  Version: ${VERSION}"
+          echo "  Channel: ${CHANNEL}"
+          echo "  Network: ${NETWORK}"
+
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            os: linux
+            arch: amd64
+            make_target: ci-build
+          - runner: ubuntu-24.04-arm
+            os: linux
+            arch: arm64
+            make_target: ci-build
+          - runner: macos-14
+            os: darwin
+            arch: universal
+            make_target: ci-build-universal
+    runs-on: ${{ matrix.runner }}
+    env:
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+      NETWORK: ${{ needs.prepare.outputs.network }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      FULLVERSION: ${{ needs.prepare.outputs.version }}
+      # These are used by compute_branch_channel.sh and other scripts
+      TRAVIS_BRANCH: ''
+      BRANCH: ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build
+        with:
+          cache-prefix: release-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Build binaries
+        run: |
+          echo "Building for ${{ matrix.os }}-${{ matrix.arch }}"
+          echo "  Version: ${VERSION}"
+          echo "  Channel: ${CHANNEL}"
+          echo "  Network: ${NETWORK}"
+          make ${{ matrix.make_target }}
+
+      - name: List build artifacts
+        run: |
+          echo "Build artifacts:"
+          find tmp/node_pkgs -type f | head -50 || echo "No artifacts found"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.arch }}
+          path: tmp/node_pkgs/
+          retention-days: 7
+          if-no-files-found: error
+
+  # Summary job to verify all builds completed
+  build-summary:
+    name: Build Summary
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    if: always()
+    steps:
+      - name: Check build results
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Check if any build failed
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            echo "| linux-amd64 | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| linux-arm64 | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| darwin-universal | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All builds completed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| All platforms | ❌ |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "One or more builds failed. Check individual job logs." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Channel:** ${{ needs.prepare.outputs.channel }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Network:** ${{ needs.prepare.outputs.network }}" >> $GITHUB_STEP_SUMMARY
