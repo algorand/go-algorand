@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -124,8 +124,7 @@ func TestApplyDataEquality(t *testing.T) {
 	t.Parallel()
 
 	var empty ApplyData
-	for _, nz := range basics_testing.NearZeros(t, ApplyData{}) {
-		ad := nz.(ApplyData)
+	for _, ad := range basics_testing.NearZeros(t, ApplyData{}) {
 		assert.False(t, ad.Equal(empty), "Equal() seems to be disregarding something %+v", ad)
 	}
 
@@ -136,8 +135,7 @@ func TestEvalDataEquality(t *testing.T) {
 	t.Parallel()
 
 	var empty EvalDelta
-	for _, nz := range basics_testing.NearZeros(t, EvalDelta{}) {
-		ed := nz.(EvalDelta)
+	for _, ed := range basics_testing.NearZeros(t, EvalDelta{}) {
 		assert.False(t, ed.Equal(empty), "Equal() seems to be disregarding something %+v", ed)
 	}
 
@@ -148,8 +146,7 @@ func TestLogicSigEquality(t *testing.T) {
 	t.Parallel()
 
 	var empty LogicSig
-	for _, nz := range basics_testing.NearZeros(t, LogicSig{}) {
-		ls := nz.(LogicSig)
+	for _, ls := range basics_testing.NearZeros(t, LogicSig{}) {
 		assert.False(t, ls.Equal(&empty), "Equal() seems to be disregarding something %+v", ls)
 	}
 

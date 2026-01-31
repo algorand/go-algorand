@@ -21,8 +21,9 @@ const _OnCompletion_name = "NoOpOCOptInOCCloseOutOCClearStateOCUpdateApplication
 var _OnCompletion_index = [...]uint8{0, 6, 13, 23, 35, 54, 73}
 
 func (i OnCompletion) String() string {
-	if i >= OnCompletion(len(_OnCompletion_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_OnCompletion_index)-1 {
 		return "OnCompletion(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _OnCompletion_name[_OnCompletion_index[i]:_OnCompletion_index[i+1]]
+	return _OnCompletion_name[_OnCompletion_index[idx]:_OnCompletion_index[idx+1]]
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -195,7 +195,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	// run netC in NPN mode (no relay => no gossip sup => no TX receiving)
 	cfg.ForceFetchTransactions = false
-	// Have to unset NetAddress to get IsGossipServer to return false
+	// Have to unset NetAddress to get IsListenServer to return false
 	cfg.NetAddress = ""
 	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisInfo, &nopeNodeInfo{}, nil, nil)
 	require.NoError(t, err)
@@ -717,7 +717,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	}
 }
 
-// TestMultiaddrConversionToFrom ensures Multiaddr can be serialized back to an address without losing information
+// TestP2PMultiaddrConversionToFrom ensures Multiaddr can be serialized back to an address without losing information
 func TestP2PMultiaddrConversionToFrom(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1070,7 +1070,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 		log:             logging.TestingLog(t),
 		ctx:             ctx,
 		nodeInfo:        &nopeNodeInfo{},
-		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag}),
+		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag}),
 	}
 	net.outgoingConnsCloser = makeOutgoingConnsCloser(logging.TestingLog(t), net, net.connPerfMonitor, cliqueResolveInterval)
 

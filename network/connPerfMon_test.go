@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,10 @@
 package network
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -239,4 +242,183 @@ func TestNetworkAdvanceMonitor(t *testing.T) {
 	// update and verify within again
 	m.updateLastAdvance()
 	require.True(t, m.lastAdvancedWithin(500*time.Millisecond))
+}
+
+// shuffleNormal reorders elements by assigning each element a priority based on
+// normal distribution centered at its original index, then sorting by priority.
+// The stddevFactor controls how much elements can move from their original position:
+// - smaller values (e.g., 0.1) keep elements closer to original positions
+// - larger values (e.g., 1.0) allow more mixing
+// - very large values approach uniform distribution behavior
+func shuffleNormal[T any](slice []T, stddevFactor float64) {
+	n := len(slice)
+	if n <= 1 {
+		return
+	}
+
+	// Each element gets a priority = originalIndex + normalRandom * stddev
+	// where stddev = stddevFactor * n
+	stddev := stddevFactor * float64(n)
+
+	type indexedItem struct {
+		original int
+		priority float64
+		item     T
+	}
+
+	items := make([]indexedItem, n)
+	for i := range slice {
+		items[i] = indexedItem{
+			original: i,
+			priority: float64(i) + rand.NormFloat64()*stddev,
+			item:     slice[i],
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].priority < items[j].priority
+	})
+
+	for i := range slice {
+		slice[i] = items[i].item
+	}
+}
+
+func shuffleUniform[T any](slice []T) {
+	rand.Shuffle(len(slice), func(i, j int) {
+		slice[i], slice[j] = slice[j], slice[i]
+	})
+}
+
+func TestConnMonitor_Simulate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Skip("Use locally for conn perf logic adjustment as needed")
+
+	const (
+		numNoDupPeers   = 2 // peers that provide only unique msgs
+		numDupPeers     = 3 // peers that provide duplicate msgs
+		numDupPlusPeers = 3 // peers that provide "smart" duplicate msgs (like txn with changed note field)
+		dupRatio        = 2 // each duplicate peer sends this many duplicates per message
+		smartDupRatio   = 3 // each "smart" duplicate peer sends this many duplicates per message (including the original)
+	)
+	const numMsgsPerTick = 1*numNoDupPeers + (numDupPeers * dupRatio) + (numDupPlusPeers * smartDupRatio)
+
+	msgs := make([]IncomingMessage, numMsgsPerTick)
+	data := make([][]byte, numMsgsPerTick)
+	for i := range numMsgsPerTick {
+		data[i] = make([]byte, 10) // each msg data, 8 bytes for uint64 + 2 bytes for randomness
+	}
+
+	senders := make([]*wsPeer, numNoDupPeers+numDupPeers+numDupPlusPeers)
+	for i := range numNoDupPeers {
+		senders[i] = &wsPeer{wsPeerCore: wsPeerCore{rootURL: fmt.Sprintf("noDupPeer%d", i+1)}}
+	}
+	for i := range numDupPeers {
+		senders[numNoDupPeers+i] = &wsPeer{wsPeerCore: wsPeerCore{rootURL: fmt.Sprintf("dupPeer%d", i+1)}}
+	}
+	for i := range numDupPlusPeers {
+		senders[numNoDupPeers+numDupPeers+i] = &wsPeer{wsPeerCore: wsPeerCore{rootURL: fmt.Sprintf("dupPlusPeer%d", i+1)}}
+	}
+
+	nextTickMsgs := func(tick uint64, shuffleFn func([]IncomingMessage)) []IncomingMessage {
+		for i := range data {
+			binary.LittleEndian.PutUint64(data[i], tick)
+		}
+
+		// noDup peers
+		for i := range numNoDupPeers {
+			msgs[i] = IncomingMessage{
+				Tag:    protocol.TxnTag,
+				Data:   data[i],
+				Sender: senders[i],
+			}
+		}
+
+		// dup peers
+		for i := range numDupPeers {
+			for j := 0; j < dupRatio; j++ {
+				msgs[numNoDupPeers+i*dupRatio+j] = IncomingMessage{
+					Tag:    protocol.TxnTag,
+					Data:   data[numNoDupPeers+i],
+					Sender: senders[numNoDupPeers+i],
+				}
+			}
+		}
+
+		// "smart" dup peers
+		for i := range numDupPlusPeers {
+			for j := 0; j < smartDupRatio; j++ {
+				// change last byte to make data different
+				idx := numNoDupPeers + numDupPeers*dupRatio + i*smartDupRatio + j
+				data[idx][9] = byte(j)
+
+				msgs[idx] = IncomingMessage{
+					Tag:    protocol.TxnTag,
+					Data:   data[idx],
+					Sender: senders[numNoDupPeers+numDupPeers+i],
+				}
+			}
+		}
+
+		// for i := range msgs {
+		// 	t.Logf("tick %d: msg from %s data=%x\n", tick, msgs[i].Sender.(*wsPeer).rootURL, msgs[i].Data)
+		// }
+
+		// shuffle to simulate different receiving orders
+		shuffleFn(msgs)
+
+		now := time.Now().UnixNano()
+		for i := range msgs {
+			msgs[i].Received = now + int64(i*10)
+		}
+		return msgs
+	}
+
+	tests := []struct {
+		name      string
+		shuffleFn func([]IncomingMessage)
+	}{
+		{
+			name:      "normalShuffle",
+			shuffleFn: func(msgs []IncomingMessage) { shuffleNormal(msgs, 0.5) },
+		},
+		{
+			name:      "uniformShuffle",
+			shuffleFn: shuffleUniform[IncomingMessage],
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			mon := makeConnectionPerformanceMonitor([]Tag{protocol.TxnTag})
+			peers := make([]Peer, len(senders))
+			for i := range senders {
+				peers[i] = senders[i]
+			}
+			mon.Reset(peers)
+
+			i := uint64(0)
+			prevStage := -1
+			for mon.stage != pmStageStopped {
+				if int(mon.stage) != prevStage {
+					t.Logf("Monitor advanced to stage %d at tick %d\n", mon.stage, i)
+					prevStage = int(mon.stage)
+				}
+				msgs := nextTickMsgs(i, test.shuffleFn)
+				for _, msg := range msgs {
+					mon.Notify(&msg)
+				}
+				i++
+			}
+
+			// at the very end get stats
+			stats := mon.GetPeersStatistics()
+			t.Logf("%s:  %d messages over %d ticks\n", test.name, mon.msgCount, i)
+			for _, ps := range stats.peerStatistics {
+				t.Logf("%s: delay=%d firstMessagePercentage=%.2f\n", ps.peer.(*wsPeer).rootURL, ps.peerDelay, ps.peerFirstMessage)
+			}
+		})
+	}
 }

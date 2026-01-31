@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestSerializableErrorBackwardCompatible ensures Err field of type serializableError can be
+// TestSerializableErrorBackwardCompatibility ensures Err field of type serializableError can be
 // properly decoded from ConsensusVersionView.
 // This test is only needed for agreement state serialization switch from reflection to msgp.
 func TestSerializableErrorBackwardCompatibility(t *testing.T) {

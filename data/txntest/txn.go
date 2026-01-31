@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -86,8 +86,8 @@ type Txn struct {
 	Access            []transactions.ResourceRef
 	LocalStateSchema  basics.StateSchema
 	GlobalStateSchema basics.StateSchema
-	ApprovalProgram   interface{} // string, nil, or []bytes if already compiled
-	ClearStateProgram interface{} // string, nil or []bytes if already compiled
+	ApprovalProgram   any // string, nil, or []bytes if already compiled
+	ClearStateProgram any // string, nil or []bytes if already compiled
 	ExtraProgramPages uint32
 
 	StateProofType protocol.StateProofType
@@ -193,7 +193,11 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 			case []byte:
 			}
 		}
-
+		if tx.ApplicationID == 0 && tx.ExtraProgramPages == 0 {
+			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
+			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
+			tx.ExtraProgramPages = uint32(totalPages - 1)
+		}
 	}
 }
 
@@ -314,13 +318,6 @@ func (tx Txn) Txn() transactions.Transaction {
 // again, for convenience when driving tests.
 func (tx Txn) SignedTxn() transactions.SignedTxn {
 	return transactions.SignedTxn{Txn: tx.Txn()}
-}
-
-// SignedTxnWithAD produces unsigned, transactions.SignedTxnWithAD
-// from the fields in this Txn.  This seemingly pointless operation
-// exists, again, for convenience when driving tests.
-func (tx Txn) SignedTxnWithAD() transactions.SignedTxnWithAD {
-	return transactions.SignedTxnWithAD{SignedTxn: tx.SignedTxn()}
 }
 
 // Group turns a list of Txns into a slice of SignedTxns with

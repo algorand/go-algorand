@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -191,6 +191,13 @@ func RandomAppParams() basics.AppParams {
 		crypto.RandBytes(ap.ClearStateProgram[:])
 	} else {
 		ap.ClearStateProgram = nil
+	}
+
+	// The can only be a sponsor if there's extra storage
+	if ap.ExtraProgramPages > 0 && !ap.StateSchemas.GlobalStateSchema.Empty() {
+		if crypto.RandUint63()%2 == 0 {
+			crypto.RandBytes(ap.SizeSponsor[:])
+		}
 	}
 
 	for i := uint64(0); i < ap.StateSchemas.GlobalStateSchema.NumUint; i++ {

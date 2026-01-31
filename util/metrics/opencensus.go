@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -94,7 +94,7 @@ func (st *statCounter) AddMetric(values map[string]float64) {
 	counter.AddMetric(values)
 }
 
-// statCounter stores single float64 sun value per stat with labels
+// statDistribution stores single float64 sun value per stat with labels
 type statDistribution struct {
 	name        string
 	description string

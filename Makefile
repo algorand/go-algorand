@@ -43,12 +43,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
-# If available, use gotestsum instead of 'go test'.
-ifeq (, $(shell which gotestsum))
-export GOTESTCOMMAND=go test
-else
-export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
-endif
+GOTESTCOMMAND := go tool -modfile=tool.mod gotestsum --format pkgname --jsonfile testresults.json --
 
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew
@@ -107,10 +102,13 @@ fix: build
 	$(GOBIN)/algofix */
 
 modernize:
-	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
+	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.39.0 -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
 
-lint: deps
-	$(GOBIN)/golangci-lint run -c .golangci.yml
+lint:
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 run -c .golangci.yml
+
+warninglint: custom-golangci-lint
+	./custom-golangci-lint run -c .golangci-warnings.yml
 
 expectlint:
 	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
@@ -140,7 +138,7 @@ cover:
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
 
-generate: deps
+generate:
 	PATH=$(GOBIN):$$PATH go generate ./...
 
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
@@ -151,13 +149,13 @@ api:
 logic:
 	make -C data/transactions/logic
 
-
-%/msgp_gen.go: deps ALWAYS
+MSGP := go run github.com/algorand/msgp@v1.1.62
+%/msgp_gen.go: ALWAYS
 		@set +e; \
-		printf "msgp: $(@D)..."; \
-		$(GOBIN)/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
+		printf "$(MSGP) $(@D)..."; \
+		$(MSGP) -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
 		if [ "$$?" != "0" ]; then \
-			printf "failed:\n$(GOBIN)/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
+			printf "failed:\n$(MSGP) -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
 			cat ./$@.out; \
 			rm ./$@.out; \
 			exit 1; \
@@ -231,9 +229,6 @@ else
 	echo "OS_TYPE must be darwin for universal builds, skipping"
 endif
 
-deps:
-	./scripts/check_deps.sh
-
 # artifacts
 
 # Regenerate kmd swagger spec files
@@ -260,7 +255,7 @@ $(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/lib
 		touch $@; \
 	fi
 
-$(KMD_API_SWAGGER_INJECT): deps $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
+$(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 	./daemon/kmd/lib/kmdapi/bundle_swagger_json.sh
 
 # generated files we should make sure we clean
@@ -268,7 +263,7 @@ GENERATED_FILES := \
 	$(KMD_API_SWAGGER_INJECT) \
 	$(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).validated
 
-rebuild_kmd_swagger: deps
+rebuild_kmd_swagger:
 	rm -f $(GENERATED_FILES)
 	# we need to invoke the make here since we want to ensure that the deletion and re-creating are sequential
 	make $(KMD_API_SWAGGER_INJECT)
@@ -306,7 +301,7 @@ build-e2e: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	wait
 	cp $(GOBIN)/kmd $(GOBIN)-race
 
-NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING $(GOBIN)/ddconfig.sh
+NONGO_BIN_FILES=$(GOBIN)/find-nodes.sh $(GOBIN)/update.sh $(GOBIN)/COPYING
 
 NONGO_BIN: $(NONGO_BIN_FILES)
 
@@ -315,8 +310,6 @@ $(GOBIN)/find-nodes.sh: scripts/find-nodes.sh
 $(GOBIN)/update.sh: cmd/updater/update.sh
 
 $(GOBIN)/COPYING: COPYING
-
-$(GOBIN)/ddconfig.sh: scripts/ddconfig.sh
 
 $(GOBIN)/%:
 	cp -f $< $@
@@ -415,7 +408,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOBIN)
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build build-race build-e2e test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium modernize
+.PHONY: default fmt lint check_shell sanity cover prof build build-race build-e2e test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal libsodium modernize
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
@@ -423,6 +416,5 @@ include ./scripts/release/mule/Makefile.mule
 archive:
 	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/$(CHANNEL)/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*$(FULLBUILDNUMBER)*"
 
-build_custom_linters:
+custom-golangci-lint: .custom-gcl.yml
 	golangci-lint custom -v
-	./custom-golangci-lint --version
