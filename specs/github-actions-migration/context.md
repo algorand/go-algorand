@@ -43,7 +43,7 @@ Two package variants:
 ### Tarball Types
 
 Three tarball types per platform:
-1. **node_*** - Full node package (bin/, bin/genesisfiles/, data/)
+1. **node_*** - Full node package (bin/, genesis/, data/)
 2. **install_*** - Bootstrap installer (updater, update.sh only)
 3. **tools_*** - Additional tools (carpenter, pingpong, etc.)
 
