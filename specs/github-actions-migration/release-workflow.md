@@ -129,7 +129,7 @@ tmp/node_pkgs/
 │   └── {os}-{arch}/
 │       ├── bin/
 │       ├── data/
-│       ├── bin/genesisfiles/
+│       ├── genesis/
 │       ├── tools/
 │       └── test-utils/
 ```

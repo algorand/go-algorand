@@ -107,20 +107,26 @@ bin/
 ├── systemd-setup.sh
 ├── algorand@.service.template
 ├── sudoers.template
-├── COPYING
-└── genesisfiles/
-    ├── devnet/genesis.json
-    ├── testnet/genesis.json
-    ├── mainnet/genesis.json
-    ├── betanet/genesis.json
-    └── alphanet/genesis.json
+├── msgpacktool
+├── tealdbg
+├── algotmpl
+└── COPYING
 data/
-├── config.json.example
-└── genesis.json (default for channel)
+└── config.json.example
+genesis/
+├── genesis.json (default for channel)
+├── devnet/genesis.json
+├── testnet/genesis.json
+├── mainnet/genesis.json
+├── betanet/genesis.json
+└── alphanet/genesis.json
 test-utils/
 ├── algotmpl
 └── COPYING
 ```
+
+Note: The `update.sh` installer reorganizes files after extraction, placing genesis
+files in `bin/genesisfiles/` and the default genesis in `data/genesis.json`.
 
 #### install_* tarball
 

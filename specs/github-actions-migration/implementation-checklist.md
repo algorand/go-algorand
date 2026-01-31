@@ -5,7 +5,7 @@
 ### Setup
 - [x] Create `.github/workflows/release.yml` skeleton
 - [x] Create `.github/actions/setup-build/action.yml` composite action
-- [ ] Test workflow triggers (tag push, workflow_dispatch)
+- [x] Test workflow triggers (tag push, workflow_dispatch)
 
 ### Prepare Job
 - [x] Implement version parsing from tags (`v4.5.0-beta` → `4.5.0`, `beta`)
@@ -20,10 +20,10 @@
   - [x] Run `make ci-build`
   - [x] Upload artifacts
 - [x] Linux arm64 build on `ubuntu-24.04-arm`
-  - [ ] Verify native ARM runner works
+  - [x] Verify native ARM runner works
   - [x] Same steps as amd64
 - [x] macOS universal build on `macos-14`
-  - [ ] Verify M1 runner works
+  - [x] Verify M1 runner works
   - [x] Run `make ci-build-universal`
   - [ ] Verify lipo produces universal binary
 
