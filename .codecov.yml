@@ -9,7 +9,7 @@ ignore:
   - "**/*_gen.go"
   - "**/*_gen_test.go"
   - "**/generated"
-  - "**/_string.go"  # ignore stringer-generated code
+  - "**/*_string.go"  # ignore stringer-generated code
 
 coverage:
   status:
