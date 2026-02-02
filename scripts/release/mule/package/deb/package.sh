@@ -144,7 +144,7 @@ EOF
 go version:
 EOF
 
-    /usr/local/go/bin/go version >> "$STATUSFILE"
+    go version >> "$STATUSFILE"
 
     ############################################################
 
@@ -152,7 +152,7 @@ EOF
 go env:
 EOF
 
-    /usr/local/go/bin/go env >> "$STATUSFILE"
+    go env >> "$STATUSFILE"
 
     ############################################################
 
