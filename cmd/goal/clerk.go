@@ -438,13 +438,9 @@ var sendCmd = &cobra.Command{
 			payment.RekeyTo = rekeyTo
 		}
 
-		// ConstructPayment fills in the suggested fee when fee=0. But if the user actually used --fee=0 on the
-		// commandline, we ought to do what they asked (especially now that zero or low fees make sense in
-		// combination with other txns that cover the groups's fee).
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			payment.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		// Apply fee and tip based on command-line flags.
+		// ConstructPayment fills in suggested fee/tip when neither is specified.
+		applyFeeAndTip(&payment, cmd, client)
 
 		var authAddr basics.Address
 		if signerAddress != "" {

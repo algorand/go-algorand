@@ -21,6 +21,8 @@ import (
 
 	cmdutil "github.com/algorand/go-algorand/cmd/util"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/libgoal"
 )
 
 const (
@@ -42,6 +44,7 @@ var numValidRounds basics.Round // also used in account and asset
 
 var (
 	fee                uint64
+	tip                uint64
 	outFilename        string
 	sign               bool
 	noteBase64         string
@@ -56,6 +59,7 @@ var dumpForDryrunFormat cmdutil.CobraStringValue = *cmdutil.MakeCobraStringValue
 
 func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
+	cmd.Flags().Uint64Var(&tip, "tip", 0, "The priority tip as a fractional multiplier (e.g., 100000 = 0.1 = 10%). If unset, Fee will be set to MinFee*(1 + tip)")
 	cmd.Flags().Uint64Var((*uint64)(&firstValid), "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	cmd.Flags().Uint64Var((*uint64)(&numValidRounds), "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	cmd.Flags().Uint64Var((*uint64)(&lastValid), "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
@@ -69,4 +73,34 @@ func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
 	cmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "additional accounts to include into dryrun request obj")
 	cmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
+}
+
+// applyFeeAndTip applies the fee and tip to a transaction based on command-line flags.
+// It handles four cases:
+// 1. Both --fee and --tip are set: use them as-is
+// 2. Only --tip is set: calculate fee from tip (fee = minFee * (1 + tip))
+// 3. Only --fee is set: use the explicit fee leave Tip as is
+// 4. Neither is set: transaction already has suggested fee and tip from construction
+func applyFeeAndTip(tx *transactions.Transaction, cmd *cobra.Command, client libgoal.Client) {
+	explicitFee := cmd.Flags().Changed("fee")
+	explicitTip := cmd.Flags().Changed("tip")
+
+	switch {
+	case explicitFee && explicitTip:
+		tx.Fee = basics.MicroAlgos{Raw: fee}
+		tx.Tip = basics.Micros(tip)
+	case explicitTip:
+		params, err := client.SuggestedParams()
+		if err != nil {
+			reportErrorf("Error getting suggested params: %v", err)
+		}
+		baseFee := basics.MicroAlgos{Raw: params.MinFee}
+		calculatedFee, _ := baseFee.MulMicros(basics.AddSaturate(1e6, basics.Micros(tip)))
+		tx.Fee = calculatedFee
+		tx.Tip = basics.Micros(tip)
+	case explicitFee:
+		tx.Fee = basics.MicroAlgos{Raw: fee}
+	default:
+		// Neither is set, transaction construction already filled in suggested fee and tip
+	}
 }
