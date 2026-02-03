@@ -77,7 +77,7 @@ func TestCorruptedChecksum(t *testing.T) {
 	// Shuffle the last word (last 11 bits of checksum)
 	wl[len(wl)-1] = wordlist[(indexOf(wordlist, lastWord)+1)%len(wordlist)]
 	recovered, err := MnemonicToKey(strings.Join(wl, sepStr))
-	require.ErrorContains(t, err, `checksum failed to validate`)
+	require.ErrorIs(t, err, errWrongChecksum)
 	require.Empty(t, recovered)
 }
 
