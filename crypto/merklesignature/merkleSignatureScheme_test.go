@@ -66,13 +66,11 @@ func TestSignerCreation(t *testing.T) {
 	signer = generateTestSigner(2, 2, 3, a)
 	a.Equal(0, length(signer, a))
 	_, err = signer.GetSigner(2).SignBytes(genMsgForTest())
-	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	signer = generateTestSigner(11, 19, 10, a)
 	a.Equal(0, length(signer, a))
 	_, err = signer.GetSigner(2).SignBytes(genMsgForTest())
-	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	// Make sure both rounds 10 and 11 can be signed (as key for round 10 is valid for both)
@@ -100,11 +98,9 @@ func TestSignerCreationOutOfBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	_, err := New(8, 4, 1)
-	a.Error(err)
 	a.ErrorIs(err, ErrStartBiggerThanEndRound)
 
 	_, err = New(1, 8, 0)
-	a.Error(err)
 	a.ErrorIs(err, ErrKeyLifetimeIsZero)
 }
 
@@ -148,11 +144,9 @@ func TestEmptySigner(t *testing.T) {
 	a.Equal(0, length(signer, a))
 
 	_, err = signer.GetSigner(8).SignBytes(h)
-	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	_, err = signer.GetSigner(9).SignBytes(h)
-	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 }
 
@@ -263,11 +257,9 @@ func TestSigning(t *testing.T) {
 	a.NoError(signer.GetVerifier().VerifyBytes(start, msg, &sig))
 
 	_, err = signer.GetSigner(start - 1).SignBytes(msg)
-	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	_, err = signer.GetSigner(end + 1).SignBytes(msg)
-	a.Error(err)
 	a.ErrorIs(err, ErrNoStateProofKeyForRound)
 
 	signer = generateTestSigner(start, end, 10, a)
@@ -290,7 +282,6 @@ func TestSigning(t *testing.T) {
 	i := uint64(50)
 	for ; i < 60; i++ { // no key for these rounds (key for round 48 was not generated)
 		_, err = signer.GetSigner(i).SignBytes(msg)
-		a.Error(err)
 		a.ErrorIs(err, ErrNoStateProofKeyForRound)
 	}
 	for ; i < 100; i++ {
@@ -317,16 +308,13 @@ func TestBadRound(t *testing.T) {
 	msg, sig := makeSig(signer, start, a)
 
 	err := signer.GetVerifier().VerifyBytes(start+1, msg, &sig)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	msg, sig = makeSig(signer, start+1, a)
 	err = signer.GetVerifier().VerifyBytes(start, msg, &sig)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	err = signer.GetVerifier().VerifyBytes(start+2, msg, &sig)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
@@ -342,7 +330,6 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	sig2 := copySig(sig)
 	sig2.Proof.Path = sig2.Proof.Path[:len(sig2.Proof.Path)-1]
 	err := signer.GetVerifier().VerifyBytes(start, msg, &sig2)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	sig3 := copySig(sig)
@@ -350,7 +337,6 @@ func TestBadMerkleProofInSignature(t *testing.T) {
 	rand.Read(someDigest[:])
 	sig3.Proof.Path[0] = someDigest[:]
 	err = signer.GetVerifier().VerifyBytes(start, msg, &sig3)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
@@ -380,7 +366,6 @@ func TestIncorrectByteSignature(t *testing.T) {
 	sig2.Signature = bs
 
 	err := signer.GetVerifier().VerifyBytes(start, msg, &sig2)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
@@ -399,16 +384,13 @@ func TestIncorrectMerkleIndex(t *testing.T) {
 
 	sig.VectorCommitmentIndex = 0
 	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	sig.VectorCommitmentIndex = math.MaxUint64
 	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 
 	err = signer.GetVerifier().VerifyBytes(20, h, &sig)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
@@ -429,7 +411,6 @@ func TestAttemptToUseDifferentKey(t *testing.T) {
 	sig2.VerifyingKey = *(key.GetVerifyingKey())
 
 	err := signer.GetVerifier().VerifyBytes(start+1, msg, &sig2)
-	a.Error(err)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 

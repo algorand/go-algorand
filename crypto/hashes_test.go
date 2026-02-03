@@ -68,7 +68,7 @@ func TestEmptyHash(t *testing.T) {
 	var msg [4]byte
 	len, err := hash.Write(msg[:])
 	a.Equal(0, len)
-	a.Error(err)
+	require.ErrorContains(t, err, `unknown hash type`)
 
 	a.Equal(0, hash.BlockSize())
 	var emptySlice []byte
