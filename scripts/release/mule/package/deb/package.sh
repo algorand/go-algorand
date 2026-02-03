@@ -30,30 +30,26 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
     ARCH=$(echo "${OS_ARCH}" | cut -d '/' -f2)
     PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
     mkdir -p "$PKG_DIR/bin"
-    ALGO_BIN="${PKG_DIR}/$CHANNEL/$OS_TYPE-$ARCH/bin"
-    ALGO_TOOLS="${PKG_DIR}/$CHANNEL/$OS_TYPE-$ARCH/tools"
-
+    ALGO_BIN_TOOLS_SRC="${PKG_DIR}/$CHANNEL/$OS_TYPE-$ARCH/bin"
+ 
     # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
     if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
         BIN_FILES=("carpenter" "msgpacktool" "tealdbg")
         UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
         OUTPUT_DEB="$PKG_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
         REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
-        for binary in "${BIN_FILES[@]}"; do
-            cp "${ALGO_TOOLS}/$binary" "$PKG_ROOT/usr/bin"
-            chmod 755 "$PKG_ROOT/usr/bin/$binary"
-        done
-
+        # tools are in tools/ subdirectory instead of bin/
+        ALGO_BIN_TOOLS_SRC="${PKG_DIR}/$CHANNEL/$OS_TYPE-$ARCH/tools"
     else
         BIN_FILES=("algocfg" "algod" "algoh" "algokey" "diagcfg" "goal" "kmd" "node_exporter")
         UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
         OUTPUT_DEB="$PKG_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
-        for binary in "${BIN_FILES[@]}"; do
-            cp "${ALGO_BIN}/$binary" "$PKG_ROOT/usr/bin"
-            chmod 755 "$PKG_ROOT/usr/bin/$binary"
-        done
-
     fi
+
+    for binary in "${ALGO_BIN_TOOLS_SRC[@]}"; do
+        cp "${ALGO_BIN_TOOLS_SRC}/$binary" "$PKG_ROOT/usr/bin"
+        chmod 755 "$PKG_ROOT/usr/bin/$binary"
+    done
 
     if [[ ! "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
         mkdir -p "$PKG_ROOT/usr/lib/algorand"
