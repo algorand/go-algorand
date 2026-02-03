@@ -227,8 +227,8 @@ func processFile(content, filePath, rootDir string, sentinelsByMsg map[string][]
 // findSubstringMatch finds a sentinel whose message contains the given substring.
 // If multiple sentinels match, returns the one with the shortest message (most specific).
 func findSubstringMatch(substring string, sentinelsByMsg map[string][]SentinelInfo) *SentinelInfo {
-	if len(substring) < 5 {
-		// Too short - would match too many things
+	if len(substring) < 15 {
+		// Too short - would match too many things and cause false positives
 		return nil
 	}
 
@@ -236,7 +236,8 @@ func findSubstringMatch(substring string, sentinelsByMsg map[string][]SentinelIn
 	bestLen := int(^uint(0) >> 1) // max int
 
 	for msg, sentinels := range sentinelsByMsg {
-		if strings.Contains(msg, substring) && len(sentinels) > 0 {
+		// Require substring to be at least 50% of sentinel message to avoid false positives
+		if strings.Contains(msg, substring) && len(sentinels) > 0 && len(substring)*2 >= len(msg) {
 			if len(msg) < bestLen {
 				bestLen = len(msg)
 				s := sentinels[0]
