@@ -136,7 +136,7 @@ func TestParseHostURLOrMultiaddr(t *testing.T) {
 	for _, addr := range badMultiAddrs {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseHostOrURLOrMultiaddr(addr)
-			require.ErrorContains(t, err, `parse`)
+			require.ErrorIs(t, err, errURLNoHost)
 			require.False(t, IsMultiaddr(addr))
 		})
 	}
