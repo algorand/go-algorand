@@ -121,7 +121,11 @@ func (reporter *MetricReporter) waitForTimeStamp(ctx context.Context) bool {
 
 func (reporter *MetricReporter) gatherMetrics() {
 	var buf strings.Builder
-	DefaultRegistry().WriteMetrics(&buf, reporter.formattedLabels)
+	if reporter.serviceConfig.registry != nil {
+		reporter.serviceConfig.registry.WriteMetrics(&buf, reporter.formattedLabels)
+	} else {
+		DefaultRegistry().WriteMetrics(&buf, reporter.formattedLabels)
+	}
 	reporter.lastMetricsBuffer = buf
 }
 
