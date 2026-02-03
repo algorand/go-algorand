@@ -1035,6 +1035,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
+	testCatchpointFlushRound(dl.validator)
 	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
 	require.EqualValues(t, 3, cph.TotalChunks)
 
@@ -1051,6 +1052,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	dl.fullBlock(&newacctpay)
 
 	// Write and read back in, and ensure even the last effect exists.
+	testCatchpointFlushRound(dl.validator)
 	cph = testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
 	require.EqualValues(t, cph.TotalChunks, 3) // Still only 3 chunks, as last was in a recent block
 
@@ -1067,6 +1069,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
+	testCatchpointFlushRound(dl.validator)
 	cph = testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
 	require.EqualValues(t, cph.TotalChunks, 4)
 
