@@ -37,6 +37,10 @@ func TestMetricGauge(t *testing.T) {
 	test := &GaugeTest{
 		MetricTest: NewMetricTest(),
 	}
+
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener("127.0.0.1:0")
 
@@ -45,11 +49,13 @@ func TestMetricGauge(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 	gauges := make([]*Gauge, 3)
 	for i := 0; i < 3; i++ {
-		gauges[i] = MakeGauge(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
+		gauges[i] = MakeGaugeUnregistered(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
+		gauges[i].Register(registry)
 	}
 	for i := 0; i < 9; i++ {
 		gauges[i%3].Set(uint64(i*100 + i))
@@ -62,7 +68,7 @@ func TestMetricGauge(t *testing.T) {
 
 	metricService.Shutdown()
 	for _, gauge := range gauges {
-		gauge.Deregister(nil)
+		gauge.Deregister(registry)
 	}
 	// test the metrics values.
 

@@ -27,14 +27,14 @@ type Gauge struct {
 
 // MakeGauge create a new gauge with the provided name and description.
 func MakeGauge(metric MetricName) *Gauge {
-	c := makeGauge(metric)
+	c := MakeGaugeUnregistered(metric)
 	c.Register(nil)
 	return c
 }
 
-// makeGauge create a new gauge with the provided name and description
+// MakeGaugeUnregistered creates a new gauge with the provided name and description
 // but does not register it with the default registry.
-func makeGauge(metric MetricName) *Gauge {
+func MakeGaugeUnregistered(metric MetricName) *Gauge {
 	c := &Gauge{g: couge{
 		values:        make([]*cougeValues, 0),
 		description:   metric.Description,
