@@ -27,7 +27,7 @@ mkdir -p %{buildroot}/usr/bin
 # NOTE: keep in sync with scripts/build_deb.sh bin_files
 # NOTE: keep in sync with %files section below
 for f in carpenter msgpacktool tealdbg; do
-  install -m 755 ${ALGO_BIN}/${f} %{buildroot}/usr/bin/${f}
+  install -m 755 ${ALGO_TOOLS}/${f} %{buildroot}/usr/bin/${f}
 done
 
 mkdir -p %{buildroot}/etc/pki/rpm-gpg
