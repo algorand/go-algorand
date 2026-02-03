@@ -3,7 +3,7 @@
 set -eo pipefail
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
-  /usr/bin/env bash scripts/travis/codecov
+  /usr/bin/env bash scripts/travis/codecov "$@"
 else
-  /usr/bin/env bash scripts/travis/codecov -t $CODECOV_TOKEN
+  /usr/bin/env bash scripts/travis/codecov -t $CODECOV_TOKEN "$@"
 fi

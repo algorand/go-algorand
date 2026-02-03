@@ -30,6 +30,7 @@ type ServiceConfig struct {
 	NodeExporterListenAddress string
 	Labels                    map[string]string
 	NodeExporterPath          string
+	registry                  *Registry // if nil, will use DefaultRegistry(). Used for testing
 }
 
 // MetricService represent a single running metric server instance

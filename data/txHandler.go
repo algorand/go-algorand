@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 	"sync"
 	"time"
 
@@ -143,10 +142,6 @@ type HybridRelayer interface {
 func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
 	if opts.TxPool == nil {
-		return nil, ErrInvalidTxPool
-	}
-	txPoolValue := reflect.ValueOf(opts.TxPool)
-	if txPoolValue.Kind() == reflect.Ptr && txPoolValue.IsNil() {
 		return nil, ErrInvalidTxPool
 	}
 

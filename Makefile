@@ -84,6 +84,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
 UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+COVERPKG_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' ))
 ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 GOMOD_DIRS := ./tools/block-generator ./tools/x-repo-types
@@ -132,8 +133,19 @@ check_shell:
 
 sanity: fix lint fmt tidy modernize
 
+# "make cover" runs all tests, and collects full coverage across all go-algorand packages by setting -coverpkg.
+# Without setting -coverpkg, coverage reports only measure lines of code exercised within the same package as the tests.
+#
+# "make cover PACKAGE=X" runs all tests in package github.com/algorand/go-algorand/X/... and collects full coverage
+# across all packages that are dependencies of that package.
 cover:
-	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
+ifeq ($(PACKAGE),)
+	$(GOTESTCOMMAND) $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES) -covermode=atomic -coverpkg=$(shell echo $(COVERPKG_PACKAGES) | sed 's/ /,/g')
+else
+	cd $(PACKAGE); \
+	$(GOTESTCOMMAND) $(GOTAGS) -coverprofile=cover.out ./... -covermode=atomic -coverpkg=$$( (go list -f '{{ join .Deps "\n" }}' ./...; go list -f '{{ join .TestImports "\n" }}' ./...) | grep 'github.com/algorand/go-algorand' | egrep -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | egrep -v '(test|testing|mocks|mock)$$' | sort | uniq | paste -sd ',' -); \
+	go tool cover -html cover.out
+endif
 
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out

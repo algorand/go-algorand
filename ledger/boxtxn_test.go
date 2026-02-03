@@ -513,9 +513,10 @@ assert
 		for i := 0; i < 330; i++ {
 			dl.fullBlock()
 		}
-		time.Sleep(5 * time.Second) // balancesFlushInterval, so commit happens
 		dl.fullBlock(call.Args("check", "x", string(make([]byte, 16))))
-		time.Sleep(100 * time.Millisecond) // give commit time to run, and prune au caches
+		// commit au deltas so the box app is executed on of data from ledger, not trackers
+		commitRoundLookback(0, dl.generator)
+		commitRoundLookback(0, dl.validator)
 		dl.fullBlock(call.Args("check", "x", string(make([]byte, 16))))
 
 		// Still the same after caches are flushed
