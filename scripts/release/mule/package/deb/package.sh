@@ -46,7 +46,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
         OUTPUT_DEB="$PKG_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
     fi
 
-    for binary in "${ALGO_BIN_TOOLS_SRC[@]}"; do
+    for binary in "${BIN_FILES[@]}"; do
         cp "${ALGO_BIN_TOOLS_SRC}/$binary" "$PKG_ROOT/usr/bin"
         chmod 755 "$PKG_ROOT/usr/bin/$binary"
     done
