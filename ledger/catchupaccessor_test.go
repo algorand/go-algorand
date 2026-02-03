@@ -263,7 +263,7 @@ func TestCatchupAccessorFoo(t *testing.T) {
 
 	// invalid label
 	err = catchpointAccessor.SetLabel(context.Background(), "wat")
-	require.ErrorContains(t, err, `catchpoint parsing failed`, "catchpointAccessor.SetLabel")
+	require.ErrorIs(t, err, ledgercore.ErrCatchpointParsingFailed, "catchpointAccessor.SetLabel")
 
 	// ok
 	calabel := "98#QGMCMMUPV74AXXVKSNPRN73XMJG44ZJTZHU25HDG7JH5OHMM6N3Q"

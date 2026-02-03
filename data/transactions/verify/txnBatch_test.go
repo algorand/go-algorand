@@ -902,5 +902,5 @@ func TestSigVerifier(t *testing.T) {
 	txnGroup = txnGroups[0]
 
 	err = verifier.Verify(txnGroup)
-	require.ErrorContains(t, err, `At least one signature didn't pass verification`)
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 }

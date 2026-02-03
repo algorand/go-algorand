@@ -1451,7 +1451,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 		}
 
 		// ensure that we would fail adding this.
-		require.ErrorContains(t, transactionPool.Remember(txgroup), `TransactionPool.checkPendingQueueSize: transaction pool have reached capacity`)
+		require.ErrorIs(t, transactionPool.Remember(txgroup), ErrPendingQueueReachedMaxCap)
 
 		if groupSize > 1 {
 			// add a single transaction and ensure we succeed

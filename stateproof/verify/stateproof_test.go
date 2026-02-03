@@ -160,7 +160,7 @@ func TestStateProofParams(t *testing.T) {
 	var hdr bookkeeping.BlockHeader
 
 	_, err := GetProvenWeight(&votersHdr, &hdr)
-	require.ErrorContains(t, err, `state proofs are not enabled`)
+	require.ErrorIs(t, err, errStateProofNotEnabled)
 
 	votersHdr.CurrentProtocol = "TestStateProofParams"
 	proto := config.Consensus[votersHdr.CurrentProtocol]

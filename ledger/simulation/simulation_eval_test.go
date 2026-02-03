@@ -1756,7 +1756,7 @@ func TestDefaultSignatureCheck(t *testing.T) {
 	stxn.Sig[0] += byte(1) // will wrap if > 255
 	result, err = s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
 	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
-	require.ErrorContains(t, err, "one signature didn't pass")
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 }
 
 // TestInvalidTxGroup tests that a transaction group with invalid transactions
@@ -6391,7 +6391,7 @@ func TestOptionalSignaturesIncorrect(t *testing.T) {
 	stxn.Sig[0] += byte(1) // will wrap if > 255
 	_, err := s.Simulate(simulation.Request{TxnGroups: [][]transactions.SignedTxn{{stxn}}})
 	require.ErrorAs(t, err, &simulation.InvalidRequestError{})
-	require.ErrorContains(t, err, "one signature didn't pass")
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 }
 
 // TestPartialMissingSignatures tests that a group of transactions with some signatures missing is

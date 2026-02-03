@@ -339,7 +339,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.ErrorContains(t, err, `signedtxn has no sig`, "payment txn %#v verified from StateProofSender", stxn2)
+	require.ErrorIs(t, err, errTxnSigHasNoSig, "payment txn %#v verified from StateProofSender", stxn2)
 
 	secret := keypair()
 	stxn2 = stxn
@@ -615,7 +615,7 @@ func TestPaysetGroups(t *testing.T) {
 	// break the signature and see if it fails.
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
 	err = PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
-	require.ErrorContains(t, err, `At least one signature didn't pass verification`)
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 
 	// ensure the rest are fine
 	err = PaysetGroups(context.Background(), txnGroups[1:], blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
@@ -772,7 +772,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	tmpSig := txnGroups[0][0].Sig
 	txnGroups[0][0].Sig = crypto.Signature{}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "has no sig")
+	require.ErrorIs(t, err, errTxnSigHasNoSig)
 	txnGroups[0][0].Sig = tmpSig
 
 	///// Sig + multiSig
@@ -782,13 +782,13 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "should only have one of Sig or Msig or LogicSig")
+	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 	txnGroups[0][0].Msig.Subsigs = nil
 
 	///// Sig + logic
 	txnGroups[0][0].Lsig.Logic = op.Program
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "should only have one of Sig or Msig or LogicSig")
+	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 	txnGroups[0][0].Lsig.Logic = []byte{}
 
 	///// MultiSig + logic
@@ -800,7 +800,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "should only have one of Sig or Msig or LogicSig")
+	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 	txnGroups[0][0].Lsig.Logic = []byte{}
 	txnGroups[0][0].Sig = tmpSig
 	txnGroups[0][0].Msig.Subsigs = nil
@@ -1333,7 +1333,7 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 
 		err = verifyLogicSig(t, stxn)
 		if useLMsig {
-			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+			require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 		} else {
 			require.NoError(t, err)
 		}
@@ -1357,7 +1357,7 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		if useLMsig { // >=v41: use LMsig field
 			stxn.Lsig = transactions.LogicSig{Logic: program, LMsig: msigWithSingleSig}
 			err = verifyLogicSig(t, stxn)
-			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+			require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 		} else { // v40: use Msig field
 			stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msigWithSingleSig}
 			err = verifyLogicSig(t, stxn)
@@ -1401,7 +1401,7 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		if useLMsig { // >=v41: use LMsig field
 			stxn.Lsig = transactions.LogicSig{Logic: program, LMsig: mixedMsig}
 			err = verifyLogicSig(t, stxn)
-			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+			require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 		} else { // v40: use Msig field
 			stxn.Lsig = transactions.LogicSig{Logic: program, Msig: mixedMsig}
 			err = verifyLogicSig(t, stxn)
@@ -1563,7 +1563,7 @@ func testAuthAddrSenderDiff(t *testing.T, consensusVer protocol.ConsensusVersion
 	require.NoError(t, err)
 	err = verifyTxn(0, groupCtx)
 	if enforceEnabled {
-		require.ErrorContains(t, err, "AuthAddr must be different from Sender",
+		require.ErrorIs(t, err, errAuthAddrEqualsSender,
 			"AuthAddr == Sender should be rejected when enforcement is enabled")
 	} else {
 		require.NoError(t, err,

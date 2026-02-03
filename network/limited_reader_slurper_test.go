@@ -190,7 +190,7 @@ func TestLimitedReaderSlurperPerMessageMaxSize(t *testing.T) {
 			b = make([]byte, dataSize)
 			crypto.RandBytes(b[:])
 			err := slurper.Read(bytes.NewBuffer(b))
-			require.ErrorContains(t, err, `read limit exceeded`)
+			require.ErrorIs(t, err, ErrIncomingMsgTooLarge)
 		}
 	}
 }

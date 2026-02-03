@@ -537,7 +537,7 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	require.ErrorContains(t, err, `pseudonode input channel is full`, "MakeVotes did not returned an error when being overflowed with requests")
+	require.ErrorIs(t, err, errPseudonodeBacklogFull, "MakeVotes did not returned an error when being overflowed with requests")
 	enqueuedVotes := len(channels) - enqueuedProposals
 	// drain output channels.
 	for _, ch := range channels {
