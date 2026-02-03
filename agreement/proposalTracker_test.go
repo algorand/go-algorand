@@ -77,7 +77,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[3])
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, `proposalSeeker.accept: credential from`)
 	assert.Equal(t, effect, NoLateCredentialTrackingImpact)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
@@ -103,7 +103,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[0])
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, `proposalSeeker.accept: seeker is already frozen`)
 	assert.Equal(t, effect, VerifiedBetterLateCredentialForTracking)
 	assert.Equal(t, s.Lowest, lowestBeforeFreeze)
 	assert.True(t, s.Frozen)
