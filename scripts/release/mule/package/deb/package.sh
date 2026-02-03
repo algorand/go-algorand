@@ -55,7 +55,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
         mkdir -p "$PKG_ROOT/usr/lib/algorand"
         lib_files=("updater" "find-nodes.sh")
         for lib in "${lib_files[@]}"; do
-            cp "$ALGO_BIN/$lib" "$PKG_ROOT/usr/lib/algorand"
+            cp "$ALGO_BIN_TOOLS_SRC/$lib" "$PKG_ROOT/usr/lib/algorand"
             chmod g-w "$PKG_ROOT/usr/lib/algorand/$lib"
         done
 
