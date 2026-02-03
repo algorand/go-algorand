@@ -198,33 +198,6 @@ type StreamHandlerPair struct {
 // StreamHandlers is an ordered list of StreamHandlerPair
 type StreamHandlers []StreamHandlerPair
 
-// PubSubOption is a function that modifies the pubsub options
-type PubSubOption func(opts *[]pubsub.Option)
-
-// DisablePubSubPeerExchange disables PX (peer exchange) in pubsub
-func DisablePubSubPeerExchange() PubSubOption {
-	return func(opts *[]pubsub.Option) {
-		*opts = append(*opts, pubsub.WithPeerExchange(false))
-	}
-}
-
-// SetPubSubMetricsTracer sets a pubsub.RawTracer for metrics collection
-func SetPubSubMetricsTracer(metricsTracer pubsub.RawTracer) PubSubOption {
-	return func(opts *[]pubsub.Option) {
-		*opts = append(*opts, pubsub.WithRawTracer(metricsTracer))
-	}
-}
-
-// SetPubSubPeerFilter sets a pubsub.PeerFilter for peers filtering out
-func SetPubSubPeerFilter(filter func(checker pstore.RoleChecker, pid peer.ID) bool, checker pstore.RoleChecker) PubSubOption {
-	return func(opts *[]pubsub.Option) {
-		f := func(pid peer.ID, topic string) bool {
-			return filter(checker, pid)
-		}
-		*opts = append(*opts, pubsub.WithPeerFilter(f))
-	}
-}
-
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
@@ -235,12 +208,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 		h.SetStreamHandler(pair.ProtoID, sm.streamHandler)
 	}
 
-	pubsubOpts := []pubsub.Option{}
-	for _, opt := range pubsubOptions {
-		opt(&pubsubOpts)
-	}
-
-	ps, err := makePubSub(ctx, h, cfg.GossipFanout, pubsubOpts...)
+	ps, err := makePubSub(ctx, h, cfg.GossipFanout, pubsubOptions...)
 	if err != nil {
 		return nil, err
 	}
