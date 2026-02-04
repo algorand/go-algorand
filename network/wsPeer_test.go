@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -143,7 +144,8 @@ func TestVersionToMajorMinor(t *testing.T) {
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("a.b")
-	require.ErrorContains(t, err, `strconv.ParseInt: parsing "a": invalid syntax`)
+	var numErr *strconv.NumError
+	require.ErrorAs(t, err, &numErr)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 }
