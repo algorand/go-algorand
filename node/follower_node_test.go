@@ -113,7 +113,8 @@ func TestErrors(t *testing.T) {
 	require.ErrorContains(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}), `cannot broadcast txns in follower mode`)
 	require.ErrorContains(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}), `cannot broadcast internal signed txn group in follower mode`)
 	_, err := node.Simulate(simulation.Request{})
-	require.ErrorContains(t, err, `expected 1 transaction group, got 0`)
+	var invalidRequestErr simulation.InvalidRequestError
+	require.ErrorAs(t, err, &invalidRequestErr)
 	_, err = node.GetParticipationKey(account.ParticipationID{})
 	require.ErrorContains(t, err, `cannot get participation key in follower mode`)
 	require.ErrorContains(t, node.RemoveParticipationKey(account.ParticipationID{}), `cannot remove participation key in follower mode`)

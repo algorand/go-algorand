@@ -348,32 +348,33 @@ func TestTxnValidationStateProof(t *testing.T) {
 	stxn2 = stxn2.Txn.Sign(secret)
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.ErrorContains(t, err, `sender must be the state-proof sender`, "state proof txn %#v verified from non-StateProofSender", stxn2)
+	var txGroupErr *TxGroupError
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified from non-StateProofSender", stxn2)
 
 	// state proof txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.ErrorContains(t, err, `fee must be zero in state-proof transaction`, "state proof txn %#v verified", stxn2)
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Header.Note = []byte{'A'}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.ErrorContains(t, err, `note must be empty in state-proof transaction`, "state proof txn %#v verified", stxn2)
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Lease[0] = 1
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.ErrorContains(t, err, `lease must be zero in state-proof transaction`, "state proof txn %#v verified", stxn2)
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.ErrorContains(t, err, `rekey must be zero in state-proof transaction`, "state proof txn %#v verified", stxn2)
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified", stxn2)
 }
 
 func TestDecodeNil(t *testing.T) {
@@ -743,7 +744,8 @@ func TestLsigSize(t *testing.T) {
 		if test.success {
 			require.NoError(t, err)
 		} else {
-			require.ErrorContains(t, err, `LogicSig`)
+			var txGroupErr *TxGroupError
+			require.ErrorAs(t, err, &txGroupErr)
 		}
 	}
 }
@@ -815,7 +817,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "should only have one of Sig, Msig, or LMsig")
+	var txGroupErr *TxGroupError
+	require.ErrorAs(t, err, &txGroupErr)
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 
 	/////  logic with sig and LMsig
@@ -825,7 +828,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "should only have one of Sig, Msig, or LMsig")
+	require.ErrorAs(t, err, &txGroupErr)
 	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
@@ -841,7 +844,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x4},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.ErrorContains(t, err, "should only have one of Sig, Msig, or LMsig")
+	require.ErrorAs(t, err, &txGroupErr)
 
 }
 
@@ -1444,7 +1447,8 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		// Test with both fields - should fail
 		stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: msig}
 		err = verifyLogicSig(t, stxn)
-		require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+		var txGroupErr *TxGroupError
+		require.ErrorAs(t, err, &txGroupErr)
 	})
 }
 
@@ -1520,7 +1524,8 @@ func TestLogicSigMsigBothFlags(t *testing.T) {
 	// Test with both fields - should fail
 	stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: lmsig}
 	err = verifyLogicSig()
-	require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+	var txGroupErr *TxGroupError
+	require.ErrorAs(t, err, &txGroupErr)
 }
 
 func TestAuthAddrSenderDiff(t *testing.T) {

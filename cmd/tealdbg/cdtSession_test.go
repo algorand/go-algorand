@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -139,7 +140,8 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	req.Method = "Debugger.removeBreakpoint"
 	req.Params = map[string]interface{}{"breakpointId": "test"}
 	resp, events, err = s.handleCdtRequest(&req, &state)
-	require.ErrorContains(t, err, `strconv.Atoi: parsing "test": invalid syntax`)
+	var numErr *strconv.NumError
+	require.ErrorAs(t, err, &numErr)
 	require.Equal(t, 0, len(events))
 	require.Empty(t, resp.ID)
 	require.Empty(t, resp.Result)

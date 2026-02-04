@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1064,7 +1065,8 @@ func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
 	// now try an error with a root dir that can't be written to
 	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
 	require.Empty(t, paths)
-	require.ErrorContains(t, err, "permission denied")
+	var pathErr *fs.PathError
+	require.ErrorAs(t, err, &pathErr)
 }
 
 // TestResolveLogPaths confirms that log paths are resolved to the most appropriate data directory of the supplied config

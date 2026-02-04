@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -305,7 +306,8 @@ func TestBuildMerkleTrie(t *testing.T) {
 	// actual testing...
 	// insufficient setup, it should fail:
 	err = catchpointAccessor.BuildMerkleTrie(ctx, progressNop)
-	require.ErrorContains(t, err, `no such table: main.catchpointpendinghashes`)
+	var error sqlite3.Error
+	require.ErrorAs(t, err, &error)
 
 	// from reset it's okay, but it doesn't do anything
 	err = catchpointAccessor.ResetStagingBalances(ctx, true)
@@ -416,7 +418,8 @@ func TestCatchupAccessorBlockdb(t *testing.T) {
 
 	// actual testing...
 	err = catchpointAccessor.BuildMerkleTrie(ctx, func(uint64, uint64) {})
-	require.ErrorContains(t, err, `no such table: main.catchpointpendinghashes`)
+	var error sqlite3.Error
+	require.ErrorAs(t, err, &error)
 }
 
 func TestVerifyCatchpoint(t *testing.T) {

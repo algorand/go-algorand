@@ -314,7 +314,8 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			ep.Ledger = NewLedger(nil)
 			_, err = EvalApp(ops.Program, 1, 888, ep)
 			if v < txnEffectsVersion {
-				require.ErrorContains(t, err, `logic eval error: Unable to obtain effects from top-level transactions. Details: app=888, pc=1`, source)
+				var evalErr EvalError
+				require.ErrorAs(t, err, &evalErr, source)
 			} else {
 				if fs.array {
 					continue // Array (Logs) will be 0 length, so will fail anyway

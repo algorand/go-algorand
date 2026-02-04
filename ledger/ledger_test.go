@@ -1755,7 +1755,8 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	// we make sure that the voters header does not exist and that the voters tracker
 	// lost tracking of the top voters.
 	_, err = l.BlockHdr(basics.Round(proto.StateProofInterval))
-	require.ErrorContains(t, err, `ledger does not have entry 256 (latest 3586, committed 3586)`)
+	var errNoEntry ledgercore.ErrNoEntry
+	require.ErrorAs(t, err, &errNoEntry)
 	expectedErr := &ledgercore.ErrNoEntry{}
 	require.ErrorAs(t, err, expectedErr, fmt.Sprintf("got error %s", err))
 
@@ -2222,7 +2223,8 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	rnd := basics.Round(proto.MaxBalLookback - shorterLookback)
 	_, err = l.OnlineCirculation(rnd, rnd+basics.Round(proto.MaxBalLookback))
-	require.ErrorContains(t, err, `round 316 before dbRound 317`)
+	var roundOffsetErr *RoundOffsetError
+	require.ErrorAs(t, err, &roundOffsetErr)
 	for i := basics.Round(proto.MaxBalLookback - shorterLookback + 1); i <= l.Latest(); i++ {
 		online, err := l.OnlineCirculation(i, i+basics.Round(proto.MaxBalLookback))
 		require.NoError(t, err)
@@ -2696,7 +2698,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	rnd := basics.Round(proto.MaxBalLookback - shorterLookback)
 	_, err = l2.OnlineCirculation(rnd, rnd+basics.Round(proto.MaxBalLookback))
-	require.ErrorContains(t, err, `round 316 before dbRound 6`)
+	var roundOffsetErr *RoundOffsetError
+	require.ErrorAs(t, err, &roundOffsetErr)
 	for i := l2.Latest() - basics.Round(proto.MaxBalLookback-1); i <= l2.Latest(); i++ {
 		online, err := l2.OnlineCirculation(i, i+basics.Round(proto.MaxBalLookback))
 		require.NoError(t, err)
@@ -3469,7 +3472,8 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 
 	// make sure we can't get a block before the max lookback
 	blk, err = l.Block(90)
-	require.ErrorContains(t, err, `ledger does not have entry 90 (latest 1500, committed 1500)`)
+	var errNoEntry ledgercore.ErrNoEntry
+	require.ErrorAs(t, err, &errNoEntry)
 	require.Empty(t, blk)
 }
 

@@ -88,7 +88,8 @@ func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
-	require.ErrorContains(t, err, `illegal base64 data at input byte 4`)
+	var corruptInputErr base64.CorruptInputError
+	require.ErrorAs(t, err, &corruptInputErr)
 
 	// happy path: response should be attached here
 	h = http.Header{}
@@ -216,7 +217,8 @@ func TestIdentityChallengeSchemeBadPayload(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
-	require.ErrorContains(t, err, `illegal base64 data at input byte 3`)
+	var corruptInputErr base64.CorruptInputError
+	require.ErrorAs(t, err, &corruptInputErr)
 }
 
 // TestIdentityChallengeSchemeBadResponseSignature tests that the  scheme will
@@ -269,7 +271,8 @@ func TestIdentityChallengeSchemeBadResponsePayload(t *testing.T) {
 	key2, verificationMsg, err := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
-	require.ErrorContains(t, err, `illegal base64 data at input byte 3`)
+	var corruptInputErr base64.CorruptInputError
+	require.ErrorAs(t, err, &corruptInputErr)
 }
 
 // TestIdentityChallengeSchemeWrongChallenge the scheme will

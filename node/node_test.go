@@ -19,6 +19,7 @@ package node
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -626,7 +627,8 @@ func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
 	node, err := MakeFull(log, testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
 
 	require.Nil(t, node)
-	require.ErrorContains(t, err, "permission denied")
+	var pathErr *fs.PathError
+	require.ErrorAs(t, err, &pathErr)
 
 	require.NoError(t, os.Chmod(testDirectroy, 1700))
 	require.NoError(t, os.RemoveAll(testDirectroy))

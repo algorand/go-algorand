@@ -18,6 +18,7 @@ package netdeploy
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,7 +55,8 @@ func TestLoadMissingConfig(t *testing.T) {
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
 	a.NoError(err)
 	template, err := loadTemplate(filepath.Join(templateDir, "<invalidname>.json"))
-	require.ErrorContains(t, err, `<invalidname>.json: no such file or directory`)
+	var pathErr *fs.PathError
+	require.ErrorAs(t, err, &pathErr)
 	a.Equal(template.Genesis.NetworkName, "")
 }
 

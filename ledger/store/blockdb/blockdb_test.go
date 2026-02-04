@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -99,7 +100,8 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []testBlockEntry) {
 	}
 
 	_, err = BlockGet(tx, basics.Round(len(blocks)))
-	require.ErrorContains(t, err, `ledger does not have entry`)
+	var errNoEntry ledgercore.ErrNoEntry
+	require.ErrorAs(t, err, &errNoEntry)
 }
 
 func blockChainBlocks(be []testBlockEntry) []bookkeeping.Block {

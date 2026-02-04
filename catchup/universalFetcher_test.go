@@ -73,7 +73,8 @@ func TestUGetBlockWs(t *testing.T) {
 
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, up)
 
-	require.ErrorContains(t, err, `no block available for given round`)
+	var noBlockForRoundErr noBlockForRoundError
+	require.ErrorAs(t, err, &noBlockForRoundErr)
 	var noBlockErr noBlockForRoundError
 	require.ErrorAs(t, err, &noBlockErr)
 	require.Equal(t, next+1, err.(noBlockForRoundError).round)

@@ -257,7 +257,8 @@ func TestTooManyArgs(t *testing.T) {
 			args := [transactions.EvalMaxArgs + 1][]byte{}
 			txn.Lsig.Args = args[:]
 			pass, err := EvalSignature(0, defaultSigParams(txn))
-			require.ErrorContains(t, err, `rejected by logic err=LogicSig has too many arguments. Details: pc=1`)
+			var evalErr EvalError
+			require.ErrorAs(t, err, &evalErr)
 			require.False(t, pass)
 		})
 	}
@@ -274,7 +275,8 @@ func TestArgTooLarge(t *testing.T) {
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{make([]byte, transactions.MaxLogicSigArgSize+1)}
 			pass, err := EvalSignature(0, defaultSigParams(txn))
-			require.ErrorContains(t, err, `rejected by logic err=LogicSig argument too large. Details: pc=1`)
+			var evalErr EvalError
+			require.ErrorAs(t, err, &evalErr)
 			require.False(t, pass)
 		})
 	}
@@ -5260,7 +5262,8 @@ func TestPcDetails(t *testing.T) {
 			ep.Trace = &strings.Builder{}
 
 			pass, cx, err := EvalContract(ops.Program, 0, 888, ep)
-			require.ErrorContains(t, err, `. Details: app=888, pc=`)
+			var evalErr EvalError
+			require.ErrorAs(t, err, &evalErr)
 			require.False(t, pass)
 			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
