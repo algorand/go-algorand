@@ -482,7 +482,6 @@ var startupConfigCheckFields = []string{
 	"OutgoingMessageFilterBucketSize",
 	"ProposalAssemblyTime",
 	"ReservedFDs",
-	"TxPoolExponentialIncreaseFactor",
 	"TxPoolSize",
 	"VerifiedTranscationsCacheSize",
 	"EnableP2P",

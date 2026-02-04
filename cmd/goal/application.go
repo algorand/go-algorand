@@ -526,10 +526,7 @@ var createAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client)
 
 		if outFilename == "" {
 			// Broadcast
@@ -606,10 +603,7 @@ var updateAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client)
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -676,10 +670,7 @@ var optInAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client)
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -746,10 +737,7 @@ var closeOutAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client)
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -816,10 +804,7 @@ var clearAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client)
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -885,10 +870,7 @@ var callAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client)
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -955,10 +937,7 @@ var deleteAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			tx.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&tx, cmd, client)
 
 		// Broadcast or write transaction to file
 		if outFilename == "" {
@@ -1459,10 +1438,7 @@ var methodAppCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
-		explicitFee := cmd.Flags().Changed("fee")
-		if explicitFee {
-			appCallTxn.Fee = basics.MicroAlgos{Raw: fee}
-		}
+		applyFeeAndTip(&appCallTxn, cmd, client)
 
 		// Compile group
 		var txnGroup []transactions.Transaction

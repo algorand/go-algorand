@@ -102,11 +102,6 @@ type ConsensusParams struct {
 	// a way of making the spender subsidize the cost of storing this transaction.
 	MinTxnFee uint64
 
-	// EnableFeePooling specifies that the sum of the fees in a
-	// group must exceed one MinTxnFee per Txn, rather than check that
-	// each Txn has a MinFee.
-	EnableFeePooling bool
-
 	// EnableAppCostPooling specifies that the sum of fees for application calls
 	// in a group is checked against the sum of the budget for application calls,
 	// rather than check each individual app call is within the budget.
@@ -580,6 +575,14 @@ type ConsensusParams struct {
 	// specify the current app. This parameter can be removed and assumed true
 	// after the first consensus release in which it is set true.
 	AllowZeroLocalAppRef bool
+
+	// LoadTracking enables header values that track Load that grows/shrinks
+	// when blocks are more/less than half full.
+	LoadTracking bool
+
+	// SupportTips indicates the tx.Tip field can be used to promise additional
+	// fees are included.
+	SupportTips bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -664,6 +667,11 @@ type BonusPlan struct {
 	// after going into effect. The BonusDecayInterval goes into effect at upgrade
 	// time, regardless of `baseRound`.
 	DecayInterval uint64
+}
+
+// MinFee simply returns the MinTxnFee as a basics.MicroAlgos
+func (proto ConsensusParams) MinFee() basics.MicroAlgos {
+	return basics.MicroAlgos{Raw: proto.MinTxnFee}
 }
 
 // EffectiveKeyDilution returns the key dilution for this account,
@@ -1185,7 +1193,6 @@ func initConsensusProtocols() {
 	// "reachability" between accounts and creatables, so we
 	// retain 4 x 4 as worst case.
 
-	v28.EnableFeePooling = true
 	v28.EnableKeyregCoherencyCheck = true
 
 	Consensus[protocol.ConsensusV28] = v28
@@ -1462,10 +1469,11 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
-
 	vFuture.AppSizeUpdates = true
 	vFuture.AllowZeroLocalAppRef = true
 	vFuture.EnforceAuthAddrSenderDiff = true
+	vFuture.LoadTracking = true
+	vFuture.SupportTips = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
