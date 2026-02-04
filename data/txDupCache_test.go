@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/blake2b"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-deadlock"
-
-	"golang.org/x/crypto/blake2b"
 )
 
 func TestTxHandlerDigestCache(t *testing.T) {

@@ -22,10 +22,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/encoding/unicode/utf32"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // As of go1.10, json implements encoding and decoding of JSON as defined in RFC 7159. https://pkg.go.dev/encoding/json

@@ -21,9 +21,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestMakeCORS(t *testing.T) {

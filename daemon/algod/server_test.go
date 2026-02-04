@@ -23,8 +23,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func isTCPPortAvailable(host string, port int) bool {

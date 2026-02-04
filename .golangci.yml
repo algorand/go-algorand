@@ -164,7 +164,15 @@ severity:
 
 formatters:
   enable:
+    - gci
     - gofmt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/algorand)
+        - prefix(github.com/algorand/go-algorand)
   exclusions:
     generated: lax
     paths:

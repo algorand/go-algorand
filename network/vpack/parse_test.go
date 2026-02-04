@@ -19,10 +19,11 @@ package vpack
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/assert"
 )
 
 // a string that is greater than the max 5-bit fixmap size

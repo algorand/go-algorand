@@ -21,13 +21,14 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/require"
 )
 
 func TestKeyPrefixIntervalPreprocessing(t *testing.T) {

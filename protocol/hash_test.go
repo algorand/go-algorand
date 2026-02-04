@@ -20,8 +20,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestHashIDPrefix checks if any HashID const declared in hash.go is a prefix of another.

@@ -22,11 +22,12 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // MockStream is a io.ReaderWriter testing mock

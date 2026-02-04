@@ -30,6 +30,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/config/bounds"
@@ -41,8 +42,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
-
-	"pgregory.net/rapid"
 )
 
 type protoOpt func(*config.ConsensusParams)

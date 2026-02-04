@@ -23,9 +23,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-codec/codec"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-codec/codec"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type TestArray [4]uint64

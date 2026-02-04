@@ -23,8 +23,9 @@ import (
 	"math"
 	"net/http"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/libp2p/go-libp2p/core/peer"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // peerMetaHeaders holds peer metadata headers similar to wsnet http.Header

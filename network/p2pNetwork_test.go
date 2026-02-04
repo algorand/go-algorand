@@ -28,6 +28,17 @@ import (
 	"testing"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
@@ -39,16 +50,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/uuid"
-	"github.com/algorand/go-deadlock"
-
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	pb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
-	ma "github.com/multiformats/go-multiaddr"
-	"github.com/stretchr/testify/require"
 )
 
 func (n *P2PNetwork) hasPeers() bool {

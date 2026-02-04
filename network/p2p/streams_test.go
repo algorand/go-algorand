@@ -22,16 +22,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network/p2p/peerstore"
-	"github.com/algorand/go-algorand/test/partitiontest"
-
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestConnectedLogsNonDialedOutgoingConnection tests that the Connected function

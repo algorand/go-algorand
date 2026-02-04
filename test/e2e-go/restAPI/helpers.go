@@ -22,10 +22,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/stretchr/testify/require"
 )
 
 // helper generates a random Uppercase Alphabetic ASCII char

@@ -18,12 +18,11 @@ package main
 
 import (
 	_ "embed"
-	"html"
-
 	// "bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"

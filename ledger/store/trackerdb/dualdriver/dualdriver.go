@@ -24,12 +24,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/google/go-cmp/cmp"
 )
 
 // ErrInconsistentResult is returned when the two stores return different results.

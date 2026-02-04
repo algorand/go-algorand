@@ -25,6 +25,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
@@ -35,13 +43,6 @@ import (
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-deadlock"
-
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
-	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 // some arbitrary number TODO: figure out a better value based on peerSelector/fetcher algorithm

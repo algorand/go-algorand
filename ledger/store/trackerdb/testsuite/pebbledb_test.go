@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/pebbledbdriver"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/stretchr/testify/require"
 )
 
 func TestPebbleDB(t *testing.T) {

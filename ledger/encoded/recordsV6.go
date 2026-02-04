@@ -17,9 +17,10 @@
 package encoded
 
 import (
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/msgp/msgp"
 )
 
 // Adjust these to be big enough for boxes, but not directly tied to box values.

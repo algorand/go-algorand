@@ -20,8 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type mockClient string
