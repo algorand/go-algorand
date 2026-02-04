@@ -380,7 +380,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 		assert.Nil(t, ret.AssetHolding)
 		ap := acctData.AssetParams[aidx]
 		assetParams := v2.AssetParamsToAsset(addr.String(), aidx, &ap)
-		assert.Equal(t, ret.CreatedAsset, &assetParams.Params)
+		assert.Equal(t, ret.CreatedAsset, assetParams.Params)
 	}
 	for i := 0; i < ret.TotalApps; i++ {
 		ctx, rec = newReq(t)
