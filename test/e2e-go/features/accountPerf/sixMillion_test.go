@@ -965,9 +965,13 @@ func scenarioD(
 					checkResChan <- 0
 					continue
 				}
+				if app.Params == nil {
+					checkResChan <- 0
+					continue
+				}
 				pass := checkApplicationParams(
 					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
-					app.Params,
+					*app.Params,
 					baseAcct.pk.String(),
 					&globalStateCheck,
 					&globalStateCheckMu)

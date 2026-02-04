@@ -298,7 +298,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	handlers, addr, acctData := setupTestForLargeResources(t, acctSize, maxResults, accountMaker)
 	params := model.AccountInformationParams{}
 	if exclude != "" {
-		params.Exclude = (*model.AccountInformationParamsExclude)(&exclude)
+		params.Exclude = &exclude
 	}
 	ctx, rec := newReq(t)
 	err := handlers.AccountInformation(ctx, addr, params)

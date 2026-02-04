@@ -275,20 +275,22 @@ func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.Ac
 	appi, ok := dl.accountApps[addr]
 	if ok {
 		app := dl.dr.Apps[appi]
-		params, err := ApplicationParamsToAppParams(&app.Params)
-		if err != nil {
-			return basics.AccountData{}, 0, err
-		}
-		if out.AppParams == nil {
-			out.AppParams = make(map[basics.AppIndex]basics.AppParams)
-			out.AppParams[app.Id] = params
-		} else {
-			ap, ok := out.AppParams[app.Id]
-			if ok {
-				MergeAppParams(&ap, &params)
-				out.AppParams[app.Id] = ap
-			} else {
+		if app.Params != nil {
+			params, err := ApplicationParamsToAppParams(app.Params)
+			if err != nil {
+				return basics.AccountData{}, 0, err
+			}
+			if out.AppParams == nil {
+				out.AppParams = make(map[basics.AppIndex]basics.AppParams)
 				out.AppParams[app.Id] = params
+			} else {
+				ap, ok := out.AppParams[app.Id]
+				if ok {
+					MergeAppParams(&ap, &params)
+					out.AppParams[app.Id] = ap
+				} else {
+					out.AppParams[app.Id] = params
+				}
 			}
 		}
 	}
@@ -525,8 +527,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 			var app basics.AppParams
 			ok := false
 			for _, appt := range dr.Apps {
-				if appt.Id == appIdx {
-					app, err = ApplicationParamsToAppParams(&appt.Params)
+				if appt.Id == appIdx && appt.Params != nil {
+					app, err = ApplicationParamsToAppParams(appt.Params)
 					if err != nil {
 						response.Error = err.Error()
 						return

@@ -416,13 +416,33 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 	}
 
 	// should we skip fetching apps and assets?
+	var excludeCreatedAppsParams bool
+	var excludeCreatedAssetsParams bool
 	if params.Exclude != nil {
-		switch *params.Exclude {
-		case "all":
+		excludeStr := strings.TrimSpace(*params.Exclude)
+
+		// Handle special cases that must be alone
+		if excludeStr == "all" {
 			return v2.basicAccountInformation(ctx, address, handle, contentType)
-		case "none", "":
-		default:
-			return badRequest(ctx, err, errFailedToParseExclude, v2.Log)
+		}
+		if excludeStr == "none" || excludeStr == "" {
+			// Default behavior - include everything
+		} else {
+			// Parse comma-separated exclusions
+			excludeValues := strings.SplitSeq(excludeStr, ",")
+			for val := range excludeValues {
+				val = strings.TrimSpace(val)
+				switch val {
+				case "created-apps-params":
+					excludeCreatedAppsParams = true
+				case "created-assets-params":
+					excludeCreatedAssetsParams = true
+				case "all", "none":
+					return badRequest(ctx, fmt.Errorf("'%s' cannot be combined with other exclude values", val), errFailedToParseExclude, v2.Log)
+				default:
+					return badRequest(ctx, fmt.Errorf("invalid exclude value: %s", val), errFailedToParseExclude, v2.Log)
+				}
+			}
 		}
 	}
 
@@ -470,7 +490,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
-	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards)
+	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards, excludeCreatedAppsParams, excludeCreatedAssetsParams)
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
@@ -586,7 +606,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address basics.Add
 
 	if record.AssetParams != nil {
 		asset := AssetParamsToAsset(address.String(), assetID, record.AssetParams)
-		response.CreatedAsset = &asset.Params
+		response.CreatedAsset = asset.Params
 	}
 
 	if record.AssetHolding != nil {
@@ -634,7 +654,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address basi
 
 	if record.AppParams != nil {
 		app := AppParamsToApplication(address.String(), applicationID, record.AppParams)
-		response.CreatedApp = &app.Params
+		response.CreatedApp = app.Params
 	}
 
 	if record.AppLocalState != nil {
@@ -1207,7 +1227,7 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Ad
 
 		if !record.Creator.IsZero() {
 			asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
-			aah.AssetParams = &asset.Params
+			aah.AssetParams = asset.Params
 		}
 
 		assetHoldings = append(assetHoldings, aah)

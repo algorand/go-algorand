@@ -106,7 +106,7 @@ func TestAccount(t *testing.T) {
 	b := a.WithUpdatedRewards(proto.RewardUnit, 100)
 
 	addr := basics.Address{}.String()
-	conv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
+	conv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos, false, false)
 	require.NoError(t, err)
 	require.Equal(t, addr, conv.Address)
 	require.Equal(t, b.MicroAlgos.Raw, conv.Amount)
@@ -206,7 +206,7 @@ func TestAccount(t *testing.T) {
 		// convert the same account a few more times to make sure we always
 		// produce the same model.Account
 		for i := 0; i < 10; i++ {
-			anotherConv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
+			anotherConv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos, false, false)
 			require.NoError(t, err)
 
 			require.Equal(t, protocol.EncodeJSON(conv), protocol.EncodeJSON(anotherConv))
@@ -223,7 +223,7 @@ func TestAccountRandomRoundTrip(t *testing.T) {
 		for addr, acct := range accts {
 			round := basics.Round(2)
 			proto := config.Consensus[protocol.ConsensusFuture]
-			conv, err := AccountDataToAccount(addr.String(), &acct, round, &proto, acct.MicroAlgos)
+			conv, err := AccountDataToAccount(addr.String(), &acct, round, &proto, acct.MicroAlgos, false, false)
 			require.NoError(t, err)
 			c, err := AccountToAccountData(&conv)
 			require.NoError(t, err)

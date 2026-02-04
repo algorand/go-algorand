@@ -190,11 +190,10 @@
           },
           {
             "name": "exclude",
-            "description": "When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.",
+            "description": "Exclude additional items from the account. Use `all` to exclude asset holdings, application local state, created asset parameters, and created application parameters. Use `created-apps-params` to exclude only the parameters of created applications (returns only application IDs). Use `created-assets-params` to exclude only the parameters of created assets (returns only asset IDs). Multiple values can be comma-separated (e.g., `created-apps-params,created-assets-params`). Note: `all` and `none` cannot be combined with other values. Defaults to `none`.",
             "in": "query",
             "required": false,
-            "type": "string",
-            "enum": ["all", "none"]
+            "type": "string"
           },
           {
             "$ref": "#/parameters/format"
@@ -2699,7 +2698,7 @@
     "Asset": {
       "description": "Specifies both the unique identifier and the parameters for an asset",
       "type": "object",
-      "required": ["index", "params"],
+      "required": ["index"],
       "properties": {
         "index": {
           "description": "unique asset identifier",
@@ -3067,7 +3066,7 @@
     "Application": {
       "description": "Application index and its parameters",
       "type": "object",
-      "required": ["id", "params"],
+      "required": ["id"],
       "properties": {
         "id": {
           "description": "\\[appidx\\] application index.",

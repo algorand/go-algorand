@@ -497,7 +497,7 @@ func TestDryrunGlobal1(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
 				GlobalStateSchema: &model.ApplicationStateSchema{
@@ -547,7 +547,7 @@ func TestDryrunGlobal2(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1234,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
 			},
@@ -594,7 +594,7 @@ func TestDryrunLocal1(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 				LocalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: 10,
@@ -668,7 +668,7 @@ func TestDryrunLocal1A(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				LocalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: 10,
 					NumUint:      10,
@@ -746,7 +746,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1234,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -806,7 +806,7 @@ func TestDryrunMultipleTxns(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
 				GlobalStateSchema: &model.ApplicationStateSchema{
@@ -851,7 +851,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	gdr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -961,7 +961,7 @@ func TestDryrunMakeLedger(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				Creator:         sender.String(),
 				ApprovalProgram: localStateCheckProg,
 			},
@@ -1156,7 +1156,7 @@ int 1`)
 		Apps: []model.Application{
 			{
 				Id: appIdx,
-				Params: model.ApplicationParams{
+				Params: &model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
@@ -1247,7 +1247,7 @@ return
 		Apps: []model.Application{
 			{
 				Id: appIdx,
-				Params: model.ApplicationParams{
+				Params: &model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
@@ -1256,7 +1256,7 @@ return
 			},
 			{
 				Id: appIdx + 1,
-				Params: model.ApplicationParams{
+				Params: &model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approv,
 					ClearStateProgram: clst,
@@ -1384,7 +1384,7 @@ int 1`)
 				Apps: []model.Application{
 					{
 						Id: appIdx,
-						Params: model.ApplicationParams{
+						Params: &model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app1,
 							ClearStateProgram: clst,
@@ -1393,7 +1393,7 @@ int 1`)
 					},
 					{
 						Id: appIdx + 1,
-						Params: model.ApplicationParams{
+						Params: &model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app2,
 							ClearStateProgram: clst,
@@ -1402,7 +1402,7 @@ int 1`)
 					},
 					{
 						Id: appIdx + 2,
-						Params: model.ApplicationParams{
+						Params: &model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app3,
 							ClearStateProgram: clst,
@@ -1484,7 +1484,7 @@ int 1`
 		}.SignedTxn()},
 		Apps: []model.Application{{
 			Id: appIdx,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				Creator:           sender.String(),
 				ApprovalProgram:   approval,
 				ClearStateProgram: clst,
@@ -1546,7 +1546,7 @@ int 0
 		Apps: []model.Application{
 			{
 				Id: appIdx,
-				Params: model.ApplicationParams{
+				Params: &model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
@@ -1611,7 +1611,7 @@ int 1
 		}.SignedTxn()},
 		Apps: []model.Application{{
 			Id: appIdx,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram:   paySender.Program,
 				ClearStateProgram: clst,
 			},
@@ -1687,7 +1687,7 @@ int 1`)
 			ApplicationID: appIdx}.SignedTxn())
 		apps = append(apps, model.Application{
 			Id: appIdx,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram:   approvalOps.Program,
 				ClearStateProgram: clst,
 			},
@@ -1806,7 +1806,7 @@ int %d`, expectedUint, i))
 		dr.Apps = []model.Application{
 			{
 				Id: 1,
-				Params: model.ApplicationParams{
+				Params: &model.ApplicationParams{
 					ApprovalProgram: ops.Program,
 					GlobalStateSchema: &model.ApplicationStateSchema{
 						NumByteSlice: 1,
@@ -1861,7 +1861,7 @@ func TestDryrunEarlyExit(t *testing.T) {
 	}
 	dr.Apps = []model.Application{{
 		Id: 1,
-		Params: model.ApplicationParams{
+		Params: &model.ApplicationParams{
 			ApprovalProgram: ops.Program,
 		},
 	}}
