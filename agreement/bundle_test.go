@@ -89,8 +89,9 @@ func TestBundleCreationWithZeroVotes(t *testing.T) {
 		var ub unauthenticatedBundle
 		makeBundlePanicWrapper(t, "makeBundle: no votes present in bundle (len(equivocationVotes) =", proposal, votes, nil)
 
+		ub.Step = step(s)
 		bundle, err := ub.verify(context.Background(), ledger, avv)
-		require.ErrorContains(t, err, `unauthenticatedBundle.verify: b.Step = 0`)
+		require.ErrorContains(t, err, `bundle: did not see enough votes: 0`)
 
 		bundles = append(bundles, bundle)
 	}
