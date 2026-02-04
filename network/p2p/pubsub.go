@@ -86,6 +86,8 @@ func deriveAlgorandGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams 
 	params := pubsub.DefaultGossipSubParams()
 
 	// configure larger overlay parameters
+	// despite the fact D-values are later overridden based on numOutgoingConns,
+	// we still want to give an idea what values might/should be by default.
 	params.D = 8
 	params.Dscore = 6
 	params.Dout = 3
