@@ -2212,7 +2212,12 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.ErrorContains(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}), `txTail: tried to check for dup in missing round 639`)
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2261,7 +2266,12 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.ErrorContains(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}), `txTail: tried to check for dup in missing round 639`)
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
 	}
 }
 
