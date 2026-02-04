@@ -174,6 +174,26 @@ int not_an_int`,
 	require.Contains(t, response.Error, "5:4: unable to parse \"not_an_int\" as integer")
 }
 
+func TestDryrunAppWithoutParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test that an app without params and without Sources fails validation
+	dr := DryrunRequest{
+		Apps: []model.Application{
+			{
+				Id: 1007,
+				// No Params, no Sources - should fail validation
+			},
+		},
+	}
+	var response model.DryrunResponse
+
+	doDryrunRequest(&dr, &response)
+	require.NotEmpty(t, response.Error)
+	require.Contains(t, response.Error, "application 1007 does not have params set")
+}
+
 func TestDryrunLogicSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}

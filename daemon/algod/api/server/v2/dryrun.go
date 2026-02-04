@@ -119,6 +119,19 @@ func (dr *DryrunRequest) ExpandSources() error {
 	return nil
 }
 
+// ValidateApps ensures all applications have params set.
+// This should be called after ExpandSources to ensure that either:
+// 1. The caller provided params explicitly, or
+// 2. Sources populated the params
+func (dr *DryrunRequest) ValidateApps() error {
+	for _, app := range dr.Apps {
+		if app.Params == nil {
+			return fmt.Errorf("application %d does not have params set", app.Id)
+		}
+	}
+	return nil
+}
+
 type dryrunDebugReceiver struct {
 	disassembly   string
 	lines         []string
@@ -424,6 +437,13 @@ func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx
 // important: dr.ProtocolVersion is used by underlying ledger implementation so that it must exist in config.Consensus
 func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 	err := dr.ExpandSources()
+	if err != nil {
+		response.Error = err.Error()
+		return
+	}
+
+	// Validate that all apps have params after Sources expansion
+	err = dr.ValidateApps()
 	if err != nil {
 		response.Error = err.Error()
 		return
