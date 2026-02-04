@@ -101,6 +101,9 @@ func (dr *DryrunRequest) ExpandSources() error {
 		case "approv", "clearp":
 			for ai, app := range dr.Apps {
 				if app.Id == s.AppIndex {
+					if dr.Apps[ai].Params == nil {
+						dr.Apps[ai].Params = &model.ApplicationParams{}
+					}
 					switch s.FieldName {
 					case "approv":
 						dr.Apps[ai].Params.ApprovalProgram = ops.Program
