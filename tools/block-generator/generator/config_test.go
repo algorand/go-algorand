@@ -232,7 +232,7 @@ func TestTxTypeParse(t *testing.T) {
 			isApp, kind, txType, err := parseAppTxType(test.txType)
 
 			if test.err != "" {
-				require.Error(t, err, test.err)
+				require.ErrorContains(t, err, test.err)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.IsApp, isApp, "Mismatch in isApp for %s", test.txType)

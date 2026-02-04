@@ -58,28 +58,28 @@ func TestValidRounds(t *testing.T) {
 	lastValid = 0
 	validRounds = maxTxnLife + 2
 	_, _, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
-	a.Error(err)
+	require.ErrorContains(t, err, `cannot construct transaction: txn validity period 1001 is greater than protocol max txn lifetime 1000`)
 	a.Equal("cannot construct transaction: txn validity period 1001 is greater than protocol max txn lifetime 1000", err.Error())
 
 	firstValid = 0
 	lastValid = 1
 	validRounds = 2
 	_, _, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
-	a.Error(err)
+	require.ErrorContains(t, err, `cannot construct transaction: ambiguous input: lastValid = 1, validRounds = 2`)
 	a.Equal("cannot construct transaction: ambiguous input: lastValid = 1, validRounds = 2", err.Error())
 
 	firstValid = 2
 	lastValid = 1
 	validRounds = 0
 	_, _, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
-	a.Error(err)
+	require.ErrorContains(t, err, `cannot construct transaction: txn would first be valid on round 2 which is after last valid round 1`)
 	a.Equal("cannot construct transaction: txn would first be valid on round 2 which is after last valid round 1", err.Error())
 
 	firstValid = 1
 	lastValid = maxTxnLife + 2
 	validRounds = 0
 	_, _, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
-	a.Error(err)
+	require.ErrorContains(t, err, `cannot construct transaction: txn validity period ( 1 to 1002 ) is greater than protocol max txn lifetime 1000`)
 	a.Equal("cannot construct transaction: txn validity period ( 1 to 1002 ) is greater than protocol max txn lifetime 1000", err.Error())
 
 	firstValid = 1

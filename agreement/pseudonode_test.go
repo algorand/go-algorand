@@ -174,7 +174,7 @@ func TestPseudonode(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	assert.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
+	assert.ErrorContains(t, err, `pseudonode input channel is full`, "MakeProposals did not returned an error when being overflowed with requests")
 
 	persist := make(chan error)
 	close(persist)
@@ -186,7 +186,7 @@ func TestPseudonode(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	assert.Error(t, err, "MakeVotes did not returned an error when being overflowed with requests")
+	assert.ErrorContains(t, err, `pseudonode input channel is full`, "MakeVotes did not returned an error when being overflowed with requests")
 
 	// drain output channels.
 	for _, ch := range channels {
@@ -525,7 +525,6 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		channels = append(channels, ch)
 	}
 	enqueuedProposals := len(channels)
-	require.Error(t, err, "MakeProposals did not returned an error when being overflowed with requests")
 	require.ErrorIs(t, err, errPseudonodeBacklogFull)
 
 	persist := make(chan error)
@@ -538,7 +537,7 @@ func TestPseudonodeNonEnqueuedTasks(t *testing.T) {
 		}
 		channels = append(channels, ch)
 	}
-	require.Error(t, err, "MakeVotes did not returned an error when being overflowed with requests")
+	require.ErrorIs(t, err, errPseudonodeBacklogFull, "MakeVotes did not returned an error when being overflowed with requests")
 	enqueuedVotes := len(channels) - enqueuedProposals
 	// drain output channels.
 	for _, ch := range channels {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -271,7 +272,7 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	cLatest.Version = getLatestConfigVersion() + 1
 	_, _, err = migrate(cLatest)
-	a.Error(err)
+	require.ErrorContains(t, err, `unexpected config version: 38`)
 
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
@@ -355,7 +356,7 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
 	_, _, err = migrate(cNext)
-	a.Error(err)
+	require.ErrorContains(t, err, `unexpected config version: 38`)
 }
 
 // Verify that nobody is changing the shipping default configurations
@@ -999,7 +1000,7 @@ func TestEnsureAndResolveGenesisDirs_migrateCrashErr(t *testing.T) {
 	require.NoError(t, err)
 	// Resolve
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
-	require.Error(t, err)
+	require.ErrorContains(t, err, `error moving crash DB files from ColdDataDir`)
 	require.Empty(t, paths)
 	// Confirm that crash.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite"))
@@ -1031,7 +1032,7 @@ func TestEnsureAndResolveGenesisDirs_migrateSPErr(t *testing.T) {
 	require.NoError(t, err)
 	// Resolve
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
-	require.Error(t, err)
+	require.ErrorContains(t, err, `error moving stateproof DB files from ColdDataDir`)
 	require.Empty(t, paths)
 	// Confirm that stateproof.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite"))
@@ -1057,16 +1058,15 @@ func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
 	// first try an error with an empty root dir
 	paths, err := cfg.EnsureAndResolveGenesisDirs("", "myGenesisID", tLogger{t: t})
 	require.Empty(t, paths)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "rootDir is required")
+	require.ErrorContains(t, err, "rootDir is required")
 
 	require.NoError(t, os.Chmod(testDirectory, 0200))
 
 	// now try an error with a root dir that can't be written to
 	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
 	require.Empty(t, paths)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "permission denied")
+	var pathErr *fs.PathError
+	require.ErrorAs(t, err, &pathErr)
 }
 
 // TestResolveLogPaths confirms that log paths are resolved to the most appropriate data directory of the supplied config

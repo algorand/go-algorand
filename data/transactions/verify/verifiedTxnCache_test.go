@@ -186,5 +186,6 @@ func TestPinningTransactions(t *testing.T) {
 	require.NoError(t, impl.Pin(txnGroups[0]))
 
 	// try to pin an entry that was not added.
-	require.Error(t, impl.Pin(txnGroups[len(txnGroups)-1]))
+	var verifiedTxnCacheErr *VerifiedTxnCacheError
+	require.ErrorAs(t, impl.Pin(txnGroups[len(txnGroups)-1]), &verifiedTxnCacheErr)
 }

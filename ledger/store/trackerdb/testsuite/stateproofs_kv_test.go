@@ -63,8 +63,7 @@ func CustomTestStateproofsReadWrite(t *customT) {
 
 	// read non-existing item
 	vc, err := spr.LookupSPContext(basics.Round(9000))
-	require.Error(t, err)
-	require.Equal(t, trackerdb.ErrNotFound, err)
+	require.ErrorIs(t, err, trackerdb.ErrNotFound)
 
 	// read back a single item
 	vc, err = spr.LookupSPContext(basics.Round(0))
@@ -78,8 +77,7 @@ func CustomTestStateproofsReadWrite(t *customT) {
 
 	// read delete items
 	vc, err = spr.LookupSPContext(basics.Round(0))
-	require.Error(t, err)
-	require.Equal(t, trackerdb.ErrNotFound, err)
+	require.ErrorIs(t, err, trackerdb.ErrNotFound)
 
 	// read back remaining items
 	vc, err = spr.LookupSPContext(basics.Round(1))

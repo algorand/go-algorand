@@ -255,7 +255,7 @@ func TestSignedPayment(t *testing.T) {
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
 	groupCtx.signedGroupTxns[0] = stxn2
-	require.Error(t, verifyTxn(0, groupCtx), "verify succeeded with bad sig")
+	require.ErrorContains(t, verifyTxn(0, groupCtx), `At least one signature didn't pass verification`, "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
@@ -339,7 +339,7 @@ func TestTxnValidationStateProof(t *testing.T) {
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.Error(t, err, "payment txn %#v verified from StateProofSender", stxn2)
+	require.ErrorIs(t, err, errTxnSigHasNoSig, "payment txn %#v verified from StateProofSender", stxn2)
 
 	secret := keypair()
 	stxn2 = stxn
@@ -348,32 +348,33 @@ func TestTxnValidationStateProof(t *testing.T) {
 	stxn2 = stxn2.Txn.Sign(secret)
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.Error(t, err, "state proof txn %#v verified from non-StateProofSender", stxn2)
+	var txGroupErr *TxGroupError
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified from non-StateProofSender", stxn2)
 
 	// state proof txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.Error(t, err, "state proof txn %#v verified", stxn2)
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Header.Note = []byte{'A'}
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.Error(t, err, "state proof txn %#v verified", stxn2)
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Lease[0] = 1
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.Error(t, err, "state proof txn %#v verified", stxn2)
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
 	groupCtx.signedGroupTxns[0] = stxn2
 	err = verifyTxn(0, groupCtx)
-	require.Error(t, err, "state proof txn %#v verified", stxn2)
+	require.ErrorAs(t, err, &txGroupErr, "state proof txn %#v verified", stxn2)
 }
 
 func TestDecodeNil(t *testing.T) {
@@ -615,7 +616,7 @@ func TestPaysetGroups(t *testing.T) {
 	// break the signature and see if it fails.
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
 	err = PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
-	require.Error(t, err)
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 
 	// ensure the rest are fine
 	err = PaysetGroups(context.Background(), txnGroups[1:], blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
@@ -743,7 +744,8 @@ func TestLsigSize(t *testing.T) {
 		if test.success {
 			require.NoError(t, err)
 		} else {
-			require.Error(t, err)
+			var txGroupErr *TxGroupError
+			require.ErrorAs(t, err, &txGroupErr)
 		}
 	}
 }
@@ -772,8 +774,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	tmpSig := txnGroups[0][0].Sig
 	txnGroups[0][0].Sig = crypto.Signature{}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "has no sig")
+	require.ErrorIs(t, err, errTxnSigHasNoSig)
 	txnGroups[0][0].Sig = tmpSig
 
 	///// Sig + multiSig
@@ -783,15 +784,13 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 	txnGroups[0][0].Msig.Subsigs = nil
 
 	///// Sig + logic
 	txnGroups[0][0].Lsig.Logic = op.Program
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 	txnGroups[0][0].Lsig.Logic = []byte{}
 
 	///// MultiSig + logic
@@ -803,8 +802,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig or Msig or LogicSig")
+	require.ErrorIs(t, err, errTxnSigNotWellFormed)
 	txnGroups[0][0].Lsig.Logic = []byte{}
 	txnGroups[0][0].Sig = tmpSig
 	txnGroups[0][0].Msig.Subsigs = nil
@@ -819,8 +817,8 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	var txGroupErr *TxGroupError
+	require.ErrorAs(t, err, &txGroupErr)
 	txnGroups[0][0].Lsig.Msig.Subsigs = nil
 
 	/////  logic with sig and LMsig
@@ -830,8 +828,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x2},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	require.ErrorAs(t, err, &txGroupErr)
 	txnGroups[0][0].Lsig.Sig = crypto.Signature{}
 	txnGroups[0][0].Lsig.LMsig.Subsigs = nil
 
@@ -847,8 +844,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 		Sig: crypto.Signature{0x4},
 	}
 	_, err = TxnGroup(txnGroups[0], &blkHdr, nil, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "should only have one of Sig, Msig, or LMsig")
+	require.ErrorAs(t, err, &txGroupErr)
 
 }
 
@@ -1194,8 +1190,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 
 	dummyLedger := DummyLedgerForSignature{}
 	_, err := TxnGroup(txnGroups[0], blkHdr, cache, &dummyLedger)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), errorString)
+	require.ErrorContains(t, err, errorString)
 
 	// The txns should not be in the cache
 	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups[:1], spec, blkHdr.CurrentProtocol)
@@ -1232,8 +1227,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 	for _, txng := range txnGroups {
 		_, err = TxnGroup(txng, blkHdr, cache, &dummyLedger)
 		if err != nil {
-			require.Error(t, err)
-			require.Contains(t, err.Error(), errorString)
+			require.ErrorContains(t, err, errorString)
 			numFailed++
 		}
 	}
@@ -1342,7 +1336,7 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 
 		err = verifyLogicSig(t, stxn)
 		if useLMsig {
-			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+			require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 		} else {
 			require.NoError(t, err)
 		}
@@ -1366,7 +1360,7 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		if useLMsig { // >=v41: use LMsig field
 			stxn.Lsig = transactions.LogicSig{Logic: program, LMsig: msigWithSingleSig}
 			err = verifyLogicSig(t, stxn)
-			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+			require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 		} else { // v40: use Msig field
 			stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msigWithSingleSig}
 			err = verifyLogicSig(t, stxn)
@@ -1410,7 +1404,7 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		if useLMsig { // >=v41: use LMsig field
 			stxn.Lsig = transactions.LogicSig{Logic: program, LMsig: mixedMsig}
 			err = verifyLogicSig(t, stxn)
-			require.ErrorContains(t, err, "At least one signature didn't pass verification")
+			require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 		} else { // v40: use Msig field
 			stxn.Lsig = transactions.LogicSig{Logic: program, Msig: mixedMsig}
 			err = verifyLogicSig(t, stxn)
@@ -1453,7 +1447,8 @@ func testLogicSigMultisigValidation(t *testing.T, consensusVer protocol.Consensu
 		// Test with both fields - should fail
 		stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: msig}
 		err = verifyLogicSig(t, stxn)
-		require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+		var txGroupErr *TxGroupError
+		require.ErrorAs(t, err, &txGroupErr)
 	})
 }
 
@@ -1529,7 +1524,8 @@ func TestLogicSigMsigBothFlags(t *testing.T) {
 	// Test with both fields - should fail
 	stxn.Lsig = transactions.LogicSig{Logic: program, Msig: msig, LMsig: lmsig}
 	err = verifyLogicSig()
-	require.ErrorContains(t, err, "LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
+	var txGroupErr *TxGroupError
+	require.ErrorAs(t, err, &txGroupErr)
 }
 
 func TestAuthAddrSenderDiff(t *testing.T) {
@@ -1572,7 +1568,7 @@ func testAuthAddrSenderDiff(t *testing.T, consensusVer protocol.ConsensusVersion
 	require.NoError(t, err)
 	err = verifyTxn(0, groupCtx)
 	if enforceEnabled {
-		require.ErrorContains(t, err, "AuthAddr must be different from Sender",
+		require.ErrorIs(t, err, errAuthAddrEqualsSender,
 			"AuthAddr == Sender should be rejected when enforcement is enabled")
 	} else {
 		require.NoError(t, err,

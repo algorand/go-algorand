@@ -130,8 +130,7 @@ func (dl *DoubleLedger) txgroup(problem string, txns ...*txntest.Txn) (payset []
 	if problem == "" {
 		require.NoError(dl.t, err)
 	} else {
-		require.Error(dl.t, err)
-		require.Contains(dl.t, err.Error(), problem)
+		require.ErrorContains(dl.t, err, problem)
 	}
 	return nil
 }

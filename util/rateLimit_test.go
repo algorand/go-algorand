@@ -70,7 +70,7 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, `congestionManager prevented client from consuming capacity`)
 
 	erl.DisableCongestionControl()
 	_, _, err = erl.ConsumeCapacity(client)
@@ -161,7 +161,7 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 	_, _, err = erl.ConsumeCapacity(client)
 	assert.Equal(t, 0, len(erl.capacityByClient[client]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, `could not consume capacity from capacityQueue`)
 
 	// now release the capacity and observe the items return to the correct places
 	err = c1.Release()

@@ -63,7 +63,7 @@ func TestMultisigAddr(t *testing.T) {
 	// test if invalid threshold can be detected
 	// #keys= 2 < threshold = 3
 	_, err = MultisigAddrGen(version, threshold, pks)
-	require.Error(t, err, "MultisigAddr: unable to detect invalid threshold (keys == %d, threshold == %d)", len(pks), threshold)
+	require.ErrorIs(t, err, errInvalidThreshold, "MultisigAddr: unable to detect invalid threshold (keys == %d, threshold == %d)", len(pks), threshold)
 	// #keys = 3 == threshold = 3
 	pks = append(pks, secrets[2].SignatureVerifier)
 	_, err = MultisigAddrGen(version, threshold, pks)
@@ -111,10 +111,10 @@ func TestMultisig(t *testing.T) {
 	// now testing signing functions
 	// check if invalid version can be detected
 	_, err = MultisigSign(txid, addr, version+1, threshold, pks, *secrets[0])
-	require.Error(t, err, "should be able to detect invalid version number")
+	require.ErrorIs(t, err, errUnknownVersion, "should be able to detect invalid version number")
 	//	check if invalid secret key can be detected
 	_, err = MultisigSign(txid, addr, version, threshold, pks, *secrets[4])
-	require.Error(t, err, "should be able to detect invalid secret key used")
+	require.ErrorIs(t, err, errKeyNotExist, "should be able to detect invalid secret key used")
 
 	// test assembling
 	// test1: assemble a single signature -- should return failure
@@ -122,7 +122,7 @@ func TestMultisig(t *testing.T) {
 	sigs[0], err = MultisigSign(txid, addr, version, threshold, pks, *secrets[3])
 	require.NoError(t, err, "Multisig: unexpected failure in multisig signing")
 	_, err = MultisigAssemble(sigs)
-	require.Error(t, err, "should be able to detect insufficient signatures for assembling")
+	require.ErrorContains(t, err, `invalid number of signatures to assemble`, "should be able to detect insufficient signatures for assembling")
 
 	// test2: assemble 3 signatures
 	// signing three signatures with pk0, pk1 and pk2
@@ -249,10 +249,10 @@ func TestEmptyMultisig(t *testing.T) {
 	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
 	emptyMutliSig := MultisigSig{Version: version, Threshold: threshold, Subsigs: make([]MultisigSubsig, 0)}
 	err = MultisigVerify(txid, addr, emptyMutliSig)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, emptyMutliSig, br)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
 }
 
 func TestIncorrectAddrresInMultisig(t *testing.T) {
@@ -275,10 +275,10 @@ func TestIncorrectAddrresInMultisig(t *testing.T) {
 	require.NoError(t, err, "Multisig: could not create mutlisig")
 	addr[0] = addr[0] + 1
 	err = MultisigVerify(txid, addr, MutliSig)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidAddress, "Multisig: did not return error as expected")
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, MutliSig, br)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidAddress, "Multisig: did not return error as expected")
 
 }
 
@@ -312,10 +312,10 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	msig, err := MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: error assemble multisig")
 	err = MultisigVerify(txid, addr, msig)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
 }
 
 func TestOneSignatureIsEmpty(t *testing.T) {
@@ -349,10 +349,10 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 	require.NoError(t, err, "Multisig: error assemble multisig")
 	msig.Subsigs[0].Sig = Signature{}
 	err = MultisigVerify(txid, addr, msig)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
 }
 
 // in this test we want to test what happen if one of the signatures are not valid.
@@ -388,12 +388,12 @@ func TestOneSignatureIsInvalid(t *testing.T) {
 	msig, err := MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: error assemble multisig")
 	err = MultisigVerify(txid, addr, msig)
-	require.Error(t, err, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, ErrBatchHasFailedSigs, "Multisig: did not return error as expected")
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
 	require.NoError(t, err, "Multisig: did not return error as expected")
 	res := br.Verify()
-	require.Error(t, res, "Multisig: batch verification passed on broken signature")
+	require.ErrorIs(t, res, ErrBatchHasFailedSigs, "Multisig: batch verification passed on broken signature")
 
 }
 
@@ -440,12 +440,12 @@ func TestMultisigLessThanTrashold(t *testing.T) {
 	require.NoError(t, err, "should be able to detect insufficient signatures for assembling")
 	msig.Subsigs[1].Sig = BlankSignature
 	err = MultisigVerify(txid, addr, msig)
-	require.Error(t, err, "Multisig: expected verification failure with err")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: expected verification failure with err")
 
 	msig, err = MultisigAssemble(sigs)
 	require.NoError(t, err, "should be able to detect insufficient signatures for assembling")
 	msig.Subsigs = msig.Subsigs[:len(msig.Subsigs)-1]
 	err = MultisigVerify(txid, addr, msig)
-	require.Error(t, err, "Multisig: expected verification failure with err")
+	require.ErrorIs(t, err, errInvalidAddress, "Multisig: expected verification failure with err")
 
 }

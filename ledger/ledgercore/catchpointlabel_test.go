@@ -17,6 +17,8 @@
 package ledgercore
 
 import (
+	"encoding/base32"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -101,15 +103,17 @@ func TestCatchpointLabelParsing2(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, _, err := ParseCatchpointLabel("5893060#KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJAB")
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrCatchpointParsingFailed)
 	_, _, err = ParseCatchpointLabel("5893060KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrCatchpointParsingFailed)
 	_, _, err = ParseCatchpointLabel("5893060##KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrCatchpointParsingFailed)
 	_, _, err = ParseCatchpointLabel("5x893060#KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	require.Error(t, err)
+	var numErr *strconv.NumError
+	require.ErrorAs(t, err, &numErr)
 	_, _, err = ParseCatchpointLabel("-5893060#KURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	require.Error(t, err)
+	require.ErrorAs(t, err, &numErr)
 	_, _, err = ParseCatchpointLabel("5893060#aURJLS6EWBEVXTMLC7NP3NABTUMQP32QUJOBBW2TT23376L6RWJA")
-	require.Error(t, err)
+	var corruptInputErr base32.CorruptInputError
+	require.ErrorAs(t, err, &corruptInputErr)
 }

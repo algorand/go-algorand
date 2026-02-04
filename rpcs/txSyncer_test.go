@@ -210,7 +210,7 @@ func TestSyncFromUnsupportedClient(t *testing.T) {
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
-	require.Error(t, syncer.syncFromClient(&client))
+	require.ErrorContains(t, syncer.syncFromClient(&client), `TxSyncer.Sync: peer 'mock.address.' error 'old failWithNil'`)
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -227,7 +227,7 @@ func TestSyncFromClientAndQuit(t *testing.T) {
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	syncer.cancel()
-	require.Error(t, syncer.syncFromClient(&client))
+	require.ErrorContains(t, syncer.syncFromClient(&client), `TxSyncer.Sync: peer 'mock.address.' error 'cancelled'`)
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -243,7 +243,7 @@ func TestSyncFromClientAndError(t *testing.T) {
 	// Since syncer is not Started, set the context here
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
-	require.Error(t, syncer.syncFromClient(&client))
+	require.ErrorContains(t, syncer.syncFromClient(&client), `TxSyncer.Sync: peer 'mock.address.' error 'failing call'`)
 	require.Zero(t, handler.messageCounter.Load())
 }
 
@@ -260,7 +260,7 @@ func TestSyncFromClientAndTimeout(t *testing.T) {
 	// Since syncer is not Started, set the context here
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
-	require.Error(t, syncer.syncFromClient(&client))
+	require.ErrorContains(t, syncer.syncFromClient(&client), `TxSyncer.Sync: peer 'mock.address.' error 'cancelled'`)
 	require.Zero(t, handler.messageCounter.Load())
 }
 

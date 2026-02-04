@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-codec/codec"
+	"github.com/algorand/msgp/msgp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -209,7 +210,8 @@ func TestMsgpDecode(t *testing.T) {
 	var tag Tag = "test"
 	dec := NewMsgpDecoderBytes([]byte{1, 2, 3})
 	err := dec.Decode(&tag)
-	require.Error(t, err)
+	var typeErr msgp.TypeError
+	require.ErrorAs(t, err, &typeErr)
 
 	data := EncodeMsgp(tag)
 	dec = NewMsgpDecoderBytes(data)
@@ -233,7 +235,6 @@ func TestMsgpDecode(t *testing.T) {
 		require.Equal(t, tags[i], tag2)
 	}
 	err = dec.Decode(&tag2)
-	require.Error(t, err)
 	require.ErrorIs(t, err, io.EOF)
 }
 

@@ -747,7 +747,7 @@ func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 	// this tx tries to both register keys to go online, and mark an account as non-participating.
 	// it is not well-formed.
 	err = tx.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
-	require.ErrorContains(t, err, "tries to register keys to go online, but nonparticipatory flag is set")
+	require.ErrorIs(t, err, errKeyregTxnGoingOnlineWithNonParticipating)
 }
 
 func TestGoNonparticipatingWellFormed(t *testing.T) {
@@ -770,7 +770,7 @@ func TestGoNonparticipatingWellFormed(t *testing.T) {
 	// but it should stop being well-formed if the protocol does not support it
 	curProto.SupportBecomeNonParticipatingTransactions = false
 	err = tx.WellFormed(SpecialAddresses{}, curProto)
-	require.ErrorContains(t, err, "mark an account as nonparticipating, but")
+	require.ErrorIs(t, err, errKeyregTxnUnsupportedSwitchToNonParticipating)
 }
 
 func TestKeyregFeeSink(t *testing.T) {

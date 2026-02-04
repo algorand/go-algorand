@@ -110,16 +110,17 @@ func TestErrors(t *testing.T) {
 	t.Parallel()
 	// Validates that expected functions are disabled
 	node := setupFollowNode(t)
-	require.Error(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}))
-	require.Error(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}))
+	require.ErrorContains(t, node.BroadcastSignedTxGroup([]transactions.SignedTxn{}), `cannot broadcast txns in follower mode`)
+	require.ErrorContains(t, node.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{}), `cannot broadcast internal signed txn group in follower mode`)
 	_, err := node.Simulate(simulation.Request{})
-	require.Error(t, err)
+	var invalidRequestErr simulation.InvalidRequestError
+	require.ErrorAs(t, err, &invalidRequestErr)
 	_, err = node.GetParticipationKey(account.ParticipationID{})
-	require.Error(t, err)
-	require.Error(t, node.RemoveParticipationKey(account.ParticipationID{}))
-	require.Error(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}))
+	require.ErrorContains(t, err, `cannot get participation key in follower mode`)
+	require.ErrorContains(t, node.RemoveParticipationKey(account.ParticipationID{}), `cannot remove participation key in follower mode`)
+	require.ErrorContains(t, node.AppendParticipationKeys(account.ParticipationID{}, account.StateProofKeys{}), `cannot append participation keys in follower mode`)
 	_, err = node.InstallParticipationKey([]byte{})
-	require.Error(t, err)
+	require.ErrorContains(t, err, `cannot install participation key in follower mode`)
 }
 
 func TestDevModeWarning(t *testing.T) {

@@ -212,7 +212,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
 	msg := delta.MarshalMsg(nil)
 	_, err := delta.UnmarshalMsg(msg)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `msgp: length overflow: 257 > 256 at InnerTxns`)
 
 	delta = &EvalDelta{}
 	max = 2048 // Hardcodes bounds.MaxLogCalls, currently MaxAppProgramLen
@@ -225,7 +225,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	delta.Logs = append(delta.Logs, "junk")
 	msg = delta.MarshalMsg(nil)
 	_, err = delta.UnmarshalMsg(msg)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `msgp: length overflow: 2049 > 2048 at Logs`)
 
 	delta = &EvalDelta{}
 	max = 256 // Hardcodes bounds.MaxInnerTransactionsPerDelta
@@ -238,7 +238,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	delta.InnerTxns = append(delta.InnerTxns, SignedTxnWithAD{})
 	msg = delta.MarshalMsg(nil)
 	_, err = delta.UnmarshalMsg(msg)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `msgp: length overflow: 257 > 256 at InnerTxns`)
 
 	// This one appears wildly conservative. The real max is something like
 	// MaxAppTxnAccounts (4) + 1, since the key must be an index in the static
@@ -254,7 +254,7 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	delta.LocalDeltas[uint64(max)] = basics.StateDelta{}
 	msg = delta.MarshalMsg(nil)
 	_, err = delta.UnmarshalMsg(msg)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `msgp: length overflow: 2049 > 2048 at LocalDeltas`)
 
 	// This one *might* be wildly conservative. Only 64 keys can be set in
 	// globals, but I don't know what happens if you set and delete 65 (or way
@@ -270,6 +270,6 @@ func TestUnchangedAllocBounds(t *testing.T) {
 	delta.GlobalDelta[fmt.Sprintf("%d", max)] = basics.ValueDelta{}
 	msg = delta.MarshalMsg(nil)
 	_, err = delta.UnmarshalMsg(msg)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `msgp: length overflow: 2049 > 2048 at GlobalDelta`)
 
 }

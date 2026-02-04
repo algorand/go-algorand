@@ -257,7 +257,8 @@ func TestTooManyArgs(t *testing.T) {
 			args := [transactions.EvalMaxArgs + 1][]byte{}
 			txn.Lsig.Args = args[:]
 			pass, err := EvalSignature(0, defaultSigParams(txn))
-			require.Error(t, err)
+			var evalErr EvalError
+			require.ErrorAs(t, err, &evalErr)
 			require.False(t, pass)
 		})
 	}
@@ -274,7 +275,8 @@ func TestArgTooLarge(t *testing.T) {
 			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{make([]byte, transactions.MaxLogicSigArgSize+1)}
 			pass, err := EvalSignature(0, defaultSigParams(txn))
-			require.Error(t, err)
+			var evalErr EvalError
+			require.ErrorAs(t, err, &evalErr)
 			require.False(t, pass)
 		})
 	}
@@ -345,7 +347,7 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	require.Equal(t, string(addr[:]), tealValue.Bytes)
 
 	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 100, false)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `invalid Accounts index 100`)
 	require.Equal(t, basics.TealUintType, tealValue.Type)
 	require.Equal(t, uint64(0), tealValue.Uint)
 	require.Equal(t, "", tealValue.Bytes)
@@ -4523,7 +4525,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			_, err = EvalApp(ops.Program, 0, 0, aep)
 			if spec.Name != "return" {
 				// "return" opcode always succeeds so ignore it
-				require.Error(t, err, source)
+				require.ErrorContains(t, err, `0 appId in contract eval`, source)
 				require.NotContains(t, err.Error(), "illegal opcode")
 			}
 
@@ -5260,7 +5262,8 @@ func TestPcDetails(t *testing.T) {
 			ep.Trace = &strings.Builder{}
 
 			pass, cx, err := EvalContract(ops.Program, 0, 888, ep)
-			require.Error(t, err)
+			var evalErr EvalError
+			require.ErrorAs(t, err, &evalErr)
 			require.False(t, pass)
 			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
@@ -5482,7 +5485,7 @@ func TestProtocolParseDuplicateErrMsg(t *testing.T) {
 	var parsed map[string]json.RawMessage
 	err := protocol.DecodeJSON([]byte(text), &parsed)
 	require.Contains(t, err.Error(), "cannot decode into a non-pointer value")
-	require.Error(t, err)
+	require.ErrorContains(t, err, `json decode error [pos 26]: cannot decode into a non-pointer value`)
 }
 
 func TestOpJSONRef(t *testing.T) {
@@ -6231,7 +6234,7 @@ func TestNoHeaderLedger(t *testing.T) {
 
 	nhl := NoHeaderLedger{}
 	_, err := nhl.BlockHdr(1)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `no block header access`)
 	require.Equal(t, err, fmt.Errorf("no block header access"))
 }
 

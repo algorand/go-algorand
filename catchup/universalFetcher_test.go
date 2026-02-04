@@ -73,7 +73,8 @@ func TestUGetBlockWs(t *testing.T) {
 
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, up)
 
-	require.Error(t, err)
+	var noBlockForRoundErr noBlockForRoundError
+	require.ErrorAs(t, err, &noBlockForRoundErr)
 	var noBlockErr noBlockForRoundError
 	require.ErrorAs(t, err, &noBlockErr)
 	require.Equal(t, next+1, err.(noBlockForRoundError).round)
@@ -138,8 +139,7 @@ func TestUGetBlockUnsupported(t *testing.T) {
 	fetcher := universalBlockFetcher{}
 	peer := ""
 	block, cert, duration, err := fetcher.fetchBlock(context.Background(), 1, peer)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
+	require.ErrorContains(t, err, "fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))

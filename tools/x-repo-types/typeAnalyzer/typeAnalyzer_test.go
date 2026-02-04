@@ -75,7 +75,7 @@ func TestEdgeFromLabel(t *testing.T) {
 			t.Parallel()
 			edge, err := ChildNameFromLabel(tc.label)
 			if tc.expectError {
-				require.Error(t, err)
+				require.ErrorContains(t, err, `invalid label`)
 				require.Equal(t, ChildName{}, edge)
 			} else {
 				require.NoError(t, err)

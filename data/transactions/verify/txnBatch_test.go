@@ -402,7 +402,7 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	for x := 0; x < 10; x++ {
 		err := verificationPool.EnqueueBacklog(context.Background(),
 			func(arg interface{}) interface{} { return nil }, nil, nil)
-		require.Error(t, err, fmt.Sprintf("x = %d", x))
+		require.ErrorContains(t, err, `context canceled`, "x = %d", x)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -800,10 +800,10 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 func TestStreamToBatchMakeStreamToBatchErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	_, err := MakeSigVerifier(&DummyLedgerForSignature{badHdr: true}, nil)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `MakeSigVerifier: Could not get header for previous block: test error block hdr`)
 
 	_, err = MakeSigVerifyJobProcessor(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `MakeSigVerifier: Could not get header for previous block: test error block hdr`)
 }
 
 // TestStreamToBatchCancelWhenPooled tests the case where the ctx is cancled after the verification
@@ -902,5 +902,5 @@ func TestSigVerifier(t *testing.T) {
 	txnGroup = txnGroups[0]
 
 	err = verifier.Verify(txnGroup)
-	require.Error(t, err)
+	require.ErrorIs(t, err, crypto.ErrBatchHasFailedSigs)
 }

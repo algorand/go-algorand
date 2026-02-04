@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -377,7 +378,7 @@ func TestMultisigSignWithWrongSigner(t *testing.T) {
 
 	resp2 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
 	err = f.Client.DoV1Request(req2, &resp2)
-	a.Error(err)
+	errorcontains.CaptureError(t, err)
 
 }
 

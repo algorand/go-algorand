@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -133,17 +134,18 @@ func TestVersionToMajorMinor(t *testing.T) {
 	require.Equal(t, int64(2), mi)
 
 	ma, mi, err = versionToMajorMinor("1.2.3")
-	require.Error(t, err)
+	require.ErrorContains(t, err, `version 1.2.3 does not have two components`)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("1")
-	require.Error(t, err)
+	require.ErrorContains(t, err, `version 1 does not have two components`)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 
 	ma, mi, err = versionToMajorMinor("a.b")
-	require.Error(t, err)
+	var numErr *strconv.NumError
+	require.ErrorAs(t, err, &numErr)
 	require.Zero(t, ma)
 	require.Zero(t, mi)
 }

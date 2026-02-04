@@ -310,11 +310,12 @@ func TestTxnEffectsAvailable(t *testing.T) {
 			ep, _, _ := makeSampleEnv()
 			ep.TxnGroup[1].Lsig.Logic = ops.Program
 			_, err := EvalSignature(1, ep)
-			require.Error(t, err)
+			require.ErrorContains(t, err, `attempt to evaluate a signature with Application mode EvalParams`)
 			ep.Ledger = NewLedger(nil)
 			_, err = EvalApp(ops.Program, 1, 888, ep)
 			if v < txnEffectsVersion {
-				require.Error(t, err, source)
+				var evalErr EvalError
+				require.ErrorAs(t, err, &evalErr, source)
 			} else {
 				if fs.array {
 					continue // Array (Logs) will be 0 length, so will fail anyway

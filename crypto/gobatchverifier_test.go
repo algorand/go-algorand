@@ -214,7 +214,7 @@ func testBatchVectors(t *testing.T, makeBV func(int) BatchVerifier, testVectors 
 		}
 		failed, err := bv.VerifyWithFeedback()
 		if slices.Contains(expFail, true) { // some failures expected
-			require.Error(t, err)
+			require.ErrorIs(t, err, ErrBatchHasFailedSigs)
 			require.NotNil(t, failed)
 			require.Len(t, failed, len(vecs))
 			for i := range expFail {

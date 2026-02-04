@@ -686,7 +686,8 @@ func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 	ao.deltas = make([]ledgercore.AccountDeltas, 10)
 	ao.onlineRoundParamsData = make([]ledgercore.OnlineRoundParamsData, 331)
 	offset, err = ao.roundParamsOffset(basics.Round(6))
-	require.Error(t, err)
+	var roundOffsetErr *RoundOffsetError
+	require.ErrorAs(t, err, &roundOffsetErr)
 	require.Zero(t, offset)
 
 	ao.cachedDBRoundOnline = 400
@@ -700,7 +701,7 @@ func TestAcctOnlineRoundParamsOffset(t *testing.T) {
 	ao.deltas = nil
 	ao.onlineRoundParamsData = nil
 	offset, err = ao.roundParamsOffset(basics.Round(400))
-	require.Error(t, err)
+	require.ErrorAs(t, err, &roundOffsetErr)
 	require.Zero(t, offset)
 }
 
@@ -1074,7 +1075,8 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 			require.Empty(t, cachedData.VoteLastValid)
 			// round 1 is out of max history
 			data, err = oa.lookupOnlineAccountData(1, addrA)
-			require.Error(t, err)
+			var roundOffsetErr *RoundOffsetError
+			require.ErrorAs(t, err, &roundOffsetErr)
 			data, err = oa.lookupOnlineAccountData(2, addrA)
 			require.NoError(t, err)
 			require.Empty(t, data.VotingData.VoteLastValid)
@@ -1082,7 +1084,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 			_, has = oa.onlineAccountsCache.read(addrB, 1)
 			require.True(t, has) // full history loaded when looked up addrB prev time
 			_, err = oa.lookupOnlineAccountData(1, addrB)
-			require.Error(t, err)
+			require.ErrorAs(t, err, &roundOffsetErr)
 			pad, err = oa.accountsq.LookupOnline(addrB, 1)
 			require.NoError(t, err)
 			require.Equal(t, addrB, pad.Addr)
@@ -1799,7 +1801,8 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 		}()
 
 		_, _, err = oa.TopOnlineAccounts(2, 2, 5, &proto, 0)
-		a.Error(err)
+		var staleDatabaseRoundErr *StaleDatabaseRoundError
+		require.ErrorAs(t, err, &staleDatabaseRoundErr)
 		a.Contains(err.Error(), "is behind in-memory round")
 
 	case <-time.After(1 * time.Minute):
@@ -2198,7 +2201,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			}
 			a.Equal(targetVoteRnd, rnd+basics.Round(params.MaxBalLookback))
 			_, err := oa.expiredOnlineCirculation(rnd, targetVoteRnd)
-			a.Error(err)
+			require.ErrorContains(t, err, `too high: dbRound`)
 			a.Contains(err.Error(), fmt.Sprintf("round %d too high", rnd))
 			expiredStake, err := oa.expiredOnlineCirculation(rnd-1, targetVoteRnd)
 			a.NoError(err)
@@ -2310,13 +2313,14 @@ func TestAcctOnline_OnlineAcctsExpiredByRound(t *testing.T) {
 
 	// check the stateproof interval 2 not in deltas
 	offset, err := oa.roundOffset(targetRound)
-	require.Error(t, err)
+	var roundOffsetErr *RoundOffsetError
+	require.ErrorAs(t, err, &roundOffsetErr)
 	var roundOffsetError *RoundOffsetError
 	require.ErrorAs(t, err, &roundOffsetError)
 	require.Zero(t, offset)
 
 	offset, err = oa.roundParamsOffset(targetRound)
-	require.Error(t, err)
+	require.ErrorAs(t, err, &roundOffsetErr)
 	require.ErrorAs(t, err, &roundOffsetError)
 	require.Zero(t, offset)
 

@@ -516,7 +516,6 @@ func TestTrackers_AccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
 		tail:       &txTail{},
 	}
 	hdr, err := aul.BlockHdr(99)
-	require.Error(t, err)
-	require.Equal(t, ledgercore.ErrNoEntry{}, err)
+	require.ErrorIs(t, err, ledgercore.ErrNoEntry{})
 	require.Equal(t, bookkeeping.BlockHeader{}, hdr)
 }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -57,7 +58,8 @@ func TestNonParsableAddress(t *testing.T) {
 	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	peer := testHTTPPeer(":def")
 	err := lf.getPeerLedger(context.Background(), &peer, basics.Round(0))
-	require.Error(t, err)
+	var error *url.Error
+	require.ErrorAs(t, err, &error)
 }
 
 func TestLedgerFetcherErrorResponseHandling(t *testing.T) {

@@ -957,6 +957,8 @@ gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce/go.mod h1:yeKp02qBN3iKW1OzL3M
 gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009 h1:q/fZgS8MMadqFFGa8WL4Oyz+TmjiZfi8UrzWhTl8d5w=
 gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009/go.mod h1:O0bY1e/dSoxMYZYTHP0SWKxG5EWLEvKR9/cOjWPPMKU=
 gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7/go.mod h1:dt/ZhP58zS4L8KSrWDmTeBkI65Dw0HsyUHuEVlX15mw=
+gopkg.in/vmarkovtsev/go-lcss.v1 v1.0.0-20181020221121-dfc501d07ea0 h1:YY+ZVPsg2oJnV1rpzwIWtuCtQk71YFwuk47mMtjraN4=
+gopkg.in/vmarkovtsev/go-lcss.v1 v1.0.0-20181020221121-dfc501d07ea0/go.mod h1:6LhSPGi1OSJsWUQZridpjQXWEnDzw7EZAXSjc5SyF8A=
 gopkg.in/yaml.v2 v2.2.1/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.4/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=

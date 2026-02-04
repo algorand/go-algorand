@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/e2e-go/globals"
+	"github.com/algorand/go-algorand/test/errorcontains"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -68,14 +69,14 @@ func TestParticipationKeyOnlyAccountParticipatesCorrectly(t *testing.T) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should get unencrypted wallet handle")
 	_, err = client.SendPaymentFromWallet(wh, nil, partkeyOnlyAccount, richAccount, amountToSend, transactionFee, nil, "", basics.Round(0), basics.Round(0))
-	a.Error(err, "attempt to send money from partkey-only account should be treated as though wallet is not controlled")
+	errorcontains.CaptureError(t, err, "attempt to send money from partkey-only account should be treated as though wallet is not controlled")
 	// partkeyonly_account attempts to go offline, should fail (no rootkey to sign txn with)
 	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(partkeyOnlyAccount, 0, 0, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go offline tx")
 	wh, err = client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should get unencrypted wallet handle")
 	_, err = client.SignAndBroadcastTransaction(wh, nil, goOfflineUTx)
-	a.Error(err, "partkey only account should fail to go offline")
+	errorcontains.CaptureError(t, err, "partkey only account should fail to go offline")
 }
 
 func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestClientFixture, account string, window int) bool {

@@ -35,7 +35,7 @@ func TestReadFromSRVPriority(t *testing.T) {
 	secure := true
 
 	prioAddrs, err := ReadFromSRVPriority("", protocol, name, fallback, secure)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `ReadFromBootstrap: DNS LookupSRV failed when using system resolver(no signature in DNS response for _._tls.devnet.algodev.network), fallback resolver(<nil>), as well as using default resolver due to no signature in DNS response for _._tls.devnet.algodev.network`)
 
 	prioAddrs, err = ReadFromSRVPriority(service, protocol, name, fallback, secure)
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestReadFromSRV(t *testing.T) {
 	secure := true
 
 	addrs, err := ReadFromSRV(context.Background(), "", protocol, name, fallback, secure)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `ReadFromBootstrap: DNS LookupSRV failed when using system resolver(no signature in DNS response for _._tls.devnet.algodev.network), fallback resolver(<nil>), as well as using default resolver due to no signature in DNS response for _._tls.devnet.algodev.network`)
 
 	addrs, err = ReadFromSRV(context.Background(), service, protocol, name, fallback, secure)
 	require.NoError(t, err)

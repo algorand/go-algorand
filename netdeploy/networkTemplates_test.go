@@ -18,6 +18,7 @@ package netdeploy
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,7 +55,8 @@ func TestLoadMissingConfig(t *testing.T) {
 	templateDir, err := filepath.Abs("../test/testdata/nettemplates")
 	a.NoError(err)
 	template, err := loadTemplate(filepath.Join(templateDir, "<invalidname>.json"))
-	a.Error(err)
+	var pathErr *fs.PathError
+	require.ErrorAs(t, err, &pathErr)
 	a.Equal(template.Genesis.NetworkName, "")
 }
 
@@ -96,7 +98,7 @@ func TestValidate(t *testing.T) {
 	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
 	template, _ = loadTemplate(filepath.Join(templateDir, "NegativeStake.json"))
 	err = template.Validate()
-	a.Error(err)
+	require.ErrorContains(t, err, `invalid template: negative stake on Genesis account W2`)
 
 	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
 	template, _ = loadTemplate(filepath.Join(templateDir, "TwoNodesOneRelay1000Accounts.json"))

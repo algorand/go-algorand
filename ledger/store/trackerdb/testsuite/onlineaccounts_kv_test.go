@@ -308,8 +308,7 @@ func CustomTestLookupOnlineAccountDataByAddress(t *customT) {
 	// check non-existing account
 	nonExistingAddr := RandomAddress()
 	_, _, err = ar.LookupOnlineAccountDataByAddress(nonExistingAddr)
-	require.Error(t, err)
-	require.Equal(t, trackerdb.ErrNotFound, err) // check the error type
+	require.ErrorIs(t, err, trackerdb.ErrNotFound)
 
 	// read existing addr
 	readRef, readData, err := ar.LookupOnlineAccountDataByAddress(addrA)

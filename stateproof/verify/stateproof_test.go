@@ -17,6 +17,8 @@
 package verify
 
 import (
+	"testing"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
@@ -27,7 +29,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func invokeValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader,
@@ -159,7 +160,7 @@ func TestStateProofParams(t *testing.T) {
 	var hdr bookkeeping.BlockHeader
 
 	_, err := GetProvenWeight(&votersHdr, &hdr)
-	require.Error(t, err) // not enabled
+	require.ErrorIs(t, err, errStateProofNotEnabled)
 
 	votersHdr.CurrentProtocol = "TestStateProofParams"
 	proto := config.Consensus[votersHdr.CurrentProtocol]
@@ -167,12 +168,12 @@ func TestStateProofParams(t *testing.T) {
 	config.Consensus[votersHdr.CurrentProtocol] = proto
 	votersHdr.Round = 1
 	_, err = GetProvenWeight(&votersHdr, &hdr)
-	require.Error(t, err) // wrong round
+	require.ErrorContains(t, err, `not a multiple of`)
 
 	votersHdr.Round = 2
 	hdr.Round = 3
 	_, err = GetProvenWeight(&votersHdr, &hdr)
-	require.Error(t, err) // wrong round
+	require.ErrorContains(t, err, `not 2 ahead of voters`)
 
 	// Covers all cases except overflow
 }

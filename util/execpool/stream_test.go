@@ -430,7 +430,7 @@ func TestPendingJobOnRestart(t *testing.T) {
 
 	// wait for the notifiation from cleanup before checking the TestPendingJobOnRestart
 	<-mbp.notify
-	require.Error(t, mj.returnError)
+	require.ErrorIs(t, mj.returnError, ErrShuttingDownError)
 	require.False(t, mj.processed)
 
 	<-callbackFeedback
