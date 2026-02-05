@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -194,6 +195,10 @@ func (m *mockNode) SuggestedFee() basics.MicroAlgos {
 // unused by handlers:
 func (m *mockNode) Config() config.Local {
 	return m.config
+}
+
+func (m *mockNode) GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error) {
+	panic("not implemented")
 }
 
 func (m *mockNode) StartCatchup(catchpoint string) error {

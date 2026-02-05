@@ -56,6 +56,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -133,6 +134,7 @@ type NodeInterface interface {
 	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
 	Simulate(request simulation.Request) (result simulation.Result, err error)
+	GetPeers() (inboundPeers []network.Peer, outboundPeers []network.Peer, err error)
 	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
@@ -402,7 +404,14 @@ func (v2 *Handlers) AppendKeys(ctx echo.Context, participationID string) error {
 
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
+// Deprecated: use ShutdownNode2 instead.
 func (v2 *Handlers) ShutdownNode(ctx echo.Context, params model.ShutdownNodeParams) error {
+	return v2.ShutdownNode2(ctx, (model.ShutdownNode2Params)(params))
+}
+
+// ShutdownNode2 shuts down the node.
+// (POST /v2/node/shutdown)
+func (v2 *Handlers) ShutdownNode2(ctx echo.Context, params model.ShutdownNode2Params) error {
 	// TODO: shutdown endpoint
 	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
 }
@@ -950,6 +959,61 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 	}
 
 	return ctx.JSON(http.StatusOK, supply)
+}
+
+// GetPeers returns the list of connected peers.
+// (GET /v2/node/peers)
+func (v2 *Handlers) GetPeers(ctx echo.Context) error {
+
+	// Get list of connected peers from the node
+	inboundPeers, outboundPeers, err := v2.Node.GetPeers()
+	if err != nil {
+		return internalError(ctx, err, errFailedToGetPeers, v2.Log)
+	}
+
+	// Populate the response struct
+	response := model.GetPeersResponse{
+		Peers: make([]model.PeerStatus, 0, len(inboundPeers)+len(outboundPeers)),
+	}
+	response.Peers = filterPeers(inboundPeers, model.PeerStatusConnectionTypeInbound)
+	response.Peers = append(response.Peers, filterPeers(outboundPeers, model.PeerStatusConnectionTypeOutbound)...)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+type PeerMap map[string]string
+
+func (pm PeerMap) addPeer(addr string, network string) {
+	if _, found := pm[addr]; !found {
+		pm[addr] = network
+		return
+	}
+	pm[addr] += "," + network
+}
+
+func filterPeers(peers []network.Peer, connType model.PeerStatusConnectionType) []model.PeerStatus {
+	peerMap := make(PeerMap)
+
+	for _, p := range peers {
+		switch peer := p.(type) {
+		case network.HTTPPeer:
+			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeWs))
+		case network.UnicastPeer:
+			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeWs))
+		case network.LibP2PPeer:
+			peerMap.addPeer(peer.GetAddress(), string(model.PeerStatusNetworkTypeP2p))
+		}
+	}
+	peerStatuses := make([]model.PeerStatus, len(peerMap))
+	var i int = 0
+	for addr := range peerMap {
+		peerStatuses[i] = model.PeerStatus{
+			ConnectionType: connType,
+			NetworkAddress: addr,
+			NetworkType:    model.PeerStatusNetworkType(peerMap[addr]),
+		}
+		i++
+	}
+	return peerStatuses
 }
 
 // GetStatus gets the current node status.
