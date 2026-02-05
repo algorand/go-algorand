@@ -97,6 +97,7 @@ elif [ "${OS}" = "darwin" ]; then
     if [ "$CI" != "true" ] && [ "$CIRCLECI" != "true" ]; then
         install_or_upgrade lnav
         lnav -i "$SCRIPTPATH/algorand_node_log.json"
+        go install github.com/daixiang0/gci@latest
     fi
 elif [ "${OS}" = "windows" ]; then
     if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-jq unzip procps; then
