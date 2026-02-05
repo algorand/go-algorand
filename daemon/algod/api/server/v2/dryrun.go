@@ -245,6 +245,9 @@ func (dl *dryrunLedger) init() error {
 	}
 	for i, app := range dl.dr.Apps {
 		var addr basics.Address
+		if app.Params == nil {
+			continue
+		}
 		if app.Params.Creator != "" {
 			var err error
 			addr, err = basics.UnmarshalChecksumAddress(app.Params.Creator)

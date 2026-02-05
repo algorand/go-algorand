@@ -240,6 +240,9 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	if a.CreatedAssets != nil && len(*a.CreatedAssets) > 0 {
 		assetParams = make(map[basics.AssetIndex]basics.AssetParams, len(*a.CreatedAssets))
 		for _, ca := range *a.CreatedAssets {
+			if ca.Params == nil {
+				continue
+			}
 			var metadataHash [32]byte
 			if ca.Params.MetadataHash != nil {
 				copy(metadataHash[:], *ca.Params.MetadataHash)
