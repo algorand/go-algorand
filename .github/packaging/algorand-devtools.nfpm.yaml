@@ -1,0 +1,64 @@
+# nFPM configuration for the algorand-devtools package
+# Generates both .deb and .rpm from a single config
+# Reference: https://nfpm.goreleaser.com/configuration/
+#
+# Required environment variables:
+#   VERSION             - Package version (e.g., 4.5.0)
+#   CHANNEL             - Release channel (stable, beta, nightly, dev)
+#   PKG_NAME            - Base package name: "algorand" or "algorand-beta"
+#   DEVTOOLS_PKG_NAME   - Devtools package name: "algorand-devtools" or "algorand-devtools-beta"
+#   BINDIR              - Directory containing built binaries
+#   SRCDIR              - Repository root directory
+
+name: ${DEVTOOLS_PKG_NAME}
+arch: ${GOARCH}
+version: ${VERSION}
+platform: linux
+
+maintainer: Algorand developers <dev@algorand.com>
+vendor: Algorand Inc.
+homepage: https://www.algorand.com
+license: AGPL-3.0-or-later
+description: |
+  Algorand development tools.
+  This package provides development and debugging tools for the Algorand blockchain.
+
+# Require the main algorand package at the same version
+depends:
+  - ${PKG_NAME} >= ${VERSION}
+
+replaces:
+  - algorand-devtools
+  - algorand-devtools-beta
+
+conflicts:
+  - algorand-devtools
+  - algorand-devtools-beta
+
+contents:
+  # Development tool binaries
+  - src: ${BINDIR}/carpenter
+    dst: /usr/bin/carpenter
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/msgpacktool
+    dst: /usr/bin/msgpacktool
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/tealdbg
+    dst: /usr/bin/tealdbg
+    file_info:
+      mode: 0755
+
+# RPM-specific configuration
+rpm:
+  group: Development/Tools
+  compression: gzip
+  summary: Algorand development tools
+
+overrides:
+  rpm:
+    depends:
+      - ${PKG_NAME} >= ${VERSION}
