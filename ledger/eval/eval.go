@@ -694,7 +694,6 @@ type EvaluatorOptions struct {
 	Validate            bool
 	Generate            bool
 	MaxTxnBytesPerBlock int
-	ProtoParams         *config.ConsensusParams
 	Tracer              logic.EvalTracer
 }
 
@@ -703,15 +702,9 @@ type EvaluatorOptions struct {
 // payset being evaluated is known in advance, a paysetHint >= 0 can be
 // passed, avoiding unnecessary payset slice growth.
 func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts EvaluatorOptions) (*BlockEvaluator, error) {
-	var proto config.ConsensusParams
-	if evalOpts.ProtoParams == nil {
-		var ok bool
-		proto, ok = config.Consensus[hdr.CurrentProtocol]
-		if !ok {
-			return nil, protocol.Error(hdr.CurrentProtocol)
-		}
-	} else {
-		proto = *evalOpts.ProtoParams
+	proto, ok := config.Consensus[hdr.CurrentProtocol]
+	if !ok {
+		return nil, protocol.Error(hdr.CurrentProtocol)
 	}
 
 	// if the caller did not provide a valid block size limit, default to the consensus params defaults.
@@ -761,9 +754,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	// dynamically grow a slice (if evaluating a whole block).
 	if evalOpts.PaysetHint > 0 {
 		maxPaysetHint := evalOpts.MaxTxnBytesPerBlock / averageEncodedTxnSizeHint
-		if evalOpts.PaysetHint > maxPaysetHint {
-			evalOpts.PaysetHint = maxPaysetHint
-		}
+		evalOpts.PaysetHint = min(maxPaysetHint, evalOpts.PaysetHint)
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, evalOpts.PaysetHint)
 	}
 
@@ -918,9 +909,11 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.blockTxBytes = 0
 }
 
-// TestTransactionGroup performs basic duplicate detection and well-formedness checks
-// on a transaction group, but does not actually add the transactions to the block
-// evaluator, or modify the block evaluator state in any other visible way.
+// TestTransactionGroup performs basic duplicate detection and well-formedness
+// checks on a transaction group, but does not actually add the transactions to
+// the block evaluator, or modify the block evaluator state in any other visible
+// way. TestTransactionGroup is _not_ called on groups during block validation,
+// so TransactionGroup() must repeat all checks.
 func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
@@ -974,6 +967,37 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 		}
 	}
 
+	// We do not check transaction fees here.  As noted above, we have to check
+	// in TransactionGroup anyway. At this stage, it's a fairly pointless check:
+	// The accounts might not have the fees they claim and we don't know about
+	// inners anyway.  No point in re-implementing SummarizeFees for []SignedTxn
+	// (without AD).
+	return nil
+}
+
+// CheckGroupFees validates that a transaction group has paid sufficient fees.
+// This is a very superficial check, since it can't determine the dynamic costs
+// associated with inner transactions.  Those costs are monitored during app
+// calls in the logic package.
+func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, minFee basics.MicroAlgos) error {
+	feeNeeded, overflow := minFee.MulMicros(usage)
+	if overflow {
+		return &ledgercore.TxGroupMalformedError{
+			Msg:    "txgroup required fee overflow",
+			Reason: ledgercore.TxGroupErrorReasonInvalidFee,
+		}
+	}
+	// feesPaid may have saturated. That's ok. Since we know
+	// feeNeeded did not overflow, simple comparison tells us
+	// feesPaid was enough.
+	if feesPaid.LessThan(feeNeeded) {
+		return &ledgercore.TxGroupMalformedError{
+			Msg: fmt.Sprintf(
+				"txgroup with %s fees is less than %s (usage=%s * base=%s)",
+				feesPaid, feeNeeded, usage, minFee),
+			Reason: ledgercore.TxGroupErrorReasonInvalidFee,
+		}
+	}
 	return nil
 }
 
@@ -1019,10 +1043,6 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 		}
 	}
 
-	var txibs []transactions.SignedTxnInBlock
-	var group transactions.TxGroup
-	var groupTxBytes int
-
 	cow := eval.state.child(len(txgroup))
 	defer cow.recycle()
 
@@ -1039,7 +1059,9 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 	}
 
 	// Evaluate each transaction in the group
-	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	txibs := make([]transactions.SignedTxnInBlock, 0, len(txgroup))
+	var groupTxBytes int
+	var group transactions.TxGroup
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
@@ -1097,6 +1119,16 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 				Reason: ledgercore.TxGroupMalformedErrorReasonIncompleteGroup,
 			}
 		}
+	}
+
+	// We can only check against usage for the top-level transactions.  This
+	// check can't know for sure the Fees will be enough if the group contains
+	// inner txns, but that will be checked during AVM execution. But this is
+	// the only chance to check that the top-level fees are enough for the
+	// top-level txns.
+	usage, feesPaid := transactions.SummarizeFees(txgroup)
+	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
+		return err
 	}
 
 	eval.block.Payset = append(eval.block.Payset, txibs...)
@@ -1385,6 +1417,11 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 			}
 		}
 
+		// Calculate and set the Load field for on-chain congestion measurement
+		if eval.proto.LoadTracking {
+			eval.block.BlockHeader.Load = ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
+		}
+
 		eval.generateKnockOfflineAccountsList(participating)
 
 		if eval.proto.StateProofInterval > 0 {
@@ -1459,7 +1496,7 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 					highWeight = expectedVotersWeight
 					lowWeight = actualVotersWeight
 				}
-				const stakeDiffusionFactor = 1
+				const stakeDiffusionFactor = uint64(1)
 				allowedDelta, overflowed := basics.Muldiv(expectedVotersWeight.Raw, stakeDiffusionFactor, 100)
 				if overflowed {
 					return fmt.Errorf("StateProofOnlineTotalWeight overflow: %v != %v", actualVotersWeight, expectedVotersWeight)
@@ -1496,6 +1533,17 @@ func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
 	}
 
 	return nil
+}
+
+// ComputeLoad determines the load for the block based on block utilization.
+func ComputeLoad(blockSize int, maxSize int) basics.Micros {
+	// Load is expressed as a fixed-point integer with 6 digits of precision
+	// 1,000,000 represents a completely full block
+	load, o := basics.Muldiv(basics.Micros(1e6), uint64(blockSize), uint64(maxSize))
+	if o {
+		return 1e6 // can't happen, but we'll say "fully loaded"
+	}
+	return min(load, 1e6) // again, there's no way load can exceed 1.
 }
 
 func (eval *BlockEvaluator) validateForPayouts() error {
@@ -1758,7 +1806,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 	}
 }
 
-const absentFactor = 20
+const absentFactor = uint64(20)
 
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// Don't consider accounts that were online when payouts went into effect as
@@ -2186,6 +2234,13 @@ transactionGroupLoop:
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
+		// Validate Load field for on-chain congestion measurement
+		if eval.proto.LoadTracking {
+			expectedLoad := ComputeLoad(eval.blockTxBytes, eval.proto.MaxTxnBytesPerBlock)
+			if eval.block.BlockHeader.Load != expectedLoad {
+				return ledgercore.StateDelta{}, fmt.Errorf("bad load: %d != %d", eval.block.BlockHeader.Load, expectedLoad)
+			}
+		}
 		// wait for the signature validation to complete.
 		select {
 		case <-ctx.Done():

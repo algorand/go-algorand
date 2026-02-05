@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -33,7 +32,7 @@ import (
 var ErrStaleBlockAssemblyRequest = errors.New("AssembleBlock: requested block assembly specified a round that is older than current transaction pool round")
 
 // ErrPendingQueueReachedMaxCap indicates the current transaction pool has reached its max capacity
-var ErrPendingQueueReachedMaxCap = errors.New("TransactionPool.checkPendingQueueSize: transaction pool have reached capacity")
+var ErrPendingQueueReachedMaxCap = errors.New("TransactionPool.checkPendingQueueSize: transaction pool has reached capacity")
 
 // ErrNoPendingBlockEvaluator indicates there is no pending block evaluator to accept a new tx group
 var ErrNoPendingBlockEvaluator = errors.New("TransactionPool.ingest: no pending block evaluator")
@@ -133,11 +132,6 @@ func ClassifyTxPoolError(err error) string {
 		return TxPoolErrTagFee
 	}
 
-	var minFeeErr *transactions.MinFeeError
-	if errors.As(err, &minFeeErr) {
-		return TxPoolErrTagFee
-	}
-
 	var deadErr *bookkeeping.TxnDeadError
 	if errors.As(err, &deadErr) {
 		if deadErr.Early {
@@ -166,6 +160,9 @@ func ClassifyTxPoolError(err error) string {
 	if errors.As(err, &groupErr) {
 		if groupErr.Reason == ledgercore.TxGroupMalformedErrorReasonExceedMaxSize {
 			return TxPoolErrTagTooLarge
+		}
+		if groupErr.Reason == ledgercore.TxGroupErrorReasonInvalidFee {
+			return TxPoolErrTagFee
 		}
 		return TxPoolErrTagGroupID
 	}
