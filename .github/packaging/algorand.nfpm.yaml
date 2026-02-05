@@ -8,7 +8,6 @@
 #   PKG_NAME        - Package name: "algorand" for most channels, "algorand-beta" for beta
 #   DEFAULTNETWORK  - Default genesis network (mainnet, betanet, devnet)
 #   BINDIR          - Directory containing built binaries
-#   SRCDIR          - Repository root directory
 
 name: ${PKG_NAME}
 arch: ${GOARCH}
@@ -36,110 +35,120 @@ conflicts:
   - algorand-beta
 
 contents:
-  # Main binaries
+  # Main binaries (expand: true required for env var expansion in src/dst)
   - src: ${BINDIR}/algocfg
     dst: /usr/bin/algocfg
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/algod
     dst: /usr/bin/algod
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/algoh
     dst: /usr/bin/algoh
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/algokey
     dst: /usr/bin/algokey
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/diagcfg
     dst: /usr/bin/diagcfg
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/goal
     dst: /usr/bin/goal
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/kmd
     dst: /usr/bin/kmd
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/node_exporter
     dst: /usr/bin/node_exporter
+    expand: true
     file_info:
       mode: 0755
 
   # Library files
   - src: ${BINDIR}/updater
     dst: /usr/lib/algorand/updater
+    expand: true
     file_info:
       mode: 0755
 
-  - src: ${SRCDIR}/cmd/updater/find-nodes.sh
+  - src: cmd/updater/find-nodes.sh
     dst: /usr/lib/algorand/find-nodes.sh
     file_info:
       mode: 0755
 
   # Configuration files
-  - src: ${SRCDIR}/installer/config.json.example
+  - src: installer/config.json.example
     dst: /var/lib/algorand/config.json.example
     file_info:
       mode: 0644
 
-  - src: ${SRCDIR}/installer/system.json
+  - src: installer/system.json
     dst: /var/lib/algorand/system.json
     type: config|noreplace
     file_info:
       mode: 0644
 
   # Genesis files - all networks
-  - src: ${SRCDIR}/installer/genesis/mainnet/genesis.json
+  - src: installer/genesis/mainnet/genesis.json
     dst: /var/lib/algorand/genesis/mainnet/genesis.json
     file_info:
       mode: 0644
 
-  - src: ${SRCDIR}/installer/genesis/testnet/genesis.json
+  - src: installer/genesis/testnet/genesis.json
     dst: /var/lib/algorand/genesis/testnet/genesis.json
     file_info:
       mode: 0644
 
-  - src: ${SRCDIR}/installer/genesis/betanet/genesis.json
+  - src: installer/genesis/betanet/genesis.json
     dst: /var/lib/algorand/genesis/betanet/genesis.json
     file_info:
       mode: 0644
 
-  - src: ${SRCDIR}/installer/genesis/devnet/genesis.json
+  - src: installer/genesis/devnet/genesis.json
     dst: /var/lib/algorand/genesis/devnet/genesis.json
     file_info:
       mode: 0644
 
-  - src: ${SRCDIR}/installer/genesis/alphanet/genesis.json
+  - src: installer/genesis/alphanet/genesis.json
     dst: /var/lib/algorand/genesis/alphanet/genesis.json
     file_info:
       mode: 0644
 
   # Default genesis.json (channel-specific, set by DEFAULTNETWORK)
-  - src: ${SRCDIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json
+  - src: installer/genesis/${DEFAULTNETWORK}/genesis.json
     dst: /var/lib/algorand/genesis.json
     type: config|noreplace
+    expand: true
     file_info:
       mode: 0644
 
   # Systemd service files
-  - src: ${SRCDIR}/installer/algorand.service
+  - src: installer/algorand.service
     dst: /lib/systemd/system/algorand.service
     file_info:
       mode: 0644
 
-  - src: ${SRCDIR}/installer/algorand@.service
+  - src: installer/algorand@.service
     dst: /lib/systemd/system/algorand@.service
     file_info:
       mode: 0644
