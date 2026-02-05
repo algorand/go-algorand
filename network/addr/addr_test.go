@@ -125,6 +125,7 @@ func TestParseHostURLOrMultiaddr(t *testing.T) {
 		{"/ip4/127.0.0.1/tcp", errMultiaddrParse},            // Missing a port after tcp
 		{"/p2p/invalidPeerID", errMultiaddrParse},            // Invalid peer ID after p2p.
 		{"ip4/127.0.0.1/tcp/8080", errURLNoHost},             // Missing starting / - parsed as URL.
+		{":1234", errURLColonHost},                           // Host starts with colon (not IPv6).
 	}
 
 	for _, addr := range validMultiAddrs {
