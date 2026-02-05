@@ -139,7 +139,6 @@ func TestWellFormedPaymentErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoV27 := config.Consensus[protocol.ConsensusV27]
 	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
 	require.NoError(t, err)
 	usecases := []struct {
@@ -152,18 +151,7 @@ func TestWellFormedPaymentErrors(t *testing.T) {
 				Type: protocol.PaymentTx,
 				Header: Header{
 					Sender: addr1,
-					Fee:    basics.MicroAlgos{Raw: 100},
-				},
-			},
-			proto:         protoV27,
-			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, protoV27.MinTxnFee),
-		},
-		{
-			tx: Transaction{
-				Type: protocol.PaymentTx,
-				Header: Header{
-					Sender: addr1,
-					Fee:    basics.MicroAlgos{Raw: 100},
+					Fee:    basics.MicroAlgos{Raw: 100}, // Low fee ok b/c fees can be pooled
 				},
 			},
 			proto: curProto,

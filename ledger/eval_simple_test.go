@@ -345,6 +345,44 @@ func TestPayoutFees(t *testing.T) {
 	})
 }
 
+// TestFeePooling checks that fees are sufficient across a group to pay for the group
+func TestFeePooling(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// FeePooling was added in v28, but we have now removed the consensus flag,
+	// as we can pretend it was always allowed. Test from v27 to show.
+	ledgertesting.TestConsensusRange(t, 27, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		proto := config.Consensus[cv]
+
+		// A basic transaction has to pay enough!
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 1},
+			"fees is less than") // avoid using the exact values in the string
+		dl.txn(&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()})
+
+		// Two txns need two min fees
+		dl.txgroup("fees is less than",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: proto.MinFee()},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: proto.MinFee()},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 2 * proto.MinTxnFee},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+		)
+		dl.txgroup("",
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: 1, Fee: 1},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Amount: proto.MinBalance, Fee: 2 * proto.MinTxnFee})
+	})
+}
+
 // TestIncentiveEligible checks that keyreg with extra fee turns on the incentive eligible flag
 func TestIncentiveEligible(t *testing.T) {
 	partitiontest.PartitionTest(t)
