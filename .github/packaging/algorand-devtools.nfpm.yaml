@@ -8,7 +8,6 @@
 #   PKG_NAME            - Base package name: "algorand" or "algorand-beta"
 #   DEVTOOLS_PKG_NAME   - Devtools package name: "algorand-devtools" or "algorand-devtools-beta"
 #   BINDIR              - Directory containing built binaries
-#   SRCDIR              - Repository root directory
 
 name: ${DEVTOOLS_PKG_NAME}
 arch: ${GOARCH}
@@ -36,19 +35,22 @@ conflicts:
   - algorand-devtools-beta
 
 contents:
-  # Development tool binaries
+  # Development tool binaries (expand: true required for env var expansion)
   - src: ${BINDIR}/carpenter
     dst: /usr/bin/carpenter
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/msgpacktool
     dst: /usr/bin/msgpacktool
+    expand: true
     file_info:
       mode: 0755
 
   - src: ${BINDIR}/tealdbg
     dst: /usr/bin/tealdbg
+    expand: true
     file_info:
       mode: 0755
 
