@@ -152,12 +152,12 @@ contents:
       owner: algorand
       group: algorand
 
-# Maintainer scripts (deb - uses deb-systemd-helper)
+# Maintainer scripts (unified - detect deb vs rpm at runtime)
 scripts:
-  preinstall: ${SRCDIR}/.github/packaging/scripts/deb/algorand-preinstall.sh
-  postinstall: ${SRCDIR}/.github/packaging/scripts/deb/algorand-postinstall.sh
-  preremove: ${SRCDIR}/.github/packaging/scripts/deb/algorand-preremove.sh
-  postremove: ${SRCDIR}/.github/packaging/scripts/deb/algorand-postremove.sh
+  preinstall: ${SRCDIR}/.github/packaging/scripts/algorand-preinstall.sh
+  postinstall: ${SRCDIR}/.github/packaging/scripts/algorand-postinstall.sh
+  preremove: ${SRCDIR}/.github/packaging/scripts/algorand-preremove.sh
+  postremove: ${SRCDIR}/.github/packaging/scripts/algorand-postremove.sh
 
 # Debian-specific configuration
 deb:
@@ -170,12 +170,6 @@ rpm:
   group: Applications/Internet
   compression: gzip
   summary: Algorand node software
-  # RPM uses different scripts (systemctl directly instead of deb-systemd-helper)
-  scripts:
-    preinstall: ${SRCDIR}/.github/packaging/scripts/rpm/algorand-preinstall.sh
-    postinstall: ${SRCDIR}/.github/packaging/scripts/rpm/algorand-postinstall.sh
-    preremove: ${SRCDIR}/.github/packaging/scripts/rpm/algorand-preremove.sh
-    postremove: ${SRCDIR}/.github/packaging/scripts/rpm/algorand-postremove.sh
 
 overrides:
   deb:
