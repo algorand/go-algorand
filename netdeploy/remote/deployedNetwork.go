@@ -659,7 +659,7 @@ func createSignedTx(src basics.Address, round basics.Round, params config.Consen
 	var sgtxns []transactions.SignedTxn
 
 	header := transactions.Header{
-		Fee:         basics.MicroAlgos{Raw: params.MinTxnFee},
+		Fee:         params.MinFee(),
 		FirstValid:  round,
 		LastValid:   round,
 		GenesisID:   bootstrappedNet.genesisID,

@@ -331,6 +331,7 @@ func TestArchivalCreatables(t *testing.T) {
 	// Enable assets
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	proto := config.Consensus[protocol.ConsensusFuture]
 	genesisInitState.GenesisHash = crypto.Digest{1}
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
@@ -386,6 +387,7 @@ func TestArchivalCreatables(t *testing.T) {
 			tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
 		}
 		require.NoError(t, err)
+		tx.Fee = proto.MinFee()
 
 		maxCreated = uint64(createdIdx)
 
@@ -415,6 +417,7 @@ func TestArchivalCreatables(t *testing.T) {
 			}
 			require.NoError(t, err)
 			tx.Sender = allCreators[createdIdx]
+			tx.Fee = proto.MinFee()
 			blk.Payset = append(blk.Payset, makeSignedTxnInBlock(tx))
 			blk.BlockHeader.TxnCounter++
 			expectedExisting--
@@ -523,6 +526,7 @@ func TestArchivalCreatables(t *testing.T) {
 	}
 	require.NoError(t, err)
 	tx0.Sender = allCreators[creatableToDelete]
+	tx0.Fee = proto.MinFee()
 	blk.BlockHeader.TxnCounter++
 	expectedExisting--
 	expectedDeleted++
@@ -541,6 +545,7 @@ func TestArchivalCreatables(t *testing.T) {
 	}
 	require.NoError(t, err)
 	tx1.Sender = allCreators[creatableToDelete]
+	tx1.Fee = proto.MinFee()
 	blk.BlockHeader.TxnCounter++
 	expectedExisting--
 	expectedDeleted++
@@ -674,6 +679,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	proto := config.Consensus[protocol.ConsensusFuture]
 	genesisInitState.GenesisHash = crypto.Digest{1}
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
@@ -714,6 +720,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 			tx, err := makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
 			require.NoError(t, err)
 			tx.Sender = balanceRecords[x].Addr
+			tx.Fee = proto.MinFee()
 			stxnib := makeSignedTxnInBlock(tx)
 			blk.Payset = append(blk.Payset, stxnib)
 			blk.BlockHeader.TxnCounter++

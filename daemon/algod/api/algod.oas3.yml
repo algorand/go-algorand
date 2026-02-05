@@ -947,7 +947,7 @@
                   "x-go-type": "basics.Round"
                 },
                 "min-fee": {
-                  "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
+                  "description": "The minimum transaction fee (not per byte) required for the txn to validate for the current network protocol.",
                   "type": "integer",
                   "x-go-type": "uint64"
                 }
@@ -3614,7 +3614,7 @@
     },
     "/v2/accounts/{address}/transactions/pending": {
       "get": {
-        "description": "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+        "description": "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.",
         "operationId": "GetPendingTransactionsByAddress",
         "parameters": [
           {
@@ -7292,7 +7292,7 @@
                       "x-go-type": "basics.Round"
                     },
                     "min-fee": {
-                      "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
+                      "description": "The minimum transaction fee (not per byte) required for the txn to validate for the current network protocol.",
                       "type": "integer",
                       "x-go-type": "uint64"
                     }
@@ -7355,7 +7355,7 @@
     },
     "/v2/transactions/pending": {
       "get": {
-        "description": "Get the list of pending transactions, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+        "description": "Get the list of pending transactions, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.",
         "operationId": "GetPendingTransactions",
         "parameters": [
           {
@@ -7496,7 +7496,7 @@
     },
     "/v2/transactions/pending/{txid}": {
       "get": {
-        "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
         "operationId": "PendingTransactionInformation",
         "parameters": [
           {

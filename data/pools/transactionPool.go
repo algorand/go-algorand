@@ -708,7 +708,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
-		roundStartedEvaluating: prev.Round + basics.Round(1),
+		roundStartedEvaluating: prev.Round + 1,
 	}
 	pool.assemblyMu.Unlock()
 
@@ -776,10 +776,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
-			case *transactions.MinFeeError:
-				asmStats.MinFeeErrorCount++
-				stats.RemovedInvalidCount++
-				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case logic.EvalError:
 				asmStats.LogicErrorCount++
 				stats.RemovedInvalidCount++
@@ -832,7 +828,7 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 		TxnSize:        encodedLen,
 	}
 
-	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
+	lastSPRound := txib.Txn.StateProofTxnFields.Message.LastAttestedRound
 	verificationCtx, err := pool.ledger.GetStateProofVerificationContext(lastSPRound)
 	if err != nil {
 		return stateProofStats

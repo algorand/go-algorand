@@ -182,6 +182,27 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
+// FeeFactor is the factor by which the base transaction fee is multiplied. Some
+// transactions are free, others might cost more (none do yet) because they use
+// extra expensive features.  It is expressed as in fixed-point integer with 6 digits
+// of precision. So 1e6 is a normal base fee transaction.
+func (tx Transaction) FeeFactor() basics.Micros {
+	switch tx.Type {
+	case protocol.StateProofTx:
+		return 0
+	case protocol.HeartbeatTx:
+		if tx.Group.IsZero() {
+			// Not every singleton heartbeat is actually free. We confirm a
+			// low/no fee heartbeat is legal in heartbeat's wellFormed() and in
+			// apply/heartbeat.go (for the dynamic check for challenge).
+			return 0
+		}
+		return 1e6
+	default:
+		return 1e6
+	}
+}
+
 // txAllocSize returns the max possible size of a transaction without state proof fields.
 // It is used to preallocate a buffer for encoding a transaction.
 func txAllocSize() int {
@@ -279,11 +300,6 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 // This is the account that pays the associated Fee.
 func (tx Header) Src() basics.Address {
 	return tx.Sender
-}
-
-// TxFee returns the fee associated with this transaction.
-func (tx Header) TxFee() basics.MicroAlgos {
-	return tx.Fee
 }
 
 // MatchAddress checks if the transaction touches a given address.  The feesink
@@ -440,13 +456,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		}
 	}
 
-	if !proto.EnableFeePooling && tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
-		if tx.Type == protocol.StateProofTx {
-			// Zero fee allowed for stateProof txn.
-		} else {
-			return makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", tx.Fee.Raw, proto.MinTxnFee)
-		}
-	}
 	if tx.LastValid < tx.FirstValid {
 		return fmt.Errorf("transaction invalid range (%v--%v)", tx.FirstValid, tx.LastValid)
 	}
