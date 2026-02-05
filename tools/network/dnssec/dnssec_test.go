@@ -22,10 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestLookup(t *testing.T) {

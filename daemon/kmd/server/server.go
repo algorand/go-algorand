@@ -26,8 +26,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/gofrs/flock"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/daemon/kmd/api"
 	"github.com/algorand/go-algorand/daemon/kmd/session"

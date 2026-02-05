@@ -17,9 +17,10 @@
 package core
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
 	"github.com/algorand/go-algorand/tools/block-generator/runner"
-	"github.com/spf13/cobra"
 )
 
 // BlockGenerator related cobra commands, ready to be executed or included as subcommands.

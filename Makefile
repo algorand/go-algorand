@@ -97,7 +97,7 @@ default: build
 
 fmt:
 	go fmt ./...
-	gci write -s standard -s default -s "prefix(github.com/algorand)" -s "prefix(github.com/algorand/go-algorand)" ./.
+	gci write -s standard -s default -s "prefix(github.com/algorand)" -s "prefix(github.com/algorand/go-algorand)" --skip-generated ./
 	./scripts/check_license.sh -i
 
 fix: build

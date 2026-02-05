@@ -20,9 +20,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
-	"github.com/algorand/go-deadlock"
 )
 
 type walletHandle struct {

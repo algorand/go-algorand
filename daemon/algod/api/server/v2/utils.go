@@ -27,8 +27,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
+
+	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
