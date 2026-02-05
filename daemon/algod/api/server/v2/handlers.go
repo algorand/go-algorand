@@ -490,7 +490,10 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
-	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards, excludeCreatedAppsParams, excludeCreatedAssetsParams)
+	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards, AccountDataToAccountOptions{
+		ExcludeCreatedAppsParams:   excludeCreatedAppsParams,
+		ExcludeCreatedAssetsParams: excludeCreatedAssetsParams,
+	})
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}

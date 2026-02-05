@@ -1061,7 +1061,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 		case strings.HasPrefix(r.URL.Path, accountPath):
 			w.WriteHeader(200)
 			if r.URL.Path[len(accountPath):] == brs.Addr.String() {
-				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, 100, &config.ConsensusParams{MinBalance: 100000}, basics.MicroAlgos{Raw: 0}, false, false)
+				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, 100, &config.ConsensusParams{MinBalance: 100000}, basics.MicroAlgos{Raw: 0}, v2.AccountDataToAccountOptions{})
 				a.NoError(err)
 				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
 				response, err := json.Marshal(accountResponse)

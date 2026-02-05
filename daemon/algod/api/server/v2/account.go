@@ -39,13 +39,18 @@ func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHoldi
 	}
 }
 
+// AccountDataToAccountOptions specifies options for converting AccountData to Account
+type AccountDataToAccountOptions struct {
+	ExcludeCreatedAppsParams   bool
+	ExcludeCreatedAssetsParams bool
+}
+
 // AccountDataToAccount converts basics.AccountData to v2.model.Account
 func AccountDataToAccount(
 	address string, record *basics.AccountData,
 	lastRound basics.Round, consensus *config.ConsensusParams,
 	amountWithoutPendingRewards basics.MicroAlgos,
-	excludeCreatedAppsParams bool,
-	excludeCreatedAssetsParams bool,
+	opts AccountDataToAccountOptions,
 ) (model.Account, error) {
 
 	assets := make([]model.AssetHolding, 0, len(record.Assets))
@@ -63,7 +68,7 @@ func AccountDataToAccount(
 	createdAssets := make([]model.Asset, 0, len(record.AssetParams))
 	for idx, params := range record.AssetParams {
 		var asset model.Asset
-		if excludeCreatedAssetsParams {
+		if opts.ExcludeCreatedAssetsParams {
 			asset = model.Asset{
 				Index: idx,
 			}
@@ -94,7 +99,7 @@ func AccountDataToAccount(
 	createdApps := make([]model.Application, 0, len(record.AppParams))
 	for appIdx, appParams := range record.AppParams {
 		var app model.Application
-		if excludeCreatedAppsParams {
+		if opts.ExcludeCreatedAppsParams {
 			app = model.Application{
 				Id: appIdx,
 			}
