@@ -23,11 +23,12 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // checkVoteValid analyzes a vote to determine if it would cause compression errors and what kind.

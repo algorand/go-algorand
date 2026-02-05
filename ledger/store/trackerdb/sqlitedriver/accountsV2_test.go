@@ -19,8 +19,9 @@ package sqlitedriver
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestRowidsToChunkedArgs(t *testing.T) {

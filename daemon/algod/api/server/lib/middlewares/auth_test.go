@@ -21,9 +21,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 var errSuccess = errors.New("unexpected success")

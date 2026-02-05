@@ -39,6 +39,7 @@ package crypto
 //                           size_t num,
 //                           int *valid_p);
 import "C"
+
 import (
 	"errors"
 	"unsafe"

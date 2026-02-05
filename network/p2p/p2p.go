@@ -25,14 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network/limitcaller"
-	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
-	"github.com/algorand/go-algorand/network/phonebook"
-	"github.com/algorand/go-algorand/util/metrics"
-	"github.com/algorand/go-deadlock"
-
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -46,6 +38,15 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
+	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // SubNextCancellable is an abstraction for pubsub.Subscription

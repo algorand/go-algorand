@@ -22,9 +22,10 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestLRUTableSizeValidation(t *testing.T) {

@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"

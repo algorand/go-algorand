@@ -20,9 +20,10 @@ import (
 	"encoding/base64"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // TestBase64AllocboundSize tests that the base64 encoded size of the Nonce is the same as the allocbound

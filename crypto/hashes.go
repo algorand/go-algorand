@@ -23,8 +23,9 @@ import (
 	"fmt"
 	"hash"
 
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-sumhash"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // HashType represents different hash functions
