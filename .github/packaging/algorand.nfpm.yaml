@@ -154,10 +154,10 @@ contents:
 
 # Maintainer scripts (unified - detect deb vs rpm at runtime)
 scripts:
-  preinstall: ${SRCDIR}/.github/packaging/scripts/algorand-preinstall.sh
-  postinstall: ${SRCDIR}/.github/packaging/scripts/algorand-postinstall.sh
-  preremove: ${SRCDIR}/.github/packaging/scripts/algorand-preremove.sh
-  postremove: ${SRCDIR}/.github/packaging/scripts/algorand-postremove.sh
+  preinstall: .github/packaging/scripts/algorand-preinstall.sh
+  postinstall: .github/packaging/scripts/algorand-postinstall.sh
+  preremove: .github/packaging/scripts/algorand-preremove.sh
+  postremove: .github/packaging/scripts/algorand-postremove.sh
 
 # Debian-specific configuration
 deb:
@@ -175,7 +175,7 @@ overrides:
   deb:
     contents:
       # Unattended upgrades configuration (channel-specific, generated at build time)
-      - src: ${SRCDIR}/.github/packaging/generated/51algorand-upgrades
+      - src: .github/packaging/generated/51algorand-upgrades
         dst: /etc/apt/apt.conf.d/51algorand-upgrades
         type: config|noreplace
         file_info:
