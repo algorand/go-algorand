@@ -1,0 +1,193 @@
+# nFPM configuration for the main algorand package
+# Generates both .deb and .rpm from a single config
+# Reference: https://nfpm.goreleaser.com/configuration/
+#
+# Required environment variables:
+#   VERSION         - Package version (e.g., 4.5.0)
+#   CHANNEL         - Release channel (stable, beta, nightly, dev)
+#   PKG_NAME        - Package name: "algorand" for most channels, "algorand-beta" for beta
+#   DEFAULTNETWORK  - Default genesis network (mainnet, betanet, devnet)
+#   BINDIR          - Directory containing built binaries
+#   SRCDIR          - Repository root directory
+
+name: ${PKG_NAME}
+arch: ${GOARCH}
+version: ${VERSION}
+platform: linux
+
+maintainer: Algorand developers <dev@algorand.com>
+vendor: Algorand Inc.
+homepage: https://www.algorand.com
+license: AGPL-3.0-or-later
+description: |
+  Algorand node software.
+  This package provides an implementation of the Algorand protocol.
+
+# Package relationships
+depends:
+  - systemd
+recommends:
+  - unattended-upgrades
+replaces:
+  - algorand
+  - algorand-beta
+conflicts:
+  - algorand
+  - algorand-beta
+
+contents:
+  # Main binaries
+  - src: ${BINDIR}/algocfg
+    dst: /usr/bin/algocfg
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/algod
+    dst: /usr/bin/algod
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/algoh
+    dst: /usr/bin/algoh
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/algokey
+    dst: /usr/bin/algokey
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/diagcfg
+    dst: /usr/bin/diagcfg
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/goal
+    dst: /usr/bin/goal
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/kmd
+    dst: /usr/bin/kmd
+    file_info:
+      mode: 0755
+
+  - src: ${BINDIR}/node_exporter
+    dst: /usr/bin/node_exporter
+    file_info:
+      mode: 0755
+
+  # Library files
+  - src: ${BINDIR}/updater
+    dst: /usr/lib/algorand/updater
+    file_info:
+      mode: 0755
+
+  - src: ${SRCDIR}/cmd/updater/find-nodes.sh
+    dst: /usr/lib/algorand/find-nodes.sh
+    file_info:
+      mode: 0755
+
+  # Configuration files
+  - src: ${SRCDIR}/installer/config.json.example
+    dst: /var/lib/algorand/config.json.example
+    file_info:
+      mode: 0644
+
+  - src: ${SRCDIR}/installer/system.json
+    dst: /var/lib/algorand/system.json
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
+  # Genesis files - all networks
+  - src: ${SRCDIR}/installer/genesis/mainnet/genesis.json
+    dst: /var/lib/algorand/genesis/mainnet/genesis.json
+    file_info:
+      mode: 0644
+
+  - src: ${SRCDIR}/installer/genesis/testnet/genesis.json
+    dst: /var/lib/algorand/genesis/testnet/genesis.json
+    file_info:
+      mode: 0644
+
+  - src: ${SRCDIR}/installer/genesis/betanet/genesis.json
+    dst: /var/lib/algorand/genesis/betanet/genesis.json
+    file_info:
+      mode: 0644
+
+  - src: ${SRCDIR}/installer/genesis/devnet/genesis.json
+    dst: /var/lib/algorand/genesis/devnet/genesis.json
+    file_info:
+      mode: 0644
+
+  - src: ${SRCDIR}/installer/genesis/alphanet/genesis.json
+    dst: /var/lib/algorand/genesis/alphanet/genesis.json
+    file_info:
+      mode: 0644
+
+  # Default genesis.json (channel-specific, set by DEFAULTNETWORK)
+  - src: ${SRCDIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json
+    dst: /var/lib/algorand/genesis.json
+    type: config|noreplace
+    file_info:
+      mode: 0644
+
+  # Systemd service files
+  - src: ${SRCDIR}/installer/algorand.service
+    dst: /lib/systemd/system/algorand.service
+    file_info:
+      mode: 0644
+
+  - src: ${SRCDIR}/installer/algorand@.service
+    dst: /lib/systemd/system/algorand@.service
+    file_info:
+      mode: 0644
+
+  # Data directory (empty, with correct permissions)
+  - dst: /var/lib/algorand
+    type: dir
+    file_info:
+      mode: 0775
+      owner: algorand
+      group: algorand
+
+# Maintainer scripts (deb - uses deb-systemd-helper)
+scripts:
+  preinstall: ${SRCDIR}/.github/packaging/scripts/deb/algorand-preinstall.sh
+  postinstall: ${SRCDIR}/.github/packaging/scripts/deb/algorand-postinstall.sh
+  preremove: ${SRCDIR}/.github/packaging/scripts/deb/algorand-preremove.sh
+  postremove: ${SRCDIR}/.github/packaging/scripts/deb/algorand-postremove.sh
+
+# Debian-specific configuration
+deb:
+  compression: xz
+  fields:
+    Bugs: https://github.com/algorand/go-algorand/issues
+
+# RPM-specific configuration
+rpm:
+  group: Applications/Internet
+  compression: gzip
+  summary: Algorand node software
+  # RPM uses different scripts (systemctl directly instead of deb-systemd-helper)
+  scripts:
+    preinstall: ${SRCDIR}/.github/packaging/scripts/rpm/algorand-preinstall.sh
+    postinstall: ${SRCDIR}/.github/packaging/scripts/rpm/algorand-postinstall.sh
+    preremove: ${SRCDIR}/.github/packaging/scripts/rpm/algorand-preremove.sh
+    postremove: ${SRCDIR}/.github/packaging/scripts/rpm/algorand-postremove.sh
+
+overrides:
+  deb:
+    contents:
+      # Unattended upgrades configuration (channel-specific, generated at build time)
+      - src: ${SRCDIR}/.github/packaging/generated/51algorand-upgrades
+        dst: /etc/apt/apt.conf.d/51algorand-upgrades
+        type: config|noreplace
+        file_info:
+          mode: 0644
+
+  rpm:
+    depends:
+      - systemd
+      - shadow-utils
