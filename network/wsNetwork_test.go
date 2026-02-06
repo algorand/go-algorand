@@ -340,6 +340,7 @@ func setupWebsocketNetworkABwithLogger(t *testing.T, countTarget int, log loggin
 	readyTimeout := time.NewTimer(5 * time.Second)
 	waitReady(t, netA, readyTimeout.C)
 	t.Log("a ready")
+	readyTimeout.Reset(5 * time.Second)
 	waitReady(t, netB, readyTimeout.C)
 	t.Log("b ready")
 
