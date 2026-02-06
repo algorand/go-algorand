@@ -97,7 +97,7 @@ default: build
 
 fmt:
 	go fmt ./...
-	gci write -s standard -s default -s "prefix(github.com/algorand)" -s "prefix(github.com/algorand/go-algorand)" --skip-generated ./
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 fmt -c .golangci.yml
 	./scripts/check_license.sh -i
 
 fix: build
