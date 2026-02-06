@@ -418,30 +418,33 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 	// should we skip fetching apps and assets?
 	var excludeCreatedAppsParams bool
 	var excludeCreatedAssetsParams bool
-	if params.Exclude != nil {
-		excludeStr := strings.TrimSpace(*params.Exclude)
+	if params.Exclude != nil && len(*params.Exclude) > 0 {
+		excludeValues := *params.Exclude
 
 		// Handle special cases that must be alone
-		if excludeStr == "all" {
-			return v2.basicAccountInformation(ctx, address, handle, contentType)
+		if len(excludeValues) == 1 {
+			val := strings.TrimSpace(string(excludeValues[0]))
+			if val == "all" {
+				return v2.basicAccountInformation(ctx, address, handle, contentType)
+			}
+			if val == "none" || val == "" {
+				// Default behavior - include everything
+				excludeValues = nil
+			}
 		}
-		if excludeStr == "none" || excludeStr == "" {
-			// Default behavior - include everything
-		} else {
-			// Parse comma-separated exclusions
-			excludeValues := strings.SplitSeq(excludeStr, ",")
-			for val := range excludeValues {
-				val = strings.TrimSpace(val)
-				switch val {
-				case "created-apps-params":
-					excludeCreatedAppsParams = true
-				case "created-assets-params":
-					excludeCreatedAssetsParams = true
-				case "all", "none":
-					return badRequest(ctx, fmt.Errorf("'%s' cannot be combined with other exclude values", val), errFailedToParseExclude, v2.Log)
-				default:
-					return badRequest(ctx, fmt.Errorf("invalid exclude value: %s", val), errFailedToParseExclude, v2.Log)
-				}
+
+		// Parse exclusions
+		for _, excludeVal := range excludeValues {
+			val := strings.TrimSpace(string(excludeVal))
+			switch val {
+			case "created-apps-params":
+				excludeCreatedAppsParams = true
+			case "created-assets-params":
+				excludeCreatedAssetsParams = true
+			case "all", "none":
+				return badRequest(ctx, fmt.Errorf("'%s' cannot be combined with other exclude values", val), errFailedToParseExclude, v2.Log)
+			default:
+				return badRequest(ctx, fmt.Errorf("invalid exclude value: %s", val), errFailedToParseExclude, v2.Log)
 			}
 		}
 	}

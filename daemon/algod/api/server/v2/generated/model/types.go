@@ -51,6 +51,14 @@ const (
 	TxTypeStpf   TxType = "stpf"
 )
 
+// Defines values for AccountInformationParamsExclude.
+const (
+	AccountInformationParamsExcludeAll                 AccountInformationParamsExclude = "all"
+	AccountInformationParamsExcludeCreatedAppsParams   AccountInformationParamsExclude = "created-apps-params"
+	AccountInformationParamsExcludeCreatedAssetsParams AccountInformationParamsExclude = "created-assets-params"
+	AccountInformationParamsExcludeNone                AccountInformationParamsExclude = "none"
+)
+
 // Defines values for AccountInformationParamsFormat.
 const (
 	AccountInformationParamsFormatJson    AccountInformationParamsFormat = "json"
@@ -1439,11 +1447,14 @@ type VersionsResponse = Version
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
 	// Exclude Exclude additional items from the account. Use `all` to exclude asset holdings, application local state, created asset parameters, and created application parameters. Use `created-apps-params` to exclude only the parameters of created applications (returns only application IDs). Use `created-assets-params` to exclude only the parameters of created assets (returns only asset IDs). Multiple values can be comma-separated (e.g., `created-apps-params,created-assets-params`). Note: `all` and `none` cannot be combined with other values. Defaults to `none`.
-	Exclude *string `form:"exclude,omitempty" json:"exclude,omitempty"`
+	Exclude *[]AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
 
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
+
+// AccountInformationParamsExclude defines parameters for AccountInformation.
+type AccountInformationParamsExclude string
 
 // AccountInformationParamsFormat defines parameters for AccountInformation.
 type AccountInformationParamsFormat string

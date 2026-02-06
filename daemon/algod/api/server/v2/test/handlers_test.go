@@ -147,7 +147,7 @@ func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
 		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 		defer releasefunc()
 
-		excludeNone := "none"
+		excludeNone := []model.AccountInformationParamsExclude{"none"}
 		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeNone})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -164,7 +164,7 @@ func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
 		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 		defer releasefunc()
 
-		excludeParams := "created-apps-params"
+		excludeParams := []model.AccountInformationParamsExclude{"created-apps-params"}
 		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -186,7 +186,7 @@ func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
 		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 		defer releasefunc()
 
-		excludeAll := "all"
+		excludeAll := []model.AccountInformationParamsExclude{"all"}
 		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeAll})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -206,7 +206,7 @@ func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
 		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 		defer releasefunc()
 
-		invalidExclude := "invalid-value"
+		invalidExclude := []model.AccountInformationParamsExclude{"invalid-value"}
 		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
 		require.NoError(t, err)
 		require.Equal(t, 400, rec.Code)
@@ -216,7 +216,7 @@ func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
 		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 		defer releasefunc()
 
-		excludeParams := "created-assets-params"
+		excludeParams := []model.AccountInformationParamsExclude{"created-assets-params"}
 		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -238,7 +238,7 @@ func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
 		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 		defer releasefunc()
 
-		excludeBoth := "created-apps-params,created-assets-params"
+		excludeBoth := []model.AccountInformationParamsExclude{"created-apps-params", "created-assets-params"}
 		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeBoth})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -266,7 +266,7 @@ func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
 		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 		defer releasefunc()
 
-		invalidExclude := "all,created-apps-params"
+		invalidExclude := []model.AccountInformationParamsExclude{"all", "created-apps-params"}
 		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
 		require.NoError(t, err)
 		require.Equal(t, 400, rec.Code)
@@ -276,7 +276,7 @@ func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
 		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 		defer releasefunc()
 
-		invalidExclude := "none,created-apps-params"
+		invalidExclude := []model.AccountInformationParamsExclude{"none", "created-apps-params"}
 		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
 		require.NoError(t, err)
 		require.Equal(t, 400, rec.Code)
