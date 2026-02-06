@@ -6,9 +6,13 @@ if command -v dpkg >/dev/null 2>&1; then
     # Debian/Ubuntu
 
     # Create algorand system user and group
-    adduser --system --group --home /var/lib/algorand --no-create-home algorand >/dev/null 2>&1 || true
-    # Ensure group exists (adduser above won't create it if user already exists)
-    getent group algorand >/dev/null || groupadd --system algorand
+    # Use useradd/groupadd which are more universally available than adduser
+    if ! getent group algorand >/dev/null 2>&1; then
+        groupadd --system algorand >/dev/null 2>&1 || true
+    fi
+    if ! getent passwd algorand >/dev/null 2>&1; then
+        useradd --system --gid algorand --home-dir /var/lib/algorand --no-create-home algorand >/dev/null 2>&1 || true
+    fi
     chown -R algorand:algorand /var/lib/algorand
 
     # Systemd service management (only if systemd is running)
