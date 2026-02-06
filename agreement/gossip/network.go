@@ -58,6 +58,8 @@ type networkImpl struct {
 	log logging.Logger
 
 	trace messagetracer.MessageTracer
+
+	ctx context.Context
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
@@ -80,7 +82,7 @@ func SetTrace(net agreement.Network, trace messagetracer.MessageTracer) {
 	i.trace = trace
 }
 
-func (i *networkImpl) Start() {
+func (i *networkImpl) Start(ctx context.Context) {
 	handlers := []network.TaggedMessageHandler{
 		{Tag: protocol.AgreementVoteTag, MessageHandler: network.HandlerFunc(i.processVoteMessage)},
 		{Tag: protocol.ProposalPayloadTag, MessageHandler: network.HandlerFunc(i.processProposalMessage)},
@@ -94,6 +96,7 @@ func (i *networkImpl) Start() {
 		{Tag: protocol.VoteBundleTag, MessageHandler: network.ValidateHandleFunc(i.processValidateBundleMessage)},
 	}
 	i.net.RegisterValidatorHandlers(validateHandlers)
+	i.ctx = ctx
 }
 
 func messageMetadataFromHandle(h agreement.MessageHandle) *messageMetadata {
@@ -163,7 +166,11 @@ func (i *networkImpl) processValidateMessage(raw network.IncomingMessage, submit
 	var action network.ForwardingPolicy
 	select {
 	case submit <- agreement.Message{MessageHandle: agreement.MessageHandle(metadata), Data: raw.Data}:
-		action = <-metadata.syncCh
+		select {
+		case action = <-metadata.syncCh:
+		case <-i.ctx.Done():
+			action = network.Ignore
+		}
 		messagesHandledTotal.Inc(nil)
 		messagesHandledByType.Add(msgType, 1)
 	default:

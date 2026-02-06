@@ -158,6 +158,7 @@ func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) 
 			topt = append(topt, pubsub.WithTopicMessageIdFn(txMsgID))
 		case AVTopicName, PPTopicName, VBTopicName:
 			// use default message ID function (sender ID + sequence number)
+			// important for agreement messages to ensure if agreement needs to re-transmit a known message
 		}
 
 		psTopic, err := s.pubsub.Join(topicName, topt...)

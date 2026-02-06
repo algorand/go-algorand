@@ -513,7 +513,7 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 func (e *testingNetworkEndpoint) Ignore(h MessageHandle) {
 }
 
-func (e *testingNetworkEndpoint) Start() {}
+func (e *testingNetworkEndpoint) Start(_ context.Context) {}
 
 type activityMonitor struct {
 	deadlock.Mutex

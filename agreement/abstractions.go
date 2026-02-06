@@ -299,7 +299,7 @@ type Network interface {
 
 	// Start notifies the network that the agreement service is ready
 	// to start receiving messages.
-	Start()
+	Start(ctx context.Context)
 }
 
 // RandomSource is an abstraction over the random number generator.
