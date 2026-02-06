@@ -434,9 +434,9 @@ jobs:
             apt-get install -y --no-install-recommends /packages/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb
 
             # Verify binaries are installed
-            which algod
-            which goal
-            which kmd
+            command -v algod
+            command -v goal
+            command -v kmd
 
             # Verify version output
             algod -v
@@ -465,9 +465,9 @@ jobs:
             dnf install -y /packages/${PKG_NAME}-${VERSION}-1.${RPM_ARCH}.rpm
 
             # Verify binaries are installed
-            which algod
-            which goal
-            which kmd
+            command -v algod
+            command -v goal
+            command -v kmd
 
             # Verify version output
             algod -v
