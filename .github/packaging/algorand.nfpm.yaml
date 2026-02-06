@@ -161,6 +161,14 @@ contents:
       owner: algorand
       group: algorand
 
+  # Unattended upgrades configuration (deb only, generated at build time)
+  - src: .github/packaging/generated/51algorand-upgrades
+    dst: /etc/apt/apt.conf.d/51algorand-upgrades
+    type: config|noreplace
+    packager: deb
+    file_info:
+      mode: 0644
+
 # Maintainer scripts (unified - detect deb vs rpm at runtime)
 scripts:
   preinstall: .github/packaging/scripts/algorand-preinstall.sh
@@ -181,15 +189,6 @@ rpm:
   summary: Algorand node software
 
 overrides:
-  deb:
-    contents:
-      # Unattended upgrades configuration (channel-specific, generated at build time)
-      - src: .github/packaging/generated/51algorand-upgrades
-        dst: /etc/apt/apt.conf.d/51algorand-upgrades
-        type: config|noreplace
-        file_info:
-          mode: 0644
-
   rpm:
     depends:
       - systemd
