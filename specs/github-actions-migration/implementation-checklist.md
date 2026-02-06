@@ -36,29 +36,44 @@
 
 ## Phase 2: Packaging
 
-### Linux Packaging
-- [ ] Implement `package-linux` job
-- [ ] .deb packaging
-  - [ ] Run `package/deb/package.sh algorand`
-  - [ ] Run `package/deb/package.sh algorand-devtools`
-  - [ ] Verify package contents
-  - [ ] Test installation on Ubuntu
-- [ ] .rpm packaging
-  - [ ] Set up CentOS container for rpmbuild
-  - [ ] Run `package/rpm/package.sh algorand`
-  - [ ] Run `package/rpm/package.sh algorand-devtools`
-  - [ ] Verify package contents
-  - [ ] Test installation on RHEL/Rocky
+### Linux Packaging (using nFPM)
+- [x] Implement `package-linux` job
+- [x] Create nFPM configuration files in `.github/packaging/`
+  - [x] `algorand.nfpm.yaml` - main package config
+  - [x] `algorand-devtools.nfpm.yaml` - devtools package config
+- [x] .deb packaging
+  - [x] Build with nFPM (single config for deb/rpm)
+  - [x] Include unattended-upgrades config (deb only via `packager: deb`)
+  - [x] Verify package contents
+  - [x] Test installation on Ubuntu (container-based)
+- [x] .rpm packaging
+  - [x] Build with nFPM (same config as deb)
+  - [x] Verify package contents
+  - [x] Test installation on Fedora (container-based)
+- [x] Create unified maintainer scripts in `.github/packaging/scripts/`
+  - [x] `algorand-preinstall.sh` - user/group creation (rpm)
+  - [x] `algorand-postinstall.sh` - systemd setup, permissions
+  - [x] `algorand-preremove.sh` - service stop
+  - [x] `algorand-postremove.sh` - systemd cleanup
+- [x] Implement `test-packages` job
+  - [x] Test deb on Ubuntu 24.04 container
+  - [x] Test rpm on Fedora 40 container
+  - [x] Verify binary installation and version output
 
 ### Darwin Packaging
-- [ ] Implement `package-darwin` job
-- [ ] Verify tarball naming matches expected format
-- [ ] Remove separate amd64/arm64 tarballs (only universal)
+- [x] Implement `package-darwin` job
+- [x] Verify tarball naming matches expected format
+- [x] Universal binary only (no separate amd64/arm64)
 
 ### Tarball Verification
-- [ ] Verify `node_*` tarball contents
-- [ ] Verify `install_*` tarball contents
-- [ ] Verify `tools_*` tarball contents
+- [x] Verify `node_*` tarball contents
+- [x] Verify `install_*` tarball contents
+- [x] Verify `tools_*` tarball contents
+
+### Version Override Support
+- [x] Add `VERSION` env var support in Makefile
+- [x] Add `VersionMajorOverride` and `VersionMinorOverride` ldflags
+- [x] Binary version now matches tag version (e.g., `v0.0.1-beta` → `0.0.1.beta`)
 
 ---
 
@@ -162,10 +177,36 @@
 ## Notes
 
 ### Blockers/Issues Discovered
-<!-- Document any blockers or issues found during implementation -->
+- nFPM `overrides.<packager>.contents` **replaces** the contents section, doesn't extend it
+- Fedora minimal images don't include `which` command - use `command -v` instead
+- Container tests without systemd require `--no-install-recommends` for apt to avoid systemd-resolved
+- `adduser` not available in minimal containers - use `useradd/groupadd` instead
 
 ### Decisions Made
-<!-- Document any decisions made during implementation -->
+1. **nFPM over legacy scripts**: Chose nFPM for packaging instead of legacy shell scripts
+   - Single YAML config produces both .deb and .rpm
+   - Better maintainability and reproducibility
+   - Industry standard tool (used by goreleaser)
+
+2. **Unified maintainer scripts**: Single script detects deb vs rpm at runtime
+   - Reduces duplication
+   - Easier to maintain
+   - Scripts in `.github/packaging/scripts/`
+
+3. **Config location**: `.github/packaging/` instead of top-level `packaging/`
+   - Keeps packaging config with CI/CD workflow
+   - Doesn't pollute repository root
+
+4. **Package naming**: `algorand` / `algorand-beta` for main, `algorand-devtools` / `algorand-devtools-beta` for devtools
+   - Consistent with existing naming conventions
+
+5. **VERSION env var**: Added support to override version at build time
+   - `VERSION=x.y.z` sets Major.Minor.Patch via ldflags
+   - Binary version now matches tag version
+   - Old behavior preserved when VERSION not set
 
 ### Test Results
-<!-- Document test results and comparisons -->
+- Successfully tested with tag `v0.0.1-beta`
+- deb packages install correctly on Ubuntu 24.04 (amd64, arm64)
+- rpm packages install correctly on Fedora 40 (amd64, arm64)
+- Binary reports correct version: `0.0.1.beta`

@@ -122,6 +122,13 @@ env:
   FULLVERSION: ${{ needs.prepare.outputs.version }}
 ```
 
+**Version Override**: When `VERSION` is set (e.g., `VERSION=4.5.0`), the Makefile parses it and overrides the version components via ldflags:
+- `VersionMajorOverride` - overrides `config.VersionMajor` constant
+- `VersionMinorOverride` - overrides `config.VersionMinor` constant
+- `BUILDNUMBER` - set to the patch version
+
+This ensures the binary version matches the tag version (e.g., `v4.5.0-beta` → `4.5.0.beta` in binary output).
+
 **Artifact Contents**:
 ```
 tmp/node_pkgs/
@@ -136,7 +143,7 @@ tmp/node_pkgs/
 
 ### Job: `package-linux`
 
-**Purpose**: Create .deb and .rpm packages from Linux builds.
+**Purpose**: Create .deb and .rpm packages from Linux builds using nFPM.
 
 **Needs**: `prepare`, `build`
 
@@ -148,41 +155,87 @@ matrix:
 
 **Runs on**: `ubuntu-24.04`
 
+**nFPM Configuration**: `.github/packaging/`
+- `algorand.nfpm.yaml` - main package (algod, goal, kmd, etc.)
+- `algorand-devtools.nfpm.yaml` - devtools package (carpenter, tealdbg, msgpacktool)
+- `scripts/` - unified maintainer scripts (detect deb vs rpm at runtime)
+
 **Steps**:
 1. Checkout code
 2. Download artifact: `build-linux-${{ matrix.arch }}`
-3. Build .deb packages:
+3. Install nFPM
+4. Generate unattended-upgrades config (deb only)
+5. Build packages with nFPM:
    ```bash
-   scripts/release/mule/package/deb/package.sh algorand
-   scripts/release/mule/package/deb/package.sh algorand-devtools
+   # Set environment for nFPM
+   export VERSION CHANNEL PKG_NAME DEFAULTNETWORK BINDIR TOOLSDIR GOARCH
+
+   # Build .deb
+   nfpm package -p deb -f .github/packaging/algorand.nfpm.yaml
+   nfpm package -p deb -f .github/packaging/algorand-devtools.nfpm.yaml
+
+   # Build .rpm
+   nfpm package -p rpm -f .github/packaging/algorand.nfpm.yaml
+   nfpm package -p rpm -f .github/packaging/algorand-devtools.nfpm.yaml
    ```
-4. Build .rpm packages (in container):
-   ```bash
-   docker run --rm \
-     -v $PWD:/work \
-     -w /work \
-     -e NETWORK=$NETWORK \
-     -e VERSION=$VERSION \
-     centos:stream10 \
-     bash -c "
-       dnf install -y rpm-build &&
-       scripts/release/mule/package/rpm/package.sh algorand &&
-       scripts/release/mule/package/rpm/package.sh algorand-devtools
-     "
-   ```
-5. Upload artifact: `packages-linux-${{ matrix.arch }}`
+6. Upload artifact: `packages-linux-${{ matrix.arch }}`
+
+**Package Naming**:
+- `algorand` / `algorand-beta` (main package)
+- `algorand-devtools` / `algorand-devtools-beta` (devtools)
+
+**Environment Variables for nFPM**:
+- `VERSION` - Package version (e.g., 4.5.0)
+- `CHANNEL` - Release channel (stable, beta, nightly, dev)
+- `PKG_NAME` - "algorand" or "algorand-beta"
+- `DEVTOOLS_PKG_NAME` - "algorand-devtools" or "algorand-devtools-beta"
+- `DEFAULTNETWORK` - Default genesis (mainnet, betanet, devnet)
+- `BINDIR` - Path to built binaries (bin/)
+- `TOOLSDIR` - Path to devtools binaries (tools/)
+- `GOARCH` - Architecture (amd64, arm64)
 
 **Artifact Contents**:
 ```
-tmp/node_pkgs/linux/{arch}/
-├── algorand_{channel}_linux-{arch}_{version}.deb
-├── algorand-devtools_{channel}_linux-{arch}_{version}.deb
-├── algorand-{version}-1.{x86_64|aarch64}.rpm
-├── algorand-devtools-{version}-1.{x86_64|aarch64}.rpm
+packages/
+├── {pkg_name}_{channel}_linux-{arch}_{version}.deb
+├── {devtools_pkg_name}_{channel}_linux-{arch}_{version}.deb
+├── {pkg_name}-{version}-1.{x86_64|aarch64}.rpm
+├── {devtools_pkg_name}-{version}-1.{x86_64|aarch64}.rpm
 ├── node_{channel}_linux-{arch}_{version}.tar.gz
 ├── install_{channel}_linux-{arch}_{version}.tar.gz
 └── tools_{channel}_linux-{arch}_{version}.tar.gz
 ```
+
+### Job: `test-packages`
+
+**Purpose**: Verify packages install correctly in clean containers.
+
+**Needs**: `prepare`, `package-linux`
+
+**Strategy Matrix**:
+```yaml
+matrix:
+  include:
+    - pkg_type: deb
+      image: ubuntu:24.04
+      arch: amd64
+    - pkg_type: deb
+      image: ubuntu:24.04
+      arch: arm64
+    - pkg_type: rpm
+      image: fedora:40
+      arch: amd64
+    - pkg_type: rpm
+      image: fedora:40
+      arch: arm64
+```
+
+**Tests**:
+1. Install package in container
+2. Verify binaries are installed (`command -v algod goal kmd`)
+3. Verify version output (`algod -v`)
+4. Verify systemd service file exists
+5. Verify data directory exists
 
 ### Job: `package-darwin`
 
