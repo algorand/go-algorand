@@ -91,7 +91,7 @@ contents:
     file_info:
       mode: 0755
 
-  - src: cmd/updater/find-nodes.sh
+  - src: scripts/find-nodes.sh
     dst: /usr/lib/algorand/find-nodes.sh
     file_info:
       mode: 0755
