@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,9 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -195,7 +193,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	// run netC in NPN mode (no relay => no gossip sup => no TX receiving)
 	cfg.ForceFetchTransactions = false
-	// Have to unset NetAddress to get IsGossipServer to return false
+	// Have to unset NetAddress to get IsListenServer to return false
 	cfg.NetAddress = ""
 	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisInfo, &nopeNodeInfo{}, nil, nil)
 	require.NoError(t, err)
@@ -717,7 +715,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	}
 }
 
-// TestMultiaddrConversionToFrom ensures Multiaddr can be serialized back to an address without losing information
+// TestP2PMultiaddrConversionToFrom ensures Multiaddr can be serialized back to an address without losing information
 func TestP2PMultiaddrConversionToFrom(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -864,9 +862,10 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 func TestP2PRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
-		t.Skip("Flaky on CIRCLECI")
-	}
+	// Speed up heartbeat to reduce test flakiness from mesh establishment timing
+	oldHeartbeatInterval := pubsub.GossipSubHeartbeatInterval
+	pubsub.GossipSubHeartbeatInterval = 200 * time.Millisecond
+	defer func() { pubsub.GossipSubHeartbeatInterval = oldHeartbeatInterval }()
 
 	cfg := config.GetDefaultLocal()
 	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
@@ -994,6 +993,11 @@ func TestP2PRelay(t *testing.T) {
 			netA.hasPeer(netB.service.ID()) && netA.hasPeer(netC.service.ID())
 	}, 2*time.Second, 50*time.Millisecond)
 
+	// Wait for gossipsub heartbeat to establish mesh links.
+	// ListPeersForTopic returns subscribed peers but mesh links are established
+	// asynchronously via HEARTBEAT.
+	time.Sleep(pubsub.GossipSubHeartbeatInterval + 100*time.Millisecond)
+
 	const expectedMsgs = 10
 	counter.Store(0)
 	var msgsSink logMessages
@@ -1070,7 +1074,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 		log:             logging.TestingLog(t),
 		ctx:             ctx,
 		nodeInfo:        &nopeNodeInfo{},
-		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag, protocol.TxnTag}),
+		connPerfMonitor: makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag}),
 	}
 	net.outgoingConnsCloser = makeOutgoingConnsCloser(logging.TestingLog(t), net, net.connPerfMonitor, cliqueResolveInterval)
 
@@ -1594,15 +1598,12 @@ func TestP2PMetainfoV1vsV22(t *testing.T) {
 	require.NoError(t, err)
 	defer netB.Stop()
 
+	// Wait for wsPeer objects to be established on both sides
 	require.Eventually(t, func() bool {
-		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+		return len(netA.GetPeers(PeersConnectedIn)) > 0 && len(netB.GetPeers(PeersConnectedOut)) > 0
 	}, 2*time.Second, 50*time.Millisecond)
 
-	var peers []Peer
-	require.Eventually(t, func() bool {
-		peers = netA.GetPeers(PeersConnectedIn)
-		return len(peers) > 0
-	}, 2*time.Second, 50*time.Millisecond)
+	peers := netA.GetPeers(PeersConnectedIn)
 	require.Len(t, peers, 1)
 	peer := peers[0].(*wsPeer)
 	require.False(t, peer.features&pfCompressedProposal != 0)
@@ -1686,9 +1687,9 @@ func TestP2PVoteCompression(t *testing.T) {
 			counterDone := matcher.done
 			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: matcher}})
 
-			// Wait for peers to connect
+			// Wait for wsPeer objects to be established on both sides
 			require.Eventually(t, func() bool {
-				return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+				return len(netA.GetPeers(PeersConnectedIn)) > 0 && len(netB.GetPeers(PeersConnectedOut)) > 0
 			}, 2*time.Second, 50*time.Millisecond)
 
 			for _, msg := range messages {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,23 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package component
+package testing
 
 import (
+	"reflect"
 	"testing"
-
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestCommandStatus(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	var start = START
-	var completed = COMPLETED
-	var failed = FAILED
-
-	assert.Equal(t, "START", start.String())
-	assert.Equal(t, "COMPLETED", completed.String())
-	assert.Equal(t, "FAILED", failed.String())
+// RoundTrip checks that converting an A -> B -> A gives the original value.
+// Returns true if equal, false otherwise.
+func RoundTrip[A any, B any](t *testing.T, a A, toB func(A) B, toA func(B) A) bool {
+	b := toB(a)
+	a2 := toA(b)
+	return reflect.DeepEqual(a, a2)
 }

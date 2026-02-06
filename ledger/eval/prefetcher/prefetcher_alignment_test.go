@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -331,7 +331,7 @@ func runEval(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Tr
 	eval, err := eval.StartEvaluator(l, block.BlockHeader, eval.EvaluatorOptions{})
 	require.NoError(t, err)
 
-	err = eval.TransactionGroup(makeGroupFromTxn(txn))
+	err = eval.TransactionGroup(makeGroupFromTxn(txn)...)
 	require.NoError(t, err)
 }
 

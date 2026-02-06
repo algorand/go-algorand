@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -625,7 +625,7 @@ func TestPeerSelector_ClassLowerBound(t *testing.T) {
 	}
 }
 
-// TestPeerSelector_Eviction tests that the peer is evicted after several download failures, and it handles same address for different peer classes
+// TestPeerSelector_EvictionAndUpgrade tests that the peer is evicted after several download failures, and it handles same address for different peer classes
 func TestPeerSelector_EvictionAndUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

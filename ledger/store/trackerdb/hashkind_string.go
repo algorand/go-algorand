@@ -19,8 +19,9 @@ const _HashKind_name = "AccountHKAssetHKAppHKKvHK"
 var _HashKind_index = [...]uint8{0, 9, 16, 21, 25}
 
 func (i HashKind) String() string {
-	if i >= HashKind(len(_HashKind_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_HashKind_index)-1 {
 		return "HashKind(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _HashKind_name[_HashKind_index[i]:_HashKind_index[i+1]]
+	return _HashKind_name[_HashKind_index[idx]:_HashKind_index[idx+1]]
 }

@@ -4,6 +4,13 @@ on:
     branches:
       - master
       - 'rel/**'
+  workflow_dispatch:
+    inputs:
+      full_coverage:
+        description: 'Run with -coverpkg to measure cross-package coverage (slower)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   CODECOV_TOKEN: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"  # Same public token from CircleCI config
@@ -49,13 +56,19 @@ jobs:
       - name: Run tests
         run: |
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+          COVERPKG_FLAG=""
+          if [[ "${{ inputs.full_coverage }}" == "true" ]]; then
+            COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
+            COVERPKG_FLAG="-coverpkg=$COVERPACKAGES"
+          fi
           mkdir -p test_results/${{ matrix.platform }}_test/${PARTITION_ID}
-          gotestsum --format standard-quiet \
+          go tool -modfile=tool.mod gotestsum --format standard-quiet \
             --junitfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" $SHORTTEST \
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 4 \
+            $COVERPKG_FLAG \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure()
@@ -89,6 +102,7 @@ jobs:
         with:
           token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
+          flags: ${{ inputs.full_coverage && 'full_coverage' || '' }}
           fail_ci_if_error: false
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}

@@ -21,8 +21,9 @@ const _coserviceType_name = "demuxCoserviceTypetokenizerCoserviceTypecryptoVerif
 var _coserviceType_index = [...]uint8{0, 18, 40, 67, 90, 108, 128}
 
 func (i coserviceType) String() string {
-	if i < 0 || i >= coserviceType(len(_coserviceType_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_coserviceType_index)-1 {
 		return "coserviceType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _coserviceType_name[_coserviceType_index[i]:_coserviceType_index[i+1]]
+	return _coserviceType_name[_coserviceType_index[idx]:_coserviceType_index[idx+1]]
 }

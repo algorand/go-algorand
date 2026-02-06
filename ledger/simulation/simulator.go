@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -191,7 +191,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 		return nil, err
 	}
 
-	err = eval.TransactionGroup(group)
+	err = eval.TransactionGroup(group...)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}

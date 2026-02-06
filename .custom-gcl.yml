@@ -8,3 +8,6 @@ plugins:
   - module: fillmore-labs.com/errortype
     import: fillmore-labs.com/errortype/gclplugin
     version: v0.0.7
+  - module: github.com/cce/docnametypo
+    import: github.com/cce/docnametypo/gclplugin
+    version: v0.2.0

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -118,7 +118,7 @@ func (env *Environment) Txn(txn transactions.SignedTxn) transactions.ApplyData {
 	env.t.Helper()
 
 	evaluator := env.nextBlock()
-	err := evaluator.Transaction(txn, transactions.ApplyData{})
+	err := evaluator.TransactionGroup(txn.WithAD())
 	require.NoError(env.t, err)
 	newBlock := env.endBlock(evaluator).Block()
 
