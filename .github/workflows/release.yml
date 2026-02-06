@@ -239,6 +239,17 @@ jobs:
           echo "Found binaries in: ${BINDIR}"
           ls -la "${BINDIR}"
 
+          # Find the tools directory (devtools binaries)
+          TOOLSDIR=$(find tmp/node_pkgs -type d -name "tools" | head -1)
+          if [ -z "$TOOLSDIR" ]; then
+            echo "Error: Could not find tools directory in artifacts"
+            exit 1
+          fi
+          TOOLSDIR=$(cd "$TOOLSDIR" && pwd)
+          echo "toolsdir=${TOOLSDIR}" >> "$GITHUB_OUTPUT"
+          echo "Found tools in: ${TOOLSDIR}"
+          ls -la "${TOOLSDIR}"
+
       - name: Generate unattended-upgrades config
         run: |
           mkdir -p .github/packaging/generated
@@ -259,6 +270,7 @@ jobs:
       - name: Build Debian packages
         env:
           BINDIR: ${{ steps.binaries.outputs.bindir }}
+          TOOLSDIR: ${{ steps.binaries.outputs.toolsdir }}
           SRCDIR: ${{ github.workspace }}
           PKG_NAME: ${{ steps.pkgname.outputs.pkg_name }}
           DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.devtools_pkg_name }}
@@ -283,6 +295,7 @@ jobs:
       - name: Build RPM packages
         env:
           BINDIR: ${{ steps.binaries.outputs.bindir }}
+          TOOLSDIR: ${{ steps.binaries.outputs.toolsdir }}
           SRCDIR: ${{ github.workspace }}
           PKG_NAME: ${{ steps.pkgname.outputs.pkg_name }}
           DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.devtools_pkg_name }}
