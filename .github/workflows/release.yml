@@ -428,8 +428,10 @@ jobs:
 
           docker run --rm -v "$(pwd)/packages:/packages" ${{ matrix.image }} bash -c "
             set -e
+            export DEBIAN_FRONTEND=noninteractive
             apt-get update
-            apt-get install -y /packages/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb
+            # Use --no-install-recommends to skip unattended-upgrades (pulls in systemd-resolved which fails in containers)
+            apt-get install -y --no-install-recommends /packages/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb
 
             # Verify binaries are installed
             which algod
