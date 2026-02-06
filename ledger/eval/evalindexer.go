@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ func (eval *BlockEvaluator) ProcessBlockForIndexer(block *bookkeeping.Block) (le
 	}
 
 	for _, group := range paysetgroups {
-		err = eval.TransactionGroup(group)
+		err = eval.TransactionGroup(group...)
 		if err != nil {
 			return ledgercore.StateDelta{}, []transactions.SignedTxnInBlock{},
 				fmt.Errorf("ProcessBlockForIndexer() err: %w", err)

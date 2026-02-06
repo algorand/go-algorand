@@ -514,9 +514,9 @@ def main():
 def finish_test_results(jsonfile, jsonpath, junitpath):
     # This only runs in CI, since TEST_RESULTS env var controls the
     # block that opens the jsonfile, and registers this atexit. So we
-    # assume jsonfile is open, and gotestsum available.
+    # assume jsonfile is open.
     jsonfile.close()
-    xrun(["gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
+    xrun(["go", "tool", "-modfile=tool.mod", "gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
 
 
 if __name__ == '__main__':

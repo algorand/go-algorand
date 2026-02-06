@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -483,7 +483,7 @@ type catchpointOnlineAccountsIterWrapper struct {
 	params                 config.ConsensusParams
 }
 
-// makeCatchpointOrderedOnlineAccountsIter wraps the MakeOrderedOnlineAccountsIter iterator to deterministically set
+// makeCatchpointOrderedOnlineAccountsIterFactory wraps the MakeOrderedOnlineAccountsIter iterator to deterministically set
 // the UpdateRound number to zero for online accounts beyond the "horizon" of online history of 320 rounds (defined by
 // MaxBalLookback).
 func makeCatchpointOrderedOnlineAccountsIterFactory(

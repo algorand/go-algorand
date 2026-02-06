@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2967,6 +2967,8 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = uint64(params.ExtraProgramPages)
 	case AppVersion:
 		sv.Uint = params.Version
+	case AppSizeSponsor:
+		sv.Bytes = params.SizeSponsor[:]
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
@@ -2984,12 +2986,12 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 		return basics.TealValue{}, fmt.Errorf("negative groupIndex %d", groupIndex)
 	}
 	var cx EvalContext
-	stxnad := &transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: *txn}}
+	stxnad := transactions.SignedTxn{Txn: *txn}.WithAD()
 	fs, ok := txnFieldSpecByField(field)
 	if !ok {
 		return basics.TealValue{}, fmt.Errorf("invalid field %s", field)
 	}
-	sv, err := cx.txnFieldToStack(stxnad, &fs, arrayFieldIdx, groupIndex, inner)
+	sv, err := cx.txnFieldToStack(&stxnad, &fs, arrayFieldIdx, groupIndex, inner)
 	return sv.ToTealValue(), err
 }
 

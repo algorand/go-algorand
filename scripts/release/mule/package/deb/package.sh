@@ -30,22 +30,24 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
     ARCH=$(echo "${OS_ARCH}" | cut -d '/' -f2)
     PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
     mkdir -p "$PKG_DIR/bin"
-    ALGO_BIN="${PKG_DIR}/$CHANNEL/$OS_TYPE-$ARCH/bin"
-
+    ALGO_BIN_TOOLS_SRC="${PKG_DIR}/$CHANNEL/$OS_TYPE-$ARCH/bin"
+ 
     # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
     if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
-        BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
+        BIN_FILES=("carpenter" "msgpacktool" "tealdbg")
         UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
         OUTPUT_DEB="$PKG_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
         REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
+        # tools are in tools/ subdirectory instead of bin/
+        ALGO_BIN_TOOLS_SRC="${PKG_DIR}/$CHANNEL/$OS_TYPE-$ARCH/tools"
     else
-        BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
+        BIN_FILES=("algocfg" "algod" "algoh" "algokey" "diagcfg" "goal" "kmd" "node_exporter")
         UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
         OUTPUT_DEB="$PKG_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
     fi
 
     for binary in "${BIN_FILES[@]}"; do
-        cp "${ALGO_BIN}/$binary" "$PKG_ROOT/usr/bin"
+        cp "${ALGO_BIN_TOOLS_SRC}/$binary" "$PKG_ROOT/usr/bin"
         chmod 755 "$PKG_ROOT/usr/bin/$binary"
     done
 
@@ -53,7 +55,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
         mkdir -p "$PKG_ROOT/usr/lib/algorand"
         lib_files=("updater" "find-nodes.sh")
         for lib in "${lib_files[@]}"; do
-            cp "$ALGO_BIN/$lib" "$PKG_ROOT/usr/lib/algorand"
+            cp "$ALGO_BIN_TOOLS_SRC/$lib" "$PKG_ROOT/usr/lib/algorand"
             chmod g-w "$PKG_ROOT/usr/lib/algorand/$lib"
         done
 
@@ -144,7 +146,7 @@ EOF
 go version:
 EOF
 
-    /usr/local/go/bin/go version >> "$STATUSFILE"
+    go version >> "$STATUSFILE"
 
     ############################################################
 
@@ -152,7 +154,7 @@ EOF
 go env:
 EOF
 
-    /usr/local/go/bin/go env >> "$STATUSFILE"
+    go env >> "$STATUSFILE"
 
     ############################################################
 

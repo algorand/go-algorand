@@ -3,7 +3,6 @@
 // the LICENSE file.
 
 //go:build !gofuzz && cgo
-// +build !gofuzz,cgo
 
 // Package secp256k1 wraps the bitcoin secp256k1 C library.
 package secp256k1

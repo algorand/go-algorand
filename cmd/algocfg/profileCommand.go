@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,6 +108,7 @@ var (
 			cfg.EnableP2PHybridMode = true
 			cfg.P2PHybridNetAddress = ":4190"
 			cfg.EnableDHTProviders = true
+			cfg.DHTMode = "server"
 			return cfg
 		},
 	}
@@ -127,6 +128,7 @@ var (
 			cfg.EnableP2PHybridMode = true
 			cfg.P2PHybridNetAddress = ":4190"
 			cfg.EnableDHTProviders = true
+			cfg.DHTMode = "server"
 			return cfg
 		},
 	}
@@ -138,6 +140,7 @@ var (
 			// P2P config defaults
 			cfg.EnableP2PHybridMode = true
 			cfg.EnableDHTProviders = true
+			cfg.DHTMode = "client"
 			return cfg
 		},
 	}

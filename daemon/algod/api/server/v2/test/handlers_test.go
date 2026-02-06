@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1261,17 +1261,12 @@ int 1`,
 								FailedAt:          expectedFailedAt,
 								Txns: []v2.PreEncodedSimulateTxnResult{
 									{
-										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
-											SignedTxn: stxns[0],
-											// expect no ApplyData info
-										}),
+										// expect no ApplyData info
+										Txn:               makePendingTxnResponse(t, stxns[0].WithAD()),
 										AppBudgetConsumed: txnAppBudgetUsed[0],
 									},
 									{
-										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
-											SignedTxn: stxns[1],
-											ApplyData: scenario.ExpectedSimulationAD,
-										}),
+										Txn:               makePendingTxnResponse(t, stxns[1].WithAD(scenario.ExpectedSimulationAD)),
 										AppBudgetConsumed: txnAppBudgetUsed[1],
 									},
 								},
@@ -1997,7 +1992,7 @@ func addStateProof(blk bookkeeping.Block) bookkeeping.Block {
 			},
 		},
 	}
-	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: tx}}
+	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: tx.WithAD()}
 	blk.Payset = append(blk.Payset, txnib)
 
 	updatedStateProofTracking := bookkeeping.StateProofTrackingData{
@@ -2316,13 +2311,13 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	blk2 := bookkeeping.BlockHeader{Round: 2}
 	delta1 := ledgercore.StateDelta{Hdr: &blk1}
 	delta2 := ledgercore.StateDelta{Hdr: &blk2, KvMods: map[string]ledgercore.KvValueDelta{"bx1": {Data: []byte("foobar")}}}
-	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+	txn1 := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}.WithAD()
 	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
 	require.NoError(t, err)
-	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{
+	txn2 := transactions.SignedTxn{Txn: transactions.Transaction{
 		Type:   protocol.AssetTransferTx,
 		Header: transactions.Header{Group: groupID1}},
-	}}
+	}.WithAD()
 
 	tracer := eval.MakeTxnGroupDeltaTracer(2)
 	handlers := v2.Handlers{

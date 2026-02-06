@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -237,7 +236,7 @@ func BenchmarkTxnTypes(b *testing.B) {
 				signed := t.SignedTxn()
 				for n := 0; n < b.N; n++ {
 					signed.Txn.Note = []byte(strconv.Itoa(n))
-					err := eval.Transaction(signed, transactions.ApplyData{})
+					err := eval.TransactionGroup(signed.WithAD())
 					if errors.Is(err, ledgercore.ErrNoSpace) {
 						endBlock(b, l, eval)
 						eval = nextBlock(b, l)

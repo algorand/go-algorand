@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -520,7 +520,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 		// there might be more transactions than MaxTxnBytesPerBlock allows so
 		// make smaller blocks to fit
 		for i, stxn := range initSignedTxns {
-			err := bev.Transaction(stxn, transactions.ApplyData{})
+			err := bev.TransactionGroup(stxn.WithAD())
 			require.NoError(b, err)
 			if maxTxnPerBlock > 0 && i%maxTxnPerBlock == 0 || i == len(initSignedTxns)-1 {
 				unfinishedBlock, err = bev.GenerateBlock(nil)
@@ -564,7 +564,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 
 	for i := 0; i < numTxns; i++ {
 		stxn := txnSource.Txn(b, addrs, keys, newBlock.Round(), genHash)
-		err = bev.Transaction(stxn, transactions.ApplyData{})
+		err = bev.TransactionGroup(stxn.WithAD())
 		require.NoError(b, err)
 	}
 

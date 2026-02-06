@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -302,7 +302,7 @@ func addNewAccount(bc *benchConfig) (acct basics.Address) {
 }
 
 func addTransaction(bc *benchConfig, stxn transactions.SignedTxn) uint64 {
-	err := bc.eval.Transaction(stxn, transactions.ApplyData{})
+	err := bc.eval.TransactionGroup(stxn.WithAD())
 	if err == ledgercore.ErrNoSpace {
 		addBlock(bc)
 		addTransaction(bc, stxn)

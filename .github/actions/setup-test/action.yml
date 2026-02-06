@@ -28,13 +28,3 @@ runs:
         sudo dpkg-reconfigure -f noninteractive man-db
         sudo apt-get install -y --no-upgrade expect
       shell: bash
-    - name: Cache gotestsum
-      id: cache-gotestsum
-      uses: actions/cache@v4
-      with:
-        path: ~/go/bin/gotestsum
-        key: gotestsum-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/buildtools/versions') }}
-    - name: Install gotestsum
-      if: steps.cache-gotestsum.outputs.cache-hit != 'true'
-      run: ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-      shell: bash

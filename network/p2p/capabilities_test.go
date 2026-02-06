@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,6 +43,7 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	var bootstrapPeers []peer.AddrInfo
 	var dhts []*dht.IpfsDHT
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "localhost:0" // enable DHT server mode
 	for i := 0; i < numHosts; i++ {
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
@@ -94,6 +95,7 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 	var bootstrapPeers []peer.AddrInfo
 	var capsDisc []*CapabilitiesDiscovery
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "localhost:0" // enable DHT server mode
 	for i := 0; i < numHosts; i++ {
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)

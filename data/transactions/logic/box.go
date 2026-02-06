@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,7 +52,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	// we don't have to go to the disk. but we only allow one such access for
 	// each spare (empty) box ref. that way, we can't end up needing to write
 	// many separate newly created boxes.
-	if !ok && cx.Proto.EnableUnnamedBoxAccessInNewApps {
+	if !ok {
 		if _, newAppAccess = cx.available.createdApps[cx.appID]; newAppAccess {
 			if cx.available.unnamedAccess > 0 {
 				ok = true                    // allow it

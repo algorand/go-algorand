@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -552,7 +552,7 @@ func (g *generator) generateTxGroup(round basics.Round, intra uint64) ([]txn.Sig
 
 	txnGroupAD := make([]txn.SignedTxnWithAD, len(signedTxns))
 	for i := range signedTxns {
-		txnGroupAD[i] = txn.SignedTxnWithAD{SignedTxn: signedTxns[i]}
+		txnGroupAD[i] = signedTxns[i].WithAD()
 
 		// for debugging:
 		g.latestPaysetWithExpectedID = append(

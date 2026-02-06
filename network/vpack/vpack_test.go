@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package vpack
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"slices"
 	"testing"
@@ -123,45 +122,45 @@ func TestStatelessDecoderErrors(t *testing.T) {
 
 	cases := []tc{
 		// ---------- cred ----------
-		{"pf-bin80", fmt.Sprintf("field %s", msgpFixstrPf),
+		{"pf-bin80", "field pf",
 			func() []byte { return slices.Concat(h(0), z(79)) }},
 
 		// ---------- r.per ----------
-		{"per-varuint-marker", fmt.Sprintf("field %s", msgpFixstrPer),
+		{"per-varuint-marker", "field per",
 			func() []byte { return slices.Concat(h(bitPer), pf) }},
 
 		// ---------- r.prop.* ----------
-		{"dig-bin32", fmt.Sprintf("field %s", msgpFixstrDig),
+		{"dig-bin32", "field dig",
 			func() []byte { return slices.Concat(h(bitDig), pf, z(10)) }},
-		{"encdig-bin32", fmt.Sprintf("field %s", msgpFixstrEncdig),
+		{"encdig-bin32", "field encdig",
 			func() []byte { return slices.Concat(h(bitDig|bitEncDig), pf, z32, z(10)) }},
-		{"oper-varuint-marker", fmt.Sprintf("field %s", msgpFixstrOper),
+		{"oper-varuint-marker", "field oper",
 			func() []byte { return slices.Concat(h(bitOper), pf) }},
-		{"oprop-bin32", fmt.Sprintf("field %s", msgpFixstrOprop),
+		{"oprop-bin32", "field oprop",
 			func() []byte { return slices.Concat(h(bitOprop), pf, z(5)) }},
 
 		// ---------- r.rnd ----------
-		{"rnd-varuint-marker", fmt.Sprintf("field %s", msgpFixstrRnd),
+		{"rnd-varuint-marker", "field rnd",
 			func() []byte { return slices.Concat(h(0), pf) }},
-		{"rnd-varuint-trunc", fmt.Sprintf("not enough data for varuint (need 4 bytes) for field %s", msgpFixstrRnd),
+		{"rnd-varuint-trunc", "not enough data for varuint (need 4 bytes) for field rnd",
 			func() []byte { return slices.Concat(h(0), pf, []byte{msgpUint32, 0x00}) }},
 
 		// ---------- r.snd / r.step ----------
-		{"snd-bin32", fmt.Sprintf("field %s", msgpFixstrSnd),
+		{"snd-bin32", "field snd",
 			func() []byte { return slices.Concat(h(0), pf, fix1) }},
-		{"step-varuint-marker", fmt.Sprintf("field %s", msgpFixstrStep),
+		{"step-varuint-marker", "field step",
 			func() []byte { return slices.Concat(h(bitStep), pf, fix1, z32) }},
 
 		// ---------- sig.* ----------
-		{"p-bin32", fmt.Sprintf("field %s", msgpFixstrP),
+		{"p-bin32", "field p",
 			func() []byte { return slices.Concat(h(0), pf, fix1, z32) }},
-		{"p1s-bin64", fmt.Sprintf("field %s", msgpFixstrP1s),
+		{"p1s-bin64", "field p1s",
 			func() []byte { return slices.Concat(h(0), pf, fix1, z32, z32, z(12)) }},
-		{"p2-bin32", fmt.Sprintf("field %s", msgpFixstrP2),
+		{"p2-bin32", "field p2",
 			func() []byte { return slices.Concat(h(0), pf, fix1, z32, z32, z64) }},
-		{"p2s-bin64", fmt.Sprintf("field %s", msgpFixstrP2s),
+		{"p2s-bin64", "field p2s",
 			func() []byte { return slices.Concat(h(0), pf, fix1, z32, z32, z64, z32, z(3)) }},
-		{"s-bin64", fmt.Sprintf("field %s", msgpFixstrS),
+		{"s-bin64", "field s",
 			func() []byte { return slices.Concat(h(0), pf, fix1, z32, z32, z64, z32, z64) }},
 
 		// ---------- trailing data ----------

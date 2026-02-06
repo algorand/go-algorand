@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -86,7 +86,7 @@ func (n *ClockedFilter) Tick(newClockTime int) bool {
 	return n.upstream.Tick(int(n.localClock))
 }
 
-// Unmarshall ClockedFilter
+// Unmarshal ClockedFilter
 func (n *ClockedFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type clockedFilterJSON struct {
 		Name             string

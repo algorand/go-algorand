@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -250,6 +250,10 @@ type AppParams struct {
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
 	Version           uint64 `codec:"v"`
+
+	// SizeSponsor, if non-zero, is the account that must hold MBR for
+	// extra program pages, and the global schema.
+	SizeSponsor Address `codec:"ss"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the

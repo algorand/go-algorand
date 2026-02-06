@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -128,7 +128,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 
 	node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node})
 
-	if cfg.IsGossipServer() {
+	if cfg.IsListenServer() {
 		rpcs.MakeHealthService(node.net)
 	}
 

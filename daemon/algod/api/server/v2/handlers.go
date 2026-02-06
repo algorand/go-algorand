@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1318,7 +1318,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 
-	response := convertSimulationResult(simulationResult, proto.EnableUnnamedBoxAccessInNewApps)
+	response := convertSimulationResult(simulationResult)
 
 	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {

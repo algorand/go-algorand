@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -256,7 +256,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				var stxn transactions.SignedTxn
 				stxn.Txn = tx
 				stxn.Sig = crypto.Signature{1}
-				err = eval.Transaction(stxn, transactions.ApplyData{})
+				err = eval.TransactionGroup(stxn.WithAD())
 
 			}
 
@@ -287,7 +287,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 					var stxn transactions.SignedTxn
 					stxn.Txn = tx
 					stxn.Sig = crypto.Signature{1}
-					err = eval.Transaction(stxn, transactions.ApplyData{})
+					err = eval.TransactionGroup(stxn.WithAD())
 					require.NoError(b, err)
 				}
 				break

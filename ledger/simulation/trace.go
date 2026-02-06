@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -77,9 +77,7 @@ type TxnGroupResult struct {
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {
 	groupResult := TxnGroupResult{Txns: make([]TxnResult, len(txgroup))}
 	for i, tx := range txgroup {
-		groupResult.Txns[i] = TxnResult{Txn: transactions.SignedTxnWithAD{
-			SignedTxn: tx,
-		}}
+		groupResult.Txns[i] = TxnResult{Txn: tx.WithAD()}
 	}
 	return groupResult
 }

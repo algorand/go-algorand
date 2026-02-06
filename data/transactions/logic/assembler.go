@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1735,12 +1735,8 @@ func addPseudoDocTags() {
 			if spec.Name == name || i == anyImmediates {
 				continue
 			}
-			msg := fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
 			desc := opDescByName[spec.Name]
-			if desc.Short == "" {
-				panic(spec.Name)
-			}
-			desc.Short = desc.Short + "<br />" + msg
+			desc.Sugar = fmt.Sprintf("`%s` can be called by using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
 			opDescByName[spec.Name] = desc
 		}
 	}

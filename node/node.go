@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -293,7 +293,7 @@ recreateNetwork:
 	}
 
 	// The health service registers itself with the network
-	if cfg.IsGossipServer() {
+	if cfg.IsListenServer() {
 		rpcs.MakeHealthService(node.net)
 	}
 
@@ -437,13 +437,13 @@ func (node *AlgorandFullNode) Start() error {
 // Capabilities returns the node's capabilities for advertising to other nodes.
 func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
 	var caps []p2p.Capability
-	if node.config.Archival && node.config.IsGossipServer() {
+	if node.config.Archival && node.config.IsListenServer() {
 		caps = append(caps, p2p.Archival)
 	}
-	if node.config.StoresCatchpoints() && node.config.IsGossipServer() {
+	if node.config.StoresCatchpoints() && node.config.IsListenServer() {
 		caps = append(caps, p2p.Catchpoints)
 	}
-	if node.config.EnableGossipService && node.config.IsGossipServer() {
+	if node.config.EnableGossipService && node.config.IsListenServer() {
 		caps = append(caps, p2p.Gossip)
 	}
 	return caps

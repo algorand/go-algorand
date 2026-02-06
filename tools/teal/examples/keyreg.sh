@@ -14,7 +14,7 @@ goal account addpartkey -a CI3OPSTHUPJNOYDN2EAQDAOVYZNQNJNS5QJD7WGHCX4O6SZAG7EP4
 # > Participation key generation successful
 
 # create the keyreg transaction and sign it with the delegate logic, along with the key
-goal account changeonlinestatus -a CI3OPSTHUPJNOYDN2EAQDAOVYZNQNJNS5QJD7WGHCX4O6SZAG7EP4TNMC4 -x uFVDhjBpkpKQ8sZaau0qsDsf0eW3oXFEn1Ar5o39vkk= --online --firstRound 2600 --validRounds 95 --txfile keyreg.tx -d .
+goal account changeonlinestatus -a CI3OPSTHUPJNOYDN2EAQDAOVYZNQNJNS5QJD7WGHCX4O6SZAG7EP4TNMC4 -x uFVDhjBpkpKQ8sZaau0qsDsf0eW3oXFEn1Ar5o39vkk= --online --firstvalid 2600 --validrounds 95 --txfile keyreg.tx -d .
 cat keyreg.tx | dsign delegate.keyregkey kr.lsig > keyreg.stx
 
 # send the keyreg transaction to the network

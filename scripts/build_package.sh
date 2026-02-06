@@ -77,7 +77,7 @@ DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "${DEFAULT
 mkdir ${PKG_ROOT}/bin
 
 # If you modify this list, also update this list in ./cmd/updater/update.sh backup_binaries()
-bin_files=("algocfg" "algotmpl" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "find-nodes.sh" "goal" "kmd" "msgpacktool" "node_exporter" "tealcut" "tealdbg" "update.sh" "updater" "COPYING")
+bin_files=("algocfg" "algotmpl" "algod" "algoh" "algokey" "diagcfg" "find-nodes.sh" "goal" "kmd" "node_exporter" "update.sh" "updater" "COPYING")
 for bin in "${bin_files[@]}"; do
     cp ${GOBIN}/${bin} ${PKG_ROOT}/bin
     if [ $? -ne 0 ]; then exit 1; fi
@@ -120,7 +120,7 @@ TOOLS_ROOT=${PKG_ROOT}/tools
 
 echo "Staging tools package files"
 
-bin_files=("algons" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "loadgenerator" "COPYING" "dsign" "catchpointdump" "block-generator")
+bin_files=("algons" "carpenter" "coroner" "dispenser" "msgpacktool" "netgoal" "nodecfg" "pingpong" "loadgenerator" "COPYING" "dsign" "catchpointdump" "block-generator" "tealdbg")
 mkdir -p ${TOOLS_ROOT}
 for bin in "${bin_files[@]}"; do
     cp ${GOBIN}/${bin} ${TOOLS_ROOT}

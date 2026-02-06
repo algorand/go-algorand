@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -157,14 +157,24 @@ func (dl *DoubleLedger) endBlock(proposer ...basics.Address) *ledgercore.Validat
 	return vb
 }
 
-func (dl *DoubleLedger) createApp(sender basics.Address, source string) basics.AppIndex {
+func (dl *DoubleLedger) createApp(sender basics.Address, source string, schemas ...basics.StateSchema) basics.AppIndex {
 	createapp := txntest.Txn{
 		Type:            "appl",
 		Sender:          sender,
 		ApprovalProgram: source,
 	}
+	switch len(schemas) {
+	case 0:
+	case 1:
+		createapp.GlobalStateSchema = schemas[0]
+	case 2:
+		createapp.GlobalStateSchema = schemas[0]
+		createapp.LocalStateSchema = schemas[1]
+	}
 	vb := dl.fullBlock(&createapp)
-	return vb.Block().Payset[0].ApplyData.ApplicationID
+	return basics.AppIndex(vb.Block().BlockHeader.TxnCounter)
+	// The following only works for v30 and above, when we start recording the id in AD.
+	// return vb.Block().Payset[0].ApplyData.ApplicationID
 }
 
 func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {

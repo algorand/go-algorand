@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -570,7 +570,10 @@ func (wp *wsPeer) readLoop() {
 		msg.Data = slurper.Bytes()
 		msg.Net = wp.net
 		wp.lastPacketTime.Store(msg.Received)
+
 		if wp.peerType == peerTypeWs {
+			msg.Outgoing = wp.outgoing
+
 			networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
 			networkMessageReceivedTotal.AddUint64(1, nil)
 			networkReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))

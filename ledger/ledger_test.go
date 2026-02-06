@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1514,10 +1514,6 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 
 // triggerTrackerFlush is based in the commit flow but executed it in a single (this) goroutine.
 func triggerTrackerFlush(t *testing.T, l *Ledger) {
-	l.trackers.mu.Lock()
-	dbRound := l.trackers.dbRound
-	l.trackers.mu.Unlock()
-
 	rnd := l.Latest()
 	minBlock := rnd
 	maxLookback := basics.Round(0)
@@ -1538,6 +1534,7 @@ func triggerTrackerFlush(t *testing.T, l *Ledger) {
 	}
 
 	l.trackers.mu.RLock()
+	dbRound := l.trackers.dbRound
 	cdr := l.trackers.produceCommittingTask(rnd, dbRound, &dcc.deferredCommitRange)
 	if cdr != nil {
 		dcc.deferredCommitRange = *cdr
@@ -2551,7 +2548,7 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	onlineTotals := make([]basics.MicroAlgos, maxBlocks+1)
 	curAddressIdx := 0
-	maxValidity := basics.Round(20) // some number different from number of txns in blocks
+	const maxValidity = basics.Round(20) // some number different from number of txns in blocks
 	txnIDs := make(map[basics.Round]map[transactions.Txid]struct{})
 	// run for maxBlocks rounds with random payment transactions
 	// generate numTxns txn per block
@@ -2624,6 +2621,8 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	triggerTrackerFlush(t, l)
+
 	latest := l.Latest()
 	nextRound := latest + 1
 	balancesRound := nextRound.SubSaturate(basics.Round(proto.MaxBalLookback))
@@ -2670,7 +2669,13 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
+		require.Equal(t, latest-1, missingRoundErr.round)
 	}
 
 	shorterLookback := config.GetDefaultLocal().MaxAcctLookback
@@ -2724,7 +2729,13 @@ func TestLedgerMigrateV6ShrinkDeltas(t *testing.T) {
 
 	// check an error latest-1
 	for txid := range txnIDs[latest-1] {
-		require.Error(t, l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}))
+		var missingRoundErr *errTxTailMissingRound
+		require.ErrorAs(
+			t,
+			l2.CheckDup(proto, nextRound, latest-maxValidity, latest-1, txid, ledgercore.Txlease{}),
+			&missingRoundErr,
+		)
+		require.Equal(t, latest-1, missingRoundErr.round)
 	}
 }
 

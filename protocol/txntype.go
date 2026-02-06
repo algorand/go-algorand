@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -49,6 +49,9 @@ const (
 
 	// HeartbeatTx demonstrates the account is alive
 	HeartbeatTx TxType = "hb"
+
+	// Remember to add to TxnTypeNames and txnTypeLongNames in logic/fields.go when
+	// adding a new transaction type!
 
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"

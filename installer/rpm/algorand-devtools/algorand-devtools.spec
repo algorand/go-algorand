@@ -26,8 +26,8 @@ This package provides development tools for the Algorand blockchain.
 mkdir -p %{buildroot}/usr/bin
 # NOTE: keep in sync with scripts/build_deb.sh bin_files
 # NOTE: keep in sync with %files section below
-for f in carpenter catchupsrv msgpacktool tealcut tealdbg; do
-  install -m 755 ${ALGO_BIN}/${f} %{buildroot}/usr/bin/${f}
+for f in carpenter msgpacktool tealdbg; do
+  install -m 755 ${ALGO_TOOLS}/${f} %{buildroot}/usr/bin/${f}
 done
 
 mkdir -p %{buildroot}/etc/pki/rpm-gpg
@@ -38,9 +38,7 @@ install -m 644 ${REPO_DIR}/installer/rpm/algorand-devtools/algorand-devtools.rep
 
 %files
 /usr/bin/carpenter
-/usr/bin/catchupsrv
 /usr/bin/msgpacktool
-/usr/bin/tealcut
 /usr/bin/tealdbg
 /etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
 /usr/lib/algorand/yum.repos.d/algorand-devtools.repo

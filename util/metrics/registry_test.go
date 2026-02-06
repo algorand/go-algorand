@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,15 +27,22 @@ import (
 func TestWriteAdd(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// Test AddMetrics and WriteMetrics with a counter
-	counter := MakeCounter(MetricName{Name: "gauge-name", Description: "gauge description"})
+	counter := MakeCounterUnregistered(MetricName{Name: "gauge-name", Description: "gauge description"})
+	counter.Register(registry)
+
 	counter.AddUint64(12, nil)
 
-	labelCounter := MakeCounter(MetricName{Name: "label-counter", Description: "counter with labels"})
+	labelCounter := MakeCounterUnregistered(MetricName{Name: "label-counter", Description: "counter with labels"})
+	labelCounter.Register(registry)
+
 	labelCounter.AddUint64(5, map[string]string{"label": "a label value"})
 
 	results := make(map[string]float64)
-	DefaultRegistry().AddMetrics(results)
+	registry.AddMetrics(results)
 
 	require.Equal(t, 2, len(results), "results", results)
 	require.Contains(t, results, "gauge-name")
@@ -44,19 +51,19 @@ func TestWriteAdd(t *testing.T) {
 	require.InDelta(t, 5, results["label-counter_label__a_label_value_"], 0.01)
 
 	bufBefore := strings.Builder{}
-	DefaultRegistry().WriteMetrics(&bufBefore, "label")
+	registry.WriteMetrics(&bufBefore, "label")
 	require.True(t, bufBefore.Len() > 0)
 
-	DefaultRegistry().AddMetrics(results)
+	registry.AddMetrics(results)
 
 	require.Contains(t, results, "gauge-name")
 	require.InDelta(t, 12, results["gauge-name"], 0.01)
 
 	// not included in string builder
 	bufAfter := strings.Builder{}
-	DefaultRegistry().WriteMetrics(&bufAfter, "label")
+	registry.WriteMetrics(&bufAfter, "label")
 	require.Equal(t, bufBefore.String(), bufAfter.String())
 
-	counter.Deregister(nil)
-	labelCounter.Deregister(nil)
+	counter.Deregister(registry)
+	labelCounter.Deregister(registry)
 }

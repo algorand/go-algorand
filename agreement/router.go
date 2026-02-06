@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ import (
 //msgp:ignore stateMachineTag
 type stateMachineTag int
 
-//go:generate stringer -type=stateMachineTag
+//go:generate go tool -modfile=../tool.mod stringer -type=stateMachineTag
 const (
 	demultiplexer stateMachineTag = iota // type demux
 

@@ -85,10 +85,11 @@ const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseRecei
 var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 225, 237, 252, 262, 270, 281, 296, 313, 320, 331, 347, 366, 390, 409, 424, 438, 461, 479, 497, 514, 533, 544, 562, 579, 585, 594, 606, 621, 634, 652, 664, 681, 698, 714, 718, 725, 739, 759, 766, 778, 798, 821, 843, 868, 881, 896}
 
 func (i TxnField) String() string {
-	if i < 0 || i >= TxnField(len(_TxnField_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_TxnField_index)-1 {
 		return "TxnField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _TxnField_name[_TxnField_index[i]:_TxnField_index[i+1]]
+	return _TxnField_name[_TxnField_index[idx]:_TxnField_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -125,10 +126,11 @@ const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogi
 var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 257, 271, 289, 303, 320, 337, 355}
 
 func (i GlobalField) String() string {
-	if i >= GlobalField(len(_GlobalField_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_GlobalField_index)-1 {
 		return "GlobalField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _GlobalField_name[_GlobalField_index[i]:_GlobalField_index[i+1]]
+	return _GlobalField_name[_GlobalField_index[idx]:_GlobalField_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -154,10 +156,11 @@ const _AssetParamsField_name = "AssetTotalAssetDecimalsAssetDefaultFrozenAssetUn
 var _AssetParamsField_index = [...]uint8{0, 10, 23, 41, 54, 63, 71, 88, 100, 112, 123, 136, 148, 171}
 
 func (i AssetParamsField) String() string {
-	if i < 0 || i >= AssetParamsField(len(_AssetParamsField_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_AssetParamsField_index)-1 {
 		return "AssetParamsField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _AssetParamsField_name[_AssetParamsField_index[i]:_AssetParamsField_index[i+1]]
+	return _AssetParamsField_name[_AssetParamsField_index[idx]:_AssetParamsField_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -173,18 +176,20 @@ func _() {
 	_ = x[AppCreator-7]
 	_ = x[AppAddress-8]
 	_ = x[AppVersion-9]
-	_ = x[invalidAppParamsField-10]
+	_ = x[AppSizeSponsor-10]
+	_ = x[invalidAppParamsField-11]
 }
 
-const _AppParamsField_name = "AppApprovalProgramAppClearStateProgramAppGlobalNumUintAppGlobalNumByteSliceAppLocalNumUintAppLocalNumByteSliceAppExtraProgramPagesAppCreatorAppAddressAppVersioninvalidAppParamsField"
+const _AppParamsField_name = "AppApprovalProgramAppClearStateProgramAppGlobalNumUintAppGlobalNumByteSliceAppLocalNumUintAppLocalNumByteSliceAppExtraProgramPagesAppCreatorAppAddressAppVersionAppSizeSponsorinvalidAppParamsField"
 
-var _AppParamsField_index = [...]uint8{0, 18, 38, 54, 75, 90, 110, 130, 140, 150, 160, 181}
+var _AppParamsField_index = [...]uint8{0, 18, 38, 54, 75, 90, 110, 130, 140, 150, 160, 174, 195}
 
 func (i AppParamsField) String() string {
-	if i < 0 || i >= AppParamsField(len(_AppParamsField_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_AppParamsField_index)-1 {
 		return "AppParamsField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _AppParamsField_name[_AppParamsField_index[i]:_AppParamsField_index[i+1]]
+	return _AppParamsField_name[_AppParamsField_index[idx]:_AppParamsField_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -213,10 +218,11 @@ const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalNum
 var _AcctParamsField_index = [...]uint16{0, 11, 25, 37, 53, 74, 96, 116, 136, 158, 173, 187, 204, 225, 241, 258, 280}
 
 func (i AcctParamsField) String() string {
-	if i < 0 || i >= AcctParamsField(len(_AcctParamsField_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_AcctParamsField_index)-1 {
 		return "AcctParamsField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _AcctParamsField_name[_AcctParamsField_index[i]:_AcctParamsField_index[i+1]]
+	return _AcctParamsField_name[_AcctParamsField_index[idx]:_AcctParamsField_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -232,10 +238,11 @@ const _AssetHoldingField_name = "AssetBalanceAssetFrozeninvalidAssetHoldingField
 var _AssetHoldingField_index = [...]uint8{0, 12, 23, 47}
 
 func (i AssetHoldingField) String() string {
-	if i < 0 || i >= AssetHoldingField(len(_AssetHoldingField_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_AssetHoldingField_index)-1 {
 		return "AssetHoldingField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _AssetHoldingField_name[_AssetHoldingField_index[i]:_AssetHoldingField_index[i+1]]
+	return _AssetHoldingField_name[_AssetHoldingField_index[idx]:_AssetHoldingField_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -254,10 +261,11 @@ const _OnCompletionConstType_name = "NoOpOptInCloseOutClearStateUpdateApplicatio
 var _OnCompletionConstType_index = [...]uint8{0, 4, 9, 17, 27, 44, 61}
 
 func (i OnCompletionConstType) String() string {
-	if i >= OnCompletionConstType(len(_OnCompletionConstType_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_OnCompletionConstType_index)-1 {
 		return "OnCompletionConstType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _OnCompletionConstType_name[_OnCompletionConstType_index[i]:_OnCompletionConstType_index[i+1]]
+	return _OnCompletionConstType_name[_OnCompletionConstType_index[idx]:_OnCompletionConstType_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -273,10 +281,11 @@ const _EcdsaCurve_name = "Secp256k1Secp256r1invalidEcdsaCurve"
 var _EcdsaCurve_index = [...]uint8{0, 9, 18, 35}
 
 func (i EcdsaCurve) String() string {
-	if i < 0 || i >= EcdsaCurve(len(_EcdsaCurve_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_EcdsaCurve_index)-1 {
 		return "EcdsaCurve(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _EcdsaCurve_name[_EcdsaCurve_index[i]:_EcdsaCurve_index[i+1]]
+	return _EcdsaCurve_name[_EcdsaCurve_index[idx]:_EcdsaCurve_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -294,10 +303,11 @@ const _EcGroup_name = "BN254g1BN254g2BLS12_381g1BLS12_381g2invalidEcGroup"
 var _EcGroup_index = [...]uint8{0, 7, 14, 25, 36, 50}
 
 func (i EcGroup) String() string {
-	if i < 0 || i >= EcGroup(len(_EcGroup_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_EcGroup_index)-1 {
 		return "EcGroup(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _EcGroup_name[_EcGroup_index[i]:_EcGroup_index[i+1]]
+	return _EcGroup_name[_EcGroup_index[idx]:_EcGroup_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -313,10 +323,11 @@ const _MimcConfig_name = "BN254Mp110BLS12_381Mp111invalidMimcConfig"
 var _MimcConfig_index = [...]uint8{0, 10, 24, 41}
 
 func (i MimcConfig) String() string {
-	if i < 0 || i >= MimcConfig(len(_MimcConfig_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_MimcConfig_index)-1 {
 		return "MimcConfig(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _MimcConfig_name[_MimcConfig_index[i]:_MimcConfig_index[i+1]]
+	return _MimcConfig_name[_MimcConfig_index[idx]:_MimcConfig_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -332,10 +343,11 @@ const _Base64Encoding_name = "URLEncodingStdEncodinginvalidBase64Encoding"
 var _Base64Encoding_index = [...]uint8{0, 11, 22, 43}
 
 func (i Base64Encoding) String() string {
-	if i < 0 || i >= Base64Encoding(len(_Base64Encoding_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_Base64Encoding_index)-1 {
 		return "Base64Encoding(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _Base64Encoding_name[_Base64Encoding_index[i]:_Base64Encoding_index[i+1]]
+	return _Base64Encoding_name[_Base64Encoding_index[idx]:_Base64Encoding_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -352,10 +364,11 @@ const _JSONRefType_name = "JSONStringJSONUint64JSONObjectinvalidJSONRefType"
 var _JSONRefType_index = [...]uint8{0, 10, 20, 30, 48}
 
 func (i JSONRefType) String() string {
-	if i < 0 || i >= JSONRefType(len(_JSONRefType_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_JSONRefType_index)-1 {
 		return "JSONRefType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _JSONRefType_name[_JSONRefType_index[i]:_JSONRefType_index[i+1]]
+	return _JSONRefType_name[_JSONRefType_index[idx]:_JSONRefType_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -371,10 +384,11 @@ const _VoterParamsField_name = "VoterBalanceVoterIncentiveEligibleinvalidVoterPa
 var _VoterParamsField_index = [...]uint8{0, 12, 34, 57}
 
 func (i VoterParamsField) String() string {
-	if i < 0 || i >= VoterParamsField(len(_VoterParamsField_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_VoterParamsField_index)-1 {
 		return "VoterParamsField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _VoterParamsField_name[_VoterParamsField_index[i]:_VoterParamsField_index[i+1]]
+	return _VoterParamsField_name[_VoterParamsField_index[idx]:_VoterParamsField_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -389,10 +403,11 @@ const _VrfStandard_name = "VrfAlgorandinvalidVrfStandard"
 var _VrfStandard_index = [...]uint8{0, 11, 29}
 
 func (i VrfStandard) String() string {
-	if i < 0 || i >= VrfStandard(len(_VrfStandard_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_VrfStandard_index)-1 {
 		return "VrfStandard(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _VrfStandard_name[_VrfStandard_index[i]:_VrfStandard_index[i+1]]
+	return _VrfStandard_name[_VrfStandard_index[idx]:_VrfStandard_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -420,8 +435,9 @@ const _BlockField_name = "BlkSeedBlkTimestampBlkProposerBlkFeesCollectedBlkBonus
 var _BlockField_index = [...]uint8{0, 7, 19, 30, 46, 54, 63, 73, 84, 97, 114, 126, 152, 174, 196, 213}
 
 func (i BlockField) String() string {
-	if i < 0 || i >= BlockField(len(_BlockField_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_BlockField_index)-1 {
 		return "BlockField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _BlockField_name[_BlockField_index[i]:_BlockField_index[i+1]]
+	return _BlockField_name[_BlockField_index[idx]:_BlockField_index[idx+1]]
 }

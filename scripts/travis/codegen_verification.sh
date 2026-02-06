@@ -20,8 +20,6 @@ touch gen/generate.go
 
 make build
 
-"${SCRIPTPATH}"/../buildtools/install_buildtools.sh
-
 make gen SHORT_PART_PERIOD=1
 
 echo "Running check_license..."

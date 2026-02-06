@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -135,7 +135,7 @@ func MakeClientFromConfig(config ClientConfig, clientType ClientType) (c Client,
 	return
 }
 
-// Init takes data directory path or an empty string if $ALGORAND_DATA is defined and initializes Client
+// init takes data directory path or an empty string if $ALGORAND_DATA is defined and initializes Client
 func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	// check and assign dataDir
 	dataDir, err := getDataDir(config.AlgodDataDir)

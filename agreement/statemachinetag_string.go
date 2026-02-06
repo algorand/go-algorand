@@ -24,8 +24,9 @@ const _stateMachineTag_name = "demultiplexerplayerMachinevoteMachinevoteMachineR
 var _stateMachineTag_index = [...]uint8{0, 13, 26, 37, 53, 70, 85, 100, 120, 141}
 
 func (i stateMachineTag) String() string {
-	if i < 0 || i >= stateMachineTag(len(_stateMachineTag_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_stateMachineTag_index)-1 {
 		return "stateMachineTag(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _stateMachineTag_name[_stateMachineTag_index[i]:_stateMachineTag_index[i+1]]
+	return _stateMachineTag_name[_stateMachineTag_index[idx]:_stateMachineTag_index[idx+1]]
 }

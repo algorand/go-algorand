@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -575,7 +575,7 @@ func TestLocal_GetVersionedDefaultLocalConfig(t *testing.T) {
 	}
 }
 
-// TestLocalVersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
+// TestLocal_VersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
 func TestLocal_VersionField(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -653,83 +653,83 @@ func TestLocal_TxFiltering(t *testing.T) {
 	require.True(t, cfg.TxFilterCanonicalEnabled())
 }
 
-func TestLocal_IsGossipServer(t *testing.T) {
+func TestLocal_IsListenServer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	cfg := GetDefaultLocal()
-	require.False(t, cfg.IsGossipServer())
-	require.False(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsListenServer())
+	require.False(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.NetAddress = ":4160"
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableGossipService = false
 	// EnableGossipService does not matter
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
-	require.True(t, cfg.IsGossipServer())
-	require.False(t, cfg.IsWsGossipServer())
-	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.False(t, cfg.IsWsListenServer())
+	require.True(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2P = false
 
 	cfg.EnableP2PHybridMode = true
 	// with net address set it is ws net gossip server
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ""
-	require.False(t, cfg.IsGossipServer())
-	require.False(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsListenServer())
+	require.False(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.P2PHybridNetAddress = ":4190"
-	require.True(t, cfg.IsGossipServer())
-	require.False(t, cfg.IsWsGossipServer())
-	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.False(t, cfg.IsWsListenServer())
+	require.True(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ":4160"
 	cfg.P2PHybridNetAddress = ":4190"
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.True(t, cfg.IsP2PListenServer())
 	require.True(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
 	cfg.P2PHybridNetAddress = ":4190"
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.True(t, cfg.IsP2PListenServer())
 	require.True(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
 	cfg.P2PHybridNetAddress = ""
-	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.IsWsGossipServer())
-	require.False(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsListenServer())
+	require.True(t, cfg.IsWsListenServer())
+	require.False(t, cfg.IsP2PListenServer())
 	require.False(t, cfg.IsHybridServer())
 }
 

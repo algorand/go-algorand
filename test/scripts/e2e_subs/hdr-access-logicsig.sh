@@ -41,8 +41,8 @@ int 1
 >
 assert
 
-int 6
-<
+int 25 // consensus allows MaxTimestampIncrement=25 sec between blocks
+<=
 EOF
 
 ${gcmd} clerk compile -o ${TEMPDIR}/hdr.lsig -s -a ${ACCOUNT} ${TEMPDIR}/hdr.teal

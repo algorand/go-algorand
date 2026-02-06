@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -289,7 +289,7 @@ func proposalUsefulForCredentialHistory(curRound round, vote unauthenticatedVote
 	return false
 }
 
-// voteFresh determines whether a proposal satisfies freshness rules.
+// proposalFresh determines whether a proposal satisfies freshness rules.
 func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
 	switch vote.R.Round {
 	case freshData.PlayerRound:

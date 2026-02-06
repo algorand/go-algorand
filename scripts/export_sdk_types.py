@@ -174,9 +174,19 @@ if __name__ == "__main__":
     export_type("ConsensusProtocols", src, dst)
     export_var("Consensus", src, dst)
     export_func("initConsensusProtocols", src, dst)
+    export_func("(cp ConsensusProtocols) DeepCopy", src, dst)
+    export_func("(cp ConsensusProtocols) Merge", src, dst)
     export_type("Global", src, dst)
     export_var("Protocol", src, dst)
     # do _not_ export init(), since go-algorand sets bounds, SDK does not
+
+    # Custom Consensus Functions
+    src = "config/config.go"
+    dst = "protocol/config/config.go"
+    export_func("SaveConfigurableConsensus", src, dst)
+    export_func("PreloadConfigurableConsensusProtocols", src, dst)
+    export_func("LoadConfigurableConsensusProtocols", src, dst)
+    # do not export SetConfigurableConsensusProtocols(), since go-algorand sets bounds, SDK does not
 
     # Common transaction types
     export_type("Header", "data/transactions/transaction.go", "transaction")

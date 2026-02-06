@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -75,7 +75,7 @@ func collectPrometheusMetrics(names []string) []Metric {
 		}
 		if _, ok := namesMap[metric.GetName()]; len(namesMap) > 0 && ok || len(namesMap) == 0 {
 			if metric.GetType() == iopc.MetricType_COUNTER && metric.GetMetric() != nil {
-				counter := makeCounter(MetricName{metric.GetName(), metric.GetHelp()})
+				counter := MakeCounterUnregistered(MetricName{metric.GetName(), metric.GetHelp()})
 				ma := metric.GetMetric()
 				for _, m := range ma {
 					if m.GetCounter() == nil {
@@ -87,7 +87,7 @@ func collectPrometheusMetrics(names []string) []Metric {
 				}
 				result = append(result, counter)
 			} else if metric.GetType() == iopc.MetricType_GAUGE && metric.GetMetric() != nil {
-				gauge := makeGauge(MetricName{metric.GetName(), metric.GetHelp()})
+				gauge := MakeGaugeUnregistered(MetricName{metric.GetName(), metric.GetHelp()})
 
 				ma := metric.GetMetric()
 				for _, m := range ma {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -633,7 +633,7 @@ func TestDuplicatePayAction(t *testing.T) {
 	})
 }
 
-// TestInnerTxCount ensures that inner transactions increment the TxnCounter
+// TestInnerTxnCount ensures that inner transactions increment the TxnCounter
 func TestInnerTxnCount(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -3765,6 +3765,7 @@ func TestUnfundedSenders(t *testing.T) {
 // no min balance.
 func TestAppCallAppDuringInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	ledgertesting.TestConsensusRange(t, 31, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
@@ -3808,5 +3809,170 @@ func TestAppCallAppDuringInit(t *testing.T) {
 			problem = "balance 0 below min"
 		}
 		dl.txn(&callInInit, problem)
+	})
+}
+
+// TestZeroAppLocalsAccess confirms that a 0, used as the app in a LocalRef indicates the current app.
+func TestZeroAppLocalsAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, accessVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// readFromArg0 tries to read the local named in Arg0 from the
+		// address given in Arg1. This allows testing of various ways to provide
+		// access to locals.
+		readFromArg0 := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+txn ApplicationArgs 0			// An address
+byte "XXX"
+app_local_get
+`),
+		}
+
+		appID := dl.txn(&readFromArg0).ApplicationID
+
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[1],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{addrs[2][:]},
+		}, "unavailable Account "+addrs[2].String())
+
+		// The old way: foreign account, with the implied access the cross product with current app
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[1],
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{addrs[2][:]},
+			Accounts:        []basics.Address{addrs[2]},
+		}, addrs[2].String()+" has not opted in") // shows that it's available now
+
+		// The long way with Access: specify the called app as a resource ref,
+		// then have the localref point to it.
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[1], // opt-in
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{addrs[2][:]},
+			Access: []transactions.ResourceRef{{
+				Address: addrs[2],
+			}, {
+				App: appID,
+			}, {
+				Locals: transactions.LocalsRef{
+					Address: 1, App: 2,
+				},
+			}},
+		}, addrs[2].String()+" has not opted in") // shows that it's available now
+
+		// The short way with Access: use 0 to mean the called app
+		problem := "0 App in LocalsRef is not supported"
+		if ver >= 42 { // 0 app is allowed now.  (Remove this after consensus change)
+			problem = addrs[2].String() + " has not opted in"
+		}
+
+		dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[1], // opt-in
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{addrs[2][:]},
+			Access: []transactions.ResourceRef{{
+				Address: addrs[2],
+			}, {
+				Locals: transactions.LocalsRef{
+					Address: 1, App: 0,
+				},
+			}},
+		}, problem)
+
+	})
+
+}
+
+// TestLocalAccessInNewApps shows that in a group that creates a new app, that
+// app can access any available account's locals for that app. Of course,
+// although the locals may be available, it's quite hard to construct examples
+// in which an account is opted-in to the new app.
+func TestLocalAccessInNewApps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	ledgertesting.TestConsensusRange(t, accessVersion, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// callArg0WithArg1 is an app that simply calls the appID provided in
+		// the 0th argument.  It supplies its own 1st arg as the callee's
+		// 0th. It is intended to be called by a top-level app in a group where
+		// a previous transactions has created a new app.  The caller of this
+		// app determines the id of that newly created app and provides it to
+		// `readFromArg0`. The goal is to re-invoke the newly created app and
+		// show it can access locals for an available account even though the
+		// Locals do not explcitly appear in an access list.
+
+		callArg0WithArg1 := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+itxn_begin
+int appl;                     itxn_field TypeEnum
+txn ApplicationArgs 0; btoi;  itxn_field ApplicationID
+txn ApplicationArgs 1;        itxn_field ApplicationArgs
+itxn_submit
+int 1
+`),
+		}
+
+		callID := dl.txn(&callArg0WithArg1).ApplicationID
+
+		// readFromArg0 tries to read the local named in Arg0 from the
+		// address given in Arg1. This allows testing of various ways to provide
+		// access to locals.
+		readFromArg0 := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: main(`
+txn ApplicationArgs 0			// An address
+byte "XXX"
+app_local_get
+`),
+		}
+
+		callFirst := txntest.Txn{
+			Type:   "appl",
+			Sender: addrs[0],
+			ApprovalProgram: `	// Don't use main(), so this runs at creation time
+itxn_begin
+int appl; itxn_field TypeEnum
+gtxn 0 CreatedApplicationID		// get the app ID created in first txn
+itob
+itxn_field ApplicationArgs
+txn ApplicationArgs 0; itxn_field ApplicationArgs
+int ` + strconv.FormatUint(uint64(callID), 10) + `
+itxn_field ApplicationID
+itxn_submit
+`,
+			Access: []transactions.ResourceRef{{
+				App: callID,
+			}},
+			Fee: 1_000_000, // Oversize fee, so that newly created app can make inner call
+		}
+
+		dl.txgroup("unavailable Account "+addrs[2].String(), &readFromArg0, callFirst.Args(string(addrs[2][:])))
+
+		callWithAcctAccess := callFirst
+		callWithAcctAccess.Access = append(callWithAcctAccess.Access, transactions.ResourceRef{Address: addrs[2]})
+		// The "not opted in" error shows that the local ref has become
+		// available because addr[2] because available, this demonstrates that
+		// the LocalRef is not needed because the app in question was made
+		// earlier in the same group.
+		dl.txgroup(addrs[2].String()+" has not opted in", &readFromArg0, callWithAcctAccess.Args(string(addrs[2][:])))
 	})
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -274,6 +274,9 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 		if err != nil {
 			reportErrorf("Signer invalid (%s): %v", signerAddress, err)
 		}
+		if authAddr == tx.Sender {
+			reportErrorf("AuthAddr cannot be the same as the transaction sender")
+		}
 	}
 
 	stxn, err := createSignedTransaction(client, signTx, dataDir, walletName, tx, authAddr)
@@ -449,6 +452,9 @@ var sendCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
 			}
+			if authAddr == payment.Sender {
+				reportErrorf("AuthAddr cannot be the same as the transaction sender")
+			}
 		}
 
 		var stx transactions.SignedTxn
@@ -531,7 +537,7 @@ var sendCmd = &cobra.Command{
 
 			// Append the signer since it's a rekey txn
 			if basics.Address(addr) == stx.Txn.Sender {
-				reportWarnln(rekeySenderTargetSameError)
+				reportErrorf("AuthAddr cannot be the same as the transaction sender")
 			}
 			stx.AuthAddr = basics.Address(addr)
 		}
@@ -862,6 +868,9 @@ var signCmd = &cobra.Command{
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
 					if signerAddress != "" {
+						if authAddr == txn.Txn.Sender {
+							reportErrorf("AuthAddr cannot be the same as the transaction sender")
+						}
 						txn.AuthAddr = authAddr
 					}
 				}
@@ -1159,6 +1168,8 @@ var dryrunCmd = &cobra.Command{
 	Short: "Test a program offline",
 	Long:  "Test a TEAL program offline under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("goal clerk dryrun is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
 		stxns := decodeTxnsFromFile(txFilename)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
@@ -1220,6 +1231,8 @@ var dryrunRemoteCmd = &cobra.Command{
 	Short: "Test a program with algod's dryrun REST endpoint",
 	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("goal clerk dryrun-remote is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)

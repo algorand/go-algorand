@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -446,7 +446,7 @@ func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClien
 	return stateProofMessage, nextStateProofBlock
 }
 
-// TestStateProofRecoveryDuringRecoveryInterval simulates a situation where the stateproof chain is lagging after the main chain.
+// TestStateProofRecoveryDuringRecoveryPeriod simulates a situation where the stateproof chain is lagging after the main chain.
 // If the missing data is being accepted before  StateProofMaxRecoveryIntervals * StateProofInterval rounds have passed, nodes should
 // be able to produce stateproofs and continue as normal
 func TestStateProofRecoveryDuringRecoveryPeriod(t *testing.T) {

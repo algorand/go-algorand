@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -212,7 +212,7 @@ int 1`
 
 			require.Len(t, eval.block.Payset, 0)
 
-			err = eval.TransactionGroup(txgroup)
+			err = eval.TransactionGroup(txgroup...)
 			require.NoError(t, err)
 			require.Len(t, eval.block.Payset, 4)
 
@@ -226,10 +226,7 @@ int 1`
 				Fee:         minFee,
 				GenesisHash: genHash,
 			}
-			secondTxGroup := transactions.WrapSignedTxnsWithAD([]transactions.SignedTxn{
-				secondPayTxn.Txn().Sign(keys[2]),
-			})
-			err = eval.TransactionGroup(secondTxGroup)
+			err = eval.TransactionGroup(secondPayTxn.Txn().Sign(keys[2]).WithAD())
 			require.NoError(t, err)
 
 			// Calculate expected balances dynamically based on proto.MinTxnFee

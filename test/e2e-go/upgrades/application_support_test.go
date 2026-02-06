@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -68,7 +68,7 @@ func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.Consensu
 	return
 }
 
-// TestApplicationsUpgrade tests that we can safely upgrade from a version that doesn't support applications
+// TestApplicationsUpgradeOverREST tests that we can safely upgrade from a version that doesn't support applications
 // to a version that supports applications. It verify that prior to supporting applications, the node would not accept
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverREST(t *testing.T) {
@@ -295,7 +295,7 @@ int 1
 	a.Equal(creator, app.Params.Creator)
 }
 
-// TestApplicationsUpgrade tests that we can safely upgrade from a version that doesn't support applications
+// TestApplicationsUpgradeOverGossip tests that we can safely upgrade from a version that doesn't support applications
 // to a version that supports applications. It verify that prior to supporting applications, the node would not accept
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverGossip(t *testing.T) {

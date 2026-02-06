@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,14 +28,14 @@ type Counter struct {
 
 // MakeCounter create a new counter with the provided name and description.
 func MakeCounter(metric MetricName) *Counter {
-	c := makeCounter(metric)
+	c := MakeCounterUnregistered(metric)
 	c.Register(nil)
 	return c
 }
 
-// makeCounter create a new counter with the provided name and description
+// MakeCounterUnregistered creates a new counter with the provided name and description
 // but does not register it with the default registry.
-func makeCounter(metric MetricName) *Counter {
+func MakeCounterUnregistered(metric MetricName) *Counter {
 	c := &Counter{c: couge{
 		values:        make([]*cougeValues, 0),
 		description:   metric.Description,

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -141,7 +141,7 @@ func (i ledgerImpl) ConsensusParams(r basics.Round) (config.ConsensusParams, err
 	return i.l.ConsensusParams(r)
 }
 
-// ConsensusParams implements Ledger.ConsensusVersion.
+// ConsensusVersion implements Ledger.ConsensusVersion.
 func (i ledgerImpl) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, error) {
 	return i.l.ConsensusVersion(r)
 }

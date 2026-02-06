@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -628,10 +628,10 @@ func MergeAppParams(base *basics.AppParams, update *basics.AppParams) {
 	if len(base.GlobalState) == 0 && len(update.GlobalState) > 0 {
 		base.GlobalState = update.GlobalState
 	}
-	if base.LocalStateSchema == (basics.StateSchema{}) && update.LocalStateSchema != (basics.StateSchema{}) {
+	if base.LocalStateSchema.Empty() && !update.LocalStateSchema.Empty() {
 		base.LocalStateSchema = update.LocalStateSchema
 	}
-	if base.GlobalStateSchema == (basics.StateSchema{}) && update.GlobalStateSchema != (basics.StateSchema{}) {
+	if base.GlobalStateSchema.Empty() && !update.GlobalStateSchema.Empty() {
 		base.GlobalStateSchema = update.GlobalStateSchema
 	}
 }

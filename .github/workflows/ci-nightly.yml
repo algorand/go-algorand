@@ -102,15 +102,16 @@ jobs:
       - name: Run tests
         run: |
           ./scripts/configure_dev.sh
-          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
           PACKAGES="$(go list ./... | grep -v /go-algorand/test/)"
-          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
+          export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')
+          COVERPACKAGES="$(go list ./... | grep -E -v '/go-algorand/(test|debug|cmd|config/defaultsGenerator|tools)' | grep -E -v '(test|testing|mock|mocks)$' | paste -sd ',' -)"
           mkdir -p test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}
-          gotestsum --format standard-quiet \
+          go tool -modfile=tool.mod gotestsum --format standard-quiet \
             --junitfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
             --jsonfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
+            -coverpkg=$COVERPACKAGES \
             $PACKAGE_NAMES
       - name: Notify Slack on failure
         if: failure()
@@ -143,6 +144,7 @@ jobs:
         with:
           token: ${{ env.CODECOV_TOKEN }}
           file: ./coverage.txt
+          flags: full_coverage
           fail_ci_if_error: false
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
@@ -184,7 +186,6 @@ jobs:
       - name: Run integration tests
         run: |
           ./scripts/configure_dev.sh
-          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
           mkdir -p ~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
@@ -241,7 +242,6 @@ jobs:
       - name: Run E2E expect tests
         run: |
           scripts/configure_dev.sh
-          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID}
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
@@ -308,7 +308,6 @@ jobs:
       - name: Run E2E subs tests
         run: |
           scripts/configure_dev.sh
-          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
           mkdir -p ~/test_results/${{ matrix.platform }}_e2e_subs_nightly
           TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_subs_nightly \
           test/scripts/run_integration_tests.sh

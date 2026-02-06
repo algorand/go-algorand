@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,7 +43,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34" version[35]:"35" version[36]:"36" version[37]:"37"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34" version[35]:"35" version[36]:"36" version[37]:"37" version[38]:"38"`
 
 	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes.  If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only affects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
 	Archival bool `version[0]:"false"`
@@ -247,9 +247,11 @@ type Local struct {
 	// TxBacklogAppTxPerSecondRate determines a target app per second rate for the app tx rate limiter
 	TxBacklogAppTxPerSecondRate int `version[32]:"100"`
 
-	// TxBacklogRateLimitingCongestionRatio determines the backlog filling threshold percentage at which the app limiter kicks in
-	// or the tx backlog rate limiter kicks off.
+	// TxBacklogRateLimitingCongestionRatio determines the backlog filling threshold percentage at which the tx backlog rate limiter kicks off
 	TxBacklogRateLimitingCongestionPct int `version[32]:"50"`
+
+	// TxBacklogAppRateLimitingCongestionPct determines the backlog filling threshold percentage at which the app limiter kicks in
+	TxBacklogAppRateLimitingCongestionPct int `version[38]:"10"`
 
 	// EnableTxBacklogAppRateLimiting controls if an app rate limiter should be attached to the tx backlog enqueue process
 	EnableTxBacklogAppRateLimiting bool `version[32]:"true"`
@@ -624,8 +626,16 @@ type Local struct {
 	// P2PHybridNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
 	P2PHybridNetAddress string `version[34]:""`
 
-	// EnableDHT will turn on the hash table for use with capabilities advertisement
+	// EnableDHTProviders enables the DHT for peer discovery and capabilities advertisement.
 	EnableDHTProviders bool `version[34]:"false"`
+
+	// DHTMode controls the DHT operation mode.
+	// Valid values:
+	// - "" (default): nodes with a listen address (NetAddress or P2PHybridNetAddress) use "server" mode
+	//   to be discoverable; other nodes use "client" mode
+	// - "server": always operate as DHT server, respond to queries and advertise peer ID
+	// - "client": operate as DHT client only, query the DHT without advertising or being discoverable
+	DHTMode string `version[38]:""`
 
 	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
 	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
@@ -765,20 +775,20 @@ func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }
 
-// IsGossipServer returns true if this node supposed to start websocket or p2p server
-func (cfg Local) IsGossipServer() bool {
-	return cfg.IsWsGossipServer() || cfg.IsP2PGossipServer()
+// IsListenServer returns true if this node supposed to start websocket or p2p server
+func (cfg Local) IsListenServer() bool {
+	return cfg.IsWsListenServer() || cfg.IsP2PListenServer()
 }
 
-// IsWsGossipServer returns true if a node is configured to run a listening ws net
-func (cfg Local) IsWsGossipServer() bool {
+// IsWsListenServer returns true if a node is configured to run a listening ws net
+func (cfg Local) IsWsListenServer() bool {
 	// 1. NetAddress is set and EnableP2P is not set
 	// 2. NetAddress is set and EnableP2PHybridMode is set then EnableP2P is overridden  by EnableP2PHybridMode
 	return cfg.NetAddress != "" && (!cfg.EnableP2P || cfg.EnableP2PHybridMode)
 }
 
-// IsP2PGossipServer returns true if a node is configured to run a listening p2p net
-func (cfg Local) IsP2PGossipServer() bool {
+// IsP2PListenServer returns true if a node is configured to run a listening p2p net
+func (cfg Local) IsP2PListenServer() bool {
 	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PHybridNetAddress != "")
 }
 
@@ -1014,7 +1024,7 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 			// split the rest of the delta between ws and p2p evenly
 			splitRatio = 2
 		}
-		if cfg.IsWsGossipServer() || cfg.IsP2PGossipServer() {
+		if cfg.IsWsListenServer() || cfg.IsP2PListenServer() {
 			if cfg.IncomingConnectionsLimit > int(restDelta) {
 				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {

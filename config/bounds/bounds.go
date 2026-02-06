@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -114,6 +114,9 @@ var MaxTxnBytesPerBlock int
 
 // MaxAppTxnForeignApps is the max number of foreign apps per txn across all consensus versions
 var MaxAppTxnForeignApps int
+
+// MaxAppAccess is the max number of references allowed in txn.Access per txn across all consensus versions
+var MaxAppAccess int
 
 // MaxEvalDeltaTotalLogSize is the maximum size of the sum of all log sizes in a single eval delta.
 const MaxEvalDeltaTotalLogSize = 1024
