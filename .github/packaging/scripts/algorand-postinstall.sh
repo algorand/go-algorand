@@ -11,21 +11,18 @@ if command -v dpkg >/dev/null 2>&1; then
     getent group algorand >/dev/null || groupadd --system algorand
     chown -R algorand:algorand /var/lib/algorand
 
-    # Systemd service management
-    if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ]; then
-        # Unmask service
-        deb-systemd-helper unmask algorand.service >/dev/null || true
+    # Systemd service management (only if systemd is running)
+    if [ -d /run/systemd/system ]; then
+        if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ]; then
+            # Unmask service
+            deb-systemd-helper unmask algorand.service >/dev/null || true
 
-        if deb-systemd-helper --quiet was-enabled algorand.service; then
-            deb-systemd-helper enable algorand.service >/dev/null || true
-        else
-            deb-systemd-helper update-state algorand.service >/dev/null || true
-        fi
-    fi
+            if deb-systemd-helper --quiet was-enabled algorand.service; then
+                deb-systemd-helper enable algorand.service >/dev/null || true
+            else
+                deb-systemd-helper update-state algorand.service >/dev/null || true
+            fi
 
-    # Restart or start service
-    if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ]; then
-        if [ -d /run/systemd/system ]; then
             systemctl --system daemon-reload >/dev/null || true
             if [ -n "$2" ]; then
                 # Upgrade: restart services
@@ -44,10 +41,12 @@ elif command -v rpm >/dev/null 2>&1; then
     # Set ownership of data directory
     chown -R algorand:algorand /var/lib/algorand
 
-    # Systemd post-install actions (equivalent to %systemd_post)
-    if [ "$1" -eq 1 ] 2>/dev/null; then
-        # Initial installation ($1 is 1 for rpm)
-        systemctl preset algorand.service >/dev/null 2>&1 || true
+    # Systemd post-install actions (only if systemd is running)
+    if [ -d /run/systemd/system ]; then
+        if [ "$1" -eq 1 ] 2>/dev/null; then
+            # Initial installation ($1 is 1 for rpm)
+            systemctl preset algorand.service >/dev/null 2>&1 || true
+        fi
+        systemctl daemon-reload >/dev/null 2>&1 || true
     fi
-    systemctl daemon-reload >/dev/null 2>&1 || true
 fi
