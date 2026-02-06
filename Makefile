@@ -29,6 +29,16 @@ GOLANG_VERSION_SUPPORT     := $(shell echo $(GOLANG_VERSION_MIN) | cut -d'.' -f1
 CURRENT_GO_VERSION         := $(shell go version | cut -d " " -f 3 | tr -d 'go')
 CURRENT_GO_VERSION_MAJOR   := $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
 
+# If VERSION is set (e.g., VERSION=1.2.3), parse it to override version components.
+# This allows setting the full semantic version at build time.
+ifdef VERSION
+  VERSION_MAJOR := $(word 1,$(subst ., ,$(VERSION)))
+  VERSION_MINOR := $(word 2,$(subst ., ,$(VERSION)))
+  VERSION_PATCH := $(word 3,$(subst ., ,$(VERSION)))
+  # Use patch as build number when VERSION is explicitly set
+  BUILDNUMBER   := $(VERSION_PATCH)
+endif
+
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
@@ -74,7 +84,16 @@ endif
 
 GOTAGS      := --tags "$(GOTAGSLIST)"
 
-GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
+# Version override ldflags (only set when VERSION env var is provided)
+ifdef VERSION
+  VERSION_LDFLAGS := -X github.com/algorand/go-algorand/config.VersionMajorOverride=$(VERSION_MAJOR) \
+		 -X github.com/algorand/go-algorand/config.VersionMinorOverride=$(VERSION_MINOR)
+else
+  VERSION_LDFLAGS :=
+endif
+
+GOLDFLAGS_BASE  := $(VERSION_LDFLAGS) \
+		 -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
 		 -X github.com/algorand/go-algorand/config.Branch=$(BUILDBRANCH) \
 		 -X github.com/algorand/go-algorand/config.DefaultDeadlock=$(DEFAULT_DEADLOCK) \
