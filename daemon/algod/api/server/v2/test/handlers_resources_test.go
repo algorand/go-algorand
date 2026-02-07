@@ -147,6 +147,33 @@ func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, ai
 	}
 	return ar, nil
 }
+
+func (l *mockLedger) LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	ad, ok := l.accounts[addr]
+	if !ok {
+		return nil, basics.Round(0), nil
+	}
+
+	var res []ledgercore.AppResourceWithIDs
+	for i := appIDGT + 1; i < appIDGT+1+basics.AppIndex(limit); i++ {
+		apr := ledgercore.AppResourceWithIDs{}
+		if ap, ok := ad.AppParams[i]; ok {
+			apr.AppParams = &ap
+			apr.Creator = addr
+		}
+
+		if ls, ok := ad.AppLocalStates[i]; ok {
+			apr.AppLocalState = &ls
+		}
+
+		if apr.AppParams != nil || apr.AppLocalState != nil {
+			apr.AppID = i
+			res = append(res, apr)
+		}
+	}
+	return res, basics.Round(0), nil
+}
+
 func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
 	panic("not implemented")
 }
@@ -543,5 +570,162 @@ func TestAccountInformationResourceLimits(t *testing.T) {
 			accountInformationResourceLimitsTest(t, tc.accountMaker, 101, 100, "all", 200)  // over limit with exclude=all
 			accountInformationResourceLimitsTest(t, tc.accountMaker, 101, 100, "none", 400) // over limit with exclude=none
 		})
+	}
+}
+
+func randomAccountWithSomeAppLocalStatesAndOverlappingAppParams(overlapN int, nonOverlapAppLocalStatesN int) basics.AccountData {
+	a := ledgertesting.RandomAccountData(0)
+	a.AppParams = make(map[basics.AppIndex]basics.AppParams)
+	a.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+	// overlapN apps have both app params and app local states
+	for i := 1; i <= overlapN; i++ {
+		a.AppParams[basics.AppIndex(i)] = ledgertesting.RandomAppParams()
+		a.AppLocalStates[basics.AppIndex(i)] = ledgertesting.RandomAppLocalState()
+	}
+
+	// nonOverlapAppLocalStatesN apps have only app local states
+	for i := overlapN + 1; i <= (overlapN + nonOverlapAppLocalStatesN); i++ {
+		a.AppLocalStates[basics.AppIndex(i)] = ledgertesting.RandomAppLocalState()
+	}
+	return a
+}
+
+func accountApplicationInformationResourceLimitsTest(t *testing.T, handlers v2.Handlers, addr basics.Address,
+	acctData basics.AccountData, params model.AccountApplicationsInformationParams, inputNextToken int, maxResults int, expectToken bool) {
+
+	ctx, rec := newReq(t)
+	err := handlers.AccountApplicationsInformation(ctx, addr, params)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var ret model.AccountApplicationsInformationResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &ret)
+	require.NoError(t, err)
+
+	if expectToken {
+		nextRaw, err0 := strconv.ParseUint(*ret.NextToken, 10, 64)
+		require.NoError(t, err0)
+		// The next token decoded is actually the last app id returned
+		assert.EqualValues(t, (*ret.ApplicationHoldings)[maxResults-1].Id, nextRaw)
+	}
+	assert.Equal(t, maxResults, len(*ret.ApplicationHoldings))
+
+	// Application holdings should match the first limit apps from the account data
+	minForResults := max(inputNextToken, 0)
+	for i := minForResults; i < minForResults+maxResults; i++ {
+		expectedIndex := basics.AppIndex(i + 1)
+
+		if acctData.AppLocalStates != nil {
+			assert.Equal(t, expectedIndex, (*ret.ApplicationHoldings)[i-minForResults].Id)
+			if (*ret.ApplicationHoldings)[i-minForResults].AppLocalState != nil {
+				assert.Equal(t, expectedIndex, (*ret.ApplicationHoldings)[i-minForResults].AppLocalState.Id)
+			}
+		}
+	}
+}
+
+// TestAccountApplicationsInformation tests the account application information endpoint
+func TestAccountApplicationsInformation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accountOverlappingAppParamsLocalStatesCount := 1000
+	accountNonOverlappingAppLocalStatesCount := 25
+	totalAppLocalStates := accountOverlappingAppParamsLocalStatesCount + accountNonOverlappingAppLocalStatesCount
+
+	handlers, addr, acctData := setupTestForLargeResources(t, accountOverlappingAppParamsLocalStatesCount, 50, func(N int) basics.AccountData {
+		return randomAccountWithSomeAppLocalStatesAndOverlappingAppParams(N, accountNonOverlappingAppLocalStatesCount)
+	})
+
+	// 1. Query with no limit/pagination - should get DefaultApplicationResults back
+	accountApplicationInformationResourceLimitsTest(t, handlers, addr, acctData, model.AccountApplicationsInformationParams{},
+		0, int(v2.DefaultApplicationResults), false)
+
+	rawLimit := 100
+	limit := uint64(rawLimit)
+	// 2. Query with limit<total resources, no next - should get the first (lowest app id to highest) limit results back
+	accountApplicationInformationResourceLimitsTest(t, handlers, addr, acctData,
+		model.AccountApplicationsInformationParams{Limit: &limit}, 0, rawLimit, true)
+
+	// 3. Loop through all apps in the account in batches of 100, ensure we get all apps back.
+	// Exercises limit and next combined.
+	for rawNext := 0; rawNext < totalAppLocalStates; rawNext += rawLimit {
+		nextTk := strconv.FormatUint(uint64(rawNext), 10)
+		// We expect a next token for all but the last batch
+		expectToken := true
+		expectedResultsCount := rawLimit
+		if rawNext+rawLimit >= totalAppLocalStates {
+			expectToken = false
+			expectedResultsCount = totalAppLocalStates - rawNext
+		}
+		accountApplicationInformationResourceLimitsTest(t, handlers, addr, acctData,
+			model.AccountApplicationsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, expectedResultsCount, expectToken)
+	}
+
+	// 4. Query with limit, next to provide batch, but no data in that range
+	rawNext := 1025
+	nextTk := strconv.FormatUint(uint64(rawNext), 10)
+	accountApplicationInformationResourceLimitsTest(t, handlers, addr, acctData,
+		model.AccountApplicationsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, totalAppLocalStates-rawNext, false)
+
+	// 5. Unknown address (200 returned, just no app data)
+	unknownAddress := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	accountApplicationInformationResourceLimitsTest(t, handlers, unknownAddress, basics.AccountData{}, model.AccountApplicationsInformationParams{},
+		0, 0, false)
+
+	// 6a. Invalid limits - larger than configured max
+	ctx, rec := newReq(t)
+	err := handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
+		Limit: func() *uint64 {
+			l := uint64(v2.MaxApplicationResults + 1)
+			return &l
+		}(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"limit 1001 exceeds max applications single batch limit 1000\"}\n", rec.Body.String())
+
+	// 6b. Invalid limits - zero
+	ctx, rec = newReq(t)
+	err = handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
+		Limit: func() *uint64 {
+			l := uint64(0)
+			return &l
+		}(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"limit parameter must be a positive integer\"}\n", rec.Body.String())
+
+	// 7. Test include-params flag
+	includeParams := true
+	ctx, rec = newReq(t)
+	err = handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
+		Limit:         &limit,
+		IncludeParams: &includeParams,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var retWithParams model.AccountApplicationsInformationResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &retWithParams)
+	require.NoError(t, err)
+	// Verify that params are included for created apps (first accountOverlappingAppParamsLocalStatesCount apps)
+	for i := 0; i < rawLimit && i < accountOverlappingAppParamsLocalStatesCount; i++ {
+		assert.NotNil(t, (*retWithParams.ApplicationHoldings)[i].Params, "Expected params for app %d", i+1)
+	}
+
+	// 8. Test exclude include-params flag (default behavior)
+	includeParams = false
+	ctx, rec = newReq(t)
+	err = handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
+		Limit:         &limit,
+		IncludeParams: &includeParams,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var retWithoutParams model.AccountApplicationsInformationResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &retWithoutParams)
+	require.NoError(t, err)
+	// Verify that params are NOT included
+	for i := 0; i < rawLimit; i++ {
+		assert.Nil(t, (*retWithoutParams.ApplicationHoldings)[i].Params, "Expected no params for app %d", i+1)
 	}
 }
