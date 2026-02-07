@@ -225,8 +225,19 @@ type p2pPeerStats struct {
 
 // gossipSubTags defines protocol messages that are relayed using GossipSub
 var gossipSubTags = map[protocol.Tag]string{
-	protocol.TxnTag: p2p.TXTopicName,
+	protocol.TxnTag:             p2p.TXTopicName,
+	protocol.AgreementVoteTag:   p2p.AVTopicName,
+	protocol.ProposalPayloadTag: p2p.PPTopicName,
+	protocol.VoteBundleTag:      p2p.VBTopicName,
 }
+
+var gossipSubTopics = func() map[string]protocol.Tag {
+	result := make(map[string]protocol.Tag)
+	for tag, topic := range gossipSubTags {
+		result[topic] = tag
+	}
+	return result
+}()
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
 func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisInfo GenesisInfo, node NodeInfo, identityOpts *identityOpts, meshCreator MeshCreator) (*P2PNetwork, error) {
@@ -449,6 +460,9 @@ func (n *P2PNetwork) Start() error {
 		n.wg.Add(1)
 		go n.txTopicHandleLoop()
 	}
+
+	n.wg.Add(1)
+	go n.agreementTopicHandleLoop()
 
 	if n.wsPeersConnectivityCheckTicker != nil {
 		n.wsPeersConnectivityCheckTicker.Stop()
@@ -1138,7 +1152,7 @@ func (n *P2PNetwork) checkPeersConnectivity() {}
 // txTopicHandleLoop reads messages from the pubsub topic for transactions.
 func (n *P2PNetwork) txTopicHandleLoop() {
 	defer n.wg.Done()
-	sub, err := n.service.Subscribe(p2p.TXTopicName, n.txTopicValidator)
+	sub, err := n.service.Subscribe(p2p.TXTopicName, n.topicValidator)
 	if err != nil {
 		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.TXTopicName, err)
 		return
@@ -1174,6 +1188,57 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	wg.Wait()
 }
 
+// agreementTopicHandleLoop reads messages from the pubsub topic for AV/PP
+func (n *P2PNetwork) agreementTopicHandleLoop() {
+	defer n.wg.Done()
+	subAV, err := n.service.Subscribe(p2p.AVTopicName, n.topicValidator)
+	if err != nil {
+		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.AVTopicName, err)
+		return
+	}
+	n.log.Debugf("Subscribed to topic %s", p2p.AVTopicName)
+
+	subPP, err := n.service.Subscribe(p2p.PPTopicName, n.topicValidator)
+	if err != nil {
+		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.PPTopicName, err)
+		return
+	}
+	n.log.Debugf("Subscribed to topic %s", p2p.PPTopicName)
+
+	subVB, err := n.service.Subscribe(p2p.VBTopicName, n.topicValidator)
+	if err != nil {
+		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.VBTopicName, err)
+		return
+	}
+	n.log.Debugf("Subscribed to topic %s", p2p.VBTopicName)
+
+	var wg sync.WaitGroup
+	handler := func(ctx context.Context, topic string, sub p2p.SubNextCancellable, peerID peer.ID, log logging.Logger) {
+		defer wg.Done()
+		for {
+			// msg from sub.Next not used since all work done by topicValidator
+			_, err := sub.Next(ctx)
+			if err != nil {
+				if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
+					log.Errorf("Error reading from subscription %v, peerId %s", err, peerID)
+				}
+				log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", topic, err)
+				sub.Cancel()
+				return
+			}
+		}
+	}
+
+	const threads = incomingThreads / 2 // TBD: perf test
+	wg.Add(threads * 3)
+	for i := 0; i < threads; i++ {
+		go handler(n.ctx, p2p.AVTopicName, subAV, n.service.ID(), n.log)
+		go handler(n.ctx, p2p.PPTopicName, subPP, n.service.ID(), n.log)
+		go handler(n.ctx, p2p.VBTopicName, subVB, n.service.ID(), n.log)
+	}
+	wg.Wait()
+}
+
 type gsPeer struct {
 	peerID peer.ID
 	net    *P2PNetwork
@@ -1187,8 +1252,8 @@ func (p *gsPeer) RoutingAddr() []byte {
 	return []byte(p.peerID)
 }
 
-// txTopicValidator calls txHandler to validate and process incoming transactions.
-func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+// topicValidator calls txHandler to validate and process incoming transactions.
+func (n *P2PNetwork) topicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 	n.wsPeersLock.Lock()
 	var sender DisconnectableAddressablePeer
 	if wsp, ok := n.wsPeers[peerID]; ok {
@@ -1201,9 +1266,20 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	}
 	n.wsPeersLock.Unlock()
 
+	if msg.Topic == nil {
+		n.log.Warnf("Received message with nil topic from peer %s", peerID)
+		return pubsub.ValidationReject
+	}
+
+	tag, ok := gossipSubTopics[*msg.Topic]
+	if !ok {
+		n.log.Warnf("Received message for unknown topic %s from peer %s", *msg.Topic, peerID)
+		return pubsub.ValidationReject
+	}
+
 	inmsg := IncomingMessage{
 		Sender:   sender,
-		Tag:      protocol.TxnTag,
+		Tag:      tag,
 		Data:     msg.Data,
 		Net:      n,
 		Received: time.Now().UnixNano(),

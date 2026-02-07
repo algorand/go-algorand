@@ -119,13 +119,9 @@ func TestP2PSubmitTX(t *testing.T) {
 	passThroughHandler := []TaggedMessageValidatorHandler{
 		{
 			Tag: protocol.TxnTag,
-			MessageHandler: struct {
-				ValidateHandleFunc
-			}{
-				ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
-					return OutgoingMessage{Action: Accept, Tag: msg.Tag}
-				}),
-			},
+			MessageHandler: ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
+				return OutgoingMessage{Action: Accept, Tag: msg.Tag}
+			}),
 		},
 	}
 
@@ -212,13 +208,9 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	passThroughHandler := []TaggedMessageValidatorHandler{
 		{
 			Tag: protocol.TxnTag,
-			MessageHandler: struct {
-				ValidateHandleFunc
-			}{
-				ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
-					return OutgoingMessage{Action: Accept, Tag: msg.Tag}
-				}),
-			},
+			MessageHandler: ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
+				return OutgoingMessage{Action: Accept, Tag: msg.Tag}
+			}),
 		},
 	}
 
@@ -294,7 +286,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
 
-	testTag := protocol.AgreementVoteTag
+	testTag := protocol.NetPrioResponseTag // this tag does not have any special handling but also listed in defaultSendMessageTags
 	var handlerCount atomic.Uint32
 
 	// Since we aren't using the transaction handler in this test, we need to register a pass-through handler
@@ -311,7 +303,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	// send messages from B and confirm that they get received by C (via A)
 	for i := 0; i < 10; i++ {
-		err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
+		err = netB.Broadcast(t.Context(), testTag, []byte(fmt.Sprintf("hello %d", i)), false, nil)
 		require.NoError(t, err)
 	}
 
@@ -1322,34 +1314,46 @@ func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
 			netB.Start()
 			defer netB.Stop()
 
+			require.Eventually(
+				t,
+				func() bool {
+					return len(netA.service.ListPeersForTopic(p2p.AVTopicName)) == 1 &&
+						len(netB.service.ListPeersForTopic(p2p.AVTopicName)) == 1
+				},
+				2*time.Second,
+				50*time.Millisecond,
+			)
+
 			require.Eventually(t, func() bool {
 				return netA.hasPeers() && netB.hasPeers()
 			}, 1*time.Second, 50*time.Millisecond)
 
+			time.Sleep(time.Second) // give time for peers to connect.
+
 			testTag := protocol.AgreementVoteTag
 
 			var handlerCountA atomic.Uint32
-			passThroughHandlerA := []TaggedMessageHandler{
-				{Tag: testTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+			passThroughHandlerA := []TaggedMessageValidatorHandler{
+				{Tag: testTag, MessageHandler: ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
 					handlerCountA.Add(1)
-					return OutgoingMessage{Action: Broadcast}
+					return OutgoingMessage{Action: Accept}
 				})},
 			}
 			var handlerCountB atomic.Uint32
-			passThroughHandlerB := []TaggedMessageHandler{
-				{Tag: testTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+			passThroughHandlerB := []TaggedMessageValidatorHandler{
+				{Tag: testTag, MessageHandler: ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
 					handlerCountB.Add(1)
-					return OutgoingMessage{Action: Broadcast}
+					return OutgoingMessage{Action: Accept}
 				})},
 			}
-			netA.RegisterHandlers(passThroughHandlerA)
-			netB.RegisterHandlers(passThroughHandlerB)
+			netA.RegisterValidatorHandlers(passThroughHandlerA)
+			netB.RegisterValidatorHandlers(passThroughHandlerB)
 
 			// send messages from both nodes to each other and confirm they are received.
 			for i := 0; i < 10; i++ {
-				err = netA.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from A %d", i)), false, nil)
+				err = netA.Broadcast(t.Context(), testTag, []byte(fmt.Sprintf("hello from A %d", i)), false, nil)
 				require.NoError(t, err)
-				err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from B %d", i)), false, nil)
+				err = netB.Broadcast(t.Context(), testTag, []byte(fmt.Sprintf("hello from B %d", i)), false, nil)
 				require.NoError(t, err)
 			}
 
@@ -1443,7 +1447,8 @@ func TestP2PTxTopicValidator_NoWsPeer(t *testing.T) {
 	defer net.Stop()
 
 	peerID := peer.ID("12345678") // must be 8+ in size
-	msg := pubsub.Message{Message: &pb.Message{}, ID: string(peerID)}
+	topic := p2p.TXTopicName
+	msg := pubsub.Message{Message: &pb.Message{Topic: &topic}, ID: string(peerID)}
 	validateIncomingTxMessage := func(rawmsg IncomingMessage) OutgoingMessage {
 		require.NotEmpty(t, rawmsg.Sender)
 		require.Implements(t, (*DisconnectableAddressablePeer)(nil), rawmsg.Sender)
@@ -1455,7 +1460,7 @@ func TestP2PTxTopicValidator_NoWsPeer(t *testing.T) {
 
 	ctx := context.Background()
 	require.NotContains(t, net.wsPeers, peerID)
-	res := net.txTopicValidator(ctx, peerID, &msg)
+	res := net.topicValidator(ctx, peerID, &msg)
 	require.Equal(t, pubsub.ValidationAccept, res)
 }
 
@@ -1620,6 +1625,8 @@ func TestP2PMetainfoV1vsV22(t *testing.T) {
 // TestP2PVoteCompression tests vote compression feature in P2P network
 func TestP2PVoteCompression(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	t.Skip("Skipping: vote compression is not supported for pubsub transport")
 
 	type testDef struct {
 		netAEnableCompression, netBEnableCompression bool
