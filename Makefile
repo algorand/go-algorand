@@ -97,6 +97,7 @@ default: build
 
 fmt:
 	go fmt ./...
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 fmt -c .golangci.yml
 	./scripts/check_license.sh -i
 
 fix: build

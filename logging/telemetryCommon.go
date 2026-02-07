@@ -20,8 +20,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
+
+	"github.com/algorand/go-deadlock"
 )
 
 type telemetryHook interface {
