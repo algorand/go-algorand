@@ -170,3 +170,94 @@ Ledger uses independent state machines that can rebuild from blockchain events, 
 - Consensus parameters support versioning for upgrades
 - Backward compatibility maintained through careful interface design
 - Feature flags and gradual rollout mechanisms
+
+## Pull Request Conventions
+
+When creating pull requests, follow these conventions to ensure consistency and enable automated release note generation.
+
+### Title Format
+
+Use the format: `<prefix>: <description>`
+
+**Example:** `network: Improve peer discovery algorithm`
+
+#### Prefix Selection Guidelines
+
+Choose the prefix based on the primary area of changes:
+
+**Standard Directory Prefixes:**
+- `network` - Changes to networking layer (`network/`)
+- `ledger` - Ledger and blockchain state (`ledger/`)
+- `agreement` - Consensus protocol (`agreement/`)
+- `data` - Core data structures and transaction handling (`data/`)
+- `cmd` - Command-line tools (`cmd/`)
+- `daemon` - Algod daemon and APIs (`daemon/`)
+- `config` - Configuration and consensus parameters (`config/`)
+- `crypto` - Cryptographic operations (`crypto/`)
+- `node` - Node orchestration (`node/`)
+- `catchup` - Fast catchup mechanisms (`catchup/`)
+- `stateproof` - State proof system (`stateproof/`)
+- `test` - Testing infrastructure (`test/`)
+- `tools` - Development tools (`tools/`)
+
+**Special Prefixes:**
+- `AVM` - Changes to the Algorand Virtual Machine (`data/transactions/logic/`)
+- `metrics` - Telemetry and metrics changes (regardless of directory)
+- `API` - REST API changes (`daemon/algod/api/`)
+
+**Semantic Prefixes (when appropriate):**
+- `Bug-Fix` or `Fix` - Bug fixes
+- `Patch` - Small, targeted fixes
+- `Doc` - Documentation-only changes
+- `Chore` - Maintenance tasks (dependencies, tooling)
+
+**Tip:** If changes span multiple directories, use the prefix for the directory with the most significant changes, or the most-changed directory by file count.
+
+### Required Labels
+
+Every PR must have **exactly one** of these labels:
+
+- **`Enhancement`** - Improvements to existing functionality (most common)
+  - Performance optimizations
+  - Code refactoring
+  - Adding configuration options
+  - Minor feature additions to existing systems
+
+- **`New Feature`** - Major new functionality
+  - New subsystems or significant capabilities
+  - Typically involves 6+ new files and 10+ total files changed
+  - Use sparingly - most additions are Enhancements
+
+- **`Bug-Fix`** - Fixing bugs, crashes, regressions
+  - Use when title/description mentions: fix, bug, crash, panic, deadlock, race condition
+
+- **`Not-Yet-Enabled`** - Experimental or disabled features
+  - Behind feature flags
+  - Not yet enabled in consensus
+
+- **`Skip-Release-Notes`** - Changes that don't affect users
+  - Test-only changes
+  - Documentation updates
+  - Code formatting/linting
+  - Internal refactoring with no behavior changes
+
+### Automated Assistance
+
+An automated workflow analyzes PRs and:
+- Suggests a prefix if the title is missing one (based on changed files)
+- Applies an appropriate label if none exists
+
+The automation is helpful but not perfect. Please verify and adjust the prefix/label if the suggestion is incorrect.
+
+### Examples
+
+✅ **Good PR Titles:**
+- `network: Add connection performance monitoring`
+- `AVM: Implement new box storage opcodes`
+- `ledger: Fix race condition in account updates`
+- `Bug-Fix: Correct panic in transaction pool`
+
+❌ **Bad PR Titles:**
+- `Add feature` (missing prefix)
+- `fix stuff` (too vague, wrong capitalization)
+- `Update code` (not descriptive)
