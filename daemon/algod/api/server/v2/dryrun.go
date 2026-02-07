@@ -101,6 +101,9 @@ func (dr *DryrunRequest) ExpandSources() error {
 		case "approv", "clearp":
 			for ai, app := range dr.Apps {
 				if app.Id == s.AppIndex {
+					if dr.Apps[ai].Params == nil {
+						dr.Apps[ai].Params = &model.ApplicationParams{}
+					}
 					switch s.FieldName {
 					case "approv":
 						dr.Apps[ai].Params.ApprovalProgram = ops.Program
@@ -111,6 +114,19 @@ func (dr *DryrunRequest) ExpandSources() error {
 			}
 		default:
 			return fmt.Errorf("dryrun Source[%d]: bad field name %#v", i, s.FieldName)
+		}
+	}
+	return nil
+}
+
+// ValidateApps ensures all applications have params set.
+// This should be called after ExpandSources to ensure that either:
+// 1. The caller provided params explicitly, or
+// 2. Sources populated the params
+func (dr *DryrunRequest) ValidateApps() error {
+	for _, app := range dr.Apps {
+		if app.Params == nil {
+			return fmt.Errorf("application %d does not have params set", app.Id)
 		}
 	}
 	return nil
@@ -229,6 +245,9 @@ func (dl *dryrunLedger) init() error {
 	}
 	for i, app := range dl.dr.Apps {
 		var addr basics.Address
+		if app.Params == nil {
+			continue
+		}
 		if app.Params.Creator != "" {
 			var err error
 			addr, err = basics.UnmarshalChecksumAddress(app.Params.Creator)
@@ -275,20 +294,22 @@ func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.Ac
 	appi, ok := dl.accountApps[addr]
 	if ok {
 		app := dl.dr.Apps[appi]
-		params, err := ApplicationParamsToAppParams(&app.Params)
-		if err != nil {
-			return basics.AccountData{}, 0, err
-		}
-		if out.AppParams == nil {
-			out.AppParams = make(map[basics.AppIndex]basics.AppParams)
-			out.AppParams[app.Id] = params
-		} else {
-			ap, ok := out.AppParams[app.Id]
-			if ok {
-				MergeAppParams(&ap, &params)
-				out.AppParams[app.Id] = ap
-			} else {
+		if app.Params != nil {
+			params, err := ApplicationParamsToAppParams(app.Params)
+			if err != nil {
+				return basics.AccountData{}, 0, err
+			}
+			if out.AppParams == nil {
+				out.AppParams = make(map[basics.AppIndex]basics.AppParams)
 				out.AppParams[app.Id] = params
+			} else {
+				ap, ok := out.AppParams[app.Id]
+				if ok {
+					MergeAppParams(&ap, &params)
+					out.AppParams[app.Id] = ap
+				} else {
+					out.AppParams[app.Id] = params
+				}
 			}
 		}
 	}
@@ -424,6 +445,13 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 		return
 	}
 
+	// Validate that all apps have params after Sources expansion
+	err = dr.ValidateApps()
+	if err != nil {
+		response.Error = err.Error()
+		return
+	}
+
 	dl := dryrunLedger{dr: dr}
 	err = dl.init()
 	if err != nil {
@@ -525,8 +553,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 			var app basics.AppParams
 			ok := false
 			for _, appt := range dr.Apps {
-				if appt.Id == appIdx {
-					app, err = ApplicationParamsToAppParams(&appt.Params)
+				if appt.Id == appIdx && appt.Params != nil {
+					app, err = ApplicationParamsToAppParams(appt.Params)
 					if err != nil {
 						response.Error = err.Error()
 						return

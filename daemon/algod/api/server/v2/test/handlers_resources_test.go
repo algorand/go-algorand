@@ -298,7 +298,8 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	handlers, addr, acctData := setupTestForLargeResources(t, acctSize, maxResults, accountMaker)
 	params := model.AccountInformationParams{}
 	if exclude != "" {
-		params.Exclude = (*model.AccountInformationParamsExclude)(&exclude)
+		excludeSlice := []model.AccountInformationParamsExclude{model.AccountInformationParamsExclude(exclude)}
+		params.Exclude = &excludeSlice
 	}
 	ctx, rec := newReq(t)
 	err := handlers.AccountInformation(ctx, addr, params)
@@ -380,7 +381,7 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 		assert.Nil(t, ret.AssetHolding)
 		ap := acctData.AssetParams[aidx]
 		assetParams := v2.AssetParamsToAsset(addr.String(), aidx, &ap)
-		assert.Equal(t, ret.CreatedAsset, &assetParams.Params)
+		assert.Equal(t, ret.CreatedAsset, assetParams.Params)
 	}
 	for i := 0; i < ret.TotalApps; i++ {
 		ctx, rec = newReq(t)

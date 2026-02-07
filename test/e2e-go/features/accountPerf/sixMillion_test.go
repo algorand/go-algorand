@@ -967,7 +967,7 @@ func scenarioD(
 				}
 				pass := checkApplicationParams(
 					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
-					app.Params,
+					*app.Params,
 					baseAcct.pk.String(),
 					&globalStateCheck,
 					&globalStateCheckMu)

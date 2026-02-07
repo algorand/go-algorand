@@ -53,8 +53,10 @@ const (
 
 // Defines values for AccountInformationParamsExclude.
 const (
-	AccountInformationParamsExcludeAll  AccountInformationParamsExclude = "all"
-	AccountInformationParamsExcludeNone AccountInformationParamsExclude = "none"
+	AccountInformationParamsExcludeAll                 AccountInformationParamsExclude = "all"
+	AccountInformationParamsExcludeCreatedAppsParams   AccountInformationParamsExclude = "created-apps-params"
+	AccountInformationParamsExcludeCreatedAssetsParams AccountInformationParamsExclude = "created-assets-params"
+	AccountInformationParamsExcludeNone                AccountInformationParamsExclude = "none"
 )
 
 // Defines values for AccountInformationParamsFormat.
@@ -308,7 +310,7 @@ type Application struct {
 	Id basics.AppIndex `json:"id"`
 
 	// Params Stores the global information associated with an application.
-	Params ApplicationParams `json:"params"`
+	Params *ApplicationParams `json:"params,omitempty"`
 }
 
 // ApplicationInitialStates An application's initial global/local/box states that were accessed during simulation.
@@ -424,7 +426,7 @@ type Asset struct {
 	//
 	// Definition:
 	// data/transactions/asset.go : AssetParams
-	Params AssetParams `json:"params"`
+	Params *AssetParams `json:"params,omitempty"`
 }
 
 // AssetHolding Describes an asset held by an account.
@@ -1444,8 +1446,8 @@ type VersionsResponse = Version
 
 // AccountInformationParams defines parameters for AccountInformation.
 type AccountInformationParams struct {
-	// Exclude When set to `all` will exclude asset holdings, application local state, created asset parameters, any created application parameters. Defaults to `none`.
-	Exclude *AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
+	// Exclude Exclude additional items from the account. Use `all` to exclude asset holdings, application local state, created asset parameters, and created application parameters. Use `created-apps-params` to exclude only the parameters of created applications (returns only application IDs). Use `created-assets-params` to exclude only the parameters of created assets (returns only asset IDs). Multiple values can be comma-separated (e.g., `created-apps-params,created-assets-params`). Note: `all` and `none` cannot be combined with other values. Defaults to `none`.
+	Exclude *[]AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
 
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
