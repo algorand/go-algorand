@@ -326,6 +326,56 @@
         }
       }
     },
+    "/v2/accounts/{address}/applications": {
+      "get": {
+        "description": "Lookup an account's application holdings (local state and params if the account is the creator).",
+        "tags": ["public", "experimental"],
+        "produces": ["application/json"],
+        "schemes": ["http"],
+        "summary": "Get a list of applications held by an account.",
+        "operationId": "AccountApplicationsInformation",
+        "parameters": [
+          {
+            "$ref": "#/parameters/address"
+          },
+          {
+            "$ref": "#/parameters/limit"
+          },
+          {
+            "$ref": "#/parameters/next"
+          },
+          {
+            "$ref": "#/parameters/include-params"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountApplicationsInformationResponse"
+          },
+          "400": {
+            "description": "Malformed address",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/accounts/{address}/applications/{application-id}": {
       "get": {
         "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
@@ -2657,6 +2707,35 @@
         }
       }
     },
+    "AccountApplicationHolding": {
+      "description": "AccountApplicationHolding describes the account's application holding (local state and params if the account is the creator) for a specific application ID.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "description": "The application ID.",
+          "type": "integer",
+          "x-go-type": "basics.AppIndex"
+        },
+        "created-at-round": {
+          "description": "Round when the account opted into or created the application.",
+          "type": "integer",
+          "x-go-type": "basics.Round"
+        },
+        "deleted": {
+          "description": "Whether the application has been deleted.",
+          "type": "boolean"
+        },
+        "app-local-state": {
+          "description": "\\[appl\\] the application local data stored in this account.\n\nThe raw account uses `AppLocalState` for this type.",
+          "$ref": "#/definitions/ApplicationLocalState"
+        },
+        "params": {
+          "description": "\\[appp\\] parameters of the application created by this account including app global data.\n\nThe raw account uses `AppParams` for this type.\nOnly present if the account is the creator and include-params is true.",
+          "$ref": "#/definitions/ApplicationParams"
+        }
+      }
+    },
     "AccountParticipation": {
       "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
       "type": "object",
@@ -4195,6 +4274,12 @@
       "type": "string",
       "name": "tx-type",
       "in": "query"
+    },
+    "include-params": {
+      "type": "boolean",
+      "description": "Include application params in the response. Defaults to false.",
+      "name": "include-params",
+      "in": "query"
     }
   },
   "responses": {
@@ -4312,6 +4397,30 @@
             "type": "array",
             "items": {
               "$ref": "#/definitions/AccountAssetHolding"
+            }
+          }
+        }
+      }
+    },
+    "AccountApplicationsInformationResponse": {
+      "description": "AccountApplicationsInformationResponse contains a list of applications held by an account.",
+      "schema": {
+        "type": "object",
+        "required": ["round"],
+        "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer",
+            "x-go-type": "basics.Round"
+          },
+          "next-token": {
+            "description": "Used for pagination, when making another request provide this token with the next parameter.",
+            "type": "string"
+          },
+          "application-holdings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AccountApplicationHolding"
             }
           }
         }

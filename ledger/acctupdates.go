@@ -345,6 +345,10 @@ func (au *accountUpdates) LookupAssetResources(addr basics.Address, assetIDGT ba
 	return au.lookupAssetResources(addr, assetIDGT, limit)
 }
 
+func (au *accountUpdates) LookupApplicationResources(addr basics.Address, appIDGT basics.AppIndex, limit uint64) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	return au.lookupApplicationResources(addr, appIDGT, limit)
+}
+
 func (au *accountUpdates) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return au.lookupKv(rnd, key, true /* take lock */)
 }
@@ -1244,6 +1248,53 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 
 				AssetResource: ledgercore.AssetResource{
 					AssetHolding: &ah,
+				},
+			}
+		}
+
+		data = append(data, arwi)
+	}
+	// We've found all the resources we could find for this address.
+	currentDbRound := resourceDbRound
+	// The resourceDbRound will not be set if there are no persisted resources
+	if len(data) == 0 {
+		au.accountsMu.RLock()
+		currentDbRound = au.cachedDBRound
+		au.accountsMu.RUnlock()
+	}
+	return data, currentDbRound, nil
+}
+
+func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDGT basics.AppIndex, limit uint64) (data []ledgercore.AppResourceWithIDs, validThrough basics.Round, err error) {
+	// Look for resources on disk
+	persistedResources, resourceDbRound, err0 := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(appIDGT), limit, basics.AppCreatable)
+	if err0 != nil {
+		return nil, basics.Round(0), err0
+	}
+
+	data = make([]ledgercore.AppResourceWithIDs, 0, len(persistedResources))
+	for _, pd := range persistedResources {
+		als := pd.Data.GetAppLocalState()
+
+		var arwi ledgercore.AppResourceWithIDs
+		if !pd.Creator.IsZero() {
+			ap := pd.Data.GetAppParams()
+
+			arwi = ledgercore.AppResourceWithIDs{
+				AppID:   basics.AppIndex(pd.Aidx),
+				Creator: pd.Creator,
+
+				AppResource: ledgercore.AppResource{
+					AppLocalState: &als,
+					AppParams:     &ap,
+				},
+			}
+		} else {
+			arwi = ledgercore.AppResourceWithIDs{
+				AppID: basics.AppIndex(pd.Aidx),
+
+				AppResource: ledgercore.AppResource{
+					AppLocalState: &als,
 				},
 			}
 		}

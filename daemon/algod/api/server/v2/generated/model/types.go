@@ -246,6 +246,24 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
+// AccountApplicationHolding AccountApplicationHolding describes the account's application holding (local state and params if the account is the creator) for a specific application ID.
+type AccountApplicationHolding struct {
+	// AppLocalState Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// CreatedAtRound Round when the account opted into or created the application.
+	CreatedAtRound *basics.Round `json:"created-at-round,omitempty"`
+
+	// Deleted Whether the application has been deleted.
+	Deleted *bool `json:"deleted,omitempty"`
+
+	// Id The application ID.
+	Id basics.AppIndex `json:"id"`
+
+	// Params Stores the global information associated with an application.
+	Params *ApplicationParams `json:"params,omitempty"`
+}
+
 // AccountAssetHolding AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.
 type AccountAssetHolding struct {
 	// AssetHolding Describes an asset held by an account.
@@ -1089,6 +1107,9 @@ type Catchpoint = string
 // Format defines model for format.
 type Format string
 
+// IncludeParams defines model for include-params.
+type IncludeParams = bool
+
 // Limit defines model for limit.
 type Limit = uint64
 
@@ -1117,6 +1138,17 @@ type AccountApplicationResponse struct {
 
 	// CreatedApp Stores the global information associated with an application.
 	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round basics.Round `json:"round"`
+}
+
+// AccountApplicationsInformationResponse defines model for AccountApplicationsInformationResponse.
+type AccountApplicationsInformationResponse struct {
+	ApplicationHoldings *[]AccountApplicationHolding `json:"application-holdings,omitempty"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter.
+	NextToken *string `json:"next-token,omitempty"`
 
 	// Round The round for which this information is relevant.
 	Round basics.Round `json:"round"`
@@ -1458,6 +1490,18 @@ type AccountInformationParamsExclude string
 
 // AccountInformationParamsFormat defines parameters for AccountInformation.
 type AccountInformationParamsFormat string
+
+// AccountApplicationsInformationParams defines parameters for AccountApplicationsInformation.
+type AccountApplicationsInformationParams struct {
+	// Limit Maximum number of results to return.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next The next page of results. Use the next token provided by the previous results.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+
+	// IncludeParams Include application params in the response. Defaults to false.
+	IncludeParams *bool `form:"include-params,omitempty" json:"include-params,omitempty"`
+}
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {
