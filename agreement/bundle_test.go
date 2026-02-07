@@ -89,8 +89,9 @@ func TestBundleCreationWithZeroVotes(t *testing.T) {
 		var ub unauthenticatedBundle
 		makeBundlePanicWrapper(t, "makeBundle: no votes present in bundle (len(equivocationVotes) =", proposal, votes, nil)
 
+		ub.Step = step(s)
 		bundle, err := ub.verify(context.Background(), ledger, avv)
-		require.Error(t, err)
+		require.ErrorContains(t, err, `bundle: did not see enough votes: 0`)
 
 		bundles = append(bundles, bundle)
 	}
@@ -248,38 +249,38 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	voteBadCredBundle := unauthenticatedBundles[0]
 	voteBadCredBundle.Votes[0].Cred = committee.UnauthenticatedCredential{}
 	_, err := voteBadCredBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `sender was not selected`)
 
 	voteBadSenderBundle := unauthenticatedBundles[1]
 	voteBadSenderBundle.Votes[0].Sender = basics.Address{}
 	_, err = voteBadSenderBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `could not verify FS signature`)
 
 	voteNoQuorumBundle := unauthenticatedBundles[2]
 	voteNoQuorumBundle.Votes = voteNoQuorumBundle.Votes[:2]
 	voteNoQuorumBundle.EquivocationVotes = voteNoQuorumBundle.EquivocationVotes[:2]
 	_, err = voteNoQuorumBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `bundle: did not see enough votes: 1`)
 
 	evBadCredBundle := unauthenticatedBundles[3]
 	evBadCredBundle.EquivocationVotes[0].Cred = committee.UnauthenticatedCredential{}
 	_, err = evBadCredBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `sender was not selected`)
 
 	evBadEVBundle := unauthenticatedBundles[4]
 	evBadEVBundle.EquivocationVotes[0].Sigs = [2]crypto.OneTimeSignature{{}, {}}
 	_, err = evBadEVBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `could not verify FS signature`)
 
 	duplicateVoteBundle := unauthenticatedBundles[5]
 	duplicateVoteBundle.Votes = append(duplicateVoteBundle.Votes, duplicateVoteBundle.Votes[0])
 	_, err = duplicateVoteBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `was duplicated in bundle`)
 
 	duplicateEquivocationVoteBundle := unauthenticatedBundles[6]
 	duplicateEquivocationVoteBundle.EquivocationVotes = append(duplicateEquivocationVoteBundle.EquivocationVotes, duplicateEquivocationVoteBundle.EquivocationVotes[0])
 	_, err = duplicateEquivocationVoteBundle.verify(context.Background(), ledger, avv)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `was duplicated in bundle`)
 
 }
 
