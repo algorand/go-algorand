@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,7 +61,6 @@ type TransactionPool struct {
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
-	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  BlockEvaluator
 	evalTracer             logic.EvalTracer
 	numPendingWholeBlocks  basics.Round
@@ -110,8 +109,7 @@ type BlockEvaluator interface {
 	TestTransactionGroup(txgroup []transactions.SignedTxn) error
 	Round() basics.Round
 	PaySetSize() int
-	TransactionGroup(txads []transactions.SignedTxnWithAD) error
-	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
+	TransactionGroup(txads ...transactions.SignedTxnWithAD) error
 	GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error)
 	ResetTxnBytes()
 }
@@ -131,7 +129,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	pool := TransactionPool{
 		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
 		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
-		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
 		logProcessBlockStats: cfg.EnableProcessBlockStats,
@@ -195,7 +192,6 @@ func (pool *TransactionPool) Reset() {
 	pool.pendingTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 	pool.rememberedTxGroups = nil
-	pool.expiredTxCount = make(map[basics.Round]int)
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
@@ -207,15 +203,6 @@ func (pool *TransactionPool) getVotingAccountsForRound(rnd basics.Round) []basic
 		return nil
 	}
 	return pool.vac.VotingAccountsForRound(rnd)
-}
-
-// NumExpired returns the number of transactions that expired at the
-// end of a round (only meaningful if cleanup has been called for that
-// round).
-func (pool *TransactionPool) NumExpired(round basics.Round) int {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-	return pool.expiredTxCount[round]
 }
 
 // PendingTxIDs return the IDs of all pending transactions.
@@ -586,10 +573,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 	stats.KnownCommittedCount = knownCommitted
 	stats.UnknownCommittedCount = unknownCommitted
 
-	proto := config.Consensus[block.CurrentProtocol]
-	pool.expiredTxCount[block.Round()] = int(stats.ExpiredCount)
-	delete(pool.expiredTxCount, block.Round()-expiredHistory*basics.Round(proto.MaxTxnLife))
-
 	if pool.logProcessBlockStats {
 		var details struct {
 			Round uint64
@@ -632,7 +615,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		transactionGroupStartsTime = time.Now()
 	}
 
-	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
+	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad...)
 
 	if recomputing {
 		if !pool.assemblyResults.assemblyCompletedOrAbandoned {
@@ -766,6 +749,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		}
 		if _, alreadyCommitted := committedTxIDs[txgroup[0].ID()]; alreadyCommitted {
 			asmStats.EarlyCommittedCount++
+			txPoolReevalCommitted.Inc(nil)
 			continue
 		}
 		err := pool.add(txgroup, &asmStats)
@@ -773,6 +757,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())
 			}
+
+			txPoolReevalCounter.Add(ClassifyTxPoolError(err), 1)
+
 			// metrics here are duplicated for historic reasons. stats is hardly used and should be removed in favor of asmstats
 			switch terr := err.(type) {
 			case *ledgercore.TransactionInLedgerError:
@@ -802,6 +789,8 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			}
+		} else {
+			txPoolReevalSuccess.Inc(nil)
 		}
 	}
 

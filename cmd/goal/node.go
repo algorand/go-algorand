@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -99,12 +99,6 @@ func init() {
 	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
 	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
-
-	// The flag for enabling an internal indexer is now deprecated, but we keep it for backwards compatibility for now.
-	indexerFlagName := "indexer"
-	_ = createCmd.Flags().BoolP(indexerFlagName, "i", false, "")
-	createCmd.Flags().MarkDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
-	createCmd.Flags().MarkShorthandDeprecated(indexerFlagName, "no longer used, please remove from your scripts")
 
 	createCmd.Flags().StringVar(&newNodeRelay, "relay", localDefaults.NetAddress, "Configure as a relay with specified listening address (NetAddress)")
 	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")

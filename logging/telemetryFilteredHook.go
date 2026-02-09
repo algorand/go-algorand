@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ type telemetryFilteredHook struct {
 	levels          []logrus.Level
 }
 
-// newFilteredTelemetryHook creates a hook filter for ensuring telemetry events are
+// newTelemetryFilteredHook creates a hook filter for ensuring telemetry events are
 // always included by the wrapped log hook.
 func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string, factory hookFactory, levels []logrus.Level) (logrus.Hook, error) {
 	filteredHook := &telemetryFilteredHook{

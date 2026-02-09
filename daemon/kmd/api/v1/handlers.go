@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1265,7 +1265,7 @@ func wrapCtx(ctx reqContext, handler func(reqContext, http.ResponseWriter, *http
 	}
 }
 
-// reqCallbackMiddlware calls the reqCB function once per request that passes
+// reqCallbackMiddleware calls the reqCB function once per request that passes
 // through. We use this in server.go to kick a watchdog timer, so that we can
 // kill kmd if we haven't received a request in a while.
 func reqCallbackMiddleware(reqCB func()) func(http.Handler) http.Handler {

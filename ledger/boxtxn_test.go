@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -130,9 +130,8 @@ var passThruSource = main(`
 
 const (
 	boxVersion          = 36
-	accessVersion       = 38
+	accessVersion       = 41
 	boxQuotaBumpVersion = 41
-	newAppCreateVersion = 41
 )
 
 func boxFee(p config.ConsensusParams, nameAndValueSize uint64) uint64 {
@@ -514,9 +513,10 @@ assert
 		for i := 0; i < 330; i++ {
 			dl.fullBlock()
 		}
-		time.Sleep(5 * time.Second) // balancesFlushInterval, so commit happens
 		dl.fullBlock(call.Args("check", "x", string(make([]byte, 16))))
-		time.Sleep(100 * time.Millisecond) // give commit time to run, and prune au caches
+		// commit au deltas so the box app is executed on of data from ledger, not trackers
+		commitRoundLookback(0, dl.generator)
+		commitRoundLookback(0, dl.validator)
 		dl.fullBlock(call.Args("check", "x", string(make([]byte, 16))))
 
 		// Still the same after caches are flushed
@@ -737,7 +737,7 @@ var passThruCreator = main(`
   itxn_submit
 `)
 
-// TestNewAppBoxCreate exercised proto.EnableUnnamedBoxCreate
+// TestNewAppBoxCreate exercises the creation of boxes in newly created apps
 func TestNewAppBoxCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -775,7 +775,7 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 
 		// 2) a) Use the predicted appID to name the box ref.
 		// or b) Use 0 as the app in the box ref, meaning "this app"
-		// or c) EnableUnnamedBoxCreate will allow such a creation if there are empty box refs.
+		// or c) v41 (accessVersion) will allow it if there are empty box refs.
 
 		// 2a is pretty much impossible in practice, we can only do it here
 		// because our blockchain is "quiet" we know the upcoming appID.
@@ -864,52 +864,46 @@ func testNewAppBoxCreate(t *testing.T, requestedTealVersion int) {
 					{Index: 0, Name: []byte{0x02}},
 				}})
 
-			if ver >= newAppCreateVersion {
-				// 2c. Create it with an empty box ref
-				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
-					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
-					Boxes: []transactions.BoxRef{{}}})
+			// 2c. Create it with an empty box ref
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
+				Boxes: []transactions.BoxRef{{}}})
 
+			if ver >= accessVersion {
 				// 2c. Create it with an empty box ref
 				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
 					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
 					Access: []transactions.ResourceRef{{Box: transactions.BoxRef{}}}})
-
-				// but you can't do a second create
-				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
-					ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
-					Boxes: []transactions.BoxRef{{}}},
-					"invalid Box reference 0x02")
-
-				// until you add a second box ref
-				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
-					ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
-					Boxes: []transactions.BoxRef{{}, {}}})
-
-				// Now confirm that 2c also works for an inner created app
-				ops, err := logic.AssembleString("#pragma version 12\n" + createSrc)
-				require.NoError(t, err, ops.Errors)
-				createSrcByteCode := ops.Program
-				// create app as an inner, fails w/o empty box ref
-				dl.txn(&txntest.Txn{Sender: addrs[0],
-					Type:            "appl",
-					ApplicationID:   passID,
-					ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
-				}, "invalid Box reference 0x01")
-				// create app as an inner, succeeds w/ empty box ref
-				dl.txn(&txntest.Txn{Sender: addrs[0],
-					Type:            "appl",
-					ApplicationID:   passID,
-					ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
-					Boxes:           []transactions.BoxRef{{}},
-				})
-			} else {
-				// 2c. Doesn't work yet until `newAppCreateVersion`
-				dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
-					ApprovalProgram: createSrcVer, ApplicationArgs: [][]byte{{0x01}},
-					Boxes: []transactions.BoxRef{{}}},
-					"invalid Box reference 0x01")
 			}
+
+			// but you can't do a second create
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{}}},
+				"invalid Box reference 0x02")
+
+			// until you add a second box ref
+			dl.txn(&txntest.Txn{Type: "appl", Sender: addrs[0],
+				ApprovalProgram: doubleSrc, ApplicationArgs: [][]byte{{0x01}, {0x02}},
+				Boxes: []transactions.BoxRef{{}, {}}})
+
+			// Now confirm that 2c also works for an inner created app
+			ops, err := logic.AssembleString("#pragma version 8\n" + createSrc)
+			require.NoError(t, err, ops.Errors)
+			createSrcByteCode := ops.Program
+			// create app as an inner, fails w/o empty box ref
+			dl.txn(&txntest.Txn{Sender: addrs[0],
+				Type:            "appl",
+				ApplicationID:   passID,
+				ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
+			}, "invalid Box reference 0x01")
+			// create app as an inner, succeeds w/ empty box ref
+			dl.txn(&txntest.Txn{Sender: addrs[0],
+				Type:            "appl",
+				ApplicationID:   passID,
+				ApplicationArgs: [][]byte{createSrcByteCode, {0x01}},
+				Boxes:           []transactions.BoxRef{{}},
+			})
 		}
 	})
 }
