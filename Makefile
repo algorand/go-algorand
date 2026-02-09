@@ -44,6 +44,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
 GOTESTCOMMAND := go tool -modfile=tool.mod gotestsum --format pkgname --jsonfile testresults.json --
+GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 -c .golangci.yml
 
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew
@@ -97,7 +98,7 @@ default: build
 
 fmt:
 	go fmt ./...
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 fmt -c .golangci.yml
+	$(GOLINTCOMMAND) fmt
 	./scripts/check_license.sh -i
 
 fix: build
@@ -107,7 +108,7 @@ modernize:
 	GOTOOLCHAIN=auto go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@v0.39.0 -any=false -bloop=false -rangeint=false -fmtappendf=false -waitgroup=false -stringsbuilder=false -omitzero=false -fix ./...
 
 lint:
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.1 run -c .golangci.yml
+	$(GOLINTCOMMAND) run
 
 warninglint: custom-golangci-lint
 	./custom-golangci-lint run -c .golangci-warnings.yml
