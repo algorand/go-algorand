@@ -1316,8 +1316,9 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 	applicationHoldings := make([]model.AccountApplicationHolding, 0, len(records))
 
 	for _, record := range records {
-		if record.AppLocalState == nil {
-			v2.Log.Warnf("AccountApplicationsInformation: application %d has no local state - should not be possible", record.AppID)
+		// Skip if neither local state nor params exist (shouldn't happen)
+		if record.AppLocalState == nil && record.AppParams == nil {
+			v2.Log.Warnf("AccountApplicationsInformation: application %d has neither local state nor params", record.AppID)
 			continue
 		}
 
