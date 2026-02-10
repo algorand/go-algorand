@@ -33,19 +33,19 @@ func TestEmptyClient(t *testing.T) {
 
 	c := MakeDNSClient(nil, time.Second)
 	rr, rsig, err := c.QueryRRSet(context.Background(), "test", 0)
-	require.ErrorContains(t, err, `no answer for (test., 0) from DNS servers [`)
+	a.ErrorContains(err, `no answer for (test., 0) from DNS servers [`)
 	a.Empty(rr)
 	a.Empty(rsig)
 
 	c = MakeDNSClient([]ResolverAddress{}, time.Second)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
-	require.ErrorContains(t, err, `no answer for (test., 0) from DNS servers [`)
+	a.ErrorContains(err, `no answer for (test., 0) from DNS servers [`)
 	a.Empty(rr)
 	a.Empty(rsig)
 
 	c = MakeDNSClient([]ResolverAddress{"example.com"}, time.Millisecond)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
-	require.ErrorContains(t, err, `no answer for (test., 0) from DNS servers [example.com`)
+	a.ErrorContains(err, `no answer for (test., 0) from DNS servers [example.com`)
 	a.Empty(rr)
 	a.Empty(rsig)
 }
@@ -66,7 +66,7 @@ func TestMockedClient(t *testing.T) {
 	qs := ttr{}
 	c := dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
 	rr, rsig, err := c.QueryRRSet(context.Background(), "test", 0)
-	require.ErrorContains(t, err, `no signature in DNS response for test`)
+	a.ErrorContains(err, `no signature in DNS response for test`)
 	a.Empty(rr)
 	a.Empty(rsig)
 
@@ -74,7 +74,7 @@ func TestMockedClient(t *testing.T) {
 	qs = ttr{msg: dns.Msg{MsgHdr: dns.MsgHdr{Rcode: dns.RcodeServerFailure}, Answer: answer}}
 	c = dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
-	require.ErrorContains(t, err, `DNS error: SERVFAIL`)
+	a.ErrorContains(err, `DNS error: SERVFAIL`)
 	a.Contains(err.Error(), "SERVFAIL")
 	a.Empty(rr)
 	a.Empty(rsig)

@@ -70,7 +70,7 @@ func TestFalconCanHandleNilSignature(t *testing.T) {
 	a.NoError(err)
 
 	err = key.GetVerifyingKey().VerifyBytes([]byte("Test"), nil)
-	require.ErrorContains(t, err, `empty signature: falcon verify failed`)
+	a.ErrorContains(err, `empty signature: falcon verify failed`)
 }
 
 func TestVerificationBytes(t *testing.T) {

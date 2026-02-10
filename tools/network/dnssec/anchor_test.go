@@ -42,5 +42,5 @@ func TestParseRootTrustAnchor(t *testing.T) {
 	a.Equal(uint8(2), currentDS.DigestType)
 
 	_, err = makeRootTrustAnchor("not xml")
-	require.ErrorContains(t, err, `EOF`)
+	a.ErrorContains(err, `EOF`)
 }

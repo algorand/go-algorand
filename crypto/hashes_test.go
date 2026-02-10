@@ -68,7 +68,7 @@ func TestEmptyHash(t *testing.T) {
 	var msg [4]byte
 	len, err := hash.Write(msg[:])
 	a.Equal(0, len)
-	require.ErrorIs(t, err, errUnknownHash)
+	a.ErrorIs(err, errUnknownHash)
 
 	a.Equal(0, hash.BlockSize())
 	var emptySlice []byte

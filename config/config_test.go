@@ -272,7 +272,7 @@ func TestLocal_ConfigMigrate(t *testing.T) {
 
 	cLatest.Version = getLatestConfigVersion() + 1
 	_, _, err = migrate(cLatest)
-	require.ErrorContains(t, err, `unexpected config version: 38`)
+	a.ErrorContains(err, `unexpected config version: 38`)
 
 	// Ensure we don't migrate values that aren't the default old version
 	c0Modified := GetVersionedDefaultLocalConfig(0)
@@ -356,7 +356,7 @@ func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
 	_, _, err = migrate(cNext)
-	require.ErrorContains(t, err, `unexpected config version: 38`)
+	a.ErrorContains(err, `unexpected config version: 38`)
 }
 
 // Verify that nobody is changing the shipping default configurations

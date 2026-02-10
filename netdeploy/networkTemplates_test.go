@@ -56,7 +56,7 @@ func TestLoadMissingConfig(t *testing.T) {
 	a.NoError(err)
 	template, err := loadTemplate(filepath.Join(templateDir, "<invalidname>.json"))
 	var pathErr *fs.PathError
-	require.ErrorAs(t, err, &pathErr)
+	a.ErrorAs(err, &pathErr)
 	a.Equal(template.Genesis.NetworkName, "")
 }
 
@@ -98,7 +98,7 @@ func TestValidate(t *testing.T) {
 	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
 	template, _ = loadTemplate(filepath.Join(templateDir, "NegativeStake.json"))
 	err = template.Validate()
-	require.ErrorContains(t, err, `invalid template: negative stake on Genesis account W2`)
+	a.ErrorContains(err, `invalid template: negative stake on Genesis account W2`)
 
 	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
 	template, _ = loadTemplate(filepath.Join(templateDir, "TwoNodesOneRelay1000Accounts.json"))

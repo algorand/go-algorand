@@ -185,10 +185,10 @@ func TestEnsureTrustChain(t *testing.T) {
 	// this was removed during last cache re-validation
 	// triggers the cache update and the chain is broken
 	err = tch.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
-	require.ErrorContains(t, err, `no KSK to verify DNSKEY RRSet of test.`)
+	a.ErrorContains(err, `no KSK to verify DNSKEY RRSet of test.`)
 	// this is a new, triggers the cache update and the chain is broken
 	err = tch.ensure(context.Background(), "cow.test.", []uint16{cowTestZSK.KeyTag()})
-	require.ErrorContains(t, err, `no KSK to verify DNSKEY RRSet of test.`)
+	a.ErrorContains(err, `no KSK to verify DNSKEY RRSet of test.`)
 
 	// DNSKEY expiration test
 	// DNSKEY is expired when its RRSIG expired
@@ -270,7 +270,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	a.NoError(err)
 	newCh = makeTrustChain(r)
 	err = newCh.ensure(context.Background(), "algo.test.", []uint16{algoTestZSK.KeyTag()})
-	require.ErrorContains(t, err, `failed to verify test. KSK against digest in parent DS`)
+	a.ErrorContains(err, `failed to verify test. KSK against digest in parent DS`)
 	a.Contains(err.Error(), "failed to verify test. KSK against digest in parent DS")
 }
 
@@ -297,10 +297,10 @@ func TestEnsureTrustChainError(t *testing.T) {
 	// test error on empty zone
 	newCh := makeTrustChain(r)
 	err = newCh.ensure(context.Background(), "", []uint16{})
-	require.ErrorContains(t, err, `is not FQDN`)
+	a.ErrorContains(err, `is not FQDN`)
 	// test non-existing ZSK
 	err = newCh.ensure(context.Background(), ".", []uint16{})
-	require.ErrorContains(t, err, `ZSK [] not found in zone .`)
+	a.ErrorContains(err, `ZSK [] not found in zone .`)
 	a.Contains(err.Error(), "ZSK [] not found in zone .")
 
 	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
@@ -321,7 +321,7 @@ func TestEnsureTrustChainError(t *testing.T) {
 
 	tch := makeTrustChain(r)
 	err = tch.ensure(context.Background(), "test.", []uint16{testZSK.KeyTag()})
-	require.ErrorContains(t, err, `cache outdated for already updated zone .`)
+	a.ErrorContains(err, `cache outdated for already updated zone .`)
 	a.Contains(err.Error(), "cache outdated for already updated zone .")
 }
 
@@ -353,7 +353,7 @@ func TestAuthenticate(t *testing.T) {
 	rrsig = append(rrsig, sig)
 	tch := makeTrustChain(r)
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
-	require.ErrorContains(t, err, `signer name mismatch: . vs test`)
+	a.ErrorContains(err, `signer name mismatch: . vs test`)
 	a.Contains(err.Error(), "signer name mismatch")
 
 	testKSK, testKSKsk := getKey("test.", dns.ZONE|dns.SEP)
@@ -376,12 +376,12 @@ func TestAuthenticate(t *testing.T) {
 	// DNSKEY is signed with KSK so authenticate will fail looking up KSK in ZSK
 	rrset, rrsig, err = r.QueryRRSet(context.Background(), "test.", dns.TypeDNSKEY)
 	err = tch.Authenticate(context.Background(), rrset, rrsig)
-	require.ErrorContains(t, err, `not found in zone`)
+	a.ErrorContains(err, `not found in zone`)
 
 	err = tch.Authenticate(context.Background(), rrset, nil)
-	require.ErrorContains(t, err, `empty RRSIG`)
+	a.ErrorContains(err, `empty RRSIG`)
 	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{})
-	require.ErrorContains(t, err, `empty RRSIG`)
+	a.ErrorContains(err, `empty RRSIG`)
 }
 
 func TestQueryWrapper(t *testing.T) {

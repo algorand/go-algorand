@@ -31,13 +31,13 @@ func TestSplitZone(t *testing.T) {
 	var err error
 
 	res, err = splitToZones("")
-	require.ErrorContains(t, err, `is not FQDN`)
+	a.ErrorContains(err, `is not FQDN`)
 
 	res, err = splitToZones("com")
-	require.ErrorContains(t, err, `com is not FQDN`)
+	a.ErrorContains(err, `com is not FQDN`)
 
 	res, err = splitToZones("example.com")
-	require.ErrorContains(t, err, `example.com is not FQDN`)
+	a.ErrorContains(err, `example.com is not FQDN`)
 
 	res, err = splitToZones(".")
 	a.NoError(err)
@@ -64,13 +64,13 @@ func TestParentZone(t *testing.T) {
 	var err error
 
 	res, err = getParentZone("")
-	require.ErrorContains(t, err, `is not FQDN`)
+	a.ErrorContains(err, `is not FQDN`)
 
 	res, err = getParentZone("com")
-	require.ErrorContains(t, err, `com is not FQDN`)
+	a.ErrorContains(err, `com is not FQDN`)
 
 	res, err = getParentZone(".")
-	require.ErrorContains(t, err, `No parent zone for .`)
+	a.ErrorContains(err, `No parent zone for .`)
 
 	res, err = getParentZone("com.")
 	a.NoError(err)

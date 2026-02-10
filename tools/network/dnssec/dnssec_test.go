@@ -111,7 +111,7 @@ func TestLookup(t *testing.T) {
 	a.Equal("target1.test.", res[2].Target)
 
 	name, res, err = dnssec.LookupSRV(context.Background(), "", "", "my-srv-1.test.")
-	require.ErrorContains(t, err, `my-srv-1.test. not found`)
+	a.ErrorContains(err, `my-srv-1.test. not found`)
 
 	// check CNAME
 	cname := dns.CNAME{
@@ -122,11 +122,11 @@ func TestLookup(t *testing.T) {
 	a.NoError(err)
 
 	_, err = dnssec.LookupCNAME(context.Background(), "algo.test.")
-	require.ErrorContains(t, err, `my-algo.test. not found`)
+	a.ErrorContains(err, `my-algo.test. not found`)
 	a.Contains(err.Error(), "my-algo.test. not found")
 
 	_, err = dnssec.LookupCNAME(context.Background(), "algo-1.test.")
-	require.ErrorContains(t, err, `algo-1.test. not found`)
+	a.ErrorContains(err, `algo-1.test. not found`)
 
 	err = r.updateARecord("my-algo.test.", net.IPv4(11, 12, 13, 14), time.Time{})
 	a.NoError(err)
@@ -135,7 +135,7 @@ func TestLookup(t *testing.T) {
 	a.Equal(net.IPv4(11, 12, 13, 14), addrs[0].IP)
 
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "algo-1.test.")
-	require.ErrorContains(t, err, `algo-1.test. not found`)
+	a.ErrorContains(err, `algo-1.test. not found`)
 	a.Empty(addrs)
 
 	// test double redirection
@@ -163,12 +163,12 @@ func TestLookup(t *testing.T) {
 
 	dnssec.maxHops = 2
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "main.test.")
-	require.ErrorContains(t, err, `exceed max attempts 2`)
+	a.ErrorContains(err, `exceed max attempts 2`)
 	a.Empty(addrs)
 
 	// check non-existing
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "main-12.test.")
-	require.ErrorContains(t, err, `main-12.test. not found`)
+	a.ErrorContains(err, `main-12.test. not found`)
 	a.Empty(addrs)
 
 	// create a loop and expect failure
@@ -182,7 +182,7 @@ func TestLookup(t *testing.T) {
 
 	dnssec.maxHops = DefaultMaxHops
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "main.test.")
-	require.ErrorContains(t, err, `loop detected: main.test. already seen`)
+	a.ErrorContains(err, `loop detected: main.test. already seen`)
 	a.Contains(err.Error(), "loop detected: main.test. already seen")
 	a.Empty(addrs)
 
@@ -198,7 +198,7 @@ func TestLookup(t *testing.T) {
 	a.NoError(err)
 
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "follower2.test.")
-	require.ErrorContains(t, err, `multiple CNAME RR detected`)
+	a.ErrorContains(err, `multiple CNAME RR detected`)
 	a.Contains(err.Error(), "multiple CNAME RR detected")
 	a.Empty(addrs)
 
@@ -211,7 +211,7 @@ func TestLookup(t *testing.T) {
 		maxHops:    DefaultMaxHops,
 	}
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "www.test.")
-	require.ErrorContains(t, err, `. not found`)
+	a.ErrorContains(err, `. not found`)
 	a.Contains(err.Error(), ". not found")
 }
 
@@ -324,7 +324,7 @@ func TestDeadNS(t *testing.T) {
 
 	r := MakeDnssecResolver([]ResolverAddress{"192.168.12.34:5678", "10.12.34.56:890"}, time.Microsecond)
 	addrs, err := r.LookupIPAddr(context.Background(), "example.com")
-	require.ErrorContains(t, err, "no answer for")
+	a.ErrorContains(err, "no answer for")
 	a.Empty(addrs)
 
 	// possible race :( with 100ms timeout
@@ -381,7 +381,7 @@ func TestRealRequests(t *testing.T) {
 	// but it is two-level aliasing
 	r.(*Resolver).maxHops = 1
 	addrs, err = r.LookupIPAddr(context.Background(), "relay-montreal-mainnet-algorand.algorand-mainnet.network.")
-	require.ErrorContains(t, err, "exceed max attempts")
+	a.ErrorContains(err, "exceed max attempts")
 }
 
 func TestDefaultResolver(t *testing.T) {

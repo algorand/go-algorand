@@ -235,7 +235,7 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{4})
-	require.ErrorIs(t, err, ErrPosOutOfBound)
+	a.ErrorIs(err, ErrPosOutOfBound)
 
 	// prove on nothing
 	proof, err := tree.Prove(nil)
@@ -248,7 +248,7 @@ func TestMerkleProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{0})
-	require.ErrorIs(t, err, ErrProvingZeroCommitment)
+	a.ErrorIs(err, ErrProvingZeroCommitment)
 
 	// prove on nothing - now the tree is empty as well
 	proof, err = tree.Prove(nil)
@@ -270,11 +270,11 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 
 	// element in the out of the inner array
 	_, err = tree.Prove([]uint64{5})
-	require.ErrorIs(t, err, ErrPosOutOfBound)
+	a.ErrorIs(err, ErrPosOutOfBound)
 
 	// element in the padded array - bottom leaf
 	_, err = tree.Prove([]uint64{8})
-	require.ErrorIs(t, err, ErrPosOutOfBound)
+	a.ErrorIs(err, ErrPosOutOfBound)
 
 	// prove on nothing
 	proof, err := tree.Prove(nil)
@@ -287,7 +287,7 @@ func TestMerkleVCProveEdgeCases(t *testing.T) {
 	a.NoError(err)
 
 	_, err = tree.Prove([]uint64{0})
-	require.ErrorIs(t, err, ErrProvingZeroCommitment)
+	a.ErrorIs(err, ErrProvingZeroCommitment)
 
 	// prove on nothing - now the tree is empty as well
 	proof, err = tree.Prove(nil)
@@ -313,10 +313,10 @@ func TestMerkleVerifyEdgeCases(t *testing.T) {
 	root := tree.Root()
 
 	err = Verify(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
-	require.ErrorIs(t, err, ErrPosOutOfBound)
+	a.ErrorIs(err, ErrPosOutOfBound)
 
 	err = Verify(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
-	require.ErrorIs(t, err, ErrPosOutOfBound)
+	a.ErrorIs(err, ErrPosOutOfBound)
 
 	err = Verify(root, nil, nil)
 	a.ErrorIs(ErrProofIsNil, err)
@@ -393,10 +393,10 @@ func TestMerkleVCVerifyEdgeCases(t *testing.T) {
 	root := tree.Root()
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{4: arr[3]}, proof)
-	require.ErrorIs(t, err, ErrPosOutOfBound)
+	a.ErrorIs(err, ErrPosOutOfBound)
 
 	err = VerifyVectorCommitment(root, map[uint64]crypto.Hashable{3: arr[3], 4: arr[3]}, proof)
-	require.ErrorIs(t, err, ErrPosOutOfBound)
+	a.ErrorIs(err, ErrPosOutOfBound)
 
 	err = VerifyVectorCommitment(root, nil, nil)
 	a.ErrorIs(ErrProofIsNil, err)

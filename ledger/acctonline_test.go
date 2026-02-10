@@ -1802,7 +1802,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 
 		_, _, err = oa.TopOnlineAccounts(2, 2, 5, &proto, 0)
 		var staleDatabaseRoundErr *StaleDatabaseRoundError
-		require.ErrorAs(t, err, &staleDatabaseRoundErr)
+		a.ErrorAs(err, &staleDatabaseRoundErr)
 		a.Contains(err.Error(), "is behind in-memory round")
 
 	case <-time.After(1 * time.Minute):
@@ -2201,7 +2201,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			}
 			a.Equal(targetVoteRnd, rnd+basics.Round(params.MaxBalLookback))
 			_, err := oa.expiredOnlineCirculation(rnd, targetVoteRnd)
-			require.ErrorContains(t, err, `too high: dbRound`)
+			a.ErrorContains(err, `too high: dbRound`)
 			a.Contains(err.Error(), fmt.Sprintf("round %d too high", rnd))
 			expiredStake, err := oa.expiredOnlineCirculation(rnd-1, targetVoteRnd)
 			a.NoError(err)
