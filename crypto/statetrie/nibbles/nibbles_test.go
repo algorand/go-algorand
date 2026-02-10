@@ -77,7 +77,7 @@ func TestNibblesDeserialize(t *testing.T) {
 	t.Parallel()
 	enc := []byte{0x01}
 	_, err := Deserialize(enc)
-	require.ErrorContains(t, err, `invalid encoding`, "should return invalid encoding error")
+	require.ErrorContains(t, err, `invalid encoding`)
 }
 
 func TestNibbles(t *testing.T) {

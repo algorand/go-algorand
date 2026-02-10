@@ -316,7 +316,6 @@ func TestBadRound(t *testing.T) {
 
 	err = signer.GetVerifier().VerifyBytes(start+2, msg, &sig)
 	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
-	a.ErrorIs(err, ErrSignatureSchemeVerificationFailed)
 }
 
 func TestBadMerkleProofInSignature(t *testing.T) {

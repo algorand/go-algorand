@@ -249,10 +249,10 @@ func TestEmptyMultisig(t *testing.T) {
 	require.NoError(t, err, "Multisig: unexpected failure generating message digest")
 	emptyMutliSig := MultisigSig{Version: version, Threshold: threshold, Subsigs: make([]MultisigSubsig, 0)}
 	err = MultisigVerify(txid, addr, emptyMutliSig)
-	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, emptyMutliSig, br)
-	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 }
 
 func TestIncorrectAddrresInMultisig(t *testing.T) {
@@ -275,10 +275,10 @@ func TestIncorrectAddrresInMultisig(t *testing.T) {
 	require.NoError(t, err, "Multisig: could not create mutlisig")
 	addr[0] = addr[0] + 1
 	err = MultisigVerify(txid, addr, MutliSig)
-	require.ErrorIs(t, err, errInvalidAddress, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidAddress)
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, MutliSig, br)
-	require.ErrorIs(t, err, errInvalidAddress, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidAddress)
 
 }
 
@@ -312,10 +312,10 @@ func TestMoreThanMaxSigsInMultisig(t *testing.T) {
 	msig, err := MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: error assemble multisig")
 	err = MultisigVerify(txid, addr, msig)
-	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
-	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 }
 
 func TestOneSignatureIsEmpty(t *testing.T) {
@@ -349,10 +349,10 @@ func TestOneSignatureIsEmpty(t *testing.T) {
 	require.NoError(t, err, "Multisig: error assemble multisig")
 	msig.Subsigs[0].Sig = Signature{}
 	err = MultisigVerify(txid, addr, msig)
-	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
-	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 }
 
 // in this test we want to test what happen if one of the signatures are not valid.
@@ -388,12 +388,12 @@ func TestOneSignatureIsInvalid(t *testing.T) {
 	msig, err := MultisigAssemble(sigs)
 	require.NoError(t, err, "Multisig: error assemble multisig")
 	err = MultisigVerify(txid, addr, msig)
-	require.ErrorIs(t, err, ErrBatchHasFailedSigs, "Multisig: did not return error as expected")
+	require.ErrorIs(t, err, ErrBatchHasFailedSigs)
 	br := MakeBatchVerifier()
 	err = MultisigBatchPrep(txid, addr, msig, br)
-	require.NoError(t, err, "Multisig: did not return error as expected")
+	require.NoError(t, err)
 	res := br.Verify()
-	require.ErrorIs(t, res, ErrBatchHasFailedSigs, "Multisig: batch verification passed on broken signature")
+	require.ErrorIs(t, res, ErrBatchHasFailedSigs)
 
 }
 
@@ -440,12 +440,12 @@ func TestMultisigLessThanTrashold(t *testing.T) {
 	require.NoError(t, err, "should be able to detect insufficient signatures for assembling")
 	msig.Subsigs[1].Sig = BlankSignature
 	err = MultisigVerify(txid, addr, msig)
-	require.ErrorIs(t, err, errInvalidNumberOfSignature, "Multisig: expected verification failure with err")
+	require.ErrorIs(t, err, errInvalidNumberOfSignature)
 
 	msig, err = MultisigAssemble(sigs)
 	require.NoError(t, err, "should be able to detect insufficient signatures for assembling")
 	msig.Subsigs = msig.Subsigs[:len(msig.Subsigs)-1]
 	err = MultisigVerify(txid, addr, msig)
-	require.ErrorIs(t, err, errInvalidAddress, "Multisig: expected verification failure with err")
+	require.ErrorIs(t, err, errInvalidAddress)
 
 }
