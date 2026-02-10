@@ -103,8 +103,12 @@ linters:
         - error-is-as
       disable-all: true
     forbidigo:
+      analyze_types: true
       forbid:
         - p: ^(require|assert)\.Error$
+          pkg: ^github\.com/stretchr/testify/(require|assert)$
+          msg: use ErrorContains, ErrorIs, or ErrorAs instead
+        - p: ^(require|assert)\.Assertions\.Error$
           pkg: ^github\.com/stretchr/testify/(require|assert)$
           msg: use ErrorContains, ErrorIs, or ErrorAs instead
 
