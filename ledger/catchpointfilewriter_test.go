@@ -849,6 +849,11 @@ func TestFullCatchpointWriter(t *testing.T) {
 // another approach is to modify the test and craft round numbers,
 // and make the ledger to generate catchpoint itself when it is time
 func testCatchpointFlushRound(l *Ledger) (basics.Round, basics.Round) {
+	// Ensure all blocks are persisted to the block DB before flushing trackers.
+	// Without this, LatestCommitted() may return a stale round if the blockQueue
+	// syncer hasn't finished yet.
+	l.WaitForCommit(l.Latest())
+
 	// Clear the timer to ensure a flush
 	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
