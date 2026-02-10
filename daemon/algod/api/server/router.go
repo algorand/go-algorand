@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,10 +22,9 @@ import (
 	"net"
 	"net/http"
 
-	"golang.org/x/sync/semaphore"
-
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
@@ -65,7 +64,7 @@ func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, echo.Context)) ech
 	}
 }
 
-// registerHandler registers a set of Routes to the given router.
+// registerHandlers registers a set of Routes to the given router.
 func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext, m ...echo.MiddlewareFunc) {
 	for _, route := range routes {
 		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc), m...)

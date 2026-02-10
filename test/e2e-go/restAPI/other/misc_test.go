@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,12 +22,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/tokens"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDisabledAPIConfig(t *testing.T) {
@@ -81,7 +82,7 @@ func TestDisabledAPIConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "Invalid API Token")
 }
 
-func TestSendingNotClosingAccountFails(t *testing.T) {
+func TestSendingNotClosingAccountErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -123,8 +124,10 @@ func TestSendingNotClosingAccountFails(t *testing.T) {
 	if someAddress == "" {
 		t.Error("no addr with funds")
 	}
-	amt := someBal - 10000 - 1
-	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, 10000, amt, nil, "", 0, 0)
+	params, err := testClient.SuggestedParams()
+	a.NoError(err)
+	amt := someBal - params.MinFee - 1
+	_, err = testClient.SendPaymentFromWallet(wh, nil, someAddress, emptyAddress, params.MinFee, amt, nil, "", 0, 0)
 	a.Error(err)
 }
 

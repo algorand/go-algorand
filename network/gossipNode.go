@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -153,6 +153,11 @@ type IncomingMessage struct {
 	// Received is time.Time.UnixNano()
 	Received int64
 
+	// Outgoing indicates whether this was received on an outgoing (trusted) connection.
+	// Added to let knowing transaction handler's rate limiters more details about the peer.
+	// Set only for ws net peers since p2p network does not really have trusted outgoing connections.
+	Outgoing bool
+
 	// processing is a channel that is used by messageHandlerThread
 	// to indicate that it has started processing this message.  It
 	// is used to ensure fairness across peers in terms of processing
@@ -224,7 +229,7 @@ func (f HandlerFunc) Handle(message IncomingMessage) OutgoingMessage {
 // MessageValidatorHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
 // to send to the network in response.
 // it supposed to perform synchronous validation and return the result of the validation
-// so that network knows immediately if the message should be be broadcasted or not.
+// so that network knows immediately if the message should be broadcasted or not.
 type MessageValidatorHandler interface {
 	ValidateHandle(message IncomingMessage) OutgoingMessage
 }
@@ -257,5 +262,5 @@ func Propagate(msg IncomingMessage) OutgoingMessage {
 
 // SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 func SubstituteGenesisID(net GossipNode, rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", net.GetGenesisID(), -1)
+	return strings.ReplaceAll(rawURL, "{genesisID}", net.GetGenesisID())
 }

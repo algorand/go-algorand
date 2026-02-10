@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package logic
 import (
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 )
 
 func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
@@ -43,8 +45,6 @@ func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
 			LocalStateSchema:  basics.StateSchema{NumUint: li, NumByteSlice: lb},
 			GlobalStateSchema: basics.StateSchema{NumUint: gi, NumByteSlice: gb},
 		},
-		ExtraProgramPages: 0,
-		Version:           0,
 	}
 }
 
@@ -70,6 +70,92 @@ func makeOldAndNewEnv(version uint64) (*EvalParams, *EvalParams, *Ledger) {
 	old, _, _ := makeSampleEnvWithVersion(version - 1)
 	old.Ledger = sharedLedger
 	return old, new, sharedLedger
+}
+
+// Converts ep in place such that only tx.Access is used, not foreign arrays
+func convertEPToAccess(ep *EvalParams, includeCrossProducts bool) {
+	for i := range ep.TxnGroup {
+		ep.TxnGroup[i].Txn = convertTxnToAccess(ep.TxnGroup[i].Txn, includeCrossProducts)
+	}
+}
+
+// Returns a copy of `txn` with Foreign arrays nil'd out and replaced by equivalent Access list.
+func convertTxnToAccess(txn transactions.Transaction, includeCrossProducts bool) transactions.Transaction {
+	for _, acct := range txn.Accounts {
+		txn.Access = append(txn.Access, transactions.ResourceRef{
+			Address: acct,
+		})
+	}
+
+	for _, asset := range txn.ForeignAssets {
+		// Add each foreign asset
+		txn.Access = append(txn.Access, transactions.ResourceRef{
+			Asset: asset,
+		})
+		if includeCrossProducts {
+			index := len(txn.Access)
+			// Add the holding of the Sender
+			txn.Access = append(txn.Access, transactions.ResourceRef{
+				Holding: transactions.HoldingRef{
+					Address: 0, // Sender
+					Asset:   uint64(index),
+				},
+			})
+			// Add holding for each added account
+			for i := range txn.Accounts {
+				txn.Access = append(txn.Access, transactions.ResourceRef{
+					Holding: transactions.HoldingRef{
+						Address: uint64(i + 1),
+						Asset:   uint64(index),
+					},
+				})
+			}
+		}
+	}
+
+	for _, app := range txn.ForeignApps {
+		txn.Access = append(txn.Access, transactions.ResourceRef{
+			App: app,
+		})
+		if includeCrossProducts {
+			index := len(txn.Access)
+			txn.Access = append(txn.Access, transactions.ResourceRef{
+				Locals: transactions.LocalsRef{
+					Address: 0, // Sender
+					App:     uint64(index),
+				},
+			})
+			for i := range txn.Accounts {
+				txn.Access = append(txn.Access, transactions.ResourceRef{
+					Locals: transactions.LocalsRef{
+						Address: uint64(i + 1),
+						App:     uint64(index),
+					},
+				})
+			}
+		}
+	}
+
+	for _, br := range txn.Boxes {
+		index := br.Index
+		if index != 0 {
+			app := txn.ForeignApps[index-1]
+			index = uint64(slices.IndexFunc(txn.Access, func(rr transactions.ResourceRef) bool {
+				return rr.App == app
+			}))
+		}
+		txn.Access = append(txn.Access, transactions.ResourceRef{
+			Box: transactions.BoxRef{
+				Index: index,
+				Name:  br.Name,
+			},
+		})
+	}
+	txn.Accounts = nil
+	txn.ForeignAssets = nil
+	txn.ForeignApps = nil
+	txn.Boxes = nil
+	return txn
 }
 
 func (r *resources) String() string {
@@ -275,11 +361,16 @@ log
 				Freeze:        tx.Receiver,
 				Clawback:      tx.Receiver,
 			}
-			algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 			ledger.NewAccount(tx.Sender, 1)
-			ledger.NewApp(tx.Sender, 100, basics.AppParams{})
+			ledger.NewApp(tx.Sender, 100, basics.AppParams{
+				StateSchemas: basics.StateSchemas{
+					GlobalStateSchema: basics.StateSchema{
+						NumUint: 1,
+					},
+				},
+			})
 			ledger.NewLocals(tx.Sender, 100)
-			ledger.NewLocal(tx.Sender, 100, "ALGO", algoValue)
+			ledger.NewLocal(tx.Sender, 100, "ALGO", 0x77)
 			ledger.NewAsset(tx.Sender, 5, params)
 
 			if mode == ModeSig {
@@ -536,7 +627,7 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 
 	ep.Trace = &strings.Builder{}
 
-	err := CheckContract(program, ep)
+	err := CheckContract(program, gi, ep)
 	if checkProblem == "" {
 		require.NoError(t, err, "Error in CheckContract %v", ep.Trace)
 	} else {
@@ -577,7 +668,7 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 // that something STOPS working as of a particular version. Note that this does
 // *not* use different consensus versions. It is tempting to make it find the
 // lowest possible consensus version in the loop in order to support the `v` it
-// it working on.  For super confidence, one might argue this should be a nested
+// is working on.  For super confidence, one might argue this should be a nested
 // loop over all of the consensus versions that work with the `v`, from the
 // first possible, to vFuture.
 func testLogicRange(t *testing.T, start, stop int, test func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger)) {
@@ -737,7 +828,7 @@ err
 exist:
 byte "ALGO"
 ==`
-	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 100, string(protocol.PaymentTx), "ALGO")
 
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
@@ -757,7 +848,7 @@ byte "ALGO"
 	// opt into 123, and try again
 	ledger.NewApp(now.TxnGroup[0].Txn.Receiver, 123, basics.AppParams{})
 	ledger.NewLocals(now.TxnGroup[0].Txn.Receiver, 123)
-	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 123, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Receiver, 123, string(protocol.PaymentTx), "ALGO")
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 123", -1), now)
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 0", -1), now)
 
@@ -780,11 +871,11 @@ exist:
 byte "ALGO"
 ==`
 
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), "ALGO")
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
-		"invalid Account reference")
+		"unavailable Account")
 
 	// check reading state of other app
 	ledger.NewApp(now.TxnGroup[0].Txn.Sender, 56, basics.AppParams{})
@@ -800,7 +891,7 @@ byte "ALGO"
 ==`
 
 	ledger.NewLocals(now.TxnGroup[0].Txn.Sender, 56)
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 56, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 56, string(protocol.PaymentTx), "ALGO")
 	testApp(t, text, now)
 
 	// check app_local_get
@@ -810,7 +901,7 @@ app_local_get
 byte "ALGO"
 ==`
 
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), "ALGO")
 	now.TxnGroup[0].Txn.ApplicationID = 100
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
@@ -818,7 +909,7 @@ byte "ALGO"
 		exp(3, "app_local_get arg 0 wanted type uint64..."))
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
-		"invalid Account reference")
+		"unavailable Account")
 
 	// check app_local_get default value
 	text = `int 0  // account idx
@@ -827,7 +918,7 @@ app_local_get
 int 0
 ==`
 
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), "ALGO")
 	testApp(t, text, now)
 }
 
@@ -847,7 +938,7 @@ int 100; byte 0x0201; == // types mismatch so this will fail
 	_, err := testApp(t, badsource, nil, "cannot compare")
 	attrs := basics.Attributes(err)
 	zeros := [256]int{}
-	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	scratch := util.Map(zeros[:], func(i int) any { return uint64(i) })
 	scratch[10] = uint64(5)
 	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
 	require.Equal(t, map[string]any{
@@ -871,7 +962,7 @@ int 4; store 2			// store an int
 byte "jj"; store 3		// store a bytes
 int 1
 `
-	gscratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	gscratch := util.Map(zeros[:], func(i int) any { return uint64(i) })
 	gscratch[2] = uint64(4)
 	gscratch[3] = []byte("jj")
 
@@ -986,7 +1077,7 @@ byte "ALGO"
 
 	testApp(t, text, now, "err opcode")
 
-	ledger.NewGlobal(100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewGlobal(100, string(protocol.PaymentTx), "ALGO")
 
 	testApp(t, text, now)
 
@@ -996,14 +1087,19 @@ byte "ALGO"
 	// check that actual app id ok instead of indirect reference
 	text = `int 100; txn ApplicationArgs 0; app_global_get_ex; int 1; ==; assert; byte "ALGO"; ==`
 	testApp(t, text, now)
-	testApp(t, text, pre, "App index 100 beyond") // but not in old teal
+	testApp(t, text, pre, "100 is not a valid foreign app slot") // but not in old teal
 
 	// check app_global_get default value
 	text = "byte 0x414c474f55; app_global_get; int 0; =="
 
 	ledger.NewLocals(now.TxnGroup[0].Txn.Sender, 100)
-	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
+	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), "ALGO")
 	testApp(t, text, now)
+
+	ledger.SetAppGlobalSchema(100, basics.StateSchema{
+		NumUint:      1, // we're about to add an int
+		NumByteSlice: 1, // "pay" is still there
+	})
 
 	text = `
 byte 0x41414141
@@ -1019,7 +1115,7 @@ int 4141
 ==
 `
 	// check that even during application creation (Txn.ApplicationID == 0)
-	// we will use the the kvCow if the exact application ID (100) is
+	// we will use the kvCow if the exact application ID (100) is
 	// specified in the transaction
 	now.TxnGroup[0].Txn.ApplicationID = 0
 	now.TxnGroup[0].Txn.ForeignApps = []basics.AppIndex{100}
@@ -1034,320 +1130,301 @@ int 4141
 		0, 100, now)
 }
 
-const assetsTestTemplate = `int 0//account
-int 55
-asset_holding_get AssetBalance
-!
-bnz error
-int 123
-==
+const assetsTestTemplate = `
 int 0//account
 int 55
-asset_holding_get AssetFrozen
-!
-bnz error
-int 1
-==
-&&
-int 0//params
-asset_params_get AssetTotal
-!
-bnz error
-int 1000
-==
-&&
-int 0//params
-asset_params_get AssetDecimals
-!
-bnz error
-int 2
-==
-&&
-int 0//params
-asset_params_get AssetDefaultFrozen
-!
-bnz error
-int 0
-==
-&&
-int 0//params
-asset_params_get AssetUnitName
-!
-bnz error
-byte "ALGO"
-==
-&&
-int 0//params
-asset_params_get AssetName
-!
-bnz error
-len
-int 0
-==
-&&
-int 0//params
-asset_params_get AssetURL
-!
-bnz error
-txna ApplicationArgs 0
-==
-&&
-int 0//params
-asset_params_get AssetMetadataHash
-!
-bnz error
-byte 0x0000000000000000000000000000000000000000000000000000000000000000
-==
-&&
-int 0//params
-asset_params_get AssetManager
-!
-bnz error
-txna Accounts 0
-==
-&&
-int 0//params
-asset_params_get AssetReserve
-!
-bnz error
-txna Accounts 1
-==
-&&
-int 0//params
-asset_params_get AssetFreeze
-!
-bnz error
-txna Accounts 1
-==
-&&
-int 0//params
-asset_params_get AssetClawback
-!
-bnz error
-txna Accounts 1
-==
-&&
-bnz ok
-error:
-err
-ok:
+asset_holding_get AssetBalance; assert
+int 123; ==; assert
+
+int 0//account
+int 55
+asset_holding_get AssetFrozen; assert
+int 1; ==; assert
+
+int 0//asset
+asset_params_get AssetTotal; assert
+int 1000; ==; assert
+
+int 0//asset
+asset_params_get AssetDecimals; assert
+int 2; ==; assert
+
+int 0//asset
+asset_params_get AssetDefaultFrozen; assert
+int 0; ==; assert
+
+int 0//asset
+asset_params_get AssetUnitName; assert
+byte "ALGO"; ==; assert
+
+int 0//asset
+asset_params_get AssetName; assert
+len; int 0; ==; assert
+
+int 0//asset
+asset_params_get AssetURL; assert
+txna ApplicationArgs 0; ==; assert
+
+int 0//asset
+asset_params_get AssetMetadataHash; assert
+byte 0x0000000000000000000000000000000000000000000000000000000000000000; ==; assert
+
+int 0//asset
+asset_params_get AssetManager; assert
+txna Accounts 0; ==; assert		// even with tx.Access, this means Sender
+
+int 0//asset
+asset_params_get AssetReserve; assert
+txna Accounts 1; ==; assert		// this won't work when we use tx.Access, see substitute() call
+
+int 0//asset
+asset_params_get AssetFreeze; assert
+txna Accounts 1; ==; assert
+
+int 0//asset
+asset_params_get AssetClawback; assert
+txna Accounts 1; ==; assert
+
 %s
+
 int 1
 `
 
+// v5extras adds test for AssetCreator, new in v5
 const v5extras = `
-int 0//params
-asset_params_get AssetCreator
-pop
-txn Sender
-==
-assert
+int 0//asset
+asset_params_get AssetCreator; assert
+txn Sender; ==; assert
 `
+
+func substitute(s string, replacements map[string]string) string {
+	for old, new := range replacements {
+		s = strings.ReplaceAll(s, old, new)
+	}
+	return s
+}
 
 func TestAssets(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()
 	tests := map[uint64]string{
-		4: fmt.Sprintf(assetsTestTemplate, ""),
-		5: fmt.Sprintf(assetsTestTemplate, v5extras),
+		4:                      fmt.Sprintf(assetsTestTemplate, ""),
+		5:                      fmt.Sprintf(assetsTestTemplate, v5extras),
+		sharedResourcesVersion: fmt.Sprintf(assetsTestTemplate, v5extras),
+		LogicVersion:           fmt.Sprintf(assetsTestTemplate, v5extras),
+	}
+
+	testAssetsByVersion := func(t *testing.T, assetsTestProgram string, version uint64) {
+		for _, field := range assetHoldingFieldNames {
+			fs := assetHoldingFieldSpecByName[field]
+			if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
+				t.Errorf("TestAssets missing field %v", field)
+			}
+		}
+		for _, field := range assetParamsFieldNames {
+			fs := assetParamsFieldSpecByName[field]
+			if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
+				t.Errorf("TestAssets missing field %v", field)
+			}
+		}
+
+		txn := makeSampleAppl(888)
+		pre := defaultAppParamsWithVersion(directRefEnabledVersion-1, txn)
+		require.GreaterOrEqual(t, version, uint64(directRefEnabledVersion))
+
+		now := defaultAppParamsWithVersion(version, txn)
+		// Make an ep that has the transactions with all the basic stuff AND implied cross products
+		nowCross := defaultAppParamsWithVersion(version, txn)
+		convertEPToAccess(nowCross, true)
+		// Make an ep that ONLY puts the base types into tx.Access, no implied cross products
+		nowSimple := defaultAppParamsWithVersion(version, txn)
+		convertEPToAccess(nowSimple, false)
+		ledger := NewLedger(
+			map[basics.Address]uint64{
+				txn.Txn.Sender: 1,
+			},
+		)
+		pre.Ledger = ledger
+		now.Ledger = ledger
+		nowCross.Ledger = ledger
+
+		// bear in mind: the sample transaction has ForeignAccounts{55,77}
+		testApp(t, "int 5; int 55; asset_holding_get AssetBalance", now, "invalid Account reference 5")
+		// the foreign arrays are converted into tx.Access for nowCross. 5 is not an Address in tx.Access
+		if version >= sharedResourcesVersion {
+			testApp(t, "int 5; int 55; asset_holding_get AssetBalance", nowCross, "address reference 5 is not an Address")
+			testApp(t, "int 5; int 55; asset_holding_get AssetBalance", nowSimple, "address reference 5 is not an Address")
+			testApp(t, "int 50; int 55; asset_holding_get AssetBalance", nowCross, "invalid Account reference 5")  // too big
+			testApp(t, "int 50; int 55; asset_holding_get AssetBalance", nowSimple, "invalid Account reference 5") // too big
+		}
+		// was legal to get asset balance on a non-ForeignAsset
+		testApp(t, "int 0; int 54; asset_holding_get AssetBalance; ==", pre)
+		// after directRefEnabledVersion, the asset must be included (whether using Foreign or Access)
+		testApp(t, "int 0; int 54; asset_holding_get AssetBalance", now, "unavailable Asset 54")
+		if version >= sharedResourcesVersion {
+			testApp(t, "int 0; int 54; asset_holding_get AssetBalance", nowCross, "unavailable Asset 54")
+			testApp(t, "int 0; int 54; asset_holding_get AssetBalance", nowSimple, "unavailable Asset 54")
+		}
+		// it wasn't legal to use a direct ref for account
+		testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
+			directRefEnabledVersion-1, exp(1, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
+		// but it is now (empty asset yields 0,0 on stack)
+		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
+		if version >= sharedResourcesVersion {
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, nowCross)
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, nowSimple,
+				"unavailable Holding 55+MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAYG54XDH4")
+		}
+		// This is receiver, who is in Accounts array
+		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, now)
+		if version >= sharedResourcesVersion {
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, nowCross)
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, nowSimple,
+				"unavailable Holding 55+MFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJMFXWK5LJGAY62VUCHY")
+		}
+		// But this address is not in Accounts, so illegal
+		testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, now, "unavailable Account")
+		if version >= sharedResourcesVersion {
+			testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, nowCross, "unavailable Account")
+		}
+
+		// for params get, presence in ForeignAssets has always be required
+		testApp(t, "int 6; asset_params_get AssetTotal", pre, "6 is not a valid foreign asset slot")
+		testApp(t, "int 6; asset_params_get AssetTotal", now, "unavailable Asset 6")
+		if version >= sharedResourcesVersion {
+			testApp(t, "int 6; asset_params_get AssetTotal", nowCross, "unavailable Asset 6")
+			testApp(t, "int 6; asset_params_get AssetTotal", nowSimple, "unavailable Asset 6")
+		}
+
+		params := basics.AssetParams{
+			Total:         1000,
+			Decimals:      2,
+			DefaultFrozen: false,
+			UnitName:      "ALGO",
+			AssetName:     "",
+			URL:           string(protocol.PaymentTx),
+			Manager:       txn.Txn.Sender,
+			Reserve:       txn.Txn.Receiver,
+			Freeze:        txn.Txn.Receiver,
+			Clawback:      txn.Txn.Receiver,
+		}
+
+		ledger.NewAsset(txn.Txn.Sender, 55, params)
+		ledger.NewHolding(txn.Txn.Sender, 55, 123, true)
+		// For consistency you can now use an indirect ref in holding_get
+		// (recall ForeignAssets[0] = 55, which has balance 123)
+		testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 1; ==; assert; int 123; ==", now)
+		if version >= sharedResourcesVersion {
+			// (recall Access[1] = 55, which has balance 123, tx.Access slots are always 1 based, so use 2.
+			testApp(t, "int 0; int 2; asset_holding_get AssetBalance; int 1; ==; assert; int 123; ==", nowCross)
+		}
+		// but previous code would still try to read ASA 0
+		testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 0; ==; assert; int 0; ==", pre)
+
+		testApp(t, assetsTestProgram, now)
+		// In current versions, can swap out the account index for the account
+		testApp(t, strings.ReplaceAll(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\""), now)
+		// Or an asset index for the asset id
+		testApp(t, strings.ReplaceAll(assetsTestProgram, "int 0//asset", "int 55"), now)
+		// Or an index for the asset id
+		testApp(t, strings.ReplaceAll(assetsTestProgram, "int 55", "int 0"), now)
+
+		// same tests, but with tx.Access
+		if version >= sharedResourcesVersion {
+			// To run it with tx.Access, use slot #2 for the asset, and directly use the Receiver
+			assetsTestProgramA := substitute(assetsTestProgram, map[string]string{
+				"int 0//asset":    "int 2//asset",
+				"txna Accounts 1": "txn Receiver",
+			})
+			testApp(t, assetsTestProgramA, nowCross)
+			testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\""), nowCross)
+			testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 2//asset", "int 55"), nowCross)
+			testApp(t, strings.ReplaceAll(assetsTestProgramA, "int 55", "int 2"), nowCross)
+		}
+
+		// but old code cannot
+		testProg(t, strings.ReplaceAll(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\""), directRefEnabledVersion-1, exp(4, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
+
+		if version < 5 {
+			// Can't run these with AppCreator anyway
+			testApp(t, strings.ReplaceAll(assetsTestProgram, "int 0//asset", "int 55"), pre, "55 is not a valid foreign asset slot")
+			testApp(t, strings.ReplaceAll(assetsTestProgram, "int 55", "int 0"), pre, "assert failed pc=53") // AssetBalance => 0,0
+		}
+
+		// check asset_holdings bool value
+		source := `intcblock 0 55 1
+intc_0  // 0, account idx (txn.Sender)
+intc_1  // 55
+asset_holding_get AssetFrozen; assert
+intc_0 // 0
+==
+`
+		ledger.NewHolding(txn.Txn.Sender, 55, 123, false)
+		testApp(t, source, now)
+		if version >= sharedResourcesVersion {
+			testApp(t, source, nowCross)
+		}
+		// check asset_holding_get with invalid field number
+		ops := testProg(t, source, version)
+		require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
+		ops.Program[9] = 0x02
+		_, err := EvalApp(ops.Program, 0, 888, now)
+		require.ErrorContains(t, err, "invalid asset_holding_get field 2")
+
+		// check asset_params bool value
+		source = `intcblock 0 1
+intc_0
+asset_params_get AssetDefaultFrozen; assert
+intc_1
+==
+`
+		params.DefaultFrozen = true
+		ledger.NewAsset(txn.Txn.Sender, 55, params)
+		testApp(t, source, now)
+		// check asset_params_get with invalid field number
+		ops = testProg(t, source, version)
+		require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
+		ops.Program[7] = 0x20
+		_, err = EvalApp(ops.Program, 0, 888, now)
+		require.ErrorContains(t, err, "invalid asset_params_get field 32")
+
+		// check empty string
+		source = `
+int 0  // foreign asset idx (txn.ForeignAssets[0])
+asset_params_get AssetURL; assert
+len; !
+`
+		params.URL = ""
+		ledger.NewAsset(txn.Txn.Sender, 55, params)
+		testApp(t, source, now)
+
+		source = `intcblock 1 9
+intc_0  // foreign asset idx (txn.ForeignAssets[1])
+asset_params_get AssetURL; assert
+len
+intc_1
+==
+`
+		params.URL = "foobarbaz"
+		ledger.NewAsset(txn.Txn.Sender, 77, params)
+		testApp(t, source, now)
+
+		source = `
+int 0
+asset_params_get AssetURL; assert
+!
+`
+		params.URL = ""
+		ledger.NewAsset(txn.Txn.Sender, 55, params)
+		testApp(t, notrack(source), now, "! arg 0 wanted uint64")
 	}
 
 	for v, source := range tests {
-		testAssetsByVersion(t, source, v)
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			testAssetsByVersion(t, source, v)
+		})
 	}
-}
-
-func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64) {
-	for _, field := range assetHoldingFieldNames {
-		fs := assetHoldingFieldSpecByName[field]
-		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
-			t.Errorf("TestAssets missing field %v", field)
-		}
-	}
-	for _, field := range assetParamsFieldNames {
-		fs := assetParamsFieldSpecByName[field]
-		if fs.version <= version && !strings.Contains(assetsTestProgram, field) {
-			t.Errorf("TestAssets missing field %v", field)
-		}
-	}
-
-	txn := makeSampleAppl(888)
-	pre := defaultAppParamsWithVersion(directRefEnabledVersion-1, txn)
-	require.GreaterOrEqual(t, version, uint64(directRefEnabledVersion))
-	now := defaultAppParamsWithVersion(version, txn)
-	ledger := NewLedger(
-		map[basics.Address]uint64{
-			txn.Txn.Sender: 1,
-		},
-	)
-	pre.Ledger = ledger
-	now.Ledger = ledger
-
-	// bear in mind: the sample transaction has ForeignAccounts{55,77}
-	testApp(t, "int 5; int 55; asset_holding_get AssetBalance", now, "invalid Account reference 5")
-	// was legal to get balance on a non-ForeignAsset
-	testApp(t, "int 0; int 54; asset_holding_get AssetBalance; ==", pre)
-	// but not since directRefEnabledVersion
-	testApp(t, "int 0; int 54; asset_holding_get AssetBalance", now, "unavailable Asset 54")
-
-	// it wasn't legal to use a direct ref for account
-	testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
-		directRefEnabledVersion-1, exp(1, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
-	// but it is now (empty asset yields 0,0 on stack)
-	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
-	// This is receiver, who is in Assets array
-	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"; int 55; asset_holding_get AssetBalance; ==`, now)
-	// But this is not in Assets, so illegal
-	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, now, "invalid")
-
-	// for params get, presence in ForeignAssets has always be required
-	testApp(t, "int 5; asset_params_get AssetTotal", pre, "Asset index 5 beyond")
-	testApp(t, "int 5; asset_params_get AssetTotal", now, "unavailable Asset 5")
-
-	params := basics.AssetParams{
-		Total:         1000,
-		Decimals:      2,
-		DefaultFrozen: false,
-		UnitName:      "ALGO",
-		AssetName:     "",
-		URL:           string(protocol.PaymentTx),
-		Manager:       txn.Txn.Sender,
-		Reserve:       txn.Txn.Receiver,
-		Freeze:        txn.Txn.Receiver,
-		Clawback:      txn.Txn.Receiver,
-	}
-
-	ledger.NewAsset(txn.Txn.Sender, 55, params)
-	ledger.NewHolding(txn.Txn.Sender, 55, 123, true)
-	// For consistency you can now use an indirect ref in holding_get
-	// (recall ForeignAssets[0] = 55, which has balance 123)
-	testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 1; ==; assert; int 123; ==", now)
-	// but previous code would still try to read ASA 0
-	testApp(t, "int 0; int 0; asset_holding_get AssetBalance; int 0; ==; assert; int 0; ==", pre)
-
-	testApp(t, assetsTestProgram, now)
-
-	// In current versions, can swap out the account index for the account
-	testApp(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
-	// Or an asset index for the asset id
-	testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), now)
-	// Or an index for the asset id
-	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), now)
-
-	// but old code cannot
-	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, exp(3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
-
-	if version < 5 {
-		// Can't run these with AppCreator anyway
-		testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "Asset index 55 beyond")
-		testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), pre, "err opcode")
-	}
-
-	// check holdings bool value
-	source := `intcblock 0 55 1
-intc_0  // 0, account idx (txn.Sender)
-intc_1  // 55
-asset_holding_get AssetFrozen
-!
-bnz error
-intc_0 // 0
-==
-bnz ok
-error:
-err
-ok:
-intc_2 // 1
-`
-	ledger.NewHolding(txn.Txn.Sender, 55, 123, false)
-	testApp(t, source, now)
-
-	// check holdings invalid offsets
-	ops := testProg(t, source, version)
-	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
-	ops.Program[9] = 0x02
-	_, err := EvalApp(ops.Program, 0, 888, now)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid asset_holding_get field 2")
-
-	// check holdings bool value
-	source = `intcblock 0 1
-intc_0
-asset_params_get AssetDefaultFrozen
-!
-bnz error
-intc_1
-==
-bnz ok
-error:
-err
-ok:
-intc_1
-`
-	params.DefaultFrozen = true
-	ledger.NewAsset(txn.Txn.Sender, 55, params)
-	testApp(t, source, now)
-	// check holdings invalid offsets
-	ops = testProg(t, source, version)
-	require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
-	ops.Program[7] = 0x20
-	_, err = EvalApp(ops.Program, 0, 888, now)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid asset_params_get field 32")
-
-	// check empty string
-	source = `intcblock 0 1
-intc_0  // foreign asset idx (txn.ForeignAssets[0])
-asset_params_get AssetURL
-!
-bnz error
-len
-intc_0
-==
-bnz ok
-error:
-err
-ok:
-intc_1
-`
-	params.URL = ""
-	ledger.NewAsset(txn.Txn.Sender, 55, params)
-	testApp(t, source, now)
-
-	source = `intcblock 1 9
-intc_0  // foreign asset idx (txn.ForeignAssets[1])
-asset_params_get AssetURL
-!
-bnz error
-len
-intc_1
-==
-bnz ok
-error:
-err
-ok:
-intc_0
-`
-	params.URL = "foobarbaz"
-	ledger.NewAsset(txn.Txn.Sender, 77, params)
-	testApp(t, source, now)
-
-	source = `intcblock 0 1
-intc_0
-asset_params_get AssetURL
-!
-bnz error
-intc_0
-==
-bnz ok
-error:
-err
-ok:
-intc_1
-`
-	params.URL = ""
-	ledger.NewAsset(txn.Txn.Sender, 55, params)
-	testApp(t, notrack(source), now, "cannot compare ([]byte to uint64)")
 }
 
 // TestAssetDisambiguation ensures we have a consistent interpretation of low
@@ -1385,7 +1462,7 @@ func TestAssetDisambiguation(t *testing.T) {
 
 				tx.ForeignAssets = []basics.AssetIndex{1, 256}
 				if ep.Proto.LogicSigVersion < directRefEnabledVersion {
-					// There's no direct use of assets IDs, so 1 is still the 1th slot (256)
+					// direct use of assets IDs is disallowed, so 1 is still the 1th slot (256)
 					testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep)
 				} else {
 					// Since 1 IS available, 1 means the assetid=1, not the 1th slot
@@ -1405,7 +1482,7 @@ func TestAssetDisambiguation(t *testing.T) {
 					testApp(t, `int 0; int 1; asset_holding_get AssetBalance; assert; int 256; ==`, ep)
 				}
 
-				// but now if that resolution led to a number below 255, boom
+				// but now if that resolution led to a number below 256, boom
 				tx.ForeignAssets = []basics.AssetIndex{256, 255}
 				testApp(t, `int 1; asset_params_get AssetName; assert; byte "thirty"; ==`, ep,
 					"low Asset lookup 255")
@@ -1456,16 +1533,16 @@ func TestAppDisambiguation(t *testing.T) {
 					ep.UnnamedResources = &mockUnnamedResourcePolicy{allowEverything: true}
 				}
 				// make apps with identifiable properties, so we can tell what we get
-				makeIdentifiableApp := func(appID uint64) {
-					ledger.NewApp(tx.Sender, basics.AppIndex(appID), basics.AppParams{
+				makeIdentifiableApp := func(appID basics.AppIndex) {
+					ledger.NewApp(tx.Sender, appID, basics.AppParams{
 						GlobalState: map[string]basics.TealValue{"a": {
 							Type: basics.TealUintType,
-							Uint: appID,
+							Uint: uint64(appID),
 						}},
 						ExtraProgramPages: uint32(appID),
 					})
 					ledger.NewLocals(tx.Sender, appID)
-					ledger.NewLocal(tx.Sender, appID, "x", basics.TealValue{Type: basics.TealUintType, Uint: appID * 10})
+					ledger.NewLocal(tx.Sender, appID, "x", uint64(appID)*10)
 				}
 				makeIdentifiableApp(1)
 				makeIdentifiableApp(20)
@@ -1743,7 +1820,7 @@ intc_1
 			txn.Txn.Type = protocol.ApplicationCallTx
 			txn.Txn.ApplicationID = 100
 			ep := defaultAppParams(txn)
-			err := CheckContract(ops.Program, ep)
+			err := CheckContract(ops.Program, 0, ep)
 			require.NoError(t, err)
 
 			ledger := NewLedger(
@@ -1767,8 +1844,8 @@ intc_1
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
 
-			ledger.NewLocal(txn.Txn.Sender, 100, "ALGO", basics.TealValue{Type: basics.TealUintType, Uint: 0x77})
-			ledger.NewLocal(txn.Txn.Sender, 100, "ALGOA", basics.TealValue{Type: basics.TealUintType, Uint: 1})
+			ledger.NewLocal(txn.Txn.Sender, 100, "ALGO", 0x77)
+			ledger.NewLocal(txn.Txn.Sender, 100, "ALGOA", 1)
 
 			ledger.Reset()
 			pass, err := EvalApp(ops.Program, 0, 100, ep)
@@ -1863,8 +1940,7 @@ int 0x77
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		delta, _ = testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
@@ -1892,7 +1968,7 @@ exist2:
 ==
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
@@ -1910,7 +1986,7 @@ app_local_put
 int 1
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
@@ -1940,7 +2016,7 @@ int 0x78
 ==
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
@@ -1968,7 +2044,7 @@ int 0x78             // value
 app_local_put
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
@@ -2002,7 +2078,7 @@ app_local_put
 int 1
 `
 		ledger.Reset()
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 
 		ledger.NewAccount(txn.Receiver, 500)
@@ -2045,6 +2121,10 @@ func TestAppLocalGlobalErrorCases(t *testing.T) {
 		}
 		testApp(t, notrack(fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1))), ep, "key too long")
 
+		testApp(t, fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep, "app 888 global schema")
+
+		ledger.SetAppGlobalSchema(888, basics.StateSchema{NumUint: 1})
+
 		testApp(t, fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
 		ledger.NewLocals(tx.Sender, 888)
@@ -2053,6 +2133,10 @@ func TestAppLocalGlobalErrorCases(t *testing.T) {
 		testApp(t, fmt.Sprintf(sender+`byte "%v"; int 1;`+l+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
 		testApp(t, fmt.Sprintf(`byte "foo"; byte "%v";`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen+1)), ep, "value too long for key")
+
+		testApp(t, fmt.Sprintf(`byte "foo"; byte "%v";`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen)), ep, "app 888 global schema") // because we tried to set a byte value
+
+		ledger.SetAppGlobalSchema(888, basics.StateSchema{NumByteSlice: 1, NumUint: 1})
 
 		testApp(t, fmt.Sprintf(`byte "foo"; byte "%v";`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppBytesValueLen)), ep)
 
@@ -2098,7 +2182,7 @@ int 0x77
 			if name == "read" {
 				testAppBytes(t, ops.Program, ep, "err opcode") // no such key
 			}
-			ledger.NewGlobal(100, "ALGO", basics.TealValue{Type: basics.TealUintType, Uint: 0x77})
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			ledger.Reset()
 
@@ -2179,7 +2263,11 @@ int 0x77
 			txn.ApplicationID = 100
 			txn.ForeignApps = []basics.AppIndex{txn.ApplicationID}
 			ledger.NewAccount(txn.Sender, 1)
-			ledger.NewApp(txn.Sender, 100, basics.AppParams{})
+			ledger.NewApp(txn.Sender, 100, basics.AppParams{
+				StateSchemas: basics.StateSchemas{
+					GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+				},
+			})
 
 			if bySlot {
 				// 100 is in the ForeignApps array, name it by slot
@@ -2217,8 +2305,7 @@ int 0x77
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NoGlobal(100, "ALGO")
 
-			algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
@@ -2242,7 +2329,7 @@ int 0x77
 `
 			ledger.Reset()
 			ledger.NoGlobal(100, "ALGOA")
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
@@ -2282,7 +2369,7 @@ byte "ALGO"
 `
 			ledger.Reset()
 			ledger.NoGlobal(100, "ALGOA")
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			delta, _ = testApp(t, source, ep)
 
@@ -2346,8 +2433,7 @@ byte "myval"
 
 			ledger.NewApp(txn.Receiver, 101, basics.AppParams{})
 			ledger.NewApp(txn.Receiver, 100, basics.AppParams{}) // this keeps current app id = 100
-			algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
-			ledger.NewGlobal(101, "mykey", algoValue)
+			ledger.NewGlobal(101, "mykey", "myval")
 
 			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
@@ -2380,7 +2466,11 @@ int 7
 	testLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
 		txn.ApplicationID = 100
 		ledger.NewAccount(txn.Sender, 1)
-		ledger.NewApp(txn.Sender, 100, basics.AppParams{})
+		ledger.NewApp(txn.Sender, 100, basics.AppParams{
+			StateSchemas: basics.StateSchemas{
+				GlobalStateSchema: basics.StateSchema{NumUint: 1},
+			},
+		})
 
 		delta, _ := testApp(t, source, ep)
 		require.Empty(t, delta.LocalDeltas)
@@ -2422,18 +2512,18 @@ int 1
 
 			ledger.NewAccount(txn.Sender, 1)
 			txn.ApplicationID = 100
-			ledger.NewApp(txn.Sender, 100, basics.AppParams{})
+			ledger.NewApp(txn.Sender, 100, basics.AppParams{
+				StateSchemas: basics.StateSchemas{
+					GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+				},
+			})
 
 			delta, _ := testApp(t, source, ep)
 			require.Len(t, delta.GlobalDelta, 2)
 			require.Empty(t, delta.LocalDeltas)
-
 			ledger.Reset()
-			ledger.NoGlobal(100, "ALGOA")
-			ledger.NoGlobal(100, "ALGO")
 
-			algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete existing
 			source = `byte "ALGO"
@@ -2462,14 +2552,12 @@ app_global_get_ex
 			require.Equal(t, uint64(0), vd.Uint)
 			require.Equal(t, "", vd.Bytes)
 			require.Equal(t, 0, len(delta.LocalDeltas))
-
 			ledger.Reset()
-			ledger.NoGlobal(100, "ALGOA")
-			ledger.NoGlobal(100, "ALGO")
 
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete and write non-existing
+			ledger.SetAppGlobalSchema(100, basics.StateSchema{NumUint: 2})
 			source = `byte "ALGOA"
 app_global_del
 int 0
@@ -2492,7 +2580,7 @@ app_global_put
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NoGlobal(100, "ALGO")
 
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete and write existing
 			source = `byte "ALGO"
@@ -2513,7 +2601,7 @@ int 1
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NoGlobal(100, "ALGO")
 
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete,write,delete existing
 			source = `byte "ALGO"
@@ -2536,7 +2624,7 @@ int 1
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NoGlobal(100, "ALGO")
 
-			ledger.NewGlobal(100, "ALGO", algoValue)
+			ledger.NewGlobal(100, "ALGO", 0x77)
 
 			// check delete, write, delete non-existing
 			source = `byte "ALGOA"   // key "ALGOA"
@@ -2624,8 +2712,7 @@ int 1
 		ledger.NoLocal(txn.Receiver, 100, "ALGOA")
 		ledger.NoLocal(txn.Receiver, 100, "ALGO")
 
-		algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete existing
 		source = `txn Sender
@@ -2653,7 +2740,7 @@ app_local_get_ex
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete and write non-existing
 		source = `txn Sender
@@ -2684,7 +2771,7 @@ app_local_put
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete and write existing
 		source = `txn Sender
@@ -2711,7 +2798,7 @@ int 1
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete,write,delete existing
 		source = `txn Sender
@@ -2741,7 +2828,7 @@ int 1
 		ledger.NoLocal(txn.Sender, 100, "ALGOA")
 		ledger.NoLocal(txn.Sender, 100, "ALGO")
 
-		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
+		ledger.NewLocal(txn.Sender, 100, "ALGO", 0x77)
 
 		// check delete, write, delete non-existing
 		source = `txn Sender
@@ -2806,10 +2893,10 @@ func allowsLocalEvent(addr basics.Address, aid basics.AppIndex) unnamedResourceP
 	}
 }
 
-func availableBoxEvent(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) unnamedResourcePolicyEvent {
+func availableBoxEvent(app basics.AppIndex, name string, newApp bool, createSize uint64) unnamedResourcePolicyEvent {
 	return unnamedResourcePolicyEvent{
 		eventType: "AvailableBox",
-		args:      []interface{}{app, name, operation, createSize},
+		args:      []interface{}{app, name, newApp, createSize},
 	}
 }
 
@@ -2850,9 +2937,15 @@ func (p *mockUnnamedResourcePolicy) AllowsLocal(addr basics.Address, aid basics.
 	return p.allowEverything
 }
 
-func (p *mockUnnamedResourcePolicy) AvailableBox(app basics.AppIndex, name string, operation BoxOperation, createSize uint64) bool {
-	p.events = append(p.events, availableBoxEvent(app, name, operation, createSize))
+func (p *mockUnnamedResourcePolicy) AvailableBox(app basics.AppIndex, name string, newApp bool, createSize uint64) bool {
+	p.events = append(p.events, availableBoxEvent(app, name, newApp, createSize))
 	return p.allowEverything
+}
+
+// If IOSurplus fails, then everything would fail before the "real" issue being
+// tested. So we just pass this in the mock.
+func (p *mockUnnamedResourcePolicy) IOSurplus(size int64) bool {
+	return true
 }
 
 func TestUnnamedResourceAccess(t *testing.T) {
@@ -2894,10 +2987,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 				})
 
 				ledger.NewLocals(otherAccount, 500)
-				ledger.NewLocal(otherAccount, 500, "local key", basics.TealValue{
-					Type:  basics.TealBytesType,
-					Bytes: "local value",
-				})
+				ledger.NewLocal(otherAccount, 500, "local key", "local value")
 
 				ledger.NewAsset(tx.Sender, 501, basics.AssetParams{Total: 501})
 				ledger.NewHolding(otherAccount, 501, 2, false)
@@ -2916,7 +3006,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 						tc.policy.events = nil
 					}
 				} else {
-					testApp(t, source, ep, fmt.Sprintf("invalid Account reference %s", otherAccount))
+					testApp(t, source, ep, fmt.Sprintf("unavailable Account %s", otherAccount))
 				}
 
 				// Unaccessible app
@@ -2988,12 +3078,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 						tc.policy.events = nil
 					}
 				} else {
-					problem := "unavailable Account %s"
-					if ep.Proto.LogicSigVersion < 9 {
-						// Message is difference before sharedResourcesVersion
-						problem = "invalid Account reference %s"
-					}
-					testApp(t, source, ep, fmt.Sprintf(problem, otherAccount))
+					testApp(t, source, ep, fmt.Sprintf("unavailable Account %s", otherAccount))
 				}
 
 				// Unaccessible asset
@@ -3051,12 +3136,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 						tc.policy.events = nil
 					}
 				} else {
-					problem := "unavailable Account %s"
-					if ep.Proto.LogicSigVersion < 9 {
-						// Message is different before sharedResourcesVersion
-						problem = "invalid Account reference %s"
-					}
-					testApp(t, source, ep, fmt.Sprintf(problem, otherAccount))
+					testApp(t, source, ep, fmt.Sprintf("unavailable Account %s", otherAccount))
 				}
 
 				// Unaccessible box
@@ -3066,7 +3146,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
 						if tc.policy != nil {
-							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "box key", BoxReadOperation, 0)}
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "box key", false, 0)}
 							assert.Equal(t, expectedEvents, tc.policy.events)
 							tc.policy.events = nil
 						}
@@ -3077,7 +3157,7 @@ func TestUnnamedResourceAccess(t *testing.T) {
 					if tc.allowsUnnamedResources {
 						testApp(t, source, ep)
 						if tc.policy != nil {
-							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box", BoxCreateOperation, 1)}
+							expectedEvents := []unnamedResourcePolicyEvent{availableBoxEvent(tx.ApplicationID, "new box", false, 1)}
 							assert.Equal(t, expectedEvents, tc.policy.events)
 							tc.policy.events = nil
 						}
@@ -3383,13 +3463,18 @@ func TestReturnTypes(t *testing.T) {
 					Clawback:      tx.Receiver,
 				}
 				ledger.NewAsset(tx.Sender, 400, params)
-				ledger.NewApp(tx.Sender, 300, basics.AppParams{})
+				ledger.NewApp(tx.Sender, 300, basics.AppParams{
+					StateSchemas: basics.StateSchemas{
+						GlobalStateSchema: basics.StateSchema{
+							NumUint: 1,
+						},
+					},
+				})
 				ledger.NewAccount(tx.Receiver, 1000000)
 				ledger.NewLocals(tx.Receiver, 300)
 				key, err := hex.DecodeString("33343536")
 				require.NoError(t, err)
-				algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
-				ledger.NewLocal(tx.Receiver, 300, string(key), algoValue)
+				ledger.NewLocal(tx.Receiver, 300, string(key), 0x77)
 				ledger.NewAccount(appAddr(300), 1000000)
 
 				// these allows the box_* opcodes that to work
@@ -3972,15 +4057,21 @@ func TestTxnaLimits(t *testing.T) {
 	t.Parallel()
 	// txna came in v2, but Apps and Assets in v3.
 	TestLogicRange(t, 3, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
-		testApp(t, "txna Accounts "+strconv.Itoa(len(tx.Accounts))+";len", ep)
-		testApp(t, "txna Accounts "+strconv.Itoa(len(tx.Accounts)+1)+";len", ep, "invalid Accounts index")
+		if len(tx.Accounts) > 0 { // With tx.Access, sample txn has no Accounts
+			testApp(t, "txna Accounts "+strconv.Itoa(len(tx.Accounts))+";len", ep)
+			testApp(t, "txna Accounts "+strconv.Itoa(len(tx.Accounts)+1)+";len", ep, "invalid Accounts index")
+		}
 
-		testApp(t, "txna Applications "+strconv.Itoa(len(tx.ForeignApps)), ep)
-		testApp(t, "txna Applications "+strconv.Itoa(len(tx.ForeignApps)+1), ep, "invalid Applications index")
+		if len(tx.ForeignApps) > 0 { // With tx.Access, sample txn has no ForeignApps
+			testApp(t, "txna Applications "+strconv.Itoa(len(tx.ForeignApps)), ep)
+			testApp(t, "txna Applications "+strconv.Itoa(len(tx.ForeignApps)+1), ep, "invalid Applications index")
+		}
 
 		// Assets and AppArgs have no implicit 0 index, so everything shifts
-		testApp(t, "txna Assets "+strconv.Itoa(len(tx.ForeignAssets)-1), ep)
-		testApp(t, "txna Assets "+strconv.Itoa(len(tx.ForeignAssets)), ep, "invalid Assets index")
+		if len(tx.ForeignApps) > 0 { // With tx.Access, sample txn has no ForeignApps
+			testApp(t, "txna Assets "+strconv.Itoa(len(tx.ForeignAssets)-1), ep)
+			testApp(t, "txna Assets "+strconv.Itoa(len(tx.ForeignAssets)), ep, "invalid Assets index")
+		}
 
 		testApp(t, "txna ApplicationArgs "+strconv.Itoa(len(tx.ApplicationArgs)-1)+";len", ep)
 		testApp(t, "txna ApplicationArgs "+strconv.Itoa(len(tx.ApplicationArgs))+";len", ep, "invalid ApplicationArgs index")

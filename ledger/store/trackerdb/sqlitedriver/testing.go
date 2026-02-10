@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -29,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/stretchr/testify/require"
 )
 
 // OpenForTesting opens a sqlite db file for testing purposes.
@@ -46,8 +47,8 @@ func OpenForTesting(t testing.TB, inMemory bool) (trackerdb.Store, string) {
 
 // AccountsInitLightTest initializes an empty database for testing without the extra methods being called.
 // implements Testing interface, test function only
-func AccountsInitLightTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
-	newDB, err := accountsInit(e, initAccounts, proto)
+func AccountsInitLightTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error) {
+	newDB, err := accountsInit(e, initAccounts, rewardUnit)
 	require.NoError(tb, err)
 	return newDB, err
 }
@@ -61,11 +62,11 @@ func modifyAcctBaseTest(e db.Executable) error {
 
 // AccountsInitTest initializes an empty database for testing.
 // implements Testing interface, test function only
-func AccountsInitTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool) {
-	newDB, err := accountsInit(e, initAccounts, config.Consensus[proto])
+func AccountsInitTest(tb testing.TB, e db.Executable, initAccounts map[basics.Address]basics.AccountData, cv protocol.ConsensusVersion) (newDatabase bool) {
+	newDB, err := accountsInit(e, initAccounts, config.Consensus[cv].RewardUnit)
 	require.NoError(tb, err)
 
-	err = accountsAddNormalizedBalance(e, config.Consensus[proto])
+	err = accountsAddNormalizedBalance(e, config.Consensus[cv].RewardUnit)
 	require.NoError(tb, err)
 
 	err = accountsCreateResourceTable(context.Background(), e)
@@ -92,7 +93,7 @@ func AccountsInitTest(tb testing.TB, e db.Executable, initAccounts map[basics.Ad
 	err = accountsCreateOnlineRoundParamsTable(context.Background(), e)
 	require.NoError(tb, err)
 
-	err = performOnlineRoundParamsTailMigration(context.Background(), e, db.Accessor{}, true, proto)
+	err = performOnlineRoundParamsTailMigration(context.Background(), e, db.Accessor{}, true, cv)
 	require.NoError(tb, err)
 
 	err = accountsCreateBoxTable(context.Background(), e)

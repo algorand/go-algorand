@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -385,8 +385,8 @@ func (cb *roundCowState) CalculateTotals() error {
 		if lookupError != nil {
 			return fmt.Errorf("roundCowState.CalculateTotals unable to load account data for address %v", accountAddr)
 		}
-		totals.DelAccount(cb.proto, previousAccountData, &ot)
-		totals.AddAccount(cb.proto, updatedAccountData, &ot)
+		totals.DelAccount(cb.proto.RewardUnit, previousAccountData, &ot)
+		totals.AddAccount(cb.proto.RewardUnit, updatedAccountData, &ot)
 	}
 
 	if ot.Overflowed {

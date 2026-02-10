@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,8 @@ package ledger
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -28,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/require"
 )
 
 // DoubleLedger allows for easy "Double Entry bookkeeping" as a way to write
@@ -72,6 +73,10 @@ func (dl *DoubleLedger) beginBlock() *eval.BlockEvaluator {
 	return dl.eval
 }
 
+// txn will add a transaction to the current block. If no block is
+// currently being built, it will start one, and end it after the
+// transaction is added. If a problem is specified, it will be
+// expected to fail, and the block will not be ended.
 func (dl *DoubleLedger) txn(tx *txntest.Txn, problem ...string) (stib *transactions.SignedTxnInBlock) {
 	dl.t.Helper()
 	if dl.eval == nil {
@@ -153,14 +158,24 @@ func (dl *DoubleLedger) endBlock(proposer ...basics.Address) *ledgercore.Validat
 	return vb
 }
 
-func (dl *DoubleLedger) createApp(sender basics.Address, source string) basics.AppIndex {
+func (dl *DoubleLedger) createApp(sender basics.Address, source string, schemas ...basics.StateSchema) basics.AppIndex {
 	createapp := txntest.Txn{
 		Type:            "appl",
 		Sender:          sender,
 		ApprovalProgram: source,
 	}
+	switch len(schemas) {
+	case 0:
+	case 1:
+		createapp.GlobalStateSchema = schemas[0]
+	case 2:
+		createapp.GlobalStateSchema = schemas[0]
+		createapp.LocalStateSchema = schemas[1]
+	}
 	vb := dl.fullBlock(&createapp)
-	return vb.Block().Payset[0].ApplyData.ApplicationID
+	return basics.AppIndex(vb.Block().BlockHeader.TxnCounter)
+	// The following only works for v30 and above, when we start recording the id in AD.
+	// return vb.Block().Payset[0].ApplyData.ApplicationID
 }
 
 func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,9 +21,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/stretchr/testify/require"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // getCodecTag extracts the base name from a codec tag, ignoring any additional parameters
@@ -45,11 +47,12 @@ func getJSONTag(field reflect.StructField) string {
 // TestGenesisTypeCompatibility verifies that model.Genesis matches the field structure
 // of bookkeeping.Genesis, using the codec tags from bookkeeping as the source of truth.
 func TestGenesisTypeCompatibility(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	// Test Genesis struct compatibility
-	verifyStructCompatibility(t, reflect.TypeOf(bookkeeping.Genesis{}), reflect.TypeOf(model.Genesis{}))
+	verifyStructCompatibility(t, reflect.TypeFor[bookkeeping.Genesis](), reflect.TypeFor[model.Genesis]())
 
 	// Test GenesisAllocation struct compatibility
-	verifyStructCompatibility(t, reflect.TypeOf(bookkeeping.GenesisAllocation{}), reflect.TypeOf(model.GenesisAllocation{}))
+	verifyStructCompatibility(t, reflect.TypeFor[bookkeeping.GenesisAllocation](), reflect.TypeFor[model.GenesisAllocation]())
 }
 
 // isStructOrPtrToStruct returns true if the type is a struct or pointer to struct
@@ -163,6 +166,16 @@ func verifyTypeCompatibility(t *testing.T, bkType, modelType reflect.Type, tag s
 		case bkType.String() == "basics.MicroAlgos",
 			bkType.String() == "basics.Status",
 			bkType.String() == "basics.Round":
+			return
+		}
+
+	case reflect.Int:
+		// Special case: Simple integer is fine for basics.Status which is a
+		// byte.  You might think that we should also allow bkType to be an int
+		// here, and that makes some sense, but we don't use simple ints in
+		// go-algorand, so it seems more likely to indicate a bug somewhere.
+		switch {
+		case bkType.String() == "basics.Status":
 			return
 		}
 

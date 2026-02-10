@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -84,6 +84,7 @@ var errTxGroupInvalidFee = errors.New("txgroup fee requirement overflow")
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
 var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
+var errAuthAddrEqualsSender = errors.New("AuthAddr must be different from Sender")
 var errUnknownSignature = errors.New("has one mystery sig. WAT?")
 
 // TxGroupErrorReason is reason code for ErrTxGroupError
@@ -168,6 +169,10 @@ func txnBatchPrep(gi int, groupCtx *GroupContext, verifier crypto.BatchVerifier)
 		return &TxGroupError{err: errRekeyingNotSupported, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
 	}
 
+	if groupCtx.consensusParams.EnforceAuthAddrSenderDiff && !s.AuthAddr.IsZero() && s.AuthAddr == s.Txn.Sender {
+		return &TxGroupError{err: errAuthAddrEqualsSender, GroupIndex: gi, Reason: TxGroupErrorReasonGeneric}
+	}
+
 	if err := s.Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
 		return &TxGroupError{err: err, GroupIndex: gi, Reason: TxGroupErrorReasonNotWellFormed}
 	}
@@ -197,7 +202,7 @@ func txnGroup(stxs []transactions.SignedTxn, contextHdr *bookkeeping.BlockHeader
 	}
 
 	if cache != nil {
-		cache.Add(stxs, groupCtx)
+		cache.Add(groupCtx)
 	}
 
 	return
@@ -395,12 +400,17 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 	}
 
 	hasMsig := false
+	hasLMsig := false
 	numSigs := 0
 	if !lsig.Sig.Blank() {
 		numSigs++
 	}
 	if !lsig.Msig.Blank() {
 		hasMsig = true
+		numSigs++
+	}
+	if !lsig.LMsig.Blank() {
+		hasLMsig = true
 		numSigs++
 	}
 	if numSigs == 0 {
@@ -413,18 +423,33 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 		return errors.New("LogicNot signed and not a Logic-only account")
 	}
 	if numSigs > 1 {
-		return errors.New("LogicSig should only have one of Sig or Msig but has more than one")
+		return errors.New("LogicSig should only have one of Sig, Msig, or LMsig but has more than one")
 	}
 
-	if !hasMsig {
+	if !hasMsig && !hasLMsig {
 		program := logic.Program(lsig.Logic)
 		batchVerifier.EnqueueSignature(crypto.PublicKey(txn.Authorizer()), &program, lsig.Sig)
 	} else {
-		program := logic.Program(lsig.Logic)
-		if err := crypto.MultisigBatchPrep(&program, crypto.Digest(txn.Authorizer()), lsig.Msig, batchVerifier); err != nil {
+		var program crypto.Hashable
+		var msig crypto.MultisigSig
+		if hasLMsig {
+			if !groupCtx.consensusParams.LogicSigLMsig {
+				return errors.New("LogicSig LMsig field not supported in this consensus version")
+			}
+			program = logic.MultisigProgram{Addr: crypto.Digest(txn.Authorizer()), Program: lsig.Logic}
+			msig = crypto.MultisigSig(lsig.LMsig)
+		} else {
+			if !groupCtx.consensusParams.LogicSigMsig {
+				return errors.New("LogicSig Msig field not supported in this consensus version")
+			}
+			program = logic.Program(lsig.Logic)
+			msig = lsig.Msig
+		}
+		if err := crypto.MultisigBatchPrep(program, crypto.Digest(txn.Authorizer()), msig, batchVerifier); err != nil {
 			return fmt.Errorf("logic multisig validation failed: %w", err)
 		}
-		sigs := lsig.Msig.Signatures()
+
+		sigs := msig.Signatures()
 		if sigs <= 4 {
 			msigLsigLessOrEqual4.Inc(nil)
 		} else if sigs <= 10 {
@@ -489,7 +514,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 			return tasksCtx.Err()
 		case worksets <- struct{}{}:
 			if len(nextWorkset) > 0 {
-				err := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
+				err1 := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
 					var grpErr error
 					// check if we've canceled the request while this was in the queue.
 					if tasksCtx.Err() != nil {
@@ -511,11 +536,11 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 					if verifyErr != nil {
 						return verifyErr
 					}
-					cache.AddPayset(txnGroups, groupCtxs)
+					cache.AddPayset(groupCtxs)
 					return nil
 				}, nextWorkset, worksDoneCh)
-				if err != nil {
-					return err
+				if err1 != nil {
+					return err1
 				}
 				processing++
 				nextWorkset = nil

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,7 +88,7 @@ func main() {
 
 	dataDir := ensureDataDir()
 	absolutePath, absPathErr := filepath.Abs(dataDir)
-	config.UpdateVersionDataDir(absolutePath)
+	config.DataDirectory = absolutePath
 
 	if *versionCheck {
 		fmt.Println(config.FormatVersionAndLicense())
@@ -116,7 +116,7 @@ func main() {
 		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
 
-	if _, err := os.Stat(absolutePath); err != nil {
+	if _, err1 := os.Stat(absolutePath); err1 != nil {
 		reportErrorf("Data directory %s does not appear to be valid\n", dataDir)
 	}
 
@@ -334,7 +334,13 @@ func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirector
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
 	if !isTest {
-		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDirectory, genesis.ID())
+		root, err := config.GetGlobalConfigFileRoot()
+		var cfgDir *string
+		if err == nil {
+			cfgDir = &root
+		}
+		telemetryConfig, err := logging.EnsureTelemetryConfig(&dataDirectory, cfgDir)
+		config.AnnotateTelemetry(&telemetryConfig, genesis.ID())
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 			return
@@ -385,7 +391,7 @@ func captureErrorLogs(algohConfig algoh.HostConfig, errorOutput stdCollector, ou
 	if errorOutput.output != "" {
 		fmt.Fprintf(os.Stdout, "errorOutput.output: `%s`\n", errorOutput.output)
 		errorCondition = true
-		fmt.Fprintf(os.Stderr, errorOutput.output)
+		fmt.Fprint(os.Stderr, errorOutput.output)
 		details := telemetryspec.ErrorOutputEventDetails{
 			Error:  errorOutput.output,
 			Output: output.output,

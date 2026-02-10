@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,9 @@ import (
 	"container/heap"
 	"encoding/json"
 
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // Duplicate message with delay
@@ -185,7 +186,7 @@ func (n *MessageDuplicationFilter) processUpstreamBuffer() bool {
 	return received
 }
 
-// Unmarshall MessageDuplicationFilter
+// Unmarshal MessageDuplicationFilter
 func (n *MessageDuplicationFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type messageDuplicationFilterJSON struct {
 		Name                  string

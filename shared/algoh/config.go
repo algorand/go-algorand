@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,13 +83,13 @@ func LoadConfigFromFile(file string) (cfg HostConfig, err error) {
 	return cfg, err
 }
 
-// Save pretty-prints the configuration into the the specified file.
+// Save pretty-prints the configuration into the specified file.
 func (cfg HostConfig) Save(file string) error {
 	prettyPrint := true
 	return codecs.SaveObjectToFile(file, cfg, prettyPrint)
 }
 
-// Dump pretty-prints the configuration into the the specified stream.
+// Dump pretty-prints the configuration into the specified stream.
 func (cfg HostConfig) Dump(stream io.Writer) {
 	enc := codecs.NewFormattedJSONEncoder(stream)
 	enc.Encode(cfg)

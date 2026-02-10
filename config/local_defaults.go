@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    36,
+	Version:                                    38,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -50,6 +50,7 @@ var defaultLocal = Local{
 	ConnectionsRateLimitingCount:               60,
 	ConnectionsRateLimitingWindowSeconds:       1,
 	CrashDBDir:                                 "",
+	DHTMode:                                    "",
 	DNSBootstrapID:                             "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)",
 	DNSSecurityFlags:                           9,
 	DeadlockDetection:                          0,
@@ -63,6 +64,7 @@ var defaultLocal = Local{
 	EnableAgreementReporting:                   false,
 	EnableAgreementTimeMetrics:                 false,
 	EnableAssembleStats:                        false,
+	EnableBatchVerification:                    true,
 	EnableBlockService:                         false,
 	EnableDHTProviders:                         false,
 	EnableDeveloperAPI:                         false,
@@ -139,6 +141,7 @@ var defaultLocal = Local{
 	RestReadTimeoutSeconds:                     15,
 	RestWriteTimeoutSeconds:                    120,
 	RunHosted:                                  false,
+	StatefulVoteCompressionTableSize:           2048,
 	StateproofDir:                              "",
 	StorageEngine:                              "sqlite",
 	SuggestedFeeBlockHistory:                   3,
@@ -149,6 +152,7 @@ var defaultLocal = Local{
 	TrackerDBDir:                               "",
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
+	TxBacklogAppRateLimitingCongestionPct:      10,
 	TxBacklogAppRateLimitingCountERLDrops:      false,
 	TxBacklogAppTxPerSecondRate:                100,
 	TxBacklogAppTxRateLimiterMaxSize:           1048576,

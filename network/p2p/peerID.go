@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,12 +27,12 @@ import (
 	"os"
 	"path"
 
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/algorand/go-algorand/config"
 	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/util"
-
-	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // DefaultPrivKeyPath is the default path inside the node's root directory at which the private key

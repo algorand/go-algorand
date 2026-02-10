@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,8 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/gorilla/mux"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -36,6 +34,9 @@ import (
 	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 	"github.com/multiformats/go-multiaddr"
+
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
 )
 
 // algorandP2pHTTPProtocol defines a libp2p protocol name for algorand's http over p2p messages

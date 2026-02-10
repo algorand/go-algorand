@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ func unmarshallMessageOfInterest(data []byte) (map[protocol.Tag]bool, error) {
 	}
 	// convert the tags into a tags map.
 	msgTagsMap := make(map[protocol.Tag]bool, len(tags))
-	for _, tag := range strings.Split(string(tags), topicsEncodingSeparator) {
+	for tag := range strings.SplitSeq(string(tags), topicsEncodingSeparator) {
 		if len(tag) != protocol.TagLength {
 			return nil, errInvalidMessageOfInterestInvalidTag
 		}

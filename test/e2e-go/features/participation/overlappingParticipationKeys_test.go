@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,7 +87,7 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	genesisHash := genesis.Hash()
 	rootKeys := make(map[int]*account.Root)
 	regTransactions := make(map[int]transactions.SignedTxn)
-	lastRound := uint64(39) // check 3 rounds of keys rotations
+	const lastRound = 39 // check 3 rounds of keys rotations
 
 	// prepare the participation keys ahead of time.
 	for round := uint64(1); round < lastRound; round++ {
@@ -117,7 +117,7 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	}
 
 	fixture.Start()
-	currentRound := uint64(0)
+	currentRound := basics.Round(0)
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.NC)
 
 	// ******** IMPORTANT ********
@@ -139,8 +139,8 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 		a.Equal(sts.LastRound, currentRound+1)
 
 		currentRound++
-		if (currentRound-1)%10 < uint64(accountsNum) {
-			acctIdx := (currentRound - 1) % 10
+		if (currentRound-1)%10 < basics.Round(accountsNum) {
+			acctIdx := int((currentRound - 1) % 10)
 
 			// We do a plus two because the filenames were stored with a plus 2
 			startRound := currentRound + 2 // +2 and -2 below to balance, start/end must match in part key file name
@@ -166,11 +166,11 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 
 }
 
-func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, startRound, endRound uint64, regTransactions map[int]transactions.SignedTxn) (crypto.OneTimeSignatureVerifier, error) {
+func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum int, startRound, endRound basics.Round, regTransactions map[int]transactions.SignedTxn) (crypto.OneTimeSignatureVerifier, error) {
 	dataDir := fixture.NodeDataDirs()[acctNum]
 	nc := fixture.GetNodeControllerForDataDir(dataDir)
 
-	partKeyName := filepath.Join(dataDir, config.PartKeyFilename("Wallet", startRound, endRound))
+	partKeyName := filepath.Join(dataDir, config.PartKeyFilename("Wallet", uint64(startRound), uint64(endRound)))
 
 	// This function can take more than a couple seconds, we can't have this function block so
 	// we wrap it in a go routine
@@ -249,12 +249,8 @@ func prepareParticipationKey(a *require.Assertions, fixture *fixtures.RestClient
 	partkeyHandle.Vacuum(context.Background())
 	persistedParticipation.Close()
 
-	unsignedTxn := persistedParticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: 1000}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{}, c.EnableStateProofKeyregCheck)
+	unsignedTxn := persistedParticipation.GenerateRegistrationTransaction(basics.MicroAlgos{Raw: c.MinTxnFee}, basics.Round(txStartRound), basics.Round(txEndRound), [32]byte{}, c.EnableStateProofKeyregCheck)
 	copy(unsignedTxn.GenesisHash[:], genesisHash[:])
-	if err != nil {
-		a.NoError(err)
-		return err
-	}
 	regTransactions[int(txStartRound)] = unsignedTxn.Sign(rootAccount.Secrets())
-	return err
+	return nil
 }

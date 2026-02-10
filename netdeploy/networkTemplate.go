@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ type NetworkTemplate struct {
 
 // TemplateKMDConfig is a subset of the kmd configuration that can be overridden in the network template
 // by using OverrideKmdConfig TemplateOverride opts.
-// The reason why config.KMDConfig cannot be used directly is that it contains DataDir field which is
+// The reason why config.KMDConfig cannot be used directly is that it contains DataDir field which
 // is not known until the template instantiation.
 type TemplateKMDConfig struct {
 	SessionLifetimeSecs uint64

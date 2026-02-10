@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,12 +23,13 @@ import (
 	"os"
 	"path"
 
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/spf13/cobra"
+
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/util"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/spf13/cobra"
 )
 
 var p2pID = &cobra.Command{

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -190,9 +190,7 @@ func TestLedgerCirculation(t *testing.T) {
 		tx.Type = protocol.PaymentTx
 		signedTx := tx.Sign(srcAccountKey)
 		blk.Payset = transactions.Payset{transactions.SignedTxnInBlock{
-			SignedTxnWithAD: transactions.SignedTxnWithAD{
-				SignedTxn: signedTx,
-			},
+			SignedTxnWithAD: signedTx.WithAD(),
 		}}
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)
@@ -720,6 +718,10 @@ func getEmptyBlock(afterRound basics.Round, l *ledger.Ledger, genesisID string, 
 
 	if proto.SupportGenesisHash {
 		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(genesisID))
+	}
+
+	if proto.EnableSha512BlockHash {
+		blk.BlockHeader.Branch512 = lastBlock.Hash512()
 	}
 
 	blk.RewardsPool = testPoolAddr

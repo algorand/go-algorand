@@ -23,7 +23,7 @@ The core development team monitors the Algorand [discord community](https://disc
 
 ## Pull Requests
 
-All changes are are made via pull requests.
+All changes are made via pull requests.
 
 Small changes are easier to review and merge than large ones, so the more focused a PR the better. If a feature requires refactoring, the refactoring should be a separate PR. If refactoring uncovers a bug, the fix should be a separate PR. These are not strict rules, but generally speaking, they make things easier to review which speeds up the PR process.
 

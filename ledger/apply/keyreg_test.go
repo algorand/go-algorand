@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -269,8 +269,8 @@ func createTestKeyregWithPeriod(t *testing.T, src basics.Address, sigVerifier cr
 		Header: transactions.Header{
 			Sender:     src,
 			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: basics.Round(defaultParticipationFirstRound),
-			LastValid:  basics.Round(defaultParticipationLastRound),
+			FirstValid: defaultParticipationFirstRound,
+			LastValid:  defaultParticipationLastRound,
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:       crypto.OneTimeSignatureVerifier(sigVerifier),

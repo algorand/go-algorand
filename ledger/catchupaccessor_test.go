@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -41,7 +43,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/msgp/msgp"
 )
 
 func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]byte, last64KIndex int) {
@@ -51,10 +52,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 	last64KIndex = -1
 	for accounts < accountsCount {
 		// generate a chunk;
-		chunkSize := accountsCount - accounts
-		if chunkSize > BalancesPerCatchpointFileChunk {
-			chunkSize = BalancesPerCatchpointFileChunk
-		}
+		chunkSize := min(accountsCount-accounts, BalancesPerCatchpointFileChunk)
 		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
 			last64KIndex = len(encodedAccountChunks)
 		}

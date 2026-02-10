@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ const VersionMajor = 4
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
-const VersionMinor = 1
+const VersionMinor = 6
 
 // Version is the type holding our full version information.
 type Version struct {
@@ -58,9 +58,6 @@ type Version struct {
 
 	// Branch-derived release channel the build is based on
 	Channel string
-
-	// DataDirectory for the current instance
-	DataDirectory string
 }
 
 func (v Version) String() string {
@@ -95,14 +92,13 @@ func convertToInt(val string) int {
 }
 
 var currentVersion = Version{
-	Major:         VersionMajor,
-	Minor:         VersionMinor,
-	BuildNumber:   convertToInt(BuildNumber), // set using -ldflags
-	Suffix:        "",
-	CommitHash:    CommitHash,
-	Branch:        Branch,
-	Channel:       Channel,
-	DataDirectory: "",
+	Major:       VersionMajor,
+	Minor:       VersionMinor,
+	BuildNumber: convertToInt(BuildNumber), // set using -ldflags
+	Suffix:      "",
+	CommitHash:  CommitHash,
+	Branch:      Branch,
+	Channel:     Channel,
 }
 
 // GetCurrentVersion retrieves a copy of the current global Version structure (for the application)
@@ -120,14 +116,6 @@ func FormatVersionAndLicense() string {
 // SetCurrentVersion allows replacing the current global Version structure (for the application)
 func SetCurrentVersion(version Version) {
 	currentVersion = version
-}
-
-// UpdateVersionDataDir is a convenience method for setting the data dir on the global Version struct
-// Used by algod and algoh to set built-time ephemeral version component e.g. data directory
-func UpdateVersionDataDir(dataDir string) {
-	v := GetCurrentVersion()
-	v.DataDirectory = dataDir
-	SetCurrentVersion(v)
 }
 
 // GetAlgorandVersion retrieves the current version formatted as a simple version string (Major.Minor.BuildNumber)

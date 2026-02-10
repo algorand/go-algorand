@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -165,9 +165,9 @@ func runBuildNetwork() error {
 		bootstrappedFile = resolveFile(r.BootstrappedFile, templateBaseDir)
 	}
 	if util.FileExists(bootstrappedFile) && bootstrapLoadingFile {
-		fileTemplate, err := remote.LoadBootstrappedData(bootstrappedFile)
-		if err != nil {
-			return fmt.Errorf("error resolving bootstrap file: %v", err)
+		fileTemplate, err1 := remote.LoadBootstrappedData(bootstrappedFile)
+		if err1 != nil {
+			return fmt.Errorf("error resolving bootstrap file: %v", err1)
 		}
 		net.BootstrappedNet = fileTemplate
 		net.SetUseBootstrappedFiles(bootstrapLoadingFile)

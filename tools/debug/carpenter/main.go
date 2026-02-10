@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -305,10 +305,7 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 	maxLen := len(out)
 	for i := 0; i < rowCount; i++ {
 		start := i * columnWidth
-		end := start + columnWidth
-		if end > maxLen {
-			end = maxLen
-		}
+		end := min(start+columnWidth, maxLen)
 		if start < len(out) {
 			row := strings.TrimSpace(out[start:end])
 			output := ""

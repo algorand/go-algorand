@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,10 +21,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // if the scheme has a dedup name, attach to headers. otherwise, don't
@@ -323,7 +324,7 @@ func TestIdentityTrackerRemoveIdentity(t *testing.T) {
 	require.True(t, exists)
 
 	// check that removing a peer who does not exist in the map (but whos identity does)
-	// not not result in the wrong peer being removed
+	// not result in the wrong peer being removed
 	tracker.removeIdentity(&p2)
 	_, exists = tracker.peersByID[p.identity]
 	require.True(t, exists)

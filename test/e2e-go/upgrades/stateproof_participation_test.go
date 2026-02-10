@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -28,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func waitUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClientFixture, nodeClient libgoal.Client) {
@@ -70,7 +71,7 @@ func TestKeysWithoutStateProofKeyCannotRegister(t *testing.T) {
 	fixture.SetConsensus(consensus)
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodesWithoutStateProofPartkeys.json"))
 	defer fixture.Shutdown()
-	lastValid := uint64(1000 * 5)
+	const lastValid = 5000
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
@@ -89,7 +90,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV30.json"))
 	defer fixture.Shutdown()
-	lastValid := uint64(1000 * 5)
+	const lastValid = 5000
 
 	nodeClient := fixture.GetLibGoalClientForNamedNode("Node")
 
@@ -97,7 +98,7 @@ func TestKeysWithoutStateProofKeyCanRegister(t *testing.T) {
 	a.Error(registerKeyInto(&nodeClient, a, lastValid+1, protocol.ConsensusV31))
 }
 
-func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid uint64, ver protocol.ConsensusVersion) error {
+func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid basics.Round, ver protocol.ConsensusVersion) error {
 
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
@@ -114,8 +115,11 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ui
 
 	cparams := config.Consensus[ver]
 
+	prms, err := client.SuggestedParams()
+	a.NoError(err)
+
 	tx := partKey.GenerateRegistrationTransaction(
-		basics.MicroAlgos{Raw: 1000},
+		basics.MicroAlgos{Raw: prms.MinFee},
 		0,
 		100,
 		[32]byte{},
@@ -123,9 +127,6 @@ func registerKeyInto(client *libgoal.Client, a *require.Assertions, lastValid ui
 	)
 
 	if cparams.SupportGenesisHash {
-		prms, err := client.SuggestedParams()
-		a.NoError(err)
-
 		var genHash crypto.Digest
 		copy(genHash[:], prms.GenesisHash)
 		tx.GenesisHash = genHash

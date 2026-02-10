@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -35,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/stretchr/testify/require"
 )
 
 func TestAccountsReencoding(t *testing.T) {
@@ -191,10 +192,10 @@ func TestRemoveStrayStateProofID(t *testing.T) {
 
 		// this is the same seq as AccountsInitTest makes but it stops
 		// before the online accounts table creation to generate a trie and commit it
-		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion])
+		_, err = accountsInit(tx, accounts, config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit)
 		require.NoError(t, err)
 
-		err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion])
+		err = accountsAddNormalizedBalance(tx, config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit)
 		require.NoError(t, err)
 
 		err = accountsCreateResourceTable(context.Background(), tx)

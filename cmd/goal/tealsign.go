@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,13 +21,13 @@ import (
 	"encoding/base64"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
-
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -142,9 +142,9 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 			progHash = logic.HashProgram(stxn.Lsig.Logic)
 		} else {
 			// Otherwise, the contract address is the logic hash
-			parsedAddr, err := basics.UnmarshalChecksumAddress(contractAddr)
-			if err != nil {
-				reportErrorf(tealsignParseAddr, err)
+			parsedAddr, err1 := basics.UnmarshalChecksumAddress(contractAddr)
+			if err1 != nil {
+				reportErrorf(tealsignParseAddr, err1)
 			}
 
 			// Copy parsed address as program hash

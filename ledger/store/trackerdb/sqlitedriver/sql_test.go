@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,16 +19,16 @@ package sqlitedriver
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"testing"
+
+	"github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
 	storetesting "github.com/algorand/go-algorand/ledger/store/testing"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/require"
 )
 
 func TestKeyPrefixIntervalPreprocessing(t *testing.T) {
@@ -102,7 +102,7 @@ func TestWrapIOError(t *testing.T) {
 	require.ErrorAs(t, wrapIOError(err), &trackerIOErr)
 
 	err = sqlite3.Error{Code: sqlite3.ErrSchema}
-	require.False(t, errors.As(wrapIOError(err), &trackerIOErr))
+	require.NotErrorAs(t, wrapIOError(err), &trackerIOErr)
 
 	// confirm that double wrapping only applies once
 	err = sqlite3.Error{Code: sqlite3.ErrIoErr}

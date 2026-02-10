@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,11 @@
 package config
 
 import (
+	"maps"
 	"time"
 
+	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -235,11 +238,17 @@ type ConsensusParams struct {
 	// sum of estimated op cost must be less than this
 	LogicSigMaxCost uint64
 
+	LogicSigMsig  bool
+	LogicSigLMsig bool
+
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
 
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
+
+	// EnforceAuthAddrSenderDiff requires that AuthAddr must be empty or different from Sender
+	EnforceAuthAddrSenderDiff bool
 
 	// application support
 	Application bool
@@ -278,8 +287,9 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
-	// maximum number of "foreign references" (accounts, asa, app, boxes)
-	// that can be attached to a single app call.
+	// maximum number of "foreign references" (accounts, asa, app, boxes) that
+	// can be attached to a single app call.  Modern transactions can use
+	// MaxAppAccess references in txn.Access to access more.
 	MaxAppTotalTxnReferences int
 
 	// maximum cost of application approval program or clear state program
@@ -350,6 +360,9 @@ type ConsensusParams struct {
 
 	// Number of box references allowed
 	MaxAppBoxReferences int
+
+	// Number of references allowed in txn.Access
+	MaxAppAccess int
 
 	// Amount added to a txgroup's box I/O budget per box ref supplied.
 	// For reads: the sum of the sizes of all boxes in the group must be less than I/O budget
@@ -446,9 +459,9 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
-	// Allow app updates to specify the extra pages they use.  This allows the
-	// update to pass WellFormed(), but they cannot _change_ the extra pages.
-	EnableExtraPagesOnAppUpdate bool
+	// When extra pages were introduced, a bug prevented the extra pages of an
+	// app from being properly removed from the creator upon deletion.
+	EnableProperExtraPageAccounting bool
 
 	// Autoincrements an app's version when the app is updated, careful callers
 	// may avoid making inner calls to apps that have changed.
@@ -553,6 +566,20 @@ type ConsensusParams struct {
 
 	// Heartbeat support
 	Heartbeat bool
+
+	// EnableSha512BlockHash adds an additional SHA-512 hash to the block header.
+	EnableSha512BlockHash bool
+
+	// AppSizeUpdates allows application update transactions to change
+	// the extra-program-pages and global schema sizes. Since it enables newly
+	// legal transactions, this parameter can be removed and assumed true after
+	// the first consensus release in which it is set true.
+	AppSizeUpdates bool
+
+	// AllowZeroLocalAppRef allows for a 0 in a LocalRef of the access list to
+	// specify the current app. This parameter can be removed and assumed true
+	// after the first consensus release in which it is set true.
+	AllowZeroLocalAppRef bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -639,6 +666,29 @@ type BonusPlan struct {
 	DecayInterval uint64
 }
 
+// EffectiveKeyDilution returns the key dilution for this account,
+// returning the default key dilution if not explicitly specified.
+func (proto ConsensusParams) EffectiveKeyDilution(kd uint64) uint64 {
+	if kd != 0 {
+		return kd
+	}
+	return proto.DefaultKeyDilution
+}
+
+// BalanceRequirements returns all the consensus values that determine min balance.
+func (proto ConsensusParams) BalanceRequirements() basics.BalanceRequirements {
+	return basics.BalanceRequirements{
+		MinBalance:               proto.MinBalance,
+		AppFlatParamsMinBalance:  proto.AppFlatParamsMinBalance,
+		AppFlatOptInMinBalance:   proto.AppFlatOptInMinBalance,
+		BoxFlatMinBalance:        proto.BoxFlatMinBalance,
+		BoxByteMinBalance:        proto.BoxByteMinBalance,
+		SchemaMinBalancePerEntry: proto.SchemaMinBalancePerEntry,
+		SchemaUintMinBalance:     proto.SchemaUintMinBalance,
+		SchemaBytesMinBalance:    proto.SchemaBytesMinBalance,
+	}
+}
+
 // PaysetCommitType enumerates possible ways for the block header to commit to
 // the set of transactions in the block.
 type PaysetCommitType int
@@ -664,97 +714,6 @@ type ConsensusProtocols map[protocol.ConsensusVersion]ConsensusParams
 // consensus protocol.
 var Consensus ConsensusProtocols
 
-// MaxVoteThreshold is the largest threshold for a bundle over all supported
-// consensus protocols, used for decoding purposes.
-var MaxVoteThreshold int
-
-// MaxEvalDeltaAccounts is the largest number of accounts that may appear in
-// an eval delta, used for decoding purposes.
-var MaxEvalDeltaAccounts int
-
-// MaxStateDeltaKeys is the largest number of key/value pairs that may appear
-// in a StateDelta, used for decoding purposes.
-var MaxStateDeltaKeys int
-
-// MaxLogCalls is the highest allowable log messages that may appear in
-// any version, used only for decoding purposes. Never decrease this value.
-var MaxLogCalls int
-
-// MaxInnerTransactionsPerDelta is the maximum number of inner transactions in one EvalDelta
-var MaxInnerTransactionsPerDelta int
-
-// MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
-// protocols, used for decoding purposes.
-var MaxLogicSigMaxSize int
-
-// MaxTxnNoteBytes is the largest supported nodes field array size supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxTxnNoteBytes int
-
-// MaxTxGroupSize is the largest supported number of transactions per transaction group supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxTxGroupSize int
-
-// MaxAppProgramLen is the largest supported app program size supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxAppProgramLen int
-
-// MaxBytesKeyValueLen is a maximum length of key or value across all protocols.
-// used for decoding purposes.
-var MaxBytesKeyValueLen int
-
-// MaxExtraAppProgramLen is the maximum extra app program length supported by any
-// of the consensus protocols. used for decoding purposes.
-var MaxExtraAppProgramLen int
-
-// MaxAvailableAppProgramLen is the largest supported app program size including the extra
-// pages supported by any of the consensus protocols. used for decoding purposes.
-var MaxAvailableAppProgramLen int
-
-// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
-// that a proposer can take offline for having expired voting keys.
-var MaxProposedExpiredOnlineAccounts int
-
-// MaxMarkAbsent is the maximum number of online accounts that a proposer can
-// suspend for not proposing "lately"
-var MaxMarkAbsent int
-
-// MaxAppTotalArgLen is the maximum number of bytes across all arguments of an application
-// max sum([len(arg) for arg in txn.ApplicationArgs])
-var MaxAppTotalArgLen int
-
-// MaxAssetNameBytes is the maximum asset name length in bytes
-var MaxAssetNameBytes int
-
-// MaxAssetUnitNameBytes is the maximum asset unit name length in bytes
-var MaxAssetUnitNameBytes int
-
-// MaxAssetURLBytes is the maximum asset URL length in bytes
-var MaxAssetURLBytes int
-
-// MaxAppBytesValueLen is the maximum length of a bytes value used in an application's global or
-// local key/value store
-var MaxAppBytesValueLen int
-
-// MaxAppBytesKeyLen is the maximum length of a key used in an application's global or local
-// key/value store
-var MaxAppBytesKeyLen int
-
-// StateProofTopVoters is a bound on how many online accounts get to
-// participate in forming the state proof, by including the
-// top StateProofTopVoters accounts (by normalized balance) into the
-// vector commitment.
-var StateProofTopVoters int
-
-// MaxTxnBytesPerBlock determines the maximum number of bytes
-// that transactions can take up in a block.  Specifically,
-// the sum of the lengths of encodings of each transaction
-// in a block must not exceed MaxTxnBytesPerBlock.
-var MaxTxnBytesPerBlock int
-
-// MaxAppTxnForeignApps is the max number of foreign apps per txn across all consensus versions
-var MaxAppTxnForeignApps int
-
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -765,47 +724,48 @@ func checkSetMax(value int, curMax *int) {
 // to enforce memory allocation limits. The values should be generous to
 // prevent correctness bugs, but not so large that DoS attacks are trivial
 func checkSetAllocBounds(p ConsensusParams) {
-	checkSetMax(int(p.SoftCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.CertCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.NextCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.LateCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.RedoCommitteeThreshold), &MaxVoteThreshold)
-	checkSetMax(int(p.DownCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.SoftCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.CertCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.NextCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.LateCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.RedoCommitteeThreshold), &bounds.MaxVoteThreshold)
+	checkSetMax(int(p.DownCommitteeThreshold), &bounds.MaxVoteThreshold)
 
 	// These bounds could be tighter, but since these values are just to
 	// prevent DoS, setting them to be the maximum number of allowed
 	// executed TEAL instructions should be fine (order of ~1000)
-	checkSetMax(p.MaxAppProgramLen, &MaxStateDeltaKeys)
-	checkSetMax(p.MaxAppProgramLen, &MaxEvalDeltaAccounts)
-	checkSetMax(p.MaxAppProgramLen, &MaxAppProgramLen)
-	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &MaxLogicSigMaxSize)
-	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
-	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
+	checkSetMax(p.MaxAppProgramLen, &bounds.MaxStateDeltaKeys)
+	checkSetMax(p.MaxAppProgramLen, &bounds.MaxEvalDeltaAccounts)
+	checkSetMax(p.MaxAppProgramLen, &bounds.MaxAppProgramLen)
+	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &bounds.MaxLogicSigMaxSize)
+	checkSetMax(p.MaxTxnNoteBytes, &bounds.MaxTxnNoteBytes)
+	checkSetMax(p.MaxTxGroupSize, &bounds.MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
-	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
-	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
-	checkSetMax(p.MaxExtraAppProgramPages, &MaxExtraAppProgramLen)
+	checkSetMax(p.MaxAppKeyLen, &bounds.MaxBytesKeyValueLen)
+	checkSetMax(p.MaxAppBytesValueLen, &bounds.MaxBytesKeyValueLen)
+	checkSetMax(p.MaxExtraAppProgramPages, &bounds.MaxExtraAppProgramLen)
 	// MaxAvailableAppProgramLen is the max of supported app program size
-	MaxAvailableAppProgramLen = MaxAppProgramLen * (1 + MaxExtraAppProgramLen)
+	bounds.MaxAvailableAppProgramLen = bounds.MaxAppProgramLen * (1 + bounds.MaxExtraAppProgramLen)
 	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation
 	// Its value is much larger than any possible reasonable MaxLogCalls value in future
-	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
-	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
-	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
-	checkSetMax(p.Payouts.MaxMarkAbsent, &MaxMarkAbsent)
+	checkSetMax(p.MaxAppProgramLen, &bounds.MaxLogCalls)
+	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &bounds.MaxInnerTransactionsPerDelta)
+	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &bounds.MaxProposedExpiredOnlineAccounts)
+	checkSetMax(p.Payouts.MaxMarkAbsent, &bounds.MaxMarkAbsent)
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
-	checkSetMax(p.MaxAppTotalArgLen, &MaxAppTotalArgLen)
-	checkSetMax(p.MaxAssetNameBytes, &MaxAssetNameBytes)
-	checkSetMax(p.MaxAssetUnitNameBytes, &MaxAssetUnitNameBytes)
-	checkSetMax(p.MaxAssetURLBytes, &MaxAssetURLBytes)
-	checkSetMax(p.MaxAppBytesValueLen, &MaxAppBytesValueLen)
-	checkSetMax(p.MaxAppKeyLen, &MaxAppBytesKeyLen)
-	checkSetMax(int(p.StateProofTopVoters), &StateProofTopVoters)
-	checkSetMax(p.MaxTxnBytesPerBlock, &MaxTxnBytesPerBlock)
+	checkSetMax(p.MaxAppTotalArgLen, &bounds.MaxAppTotalArgLen)
+	checkSetMax(p.MaxAssetNameBytes, &bounds.MaxAssetNameBytes)
+	checkSetMax(p.MaxAssetUnitNameBytes, &bounds.MaxAssetUnitNameBytes)
+	checkSetMax(p.MaxAssetURLBytes, &bounds.MaxAssetURLBytes)
+	checkSetMax(p.MaxAppBytesValueLen, &bounds.MaxAppBytesValueLen)
+	checkSetMax(p.MaxAppKeyLen, &bounds.MaxAppBytesKeyLen)
+	checkSetMax(int(p.StateProofTopVoters), &bounds.StateProofTopVoters)
+	checkSetMax(p.MaxTxnBytesPerBlock, &bounds.MaxTxnBytesPerBlock)
 
-	checkSetMax(p.MaxAppTxnForeignApps, &MaxAppTxnForeignApps)
+	checkSetMax(p.MaxAppTxnForeignApps, &bounds.MaxAppTxnForeignApps)
+	checkSetMax(p.MaxAppAccess, &bounds.MaxAppAccess)
 }
 
 // DeepCopy creates a deep copy of a consensus protocols map.
@@ -813,13 +773,7 @@ func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	staticConsensus := make(ConsensusProtocols)
 	for consensusVersion, consensusParams := range cp {
 		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
-		if consensusParams.ApprovedUpgrades != nil {
-			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
-			for ver, when := range consensusParams.ApprovedUpgrades {
-				newApprovedUpgrades[ver] = when
-			}
-			consensusParams.ApprovedUpgrades = newApprovedUpgrades
-		}
+		consensusParams.ApprovedUpgrades = maps.Clone(consensusParams.ApprovedUpgrades)
 		staticConsensus[consensusVersion] = consensusParams
 	}
 	return staticConsensus
@@ -1033,6 +987,7 @@ func initConsensusProtocols() {
 	v18.LogicSigVersion = 1
 	v18.LogicSigMaxSize = 1000
 	v18.LogicSigMaxCost = 20000
+	v18.LogicSigMsig = true
 	v18.MaxAssetsPerAccount = 1000
 	v18.SupportTxGroups = true
 	v18.MaxTxGroupSize = 16
@@ -1242,8 +1197,8 @@ func initConsensusProtocols() {
 	v29 := v28
 	v29.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// Enable ExtraProgramPages for application update
-	v29.EnableExtraPagesOnAppUpdate = true
+	// Fix the accounting bug
+	v29.EnableProperExtraPageAccounting = true
 
 	Consensus[protocol.ConsensusV29] = v29
 
@@ -1479,13 +1434,38 @@ func initConsensusProtocols() {
 	// our current max is 250000
 	v39.ApprovedUpgrades[protocol.ConsensusV40] = 208000
 
+	v41 := v40
+	v41.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v41.LogicSigVersion = 12
+
+	v41.EnableAppVersioning = true
+	v41.EnableSha512BlockHash = true
+
+	// txn.Access work
+	v41.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
+	v41.MaxAppAccess = 16           // Twice as many, though cross products are explicit
+	v41.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
+	v41.LogicSigMsig = false
+	v41.LogicSigLMsig = true
+
+	Consensus[protocol.ConsensusV41] = v41
+
+	// v40 can be upgraded to v41, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v40.ApprovedUpgrades[protocol.ConsensusV41] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v40
+	vFuture := v41
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
+	vFuture.LogicSigVersion = 13 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.AppSizeUpdates = true
+	vFuture.AllowZeroLocalAppRef = true
+	vFuture.EnforceAuthAddrSenderDiff = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

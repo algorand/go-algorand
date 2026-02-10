@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,11 +20,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/require"
 )
 
 type dbForInit interface {
@@ -48,10 +48,10 @@ func AccountsInitTest(tb testing.TB, db dbForInit, initAccounts map[basics.Addre
 //
 // This is duplicate due to a specific legacy test in accdeltas_test.go.
 // TODO: remove the need for this.
-func AccountsInitLightTest(tb testing.TB, db dbForInit, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
+func AccountsInitLightTest(tb testing.TB, db dbForInit, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error) {
 	params := trackerdb.Params{
 		InitAccounts: initAccounts,
-		// TODO: how do we get the correct version from the proto arg?
+		// TODO: how do we get the correct version?
 		InitProto: protocol.ConsensusCurrentVersion,
 	}
 	_, err = RunMigrations(context.Background(), db, params, trackerdb.AccountDBVersion)

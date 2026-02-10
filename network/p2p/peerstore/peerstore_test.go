@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -157,7 +157,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 		entry := makePhonebookEntryData("", phonebook.RelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
-		ph.Put(info.ID, addressDataKey, entry)
+		ph.Put(info.ID, psmdkAddressData, entry)
 	}
 	testPhonebookAll(t, infoSet, ph)
 }
@@ -179,7 +179,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 		entry := makePhonebookEntryData("", phonebook.RelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
-		ph.Put(info.ID, addressDataKey, entry)
+		ph.Put(info.ID, psmdkAddressData, entry)
 	}
 	testPhonebookUniform(t, infoSet, ph, 1)
 }
@@ -201,7 +201,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 		entry := makePhonebookEntryData("", phonebook.RelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
-		ph.Put(info.ID, addressDataKey, entry)
+		ph.Put(info.ID, psmdkAddressData, entry)
 	}
 	testPhonebookUniform(t, infoSet, ph, 3)
 }
@@ -340,7 +340,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, true, addrInPhonebook)
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(string(info1.ID), provisionalTime))
-	data, _ := entries.Get(info1.ID, addressDataKey)
+	data, _ := entries.Get(info1.ID, psmdkAddressData)
 	require.NotNil(t, data)
 	ad := data.(addressData)
 	phBookData := ad.recentConnectionTimes
@@ -355,7 +355,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(string(info1.ID))
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(string(info1.ID), provisionalTime))
-	data, _ = entries.Get(info1.ID, addressDataKey)
+	data, _ = entries.Get(info1.ID, psmdkAddressData)
 	ad = data.(addressData)
 	phBookData = ad.recentConnectionTimes
 	require.Equal(t, 2, len(phBookData))
@@ -370,7 +370,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(string(info1.ID))
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(string(info1.ID), provisionalTime))
-	data, _ = entries.Get(info1.ID, addressDataKey)
+	data, _ = entries.Get(info1.ID, psmdkAddressData)
 	ad = data.(addressData)
 	phBookData2 := ad.recentConnectionTimes
 	require.Equal(t, 2, len(phBookData2))
@@ -390,7 +390,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// introduce a gap between the two requests so that only the first will be removed later when waited
 	// simulate passing a unit of time
-	data2, _ := entries.Get(info2.ID, addressDataKey)
+	data2, _ := entries.Get(info2.ID, psmdkAddressData)
 	require.NotNil(t, data2)
 	ad2 := data2.(addressData)
 	for rct := range ad2.recentConnectionTimes {
@@ -406,7 +406,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(string(info2.ID), provisionalTime))
 
-	data2, _ = entries.Get(info2.ID, addressDataKey)
+	data2, _ = entries.Get(info2.ID, psmdkAddressData)
 	ad2 = data2.(addressData)
 	phBookData = ad2.recentConnectionTimes
 	// all three times should be queued
@@ -416,7 +416,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	_, waitTime, _ = entries.GetConnectionWaitTime(string(info2.ID))
 	require.Greater(t, int64(waitTime), int64(0))
 	// no element should be removed
-	data2, _ = entries.Get(info2.ID, addressDataKey)
+	data2, _ = entries.Get(info2.ID, psmdkAddressData)
 	ad2 = data2.(addressData)
 	phBookData2 = ad2.recentConnectionTimes
 	require.Equal(t, phBookData[0], phBookData2[0])
@@ -432,7 +432,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(string(info2.ID), provisionalTime))
 	// only one element should be removed, and one added
-	data2, _ = entries.Get(info2.ID, addressDataKey)
+	data2, _ = entries.Get(info2.ID, psmdkAddressData)
 	ad2 = data2.(addressData)
 	phBookData2 = ad2.recentConnectionTimes
 	require.Equal(t, 3, len(phBookData2))
@@ -608,5 +608,59 @@ func TestReplacePeerList(t *testing.T) {
 	require.Equal(t, 1, len(res))
 	for _, info := range infoArchiverSet {
 		require.Contains(t, res, info)
+	}
+}
+
+// TestReplacePeerListRefreshesAddresses simulates addresses expiring
+// by calling ReplacePeerList + UpdateAddrs(newTTL=0) + ReplacePeerList again
+func TestReplacePeerListRefreshesAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	relaysSet := []string{"relay1:4160", "relay2:4160", "relay3:4160"}
+	infoRelaySet := make([]*peer.AddrInfo, 0)
+	for _, addr := range relaysSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoRelaySet = append(infoRelaySet, info)
+	}
+
+	ph, err := MakePhonebook(1, time.Millisecond)
+	require.NoError(t, err)
+
+	ph.ReplacePeerList(infoRelaySet, "default", phonebook.RelayRole)
+
+	for _, info := range infoRelaySet {
+		addrs := ph.Addrs(info.ID)
+		require.NotEmpty(t, addrs)
+	}
+
+	// Simulate addr book GC run by setting zero TTL
+	for _, info := range infoRelaySet {
+		ph.UpdateAddrs(info.ID, libp2p.AddressTTL, 0)
+	}
+
+	// Verify metadata still exists but addresses are now empty
+	for _, info := range infoRelaySet {
+		addrs := ph.Addrs(info.ID)
+		require.Empty(t, addrs)
+		data, err := ph.Get(info.ID, psmdkAddressData)
+		require.NoError(t, err)
+		require.NotNil(t, data)
+	}
+
+	// Re-add the peer list, which should refresh the addresses
+	ph.ReplacePeerList(infoRelaySet, "default", phonebook.RelayRole)
+
+	// Verify addresses are restored
+	for _, info := range infoRelaySet {
+		addrs := ph.Addrs(info.ID)
+		require.NotEmpty(t, addrs)
+	}
+
+	result := ph.GetAddresses(len(relaysSet), phonebook.RelayRole)
+	require.Equal(t, len(relaysSet), len(result))
+	for _, info := range result {
+		require.NotEmpty(t, info.Addrs)
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-
 	//ossignal "os/signal"
 	"path/filepath"
 	//"runtime/pprof"
@@ -34,9 +33,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/logging"
 	//"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -492,10 +491,7 @@ func TestNetworkBandwidth(t *testing.T) {
 
 	deadlock.Opts.Disable = true
 	rnd := rand.New(rand.NewSource(0))
-	k := 4 // outgoing connections
-	if k > relayCounts {
-		k = relayCounts
-	}
+	k := min(4, relayCounts) // outgoing connections
 	statConf := &TrafficStatisticsFilterConfig{
 		OutputFormat: 2,
 	}
@@ -563,10 +559,7 @@ func TestUnstakedNetworkLinearGrowth(t *testing.T) {
 
 	relayMaxBandwidth := []int{}
 
-	k := 4 // outgoing connections
-	if k > relayCount {
-		k = relayCount
-	}
+	k := min(4, relayCount) // outgoing connections
 	statConf := &TrafficStatisticsFilterConfig{
 		OutputFormat: 0,
 	}
@@ -674,10 +667,7 @@ func TestStakedNetworkQuadricGrowth(t *testing.T) {
 	totalRelayedMessages := []int{}
 	deadlock.Opts.Disable = true
 
-	k := 2 // outgoing connections
-	if k > relayCount {
-		k = relayCount
-	}
+	k := min(2, relayCount) // outgoing connections
 	statConf := &TrafficStatisticsFilterConfig{
 		OutputFormat: 0,
 	}
@@ -784,10 +774,7 @@ func TestRegossipinngElimination(t *testing.T) {
 	nodeCount := 20
 	deadlock.Opts.Disable = true
 	rnd := rand.New(rand.NewSource(0))
-	k := 4 // outgoing connections
-	if k > relayCounts {
-		k = relayCounts
-	}
+	k := min(4, relayCounts) // outgoing connections
 	statConf := &TrafficStatisticsFilterConfig{
 		OutputFormat: 2,
 	}
@@ -880,10 +867,7 @@ func BenchmarkNetworkPerformance(b *testing.B) {
 	// disable deadlock checking code
 	deadlock.Opts.Disable = true
 
-	k := 4 // outgoing connections
-	if k > relayCount {
-		k = relayCount
-	}
+	k := min(4, relayCount) // outgoing connections
 	statConf := &TrafficStatisticsFilterConfig{
 		OutputFormat: 0,
 	}

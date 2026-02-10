@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ type Request struct {
 	AllowEmptySignatures  bool
 	AllowMoreLogging      bool
 	AllowUnnamedResources bool
-	ExtraOpcodeBudget     uint64
+	ExtraOpcodeBudget     int
 	TraceConfig           ExecTraceConfig
 	FixSigners            bool
 }
@@ -191,7 +191,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 		return nil, err
 	}
 
-	err = eval.TransactionGroup(group)
+	err = eval.TransactionGroup(group...)
 	if err != nil {
 		return nil, EvalFailureError{SimulatorError{err}}
 	}
@@ -321,7 +321,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 				return Result{}, InvalidRequestError{SimulatorError{err}}
 			}
 			simulatorTracer.result.TxnGroups[0].FailureMessage = verifyError.Error()
-			simulatorTracer.result.TxnGroups[0].FailedAt = TxnPath{uint64(verifyError.GroupIndex)}
+			simulatorTracer.result.TxnGroups[0].FailedAt = TxnPath{verifyError.GroupIndex}
 		case errors.As(err, &EvalFailureError{}):
 			simulatorTracer.result.TxnGroups[0].FailureMessage = err.Error()
 			simulatorTracer.result.TxnGroups[0].FailedAt = simulatorTracer.failedAt
@@ -350,7 +350,7 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	simulatorTracer.result.Block = block
 
 	// Update total cost by aggregating individual txn costs
-	totalCost := uint64(0)
+	totalCost := 0
 	for _, txn := range simulatorTracer.result.TxnGroups[0].Txns {
 		totalCost += txn.AppBudgetConsumed
 	}

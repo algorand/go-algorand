@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,17 +19,16 @@ package transactions
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func generatePayset(txnCount, acctCount int) Payset {
 	stxnb := make([]SignedTxnInBlock, txnCount)
 	for i, stxn := range generateSignedTxns(txnCount, acctCount) {
 		stxnb[i] = SignedTxnInBlock{
-			SignedTxnWithAD: SignedTxnWithAD{
-				SignedTxn: stxn,
-			},
+			SignedTxnWithAD: stxn.WithAD(),
 		}
 	}
 	return Payset(stxnb)

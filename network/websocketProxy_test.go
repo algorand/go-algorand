@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// This is a simple reverse proxy for websocket connections. It is used to to test
+// This is a simple reverse proxy for websocket connections. It is used to test
 // ws network behavior when UseXForwardedForAddressField is enabled.
 // Not suitable for production use.
 package network
@@ -28,10 +28,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/websocket"
+
 	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/websocket"
-	"github.com/stretchr/testify/require"
 )
 
 var testProxyUpgrader = websocket.Upgrader{

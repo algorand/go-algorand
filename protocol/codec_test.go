@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,9 +23,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-codec/codec"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-codec/codec"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type TestArray [4]uint64
@@ -161,7 +163,7 @@ func TestEncodeJSON(t *testing.T) {
 
 	type ar []string
 	type mp struct {
-		Map map[int]ar `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+		Map map[int]ar `codec:"ld,allocbound=bounds.MaxEvalDeltaAccounts"`
 	}
 
 	var v mp

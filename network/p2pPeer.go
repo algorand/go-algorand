@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,12 +23,13 @@ import (
 	"net"
 	"time"
 
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/websocket"
-
 	"github.com/libp2p/go-libp2p/core/network"
 	yamux "github.com/libp2p/go-yamux/v4"
 	mnet "github.com/multiformats/go-multiaddr/net"
+
+	"github.com/algorand/websocket"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
 type wsPeerConnP2P struct {
@@ -75,8 +76,14 @@ func (c *wsPeerConnP2P) CloseWithMessage([]byte, time.Time) error {
 
 func (c *wsPeerConnP2P) SetReadLimit(int64) {}
 
-func (c *wsPeerConnP2P) CloseWithoutFlush() error {
-	err := c.stream.Close()
+func (c *wsPeerConnP2P) CloseWithoutFlush() (err error) {
+	err = c.stream.Reset()
+	defer func() {
+		err0 := c.stream.Conn().Close()
+		if err == nil {
+			err = err0
+		}
+	}()
 	if err != nil && err != yamux.ErrStreamClosed && err != yamux.ErrSessionShutdown && err != yamux.ErrStreamReset {
 		return err
 	}

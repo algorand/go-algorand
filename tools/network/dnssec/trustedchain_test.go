@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,9 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTrustChainBasic(t *testing.T) {
@@ -274,7 +275,7 @@ func TestEnsureTrustChain(t *testing.T) {
 	a.Contains(err.Error(), "failed to verify test. KSK against digest in parent DS")
 }
 
-func TestEnsureTrustChainFailures(t *testing.T) {
+func TestEnsureTrustChainError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)

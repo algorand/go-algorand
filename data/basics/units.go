@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 )
 
@@ -56,8 +55,8 @@ func (a MicroAlgos) ToUint64() uint64 {
 }
 
 // RewardUnits returns the number of reward units in some number of algos
-func (a MicroAlgos) RewardUnits(proto config.ConsensusParams) uint64 {
-	return a.Raw / proto.RewardUnit
+func (a MicroAlgos) RewardUnits(unitSize uint64) uint64 {
+	return a.Raw / unitSize
 }
 
 // We generate our own encoders and decoders for MicroAlgos

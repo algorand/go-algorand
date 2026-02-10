@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,10 +59,7 @@ type fuzzReader struct {
 }
 
 func (f *fuzzReader) Read(b []byte) (n int, err error) {
-	s := int(crypto.RandUint64() % 19)
-	if s > len(b) {
-		s = len(b)
-	}
+	s := min(int(crypto.RandUint64()%19), len(b))
 	if f.pos >= len(f.buf) {
 		return 0, io.EOF
 	}

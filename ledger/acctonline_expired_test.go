@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,15 +23,17 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // onlineAcctModel provides a simple interface for tracking accounts
@@ -320,6 +322,7 @@ func (m *doubleLedgerAcctModel) goOnline(addr basics.Address, firstvalid, lastva
 		// meaningless non-zero voting data
 		VotePK:          crypto.OneTimeSignatureVerifier(addr),
 		SelectionPK:     crypto.VRFVerifier(addr),
+		StateProofPK:    merklesignature.Commitment{1},
 		VoteKeyDilution: 1024,
 	})
 	m.accts[addr] = m.ops.Sub(m.accts[addr], basics.MicroAlgos{Raw: minFee})
@@ -657,27 +660,28 @@ func BenchmarkExpiredOnlineCirculation(b *testing.B) {
 		return addr
 	}
 
-	var blockCounter, acctCounter uint64
+	var blockCounter basics.Round
+	var acctCounter uint64
 	for i := 0; i < totalAccounts/maxKeyregPerBlock; i++ {
 		blockCounter++
 		for j := 0; j < maxKeyregPerBlock; j++ {
 			acctCounter++
 			// go online for a random number of rounds, from 400 to 1600
-			validFor := 400 + uint64(rand.Intn(1200))
-			m.goOnline(addrFromUint64(acctCounter), basics.Round(blockCounter), basics.Round(blockCounter+validFor))
+			validFor := 400 + basics.Round(rand.Intn(1200))
+			m.goOnline(addrFromUint64(acctCounter), blockCounter, blockCounter+validFor)
 		}
 		b.Log("built block", blockCounter, "accts", acctCounter)
 		m.nextRound()
 	}
 	// then advance ~1K rounds to exercise the exercise accounts going offline
-	m.advanceToRound(basics.Round(blockCounter + 1000))
+	m.advanceToRound(blockCounter + 1000)
 	b.Log("advanced to round", m.currentRound())
 
 	b.ResetTimer()
-	for i := uint64(0); i < uint64(b.N); i++ {
+	for i := range basics.Round(b.N) {
 		// query expired circulation across the available range (last 320 rounds, from ~680 to ~1000)
 		startRnd := m.currentRound() - 320
-		offset := basics.Round(i % 320)
+		offset := i % 320
 		_, err := m.dl.validator.expiredOnlineCirculation(startRnd+offset, startRnd+offset+320)
 		require.NoError(b, err)
 		//total, err := m.dl.validator.OnlineTotalStake(startRnd + offset)

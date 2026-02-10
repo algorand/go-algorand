@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -201,9 +201,9 @@ func (p *puppet) exec(wg *sync.WaitGroup, errs chan error) {
 			fmt.Printf("%s: Disabled step '%s' skipped.\n", p.recipeName, recipeStep.StepName)
 			continue
 		}
-		err := p.runStep(recipeStep, time.Hour)
-		if err != nil {
-			errs <- fmt.Errorf("Failed running recipe step '%s' : %v", recipeStep.StepName, err)
+		err1 := p.runStep(recipeStep, time.Hour)
+		if err1 != nil {
+			errs <- fmt.Errorf("Failed running recipe step '%s' : %v", recipeStep.StepName, err1)
 			return
 		}
 	}
@@ -218,9 +218,9 @@ func (p *puppet) exec(wg *sync.WaitGroup, errs chan error) {
 			fmt.Printf("%s: Disabled step '%s' skipped.\n", p.recipeName, recipeStep.StepName)
 			continue
 		}
-		err := p.runStep(recipeStep, time.Hour)
-		if err != nil {
-			errs <- fmt.Errorf("Failed running teardown step '%s' : %v", recipeStep.StepName, err)
+		err1 := p.runStep(recipeStep, time.Hour)
+		if err1 != nil {
+			errs <- fmt.Errorf("Failed running teardown step '%s' : %v", recipeStep.StepName, err1)
 			return
 		}
 	}
@@ -439,15 +439,17 @@ func (p *puppet) collectMetrics() {
 				fmt.Fprintf(os.Stderr, "Failed to read '%s' : %v\n", telemetryHostFile, err)
 			} else {
 				metricFetcher := makePromMetricFetcher(string(hostNameBytes))
-				var err error
-				if results, err := metricFetcher.getMetric(metric.Query); err == nil {
-					if result, err := metricFetcher.getSingleValue(results); err == nil {
-						p.metrics[metric.Name] = result
-					}
-				}
+				results, err := metricFetcher.getMetric(metric.Query)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to read metric '%s' : %v\n", metric.Name, err)
+					continue
 				}
+				result, err := metricFetcher.getSingleValue(results)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to parse metric '%s' : %v\n", metric.Name, err)
+					continue
+				}
+				p.metrics[metric.Name] = result
 			}
 		default:
 			if verbose {

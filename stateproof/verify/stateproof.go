@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -171,7 +171,7 @@ func ValidateStateProof(verificationContext *ledgercore.StateProofVerificationCo
 		return err
 	}
 
-	err = verifier.Verify(uint64(verificationContext.LastAttestedRound), msg.Hash(), stateProof)
+	err = verifier.Verify(verificationContext.LastAttestedRound, msg.Hash(), stateProof)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
 	}

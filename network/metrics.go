@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ func init() {
 	}
 	networkSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringList, "UNK")
 	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkReceivedUncompressedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_uncompressed_bytes_{TAG}", "Number of bytes after decompression that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
 	networkHandleCountByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_countbytag_{TAG}", "count of handler calls in the receive thread for {TAG} messages", tagStringList, "UNK")
@@ -41,6 +42,7 @@ func init() {
 
 	networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringList, "UNK")
 	networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkP2PReceivedUncompressedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_uncompressed_bytes_{TAG}", "Number of bytes after decompression that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
 }
@@ -53,6 +55,8 @@ var networkReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkReceivedBytes
 var networkP2PReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkP2PReceivedBytesTotal)
 var networkReceivedBytesByTag *metrics.TagCounter
 var networkP2PReceivedBytesByTag *metrics.TagCounter
+var networkReceivedUncompressedBytesByTag *metrics.TagCounter
+var networkP2PReceivedUncompressedBytesByTag *metrics.TagCounter
 
 var networkMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkMessageReceivedTotal)
 var networkP2PMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkP2PMessageReceivedTotal)
@@ -112,6 +116,15 @@ var networkP2PGossipSubSentBytesTotal = metrics.MakeCounter(metrics.MetricName{N
 var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_received_bytes_total", Description: "Total number of bytes received through gossipsub"})
 
 // var networkP2PGossipSubSentMsgs = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_message_sent", Description: "Number of complete messages that were sent to the network through gossipsub"})
+
+var networkVoteBroadcastCompressedBytes = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vote_compressed_bytes_broadcast_total", Description: "Total AV message bytes broadcast after applying stateless compression"})
+var networkVoteBroadcastUncompressedBytes = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vote_uncompressed_bytes_broadcast_total", Description: "Total AV message bytes broadcast before applying stateless compression"})
+var networkVPCompressionErrors = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_compression_errors_total", Description: "Total number of stateful vote compression errors"})
+var networkVPDecompressionErrors = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_decompression_errors_total", Description: "Total number of stateful vote decompression errors"})
+var networkVPAbortMessagesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_abort_messages_sent_total", Description: "Total number of vpack abort messages sent to peers"})
+var networkVPAbortMessagesReceived = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_abort_messages_received_total", Description: "Total number of vpack abort messages received from peers"})
+var networkVPCompressedBytesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_compressed_bytes_sent_total", Description: "Total VP message bytes sent, after compressing AV to VP messages"})
+var networkVPUncompressedBytesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_uncompressed_bytes_sent_total", Description: "Total VP message bytes sent, before compressing AV to VP messages"})
 
 var _ = pubsub.RawTracer(pubsubMetricsTracer{})
 

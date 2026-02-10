@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+app-delete-clear-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -25,7 +27,7 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT}  --on-completion "DeleteApplicat
 APPID_CHECK=$(${gcmd} app info --app-id $APPID 2>&1 || true)
 EXPERROR="application does not exist"
 if [[ $APPID_CHECK != *"${EXPERROR}"* ]]; then
-    date '+app-create-delete-test FAIL the deleted application should not exist %Y%m%d_%H%M%S'
+    date '+${scriptname} FAIL the deleted application should not exist %Y%m%d_%H%M%S'
     false
 fi
 
@@ -34,7 +36,6 @@ RES=$(${gcmd} app create --creator ${ACCOUNT}  --on-completion "ClearState" --ap
 EXPERROR1='cannot clear state'
 EXPERROR2='is not currently opted in'
 if [[ $RES != *"${EXPERROR1}"*"${EXPERROR2}"* ]]; then
-    date '+app-create-clear FAIL should fail to create app with on-completion ClearState %Y%m%d_%H%M%S'
+    date '+${scriptname} FAIL should fail to create app with on-completion ClearState %Y%m%d_%H%M%S'
     false
 fi
-

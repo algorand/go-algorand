@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,9 @@ package testsuite
 import (
 	"context"
 
-	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
 func init() {
@@ -43,7 +44,7 @@ func CustomTestTransaction(t *customT) {
 	}
 
 	// insert the account
-	normBalanceA := dataA.NormalizedOnlineBalance(t.proto)
+	normBalanceA := dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 	refA, err := aow.InsertAccount(addrA, normBalanceA, dataA)
 	require.NoError(t, err)
 
@@ -67,7 +68,7 @@ func CustomTestTransaction(t *customT) {
 
 		// update the account
 		dataA.RewardsBase = 98287
-		normBalanceA = dataA.NormalizedOnlineBalance(t.proto)
+		normBalanceA = dataA.NormalizedOnlineBalance(t.proto.RewardUnit)
 		_, err = aow.UpdateAccount(refA, normBalanceA, dataA)
 		require.NoError(t, err)
 
@@ -75,7 +76,7 @@ func CustomTestTransaction(t *customT) {
 	})
 	require.NoError(t, err)
 
-	// read the updated record outside the transaction to make sure it was commited
+	// read the updated record outside the transaction to make sure it was committed
 	padA, err := aor.LookupAccount(addrA)
 	require.NoError(t, err)
 	require.Equal(t, uint64(98287), padA.AccountData.RewardsBase) // same updated data

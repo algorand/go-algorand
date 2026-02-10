@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,21 +18,12 @@ package p2p
 
 import (
 	"context"
-	"encoding/base32"
 	"fmt"
 	"net"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network/limitcaller"
-	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
-	"github.com/algorand/go-algorand/network/phonebook"
-	"github.com/algorand/go-algorand/util/metrics"
-	"github.com/algorand/go-deadlock"
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -47,6 +38,15 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
+	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // SubNextCancellable is an abstraction for pubsub.Subscription
@@ -62,8 +62,10 @@ type Service interface {
 	ID() peer.ID // return peer.ID for self
 	IDSigner() *PeerIDChallengeSigner
 	AddrInfo() peer.AddrInfo // return addrInfo for self
+	NetworkNotify(network.Notifiee)
+	NetworkStopNotify(network.Notifiee)
 
-	DialPeersUntilTargetCount(targetConnCount int)
+	DialPeersUntilTargetCount(targetConnCount int) bool
 	ClosePeer(peer.ID) error
 
 	Conns() []network.Conn
@@ -75,28 +77,36 @@ type Service interface {
 	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
+// subset of config.Local needed here
+type nodeSubConfig interface {
+	IsHybridServer() bool
+}
+
 // serviceImpl manages integration with libp2p and implements the Service interface
 type serviceImpl struct {
 	log        logging.Logger
+	subcfg     nodeSubConfig
 	listenAddr string
 	host       host.Host
 	streams    *streamManager
 	pubsub     *pubsub.PubSub
-	pubsubCtx  context.Context
 	privKey    crypto.PrivKey
 
 	topics   map[string]*pubsub.Topic
 	topicsMu deadlock.RWMutex
 }
 
-// AlgorandWsProtocol defines a libp2p protocol name for algorand's websockets messages
-const AlgorandWsProtocol = "/algorand-ws/1.0.0"
+// AlgorandWsProtocolV1 defines a libp2p protocol name for algorand's websockets messages
+// as the very initial release
+const AlgorandWsProtocolV1 = "/algorand-ws/1.0.0"
 
-// algorandGUIDProtocolPrefix defines a libp2p protocol name for algorand node telemetry GUID exchange
-const algorandGUIDProtocolPrefix = "/algorand-telemetry/1.0.0/"
-const algorandGUIDProtocolTemplate = algorandGUIDProtocolPrefix + "%s/%s"
+// AlgorandWsProtocolV22 defines a libp2p protocol name for algorand's websockets messages
+// as a version supporting peer metadata and wsnet v2.2 protocol features
+const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 const dialTimeout = 30 * time.Second
+
+const psmdkDialed = "dialed"
 
 // MakeHost creates a libp2p host but does not start listening.
 // Use host.Network().Listen() on the returned address to start listening.
@@ -180,30 +190,68 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 	return rm, err
 }
 
+// StreamHandlerPair is a struct that contains a protocol ID and a StreamHandler
+type StreamHandlerPair struct {
+	ProtoID protocol.ID
+	Handler StreamHandler
+}
+
+// StreamHandlers is an ordered list of StreamHandlerPair
+type StreamHandlers []StreamHandlerPair
+
+// PubSubOption is a function that modifies the pubsub options
+type PubSubOption func(opts *[]pubsub.Option)
+
+// DisablePubSubPeerExchange disables PX (peer exchange) in pubsub
+func DisablePubSubPeerExchange() PubSubOption {
+	return func(opts *[]pubsub.Option) {
+		*opts = append(*opts, pubsub.WithPeerExchange(false))
+	}
+}
+
+// SetPubSubMetricsTracer sets a pubsub.RawTracer for metrics collection
+func SetPubSubMetricsTracer(metricsTracer pubsub.RawTracer) PubSubOption {
+	return func(opts *[]pubsub.Option) {
+		*opts = append(*opts, pubsub.WithRawTracer(metricsTracer))
+	}
+}
+
+// SetPubSubPeerFilter sets a pubsub.PeerFilter for peers filtering out
+func SetPubSubPeerFilter(filter func(checker pstore.RoleChecker, pid peer.ID) bool, checker pstore.RoleChecker) PubSubOption {
+	return func(opts *[]pubsub.Option) {
+		f := func(pid peer.ID, topic string) bool {
+			return filter(checker, pid)
+		}
+		*opts = append(*opts, pubsub.WithPeerFilter(f))
+	}
+}
+
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
+	sm := makeStreamManager(ctx, log, cfg, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
-	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 
-	// set an empty handler for telemetryID/telemetryInstance protocol in order to allow other peers to know our telemetryID
-	telemetryID := log.GetTelemetryGUID()
-	telemetryInstance := log.GetInstanceName()
-	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
-	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
+	for _, pair := range wsStreamHandlers {
+		h.SetStreamHandler(pair.ProtoID, sm.streamHandler)
+	}
 
-	ps, err := makePubSub(ctx, cfg, h, metricsTracer)
+	pubsubOpts := []pubsub.Option{}
+	for _, opt := range pubsubOptions {
+		opt(&pubsubOpts)
+	}
+
+	ps, err := makePubSub(ctx, h, cfg.GossipFanout, pubsubOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return &serviceImpl{
 		log:        log,
+		subcfg:     cfg,
 		listenAddr: listenAddr,
 		host:       h,
 		streams:    sm,
 		pubsub:     ps,
-		pubsubCtx:  ctx,
 		privKey:    h.Peerstore().PrivKey(h.ID()),
 		topics:     make(map[string]*pubsub.Topic),
 	}, nil
@@ -227,6 +275,7 @@ func (s *serviceImpl) Start() error {
 
 // Close shuts down the P2P service
 func (s *serviceImpl) Close() error {
+	s.host.Network().StopNotify(s.streams)
 	return s.host.Close()
 }
 
@@ -241,20 +290,29 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 }
 
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
-func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
+func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
 	addrInfos := ps.GetAddresses(targetConnCount, phonebook.RelayRole)
 	conns := s.host.Network().Conns()
 	var numOutgoingConns int
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
-			numOutgoingConns++
+			if s.subcfg.IsHybridServer() {
+				remotePeer := conn.RemotePeer()
+				val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
+				if err == nil && val != nil && val.(bool) {
+					numOutgoingConns++
+				}
+			} else {
+				numOutgoingConns++
+			}
 		}
 	}
+	preExistingConns := numOutgoingConns
 	for _, peerInfo := range addrInfos {
 		// if we are at our target count stop trying to connect
 		if numOutgoingConns >= targetConnCount {
-			return
+			return numOutgoingConns > preExistingConns
 		}
 		// if we are already connected to this peer, skip it
 		if len(s.host.Network().ConnsToPeer(peerInfo.ID)) > 0 {
@@ -263,8 +321,11 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 		err := s.dialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {
 			s.log.Warnf("failed to connect to peer %s: %v", peerInfo.ID, err)
+		} else {
+			numOutgoingConns++
 		}
 	}
+	return numOutgoingConns > preExistingConns
 }
 
 // dialNode attempts to establish a connection to the provided peer
@@ -275,6 +336,11 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
+	if s.subcfg.IsHybridServer() {
+		if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
+			return err
+		}
+	}
 	return s.host.Connect(ctx, *peer)
 }
 
@@ -318,35 +384,6 @@ func netAddressToListenAddress(netAddress string) (string, error) {
 	}
 
 	return fmt.Sprintf("/ip4/%s/tcp/%s", ip, parts[1]), nil
-}
-
-// GetPeerTelemetryInfo returns the telemetry ID of a peer by looking at its protocols
-func GetPeerTelemetryInfo(peerProtocols []protocol.ID) (telemetryID string, telemetryInstance string) {
-	for _, protocol := range peerProtocols {
-		if strings.HasPrefix(string(protocol), algorandGUIDProtocolPrefix) {
-			telemetryInfo := string(protocol[len(algorandGUIDProtocolPrefix):])
-			telemetryInfoParts := strings.Split(telemetryInfo, "/")
-			if len(telemetryInfoParts) == 2 {
-				telemetryIDBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[0])
-				if err == nil {
-					telemetryID = string(telemetryIDBytes)
-				}
-				telemetryInstanceBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[1])
-				if err == nil {
-					telemetryInstance = string(telemetryInstanceBytes)
-				}
-				return telemetryID, telemetryInstance
-			}
-		}
-	}
-	return "", ""
-}
-
-func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance string) string {
-	return fmt.Sprintf(algorandGUIDProtocolTemplate,
-		base32.StdEncoding.EncodeToString([]byte(telemetryID)),
-		base32.StdEncoding.EncodeToString([]byte(telemetryInstance)),
-	)
 }
 
 var private6 = parseCIDR([]string{
@@ -423,4 +460,14 @@ func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 // GetHTTPClient returns a libp2p-streaming http client that can be used to make requests to the given peer
 func (s *serviceImpl) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
 	return makeHTTPClientWithRateLimit(addrInfo, s, connTimeStore, queueingTimeout)
+}
+
+// NetworkNotify registers a notifiee with the host's network
+func (s *serviceImpl) NetworkNotify(n network.Notifiee) {
+	s.host.Network().Notify(n)
+}
+
+// NetworkStopNotify unregisters a notifiee with the host's network
+func (s *serviceImpl) NetworkStopNotify(n network.Notifiee) {
+	s.host.Network().StopNotify(n)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,8 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type CounterTest struct {
@@ -38,6 +39,9 @@ func TestMetricCounter(t *testing.T) {
 		MetricTest: NewMetricTest(),
 	}
 
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener("127.0.0.1:0")
 
@@ -46,10 +50,12 @@ func TestMetricCounter(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter.Register(registry)
 
 	for i := 0; i < 20; i++ {
 		counter.Inc(map[string]string{"pid": "123", "data_host": fmt.Sprintf("host%d", i%5)})
@@ -61,12 +67,12 @@ func TestMetricCounter(t *testing.T) {
 
 	metricService.Shutdown()
 
-	counter.Deregister(nil)
+	counter.Deregister(registry)
 	// test the metrics values.
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 5, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
@@ -84,6 +90,9 @@ func TestMetricCounterFastInts(t *testing.T) {
 		MetricTest: NewMetricTest(),
 	}
 
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener("127.0.0.1:0")
 
@@ -92,10 +101,12 @@ func TestMetricCounterFastInts(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter.Register(registry)
 
 	for i := 0; i < 20; i++ {
 		counter.Inc(nil)
@@ -108,12 +119,12 @@ func TestMetricCounterFastInts(t *testing.T) {
 
 	metricService.Shutdown()
 
-	counter.Deregister(nil)
+	counter.Deregister(registry)
 	// test the metrics values.
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 
@@ -131,6 +142,9 @@ func TestMetricCounterMixed(t *testing.T) {
 		MetricTest: NewMetricTest(),
 	}
 
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener("127.0.0.1:0")
 
@@ -139,10 +153,12 @@ func TestMetricCounterMixed(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter.Register(registry)
 
 	counter.AddUint64(5, nil)
 	counter.AddUint64(8, map[string]string{})
@@ -157,12 +173,12 @@ func TestMetricCounterMixed(t *testing.T) {
 
 	metricService.Shutdown()
 
-	counter.Deregister(nil)
+	counter.Deregister(registry)
 	// test the metrics values.
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
+	// the loop above we've created a single metric name with five different labels set ( host0, host1 .. host 4)
 	// let's see if we received all the 5 different labels.
 	require.Equal(t, 1, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 

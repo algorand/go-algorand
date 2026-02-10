@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,16 +33,11 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
-	"github.com/algorand/go-algorand/daemon/algod/api/server"
-	"github.com/algorand/go-algorand/ledger/eval"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-codec/codec"
 
@@ -52,6 +47,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data"
@@ -63,6 +59,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -72,7 +70,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-const stateProofInterval = uint64(256)
+const stateProofInterval = 256
 
 func setupMockNodeForMethodGet(t *testing.T, status node.StatusReport, devmode bool) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	return setupMockNodeForMethodGetWithShutdown(t, status, devmode, make(chan struct{}))
@@ -105,11 +103,13 @@ func setupTestForMethodGet(t *testing.T, status node.StatusReport) (v2.Handlers,
 	return setupMockNodeForMethodGet(t, status, false)
 }
 
-func numOrNil(n uint64) *uint64 {
-	if n == 0 {
+// omitEmpty defines a handy impl for all comparable types to convert from default value to nil ptr
+func omitEmpty[T comparable](val T) *T {
+	var defaultVal T
+	if val == defaultVal {
 		return nil
 	}
-	return &n
+	return &val
 }
 
 func TestSimpleMockBuilding(t *testing.T) {
@@ -121,13 +121,13 @@ func TestSimpleMockBuilding(t *testing.T) {
 	require.Equal(t, t.Name(), handler.Node.GenesisID())
 }
 
-func accountInformationTest(t *testing.T, address string, expectedCode int) {
+func accountInformationTest(t *testing.T, address basics.Address, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.AccountInformation(c, address, model.AccountInformationParams{})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
-	if address == poolAddr.String() {
+	if address == poolAddr {
 		expectedResponse := poolAddrResponseGolden
 		actualResponse := model.AccountResponse{}
 		err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
@@ -140,11 +140,155 @@ func TestAccountInformation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	accountInformationTest(t, poolAddr.String(), 200)
-	accountInformationTest(t, "bad account", 400)
+	accountInformationTest(t, poolAddr, 200)
 }
 
-func getBlockTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
+func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test with poolAddr which is in the golden data
+	t.Run("exclude=none", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeNone := []model.AccountInformationParamsExclude{"none"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeNone})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		// With exclude=none, created apps should be present (if any exist)
+		// Just verify the response is valid
+		require.NotNil(t, response.Address)
+	})
+
+	t.Run("exclude=created-apps-params", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeParams := []model.AccountInformationParamsExclude{"created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify that if created apps exist, they have IDs but no params
+		if response.CreatedApps != nil {
+			for _, app := range *response.CreatedApps {
+				require.Nil(t, app.Params, "Expected params to be absent with exclude=created-apps-params")
+				require.NotZero(t, app.Id, "Expected app ID to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=all", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeAll := []model.AccountInformationParamsExclude{"all"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeAll})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify all resources are excluded
+		require.Nil(t, response.CreatedApps)
+		require.Nil(t, response.CreatedAssets)
+		require.Nil(t, response.Assets)
+		require.Nil(t, response.AppsLocalState)
+	})
+
+	t.Run("invalid-exclude-value", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"invalid-value"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("exclude=created-assets-params", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeParams := []model.AccountInformationParamsExclude{"created-assets-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify that if created assets exist, they have IDs but no params
+		if response.CreatedAssets != nil {
+			for _, asset := range *response.CreatedAssets {
+				require.Nil(t, asset.Params, "Expected params to be absent with exclude=created-assets-params")
+				require.NotZero(t, asset.Index, "Expected asset index to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=comma-delimited-both", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeBoth := []model.AccountInformationParamsExclude{"created-apps-params", "created-assets-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeBoth})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify both apps and assets have no params
+		if response.CreatedApps != nil {
+			for _, app := range *response.CreatedApps {
+				require.Nil(t, app.Params, "Expected app params to be absent")
+				require.NotZero(t, app.Id, "Expected app ID to be present")
+			}
+		}
+		if response.CreatedAssets != nil {
+			for _, asset := range *response.CreatedAssets {
+				require.Nil(t, asset.Params, "Expected asset params to be absent")
+				require.NotZero(t, asset.Index, "Expected asset index to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=all-with-others-fails", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"all", "created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("exclude=none-with-others-fails", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"none", "created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+}
+
+func getBlockTest(t *testing.T, blockNum basics.Round, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	err := handler.GetBlock(c, blockNum, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format)})
@@ -169,7 +313,7 @@ type blockResponseTest struct {
 	Cert *map[string]interface{} `codec:"cert,omitempty"`
 }
 
-func getBlockHeaderTest(t *testing.T, blockNum uint64, format string, expectedCode int, headerOnly *bool) {
+func getBlockHeaderTest(t *testing.T, blockNum basics.Round, format string, expectedCode int, headerOnly *bool) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 
@@ -238,7 +382,7 @@ func TestGetBlockHeader(t *testing.T) {
 	})
 }
 
-func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {
+func testGetLedgerStateDelta(t *testing.T, round basics.Round, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
 	insertRounds(require.New(t), handler, 3)
@@ -593,13 +737,13 @@ func TestGetStatus(t *testing.T) {
 	require.NoError(t, err)
 	stat := cannedStatusReportGolden
 	expectedResult := model.NodeStatusResponse{
-		LastRound:                   uint64(stat.LastRound),
+		LastRound:                   stat.LastRound,
 		LastVersion:                 string(stat.LastVersion),
 		NextVersion:                 string(stat.NextVersion),
-		NextVersionRound:            uint64(stat.NextVersionRound),
+		NextVersionRound:            stat.NextVersionRound,
 		NextVersionSupported:        stat.NextVersionSupported,
-		TimeSinceLastRound:          uint64(stat.TimeSinceLastRound().Nanoseconds()),
-		CatchupTime:                 uint64(stat.CatchupTime.Nanoseconds()),
+		TimeSinceLastRound:          stat.TimeSinceLastRound().Nanoseconds(),
+		CatchupTime:                 stat.CatchupTime.Nanoseconds(),
 		StoppedAtUnsupportedRound:   stat.StoppedAtUnsupportedRound,
 		LastCatchpoint:              &stat.LastCatchpoint,
 		Catchpoint:                  &stat.Catchpoint,
@@ -631,7 +775,7 @@ func TestGetStatusConsensusUpgradeUnderflow(t *testing.T) {
 		NextVersion:            protocol.ConsensusCurrentVersion,
 		UpgradePropose:         "upgradePropose",
 		NextProtocolVoteBefore: currentRound,
-		NextProtocolApprovals:  proto.UpgradeVoteRounds,
+		NextProtocolApprovals:  basics.Round(proto.UpgradeVoteRounds),
 	}
 
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, stat)
@@ -643,10 +787,10 @@ func TestGetStatusConsensusUpgradeUnderflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make sure the votes are all yes, and 0 no.
-	require.Equal(t, uint64(0), *actualResult.UpgradeNoVotes)
-	require.Equal(t, proto.UpgradeVoteRounds, *actualResult.UpgradeYesVotes)
-	require.Equal(t, proto.UpgradeVoteRounds, *actualResult.UpgradeVotes)
-	require.Equal(t, proto.UpgradeThreshold, *actualResult.UpgradeVotesRequired)
+	require.Zero(t, *actualResult.UpgradeNoVotes)
+	require.EqualValues(t, proto.UpgradeVoteRounds, *actualResult.UpgradeYesVotes)
+	require.EqualValues(t, proto.UpgradeVoteRounds, *actualResult.UpgradeVotes)
+	require.EqualValues(t, proto.UpgradeThreshold, *actualResult.UpgradeVotesRequired)
 }
 
 func TestGetStatusConsensusUpgrade(t *testing.T) {
@@ -683,19 +827,22 @@ func TestGetStatusConsensusUpgrade(t *testing.T) {
 	require.NoError(t, err)
 	stat := cannedStatusReportConsensusUpgradeGolden
 	consensus := config.Consensus[protocol.ConsensusCurrentVersion]
-	votesToGo := uint64(stat.NextProtocolVoteBefore) - uint64(stat.LastRound) - 1
-	nextProtocolVoteBefore := uint64(stat.NextProtocolVoteBefore)
-	votes := uint64(consensus.UpgradeVoteRounds) - votesToGo
+	votesToGo := stat.NextProtocolVoteBefore - stat.LastRound - 1
+	nextProtocolVoteBefore := stat.NextProtocolVoteBefore
+	votes := basics.Round(consensus.UpgradeVoteRounds) - votesToGo
 	votesNo := votes - stat.NextProtocolApprovals
 
+	upgradeThreshold := basics.Round(consensus.UpgradeThreshold)
+	upgradeVoteRounds := basics.Round(consensus.UpgradeVoteRounds)
+
 	expectedResult := model.NodeStatusResponse{
-		LastRound:                     uint64(stat.LastRound),
+		LastRound:                     stat.LastRound,
 		LastVersion:                   string(stat.LastVersion),
 		NextVersion:                   string(stat.NextVersion),
-		NextVersionRound:              uint64(stat.NextVersionRound),
+		NextVersionRound:              stat.NextVersionRound,
 		NextVersionSupported:          stat.NextVersionSupported,
-		TimeSinceLastRound:            uint64(stat.TimeSinceLastRound().Nanoseconds()),
-		CatchupTime:                   uint64(stat.CatchupTime.Nanoseconds()),
+		TimeSinceLastRound:            stat.TimeSinceLastRound().Nanoseconds(),
+		CatchupTime:                   stat.CatchupTime.Nanoseconds(),
 		StoppedAtUnsupportedRound:     stat.StoppedAtUnsupportedRound,
 		LastCatchpoint:                &stat.LastCatchpoint,
 		Catchpoint:                    &stat.Catchpoint,
@@ -707,12 +854,12 @@ func TestGetStatusConsensusUpgrade(t *testing.T) {
 		CatchpointTotalKvs:            &stat.CatchpointCatchupTotalKVs,
 		CatchpointProcessedKvs:        &stat.CatchpointCatchupProcessedKVs,
 		CatchpointVerifiedKvs:         &stat.CatchpointCatchupVerifiedKVs,
-		UpgradeVotesRequired:          &consensus.UpgradeThreshold,
+		UpgradeVotesRequired:          &upgradeThreshold,
 		UpgradeNodeVote:               &stat.UpgradeApprove,
 		UpgradeDelay:                  &stat.UpgradeDelay,
 		UpgradeNoVotes:                &votesNo,
 		UpgradeYesVotes:               &stat.NextProtocolApprovals,
-		UpgradeVoteRounds:             &consensus.UpgradeVoteRounds,
+		UpgradeVoteRounds:             &upgradeVoteRounds,
 		UpgradeNextProtocolVoteBefore: &nextProtocolVoteBefore,
 		UpgradeVotes:                  &votes,
 	}
@@ -796,7 +943,7 @@ func TestGetStatusAfterBlockTimeout(t *testing.T) {
 	var resp model.NodeStatusResponse
 	err = dec.Decode(&resp)
 	require.NoError(t, err)
-	require.Equal(t, uint64(1), resp.LastRound)
+	require.EqualValues(t, 1, resp.LastRound)
 }
 
 func TestGetTransactionParams(t *testing.T) {
@@ -855,8 +1002,8 @@ func getPendingTransactionsTest(t *testing.T, format string, max uint64, expecte
 			require.Equal(t, uint64(len(response.TopTransactions)), max)
 		}
 
-		require.Equal(t, response.TotalTransactions, uint64(len(txnPoolGolden)))
-		require.GreaterOrEqual(t, response.TotalTransactions, uint64(len(response.TopTransactions)))
+		require.Equal(t, response.TotalTransactions, len(txnPoolGolden))
+		require.GreaterOrEqual(t, response.TotalTransactions, len(response.TopTransactions))
 	}
 }
 
@@ -915,10 +1062,8 @@ func TestPendingTransactions(t *testing.T) {
 func pendingTransactionsByAddressTest(t *testing.T, rootkeyToUse int, format string, expectedCode int) {
 	handler, c, rec, rootkeys, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
-	address := "bad address"
-	if rootkeyToUse >= 0 {
-		address = rootkeys[rootkeyToUse].Address().String()
-	}
+
+	address := rootkeys[rootkeyToUse].Address()
 	params := model.GetPendingTransactionsByAddressParams{Format: (*model.GetPendingTransactionsByAddressParamsFormat)(&format)}
 	err := handler.GetPendingTransactionsByAddress(c, address, params)
 	require.NoError(t, err)
@@ -932,7 +1077,6 @@ func TestPendingTransactionsByAddress(t *testing.T) {
 	pendingTransactionsByAddressTest(t, 0, "json", 200)
 	pendingTransactionsByAddressTest(t, 0, "msgpack", 200)
 	pendingTransactionsByAddressTest(t, 0, "bad format", 400)
-	pendingTransactionsByAddressTest(t, -1, "json", 400)
 }
 
 func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transactions.SignedTxn) []byte, cfg config.Local) (handler v2.Handlers, c echo.Context, rec *httptest.ResponseRecorder, releasefunc func()) {
@@ -1278,18 +1422,18 @@ int 1`,
 					err = decoder.Decode(&actualBody)
 					require.NoError(t, err)
 
-					var expectedFailedAt *[]uint64
+					var expectedFailedAt *[]int
 					if len(scenario.FailedAt) != 0 {
 						clone := slices.Clone(scenario.FailedAt)
 						clone[0]++
 						expectedFailedAt = &clone
 					}
 
-					var txnAppBudgetUsed []*uint64
-					appBudgetAdded := numOrNil(scenario.AppBudgetAdded)
-					appBudgetConsumed := numOrNil(scenario.AppBudgetConsumed)
+					var txnAppBudgetUsed []*int
+					appBudgetAdded := omitEmpty(scenario.AppBudgetAdded)
+					appBudgetConsumed := omitEmpty(scenario.AppBudgetConsumed)
 					for i := range scenario.TxnAppBudgetConsumed {
-						txnAppBudgetUsed = append(txnAppBudgetUsed, numOrNil(scenario.TxnAppBudgetConsumed[i]))
+						txnAppBudgetUsed = append(txnAppBudgetUsed, omitEmpty(scenario.TxnAppBudgetConsumed[i]))
 					}
 					expectedBody := v2.PreEncodedSimulateResponse{
 						Version: 2,
@@ -1300,17 +1444,12 @@ int 1`,
 								FailedAt:          expectedFailedAt,
 								Txns: []v2.PreEncodedSimulateTxnResult{
 									{
-										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
-											SignedTxn: stxns[0],
-											// expect no ApplyData info
-										}),
+										// expect no ApplyData info
+										Txn:               makePendingTxnResponse(t, stxns[0].WithAD()),
 										AppBudgetConsumed: txnAppBudgetUsed[0],
 									},
 									{
-										Txn: makePendingTxnResponse(t, transactions.SignedTxnWithAD{
-											SignedTxn: stxns[1],
-											ApplyData: scenario.ExpectedSimulationAD,
-										}),
+										Txn:               makePendingTxnResponse(t, stxns[1].WithAD(scenario.ExpectedSimulationAD)),
 										AppBudgetConsumed: txnAppBudgetUsed[1],
 									},
 								},
@@ -1324,7 +1463,7 @@ int 1`,
 	}
 }
 
-func TestSimulateTransactionVerificationFailure(t *testing.T) {
+func TestSimulateTransactionVerificationErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1445,7 +1584,7 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	startCatchupTestFull(t, catchpoint, nodeError, expectedCode, 0, "")
 }
 
-func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, minRounds uint64, response string) {
+func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, minRounds basics.Round, response string) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -1475,7 +1614,7 @@ func TestStartCatchupInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	minRoundsToInitialize := uint64(1_000_000)
+	const minRoundsToInitialize = 1_000_000
 
 	tooSmallCatchpoint := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", minRoundsToInitialize-1)
 	startCatchupTestFull(t, tooSmallCatchpoint, nil, 200, minRoundsToInitialize, "the node has already been initialized")
@@ -1762,7 +1901,7 @@ func TestTealDryrun(t *testing.T) {
 	gdr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: sucOps.Program,
 			},
 		},
@@ -1963,7 +2102,7 @@ func TestGetProofDefault(t *testing.T) {
 	var resp model.TransactionProofResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	a.NoError(err)
-	a.Equal(model.TransactionProofResponseHashtypeSha512256, resp.Hashtype)
+	a.Equal(model.TransactionProofHashtypeSha512256, resp.Hashtype)
 
 	l := handler.Node.LedgerForAPI()
 	blkHdr, err := l.BlockHdr(1)
@@ -2021,8 +2160,7 @@ func newEmptyBlock(a *require.Assertions, lastBlock bookkeeping.Block, genBlk bo
 }
 
 func addStateProof(blk bookkeeping.Block) bookkeeping.Block {
-	round := uint64(blk.Round())
-	stateProofRound := (round/stateProofInterval - 1) * stateProofInterval
+	stateProofRound := (blk.Round()/stateProofInterval - 1) * stateProofInterval
 	tx := transactions.SignedTxn{
 		Txn: transactions.Transaction{
 			Type:   protocol.StateProofTx,
@@ -2037,7 +2175,7 @@ func addStateProof(blk bookkeeping.Block) bookkeeping.Block {
 			},
 		},
 	}
-	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: transactions.SignedTxnWithAD{SignedTxn: tx}}
+	txnib := transactions.SignedTxnInBlock{SignedTxnWithAD: tx.WithAD()}
 	blk.Payset = append(blk.Payset, txnib)
 
 	updatedStateProofTracking := bookkeeping.StateProofTrackingData{
@@ -2166,7 +2304,7 @@ func TestGetBlockProof200(t *testing.T) {
 	proofResp := model.LightBlockHeaderProofResponse{}
 	a.NoError(json.Unmarshal(responseRecorder.Body.Bytes(), &proofResp))
 	a.Equal(proofResp.Proof, leafproof.GetConcatenatedProof())
-	a.Equal(proofResp.Treedepth, uint64(leafproof.TreeDepth))
+	a.EqualValues(proofResp.Treedepth, leafproof.TreeDepth)
 }
 
 func TestStateproofTransactionForRound(t *testing.T) {
@@ -2190,14 +2328,14 @@ func TestStateproofTransactionForRound(t *testing.T) {
 	defer cncl()
 	txn, err := v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(stateProofInterval*2+1), 1000, nil)
 	a.NoError(err)
-	a.Equal(2*stateProofInterval+1, txn.Message.FirstAttestedRound)
-	a.Equal(3*stateProofInterval, txn.Message.LastAttestedRound)
+	a.EqualValues(2*stateProofInterval+1, txn.Message.FirstAttestedRound)
+	a.EqualValues(3*stateProofInterval, txn.Message.LastAttestedRound)
 	a.Equal([]byte{0x0, 0x1, 0x2}, txn.Message.BlockHeadersCommitment)
 
 	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, basics.Round(2*stateProofInterval), 1000, nil)
 	a.NoError(err)
-	a.Equal(stateProofInterval+1, txn.Message.FirstAttestedRound)
-	a.Equal(2*stateProofInterval, txn.Message.LastAttestedRound)
+	a.EqualValues(stateProofInterval+1, txn.Message.FirstAttestedRound)
+	a.EqualValues(2*stateProofInterval, txn.Message.LastAttestedRound)
 
 	txn, err = v2.GetStateProofTransactionForRound(ctx, &ledger, 999, 1000, nil)
 	a.ErrorIs(err, v2.ErrNoStateProofForRound)
@@ -2356,13 +2494,13 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	blk2 := bookkeeping.BlockHeader{Round: 2}
 	delta1 := ledgercore.StateDelta{Hdr: &blk1}
 	delta2 := ledgercore.StateDelta{Hdr: &blk2, KvMods: map[string]ledgercore.KvValueDelta{"bx1": {Data: []byte("foobar")}}}
-	txn1 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}}
+	txn1 := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.PaymentTx}}.WithAD()
 	groupID1, err := crypto.DigestFromString(crypto.Hash([]byte("hello")).String())
 	require.NoError(t, err)
-	txn2 := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: transactions.Transaction{
+	txn2 := transactions.SignedTxn{Txn: transactions.Transaction{
 		Type:   protocol.AssetTransferTx,
 		Header: transactions.Header{Group: groupID1}},
-	}}
+	}.WithAD()
 
 	tracer := eval.MakeTxnGroupDeltaTracer(2)
 	handlers := v2.Handlers{
@@ -2387,7 +2525,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	jsonFormatForRound := model.GetTransactionGroupLedgerStateDeltasForRoundParamsFormatJson
 	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
 		c,
-		uint64(1),
+		1,
 		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
 	)
 	require.NoError(t, err)
@@ -2405,7 +2543,7 @@ func TestDeltasForTxnGroup(t *testing.T) {
 	c, rec = newReq(t)
 	err = handlers.GetTransactionGroupLedgerStateDeltasForRound(
 		c,
-		uint64(4),
+		4,
 		model.GetTransactionGroupLedgerStateDeltasForRoundParams{Format: &jsonFormatForRound},
 	)
 	require.NoError(t, err)
@@ -2541,7 +2679,7 @@ func TestGeneratePartkeys(t *testing.T) {
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 
-		err := handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+		err := handler.GenerateParticipationKeys(c, addr, model.GenerateParticipationKeysParams{
 			First: 1000,
 			Last:  2000,
 		})
@@ -2563,7 +2701,7 @@ func TestGeneratePartkeys(t *testing.T) {
 		// Simulate a blocked keygen process (and block until the previous keygen is complete)
 		err := handler.KeygenLimiter.Acquire(context.Background(), 1)
 		require.NoError(t, err)
-		err = handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+		err = handler.GenerateParticipationKeys(c, addr, model.GenerateParticipationKeysParams{
 			First: 1000,
 			Last:  2000,
 		})

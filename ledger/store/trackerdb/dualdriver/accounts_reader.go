@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,10 @@
 package dualdriver
 
 import (
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/google/go-cmp/cmp"
 )
 
 type accountsReader struct {
@@ -142,20 +143,21 @@ func (ar *accountsReader) LookupKeyValue(key string) (pv trackerdb.PersistedKVDa
 }
 
 // LookupKeysByPrefix implements trackerdb.AccountsReader
-func (ar *accountsReader) LookupKeysByPrefix(prefix, next string, maxBoxes, maxBytes int, values bool) (basics.Round, map[string]string, string, error) {
-	roundP, resP, nextP, errP := ar.primary.LookupKeysByPrefix(prefix, next, maxBoxes, maxBytes, values)
-	roundS, resS, nextS, errS := ar.secondary.LookupKeysByPrefix(prefix, next, maxBoxes, maxBytes, values)
+func (ar *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+	roundP, errP := ar.primary.LookupKeysByPrefix(prefix, maxKeyNum, results, resultCount)
+	roundS, errS := ar.secondary.LookupKeysByPrefix(prefix, maxKeyNum, results, resultCount)
 	// coalesce errors
-	err := coalesceErrors(errP, errS)
+	err = coalesceErrors(errP, errS)
 	if err != nil {
-		return 0, nil, "", err
+		return
 	}
 	// check results match
-	if roundP != roundS || !cmp.Equal(resP, resS) || nextP != nextS {
-		return 0, nil, "", ErrInconsistentResult
+	if roundP != roundS {
+		err = ErrInconsistentResult
+		return
 	}
 	// return primary results
-	return roundP, resP, nextP, nil
+	return roundP, nil
 }
 
 // LookupResources implements trackerdb.AccountsReader

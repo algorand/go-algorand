@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,11 +20,11 @@ import (
 	"encoding/binary"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/assert"
 )
 
 func makeKeyFromSeed(i uint64) *crypto.SignatureSecrets {

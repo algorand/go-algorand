@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ import (
 	"unicode"
 
 	"github.com/algorand/avm-abi/abi"
+
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -1735,12 +1736,8 @@ func addPseudoDocTags() {
 			if spec.Name == name || i == anyImmediates {
 				continue
 			}
-			msg := fmt.Sprintf("`%s` can be called using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
 			desc := opDescByName[spec.Name]
-			if desc.Short == "" {
-				panic(spec.Name)
-			}
-			desc.Short = desc.Short + "<br />" + msg
+			desc.Sugar = fmt.Sprintf("`%s` can be called by using `%s` with %s.", spec.Name, name, joinIntsOnOr("immediate", i))
 			opDescByName[spec.Name] = desc
 		}
 	}
@@ -2207,7 +2204,7 @@ func checkMacroName(macroName string, version uint64, labels map[string]int) err
 		} else if count == 1 {
 			secondRune = r
 		}
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !otherAllowedChars[r] {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && (int(r) >= len(otherAllowedChars) || !otherAllowedChars[r]) {
 			return fmt.Errorf("%s character not allowed in macro name", string(r))
 		}
 		count++

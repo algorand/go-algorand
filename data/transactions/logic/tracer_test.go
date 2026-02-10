@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,11 +19,12 @@ package logic_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 	. "github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 type tracerTestCase struct {
@@ -214,7 +215,7 @@ func (t *panicTracer) AfterOpcode(cx *EvalContext, evalError error) {
 	panic("panicTracer panics")
 }
 
-// TestEvalWithTracerTracerPanic ensures that tracer panics get recovered and turned into errors
+// TestEvalWithTracerPanic ensures that tracer panics get recovered and turned into errors
 func TestEvalWithTracerPanic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

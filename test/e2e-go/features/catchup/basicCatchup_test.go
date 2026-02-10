@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,8 +56,8 @@ func TestBasicCatchup(t *testing.T) {
 	a.NoError(err)
 
 	// Let the network make some progress
-	waitForRound := uint64(3)
-	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(3)
+	const waitForRound = 3
+	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Now spin up third node
@@ -153,7 +153,7 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 	a.NoError(err)
 
 	// Let the secondary make progress up to round 3, while the primary was never startred ( hence, it's on round = 0)
-	waitForRound := uint64(3)
+	const waitForRound = 3
 	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
@@ -256,7 +256,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 
 	// Let the network make some progress
 	a.NoError(err)
-	waitForRound := uint64(3) // UpgradeVoteRounds + DefaultUpgradeWaitRounds
+	const waitForRound = 3 // UpgradeVoteRounds + DefaultUpgradeWaitRounds
 	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
@@ -332,7 +332,7 @@ func shutdownClonedNode(nodeDataDir string, f *fixtures.RestClientFixture, t *te
 	}
 }
 
-// TestBasicCatchupCompletes confirms the the catchup eventually completes and stops.
+// TestBasicCatchupCompletes confirms that catchup eventually completes and stops.
 func TestBasicCatchupCompletes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -364,7 +364,7 @@ func TestBasicCatchupCompletes(t *testing.T) {
 	// Let the network make some progress.
 	// Make it long enough so the catchup to it is longer than a single round agreement
 	a.NoError(err)
-	waitForRound := uint64(100)
+	const waitForRound = 100
 
 	// Now prepare a third node
 	cloneDataDir := filepath.Join(fixture.PrimaryDataDir(), "../clone")

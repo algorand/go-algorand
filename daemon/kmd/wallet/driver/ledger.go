@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,9 +136,9 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 			continue
 		}
 
-		dev, err := info.Open()
-		if err != nil {
-			lwd.log.Warnf("enumerated but failed to open ledger %s %x: %v", info.Path, info.ProductID, err)
+		dev, err1 := info.Open()
+		if err1 != nil {
+			lwd.log.Warnf("enumerated but failed to open ledger %s %x: %v", info.Path, info.ProductID, err1)
 			continue
 		}
 
@@ -398,7 +398,7 @@ func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 }
 
 // MultisigSignProgram implements the Wallet interface.
-func (lw *LedgerWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
+func (lw *LedgerWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, useLegacyMsig bool) (crypto.MultisigSig, error) {
 	isValidKey := false
 	for i := 0; i < len(partial.Subsigs); i++ {
 		subsig := &partial.Subsigs[i]

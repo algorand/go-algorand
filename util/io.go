@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -190,8 +190,8 @@ func CopyFolder(source, dest string) error {
 }
 
 func copyFolder(source string, dest string, info os.FileInfo, includeFilter IncludeFilter) (err error) {
-	if err := os.MkdirAll(dest, info.Mode()); err != nil {
-		return fmt.Errorf("error creating destination folder: %v", err)
+	if err1 := os.MkdirAll(dest, info.Mode()); err1 != nil {
+		return fmt.Errorf("error creating destination folder: %v", err1)
 	}
 
 	contents, err := os.ReadDir(source)

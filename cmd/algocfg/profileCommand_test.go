@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,10 +19,9 @@ package main
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -83,6 +82,7 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableP2PHybridMode)
 		require.Equal(t, ":4190", cfg.P2PHybridNetAddress)
 		require.True(t, cfg.EnableDHTProviders)
+		require.Equal(t, "server", cfg.DHTMode)
 	})
 
 	t.Run("valid config test hybrid archival", func(t *testing.T) {
@@ -103,6 +103,7 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableP2PHybridMode)
 		require.Equal(t, ":4190", cfg.P2PHybridNetAddress)
 		require.True(t, cfg.EnableDHTProviders)
+		require.Equal(t, "server", cfg.DHTMode)
 	})
 
 	t.Run("valid config test hybrid client", func(t *testing.T) {
@@ -124,5 +125,6 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableP2PHybridMode)
 		require.Equal(t, "", cfg.P2PHybridNetAddress)
 		require.True(t, cfg.EnableDHTProviders)
+		require.Equal(t, "client", cfg.DHTMode)
 	})
 }

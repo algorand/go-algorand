@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,14 +24,15 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/bloom"
+	"github.com/cockroachdb/pebble/vfs"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/generickv"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/bloom"
-	"github.com/cockroachdb/pebble/vfs"
 )
 
 const (
@@ -72,10 +73,7 @@ func Open(dbdir string, inMem bool, proto config.ConsensusParams, log logging.Lo
 	maxMemTableSize := 4<<30 - 1 // Capped by 4 GB
 
 	memTableLimit := 2 // default: 2
-	memTableSize := cache * 1024 * 1024 / 2 / memTableLimit
-	if memTableSize > maxMemTableSize {
-		memTableSize = maxMemTableSize
-	}
+	memTableSize := min(cache*1024*1024/2/memTableLimit, maxMemTableSize)
 
 	// configure pebbledb
 	opts := &pebble.Options{

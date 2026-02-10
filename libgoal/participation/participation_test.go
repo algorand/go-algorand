@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,13 +17,13 @@
 package participation
 
 import (
-	"github.com/algorand/go-algorand/data/account"
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/test/partitiontest"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"testing"
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestGenParticipationKeysTo_Install(t *testing.T) {
@@ -72,8 +72,8 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 
 	var addr basics.Address
 	addr[1] = 1
-	first := uint64(1000)
-	last := uint64(2000)
+	const first = 1000
+	const last = 2000
 
 	testcases := []struct {
 		name     string
@@ -83,7 +83,7 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 		{
 			name:     "default",
 			dilution: 0,
-			expected: account.DefaultKeyDilution(basics.Round(first), basics.Round(last)),
+			expected: account.DefaultKeyDilution(first, last),
 		}, {
 			name:     "override",
 			dilution: 5,

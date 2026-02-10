@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -109,15 +109,15 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	return
 }
 
-func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks int) {
-	var err error
-	for i := 0; i < numBlocks; i++ {
+func addBlocks(t *testing.T, ledger *data.Ledger, blk bookkeeping.Block, numBlocks basics.Round) {
+	for range numBlocks {
+		var err error
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		blk.TxnCommitments, err = blk.PaysetCommit()
 		require.NoError(t, err)
 
-		err := ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
+		err = ledger.AddBlock(blk, agreement.Certificate{Round: blk.BlockHeader.Round})
 		require.NoError(t, err)
 
 		hdr, err := ledger.BlockHdr(blk.BlockHeader.Round)
@@ -295,24 +295,6 @@ func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMe
 	default:
 	}
 
-	return nil
-}
-
-func (p *testUnicastPeer) Version() string {
-	return p.version
-}
-
-func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
-	ps := p.gn.(*httpTestPeerSource)
-	var dispather network.MessageHandler
-	for _, v := range ps.dispatchHandlers {
-		if v.Tag == tag {
-			dispather = v.MessageHandler
-			break
-		}
-	}
-	require.NotNil(p.t, dispather)
-	dispather.Handle(network.IncomingMessage{Tag: tag, Data: msg, Sender: p, Net: p.gn})
 	return nil
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,9 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -388,9 +389,9 @@ func BenchmarkCryptoVerifierBundleVertification(b *testing.B) {
 	}
 }
 
-// TestCryptoVerifierVerificationFailures tests to see that the cryptoVerifier.VerifyVote returns an error in the vote response
+// TestCryptoVerifierVerificationErrs tests to see that the cryptoVerifier.VerifyVote returns an error in the vote response
 // when being unable to enqueue a vote.
-func TestCryptoVerifierVerificationFailures(t *testing.T) {
+func TestCryptoVerifierVerificationErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	mainPool := execpool.MakePool(t)

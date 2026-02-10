@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,8 +33,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/golang/snappy"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -183,10 +184,7 @@ func (ct *catchpointTracker) initialize(cfg config.Local, paths DirsAndPrefix) {
 		ct.enableGeneratingCatchpointFiles = true
 	}
 
-	ct.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
-	if cfg.CatchpointFileHistoryLength < -1 {
-		ct.catchpointFileHistoryLength = -1
-	}
+	ct.catchpointFileHistoryLength = max(cfg.CatchpointFileHistoryLength, -1)
 }
 
 // GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.

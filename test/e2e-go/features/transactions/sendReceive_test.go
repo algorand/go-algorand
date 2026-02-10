@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -135,7 +134,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		if waitForTransaction {
 			curStatus, _ := pongClient.Status()
 			curRound := curStatus.LastRound
-			err = fixture.WaitForRoundWithTimeout(curRound + uint64(1))
+			err = fixture.WaitForRoundWithTimeout(curRound + 1)
 			a.NoError(err)
 		}
 	}
@@ -145,10 +144,10 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	confirmed := true
 
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
-	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+uint64(5))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+uint64(5))
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pingTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+5)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pongTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+5)
 
 	pingBalance, err = pongClient.GetBalance(pingAccount)
 	a.NoError(err)
@@ -158,10 +157,10 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
-	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+uint64(5))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+uint64(5))
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pingTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+5)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pongTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+5)
 
 	pingBalance, err = pingClient.GetBalance(pingAccount)
 	a.NoError(err)

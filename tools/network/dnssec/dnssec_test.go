@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,10 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestLookup(t *testing.T) {

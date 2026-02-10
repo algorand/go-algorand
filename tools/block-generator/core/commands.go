@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,10 @@
 package core
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
 	"github.com/algorand/go-algorand/tools/block-generator/runner"
-	"github.com/spf13/cobra"
 )
 
 // BlockGenerator related cobra commands, ready to be executed or included as subcommands.

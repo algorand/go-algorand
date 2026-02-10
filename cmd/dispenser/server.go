@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,12 +18,10 @@ package main
 
 import (
 	_ "embed"
-	"html"
-
-	// "bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -136,7 +134,7 @@ func dispense(w http.ResponseWriter, r *http.Request) {
 	targets := r.Form["target"]
 	if len(targets) != 1 {
 		log.Printf("Corrupted target argument\n")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Corrupted target argument", http.StatusBadRequest)
 		return
 	}
 

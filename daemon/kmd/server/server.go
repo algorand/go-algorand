@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,8 +26,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/gofrs/flock"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/daemon/kmd/api"
 	"github.com/algorand/go-algorand/daemon/kmd/session"
@@ -223,9 +224,9 @@ func (ws *WalletServer) start(kill chan os.Signal) (died chan error, sock string
 		ws.mux.Unlock()
 
 		// Shut down the server
-		err := srv.Shutdown(context.Background())
-		if err != nil {
-			ws.Log.Warnf("non-nil error stopping kmd wallet HTTP server: %s", err)
+		err1 := srv.Shutdown(context.Background())
+		if err1 != nil {
+			ws.Log.Warnf("non-nil error stopping kmd wallet HTTP server: %s", err1)
 		}
 	}()
 

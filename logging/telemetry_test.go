@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -341,12 +340,9 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	tempDir := os.TempDir()
-	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()
-	config.SetGlobalConfigFileRoot(tempDir)
 
-	cfg, err := ReadTelemetryConfigOrDefault("", "")
+	cfg, err := ReadTelemetryConfigOrDefault("", tempDir)
 	defaultCfgSettings := createTelemetryConfig()
-	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
 
 	a.Nil(err)
 	a.NotNil(cfg)

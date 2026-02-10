@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,7 +136,7 @@ func (tr *VotersForRound) LoadTree(onlineAccountsFetcher OnlineAccountsFetcher, 
 
 	for i, acct := range top {
 		var ot basics.OverflowTracker
-		rewards := basics.PendingRewards(&ot, tr.Proto, acct.MicroAlgos, acct.RewardsBase, hdr.RewardsLevel)
+		rewards := basics.PendingRewards(&ot, tr.Proto.RewardUnit, acct.MicroAlgos, acct.RewardsBase, hdr.RewardsLevel)
 		money := ot.AddA(acct.MicroAlgos, rewards)
 		if ot.Overflowed {
 			return fmt.Errorf("votersTracker.LoadTree: overflow adding rewards %d + %d", acct.MicroAlgos, rewards)

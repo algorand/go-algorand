@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,7 +43,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34" version[35]:"35" version[36]:"36"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34" version[35]:"35" version[36]:"36" version[37]:"37" version[38]:"38"`
 
 	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes.  If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only affects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
 	Archival bool `version[0]:"false"`
@@ -248,9 +247,11 @@ type Local struct {
 	// TxBacklogAppTxPerSecondRate determines a target app per second rate for the app tx rate limiter
 	TxBacklogAppTxPerSecondRate int `version[32]:"100"`
 
-	// TxBacklogRateLimitingCongestionRatio determines the backlog filling threshold percentage at which the app limiter kicks in
-	// or the tx backlog rate limiter kicks off.
+	// TxBacklogRateLimitingCongestionRatio determines the backlog filling threshold percentage at which the tx backlog rate limiter kicks off
 	TxBacklogRateLimitingCongestionPct int `version[32]:"50"`
+
+	// TxBacklogAppRateLimitingCongestionPct determines the backlog filling threshold percentage at which the app limiter kicks in
+	TxBacklogAppRateLimitingCongestionPct int `version[38]:"10"`
 
 	// EnableTxBacklogAppRateLimiting controls if an app rate limiter should be attached to the tx backlog enqueue process
 	EnableTxBacklogAppRateLimiting bool `version[32]:"true"`
@@ -327,7 +328,7 @@ type Local struct {
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
-	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in in the header and always uses the last value
+	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in the header and always uses the last value
 	// from the last X-Forwarded-For HTTP header that corresponds to a single reverse proxy (even if it received the request from another reverse proxy or adversary node).
 	//
 	// WARNING: By enabling this option, you are trusting peers to provide accurate forwarding addresses.
@@ -625,8 +626,16 @@ type Local struct {
 	// P2PHybridNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
 	P2PHybridNetAddress string `version[34]:""`
 
-	// EnableDHT will turn on the hash table for use with capabilities advertisement
+	// EnableDHTProviders enables the DHT for peer discovery and capabilities advertisement.
 	EnableDHTProviders bool `version[34]:"false"`
+
+	// DHTMode controls the DHT operation mode.
+	// Valid values:
+	// - "" (default): nodes with a listen address (NetAddress or P2PHybridNetAddress) use "server" mode
+	//   to be discoverable; other nodes use "client" mode
+	// - "server": always operate as DHT server, respond to queries and advertise peer ID
+	// - "client": operate as DHT client only, query the DHT without advertising or being discoverable
+	DHTMode string `version[38]:""`
 
 	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
 	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
@@ -646,6 +655,18 @@ type Local struct {
 
 	// EnableVoteCompression controls whether vote compression is enabled for websocket networks
 	EnableVoteCompression bool `version[36]:"true"`
+
+	// StatefulVoteCompressionTableSize controls the size of the per-peer tables used for vote compression.
+	// If 0, stateful vote compression is disabled (but stateless vote compression will still be used if
+	// EnableVoteCompression is true). This value should be a power of 2 between 16 and 2048, inclusive.
+	// The per-peer overhead for stateful compression in one direction (from peer A => B) is 224 bytes times
+	// this value, plus 800 bytes of fixed overhead; it is twice that if votes are also being sent from B => A.
+	// So the default value of 2048 requires 459,552 bytes of memory per peer for stateful vote compression
+	// in one direction, or 919,104 bytes if both directions are used.
+	StatefulVoteCompressionTableSize uint `version[37]:"2048"`
+
+	// EnableBatchVerification controls whether ed25519 batch verification is enabled
+	EnableBatchVerification bool `version[37]:"true"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
@@ -667,8 +688,8 @@ func (cfg Local) ValidateDNSBootstrapArray(networkID protocol.NetworkID) ([]*DNS
 func (cfg Local) internalValidateDNSBootstrapArray(networkID protocol.NetworkID) (
 	bootstrapArray []*DNSBootstrap, err error) {
 
-	bootstrapStringArray := strings.Split(cfg.DNSBootstrapID, ";")
-	for _, bootstrapString := range bootstrapStringArray {
+	bootstrapStringArray := strings.SplitSeq(cfg.DNSBootstrapID, ";")
+	for bootstrapString := range bootstrapStringArray {
 		if len(strings.TrimSpace(bootstrapString)) == 0 {
 			continue
 		}
@@ -754,20 +775,20 @@ func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }
 
-// IsGossipServer returns true if this node supposed to start websocket or p2p server
-func (cfg Local) IsGossipServer() bool {
-	return cfg.IsWsGossipServer() || cfg.IsP2PGossipServer()
+// IsListenServer returns true if this node supposed to start websocket or p2p server
+func (cfg Local) IsListenServer() bool {
+	return cfg.IsWsListenServer() || cfg.IsP2PListenServer()
 }
 
-// IsWsGossipServer returns true if a node is configured to run a listening ws net
-func (cfg Local) IsWsGossipServer() bool {
+// IsWsListenServer returns true if a node is configured to run a listening ws net
+func (cfg Local) IsWsListenServer() bool {
 	// 1. NetAddress is set and EnableP2P is not set
 	// 2. NetAddress is set and EnableP2PHybridMode is set then EnableP2P is overridden  by EnableP2PHybridMode
 	return cfg.NetAddress != "" && (!cfg.EnableP2P || cfg.EnableP2PHybridMode)
 }
 
-// IsP2PGossipServer returns true if a node is configured to run a listening p2p net
-func (cfg Local) IsP2PGossipServer() bool {
+// IsP2PListenServer returns true if a node is configured to run a listening p2p net
+func (cfg Local) IsP2PListenServer() bool {
 	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PHybridNetAddress != "")
 }
 
@@ -780,10 +801,26 @@ func (cfg Local) IsHybridServer() bool {
 func (cfg Local) ValidateP2PHybridConfig() error {
 	if cfg.EnableP2PHybridMode {
 		if cfg.NetAddress == "" && cfg.P2PHybridNetAddress != "" || cfg.NetAddress != "" && cfg.P2PHybridNetAddress == "" {
-			return errors.New("both NetAddress and P2PHybridNetAddress must be set or unset")
+			return P2PHybridConfigError{
+				msg: "P2PHybridMode requires both NetAddress and P2PHybridNetAddress to be set or unset",
+			}
+		}
+		// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
+		// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
+		if (cfg.NetAddress != "" || cfg.P2PHybridNetAddress != "") && cfg.PublicAddress == "" {
+			return P2PHybridConfigError{msg: "PublicAddress must be specified when EnableP2PHybridMode is set"}
 		}
 	}
 	return nil
+}
+
+// P2PHybridConfigError is an error type for P2PHybrid configuration issues
+type P2PHybridConfigError struct {
+	msg string
+}
+
+func (e P2PHybridConfigError) Error() string {
+	return e.msg
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
@@ -853,6 +890,7 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 
 type logger interface {
 	Infof(format string, args ...interface{})
+	Warnf(format string, args ...interface{})
 }
 
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
@@ -986,7 +1024,7 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 			// split the rest of the delta between ws and p2p evenly
 			splitRatio = 2
 		}
-		if cfg.IsWsGossipServer() || cfg.IsP2PGossipServer() {
+		if cfg.IsWsListenServer() || cfg.IsP2PListenServer() {
 			if cfg.IncomingConnectionsLimit > int(restDelta) {
 				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
@@ -1040,4 +1078,36 @@ func (cfg *Local) TracksCatchpoints() bool {
 		return true
 	}
 	return false
+}
+
+// NormalizedVoteCompressionTableSize validates and normalizes the StatefulVoteCompressionTableSize config value.
+// Supported values are powers of 2 in the range [16, 2048].
+// Values >= 2048 clamp to 2048.
+// Values 1-15 are below the minimum and return 0 (disabled).
+// Values between supported powers of 2 round down to the nearest supported value.
+// Logs a message if the configured value is adjusted.
+// Returns the normalized size.
+func (cfg Local) NormalizedVoteCompressionTableSize(log logger) uint {
+	configured := cfg.StatefulVoteCompressionTableSize
+	if configured == 0 {
+		return 0
+	}
+	if configured < 16 {
+		log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid (minimum 16). Stateful vote compression disabled.", configured)
+		return 0
+	}
+	// Round down to nearest power of 2 within supported range [16, 2048]
+	supportedSizes := []uint{2048, 1024, 512, 256, 128, 64, 32, 16}
+	for _, size := range supportedSizes {
+		if configured >= size {
+			if configured != size {
+				log.Infof("StatefulVoteCompressionTableSize configured as %d, using nearest supported value: %d", configured, size)
+			}
+			return size
+		}
+	}
+
+	// Should never reach here given the checks above
+	log.Warnf("StatefulVoteCompressionTableSize configured as %d is invalid. Stateful vote compression disabled.", configured)
+	return 0
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,8 +30,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -39,8 +41,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-
-	"pgregory.net/rapid"
+	"github.com/algorand/go-algorand/util"
 )
 
 type protoOpt func(*config.ConsensusParams)
@@ -86,7 +87,7 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 
 		// With the addition of itxn_field, itxn_submit, which rely on
 		// machinery outside logic package for validity checking, we
-		// need a more realistic set of consensus paramaters.
+		// need a more realistic set of consensus parameters.
 		Asset:                 true,
 		MaxAssetNameBytes:     12,
 		MaxAssetUnitNameBytes: 6,
@@ -133,6 +134,9 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 			MinBalance:  5,
 			MaxBalance:  6,
 		},
+
+		EnableAppVersioning: true,
+		AppSizeUpdates:      true,
 	}
 	for _, opt := range opts {
 		if opt != nil { // so some callsites can take one arg and pass it in
@@ -283,7 +287,7 @@ func TestEmptyProgram(t *testing.T) {
 	testLogicBytes(t, nil, nil, "invalid", "invalid program (empty)")
 }
 
-// TestMinAvmVersionParamEval tests eval/check reading the minAvmVersion from the param
+// TestMinAvmVersionParamEvalCheckSignature tests eval/check reading the minAvmVersion from the param
 func TestMinAvmVersionParamEvalCheckSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1087,7 +1091,7 @@ func TestTxnBadField(t *testing.T) {
 	testLogicBytes(t, program, nil, "invalid txn field")
 	// TODO: Check should know the type stack was wrong
 
-	// test txn does not accept ApplicationArgs and Accounts
+	// test that `txn` does not accept ApplicationArgs and Accounts, `txna` is necessary
 	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
 	txnaOpcode := OpsByName[LogicVersion]["txna"].Opcode
 
@@ -1269,6 +1273,9 @@ global PayoutsMaxBalance; int 6; ==; assert
 const globalV12TestProgram = globalV11TestProgram + `
 `
 
+const globalV13TestProgram = globalV12TestProgram + `
+`
+
 func TestAllGlobals(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1292,6 +1299,7 @@ func TestAllGlobals(t *testing.T) {
 		10: {GenesisHash, globalV10TestProgram},
 		11: {PayoutsMaxBalance, globalV11TestProgram},
 		12: {PayoutsMaxBalance, globalV12TestProgram},
+		13: {PayoutsMaxBalance, globalV13TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1393,7 +1401,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	}
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
 	require.Equal(t, int(invalidOnCompletionConst), last)
-	require.Equal(t, len(onCompletionMap), len(onCompletionDescriptions))
+	require.Equal(t, len(onCompletionMap), len(OnCompletionDescriptions))
 	require.Equal(t, len(OnCompletionNames), last)
 	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
@@ -1809,6 +1817,10 @@ txn RejectVersion
 !
 `
 
+const testTxnProgramTextV13 = testTxnProgramTextV12 + `
+assert
+int 1`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1835,8 +1847,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
 	txn.Txn.ApplicationID = basics.AppIndex(888)
-	txn.Txn.Accounts = make([]basics.Address, 1)
-	txn.Txn.Accounts[0] = txn.Txn.Receiver
+	txn.Txn.Accounts = []basics.Address{txn.Txn.Receiver}
 	rekeyToAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05")
 	metadata := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeuiHH")
 	managerAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui06")
@@ -1924,6 +1935,7 @@ func TestTxn(t *testing.T) {
 		10: testTxnProgramTextV10,
 		11: testTxnProgramTextV11,
 		12: testTxnProgramTextV12,
+		13: testTxnProgramTextV13,
 	}
 
 	for i, txnField := range TxnFieldNames {
@@ -2811,7 +2823,7 @@ int 100; byte 0x0201; == // types mismatch so this will fail
 	err := testPanics(t, badsource, 1, "cannot compare")
 	attrs := basics.Attributes(err)
 	zeros := [256]int{}
-	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	scratch := util.Map(zeros[:], func(i int) any { return uint64(i) })
 	scratch[10] = uint64(5)
 	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
 	require.Equal(t, map[string]any{
@@ -2830,7 +2842,7 @@ int 4; store 2			// store an int
 byte "jj"; store 3		// store a bytes
 int 1
 `
-	gscratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	gscratch := util.Map(zeros[:], func(i int) any { return uint64(i) })
 	gscratch[2] = uint64(4)
 	gscratch[3] = []byte("jj")
 
@@ -4505,7 +4517,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			require.Contains(t, source, spec.Name)
 			ops := testProg(t, source, 2)
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalContract
-			err := CheckContract(ops.Program, aep)
+			err := CheckContract(ops.Program, 0, aep)
 			require.NoError(t, err, source)
 			_, err = EvalApp(ops.Program, 0, 0, aep)
 			if spec.Name != "return" {
@@ -4589,7 +4601,7 @@ func TestLinearOpcodes(t *testing.T) {
 	}
 }
 
-func TestRekeyFailsOnOldVersion(t *testing.T) {
+func TestRekeyErrsOnOldVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -6226,5 +6238,5 @@ func TestMaxTxGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, config.MaxTxGroupSize, maxTxGroupSize)
+	require.Equal(t, bounds.MaxTxGroupSize, maxTxGroupSize)
 }

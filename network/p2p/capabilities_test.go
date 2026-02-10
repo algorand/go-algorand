@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"math/rand"
 	"sync"
@@ -42,6 +43,7 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	var bootstrapPeers []peer.AddrInfo
 	var dhts []*dht.IpfsDHT
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "localhost:0" // enable DHT server mode
 	for i := 0; i < numHosts; i++ {
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
@@ -93,6 +95,7 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 	var bootstrapPeers []peer.AddrInfo
 	var capsDisc []*CapabilitiesDiscovery
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "localhost:0" // enable DHT server mode
 	for i := 0; i < numHosts; i++ {
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
@@ -314,4 +317,54 @@ func TestCapabilities_ExcludesSelf(t *testing.T) {
 	err := disc[0].Close()
 	require.NoError(t, err)
 	disc[0].wg.Wait()
+}
+
+// TestCapabilities_NoPeers makes sure no errors logged when no peers in routing table on advertise
+func TestCapabilities_NoPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// create a single host/DHT => no peers in routing table
+	cfg := config.GetDefaultLocal()
+	tmpdir := t.TempDir()
+	pk, err := GetPrivKey(cfg, tmpdir)
+	require.NoError(t, err)
+	ps, err := peerstore.NewPeerStore(nil, "")
+	require.NoError(t, err)
+	h, err := libp2p.New(
+		libp2p.ListenAddrStrings("/dns4/localhost/tcp/0"),
+		libp2p.Identity(pk),
+		libp2p.Peerstore(ps))
+	require.NoError(t, err)
+	defer h.Close()
+
+	ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, func() []peer.AddrInfo { return nil })
+	require.NoError(t, err)
+	err = ht.Bootstrap(context.Background())
+	require.NoError(t, err)
+	defer ht.Close()
+
+	disc, err := algodht.MakeDiscovery(ht)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	log := logging.NewLogger()
+	log.SetLevel(logging.Info)
+	log.SetOutput(&buf)
+
+	cd := &CapabilitiesDiscovery{
+		disc: disc,
+		dht:  ht,
+		log:  log,
+	}
+	defer cd.Close()
+
+	cd.AdvertiseCapabilities(Archival)
+
+	// sleep 3x capAdvertisementInitialDelay to allow for the log messages to be generated
+	time.Sleep(3 * capAdvertisementInitialDelay)
+
+	logData := buf.String()
+	require.NotContains(t, logData, "advertised capability")
+	require.NotContains(t, logData, "failed to advertise for capability")
+	require.NotContains(t, logData, "failed to find any peer in table")
 }

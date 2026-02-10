@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -284,10 +284,17 @@ func (nd *nodeDir) configureAdminAPIToken(token string) (err error) {
 }
 
 func (nd *nodeDir) configureTelemetry(enable bool) (err error) {
-	cfg, created, cfgErr := logging.EnsureTelemetryConfigCreated(nil, "")
+	root, err := config.GetGlobalConfigFileRoot()
+	var cfgDir *string
+	if err == nil {
+		cfgDir = &root
+	}
+	cfg, created, cfgErr := logging.EnsureTelemetryConfigCreated(nil, cfgDir)
 	if cfgErr != nil {
 		return cfgErr
 	}
+
+	config.AnnotateTelemetry(&cfg, nd.configurator.genesisData.ID())
 
 	// Override default enabling of new telemetry config
 	if created {

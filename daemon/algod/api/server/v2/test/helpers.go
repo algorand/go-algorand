@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -116,7 +116,7 @@ func (m *mockNode) RemoveParticipationKey(id account.ParticipationID) error {
 	panic("implement me")
 }
 
-func (m *mockNode) SetSyncRound(rnd uint64) error {
+func (m *mockNode) SetSyncRound(rnd basics.Round) error {
 	args := m.Called(rnd)
 	return args.Error(0)
 }
@@ -124,9 +124,9 @@ func (m *mockNode) SetSyncRound(rnd uint64) error {
 func (m *mockNode) UnsetSyncRound() {
 }
 
-func (m *mockNode) GetSyncRound() uint64 {
+func (m *mockNode) GetSyncRound() basics.Round {
 	args := m.Called()
-	return uint64(args.Int(0))
+	return basics.Round(args.Int(0))
 }
 
 func (m *mockNode) AppendParticipationKeys(id account.ParticipationID, keys account.StateProofKeys) error {

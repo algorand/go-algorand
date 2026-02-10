@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
@@ -78,7 +79,7 @@ func TestWhaleJoin(t *testing.T) {
 	burn, err := c01.SendPaymentFromUnencryptedWallet(account01.Address, basics.Address{}.String(),
 		1000, 99_900_000_000_000, nil)
 	a.NoError(err)
-	receipt, err := fixture.WaitForConfirmedTxn(uint64(burn.LastValid), burn.ID().String())
+	receipt, err := fixture.WaitForConfirmedTxn(burn.LastValid, burn.ID().String())
 	a.NoError(err)
 
 	// 3. Wait lookback rounds
@@ -100,7 +101,7 @@ func TestWhaleJoin(t *testing.T) {
 	txn, err := c15.SendPaymentFromUnencryptedWallet(account15.Address, basics.Address{}.String(),
 		1000, 1, nil)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	a.NoError(err)
 	data, err = c15.AccountData(account15.Address)
 	a.NoError(err)
@@ -196,9 +197,10 @@ func TestBigIncrease(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
+	consensusVersion := protocol.ConsensusFuture
 	var fixture fixtures.RestClientFixture
 	const lookback = 32
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second/2, lookback)
+	fixture.FasterConsensus(consensusVersion, time.Second/2, lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()
 
@@ -227,7 +229,8 @@ func TestBigIncrease(t *testing.T) {
 	// have a fairly recent proposal, and not get knocked off.
 	pay(a, c1, account01.Address, account15.Address, 99*account01.Amount/100)
 
-	rekeyreg(a, c1, account01.Address, true)
+	proto := config.Consensus[consensusVersion]
+	rekeyreg(a, c1, proto, account01.Address, true)
 
 	// 2. Wait lookback rounds
 	wait(&fixture, a, lookback)
@@ -244,7 +247,7 @@ func TestBigIncrease(t *testing.T) {
 	a.True(data.IncentiveEligible)
 }
 
-func wait(f *fixtures.RestClientFixture, a *require.Assertions, count uint64) {
+func wait(f *fixtures.RestClientFixture, a *require.Assertions, count basics.Round) {
 	res, err := f.AlgodClient.Status()
 	a.NoError(err)
 	round := res.LastRound + count
@@ -253,9 +256,11 @@ func wait(f *fixtures.RestClientFixture, a *require.Assertions, count uint64) {
 
 func pay(a *require.Assertions, c libgoal.Client,
 	from string, to string, amount uint64) v2.PreEncodedTxInfo {
-	pay, err := c.SendPaymentFromUnencryptedWallet(from, to, 1000, amount, nil)
+	params, err := c.SuggestedParams()
 	a.NoError(err)
-	tx, err := c.WaitForConfirmedTxn(uint64(pay.LastValid), pay.ID().String())
+	pay, err := c.SendPaymentFromUnencryptedWallet(from, to, params.MinFee, amount, nil)
+	a.NoError(err)
+	tx, err := c.WaitForConfirmedTxn(pay.LastValid, pay.ID().String())
 	a.NoError(err)
 	return tx
 }
@@ -284,7 +289,7 @@ func offline(a *require.Assertions, client libgoal.Client, address string) trans
 	a.NoError(err)
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, offTx)
 	a.NoError(err)
-	txn, err := client.WaitForConfirmedTxn(uint64(offTx.LastValid), onlineTxID)
+	txn, err := client.WaitForConfirmedTxn(offTx.LastValid, onlineTxID)
 	a.NoError(err)
 	// sync up with the network
 	_, err = client.WaitForRound(*txn.ConfirmedRound)
@@ -296,7 +301,7 @@ func offline(a *require.Assertions, client libgoal.Client, address string) trans
 }
 
 // Go online with the supplied key material
-func online(a *require.Assertions, client libgoal.Client, address string, keys transactions.KeyregTxnFields) uint64 {
+func online(a *require.Assertions, client libgoal.Client, address string, keys transactions.KeyregTxnFields) basics.Round {
 	// sanity check that we start offline
 	data, err := client.AccountData(address)
 	a.NoError(err)
@@ -311,7 +316,7 @@ func online(a *require.Assertions, client libgoal.Client, address string, keys t
 	a.NoError(err)
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, onTx)
 	a.NoError(err)
-	receipt, err := client.WaitForConfirmedTxn(uint64(onTx.LastValid), onlineTxID)
+	receipt, err := client.WaitForConfirmedTxn(onTx.LastValid, onlineTxID)
 	a.NoError(err)
 	data, err = client.AccountData(address)
 	a.NoError(err)

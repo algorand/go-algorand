@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -51,12 +50,6 @@ type mockUnicastPeer struct {
 
 func (d *mockUnicastPeer) GetAddress() string {
 	return d.address
-}
-func (d *mockUnicastPeer) Unicast(ctx context.Context, data []byte, tag protocol.Tag) error {
-	return nil
-}
-func (d *mockUnicastPeer) Version() string {
-	return ""
 }
 func (d *mockUnicastPeer) Request(ctx context.Context, tag network.Tag, topics network.Topics) (resp *network.Response, e error) {
 	return nil, nil
@@ -325,7 +318,7 @@ func peerSelectorTestRandVal(t *testing.T, seed int) float64 {
 	randVal = randVal + 1
 	return randVal
 }
-func TestPeerSelector_PeersDownloadFailed(t *testing.T) {
+func TestPeerSelector_PeersDownloadError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -632,7 +625,7 @@ func TestPeerSelector_ClassLowerBound(t *testing.T) {
 	}
 }
 
-// TestPeerSelector_Eviction tests that the peer is evicted after several download failures, and it handles same address for different peer classes
+// TestPeerSelector_EvictionAndUpgrade tests that the peer is evicted after several download failures, and it handles same address for different peer classes
 func TestPeerSelector_EvictionAndUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

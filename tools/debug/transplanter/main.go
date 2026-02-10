@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+//nolint:unused // old debug program
 package main
 
 import (
@@ -33,8 +34,11 @@ import (
 	"github.com/golang/snappy"
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/algorand/go-codec/codec"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
@@ -44,7 +48,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-codec/codec"
 )
 
 var dataDir = flag.String("d", "", "Data directory to track to get files from")
@@ -83,7 +86,7 @@ func decodeTxGroup(data []byte) ([]transactions.SignedTxn, error) {
 			return nil, fmt.Errorf("received a non-decodable txn: %v", err)
 		}
 		ntx++
-		if ntx >= config.MaxTxGroupSize {
+		if ntx >= bounds.MaxTxGroupSize {
 			// max ever possible group size reached, done reading input.
 			if dec.Remaining() > 0 {
 				// if something else left in the buffer - this is an error, drop
@@ -387,7 +390,7 @@ func main() {
 			os.Exit(1)
 		}
 		syncRound := uint64(*roundStart) - cfg.MaxAcctLookback + 1
-		err = followerNode.SetSyncRound(syncRound)
+		err = followerNode.SetSyncRound(basics.Round(syncRound))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot configure catchup: %v", err)
 			os.Exit(1)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -378,7 +378,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 		var desc []cdt.RuntimePropertyDescriptor
 		desc, err = state.getObjectDescriptor(objID, preview)
 		if err != nil {
-			err = fmt.Errorf("getObjectDescriptor error: " + err.Error())
+			err = fmt.Errorf("getObjectDescriptor error: %w", err)
 			return
 		}
 
@@ -386,7 +386,7 @@ func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (
 			var data []byte
 			data, err = json.Marshal(desc)
 			if err != nil {
-				err = fmt.Errorf("getObjectDescriptor json error: " + err.Error())
+				err = fmt.Errorf("getObjectDescriptor json error: %w", err)
 				return
 			}
 			log.Printf("Desc object: %s", string(data))

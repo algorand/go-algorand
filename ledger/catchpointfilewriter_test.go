@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/avm-abi/apps"
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -48,7 +50,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/msgp/msgp"
 )
 
 type decodedCatchpointChunkData struct {
@@ -430,7 +431,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 
 	accts := ledgertesting.RandomAccounts(1, false)
 	// force acct to have overflowing number of resources
-	assetIndex := 1000
+	assetIndex := basics.AssetIndex(1000)
 	for addr, acct := range accts {
 		if acct.AssetParams == nil {
 			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
@@ -438,7 +439,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		}
 		for i := uint64(0); i < 20; i++ {
 			ap := ledgertesting.RandomAssetParams()
-			acct.AssetParams[basics.AssetIndex(assetIndex)] = ap
+			acct.AssetParams[assetIndex] = ap
 			assetIndex++
 		}
 	}
@@ -526,7 +527,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 
 	accts := ledgertesting.RandomAccounts(5, false)
 	// force each acct to have overflowing number of resources
-	assetIndex := 1000
+	assetIndex := basics.AssetIndex(1000)
 	for addr, acct := range accts {
 		if acct.AssetParams == nil {
 			acct.AssetParams = make(map[basics.AssetIndex]basics.AssetParams, 0)
@@ -534,7 +535,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 		}
 		for i := uint64(0); i < 20; i++ {
 			ap := ledgertesting.RandomAssetParams()
-			acct.AssetParams[basics.AssetIndex(assetIndex)] = ap
+			acct.AssetParams[assetIndex] = ap
 			assetIndex++
 		}
 	}
@@ -643,7 +644,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		acctData, validThrough, _, err := l.LookupLatest(addr)
 		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
 		require.Equal(t, acct, acctData)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 	}
 
 	// TODO: uncomment if we want to test re-initializing the ledger fully
@@ -840,7 +841,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 		acctData, validThrough, _, err := l.LookupLatest(addr)
 		require.NoErrorf(t, err, "failed to lookup for account %v after restoring from catchpoint", addr)
 		require.Equal(t, acct, acctData)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 	}
 }
 
@@ -943,7 +944,7 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 	var onlineExcludeBefore basics.Round
 	// we added so many blocks that lowestRound is stuck at first state proof, round 240?
 	if normalHorizon := catchpointLookbackHorizonForNextRound(genDBRound, params); normalHorizon <= genLowestRound {
-		t.Logf("subtest is exercising case where lowestRound from votersTracker is satsified by the existing history")
+		t.Logf("subtest is exercising case where lowestRound from votersTracker is satisfied by the existing history")
 		require.EqualValues(t, genLowestRound, params.StateProofInterval-params.StateProofVotersLookback)
 		onlineExcludeBefore = 0
 		require.False(t, longHistory)
@@ -1040,7 +1041,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 
 	l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 	defer l.Close()
-	_, values, _, err := l.LookupKeysByPrefix("bx:", "", 10, 10_000, false)
+	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 
@@ -1072,7 +1073,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 
 	l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 	defer l.Close()
-	_, values, _, err = l.LookupKeysByPrefix("bx:", "", 10, 10_000, false)
+	values, err = l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))
@@ -1199,6 +1200,12 @@ assert
 		require.Empty(t, vb.Block().AbsentParticipationAccounts)
 	}
 
+	require.Eventually(t, func() bool {
+		gr, _ := dl.generator.LatestCommitted()
+		vr, _ := dl.validator.LatestCommitted()
+		return gr == vr
+	}, 1*time.Second, 50*time.Millisecond)
+
 	// wait for tracker to flush
 	testCatchpointFlushRound(dl.generator)
 	testCatchpointFlushRound(dl.validator)
@@ -1232,7 +1239,7 @@ assert
 	var onlineExcludeBefore basics.Round
 	normalOnlineHorizon := catchpointLookbackHorizonForNextRound(genDBRound, config.Consensus[proto])
 	if normalOnlineHorizon <= genLowestRound {
-		t.Logf("lowestRound from votersTracker is satsified by the existing history")
+		t.Logf("lowestRound from votersTracker is satisfied by the existing history")
 		onlineExcludeBefore = 0
 		require.False(t, longHistory)
 	} else if normalOnlineHorizon > genLowestRound {
@@ -1381,7 +1388,7 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
-	_, values, _, err := l.LookupKeysByPrefix("bx:", "", 10, 10_000, false)
+	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))

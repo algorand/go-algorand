@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,9 +20,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestOpDocs(t *testing.T) {
@@ -43,7 +44,7 @@ func TestOpDocs(t *testing.T) {
 		assert.True(t, seen, "opDescByName is missing description for %#v", op)
 	}
 
-	require.Len(t, onCompletionDescriptions, len(OnCompletionNames))
+	require.Len(t, OnCompletionDescriptions, len(OnCompletionNames))
 	require.Len(t, TypeNameDescriptions, len(TxnTypeNames))
 }
 
@@ -79,9 +80,9 @@ func TestOpDoc(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	xd := OpDoc("txn")
+	xd := OpDescOf("txn")
 	require.NotEmpty(t, xd)
-	xd = OpDoc("NOT AN INSTRUCTION")
+	xd = OpDescOf("NOT AN INSTRUCTION")
 	require.Empty(t, xd)
 }
 
@@ -100,7 +101,7 @@ func TestOpImmediateDetails(t *testing.T) {
 			require.Equal(t, d.Encoding, imm.kind.String())
 
 			if imm.Group != nil {
-				require.Equal(t, d.Reference, imm.Group.Name)
+				require.Equal(t, d.Reference, imm.Group.Heading())
 			}
 		}
 	}
@@ -110,19 +111,8 @@ func TestOpDocExtra(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	xd := OpDocExtra("bnz")
-	require.NotEmpty(t, xd)
-	xd = OpDocExtra("-")
-	require.Empty(t, xd)
-}
-
-func TestOnCompletionDescription(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	desc := OnCompletionDescription(0)
-	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)
-
-	desc = OnCompletionDescription(100)
-	require.Equal(t, "invalid constant value", desc)
+	xd := OpDescOf("bnz")
+	require.NotEmpty(t, xd.Extra)
+	xd = OpDescOf("-")
+	require.Empty(t, xd.Extra)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -144,6 +144,7 @@ func TestProcessStageBlocksDownloadNilCert(t *testing.T) {
 	blk2 := blk1
 	blk2.BlockHeader.Round = 2
 	blk2.BlockHeader.Branch = blk1.Hash()
+	blk2.BlockHeader.Branch512 = blk1.Hash512()
 	blk2.TxnCommitments, err = blk2.PaysetCommit()
 	require.NoError(t, err)
 

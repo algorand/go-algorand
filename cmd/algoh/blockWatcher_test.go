@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,9 +22,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func bw(client Client) *blockWatcher {
@@ -112,7 +114,7 @@ type testlistener struct {
 	blockCount uint32
 }
 
-func (l *testlistener) init(block uint64) {
+func (l *testlistener) init(block basics.Round) {
 	atomic.AddUint32(&(l.initCount), 1)
 }
 

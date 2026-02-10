@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,14 +20,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // testinterface.go contains interface extensions specific to testing
-// testing interfaces should be made accessible by calling the Testing() method
+// Testing interfaces should be made accessible by calling the Testing() method
 // on the related interface. Example:
 // 		testTx := tx.Testing()
 // these can also be inlined:
@@ -36,7 +35,7 @@ import (
 // WriterTestExt is an interface to extend Writer with test-only methods
 type WriterTestExt interface {
 	AccountsInitTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto protocol.ConsensusVersion) (newDatabase bool)
-	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error)
+	AccountsInitLightTest(tb testing.TB, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error)
 	AccountsUpdateSchemaTest(ctx context.Context) (err error)
 	ModifyAcctBaseTest() error
 }

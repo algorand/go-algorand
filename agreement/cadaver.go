@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,7 +64,7 @@ func (c *cadaver) filename() string {
 	baseDir := c.baseDirectory
 	if baseDir == "" {
 		// Put cadaver files in our data directory
-		baseDir = config.GetCurrentVersion().DataDirectory
+		baseDir = config.DataDirectory
 	}
 
 	fmtstr := "%s.cdv"

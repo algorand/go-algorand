@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
 	"os"
@@ -35,7 +36,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/avm-abi/apps"
+
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
@@ -129,7 +132,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 	})
 
 	for i := 0; i < len(onlineAccounts); i++ {
-		dbtop, err := ar.AccountsOnlineTop(rnd, 0, uint64(i), proto)
+		dbtop, err := ar.AccountsOnlineTop(rnd, 0, uint64(i), proto.RewardUnit)
 		require.NoError(t, err)
 		require.Equal(t, i, len(dbtop))
 
@@ -139,7 +142,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 		}
 	}
 
-	top, err := ar.AccountsOnlineTop(rnd, 0, uint64(len(onlineAccounts)+1), proto)
+	top, err := ar.AccountsOnlineTop(rnd, 0, uint64(len(onlineAccounts)+1), proto.RewardUnit)
 	require.NoError(t, err)
 	require.Equal(t, len(top), len(onlineAccounts))
 }
@@ -159,7 +162,7 @@ func TestAccountDBInit(t *testing.T) {
 
 		checkAccounts(t, tx, 0, accts)
 
-		newDB, err = tx.Testing().AccountsInitLightTest(t, accts, proto)
+		newDB, err = tx.Testing().AccountsInitLightTest(t, accts, proto.RewardUnit)
 		require.NoError(t, err)
 		require.False(t, newDB)
 		checkAccounts(t, tx, 0, accts)
@@ -187,9 +190,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates l
 
 func applyPartialDeltas(base map[basics.Address]basics.AccountData, deltas ledgercore.AccountDeltas) map[basics.Address]basics.AccountData {
 	result := make(map[basics.Address]basics.AccountData, len(base)+deltas.Len())
-	for addr, ad := range base {
-		result[addr] = ad
-	}
+	maps.Copy(result, base)
 
 	for i := 0; i < deltas.Len(); i++ {
 		addr, _ := deltas.GetByIdx(i)
@@ -474,10 +475,7 @@ func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	iteration-- // 0-based here
 
 	delSegmentEnd := iteration * numElementsPerSegement
-	delSegmentStart := delSegmentEnd - numElementsPerSegement
-	if delSegmentStart < 0 {
-		delSegmentStart = 0
-	}
+	delSegmentStart := max(delSegmentEnd-numElementsPerSegement, 0)
 
 	newSample := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	stop := delSegmentEnd + numElementsPerSegement
@@ -706,10 +704,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		b.StopTimer()
 		balancesLoopStart := time.Now()
 		// generate a chunk;
-		chunkSize := targetAccountsCount - accountsLoaded
-		if chunkSize > BalancesPerCatchpointFileChunk {
-			chunkSize = BalancesPerCatchpointFileChunk
-		}
+		chunkSize := min(targetAccountsCount-accountsLoaded, BalancesPerCatchpointFileChunk)
 		last64KSize += chunkSize
 		if accountsLoaded >= targetAccountsCount-64*1024 && last64KStart.IsZero() {
 			last64KStart = time.Now()
@@ -945,15 +940,16 @@ func TestLookupKeysByPrefix(t *testing.T) {
 
 	for index, testCase := range testCases {
 		t.Run("lookupKVByPrefix-testcase-"+strconv.Itoa(index), func(t *testing.T) {
-			_, actual, _, err := qs.LookupKeysByPrefix(string(testCase.prefix), "", len(kvPairDBPrepareSet), 1_000_000, false)
+			actual := make(map[string]bool)
+			_, err := qs.LookupKeysByPrefix(string(testCase.prefix), uint64(len(kvPairDBPrepareSet)), actual, 0)
 			if err != nil {
 				require.NotEmpty(t, testCase.err, testCase.prefix)
 				require.Contains(t, err.Error(), testCase.err)
 			} else {
 				require.Empty(t, testCase.err)
-				expected := make(map[string]string)
+				expected := make(map[string]bool)
 				for _, name := range testCase.expectedNames {
-					expected[string(name)] = ""
+					expected[string(name)] = true
 				}
 				require.Equal(t, actual, expected)
 			}
@@ -1022,7 +1018,8 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 
 		b.Run("lookupKVByPrefix-DBsize"+strconv.Itoa(currentDBSize), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_, results, _, err := qs.LookupKeysByPrefix(prefix, "", currentDBSize, 1_000_000, false)
+				results := make(map[string]bool)
+				_, err := qs.LookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
 				require.NoError(b, err)
 				require.True(b, len(results) >= 1)
 			}
@@ -1481,18 +1478,10 @@ func (m mockAccountWriter) clone() (m2 mockAccountWriter) {
 	m2.resources = make(map[mockResourcesKey]ledgercore.AccountResource, len(m.resources))
 	m2.addresses = make(map[basics.Address]trackerdb.AccountRef, len(m.resources))
 	m2.rowids = make(map[trackerdb.AccountRef]basics.Address, len(m.rowids))
-	for k, v := range m.accounts {
-		m2.accounts[k] = v
-	}
-	for k, v := range m.resources {
-		m2.resources[k] = v
-	}
-	for k, v := range m.addresses {
-		m2.addresses[k] = v
-	}
-	for k, v := range m.rowids {
-		m2.rowids[k] = v
-	}
+	maps.Copy(m2.accounts, m.accounts)
+	maps.Copy(m2.resources, m.resources)
+	maps.Copy(m2.addresses, m.addresses)
+	maps.Copy(m2.rowids, m.rowids)
 	m2.lastAcctRef = m.lastAcctRef
 	m2.availAcctRefs = m.availAcctRefs
 	return m2
@@ -1818,7 +1807,7 @@ func compactResourcesDeltasPermutations(a *require.Assertions, crd compactResour
 // Investigation shown there was another account YF5GJTPPMOUPU2GRGGVP2PGJTQZWGSWZISFHNIKDJSZ2CDPPWN4KKKYVQE
 // opted in into the same app 22045503. During the commit range the following happened:
 // at 16541783 YF5 made a payment txn (one acct delta)
-// at 16541785 RGJ has been funded and and opted in into app 22045503 (one acct delta, one res delta)
+// at 16541785 RGJ has been funded and opted in into app 22045503 (one acct delta, one res delta)
 // at 16541788 YF5 address had clear state txn for 22045503, and close out txn for the entire account (one acct delta, one res delta)
 // Because YF5 had modifications before RGJ, all its acct deltas were compacted into a single entry before RGJ (delete, create)
 // In the same time, the order in resources delta remained the same (opt-in, delete).
@@ -2053,7 +2042,7 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 		batchCount = 1
 	}
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	rewardUnit := config.Consensus[protocol.ConsensusCurrentVersion].RewardUnit
 	dbs, _ := storetesting.DbOpenTest(b, false)
 	cleanup := func() {
 		dbs.Close()
@@ -2061,7 +2050,7 @@ func initBoxDatabase(b *testing.B, totalBoxes, boxSize int) (db.Pair, func(), er
 
 	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
-	_, err = sqlitedriver.AccountsInitLightTest(b, tx, make(map[basics.Address]basics.AccountData), proto)
+	_, err = sqlitedriver.AccountsInitLightTest(b, tx, nil, rewardUnit)
 	require.NoError(b, err)
 	err = tx.Commit()
 	require.NoError(b, err)
@@ -2168,7 +2157,7 @@ func BenchmarkBoxDatabaseRead(b *testing.B) {
 	}
 }
 
-// TestAccountTopOnline ensures accountsOnlineTop return a right subset of accounts
+// TestAccountOnlineQueries ensures accountsOnlineTop return a right subset of accounts
 // from the history table.
 // Start with two online accounts A, B at round 1
 // At round 2 make A offline.
@@ -2332,7 +2321,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		// check round 1
 		rnd := basics.Round(1)
-		online, err := ar.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err := ar.AccountsOnlineTop(rnd, 0, 10, proto.RewardUnit)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(online))
 		require.NotContains(t, online, addrC)
@@ -2371,7 +2360,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		// check round 2
 		rnd = basics.Round(2)
-		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto.RewardUnit)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(online))
 		require.NotContains(t, online, addrA)
@@ -2404,7 +2393,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 
 		// check round 3
 		rnd = basics.Round(3)
-		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto)
+		online, err = ar.AccountsOnlineTop(rnd, 0, 10, proto.RewardUnit)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(online))
 		require.NotContains(t, online, addrA)
@@ -2788,6 +2777,8 @@ func TestAccountOnlineRoundParams(t *testing.T) {
 // onlineAccountsDelete(2): A online
 // onlineAccountsDelete(3): A offline, B online
 // etc
+//
+//nolint:dupword // ignore
 func TestOnlineAccountsDeletion(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2885,11 +2876,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough) // not set
+		require.Zero(t, validThrough) // not set
 		require.Len(t, history, 3)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 2)
 	}
 
@@ -2903,11 +2894,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 2)
 	}
 
@@ -2921,11 +2912,11 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 
 		history, validThrough, err = queries.LookupOnlineHistory(addrA)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 		history, validThrough, err = queries.LookupOnlineHistory(addrB)
 		require.NoError(t, err)
-		require.Equal(t, basics.Round(0), validThrough)
+		require.Zero(t, validThrough)
 		require.Len(t, history, 1)
 	}
 }
@@ -3391,9 +3382,9 @@ func randomAppResourceData() trackerdb.ResourcesData {
 	}
 
 	// MaxAvailableAppProgramLen is conbined size of approval and clear state since it is bound by proto.MaxAppTotalProgramLen
-	rdApp.ApprovalProgram = make([]byte, config.MaxAvailableAppProgramLen/2)
+	rdApp.ApprovalProgram = make([]byte, bounds.MaxAvailableAppProgramLen/2)
 	crypto.RandBytes(rdApp.ApprovalProgram)
-	rdApp.ClearStateProgram = make([]byte, config.MaxAvailableAppProgramLen/2)
+	rdApp.ClearStateProgram = make([]byte, bounds.MaxAvailableAppProgramLen/2)
 	crypto.RandBytes(rdApp.ClearStateProgram)
 
 	maxGlobalState := make(basics.TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)

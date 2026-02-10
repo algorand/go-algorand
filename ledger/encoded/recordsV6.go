@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,10 @@
 package encoded
 
 import (
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/msgp/msgp"
 )
 
 // Adjust these to be big enough for boxes, but not directly tied to box values.

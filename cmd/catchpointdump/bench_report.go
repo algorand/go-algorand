@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,9 +24,10 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/algorand/go-algorand/util"
 	"github.com/google/uuid"
 	"github.com/klauspost/cpuid/v2"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 type benchStage struct {

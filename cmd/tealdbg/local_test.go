@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
@@ -35,8 +38,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var txnSample string = `{
@@ -708,7 +709,7 @@ func TestRunMode(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 
 	// check run mode application
 	dp = DebugParams{
@@ -745,7 +746,7 @@ func TestRunMode(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 }
 
 func TestDebugFromTxn(t *testing.T) {
@@ -810,7 +811,7 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal([]byte{3}, l.runs[0].program)
 	a.Nil(l.runs[0].ba)
 	a.Equal(modeLogicsig, l.runs[0].mode)
-	a.Equal(basics.AppIndex(0), l.runs[0].aidx)
+	a.Zero(l.runs[0].aidx)
 
 	// ensure clear approval program is supposed to be debugged
 	brs = makeSampleBalanceRecord(sender, 0, appIdx)
@@ -1060,7 +1061,7 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 		case strings.HasPrefix(r.URL.Path, accountPath):
 			w.WriteHeader(200)
 			if r.URL.Path[len(accountPath):] == brs.Addr.String() {
-				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, 100, &config.ConsensusParams{MinBalance: 100000}, basics.MicroAlgos{Raw: 0})
+				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, 100, &config.ConsensusParams{MinBalance: 100000}, basics.MicroAlgos{Raw: 0}, v2.AccountDataToAccountOptions{})
 				a.NoError(err)
 				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
 				response, err := json.Marshal(accountResponse)
@@ -1248,15 +1249,19 @@ int 1`
 	}
 	balanceBlob := protocol.EncodeMsgp(&br)
 
+	// Get proto using the same lookup that LocalRunner.Setup will use
+	_, proto, err := protoFromString(string(protocol.ConsensusCurrentVersion))
+	a.NoError(err)
+
 	// two testcase: success with enough fees and fail otherwise
 	var tests = []struct {
 		fee      uint64
 		expected func(LocalRunner, runAllResult)
 	}{
-		{2000, func(l LocalRunner, r runAllResult) {
+		{2 * proto.MinTxnFee, func(l LocalRunner, r runAllResult) {
 			a.Equal(allPassing(len(l.runs)), r)
 		}},
-		{1500, func(_ LocalRunner, r runAllResult) {
+		{proto.MinTxnFee + proto.MinTxnFee/2, func(_ LocalRunner, r runAllResult) {
 			a.Condition(allErrors(r.allErrors()))
 			for _, result := range r.results {
 				a.False(result.pass)
@@ -1293,7 +1298,7 @@ int 1`
 				LatestTimestamp: 333,
 				GroupIndex:      0,
 				RunMode:         "application",
-				AppID:           uint64(appIdx),
+				AppID:           appIdx,
 			}
 
 			local := MakeLocalRunner(nil)
@@ -1425,7 +1430,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 				LatestTimestamp: 333,
 				GroupIndex:      0,
 				RunMode:         "application",
-				AppID:           uint64(appIdx),
+				AppID:           appIdx,
 			}
 
 			local := MakeLocalRunner(nil)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,9 @@ package main
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type testCase struct {
@@ -63,7 +64,7 @@ func TestCrossRepoTypes(t *testing.T) {
 			yBranch:    "main",
 			yType:      "Block",
 			skip:       true,
-			skipReason: `Several issues. For example: LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=config.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
+			skipReason: `Several issues. For example: LEVEL 5 of goal bookkeeping.Block is EvalDelta with field [SharedAccts](codec:"sa,allocbound=bounds.MaxEvalDeltaAccounts") VS SDK types.EvalDelta is missing SharedAccts field`,
 		},
 		{
 			name:    "goal-v-sdk-eval-delta",

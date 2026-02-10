@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
+
+	"github.com/algorand/go-deadlock"
 )
 
 type telemetryHook interface {
@@ -56,6 +57,7 @@ type TelemetryConfig struct {
 	Version            string       `json:"-"`
 	UserName           string
 	Password           string
+	DataDirectory      string `json:"-"` // distinguishes instances on the same node
 }
 
 // MarshalingTelemetryConfig is used for json serialization of the TelemetryConfig

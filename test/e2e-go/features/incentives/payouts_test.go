@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -45,10 +46,12 @@ func TestBasicPayouts(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
+	consensusVersion := protocol.ConsensusFuture
+
 	var fixture fixtures.RestClientFixture
 	// Make the seed lookback shorter, otherwise we need to wait 320 rounds to become IncentiveEligible.
 	const lookback = 32
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
+	fixture.FasterConsensus(consensusVersion, time.Second, lookback)
 	t.Logf("lookback is %d\n", lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()
@@ -72,8 +75,10 @@ func TestBasicPayouts(t *testing.T) {
 	c01, account01 := clientAndAccount("Node01")
 	relay, _ := clientAndAccount("Relay")
 
-	data01 := rekeyreg(a, c01, account01.Address, true)
-	data15 := rekeyreg(a, c15, account15.Address, true)
+	proto := config.Consensus[consensusVersion]
+
+	data01 := rekeyreg(a, c01, proto, account01.Address, true)
+	data15 := rekeyreg(a, c15, proto, account15.Address, true)
 
 	// Wait a few rounds after rekeyreg, this means that `lookback` rounds after
 	// those rekeyregs, the nodes will be IncentiveEligible, but both will have
@@ -87,9 +92,9 @@ func TestBasicPayouts(t *testing.T) {
 	// have account01 burn some money to get below the eligibility cap
 	// Starts with 100M, so burn 60M and get under 70M cap.
 	txn, err := c01.SendPaymentFromUnencryptedWallet(account01.Address, basics.Address{}.String(),
-		1000, 60_000_000_000_000, nil)
+		proto.MinTxnFee, 60_000_000_000_000, nil)
 	a.NoError(err)
-	burn, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	burn, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	a.NoError(err)
 	burnRound := *burn.ConfirmedRound
 	t.Logf("burn round is %d", burnRound)
@@ -139,7 +144,7 @@ func TestBasicPayouts(t *testing.T) {
 		a.LessOrEqual(int(status.LastRound), int(next.LastProposed))
 		switch block.Proposer().String() {
 		case account01.Address:
-			if uint64(block.Round()) < burnRound+lookback {
+			if block.Round() < burnRound+lookback {
 				// until the burn is lookback rounds old, account01 can't earn
 				a.Zero(block.ProposerPayout())
 				a.Equal(data01.MicroAlgos, next.MicroAlgos)
@@ -172,13 +177,13 @@ func TestBasicPayouts(t *testing.T) {
 	// 32 rounds) only account01 (who is eligible) is proposing, so drainage
 	// will happen soon after.
 
-	offline, err := c15.MakeUnsignedGoOfflineTx(account15.Address, 0, 0, 1000, [32]byte{})
+	offline, err := c15.MakeUnsignedGoOfflineTx(account15.Address, 0, 0, proto.MinTxnFee, [32]byte{})
 	a.NoError(err)
 	wh, err := c15.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	offlineTxID, err := c15.SignAndBroadcastTransaction(wh, nil, offline)
 	a.NoError(err)
-	offTxn, err := fixture.WaitForConfirmedTxn(uint64(offline.LastValid), offlineTxID)
+	offTxn, err := fixture.WaitForConfirmedTxn(offline.LastValid, offlineTxID)
 	a.NoError(err)
 
 	t.Logf(" c15 (%s) will be truly offline (not proposing) after round %d\n",
@@ -233,9 +238,9 @@ func TestBasicPayouts(t *testing.T) {
 	a.NoError(err)
 
 	// put 50 algos back into the feesink, show it pays out again
-	txn, err = c01.SendPaymentFromUnencryptedWallet(account01.Address, feesink.String(), 1000, 50_000_000, nil)
+	txn, err = c01.SendPaymentFromUnencryptedWallet(account01.Address, feesink.String(), proto.MinTxnFee, 50_000_000, nil)
 	a.NoError(err)
-	refill, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	refill, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	fmt.Printf("refilled fee sink in %d\n", *refill.ConfirmedRound)
 	a.NoError(err)
 	block, err := client.BookkeepingBlock(*refill.ConfirmedRound)
@@ -254,9 +259,9 @@ func TestBasicPayouts(t *testing.T) {
 	wh, err = c01.GetUnencryptedWalletHandle()
 	a.NoError(err)
 	junk := basics.Address{0x01, 0x01}.String()
-	txn, err = c01.SendPaymentFromWallet(wh, nil, account01.Address, junk, 1000, 0, nil, junk /* close to */, 0, 0)
+	txn, err = c01.SendPaymentFromWallet(wh, nil, account01.Address, junk, proto.MinTxnFee, 0, nil, junk /* close to */, 0, 0)
 	a.NoError(err)
-	close, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	close, err := fixture.WaitForConfirmedTxn(txn.LastValid, txn.ID().String())
 	a.NoError(err)
 	fmt.Printf("closed c01 in %d\n", *close.ConfirmedRound)
 	block, err = client.BookkeepingBlock(*close.ConfirmedRound)
@@ -276,8 +281,10 @@ func TestBasicPayouts(t *testing.T) {
 	data, err = relay.AccountData(feesink.String())
 	a.NoError(err)
 	// Don't want to bother dealing with the exact fees paid in/out.
-	a.Less(data.MicroAlgos.Raw, expected+5000)
-	a.Greater(data.MicroAlgos.Raw, expected-5000)
+	// Allow wider tolerance to account for varying MinTxnFee values across protocol versions
+	tolerance := basics.Round(100000) // 0.1 Algo tolerance
+	a.Less(data.MicroAlgos.Raw, uint64(expected+tolerance))
+	a.Greater(data.MicroAlgos.Raw, uint64(expected-tolerance))
 
 	// Lest one be concerned about that cavalier attitude, wait for a few more
 	// rounds, and show feesink is unchanged.
@@ -289,14 +296,14 @@ func TestBasicPayouts(t *testing.T) {
 
 // getblock waits for the given block because we use when we might be talking to
 // a client that is behind the network (since it has low stake)
-func getblock(client libgoal.Client, round uint64) (bookkeeping.Block, error) {
+func getblock(client libgoal.Client, round basics.Round) (bookkeeping.Block, error) {
 	if _, err := client.WaitForRound(round); err != nil {
 		return bookkeeping.Block{}, err
 	}
 	return client.BookkeepingBlock(round)
 }
 
-func rekeyreg(a *require.Assertions, client libgoal.Client, address string, becomeEligible bool) basics.AccountData {
+func rekeyreg(a *require.Assertions, client libgoal.Client, proto config.ConsensusParams, address string, becomeEligible bool) basics.AccountData {
 	// we start by making an _offline_ tx here, because we want to populate the
 	// key material ourself with a copy of the account's existing material. That
 	// makes it an _online_ keyreg. That allows the running node to chug along
@@ -304,7 +311,7 @@ func rekeyreg(a *require.Assertions, client libgoal.Client, address string, beco
 	// IncentiveEligible, and to get some funds into FeeSink because we will
 	// watch it drain toward bottom of test.
 
-	fee := uint64(1000)
+	fee := proto.MinTxnFee
 	if becomeEligible {
 		fee = 12_000_000
 	}
@@ -329,7 +336,7 @@ func rekeyreg(a *require.Assertions, client libgoal.Client, address string, beco
 	a.NoError(err)
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
 	a.NoError(err)
-	txn, err := client.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
+	txn, err := client.WaitForConfirmedTxn(reReg.LastValid, onlineTxID)
 	a.NoError(err)
 	// sync up with the network
 	_, err = client.WaitForRound(*txn.ConfirmedRound)

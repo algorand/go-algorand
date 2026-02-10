@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,11 +22,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func testP2PWithConfig(t *testing.T, templateName string) *fixtures.RestClientFixture {
@@ -110,10 +111,10 @@ func TestP2PTwoNodes(t *testing.T) {
 	curRound := curStatus.LastRound
 
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
-	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
-	require.True(t, confirmed, "failed to see confirmed ping transaction by round %v", curRound+uint64(5))
-	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	require.True(t, confirmed, "failed to see confirmed pong transaction by round %v", curRound+uint64(5))
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, pingTxidsToAddresses)
+	require.True(t, confirmed, "failed to see confirmed ping transaction by round %v", curRound+5)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pongTxidsToAddresses)
+	require.True(t, confirmed, "failed to see confirmed pong transaction by round %v", curRound+5)
 
 	pingBalance, err = pongClient.GetBalance(pingAccount)
 	require.NoError(t, err)

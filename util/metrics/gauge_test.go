@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,8 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type GaugeTest struct {
@@ -37,6 +38,10 @@ func TestMetricGauge(t *testing.T) {
 	test := &GaugeTest{
 		MetricTest: NewMetricTest(),
 	}
+
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener("127.0.0.1:0")
 
@@ -45,11 +50,13 @@ func TestMetricGauge(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 	gauges := make([]*Gauge, 3)
 	for i := 0; i < 3; i++ {
-		gauges[i] = MakeGauge(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
+		gauges[i] = MakeGaugeUnregistered(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
+		gauges[i].Register(registry)
 	}
 	for i := 0; i < 9; i++ {
 		gauges[i%3].Set(uint64(i*100 + i))
@@ -62,13 +69,13 @@ func TestMetricGauge(t *testing.T) {
 
 	metricService.Shutdown()
 	for _, gauge := range gauges {
-		gauge.Deregister(nil)
+		gauge.Deregister(registry)
 	}
 	// test the metrics values.
 
 	test.Lock()
 	defer test.Unlock()
-	// the the loop above we've created 3 separate gauges
+	// in the loop above we've created 3 separate gauges
 	// let's see if we received all 3 metrics
 	require.Equal(t, 3, len(test.metrics), "Missing metric counts were reported: %+v", test.metrics)
 

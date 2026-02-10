@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -166,7 +166,7 @@ func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte,
 }
 
 // MultisigSignProgram wraps kmdapi.APIV1POSTMultisigProgramSignRequest
-func (kcl KMDClient) MultisigSignProgram(walletHandle, pw []byte, addr string, data []byte, pk crypto.PublicKey, partial crypto.MultisigSig) (resp kmdapi.APIV1POSTMultisigProgramSignResponse, err error) {
+func (kcl KMDClient) MultisigSignProgram(walletHandle, pw []byte, addr string, data []byte, pk crypto.PublicKey, partial crypto.MultisigSig, useLegacyMsig bool) (resp kmdapi.APIV1POSTMultisigProgramSignResponse, err error) {
 	req := kmdapi.APIV1POSTMultisigProgramSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
@@ -174,6 +174,7 @@ func (kcl KMDClient) MultisigSignProgram(walletHandle, pw []byte, addr string, d
 		Address:           addr,
 		PublicKey:         pk,
 		PartialMsig:       partial,
+		UseLegacyMsig:     useLegacyMsig,
 	}
 	err = kcl.DoV1Request(req, &resp)
 	return

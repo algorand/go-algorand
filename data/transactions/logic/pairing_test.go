@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	bls12381fp "github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	bls12381fr "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
@@ -32,6 +31,8 @@ import (
 	bn254fp "github.com/consensys/gnark-crypto/ecc/bn254/fp"
 	bn254fr "github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 const pairingNonsense = `

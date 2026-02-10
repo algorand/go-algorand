@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,14 +26,15 @@ import (
 	"hash"
 	"math/big"
 
+	bls12_381mimc "github.com/consensys/gnark-crypto/ecc/bls12-381/fr/mimc"
+	bn254mimc "github.com/consensys/gnark-crypto/ecc/bn254/fr/mimc"
+	"golang.org/x/crypto/sha3"
+
+	"github.com/algorand/go-sumhash"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-sumhash"
-	"golang.org/x/crypto/sha3"
-
-	bls12_381mimc "github.com/consensys/gnark-crypto/ecc/bls12-381/fr/mimc"
-	bn254mimc "github.com/consensys/gnark-crypto/ecc/bn254/fr/mimc"
 )
 
 // mimc is implemented for compatibility with zk circuits,
@@ -122,6 +123,13 @@ func opSumhash512(cx *EvalContext) error {
 	h := sumhash.New512(nil)
 	h.Write(cx.Stack[last].Bytes)
 	cx.Stack[last].Bytes = h.Sum(nil)
+	return nil
+}
+
+func opSHA512(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	hash := sha512.Sum512(cx.Stack[last].Bytes)
+	cx.Stack[last].Bytes = hash[:]
 	return nil
 }
 

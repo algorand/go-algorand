@@ -29,7 +29,9 @@ if { [catch {
     set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME $TEST_PRIMARY_NODE_DIR]
 
     set timeout 30
-    set FEE_AMOUNT 1000
+    # Get suggested fee from network
+    set FEE_AMOUNT [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Network suggested fee: $FEE_AMOUNT"
 
     set TXN_FILE1 "$TEST_PRIMARY_NODE_DIR/txns1"
     set TRANSFER_AMOUNT1 3800

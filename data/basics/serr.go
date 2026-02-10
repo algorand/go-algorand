@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package basics
 
 import (
 	"errors"
+	"maps"
 	"strings"
 
 	"golang.org/x/exp/slog"
@@ -53,7 +54,7 @@ func (e *SError) Error() string {
 	}
 	// imperfect because we replace \%A as well
 	if strings.Contains(e.Msg, "%A") {
-		return strings.Replace(e.Msg, "%A", e.AttributesAsString(), -1)
+		return strings.ReplaceAll(e.Msg, "%A", e.AttributesAsString())
 	}
 	return e.Msg
 }
@@ -108,9 +109,7 @@ func Wrap(err error, msg string, field string, pairs ...any) error {
 	var inner *SError
 	if ok := errors.As(err, &inner); ok {
 		attributes := make(map[string]any, len(inner.Attrs))
-		for key, val := range inner.Attrs {
-			attributes[key] = val
-		}
+		maps.Copy(attributes, inner.Attrs)
 		serr.Attrs[field+"-attrs"] = attributes
 	}
 

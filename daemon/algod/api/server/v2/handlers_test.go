@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,10 +23,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestApplicationBoxesMaxKeys(t *testing.T) {
@@ -34,15 +35,15 @@ func TestApplicationBoxesMaxKeys(t *testing.T) {
 	t.Parallel()
 
 	// Response size limited by request supplied value.
-	require.Equal(t, 5, applicationBoxesMaxKeys(5, 7))
-	require.Equal(t, 5, applicationBoxesMaxKeys(5, 0))
+	require.Equal(t, uint64(5), applicationBoxesMaxKeys(5, 7))
+	require.Equal(t, uint64(5), applicationBoxesMaxKeys(5, 0))
 
 	// Response size limited by algod max.
-	require.Equal(t, 1, applicationBoxesMaxKeys(5, 1))
-	require.Equal(t, 1, applicationBoxesMaxKeys(0, 1))
+	require.Equal(t, uint64(2), applicationBoxesMaxKeys(5, 1))
+	require.Equal(t, uint64(2), applicationBoxesMaxKeys(0, 1))
 
 	// Response size _not_ limited
-	require.Equal(t, math.MaxInt, applicationBoxesMaxKeys(0, 0))
+	require.Equal(t, uint64(math.MaxUint64), applicationBoxesMaxKeys(0, 0))
 }
 
 type tagNode struct {
@@ -160,10 +161,10 @@ func TestPendingTransactionResponseStruct(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	generatedResponseType := reflect.TypeOf(model.PendingTransactionResponse{})
+	generatedResponseType := reflect.TypeFor[model.PendingTransactionResponse]()
 	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
 
-	customResponseType := reflect.TypeOf(PreEncodedTxInfo{})
+	customResponseType := reflect.TypeFor[PreEncodedTxInfo]()
 	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
 
 	expectedGeneratedTxnGraph := map[string]*tagNode{
@@ -186,10 +187,10 @@ func TestSimulateResponseStruct(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	generatedResponseType := reflect.TypeOf(model.SimulateResponse{})
+	generatedResponseType := reflect.TypeFor[model.SimulateResponse]()
 	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
 
-	customResponseType := reflect.TypeOf(PreEncodedSimulateResponse{})
+	customResponseType := reflect.TypeFor[PreEncodedSimulateResponse]()
 	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
 
 	expectedGeneratedTxnGraph := map[string]*tagNode{
@@ -216,10 +217,10 @@ func TestSimulateRequestStruct(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	generatedResponseType := reflect.TypeOf(model.SimulateRequest{})
+	generatedResponseType := reflect.TypeFor[model.SimulateRequest]()
 	generatedResponseGraph := makeTagGraph(generatedResponseType, make(map[reflect.Type]*tagNode))
 
-	customResponseType := reflect.TypeOf(PreEncodedSimulateRequest{})
+	customResponseType := reflect.TypeFor[PreEncodedSimulateRequest]()
 	customResponseGraph := makeTagGraph(customResponseType, make(map[reflect.Type]*tagNode))
 
 	expectedGeneratedTxnGraph := map[string]*tagNode{

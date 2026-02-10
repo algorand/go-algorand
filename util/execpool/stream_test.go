@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,8 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // implements BatchProcessor interface for testing purposes
@@ -308,8 +309,7 @@ func TestErrors(t *testing.T) {
 		asyncDelay:   make(chan struct{}, 10),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	inputChan := make(chan InputJob)
 	mbp := mockBatchProcessor{}

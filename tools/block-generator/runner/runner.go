@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ func init() {
 		Use:   "runner",
 		Short: "Run test suite and collect results.",
 		Long:  "Run an automated test suite using the block-generator daemon and a provided conduit binary. Results are captured to a specified output directory.",
-		RunE: func(cmd *cobra.Command, args []string) error{
+		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("starting block-generator runner with args: %+v\n", runnerArgs)
 
 			if runnerArgs.Template == "postgres-exporter" && runnerArgs.PostgresConnectionString == "" {

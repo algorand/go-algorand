@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,9 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type MetricTest struct {
@@ -69,8 +71,8 @@ func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return
 	}
-	lines := strings.Split(string(body), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(body), "\n")
+	for line := range lines {
 		if len(line) < 5 {
 			continue
 		}

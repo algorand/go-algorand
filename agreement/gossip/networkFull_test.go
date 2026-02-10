@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -322,10 +322,7 @@ func testNetworkImplRebroadcast(t *testing.T, nodesCount int, cfg config.Local) 
 	nets, counters := spinNetwork(t, nodesCount, cfg)
 	defer shutdownNetwork(nets, counters)
 
-	rebroadcastNodes := nodesCount
-	if rebroadcastNodes > 3 {
-		rebroadcastNodes = 3
-	}
+	rebroadcastNodes := min(nodesCount, 3)
 	for i := byte(0); i < byte(rebroadcastNodes); i++ {
 		ok := nets[i].Broadcast(protocol.AgreementVoteTag, []byte{i, i + 1})
 		assert.NoError(t, ok)

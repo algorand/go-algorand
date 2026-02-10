@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,8 +36,8 @@ type unauthenticatedBundle struct {
 	Step     step          `codec:"step"`
 	Proposal proposalValue `codec:"prop"`
 
-	Votes             []voteAuthenticator             `codec:"vote,allocbound=config.MaxVoteThreshold"`
-	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=config.MaxVoteThreshold"`
+	Votes             []voteAuthenticator             `codec:"vote,allocbound=bounds.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
 // bundle is a set of votes, all from the same round, period, and step, and from distinct senders, that reaches quorum.
@@ -48,11 +48,11 @@ type bundle struct {
 
 	U unauthenticatedBundle `codec:"u"`
 
-	Votes             []vote             `codec:"vote,allocbound=config.MaxVoteThreshold"`
-	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=config.MaxVoteThreshold"`
+	Votes             []vote             `codec:"vote,allocbound=bounds.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
-// voteAuthenticators omit the Round, Period, Step, and Proposal for compression
+// voteAuthenticator omits the Round, Period, Step, and Proposal for compression
 // and to simplify checking logic.
 type voteAuthenticator struct {
 	_struct struct{} `codec:""` // not omitempty

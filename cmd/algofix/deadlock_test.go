@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,8 +25,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 const deadlockSimpleSrc = `package main
@@ -144,7 +145,7 @@ func testGoFmt(fset *token.FileSet, node interface{}) (out string, err error) {
 	var buf bytes.Buffer
 	err = format.Node(&buf, fset, node)
 	if err == nil {
-		out = string(buf.Bytes())
+		out = buf.String()
 	}
 	return
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,13 +20,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // TxnMerkleElemRaw this struct helps creates a hashable struct from the bytes
@@ -76,6 +77,9 @@ func TestTxnMerkleProof(t *testing.T) {
 	status, err := client.Status()
 	a.NoError(err)
 
+	params, err := client.SuggestedParams()
+	a.NoError(err)
+
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
 	// we do not want to have a full tree in order the catch an empty element edge case
@@ -83,11 +87,11 @@ func TestTxnMerkleProof(t *testing.T) {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
-		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, 1000, 10000000, nil)
+		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, params.MinFee, 10000000, nil)
 		a.NoError(err)
 	}
 
-	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
+	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, params.MinFee, 10000000, nil)
 	a.NoError(err)
 
 	txid := tx.ID()
@@ -160,6 +164,9 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	status, err := client.Status()
 	a.NoError(err)
 
+	params, err := client.SuggestedParams()
+	a.NoError(err)
+
 	// Transfer some money to acct0, as well as other random accounts to
 	// fill up the Merkle tree with more than one element.
 	// we do not want to have a full tree in order the catch an empty element edge case
@@ -167,11 +174,11 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 		accti, err := client.GenerateAddress(walletHandle)
 		a.NoError(err)
 
-		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, 1000, 10000000, nil)
+		_, err = client.SendPaymentFromUnencryptedWallet(baseAcct, accti, params.MinFee, 10000000, nil)
 		a.NoError(err)
 	}
 
-	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
+	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, params.MinFee, 10000000, nil)
 	a.NoError(err)
 
 	txid := tx.ID()

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,18 +19,16 @@ package runner
 import (
 	"bytes"
 	"context"
+	_ "embed" // embed conduit template config file
 	"encoding/json"
-	"io"
-	"sort"
-
-	// embed conduit template config file
-	_ "embed"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -38,6 +36,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/block-generator/generator"
 	"github.com/algorand/go-algorand/tools/block-generator/util"
@@ -57,7 +56,7 @@ type Args struct {
 	Path                     string
 	ConduitBinary            string
 	MetricsPort              uint64
-	Template string
+	Template                 string
 	PostgresConnectionString string
 	CPUProfilePath           string
 	RunDuration              time.Duration
@@ -155,7 +154,7 @@ func (r *Args) run(reportDirectory string) error {
 		})
 	}
 	// get next db round
-	var nextRound uint64
+	var nextRound basics.Round
 	var err error
 	switch r.Template {
 	case "file-exporter":
@@ -517,7 +516,7 @@ func (r *Args) runTest(w io.Writer, metricsURL string, generatorURL string) erro
 }
 
 // startGenerator starts the generator server.
-func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
+func startGenerator(ledgerLogFile, configFile string, dbround basics.Round, genesisFile string, verbose bool, addr string, blockMiddleware func(http.Handler) http.Handler) (func() error, generator.Generator) {
 	f, err := os.OpenFile(ledgerLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	util.MaybeFail(err, "unable to open ledger log file '%s'", ledgerLogFile)
 	log := logging.NewLogger()
@@ -548,13 +547,13 @@ func startGenerator(ledgerLogFile, configFile string, dbround uint64, genesisFil
 }
 
 // startConduit starts the conduit binary.
-func startConduit(dataDir string, conduitBinary string, round uint64) (func() error, error) {
+func startConduit(dataDir string, conduitBinary string, round basics.Round) (func() error, error) {
 	fmt.Printf("%sConduit starting with data directory: %s\n", pad, dataDir)
 	ctx, cf := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(
 		ctx,
 		conduitBinary,
-		"-r", strconv.FormatUint(round, 10),
+		"-r", strconv.FormatUint(uint64(round), 10),
 		"-d", dataDir,
 	)
 	cmd.WaitDelay = 5 * time.Second

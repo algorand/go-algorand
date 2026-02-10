@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -40,8 +42,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
-
-	"github.com/spf13/cobra"
+	"github.com/algorand/go-algorand/util"
 )
 
 var (
@@ -68,12 +69,13 @@ var (
 	rawOutput          bool
 	requestFilename    string
 	requestOutFilename string
+	inspectTxid        bool
 
-	simulateStartRound            uint64
+	simulateStartRound            basics.Round
 	simulateAllowEmptySignatures  bool
 	simulateAllowMoreLogging      bool
 	simulateAllowMoreOpcodeBudget bool
-	simulateExtraOpcodeBudget     uint64
+	simulateExtraOpcodeBudget     int
 
 	simulateFullTrace             bool
 	simulateEnableRequestTrace    bool
@@ -97,6 +99,9 @@ func init() {
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+
+	// inspect flags
+	inspectCmd.Flags().BoolVarP(&inspectTxid, "txid", "t", false, "Display the TxID for each transaction")
 
 	// send flags
 	sendCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (If not specified, uses default account)")
@@ -165,11 +170,11 @@ func init() {
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
 	simulateCmd.Flags().StringVar(&requestOutFilename, "request-only-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
-	simulateCmd.Flags().Uint64Var(&simulateStartRound, "round", 0, "Specify the round after which the simulation will take place. If not specified, the simulation will take place after the latest round.")
+	simulateCmd.Flags().Uint64Var((*uint64)(&simulateStartRound), "round", 0, "Specify the round after which the simulation will take place. If not specified, the simulation will take place after the latest round.")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
-	simulateCmd.Flags().Uint64Var(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
+	simulateCmd.Flags().IntVar(&simulateExtraOpcodeBudget, "extra-opcode-budget", 0, "Apply extra opcode budget for apps per transaction group during simulation")
 
 	simulateCmd.Flags().BoolVar(&simulateFullTrace, "full-trace", false, "Enable all options for simulation execution trace")
 	simulateCmd.Flags().BoolVar(&simulateEnableRequestTrace, "trace", false, "Enable simulation time execution trace of app calls")
@@ -190,7 +195,7 @@ var clerkCmd = &cobra.Command{
 	},
 }
 
-func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound uint64) (txn model.PendingTransactionResponse, err error) {
+func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound basics.Round) (txn model.PendingTransactionResponse, err error) {
 	// Get current round information
 	stat, err := client.Status()
 	if err != nil {
@@ -268,6 +273,9 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 		authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
 		if err != nil {
 			reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+		}
+		if authAddr == tx.Sender {
+			reportErrorf("AuthAddr cannot be the same as the transaction sender")
 		}
 	}
 
@@ -408,20 +416,20 @@ var sendCmd = &cobra.Command{
 		// (we don't use accountList.getAddressByName because this address likely doesn't correspond to an account)
 		var rekeyTo basics.Address
 		if rekeyToAddress != "" {
-			var err error
-			rekeyTo, err = basics.UnmarshalChecksumAddress(rekeyToAddress)
-			if err != nil {
-				reportErrorf(err.Error())
+			var err1 error
+			rekeyTo, err1 = basics.UnmarshalChecksumAddress(rekeyToAddress)
+			if err1 != nil {
+				reportErrorln(err1)
 			}
 		}
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err)
 		}
 		payment, err := client.ConstructPayment(
 			fromAddressResolved, toAddressResolved, fee, amount, noteBytes, closeToAddressResolved,
-			leaseBytes, basics.Round(firstValid), basics.Round(lastValid),
+			leaseBytes, firstValid, lastValid,
 		)
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
@@ -444,14 +452,17 @@ var sendCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Signer invalid (%s): %v", signerAddress, err)
 			}
+			if authAddr == payment.Sender {
+				reportErrorf("AuthAddr cannot be the same as the transaction sender")
+			}
 		}
 
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
 
-			params, err := client.SuggestedParams()
-			if err != nil {
-				reportErrorf(errorNodeStatus, err)
+			params, err1 := client.SuggestedParams()
+			if err1 != nil {
+				reportErrorf(errorNodeStatus, err1)
 			}
 			proto := protocol.ConsensusVersion(params.ConsensusVersion)
 			uncheckedTxn := transactions.SignedTxn{
@@ -463,12 +474,12 @@ var sendCmd = &cobra.Command{
 					CurrentProtocol: proto,
 				},
 			}
-			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil, nil)
-			if err == nil {
-				err = verify.LogicSigSanityCheck(0, groupCtx)
+			groupCtx, err1 := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, &blockHeader, nil, nil)
+			if err1 == nil {
+				err1 = verify.LogicSigSanityCheck(0, groupCtx)
 			}
-			if err != nil {
-				reportErrorf("%s: txn error %s", outFilename, err)
+			if err1 != nil {
+				reportErrorf("%s: txn error %s", outFilename, err1)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -501,24 +512,24 @@ var sendCmd = &cobra.Command{
 				reportErrorf(msigParseError, "Not enough arguments to create the multisig address.\nPlease make sure to specify the threshold and at least 2 addresses\n")
 			}
 
-			threshold, err := strconv.ParseUint(params[0], 10, 8)
-			if err != nil || threshold < 1 || threshold > 255 {
+			threshold, err1 := strconv.ParseUint(params[0], 10, 8)
+			if err1 != nil || threshold < 1 || threshold > 255 {
 				reportErrorf(msigParseError, "Failed to parse the threshold. Make sure it's a number between 1 and 255")
 			}
 
 			// Convert the addresses into public keys
 			pks := make([]crypto.PublicKey, len(params[1:]))
 			for i, addrStr := range params[1:] {
-				addr, err := basics.UnmarshalChecksumAddress(addrStr)
-				if err != nil {
-					reportErrorf(failDecodeAddressError, err)
+				addr, err2 := basics.UnmarshalChecksumAddress(addrStr)
+				if err2 != nil {
+					reportErrorf(failDecodeAddressError, err2)
 				}
 				pks[i] = crypto.PublicKey(addr)
 			}
 
-			addr, err := crypto.MultisigAddrGen(1, uint8(threshold), pks)
-			if err != nil {
-				reportErrorf(msigParseError, err)
+			addr, err1 := crypto.MultisigAddrGen(1, uint8(threshold), pks)
+			if err1 != nil {
+				reportErrorf(msigParseError, err1)
 			}
 
 			// Generate the multisig and assign to the txn
@@ -526,17 +537,17 @@ var sendCmd = &cobra.Command{
 
 			// Append the signer since it's a rekey txn
 			if basics.Address(addr) == stx.Txn.Sender {
-				reportWarnln(rekeySenderTargetSameError)
+				reportErrorf("AuthAddr cannot be the same as the transaction sender")
 			}
 			stx.AuthAddr = basics.Address(addr)
 		}
 
 		if outFilename == "" {
 			// Broadcast the tx
-			txid, err := client.BroadcastTransaction(stx)
+			txid, err1 := client.BroadcastTransaction(stx)
 
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			if err1 != nil {
+				reportErrorf(errorBroadcastingTX, err1)
 			}
 
 			// update information from Transaction
@@ -546,9 +557,9 @@ var sendCmd = &cobra.Command{
 			reportInfof(infoTxIssued, amount, fromAddressResolved, toAddressResolved, txid, fee)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lastValid)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err1 = waitForCommit(client, txid, lastValid)
+				if err1 != nil {
+					reportErrorln(err1)
 				}
 			}
 		} else {
@@ -558,7 +569,7 @@ var sendCmd = &cobra.Command{
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			}
 			if err != nil {
-				reportErrorln(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -609,12 +620,12 @@ var rawsendCmd = &cobra.Command{
 		pendingTxns := make(map[transactions.Txid]string)
 		for _, txgroup := range txgroups {
 			// Broadcast the transaction
-			err := client.BroadcastTransactionGroup(txgroup)
-			if err != nil {
+			err1 := client.BroadcastTransactionGroup(txgroup)
+			if err1 != nil {
 				for _, txn := range txgroup {
-					txnErrors[txn.ID()] = err.Error()
+					txnErrors[txn.ID()] = err1.Error()
 				}
-				reportWarnf(errorBroadcastingTX, err)
+				reportWarnf(errorBroadcastingTX, err1)
 				continue
 			}
 
@@ -723,7 +734,11 @@ var inspectCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(txDecodeError, txFilename, err)
 				}
-				fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				if inspectTxid {
+					fmt.Printf("%s[%d] - %s\n%s\n\n", txFilename, count, sti.Txn.ID(), string(protocol.EncodeJSON(sti)))
+				} else {
+					fmt.Printf("%s[%d]\n%s\n\n", txFilename, count, string(protocol.EncodeJSON(sti)))
+				}
 				count++
 			}
 		}
@@ -853,6 +868,9 @@ var signCmd = &cobra.Command{
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
 					if signerAddress != "" {
+						if authAddr == txn.Txn.Sender {
+							reportErrorf("AuthAddr cannot be the same as the transaction sender")
+						}
 						txn.AuthAddr = authAddr
 					}
 				}
@@ -1150,19 +1168,18 @@ var dryrunCmd = &cobra.Command{
 	Short: "Test a program offline",
 	Long:  "Test a TEAL program offline under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("goal clerk dryrun is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
 		stxns := decodeTxnsFromFile(txFilename)
 		proto, params := getProto(protoVersion)
 		if dumpForDryrun {
 			// Write dryrun data to file
 			dataDir := datadir.EnsureSingleDataDir()
 			client := ensureFullClient(dataDir)
-			accts, err := unmarshalSlice(dumpForDryrunAccts)
-			if err != nil {
-				reportErrorln(err.Error())
-			}
+			accts := util.Map(dumpForDryrunAccts, cliAddress)
 			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err)
 			}
 			writeFile(outFilename, data, 0600)
 			return
@@ -1214,6 +1231,8 @@ var dryrunRemoteCmd = &cobra.Command{
 	Short: "Test a program with algod's dryrun REST endpoint",
 	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
+		reportWarnf("goal clerk dryrun-remote is deprecated and will be removed soon. Please speak up if the feature matters to you.")
+		time.Sleep(3 * time.Second)
 		data, err := readFile(txFilename)
 		if err != nil {
 			reportErrorf(fileReadError, txFilename, err)
@@ -1317,7 +1336,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				Round:                 basics.Round(simulateStartRound),
+				Round:                 simulateStartRound,
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
 				AllowUnnamedResources: simulateAllowUnnamedResources,
@@ -1343,7 +1362,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
-				Round:                 basics.Round(simulateStartRound),
+				Round:                 simulateStartRound,
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
 				AllowUnnamedResources: simulateAllowUnnamedResources,
@@ -1373,19 +1392,6 @@ var simulateCmd = &cobra.Command{
 			fmt.Println(string(encodedResponse))
 		}
 	},
-}
-
-// unmarshalSlice converts string addresses to basics.Address
-func unmarshalSlice(accts []string) ([]basics.Address, error) {
-	result := make([]basics.Address, 0, len(accts))
-	for _, acct := range accts {
-		addr, err := basics.UnmarshalChecksumAddress(acct)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, addr)
-	}
-	return result, nil
 }
 
 func decodeTxnsFromFile(file string) []transactions.SignedTxn {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,8 +26,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // CyclicFileWriter implements the io.Writer interface and wraps an underlying file.
@@ -118,7 +119,7 @@ func procWait(cmd *exec.Cmd, cause string) {
 	}
 }
 
-// Write ensures the the underlying file can store an additional len(p) bytes. If there is not enough room left it seeks
+// Write ensures the underlying file can store an additional len(p) bytes. If there is not enough room left it seeks
 // to the beginning of the file.
 func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 	cyclic.mu.Lock()
@@ -143,23 +144,23 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 		now := time.Now()
 		// we don't have enough space to write the entry, so archive data
 		cyclic.writer.Close()
-		var err error
+
 		globPath := cyclic.getArchiveGlob()
-		oldarchives, err := filepath.Glob(globPath)
-		if err != nil && !os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "%s: glob err: %s\n", globPath, err)
+		oldarchives, err1 := filepath.Glob(globPath)
+		if err1 != nil && !os.IsNotExist(err1) {
+			fmt.Fprintf(os.Stderr, "%s: glob err: %s\n", globPath, err1)
 		} else if cyclic.maxLogAge != 0 {
 			tooOld := now.Add(-cyclic.maxLogAge)
 			for _, path := range oldarchives {
-				finfo, err := os.Stat(path)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "%s: stat: %s\n", path, err)
+				finfo, err2 := os.Stat(path)
+				if err2 != nil {
+					fmt.Fprintf(os.Stderr, "%s: stat: %s\n", path, err2)
 					continue
 				}
 				if finfo.ModTime().Before(tooOld) {
-					err = os.Remove(path)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "%s: rm: %s\n", path, err)
+					err2 = os.Remove(path)
+					if err2 != nil {
+						fmt.Fprintf(os.Stderr, "%s: rm: %s\n", path, err2)
 					}
 				}
 			}
@@ -174,30 +175,30 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 			shouldBz2 = true
 			archivePath = archivePath[:len(archivePath)-4]
 		}
-		if err = util.MoveFile(cyclic.liveLog, archivePath); err != nil {
-			panic(fmt.Sprintf("CyclicFileWriter: cannot archive full log %v", err))
+		if err1 = util.MoveFile(cyclic.liveLog, archivePath); err1 != nil {
+			panic(fmt.Sprintf("CyclicFileWriter: cannot archive full log %v", err1))
 		}
 		if shouldGz {
 			cmd := exec.Command("gzip", archivePath)
-			err = cmd.Start()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: could not gzip: %s", archivePath, err)
+			err1 = cmd.Start()
+			if err1 != nil {
+				fmt.Fprintf(os.Stderr, "%s: could not gzip: %s", archivePath, err1)
 			} else {
 				go procWait(cmd, archivePath)
 			}
 		} else if shouldBz2 {
 			cmd := exec.Command("bzip2", archivePath)
-			err = cmd.Start()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: could not bzip2: %s", archivePath, err)
+			err1 = cmd.Start()
+			if err1 != nil {
+				fmt.Fprintf(os.Stderr, "%s: could not bzip2: %s", archivePath, err1)
 			} else {
 				go procWait(cmd, archivePath)
 			}
 		}
 		cyclic.logStart = now
-		cyclic.writer, err = os.OpenFile(cyclic.liveLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
-		if err != nil {
-			panic(fmt.Sprintf("CyclicFileWriter: cannot open log file %v", err))
+		cyclic.writer, err1 = os.OpenFile(cyclic.liveLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		if err1 != nil {
+			panic(fmt.Sprintf("CyclicFileWriter: cannot open log file %v", err1))
 		}
 		cyclic.nextWrite = 0
 	}

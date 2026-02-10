@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -192,11 +192,11 @@ func (s *Service) triggerSync() {
 
 // SetDisableSyncRound attempts to set the first round we _do_not_ want to fetch from the network
 // Blocks from disableSyncRound or any round after disableSyncRound will not be fetched while this is set
-func (s *Service) SetDisableSyncRound(rnd uint64) error {
-	if basics.Round(rnd) < s.ledger.LastRound() {
+func (s *Service) SetDisableSyncRound(rnd basics.Round) error {
+	if rnd < s.ledger.LastRound() {
 		return ErrSyncRoundInvalid
 	}
-	s.disableSyncRound.Store(rnd)
+	s.disableSyncRound.Store(uint64(rnd))
 	s.triggerSync()
 	return nil
 }
@@ -208,8 +208,8 @@ func (s *Service) UnsetDisableSyncRound() {
 }
 
 // GetDisableSyncRound returns the disabled sync round
-func (s *Service) GetDisableSyncRound() uint64 {
-	return s.disableSyncRound.Load()
+func (s *Service) GetDisableSyncRound() basics.Round {
+	return basics.Round(s.disableSyncRound.Load())
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
@@ -476,17 +476,11 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	maxParallelRequests := s.parallelBlocks
-	if maxParallelRequests < seedLookback {
-		maxParallelRequests = seedLookback
-	}
+	maxParallelRequests := max(s.parallelBlocks, seedLookback)
 	minParallelRequests := seedLookback
 
 	// Start the limited requests at max(1, 'seedLookback')
-	limitedParallelRequests := uint64(1)
-	if limitedParallelRequests < seedLookback {
-		limitedParallelRequests = seedLookback
-	}
+	limitedParallelRequests := max(1, seedLookback)
 
 	completed := make(map[basics.Round]chan bool)
 	var wg sync.WaitGroup

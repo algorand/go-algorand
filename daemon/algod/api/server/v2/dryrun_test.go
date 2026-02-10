@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -172,6 +172,26 @@ int not_an_int`,
 	require.Contains(t, response.Error, "dryrun Source[0]: 2 errors")
 	require.Contains(t, response.Error, "4: unknown opcode: fake_opcode")
 	require.Contains(t, response.Error, "5:4: unable to parse \"not_an_int\" as integer")
+}
+
+func TestDryrunAppWithoutParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test that an app without params and without Sources fails validation
+	dr := DryrunRequest{
+		Apps: []model.Application{
+			{
+				Id: 1007,
+				// No Params, no Sources - should fail validation
+			},
+		},
+	}
+	var response model.DryrunResponse
+
+	doDryrunRequest(&dr, &response)
+	require.NotEmpty(t, response.Error)
+	require.Contains(t, response.Error, "application 1007 does not have params set")
 }
 
 func TestDryrunLogicSig(t *testing.T) {
@@ -497,7 +517,7 @@ func TestDryrunGlobal1(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
 				GlobalStateSchema: &model.ApplicationStateSchema{
@@ -547,7 +567,7 @@ func TestDryrunGlobal2(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1234,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
 			},
@@ -594,7 +614,7 @@ func TestDryrunLocal1(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 				LocalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: 10,
@@ -668,7 +688,7 @@ func TestDryrunLocal1A(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				LocalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: 10,
 					NumUint:      10,
@@ -746,7 +766,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1234,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -806,7 +826,7 @@ func TestDryrunMultipleTxns(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
 				GlobalStateSchema: &model.ApplicationStateSchema{
@@ -851,7 +871,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	gdr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -961,7 +981,7 @@ func TestDryrunMakeLedger(t *testing.T) {
 	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				Creator:         sender.String(),
 				ApprovalProgram: localStateCheckProg,
 			},
@@ -1155,8 +1175,8 @@ int 1`)
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
-				Params: model.ApplicationParams{
+				Id: appIdx,
+				Params: &model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
@@ -1246,8 +1266,8 @@ return
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
-				Params: model.ApplicationParams{
+				Id: appIdx,
+				Params: &model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
@@ -1255,8 +1275,8 @@ return
 				},
 			},
 			{
-				Id: uint64(appIdx + 1),
-				Params: model.ApplicationParams{
+				Id: appIdx + 1,
+				Params: &model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approv,
 					ClearStateProgram: clst,
@@ -1310,7 +1330,7 @@ func TestDryrunCost(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
 			expectedCosts := make([]int64, 3)
-			expectedBudgetAdded := make([]uint64, 3)
+			expectedBudgetAdded := make([]int, 3)
 
 			ops, err := logic.AssembleString("#pragma version 5\nbyte 0x41\n" + strings.Repeat("keccak256\n", test.numHashes) + "pop\nint 1\n")
 			require.NoError(t, err)
@@ -1383,8 +1403,8 @@ int 1`)
 				},
 				Apps: []model.Application{
 					{
-						Id: uint64(appIdx),
-						Params: model.ApplicationParams{
+						Id: appIdx,
+						Params: &model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app1,
 							ClearStateProgram: clst,
@@ -1392,8 +1412,8 @@ int 1`)
 						},
 					},
 					{
-						Id: uint64(appIdx + 1),
-						Params: model.ApplicationParams{
+						Id: appIdx + 1,
+						Params: &model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app2,
 							ClearStateProgram: clst,
@@ -1401,8 +1421,8 @@ int 1`)
 						},
 					},
 					{
-						Id: uint64(appIdx + 2),
-						Params: model.ApplicationParams{
+						Id: appIdx + 2,
+						Params: &model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app3,
 							ClearStateProgram: clst,
@@ -1483,8 +1503,8 @@ int 1`
 			ApplicationID: appIdx,
 		}.SignedTxn()},
 		Apps: []model.Application{{
-			Id: uint64(appIdx),
-			Params: model.ApplicationParams{
+			Id: appIdx,
+			Params: &model.ApplicationParams{
 				Creator:           sender.String(),
 				ApprovalProgram:   approval,
 				ClearStateProgram: clst,
@@ -1545,8 +1565,8 @@ int 0
 		},
 		Apps: []model.Application{
 			{
-				Id: uint64(appIdx),
-				Params: model.ApplicationParams{
+				Id: appIdx,
+				Params: &model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
@@ -1601,6 +1621,7 @@ int 1
 	a.NoError(err)
 
 	appIdx := basics.AppIndex(7)
+	proto := config.Consensus[dryrunProtoVersion]
 	dr := DryrunRequest{
 		ProtocolVersion: string(dryrunProtoVersion),
 		Txns: []transactions.SignedTxn{txntest.Txn{
@@ -1609,8 +1630,8 @@ int 1
 			ApplicationID: appIdx,
 		}.SignedTxn()},
 		Apps: []model.Application{{
-			Id: uint64(appIdx),
-			Params: model.ApplicationParams{
+			Id: appIdx,
+			Params: &model.ApplicationParams{
 				ApprovalProgram:   paySender.Program,
 				ClearStateProgram: clst,
 			},
@@ -1618,8 +1639,8 @@ int 1
 		// Sender must exist (though no fee is ever taken)
 		// AppAccount must exist and be able to pay the inner fee and the pay amount (but min balance not checked)
 		Accounts: []model.Account{
-			{Address: sender.String(), Status: "Offline"},                                                // sender
-			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: 1_010}}, // app account
+			{Address: sender.String(), Status: "Offline"},                                                               // sender
+			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: proto.MinTxnFee + 10}}, // app account needs MinTxnFee + pay amount
 	}
 	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)
@@ -1685,8 +1706,8 @@ int 1`)
 			Sender:        sender,
 			ApplicationID: appIdx}.SignedTxn())
 		apps = append(apps, model.Application{
-			Id: uint64(appIdx),
-			Params: model.ApplicationParams{
+			Id: appIdx,
+			Params: &model.ApplicationParams{
 				ApprovalProgram:   approvalOps.Program,
 				ClearStateProgram: clst,
 			},
@@ -1805,7 +1826,7 @@ int %d`, expectedUint, i))
 		dr.Apps = []model.Application{
 			{
 				Id: 1,
-				Params: model.ApplicationParams{
+				Params: &model.ApplicationParams{
 					ApprovalProgram: ops.Program,
 					GlobalStateSchema: &model.ApplicationStateSchema{
 						NumByteSlice: 1,
@@ -1860,7 +1881,7 @@ func TestDryrunEarlyExit(t *testing.T) {
 	}
 	dr.Apps = []model.Application{{
 		Id: 1,
-		Params: model.ApplicationParams{
+		Params: &model.ApplicationParams{
 			ApprovalProgram: ops.Program,
 		},
 	}}

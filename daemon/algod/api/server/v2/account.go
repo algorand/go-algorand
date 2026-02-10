@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,9 +34,15 @@ import (
 func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHolding {
 	return model.AssetHolding{
 		Amount:   ah.Amount,
-		AssetID:  uint64(ai),
+		AssetID:  ai,
 		IsFrozen: ah.Frozen,
 	}
+}
+
+// AccountDataToAccountOptions specifies options for converting AccountData to Account
+type AccountDataToAccountOptions struct {
+	ExcludeCreatedAppsParams   bool
+	ExcludeCreatedAssetsParams bool
 }
 
 // AccountDataToAccount converts basics.AccountData to v2.model.Account
@@ -44,6 +50,7 @@ func AccountDataToAccount(
 	address string, record *basics.AccountData,
 	lastRound basics.Round, consensus *config.ConsensusParams,
 	amountWithoutPendingRewards basics.MicroAlgos,
+	opts AccountDataToAccountOptions,
 ) (model.Account, error) {
 
 	assets := make([]model.AssetHolding, 0, len(record.Assets))
@@ -60,7 +67,14 @@ func AccountDataToAccount(
 
 	createdAssets := make([]model.Asset, 0, len(record.AssetParams))
 	for idx, params := range record.AssetParams {
-		asset := AssetParamsToAsset(address, idx, &params)
+		var asset model.Asset
+		if opts.ExcludeCreatedAssetsParams {
+			asset = model.Asset{
+				Index: idx,
+			}
+		} else {
+			asset = AssetParamsToAsset(address, idx, &params)
+		}
 		createdAssets = append(createdAssets, asset)
 	}
 	sort.Slice(createdAssets, func(i, j int) bool {
@@ -72,9 +86,9 @@ func AccountDataToAccount(
 		apiParticipation = &model.AccountParticipation{
 			VoteParticipationKey:      record.VoteID[:],
 			SelectionParticipationKey: record.SelectionID[:],
-			VoteFirstValid:            uint64(record.VoteFirstValid),
-			VoteLastValid:             uint64(record.VoteLastValid),
-			VoteKeyDilution:           uint64(record.VoteKeyDilution),
+			VoteFirstValid:            record.VoteFirstValid,
+			VoteLastValid:             record.VoteLastValid,
+			VoteKeyDilution:           record.VoteKeyDilution,
 		}
 		if !record.StateProofID.IsEmpty() {
 			tmp := record.StateProofID[:]
@@ -84,7 +98,14 @@ func AccountDataToAccount(
 
 	createdApps := make([]model.Application, 0, len(record.AppParams))
 	for appIdx, appParams := range record.AppParams {
-		app := AppParamsToApplication(address, appIdx, &appParams)
+		var app model.Application
+		if opts.ExcludeCreatedAppsParams {
+			app = model.Application{
+				Id: appIdx,
+			}
+		} else {
+			app = AppParamsToApplication(address, appIdx, &appParams)
+		}
 		createdApps = append(createdApps, app)
 	}
 	sort.Slice(createdApps, func(i, j int) bool {
@@ -111,11 +132,11 @@ func AccountDataToAccount(
 		return model.Account{}, errors.New("overflow on pending reward calculation")
 	}
 
-	minBalance := record.MinBalance(consensus)
+	minBalance := record.MinBalance(consensus.BalanceRequirements())
 
 	return model.Account{
 		SigType:                     nil,
-		Round:                       uint64(lastRound),
+		Round:                       lastRound,
 		Address:                     address,
 		Amount:                      amount.Raw,
 		PendingRewards:              pendingRewards.Raw,
@@ -139,8 +160,8 @@ func AccountDataToAccount(
 		TotalBoxes:                  omitEmpty(record.TotalBoxes),
 		TotalBoxBytes:               omitEmpty(record.TotalBoxBytes),
 		MinBalance:                  minBalance.Raw,
-		LastProposed:                omitEmpty(uint64(record.LastProposed)),
-		LastHeartbeat:               omitEmpty(uint64(record.LastHeartbeat)),
+		LastProposed:                omitEmpty(record.LastProposed),
+		LastHeartbeat:               omitEmpty(record.LastHeartbeat),
 	}, nil
 }
 
@@ -207,8 +228,8 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	if a.Participation != nil {
 		copy(voteID[:], a.Participation.VoteParticipationKey)
 		copy(selID[:], a.Participation.SelectionParticipationKey)
-		voteFirstValid = basics.Round(a.Participation.VoteFirstValid)
-		voteLastValid = basics.Round(a.Participation.VoteLastValid)
+		voteFirstValid = a.Participation.VoteFirstValid
+		voteLastValid = a.Participation.VoteLastValid
 		voteKeyDilution = a.Participation.VoteKeyDilution
 		if a.Participation.StateProofKey != nil {
 			copy(stateProofID[:], *a.Participation.StateProofKey)
@@ -223,58 +244,38 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	var assetParams map[basics.AssetIndex]basics.AssetParams
 	if a.CreatedAssets != nil && len(*a.CreatedAssets) > 0 {
 		assetParams = make(map[basics.AssetIndex]basics.AssetParams, len(*a.CreatedAssets))
-		var err error
 		for _, ca := range *a.CreatedAssets {
+			if ca.Params == nil {
+				continue
+			}
 			var metadataHash [32]byte
 			if ca.Params.MetadataHash != nil {
 				copy(metadataHash[:], *ca.Params.MetadataHash)
 			}
-			var manager, reserve, freeze, clawback basics.Address
-			if ca.Params.Manager != nil {
-				if manager, err = basics.UnmarshalChecksumAddress(*ca.Params.Manager); err != nil {
-					return basics.AccountData{}, err
-				}
+			manager, err := nilToZeroAddr(ca.Params.Manager)
+			if err != nil {
+				return basics.AccountData{}, err
 			}
-			if ca.Params.Reserve != nil {
-				if reserve, err = basics.UnmarshalChecksumAddress(*ca.Params.Reserve); err != nil {
-					return basics.AccountData{}, err
-				}
+			reserve, err := nilToZeroAddr(ca.Params.Reserve)
+			if err != nil {
+				return basics.AccountData{}, err
 			}
-			if ca.Params.Freeze != nil {
-				if freeze, err = basics.UnmarshalChecksumAddress(*ca.Params.Freeze); err != nil {
-					return basics.AccountData{}, err
-				}
+			freeze, err := nilToZeroAddr(ca.Params.Freeze)
+			if err != nil {
+				return basics.AccountData{}, err
 			}
-			if ca.Params.Clawback != nil {
-				if clawback, err = basics.UnmarshalChecksumAddress(*ca.Params.Clawback); err != nil {
-					return basics.AccountData{}, err
-				}
+			clawback, err := nilToZeroAddr(ca.Params.Clawback)
+			if err != nil {
+				return basics.AccountData{}, err
 			}
 
-			var defaultFrozen bool
-			if ca.Params.DefaultFrozen != nil {
-				defaultFrozen = *ca.Params.DefaultFrozen
-			}
-			var url string
-			if ca.Params.Url != nil {
-				url = *ca.Params.Url
-			}
-			var unitName string
-			if ca.Params.UnitName != nil {
-				unitName = *ca.Params.UnitName
-			}
-			var name string
-			if ca.Params.Name != nil {
-				name = *ca.Params.Name
-			}
-
-			assetParams[basics.AssetIndex(ca.Index)] = basics.AssetParams{
+			assetParams[ca.Index] = basics.AssetParams{
 				Total:         ca.Params.Total,
 				Decimals:      uint32(ca.Params.Decimals),
-				DefaultFrozen: defaultFrozen,
-				UnitName:      unitName,
-				AssetName:     name,
-				URL:           url,
+				DefaultFrozen: nilToZero(ca.Params.DefaultFrozen),
+				UnitName:      nilToZero(ca.Params.UnitName),
+				AssetName:     nilToZero(ca.Params.Name),
+				URL:           nilToZero(ca.Params.Url),
 				MetadataHash:  metadataHash,
 				Manager:       manager,
 				Reserve:       reserve,
@@ -287,7 +288,7 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	if a.Assets != nil && len(*a.Assets) > 0 {
 		assets = make(map[basics.AssetIndex]basics.AssetHolding, len(*a.Assets))
 		for _, h := range *a.Assets {
-			assets[basics.AssetIndex(h.AssetID)] = basics.AssetHolding{
+			assets[h.AssetID] = basics.AssetHolding{
 				Amount: h.Amount,
 				Frozen: h.IsFrozen,
 			}
@@ -302,7 +303,7 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			if err != nil {
 				return basics.AccountData{}, err
 			}
-			appLocalStates[basics.AppIndex(ls.Id)] = basics.AppLocalState{
+			appLocalStates[ls.Id] = basics.AppLocalState{
 				Schema: basics.StateSchema{
 					NumUint:      ls.Schema.NumUint,
 					NumByteSlice: ls.Schema.NumByteSlice,
@@ -316,11 +317,13 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	if a.CreatedApps != nil && len(*a.CreatedApps) > 0 {
 		appParams = make(map[basics.AppIndex]basics.AppParams, len(*a.CreatedApps))
 		for _, params := range *a.CreatedApps {
-			ap, err := ApplicationParamsToAppParams(&params.Params)
-			if err != nil {
-				return basics.AccountData{}, err
+			if params.Params != nil {
+				ap, err := ApplicationParamsToAppParams(params.Params)
+				if err != nil {
+					return basics.AccountData{}, err
+				}
+				appParams[params.Id] = ap
 			}
-			appParams[basics.AppIndex(params.Id)] = ap
 		}
 	}
 
@@ -336,26 +339,6 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			return basics.AccountData{}, errors.New("AppsTotalExtraPages exceeds maximum decodable value")
 		}
 		totalExtraPages = uint32(*a.AppsTotalExtraPages)
-	}
-
-	var totalBoxes uint64
-	if a.TotalBoxes != nil {
-		totalBoxes = *a.TotalBoxes
-	}
-
-	var totalBoxBytes uint64
-	if a.TotalBoxBytes != nil {
-		totalBoxBytes = *a.TotalBoxBytes
-	}
-
-	var lastProposed uint64
-	if a.LastProposed != nil {
-		lastProposed = *a.LastProposed
-	}
-
-	var lastHeartbeat uint64
-	if a.LastHeartbeat != nil {
-		lastHeartbeat = *a.LastHeartbeat
 	}
 
 	status, err := basics.UnmarshalStatus(a.Status)
@@ -380,18 +363,15 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 		AppParams:          appParams,
 		TotalAppSchema:     totalSchema,
 		TotalExtraAppPages: totalExtraPages,
-		TotalBoxes:         totalBoxes,
-		TotalBoxBytes:      totalBoxBytes,
-		LastProposed:       basics.Round(lastProposed),
-		LastHeartbeat:      basics.Round(lastHeartbeat),
+		TotalBoxes:         nilToZero(a.TotalBoxes),
+		TotalBoxBytes:      nilToZero(a.TotalBoxBytes),
+		LastProposed:       nilToZero(a.LastProposed),
+		LastHeartbeat:      nilToZero(a.LastHeartbeat),
 	}
 
-	if a.AuthAddr != nil {
-		authAddr, err := basics.UnmarshalChecksumAddress(*a.AuthAddr)
-		if err != nil {
-			return basics.AccountData{}, err
-		}
-		ad.AuthAddr = authAddr
+	ad.AuthAddr, err = nilToZeroAddr(a.AuthAddr)
+	if err != nil {
+		return basics.AccountData{}, err
 	}
 	if len(assetParams) > 0 {
 		ad.AssetParams = assetParams
@@ -441,6 +421,10 @@ func ApplicationParamsToAppParams(gap *model.ApplicationParams) (basics.AppParam
 	}
 	ap.GlobalState = kv
 
+	ap.SizeSponsor, err = nilToZeroAddr(gap.SizeSponsor)
+	if err != nil {
+		return basics.AppParams{}, err
+	}
 	return ap, nil
 }
 
@@ -449,8 +433,8 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 	globalState := convertTKVToGenerated(&appParams.GlobalState)
 	extraProgramPages := uint64(appParams.ExtraProgramPages)
 	app := model.Application{
-		Id: uint64(appIdx),
-		Params: model.ApplicationParams{
+		Id: appIdx,
+		Params: &model.ApplicationParams{
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
@@ -464,7 +448,8 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 				NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
 				NumUint:      appParams.GlobalStateSchema.NumUint,
 			},
-			Version: omitEmpty(appParams.Version),
+			Version:     omitEmpty(appParams.Version),
+			SizeSponsor: addrOrNil(appParams.SizeSponsor),
 		},
 	}
 	return app
@@ -474,7 +459,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.ApplicationLocalState {
 	localState := convertTKVToGenerated(&state.KeyValue)
 	return model.ApplicationLocalState{
-		Id:       uint64(appIdx),
+		Id:       appIdx,
 		KeyValue: localState,
 		Schema: model.ApplicationStateSchema{
 			NumByteSlice: state.Schema.NumByteSlice,
@@ -508,7 +493,7 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 	}
 
 	return model.Asset{
-		Index:  uint64(idx),
-		Params: assetParams,
+		Index:  idx,
+		Params: &assetParams,
 	}
 }

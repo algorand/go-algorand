@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,35 +17,25 @@
 package phonebook
 
 import (
+	"slices"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
 	actual := ph.GetAddresses(len(set), RelayRole)
 	for _, got := range actual {
-		ok := false
-		for _, known := range set {
-			if got == known {
-				ok = true
-				break
-			}
-		}
+		ok := slices.Contains(set, got)
 		if !ok {
 			t.Errorf("get returned junk %#v", got)
 		}
 	}
 	for _, known := range set {
-		ok := false
-		for _, got := range actual {
-			if got == known {
-				ok = true
-				break
-			}
-		}
+		ok := slices.Contains(actual, known)
 		if !ok {
 			t.Errorf("get missed %#v; actual=%#v; set=%#v", known, actual, set)
 		}

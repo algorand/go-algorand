@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,9 @@ package fixtures
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // TestingTB is identical to testing.TB, beside the private method.

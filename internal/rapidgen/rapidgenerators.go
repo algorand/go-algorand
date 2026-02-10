@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,9 @@ package rapidgen
 
 import (
 	"fmt"
-	"pgregory.net/rapid"
 	"strings"
+
+	"pgregory.net/rapid"
 )
 
 // DomainWithPort generates an RFC 1035 compliant domain name with a port.

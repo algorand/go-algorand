@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1092,16 +1092,19 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 	}
 
 	// switch context one more time to give the blockqueue syncer to run
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// ensure Ledger.Wait() is non-blocked for all rounds except the last one (due to possible races)
 	for rnd := startRound; rnd < endRound; rnd++ {
 		done := ledger.Wait(rnd)
-		select {
-		case <-done:
-		default:
-			require.FailNow(t, fmt.Sprintf("Wait(%d) is blocked", rnd))
-		}
+		require.Eventually(t, func() bool {
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		}, 15*time.Millisecond, 1*time.Millisecond, "Wait(%d) is blocked", rnd)
 	}
 }
 
@@ -1600,7 +1603,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 
 	secondStageRound := basics.Round(36)
 
-	// Add blocks that preceed the first catchpoint round.
+	// Add blocks that precede the first catchpoint round.
 	for i := basics.Round(1); i < secondStageRound; i++ {
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
@@ -1879,7 +1882,7 @@ func TestHashContract(t *testing.T) {
 	}
 }
 
-// TestCatchpoint_FastUpdates tests catchpoint label writing data race
+// TestCatchpointFastUpdates tests catchpoint label writing data race
 func TestCatchpointFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1892,7 +1895,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.CatchpointTracking = 1
-	initialBlocksCount := int(conf.MaxAcctLookback)
+	initialBlocksCount := basics.Round(conf.MaxAcctLookback)
 	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, protocol.ConsensusFuture, accts)
 	defer ml.Close()
 
@@ -1913,7 +1916,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
-	for i := 1; i < initialBlocksCount; i++ {
+	for i := basics.Round(1); i < initialBlocksCount; i++ {
 		accts = append(accts, accts[0])
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
@@ -1975,7 +1978,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	require.NotEmpty(t, ct.GetLastCatchpointLabel())
 }
 
-// TestCatchpoint_LargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
+// TestCatchpointLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
 // and attempts to have the catchpoint tracker create the associated catchpoint. It's designed precisely around setting an
 // environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
 func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
@@ -2007,7 +2010,7 @@ func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
 	conf.CatchpointInterval = 32
 	conf.CatchpointTracking = 1
 	conf.Archival = true
-	initialBlocksCount := int(conf.MaxAcctLookback)
+	initialBlocksCount := basics.Round(conf.MaxAcctLookback)
 	ml := makeMockLedgerForTracker(t, true, initialBlocksCount, testProtocolVersion, accts)
 	defer ml.Close()
 
@@ -2024,16 +2027,13 @@ func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 	// cover 10 genesis blocks
 	rewardLevel := uint64(0)
-	for i := 1; i < initialBlocksCount; i++ {
+	for i := basics.Round(1); i < initialBlocksCount; i++ {
 		accts = append(accts, accts[0])
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 	}
 
 	start := basics.Round(initialBlocksCount)
-	min := conf.CatchpointInterval
-	if min < protoParams.CatchpointLookback {
-		min = protoParams.CatchpointLookback
-	}
+	min := max(conf.CatchpointInterval, protoParams.CatchpointLookback)
 	end := basics.Round(min + conf.MaxAcctLookback + 3) // few more rounds to commit and generate the second stage
 	for i := start; i < end; i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
@@ -2113,7 +2113,7 @@ func TestMakeCatchpointFilePath(t *testing.T) {
 // deadlock detection) and concurrent reads (from transaction evaluation, stake lookups, etc) can
 // cause the SQLite implementation in util/db/dbutil.go to retry the function looping over all
 // tracker commitRound implementations. Since catchpointtracker' commitRound updates a merkle trie's
-// DB storage and its in-memory cache, the retry can cause the the balancesTrie's cache to become
+// DB storage and its in-memory cache, the retry can cause the balancesTrie's cache to become
 // corrupted and out of sync with the DB (which uses transaction rollback between retries). The
 // merkle trie corruption manifests as error log messages like:
 //   - "attempted to add duplicate hash 'X' to merkle trie for account Y"

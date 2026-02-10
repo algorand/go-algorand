@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -421,11 +421,7 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 
 	minAccounts := accountsNeeded(fileCfgs.GeneratedApplicationCount, fileCfgs.GeneratedAssetsCount, params)
 	nAccounts := fileCfgs.GeneratedAccountsCount
-	if minAccounts > nAccounts {
-		bootstrappedNet.nAccounts = minAccounts
-	} else {
-		bootstrappedNet.nAccounts = nAccounts
-	}
+	bootstrappedNet.nAccounts = max(minAccounts, nAccounts)
 
 	//fund src account with enough funding
 	rand.Seed(time.Now().UnixNano())
@@ -567,9 +563,9 @@ func createBlock(src basics.Address, prev bookkeeping.Block, roundTxnCnt uint64,
 	}
 
 	for _, stxn := range stxns {
-		txib, err := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
-		if err != nil {
-			return bookkeeping.Block{}, err
+		txib, err1 := block.EncodeSignedTxn(stxn, transactions.ApplyData{})
+		if err1 != nil {
+			return bookkeeping.Block{}, err1
 		}
 		txibs = append(txibs, txib)
 	}

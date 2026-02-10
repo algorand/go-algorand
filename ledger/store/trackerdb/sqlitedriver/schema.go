@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -35,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/mattn/go-sqlite3"
 )
 
 var accountsSchema = []string{
@@ -182,7 +183,7 @@ var accountsResetExprs = []string{
 //
 // accountsInit returns nil if either it has initialized the database
 // correctly, or if the database has already been initialized.
-func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.AccountData, proto config.ConsensusParams) (newDatabase bool, err error) {
+func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.AccountData, rewardUnit uint64) (newDatabase bool, err error) {
 	for _, tableCreate := range accountsSchema {
 		_, err = e.Exec(tableCreate)
 		if err != nil {
@@ -218,7 +219,7 @@ func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.Accoun
 			}
 
 			ad := ledgercore.ToAccountData(data)
-			totals.AddAccount(proto, ad, &ot)
+			totals.AddAccount(rewardUnit, ad, &ot)
 		}
 
 		if ot.Overflowed {
@@ -246,7 +247,7 @@ func accountsInit(e db.Executable, initAccounts map[basics.Address]basics.Accoun
 
 // accountsAddNormalizedBalance adds the normalizedonlinebalance column
 // to the accountbase table.
-func accountsAddNormalizedBalance(e db.Executable, proto config.ConsensusParams) error {
+func accountsAddNormalizedBalance(e db.Executable, rewardUnit uint64) error {
 	var exists bool
 	err := e.QueryRow("SELECT 1 FROM pragma_table_info('accountbase') WHERE name='normalizedonlinebalance'").Scan(&exists)
 	if err == nil {
@@ -284,7 +285,7 @@ func accountsAddNormalizedBalance(e db.Executable, proto config.ConsensusParams)
 			return err
 		}
 
-		normBalance := data.NormalizedOnlineBalance(proto)
+		normBalance := data.NormalizedOnlineBalance(rewardUnit)
 		if normBalance > 0 {
 			_, err = e.Exec("UPDATE accountbase SET normalizedonlinebalance=? WHERE address=?", normBalance, addrbuf)
 			if err != nil {

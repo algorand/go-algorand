@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -345,6 +345,7 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 	if ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+int(offset)].CurrentProtocol {
 		// find the tip point.
 		tipPoint := sort.Search(int(offset), func(i int) bool {
+			//nolint:dupword // ignore
 			// we're going to search here for version inequality, with the assumption that consensus versions won't repeat.
 			// that allow us to support [ver1, ver1, ..., ver2, ver2, ..., ver3, ver3] but not [ver1, ver1, ..., ver2, ver2, ..., ver1, ver3].
 			return ao.onlineRoundParamsData[startIndex+1].CurrentProtocol != ao.onlineRoundParamsData[startIndex+1+i].CurrentProtocol
@@ -701,7 +702,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 				// Check if this is the most recent round, in which case, we can
 				// use a cache of the most recent account state.
 				if offset == uint64(len(ao.deltas)) {
-					return macct.data.OnlineAccountData(rewardsProto, rewardsLevel), nil
+					return macct.data.OnlineAccountData(rewardsProto.RewardUnit, rewardsLevel), nil
 				}
 				// the account appears in the deltas, but we don't know if it appears in the
 				// delta range of [0..offset], so we'll need to check :
@@ -712,14 +713,14 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 					offset--
 					d, ok := ao.deltas[offset].GetData(addr)
 					if ok {
-						return d.OnlineAccountData(rewardsProto, rewardsLevel), nil
+						return d.OnlineAccountData(rewardsProto.RewardUnit, rewardsLevel), nil
 					}
 				}
 			}
 		}
 
 		if macct, has := ao.onlineAccountsCache.read(addr, rnd); has {
-			return macct.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+			return macct.GetOnlineAccountData(rewardsProto.RewardUnit, rewardsLevel), nil
 		}
 
 		ao.accountsMu.RUnlock()
@@ -780,7 +781,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 				ao.log.Info("inserted new item to onlineAccountsCache")
 			}
 			ao.accountsMu.Unlock()
-			return persistedData.AccountData.GetOnlineAccountData(rewardsProto, rewardsLevel), nil
+			return persistedData.AccountData.GetOnlineAccountData(rewardsProto.RewardUnit, rewardsLevel), nil
 		}
 		// case 3.3: retry (for loop iterates and queries again)
 		ao.accountsMu.Unlock()
@@ -872,7 +873,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 					return err
 				}
 
-				accts, err = ar.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto)
+				accts, err = ar.AccountsOnlineTop(rnd, batchOffset, batchSize, genesisProto.RewardUnit)
 				if err != nil {
 					return
 				}
@@ -975,7 +976,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 				return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound")
 			}
 			if params.StateProofExcludeTotalWeightWithRewards {
-				rewards := basics.PendingRewards(&ot, *params, oa.MicroAlgos, oa.RewardsBase, rewardsLevel)
+				rewards := basics.PendingRewards(&ot, params.RewardUnit, oa.MicroAlgos, oa.RewardsBase, rewardsLevel)
 				totalOnlineStake = ot.SubA(totalOnlineStake, rewards)
 				if ot.Overflowed {
 					return nil, basics.MicroAlgos{}, fmt.Errorf("TopOnlineAccounts: overflow in stakeOfflineInVoteRound rewards")
@@ -1029,7 +1030,7 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			if err != nil {
 				return err
 			}
-			expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams, rewardsLevel)
+			expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams.RewardUnit, rewardsLevel)
 			if err != nil {
 				return err
 			}
@@ -1065,7 +1066,7 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 				// setting VoteFirstValid into future.
 				if d.Status == basics.Online && d.VoteLastValid != 0 && voteRnd > d.VoteLastValid {
 					// Online expired: insert or overwrite the old data in expiredAccounts.
-					oadata := d.OnlineAccountData(rewardsParams, rewardsLevel)
+					oadata := d.OnlineAccountData(rewardsParams.RewardUnit, rewardsLevel)
 					expiredAccounts[addr] = &oadata
 				} else {
 					// addr went offline not expired, so do not report as an expired ONLINE account.

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -132,7 +132,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d after VoteLastValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteLastValid, uv)
 	}
 
-	ephID := basics.OneTimeIDForRound(rv.Round, m.Record.KeyDilution(proto))
+	ephID := basics.OneTimeIDForRound(rv.Round, proto.EffectiveKeyDilution(m.Record.OnlineAccountData.VoteKeyDilution))
 	voteID := m.Record.VoteID
 	if !voteID.Verify(ephID, rv, uv.Sig) {
 		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, uv)

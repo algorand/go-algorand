@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -67,6 +67,8 @@ type Balances interface {
 	HasAppLocalState(addr basics.Address, aidx basics.AppIndex) (bool, error)
 	PutAppLocalState(addr basics.Address, aidx basics.AppIndex, state basics.AppLocalState) error
 	DeleteAppLocalState(addr basics.Address, aidx basics.AppIndex) error
+
+	SetAppGlobalSchema(addr basics.Address, aidx basics.AppIndex, limits basics.StateSchema) error
 
 	GetAssetHolding(addr basics.Address, aidx basics.AssetIndex) (basics.AssetHolding, bool, error)
 	PutAssetHolding(addr basics.Address, aidx basics.AssetIndex, data basics.AssetHolding) error

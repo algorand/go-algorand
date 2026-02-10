@@ -11,19 +11,14 @@ set -e
 
 ALGORAND_DEADLOCK=enable
 export ALGORAND_DEADLOCK
+GOPATH=$(go env GOPATH)
+export GOPATH
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 # Force re-evaluation of genesis files to see if source files changed w/o running make
 touch gen/generate.go
 
-"${SCRIPTPATH}/build.sh"
-
-# Get the go build version.
-GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-
-eval "$(~/gimme "${GOLANG_VERSION}")"
-
-"${SCRIPTPATH}"/../buildtools/install_buildtools.sh
+make build
 
 make gen SHORT_PART_PERIOD=1
 
@@ -37,8 +32,10 @@ echo "Regenerate for stringer et el."
 make generate
 
 echo "Running fixcheck"
-GOPATH=$(go env GOPATH)
 "$GOPATH"/bin/algofix -error */
+
+echo "Running modernize checks"
+make modernize
 
 echo "Running expect linter"
 make expectlint

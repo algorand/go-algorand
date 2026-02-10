@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -525,10 +525,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	// 2. replay starts from X-CatchpointLookback+1
 	// 3. transaction evaluation at Y requires block up to MaxTxnLife+DeeperBlockHeaderHistory back from Y
 	proto := config.Consensus[topBlock.CurrentProtocol]
-	lookback := proto.MaxTxnLife + proto.DeeperBlockHeaderHistory + proto.CatchpointLookback
-	if lookback < proto.MaxBalLookback {
-		lookback = proto.MaxBalLookback
-	}
+	lookback := max(proto.MaxTxnLife+proto.DeeperBlockHeaderHistory+proto.CatchpointLookback, proto.MaxBalLookback)
 
 	lookbackForStateProofSupport := lookbackForStateproofsSupport(&topBlock)
 	if lookback < lookbackForStateProofSupport {
@@ -552,7 +549,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	var blk *bookkeeping.Block
 	var cert *agreement.Certificate
 	for retryCount := uint64(1); blocksFetched <= lookback; {
-		if err := cs.ctx.Err(); err != nil {
+		if err1 := cs.ctx.Err(); err1 != nil {
 			return cs.stopOrAbort()
 		}
 

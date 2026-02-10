@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -28,12 +30,10 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/stretchr/testify/require"
-
-	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 )
 
 func TestStateProofInParticipationInfo(t *testing.T) {
@@ -83,7 +83,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:      addr,
-			Fee:         basics.MicroAlgos{Raw: 10000},
+			Fee:         basics.MicroAlgos{Raw: params.MinFee},
 			FirstValid:  firstRound,
 			LastValid:   lastRound,
 			GenesisHash: gh,
@@ -181,7 +181,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 		Type: protocol.KeyRegistrationTx,
 		Header: transactions.Header{
 			Sender:      addr,
-			Fee:         basics.MicroAlgos{Raw: 10000},
+			Fee:         basics.MicroAlgos{Raw: params.MinFee},
 			FirstValid:  firstRound,
 			LastValid:   lastRound,
 			GenesisHash: gh,

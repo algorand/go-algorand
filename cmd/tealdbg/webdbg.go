@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,10 +25,12 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/algorand/go-algorand/protocol"
+	"github.com/gorilla/mux"
+
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
-	"github.com/gorilla/mux"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // WebPageFrontend is web page debugging frontend

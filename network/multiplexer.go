@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package network
 
 import (
 	"fmt"
+	"maps"
 	"sync/atomic"
 )
 
@@ -83,11 +84,8 @@ func (m *Multiplexer) ValidateHandle(msg IncomingMessage) OutgoingMessage {
 
 func registerMultiplexer[T any](target *atomic.Value, dispatch []taggedMessageDispatcher[T]) {
 	mp := make(map[Tag]T)
-	if existingMap := getMap[T](target); existingMap != nil {
-		for k, v := range existingMap {
-			mp[k] = v
-		}
-	}
+	existingMap := getMap[T](target)
+	maps.Copy(mp, existingMap)
 	for _, v := range dispatch {
 		if _, has := mp[v.Tag]; has {
 			panic(fmt.Sprintf("Already registered a handler for tag %v", v.Tag))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,7 +104,7 @@ var DefaultConfig = PpConfig{
 	RandomizeDst:    false,
 	MaxRandomDst:    200000,
 	MaxFee:          10000,
-	MinFee:          1000,
+	MinFee:          0,
 	MaxAmt:          1000,
 	TxnPerSec:       200,
 	NumPartAccounts: 10,

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,13 +23,14 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/algorand/go-algorand/components/mocks"
-	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/components/mocks"
+	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/p2p"
 )
 
 // HTTPNode is a mock network node that uses libp2p and http.

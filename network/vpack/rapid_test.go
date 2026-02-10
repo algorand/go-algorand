@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,12 +23,13 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"pgregory.net/rapid"
 )
 
 // TestCheckStatelessEncoder tests the StatelessEncoder/Decoder using randomly generated votes
@@ -40,6 +41,7 @@ func TestCheckStatelessEncoder(t *testing.T) {
 
 // FuzzCheckStatelessEncoder is the same as TestCheckStatelessEncoder, but is a fuzz test.
 func FuzzCheckStatelessEncoder(f *testing.F) {
+	partitiontest.PartitionTest(f)
 	f.Fuzz(rapid.MakeFuzz(checkStatelessEncoder))
 }
 
@@ -185,6 +187,8 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 // expects to be valid msgpack-encoded votes, this test is only ensures that
 // StatelessEncoder and StatelessDecoder don't crash on malformed data.
 func FuzzStatelessEncoder(f *testing.F) {
+	partitiontest.PartitionTest(f)
+
 	// Seed with valid compressed votes from random vote generator
 	voteGen := generateRandomVote()
 	var msgpBuf []byte
@@ -229,6 +233,8 @@ func FuzzStatelessEncoder(f *testing.F) {
 // FuzzStatelessDecoder is a fuzz test specifically targeting the StatelessDecoder
 // with potentially malformed input.
 func FuzzStatelessDecoder(f *testing.F) {
+	partitiontest.PartitionTest(f)
+
 	// Add valid compressed votes from random vote generator
 	voteGen := generateRandomVote()
 	var msgpBuf []byte

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,15 +21,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/blake2b"
+	"golang.org/x/exp/rand"
+
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/blake2b"
-	"golang.org/x/exp/rand"
 )
 
 func TestAppRateLimiter_Make(t *testing.T) {
@@ -183,7 +185,7 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	require.True(t, drop)
 }
 
-// TestAppRateLimiter_IntervalFull checks the cur counter accounts only admitted requests
+// TestAppRateLimiter_IntervalAdmitted checks the cur counter accounts only admitted requests
 func TestAppRateLimiter_IntervalAdmitted(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -229,7 +231,7 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC).UnixNano() // 11 sec => 1 sec into the interval
 
 	// fill 80% of the current interval
-	// switch to the next next interval
+	// switch to the next interval
 	// ensure all capacity is available
 
 	for i := 0; i < int(0.8*float64(rate)); i++ {
@@ -245,6 +247,82 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 
 	drop := rm.shouldDropAt(txns, nil, nextnext)
 	require.True(t, drop)
+}
+
+// TestAppRateLimiter_PenalizeEvalError checks that penalizeEvalError increases the rate counter
+func TestAppRateLimiter_PenalizeEvalError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	window := 10 * time.Second
+	perWindowRate := uint64(200)
+	perSecondRate := perWindowRate / uint64(window/time.Second)
+	rm := makeAppRateLimiter(512, perSecondRate, window)
+
+	txns := getAppTxnGroup(1)
+	bk := txgroupToKeys(txns, nil, rm.seed, rm.salt, numBuckets)
+	require.Equal(t, 1, len(bk.buckets))
+	require.Equal(t, 1, len(bk.keys))
+	b := bk.buckets[0]
+	k := bk.keys[0]
+	putAppKeyBuf(bk)
+
+	expectedPenalty := int64(rm.serviceRatePerWindow / 4)
+
+	// penalize the sender, this should create an entry with calculated penalty
+	rm.penalizeEvalError(txns, nil)
+
+	entry := rm.buckets[b].entries[k]
+	require.NotNil(t, entry)
+	require.Equal(t, expectedPenalty, entry.cur.Load())
+
+	// penalize again
+	rm.penalizeEvalError(txns, nil)
+	require.Equal(t, 2*expectedPenalty, entry.cur.Load())
+
+	// verify that penalty affects rate limiting decisions
+	// after penalty, only (rate - 2*penalty) requests should be allowed
+	now := time.Now().UnixNano()
+	allowedRequests := int(perWindowRate) - int(2*expectedPenalty)
+	executed := false
+	for i := 0; i < allowedRequests; i++ {
+		require.False(t, rm.shouldDropAt(txns, nil, now))
+		executed = true
+	}
+	require.True(t, executed)
+	require.True(t, rm.shouldDropAt(txns, nil, now))
+
+	// now checks multiple app ids
+	// create a txgroup with multiple apps including foreign apps
+	apptxn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 10,
+			ForeignApps:   []basics.AppIndex{20, 30},
+		},
+	}
+	txns = []transactions.SignedTxn{{Txn: apptxn}}
+
+	bk = txgroupToKeys(txns, nil, rm.seed, rm.salt, numBuckets)
+	require.Equal(t, 3, len(bk.keys)) // app 10, 20, 30
+	putAppKeyBuf(bk)
+
+	rm.penalizeEvalError(txns, nil)
+
+	// all 4 apps (1, 10, 20, 30) should have entries with penalty
+	require.Equal(t, 4, rm.len())
+
+	// verify each app was penalized
+	for _, appID := range []basics.AppIndex{10, 20, 30} {
+		bk := txgroupToKeys(getAppTxnGroup(appID), nil, rm.seed, rm.salt, numBuckets)
+		b := bk.buckets[0]
+		k := bk.keys[0]
+		putAppKeyBuf(bk)
+
+		entry := rm.buckets[b].entries[k]
+		require.NotNil(t, entry)
+		require.Equal(t, expectedPenalty, entry.cur.Load())
+	}
 }
 
 func TestAppRateLimiter_IPAddr(t *testing.T) {
@@ -447,6 +525,14 @@ func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	paytx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+	}
+	payTxgroup := []transactions.SignedTxn{{Txn: paytx}}
+
+	kb0 := txgroupToKeys(payTxgroup, nil, 123, [16]byte{}, 1)
+	require.Nil(t, kb0)
+
 	apptxn := transactions.Transaction{
 		Type: protocol.ApplicationCallTx,
 		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -458,32 +544,48 @@ func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
 
 	kb := txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 0, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	txgroup[0].Txn.ApplicationID = 1
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 1, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	txgroup[0].Txn.ForeignApps = append(txgroup[0].Txn.ForeignApps, 1)
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 1, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	txgroup[0].Txn.ForeignApps = append(txgroup[0].Txn.ForeignApps, 2)
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 2, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 
 	apptxn.ApplicationID = 2
 	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
 	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
 	require.Equal(t, 2, len(kb.keys))
-	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
+	putAppKeyBuf(kb)
+
+	// new app if from access list
+	apptxn.Access = []transactions.ResourceRef{{App: 3}}
+	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
+	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 3, len(kb.keys))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
+	putAppKeyBuf(kb)
+
+	// known app id in access list
+	apptxn.Access = []transactions.ResourceRef{{App: 3}, {App: 2}}
+	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
+	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 3, len(kb.keys))
+	require.Equal(t, len(kb.keys), len(kb.buckets))
 	putAppKeyBuf(kb)
 }
 
@@ -492,8 +594,8 @@ func BenchmarkAppRateLimiter_TxgroupToKeys(b *testing.B) {
 
 	txgroups := make([][]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		txgroup := make([]transactions.SignedTxn, 0, config.MaxTxGroupSize)
-		for j := 0; j < config.MaxTxGroupSize; j++ {
+		txgroup := make([]transactions.SignedTxn, 0, bounds.MaxTxGroupSize)
+		for j := 0; j < bounds.MaxTxGroupSize; j++ {
 			apptxn := transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{

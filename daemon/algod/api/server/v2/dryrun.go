@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,10 +27,9 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -51,7 +50,7 @@ type DryrunRequest struct {
 	ProtocolVersion string `codec:"protocol-version"`
 
 	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
-	Round uint64 `codec:"round"`
+	Round basics.Round `codec:"round"`
 
 	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
 	LatestTimestamp int64 `codec:"latest-timestamp"`
@@ -101,6 +100,9 @@ func (dr *DryrunRequest) ExpandSources() error {
 		case "approv", "clearp":
 			for ai, app := range dr.Apps {
 				if app.Id == s.AppIndex {
+					if dr.Apps[ai].Params == nil {
+						dr.Apps[ai].Params = &model.ApplicationParams{}
+					}
 					switch s.FieldName {
 					case "approv":
 						dr.Apps[ai].Params.ApprovalProgram = ops.Program
@@ -111,6 +113,19 @@ func (dr *DryrunRequest) ExpandSources() error {
 			}
 		default:
 			return fmt.Errorf("dryrun Source[%d]: bad field name %#v", i, s.FieldName)
+		}
+	}
+	return nil
+}
+
+// ValidateApps ensures all applications have params set.
+// This should be called after ExpandSources to ensure that either:
+// 1. The caller provided params explicitly, or
+// 2. Sources populated the params
+func (dr *DryrunRequest) ValidateApps() error {
+	for _, app := range dr.Apps {
+		if app.Params == nil {
+			return fmt.Errorf("application %d does not have params set", app.Id)
 		}
 	}
 	return nil
@@ -158,8 +173,8 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 
 func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.DryrunState {
 	st := model.DryrunState{
-		Line: uint64(state.Line),
-		Pc:   uint64(state.PC),
+		Line: state.Line,
+		Pc:   state.PC,
 	}
 	st.Stack = make([]model.TealValue, len(state.Stack))
 	for i, v := range state.Stack {
@@ -229,6 +244,9 @@ func (dl *dryrunLedger) init() error {
 	}
 	for i, app := range dl.dr.Apps {
 		var addr basics.Address
+		if app.Params == nil {
+			continue
+		}
 		if app.Params.Creator != "" {
 			var err error
 			addr, err = basics.UnmarshalChecksumAddress(app.Params.Creator)
@@ -275,20 +293,22 @@ func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.Ac
 	appi, ok := dl.accountApps[addr]
 	if ok {
 		app := dl.dr.Apps[appi]
-		params, err := ApplicationParamsToAppParams(&app.Params)
-		if err != nil {
-			return basics.AccountData{}, 0, err
-		}
-		if out.AppParams == nil {
-			out.AppParams = make(map[basics.AppIndex]basics.AppParams)
-			out.AppParams[basics.AppIndex(app.Id)] = params
-		} else {
-			ap, ok := out.AppParams[basics.AppIndex(app.Id)]
-			if ok {
-				MergeAppParams(&ap, &params)
-				out.AppParams[basics.AppIndex(app.Id)] = ap
+		if app.Params != nil {
+			params, err := ApplicationParamsToAppParams(app.Params)
+			if err != nil {
+				return basics.AccountData{}, 0, err
+			}
+			if out.AppParams == nil {
+				out.AppParams = make(map[basics.AppIndex]basics.AppParams)
+				out.AppParams[app.Id] = params
 			} else {
-				out.AppParams[basics.AppIndex(app.Id)] = params
+				ap, ok := out.AppParams[app.Id]
+				if ok {
+					MergeAppParams(&ap, &params)
+					out.AppParams[app.Id] = ap
+				} else {
+					out.AppParams[app.Id] = params
+				}
 			}
 		}
 	}
@@ -342,10 +362,10 @@ func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address,
 		return ledgercore.AppResource{}, err
 	}
 	var result ledgercore.AppResource
-	if p, ok := ad.AppParams[basics.AppIndex(aidx)]; ok {
+	if p, ok := ad.AppParams[aidx]; ok {
 		result.AppParams = &p
 	}
-	if s, ok := ad.AppLocalStates[basics.AppIndex(aidx)]; ok {
+	if s, ok := ad.AppLocalStates[aidx]; ok {
 		result.AppLocalState = &s
 	}
 	return result, nil
@@ -357,10 +377,10 @@ func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx 
 		return ledgercore.AssetResource{}, err
 	}
 	var result ledgercore.AssetResource
-	if p, ok := ad.AssetParams[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.AssetParams[aidx]; ok {
 		result.AssetParams = &p
 	}
-	if p, ok := ad.Assets[basics.AssetIndex(aidx)]; ok {
+	if p, ok := ad.Assets[aidx]; ok {
 		result.AssetHolding = &p
 	}
 	return result, nil
@@ -378,7 +398,7 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 				continue
 			}
 			for _, asset := range *acct.CreatedAssets {
-				if asset.Index == uint64(cidx) {
+				if asset.Index == basics.AssetIndex(cidx) {
 					addr, err := basics.UnmarshalChecksumAddress(acct.Address)
 					return addr, true, err
 				}
@@ -387,7 +407,7 @@ func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.Creatab
 		return basics.Address{}, false, fmt.Errorf("no asset %d", cidx)
 	case basics.AppCreatable:
 		for _, app := range dl.dr.Apps {
-			if app.Id == uint64(cidx) {
+			if app.Id == basics.AppIndex(cidx) {
 				var addr basics.Address
 				if app.Params.Creator != "" {
 					var err error
@@ -419,6 +439,13 @@ func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx
 // important: dr.ProtocolVersion is used by underlying ledger implementation so that it must exist in config.Consensus
 func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 	err := dr.ExpandSources()
+	if err != nil {
+		response.Error = err.Error()
+		return
+	}
+
+	// Validate that all apps have params after Sources expansion
+	err = dr.ValidateApps()
 	if err != nil {
 		response.Error = err.Error()
 		return
@@ -480,18 +507,18 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				creator := stxn.Txn.Sender.String()
 				// check and use the first entry in dr.Apps
 				if len(dr.Apps) > 0 && dr.Apps[0].Params.Creator == creator {
-					appIdx = basics.AppIndex(dr.Apps[0].Id)
+					appIdx = dr.Apps[0].Id
 				}
 			}
 			if stxn.Txn.OnCompletion == transactions.OptInOC {
 				if idx, ok := dl.accountsIn[stxn.Txn.Sender]; ok {
 					acct := dl.dr.Accounts[idx]
 					ls := model.ApplicationLocalState{
-						Id:       uint64(appIdx),
+						Id:       appIdx,
 						KeyValue: new(model.TealKeyValueStore),
 					}
 					for _, app := range dr.Apps {
-						if basics.AppIndex(app.Id) == appIdx {
+						if app.Id == appIdx {
 							if app.Params.LocalStateSchema != nil {
 								ls.Schema = *app.Params.LocalStateSchema
 							}
@@ -504,7 +531,7 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 					} else {
 						found := false
 						for _, apls := range *acct.AppsLocalState {
-							if apls.Id == uint64(appIdx) {
+							if apls.Id == appIdx {
 								// already opted in
 								found = true
 							}
@@ -525,8 +552,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 			var app basics.AppParams
 			ok := false
 			for _, appt := range dr.Apps {
-				if appt.Id == uint64(appIdx) {
-					app, err = ApplicationParamsToAppParams(&appt.Params)
+				if appt.Id == appIdx && appt.Params != nil {
+					app, err = ApplicationParamsToAppParams(appt.Params)
 					if err != nil {
 						response.Error = err.Error()
 						return
@@ -577,8 +604,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				// This is necessary because the fields can only be represented as unsigned
 				// integers, so a negative cost would underflow. The two fields also provide
 				// more information, which can be useful for testing purposes.
-				budgetAdded := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
-				budgetConsumed := uint64(cost) + budgetAdded
+				budgetAdded := proto.MaxAppProgramCost * numInnerTxns(delta)
+				budgetConsumed := cost + budgetAdded
 				result.BudgetAdded = &budgetAdded
 				result.BudgetConsumed = &budgetConsumed
 				maxCurrentBudget = pooledAppBudget
@@ -628,10 +655,10 @@ func MergeAppParams(base *basics.AppParams, update *basics.AppParams) {
 	if len(base.GlobalState) == 0 && len(update.GlobalState) > 0 {
 		base.GlobalState = update.GlobalState
 	}
-	if base.LocalStateSchema == (basics.StateSchema{}) && update.LocalStateSchema != (basics.StateSchema{}) {
+	if base.LocalStateSchema.Empty() && !update.LocalStateSchema.Empty() {
 		base.LocalStateSchema = update.LocalStateSchema
 	}
-	if base.GlobalStateSchema == (basics.StateSchema{}) && update.GlobalStateSchema != (basics.StateSchema{}) {
+	if base.GlobalStateSchema.Empty() && !update.GlobalStateSchema.Empty() {
 		base.GlobalStateSchema = update.GlobalStateSchema
 	}
 }

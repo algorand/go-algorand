@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -199,7 +199,7 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 				Name:  "keyword.other.teal",
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(loading, "|")),
 			})
-		case "State Access", "Box Access":
+		case "Block Access", "Account Access", "Asset Access", "Application Access", "Box Access":
 			allAccess = append(allAccess, names...)
 		// For these, accumulate into allArithmetics,
 		// and only add to keyword.Patterns later, when all

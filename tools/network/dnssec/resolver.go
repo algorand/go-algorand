@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2025 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -169,7 +169,7 @@ func (r *Resolver) lookupCnameAware(ctx context.Context, name string, qt uint16)
 	return
 }
 
-// LookupIPAddr resolves a given hostname to ipv4 or ipv6 address following CNAME aliaces
+// lookupIPAddr resolves a given hostname to ipv4 or ipv6 address following CNAME aliaces
 func (r *Resolver) lookupIPAddr(ctx context.Context, hostname string) (cname string, addrs []net.IPAddr, err error) {
 	var rrSet []dns.RR
 	nextName := hostname
