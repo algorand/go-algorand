@@ -4693,7 +4693,7 @@
             "x-go-type": "uint64"
           },
           "online-circulation": {
-            "description": "OnlineCirculation as used by consensus, excluding expired accounts",
+            "description": "Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.",
             "type": "integer",
             "x-go-type": "uint64"
           },
