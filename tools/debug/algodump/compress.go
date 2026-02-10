@@ -31,15 +31,17 @@ import (
 	"time"
 
 	"github.com/DataDog/zstd"
+	kzstd "github.com/klauspost/compress/zstd"
+	"github.com/valyala/gozstd"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/vpack"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-deadlock"
-	kzstd "github.com/klauspost/compress/zstd"
-	"github.com/valyala/gozstd"
 )
 
 // Compression-specific flags

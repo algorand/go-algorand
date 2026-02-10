@@ -22,8 +22,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/miekg/dns"
+
+	"github.com/algorand/go-deadlock"
 )
 
 // TrustQuerier wraps Querier and trusted root anchor retrieval for better testability
