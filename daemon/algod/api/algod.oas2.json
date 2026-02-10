@@ -4688,7 +4688,7 @@
             "x-go-type": "basics.Round"
           },
           "online-money": {
-            "description": "OnlineMoney",
+            "description": "Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.",
             "type": "integer",
             "x-go-type": "uint64"
           },
