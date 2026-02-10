@@ -716,7 +716,7 @@ func TestGetSupply(t *testing.T) {
 	t.Logf("Total Money: %d, Online Money: %d, Online Circulation: %d",
 		supplyResponse.TotalMoney, supplyResponse.OnlineMoney, supplyResponse.OnlineCirculation)
 
-	a.Equal(uint64(375), supplyResponse.CurrentRound)
+	a.Equal(basics.Round(375), supplyResponse.CurrentRound)
 	a.Equal(uint64(1_000_000), supplyResponse.TotalMoney)
 	a.Equal(uint64(800_000), supplyResponse.OnlineMoney)
 	a.Equal(uint64(300_000), supplyResponse.OnlineCirculation)
