@@ -1399,7 +1399,7 @@ type SupplyResponse struct {
 	// CurrentRound Round
 	CurrentRound basics.Round `json:"current_round"`
 
-	// OnlineCirculation OnlineCirculation as used by consensus, excluding expired accounts
+	// OnlineCirculation Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.
 	OnlineCirculation uint64 `json:"online-circulation"`
 
 	// OnlineMoney OnlineMoney
