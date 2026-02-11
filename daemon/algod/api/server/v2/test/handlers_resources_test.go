@@ -605,19 +605,19 @@ func accountApplicationInformationResourceLimitsTest(t *testing.T, handlers v2.H
 		nextRaw, err0 := strconv.ParseUint(*ret.NextToken, 10, 64)
 		require.NoError(t, err0)
 		// The next token decoded is actually the last app id returned
-		assert.EqualValues(t, (*ret.ApplicationHoldings)[maxResults-1].Id, nextRaw)
+		assert.EqualValues(t, (*ret.ApplicationResources)[maxResults-1].Id, nextRaw)
 	}
-	assert.Equal(t, maxResults, len(*ret.ApplicationHoldings))
+	assert.Equal(t, maxResults, len(*ret.ApplicationResources))
 
-	// Application holdings should match the first limit apps from the account data
+	// Application resources should match the first limit apps from the account data
 	minForResults := max(inputNextToken, 0)
 	for i := minForResults; i < minForResults+maxResults; i++ {
 		expectedIndex := basics.AppIndex(i + 1)
 
 		if acctData.AppLocalStates != nil {
-			assert.Equal(t, expectedIndex, (*ret.ApplicationHoldings)[i-minForResults].Id)
-			if (*ret.ApplicationHoldings)[i-minForResults].AppLocalState != nil {
-				assert.Equal(t, expectedIndex, (*ret.ApplicationHoldings)[i-minForResults].AppLocalState.Id)
+			assert.Equal(t, expectedIndex, (*ret.ApplicationResources)[i-minForResults].Id)
+			if (*ret.ApplicationResources)[i-minForResults].AppLocalState != nil {
+				assert.Equal(t, expectedIndex, (*ret.ApplicationResources)[i-minForResults].AppLocalState.Id)
 			}
 		}
 	}
@@ -709,7 +709,7 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	require.NoError(t, err)
 	// Verify that params are included for created apps (first accountOverlappingAppParamsLocalStatesCount apps)
 	for i := 0; i < rawLimit && i < accountOverlappingAppParamsLocalStatesCount; i++ {
-		assert.NotNil(t, (*retWithParams.ApplicationHoldings)[i].Params, "Expected params for app %d", i+1)
+		assert.NotNil(t, (*retWithParams.ApplicationResources)[i].Params, "Expected params for app %d", i+1)
 	}
 
 	// 8. Test exclude include-params flag (default behavior)
@@ -726,6 +726,6 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	require.NoError(t, err)
 	// Verify that params are NOT included
 	for i := 0; i < rawLimit; i++ {
-		assert.Nil(t, (*retWithoutParams.ApplicationHoldings)[i].Params, "Expected no params for app %d", i+1)
+		assert.Nil(t, (*retWithoutParams.ApplicationResources)[i].Params, "Expected no params for app %d", i+1)
 	}
 }

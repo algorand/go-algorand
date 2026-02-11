@@ -2707,8 +2707,8 @@
         }
       }
     },
-    "AccountApplicationHolding": {
-      "description": "AccountApplicationHolding describes the account's application holding (local state and params if the account is the creator) for a specific application ID.",
+    "AccountApplicationResource": {
+      "description": "AccountApplicationResource describes the account's application resource (local state and params if the account is the creator) for a specific application ID.",
       "type": "object",
       "required": ["id"],
       "properties": {
@@ -4403,7 +4403,7 @@
       }
     },
     "AccountApplicationsInformationResponse": {
-      "description": "AccountApplicationsInformationResponse contains a list of applications held by an account.",
+      "description": "AccountApplicationsInformationResponse contains a list of application resources for an account.",
       "schema": {
         "type": "object",
         "required": ["round"],
@@ -4414,13 +4414,13 @@
             "x-go-type": "basics.Round"
           },
           "next-token": {
-            "description": "Used for pagination, when making another request provide this token with the next parameter.",
+            "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.",
             "type": "string"
           },
-          "application-holdings": {
+          "application-resources": {
             "type": "array",
             "items": {
-              "$ref": "#/definitions/AccountApplicationHolding"
+              "$ref": "#/definitions/AccountApplicationResource"
             }
           }
         }

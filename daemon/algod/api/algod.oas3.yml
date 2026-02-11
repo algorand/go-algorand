@@ -184,14 +184,14 @@
           "application/json": {
             "schema": {
               "properties": {
-                "application-holdings": {
+                "application-resources": {
                   "items": {
-                    "$ref": "#/components/schemas/AccountApplicationHolding"
+                    "$ref": "#/components/schemas/AccountApplicationResource"
                   },
                   "type": "array"
                 },
                 "next-token": {
-                  "description": "Used for pagination, when making another request provide this token with the next parameter.",
+                  "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.",
                   "type": "string"
                 },
                 "round": {
@@ -207,7 +207,7 @@
             }
           }
         },
-        "description": "AccountApplicationsInformationResponse contains a list of applications held by an account."
+        "description": "AccountApplicationsInformationResponse contains a list of application resources for an account."
       },
       "AccountAssetResponse": {
         "content": {
@@ -1186,8 +1186,8 @@
         ],
         "type": "object"
       },
-      "AccountApplicationHolding": {
-        "description": "AccountApplicationHolding describes the account's application holding (local state and params if the account is the creator) for a specific application ID.",
+      "AccountApplicationResource": {
+        "description": "AccountApplicationResource describes the account's application resource (local state and params if the account is the creator) for a specific application ID.",
         "properties": {
           "app-local-state": {
             "$ref": "#/components/schemas/ApplicationLocalState"
@@ -3326,14 +3326,14 @@
               "application/json": {
                 "schema": {
                   "properties": {
-                    "application-holdings": {
+                    "application-resources": {
                       "items": {
-                        "$ref": "#/components/schemas/AccountApplicationHolding"
+                        "$ref": "#/components/schemas/AccountApplicationResource"
                       },
                       "type": "array"
                     },
                     "next-token": {
-                      "description": "Used for pagination, when making another request provide this token with the next parameter.",
+                      "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.",
                       "type": "string"
                     },
                     "round": {
@@ -3349,7 +3349,7 @@
                 }
               }
             },
-            "description": "AccountApplicationsInformationResponse contains a list of applications held by an account."
+            "description": "AccountApplicationsInformationResponse contains a list of application resources for an account."
           },
           "400": {
             "content": {

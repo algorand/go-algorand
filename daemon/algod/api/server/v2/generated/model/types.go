@@ -246,8 +246,8 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
-// AccountApplicationHolding AccountApplicationHolding describes the account's application holding (local state and params if the account is the creator) for a specific application ID.
-type AccountApplicationHolding struct {
+// AccountApplicationResource AccountApplicationResource describes the account's application resource (local state and params if the account is the creator) for a specific application ID.
+type AccountApplicationResource struct {
 	// AppLocalState Stores local state associated with an application.
 	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
 
@@ -1145,9 +1145,9 @@ type AccountApplicationResponse struct {
 
 // AccountApplicationsInformationResponse defines model for AccountApplicationsInformationResponse.
 type AccountApplicationsInformationResponse struct {
-	ApplicationHoldings *[]AccountApplicationHolding `json:"application-holdings,omitempty"`
+	ApplicationResources *[]AccountApplicationResource `json:"application-resources,omitempty"`
 
-	// NextToken Used for pagination, when making another request provide this token with the next parameter.
+	// NextToken Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.
 	NextToken *string `json:"next-token,omitempty"`
 
 	// Round The round for which this information is relevant.

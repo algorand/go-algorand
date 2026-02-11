@@ -1253,7 +1253,7 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Ad
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// AccountApplicationsInformation returns application holdings for a specific address.
+// AccountApplicationsInformation returns application resources for a specific address.
 func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address basics.Address, params model.AccountApplicationsInformationParams) error {
 	if !v2.Node.Config().EnableExperimentalAPI {
 		return ctx.String(http.StatusNotFound, "/v2/accounts/{address}/applications was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
@@ -1291,7 +1291,7 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 	ledger := v2.Node.LedgerForAPI()
 
 	// Logic
-	// 1. Get the account's application holdings subject to limits
+	// 1. Get the account's application resources subject to limits
 	// 2. Handle empty response
 	// 3. Prepare JSON response
 
@@ -1313,7 +1313,7 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 		response.NextToken = &nextTk
 	}
 
-	applicationHoldings := make([]model.AccountApplicationHolding, 0, len(records))
+	applicationResources := make([]model.AccountApplicationResource, 0, len(records))
 
 	for _, record := range records {
 		// Skip if neither local state nor params exist (shouldn't happen)
@@ -1322,7 +1322,7 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 			continue
 		}
 
-		aah := model.AccountApplicationHolding{
+		aah := model.AccountApplicationResource{
 			Id: record.AppID,
 		}
 
@@ -1344,10 +1344,10 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 			aah.AppLocalState = &appLocalState
 		}
 
-		applicationHoldings = append(applicationHoldings, aah)
+		applicationResources = append(applicationResources, aah)
 	}
 
-	response.ApplicationHoldings = &applicationHoldings
+	response.ApplicationResources = &applicationResources
 
 	return ctx.JSON(http.StatusOK, response)
 }
