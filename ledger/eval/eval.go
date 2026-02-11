@@ -2018,8 +2018,7 @@ func (validator *evalTxValidator) run() {
 		RewardsPool: validator.block.BlockHeader.RewardsPool,
 	}
 
-	var unverifiedTxnGroups [][]transactions.SignedTxn
-	unverifiedTxnGroups = make([][]transactions.SignedTxn, 0, len(validator.txgroups))
+	unverifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(validator.txgroups))
 	for _, group := range validator.txgroups {
 		signedTxnGroup := make([]transactions.SignedTxn, len(group))
 		for j, txn := range group {

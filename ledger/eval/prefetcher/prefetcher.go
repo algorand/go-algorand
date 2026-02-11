@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/algorand/avm-abi/apps"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -63,7 +64,6 @@ type LoadedResourceEntry struct {
 
 // LoadedKVEntry describes a loaded kv.
 type LoadedKVEntry struct {
-	// KV is the loaded kv entry.
 	Key   string
 	Value []byte
 }
@@ -73,7 +73,7 @@ type LoadedTransactionGroup struct {
 	// the transaction group
 	TxnGroup []transactions.SignedTxnWithAD
 
-	// Accounts is a list of all the Accounts balance records for the transaction group.
+	// Accounts is a list of all the Account balance records for the transaction group.
 	Accounts []LoadedAccountDataEntry
 
 	// Resources is the list of all Resources (apps/assets/hodling/locals) for the transaction group.
@@ -87,7 +87,7 @@ type LoadedTransactionGroup struct {
 	Err error
 }
 
-// resourcePrefetcher used to prefetch accounts balances and resources before the evaluator is being called.
+// resourcePrefetcher used to prefetch accounts balances and resources before the evaluator is called.
 type resourcePrefetcher struct {
 	ledger          Ledger
 	rnd             basics.Round
@@ -97,8 +97,10 @@ type resourcePrefetcher struct {
 	outChan         chan LoadedTransactionGroup
 }
 
-// PrefetchResources loads the resources for the provided transaction group list. It also loads the feeSink account and add it to the first returned transaction group.
-// The order of the transaction groups returned by the channel is identical to the one in the input array.
+// PrefetchResources loads the resources for the provided transaction group
+// list. It also loads the feeSink account and adds it to the first returned
+// transaction group.  The order of the transaction groups returned by the
+// channel is identical to the one in the input array.
 func PrefetchResources(ctx context.Context, l Ledger, rnd basics.Round, txnGroups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
 	prefetcher := &resourcePrefetcher{
 		ledger:          l,
@@ -299,15 +301,8 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
 	kvTasks := make(map[string]*preloaderTask)
 
-	var maxTxnGroupEntries int
-	if p.consensusParams.Application {
-		// the extra two are for the sender account data, plus the application global state
-		maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * (2 + p.consensusParams.MaxAppTotalTxnReferences)
-	} else {
-		// 8 is the number of resources+account used in the AssetTransferTx, which is the largest one.
-		maxTxnGroupEntries = p.consensusParams.MaxTxGroupSize * 8
-	}
-
+	// the extra two are for the sender account data, plus the application global state
+	maxTxnGroupEntries := p.consensusParams.MaxTxGroupSize * (2 + p.consensusParams.MaxAppTotalTxnReferences)
 	tasksQueue := allocPreloaderQueue(len(p.txnGroups), maxTxnGroupEntries)
 
 	// totalBalances counts the total number of balances over all the transaction groups
@@ -334,7 +329,7 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 		tasksQueue.enqueue(feeSinkPreloader)
 	}
 
-	// iterate over the transaction groups and add all their account addresses to the list
+	// iterate over the transaction groups and add resources that are very likely to be accessed
 	queue := &tasksQueue
 	for i := range p.txnGroups {
 		task := groupsReady[i]
@@ -407,7 +402,7 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 				}
 
 				// With tx.Access, cross-products are explicit, so we fetch them
-				// (and the apps and boxes, as with foriegn arrays).  We also
+				// (and the apps and boxes, as with foreign arrays).  We also
 				// fetch the accounts and assets if they are NOT used in
 				// cross-products. That implies they are directly needed.
 				if len(stxn.Txn.Access) > 0 {
@@ -445,7 +440,7 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 						}
 					}
 
-					// Presumably, Accounts and assets that don't appear in
+					// Presumably, accounts and assets that don't appear in
 					// cross-products are present to be directly accessed.
 					for _, rr := range stxn.Txn.Access {
 						if !rr.Address.IsZero() && !accountInCrossProduct.Contains(rr.Address) {
@@ -518,7 +513,7 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 	var taskIdx atomic.Int64
 	taskIdx.Store(-1)
 	defer taskIdx.Store(tasksCount)
-	// create few go-routines to load asyncroniously the account data.
+	// create a few go-routines to asynchronously perform prefetches
 	for range asyncAccountLoadingThreadCount {
 		go p.asyncPrefetchRoutine(&tasksQueue, &taskIdx, groupDoneCh)
 	}
@@ -548,8 +543,8 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 				return
 			}
 		}
-		next := i
-		for ; next < int64(len(p.txnGroups)); next++ {
+
+		for next := i; next < int64(len(p.txnGroups)); next++ {
 			if !completed[next] {
 				if next > i {
 					i = next
@@ -570,7 +565,7 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 				KVs:       groupsReady[next].kvs,
 			}
 		}
-		// if we get to this point, it means that we have no more transaction to process.
+		// if we get to this point, it means that we have no more groups to process.
 		break
 	}
 }
