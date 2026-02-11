@@ -21,8 +21,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func randSignedMsg(t testing.TB, r io.Reader) (SignatureVerifier, Hashable, Signature) {

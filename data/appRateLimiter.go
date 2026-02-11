@@ -22,14 +22,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/crypto/blake2b"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
-	"github.com/algorand/go-deadlock"
-	"golang.org/x/crypto/blake2b"
 )
 
 const numBuckets = 128
@@ -169,6 +171,9 @@ func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []b
 // in order to make it testable
 func (r *appRateLimiter) shouldDropAt(txgroup []transactions.SignedTxn, origin []byte, nowNano int64) bool {
 	keysBuckets := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
+	if keysBuckets == nil {
+		return false
+	}
 	defer putAppKeyBuf(keysBuckets)
 	if len(keysBuckets.keys) == 0 {
 		return false
@@ -199,6 +204,27 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, nowNano i
 	}
 
 	return false
+}
+
+func (r *appRateLimiter) penalizeEvalError(txgroup []transactions.SignedTxn, origin []byte) {
+	keysBuckets := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
+	if keysBuckets == nil {
+		return
+	}
+	defer putAppKeyBuf(keysBuckets)
+	if len(keysBuckets.keys) == 0 {
+		return
+	}
+
+	nowNano := time.Now().UnixNano()
+	curInt := r.interval(nowNano)
+
+	const penaltyFactor = 4 // penalize by 25% of the service rate
+	for i, key := range keysBuckets.keys {
+		b := keysBuckets.buckets[i]
+		entry, _ := r.entry(&r.buckets[b], key, curInt)
+		entry.cur.Add(max(1, int64(r.serviceRatePerWindow)/penaltyFactor))
+	}
 }
 
 func (r *appRateLimiter) len() int {
@@ -241,6 +267,17 @@ func putAppKeyBuf(buf *appKeyBuf) {
 
 // txgroupToKeys converts txgroup data to keys
 func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64, salt [16]byte, numBuckets int) *appKeyBuf {
+	hasApps := false
+	for i := range txgroup {
+		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
+			hasApps = true
+			break
+		}
+	}
+	if !hasApps {
+		return nil
+	}
+
 	keysBuckets := getAppKeyBuf()
 	// since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest down to 8.
 	// Rationale: we expect thousands of apps sent from thousands of peers,
@@ -265,7 +302,7 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 	txnToBucket := func(appIdx basics.AppIndex) int {
 		return int(memhash64(uint64(appIdx), seed) % uint64(numBuckets))
 	}
-	seen := make(map[basics.AppIndex]struct{}, len(txgroup)*(1+bounds.MaxAppTxnForeignApps))
+	seen := make(map[basics.AppIndex]struct{}, len(txgroup)*(1+max(bounds.MaxAppTxnForeignApps, bounds.MaxAppAccess)))
 	valid := func(appIdx basics.AppIndex) bool {
 		if appIdx != 0 {
 			_, ok := seen[appIdx]
@@ -273,24 +310,24 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 		}
 		return false
 	}
+	record := func(appIdx basics.AppIndex) {
+		// hash appIdx into a bucket, do not use modulo without hashing first since it could
+		// assign two vanilla (and presumable, popular) apps to the same bucket.
+		if valid(appIdx) {
+			keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
+			keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
+			seen[appIdx] = struct{}{}
+		}
+	}
 	for i := range txgroup {
 		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
 			appIdx := txgroup[i].Txn.ApplicationID
-			if valid(appIdx) {
-				keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
-				keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
-				seen[appIdx] = struct{}{}
+			record(appIdx)
+			for _, appIdx := range txgroup[i].Txn.ForeignApps {
+				record(appIdx)
 			}
-			// hash appIdx into a bucket, do not use modulo without hashing first since it could
-			// assign two vanilla (and presumable, popular) apps to the same bucket.
-			if len(txgroup[i].Txn.ForeignApps) > 0 {
-				for _, appIdx := range txgroup[i].Txn.ForeignApps {
-					if valid(appIdx) {
-						keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
-						keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
-						seen[appIdx] = struct{}{}
-					}
-				}
+			for _, acc := range txgroup[i].Txn.Access {
+				record(acc.App)
 			}
 		}
 	}

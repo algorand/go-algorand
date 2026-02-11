@@ -24,9 +24,10 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/algorand/go-algorand/util"
 	"github.com/google/uuid"
 	"github.com/klauspost/cpuid/v2"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 type benchStage struct {

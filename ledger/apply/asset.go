@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetParams, creator basics.Address, err error) {
@@ -214,7 +215,10 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 
 	newAmount, overflowed := basics.OSub(sndHolding.Amount, amount)
 	if overflowed {
-		return fmt.Errorf("underflow on subtracting %d from sender amount %d", amount, sndHolding.Amount)
+		return &ledgercore.AssetBalanceError{
+			Amount:       amount,
+			SenderAmount: sndHolding.Amount,
+		}
 	}
 	sndHolding.Amount = newAmount
 

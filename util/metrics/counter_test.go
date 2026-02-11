@@ -23,8 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type CounterTest struct {
@@ -38,6 +39,9 @@ func TestMetricCounter(t *testing.T) {
 		MetricTest: NewMetricTest(),
 	}
 
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener("127.0.0.1:0")
 
@@ -46,10 +50,12 @@ func TestMetricCounter(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter.Register(registry)
 
 	for i := 0; i < 20; i++ {
 		counter.Inc(map[string]string{"pid": "123", "data_host": fmt.Sprintf("host%d", i%5)})
@@ -61,7 +67,7 @@ func TestMetricCounter(t *testing.T) {
 
 	metricService.Shutdown()
 
-	counter.Deregister(nil)
+	counter.Deregister(registry)
 	// test the metrics values.
 
 	test.Lock()
@@ -84,6 +90,9 @@ func TestMetricCounterFastInts(t *testing.T) {
 		MetricTest: NewMetricTest(),
 	}
 
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener("127.0.0.1:0")
 
@@ -92,10 +101,12 @@ func TestMetricCounterFastInts(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter.Register(registry)
 
 	for i := 0; i < 20; i++ {
 		counter.Inc(nil)
@@ -108,7 +119,7 @@ func TestMetricCounterFastInts(t *testing.T) {
 
 	metricService.Shutdown()
 
-	counter.Deregister(nil)
+	counter.Deregister(registry)
 	// test the metrics values.
 
 	test.Lock()
@@ -131,6 +142,9 @@ func TestMetricCounterMixed(t *testing.T) {
 		MetricTest: NewMetricTest(),
 	}
 
+	// create a non-default registry for the metrics in this test
+	registry := MakeRegistry()
+
 	// create a http listener.
 	port := test.createListener("127.0.0.1:0")
 
@@ -139,10 +153,12 @@ func TestMetricCounterMixed(t *testing.T) {
 		Labels: map[string]string{
 			"host_name":  "host_one",
 			"session_id": "AFX-229"},
+		registry: registry,
 	})
 	metricService.Start(context.Background())
 
-	counter := MakeCounter(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter := MakeCounterUnregistered(MetricName{Name: "metric_test_name1", Description: "this is the metric test for counter object"})
+	counter.Register(registry)
 
 	counter.AddUint64(5, nil)
 	counter.AddUint64(8, map[string]string{})
@@ -157,7 +173,7 @@ func TestMetricCounterMixed(t *testing.T) {
 
 	metricService.Shutdown()
 
-	counter.Deregister(nil)
+	counter.Deregister(registry)
 	// test the metrics values.
 
 	test.Lock()

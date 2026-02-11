@@ -115,6 +115,9 @@ var MaxTxnBytesPerBlock int
 // MaxAppTxnForeignApps is the max number of foreign apps per txn across all consensus versions
 var MaxAppTxnForeignApps int
 
+// MaxAppAccess is the max number of references allowed in txn.Access per txn across all consensus versions
+var MaxAppAccess int
+
 // MaxEvalDeltaTotalLogSize is the maximum size of the sum of all log sizes in a single eval delta.
 const MaxEvalDeltaTotalLogSize = 1024
 

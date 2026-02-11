@@ -23,11 +23,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/config/bounds"
-	"github.com/algorand/go-algorand/crypto"
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/algorand/go-deadlock"
 
-	"golang.org/x/crypto/blake2b"
+	"github.com/algorand/go-algorand/config/bounds"
+	"github.com/algorand/go-algorand/crypto"
 )
 
 // digestCache is a rotating cache of size N accepting crypto.Digest as a key

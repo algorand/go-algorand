@@ -33,16 +33,11 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
-	"github.com/algorand/go-algorand/daemon/algod/api/server"
-	"github.com/algorand/go-algorand/ledger/eval"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-codec/codec"
 
@@ -52,6 +47,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data"
@@ -63,6 +59,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -138,6 +136,151 @@ func TestAccountInformation(t *testing.T) {
 	t.Parallel()
 
 	accountInformationTest(t, poolAddr, 200)
+}
+
+func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test with poolAddr which is in the golden data
+	t.Run("exclude=none", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeNone := []model.AccountInformationParamsExclude{"none"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeNone})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		// With exclude=none, created apps should be present (if any exist)
+		// Just verify the response is valid
+		require.NotNil(t, response.Address)
+	})
+
+	t.Run("exclude=created-apps-params", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeParams := []model.AccountInformationParamsExclude{"created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify that if created apps exist, they have IDs but no params
+		if response.CreatedApps != nil {
+			for _, app := range *response.CreatedApps {
+				require.Nil(t, app.Params, "Expected params to be absent with exclude=created-apps-params")
+				require.NotZero(t, app.Id, "Expected app ID to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=all", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeAll := []model.AccountInformationParamsExclude{"all"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeAll})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify all resources are excluded
+		require.Nil(t, response.CreatedApps)
+		require.Nil(t, response.CreatedAssets)
+		require.Nil(t, response.Assets)
+		require.Nil(t, response.AppsLocalState)
+	})
+
+	t.Run("invalid-exclude-value", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"invalid-value"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("exclude=created-assets-params", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeParams := []model.AccountInformationParamsExclude{"created-assets-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify that if created assets exist, they have IDs but no params
+		if response.CreatedAssets != nil {
+			for _, asset := range *response.CreatedAssets {
+				require.Nil(t, asset.Params, "Expected params to be absent with exclude=created-assets-params")
+				require.NotZero(t, asset.Index, "Expected asset index to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=comma-delimited-both", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeBoth := []model.AccountInformationParamsExclude{"created-apps-params", "created-assets-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeBoth})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify both apps and assets have no params
+		if response.CreatedApps != nil {
+			for _, app := range *response.CreatedApps {
+				require.Nil(t, app.Params, "Expected app params to be absent")
+				require.NotZero(t, app.Id, "Expected app ID to be present")
+			}
+		}
+		if response.CreatedAssets != nil {
+			for _, asset := range *response.CreatedAssets {
+				require.Nil(t, asset.Params, "Expected asset params to be absent")
+				require.NotZero(t, asset.Index, "Expected asset index to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=all-with-others-fails", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"all", "created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("exclude=none-with-others-fails", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"none", "created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
 }
 
 func getBlockTest(t *testing.T, blockNum basics.Round, format string, expectedCode int) {
@@ -1718,7 +1861,7 @@ func TestTealDryrun(t *testing.T) {
 	gdr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: sucOps.Program,
 			},
 		},
