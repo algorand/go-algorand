@@ -464,10 +464,9 @@ func disconnectAction(e messageEvent, err *serializableError) action {
 	return networkAction{T: disconnect, Err: err, h: e.Input.messageHandle}
 }
 
-// no use at the moment
-// func broadcastVoteAction(v unauthenticatedVote) action {
-// 	return networkAction{T: broadcast, Tag: protocol.AgreementVoteTag, UnauthenticatedVote: v}
-// }
+// note, there is no broadcastVoteAction
+// because when a participant makes a vote, it is processed as voteVerified / handleMessageEvent events
+// and then processed like any other votes, resulting in a relayVoteAction instead of a broadcast
 
 func broadcastBundleAction(b unauthenticatedBundle) action {
 	return networkAction{T: broadcast, Tag: protocol.VoteBundleTag, UnauthenticatedBundle: b}
