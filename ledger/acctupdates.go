@@ -1276,27 +1276,17 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 	for _, pd := range persistedResources {
 		als := pd.Data.GetAppLocalState()
 
-		var arwi ledgercore.AppResourceWithIDs
+		arwi := ledgercore.AppResourceWithIDs{
+			AppID: basics.AppIndex(pd.Aidx),
+			AppResource: ledgercore.AppResource{
+				AppLocalState: &als,
+			},
+		}
+
 		if !pd.Creator.IsZero() {
 			ap := pd.Data.GetAppParams()
-
-			arwi = ledgercore.AppResourceWithIDs{
-				AppID:   basics.AppIndex(pd.Aidx),
-				Creator: pd.Creator,
-
-				AppResource: ledgercore.AppResource{
-					AppLocalState: &als,
-					AppParams:     &ap,
-				},
-			}
-		} else {
-			arwi = ledgercore.AppResourceWithIDs{
-				AppID: basics.AppIndex(pd.Aidx),
-
-				AppResource: ledgercore.AppResource{
-					AppLocalState: &als,
-				},
-			}
+			arwi.Creator = pd.Creator,
+			arwi.AppResource.AppParams = &ap
 		}
 
 		data = append(data, arwi)
