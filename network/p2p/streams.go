@@ -65,12 +65,24 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 		stream.Close()
 		return
 	}
+	remotePeer := stream.Conn().RemotePeer()
+	// reject streams on connections not explicitly dialed by us
+	if stream.Conn().Stat().Direction == network.DirOutbound && stream.Stat().Direction == network.DirInbound {
+		val, err := n.host.Peerstore().Get(remotePeer, psmdkDialed)
+		if err != nil || val != nil && !val.(bool) {
+			// not found or false value
+			n.log.Debugf("%s: ignoring incoming stream from non-dialed outgoing peer ID %s", stream.Conn().LocalPeer().String(), remotePeer.String())
+			stream.Close()
+			return
+		}
+		if val == nil {
+			n.log.Warnf("%s: failed to get dialed status for %s (handler)", stream.Conn().LocalPeer().String(), remotePeer.String())
+		}
+
+	}
 
 	n.streamsLock.Lock()
 	defer n.streamsLock.Unlock()
-
-	// could use stream.ID() for tracking; unique across all conns and peers
-	remotePeer := stream.Conn().RemotePeer()
 
 	if oldStream, ok := n.streams[remotePeer]; ok {
 		// there's already a stream, for some reason, check if it's still open
