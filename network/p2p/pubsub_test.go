@@ -41,6 +41,7 @@ func TestPubsub_GossipSubParamsBasic(t *testing.T) {
 		require.Equal(t, fanout-1, params.Dlo)
 		require.Equal(t, fanout*2/3, params.Dscore)
 		require.Equal(t, fanout*1/3, params.Dout)
+		require.Equal(t, fanout*2, params.Dhi)
 
 		// Sanity: other defaults are preserved (not zeroed). Avoid asserting exact values to reduce brittleness.
 		def := pubsub.DefaultGossipSubParams()
@@ -53,7 +54,7 @@ func TestPubsub_GossipSubParamsEdgeCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// D = 1 => Dlo must not drop below 1
+	// D = 1 => Dlo must not drop below 1, Dhi = D+2 (minimum floor)
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = 1
 	p := deriveGossipSubParams(cfg.GossipFanout)
@@ -61,8 +62,9 @@ func TestPubsub_GossipSubParamsEdgeCases(t *testing.T) {
 	require.Equal(t, 1, p.Dlo)
 	require.Equal(t, 0, p.Dscore)
 	require.Equal(t, 0, p.Dout)
+	require.Equal(t, 3, p.Dhi)
 
-	// D = 0 => keep Dlo = D (0) instead of negative
+	// D = 0 => keep Dlo = D (0) instead of negative, Dhi = D+2 (minimum floor)
 	cfg = config.GetDefaultLocal()
 	cfg.GossipFanout = 0
 	p = deriveGossipSubParams(cfg.GossipFanout)
@@ -70,4 +72,5 @@ func TestPubsub_GossipSubParamsEdgeCases(t *testing.T) {
 	require.Equal(t, 0, p.Dlo)
 	require.Equal(t, 0, p.Dscore)
 	require.Equal(t, 0, p.Dout)
+	require.Equal(t, 2, p.Dhi)
 }

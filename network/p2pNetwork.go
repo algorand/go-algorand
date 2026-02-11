@@ -1072,6 +1072,7 @@ func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 }
 
 func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disconnectReason) {
+	n.service.UnprotectPeer(remotePeerID)
 	n.wsPeersLock.Lock()
 	n.identityTracker.removeIdentity(peer)
 	delete(n.wsPeers, remotePeerID)
