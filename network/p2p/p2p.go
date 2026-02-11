@@ -77,15 +77,9 @@ type Service interface {
 	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
-// subset of config.Local needed here
-type nodeSubConfig interface {
-	IsHybridServer() bool
-}
-
 // serviceImpl manages integration with libp2p and implements the Service interface
 type serviceImpl struct {
 	log        logging.Logger
-	subcfg     nodeSubConfig
 	listenAddr string
 	host       host.Host
 	streams    *streamManager
@@ -181,7 +175,8 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 
 	limitConfig := rcmgr.PartialLimitConfig{
 		System: rcmgr.ResourceLimits{
-			Conns: rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
+			ConnsOutbound: rcmgr.LimitVal(cfg.GossipFanout * 4), // p2p GossipFanout streams + 3*GossipFanout for pubsub mesh
+			Conns:         rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
 		},
 		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
 	}
@@ -229,7 +224,7 @@ func SetPubSubPeerFilter(filter func(checker pstore.RoleChecker, pid peer.ID) bo
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, cfg, h, wsStreamHandlers, cfg.EnableGossipService)
+	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
 
 	for _, pair := range wsStreamHandlers {
@@ -247,7 +242,6 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	}
 	return &serviceImpl{
 		log:        log,
-		subcfg:     cfg,
 		listenAddr: listenAddr,
 		host:       h,
 		streams:    sm,
@@ -297,13 +291,9 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	var numOutgoingConns int
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
-			if s.subcfg.IsHybridServer() {
-				remotePeer := conn.RemotePeer()
-				val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
-				if err == nil && val != nil && val.(bool) {
-					numOutgoingConns++
-				}
-			} else {
+			remotePeer := conn.RemotePeer()
+			val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
+			if err == nil && val != nil && val.(bool) {
 				numOutgoingConns++
 			}
 		}
@@ -336,10 +326,8 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	if s.subcfg.IsHybridServer() {
-		if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
-			return err
-		}
+	if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
+		return err
 	}
 	return s.host.Connect(ctx, *peer)
 }

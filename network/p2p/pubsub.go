@@ -66,6 +66,7 @@ func deriveGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams {
 	if params.Dlo <= 0 {
 		params.Dlo = params.D
 	}
+	params.Dhi = params.D * 2
 	params.Dscore = params.D * 2 / 3
 	params.Dout = params.D * 1 / 3
 	return params

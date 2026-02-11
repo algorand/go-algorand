@@ -36,7 +36,6 @@ import (
 type streamManager struct {
 	ctx                 context.Context
 	log                 logging.Logger
-	cfg                 nodeSubConfig
 	host                host.Host
 	handlers            StreamHandlers
 	allowIncomingGossip bool
@@ -48,11 +47,10 @@ type streamManager struct {
 // StreamHandler is called when a new bidirectional stream for a given protocol and peer is opened.
 type StreamHandler func(ctx context.Context, pid peer.ID, s network.Stream, incoming bool)
 
-func makeStreamManager(ctx context.Context, log logging.Logger, cfg nodeSubConfig, h host.Host, handlers StreamHandlers, allowIncomingGossip bool) *streamManager {
+func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, handlers StreamHandlers, allowIncomingGossip bool) *streamManager {
 	return &streamManager{
 		ctx:                 ctx,
 		log:                 log,
-		cfg:                 cfg,
 		host:                h,
 		handlers:            handlers,
 		allowIncomingGossip: allowIncomingGossip,
@@ -140,7 +138,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 
 	// check if this is outgoing connection but made not by us (serviceImpl.dialNode)
 	// then it was made by some sub component like pubsub, ignore
-	if n.cfg.IsHybridServer() && conn.Stat().Direction == network.DirOutbound {
+	if conn.Stat().Direction == network.DirOutbound {
 		val, err := n.host.Peerstore().Get(remotePeer, psmdkDialed)
 		if err != nil || val != nil && !val.(bool) {
 			// not found or false value
