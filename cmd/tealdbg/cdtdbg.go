@@ -23,8 +23,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
 )

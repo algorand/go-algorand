@@ -24,9 +24,8 @@ package main
 
 import (
 	"fmt"
-	"os"
-
 	xpkg "net/http"
+	"os"
 	ypkg "time"
 )
 
