@@ -119,7 +119,7 @@ type LedgerForAPI interface {
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
-	LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64) ([]ledgercore.AppResourceWithIDs, basics.Round, error)
+	LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error)
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
@@ -1296,7 +1296,7 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 	// 3. Prepare JSON response
 
 	// We intentionally request one more than the limit to determine if there are more applications.
-	records, lookupRound, err := ledger.LookupApplications(address, basics.AppIndex(appGreaterThan), *params.Limit+1)
+	records, lookupRound, err := ledger.LookupApplications(address, basics.AppIndex(appGreaterThan), *params.Limit+1, includeParams)
 
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)

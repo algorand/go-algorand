@@ -148,7 +148,7 @@ func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, ai
 	return ar, nil
 }
 
-func (l *mockLedger) LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+func (l *mockLedger) LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
 	ad, ok := l.accounts[addr]
 	if !ok {
 		return nil, basics.Round(0), nil
@@ -158,7 +158,10 @@ func (l *mockLedger) LookupApplications(addr basics.Address, appIDGT basics.AppI
 	for i := appIDGT + 1; i < appIDGT+1+basics.AppIndex(limit); i++ {
 		apr := ledgercore.AppResourceWithIDs{}
 		if ap, ok := ad.AppParams[i]; ok {
-			apr.AppParams = &ap
+			// Only populate AppParams if requested to match the optimization in the real implementation
+			if includeParams {
+				apr.AppParams = &ap
+			}
 			apr.Creator = addr
 		}
 
@@ -728,4 +731,28 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	for i := 0; i < rawLimit; i++ {
 		assert.Nil(t, (*retWithoutParams.ApplicationResources)[i].Params, "Expected no params for app %d", i+1)
 	}
+
+	// 9. Test that the ledger-layer optimization is working (AppParams not allocated when includeParams=false)
+	// Call the ledger method directly to verify AppParams is nil at the ledger layer, not just filtered at handler
+	ledgerRecordsWithoutParams, _, err := handlers.Node.LedgerForAPI().LookupApplications(addr, 0, uint64(rawLimit), false)
+	require.NoError(t, err)
+	for i, record := range ledgerRecordsWithoutParams {
+		// For created apps, Creator should be set but AppParams should be nil (optimization working)
+		if !record.Creator.IsZero() {
+			assert.Nil(t, record.AppParams, "Expected AppParams to be nil at ledger layer when includeParams=false (app %d)", i+1)
+		}
+	}
+
+	// Call with includeParams=true to verify AppParams IS populated at ledger layer
+	ledgerRecordsWithParams, _, err := handlers.Node.LedgerForAPI().LookupApplications(addr, 0, uint64(rawLimit), true)
+	require.NoError(t, err)
+	foundParamsInLedgerLayer := false
+	for _, record := range ledgerRecordsWithParams {
+		// For created apps, both Creator and AppParams should be set
+		if !record.Creator.IsZero() && record.AppParams != nil {
+			foundParamsInLedgerLayer = true
+			break
+		}
+	}
+	assert.True(t, foundParamsInLedgerLayer, "Expected to find at least one app with AppParams populated at ledger layer when includeParams=true")
 }

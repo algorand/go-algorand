@@ -601,9 +601,10 @@ func (l *Ledger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, 
 	return resources, lookupRound, err
 }
 
-// LookupApplications returns the application resources (local state and params) for a given address, with pagination support
-func (l *Ledger) LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
-	resources, lookupRound, err := l.accts.LookupApplicationResources(addr, appIDGT, limit)
+// LookupApplications returns the application resources (local state and params) for a given address, with pagination support.
+// If includeParams is false, AppParams will not be populated to save memory allocations.
+func (l *Ledger) LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	resources, lookupRound, err := l.accts.LookupApplicationResources(addr, appIDGT, limit, includeParams)
 	return resources, lookupRound, err
 }
 
