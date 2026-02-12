@@ -919,13 +919,13 @@
                   "type": "integer",
                   "x-go-type": "basics.Round"
                 },
-                "online-circulation": {
-                  "description": "Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.",
+                "online-money": {
+                  "description": "Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.",
                   "type": "integer",
                   "x-go-type": "uint64"
                 },
-                "online-money": {
-                  "description": "Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.",
+                "online-stake": {
+                  "description": "Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.",
                   "type": "integer",
                   "x-go-type": "uint64"
                 },
@@ -937,8 +937,8 @@
               },
               "required": [
                 "current_round",
-                "online-circulation",
                 "online-money",
+                "online-stake",
                 "total-money"
               ],
               "type": "object"
@@ -5731,13 +5731,13 @@
                       "type": "integer",
                       "x-go-type": "basics.Round"
                     },
-                    "online-circulation": {
-                      "description": "Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.",
+                    "online-money": {
+                      "description": "Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.",
                       "type": "integer",
                       "x-go-type": "uint64"
                     },
-                    "online-money": {
-                      "description": "Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.",
+                    "online-stake": {
+                      "description": "Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.",
                       "type": "integer",
                       "x-go-type": "uint64"
                     },
@@ -5749,8 +5749,8 @@
                   },
                   "required": [
                     "current_round",
-                    "online-circulation",
                     "online-money",
+                    "online-stake",
                     "total-money"
                   ],
                   "type": "object"

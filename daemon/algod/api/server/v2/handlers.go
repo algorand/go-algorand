@@ -997,10 +997,10 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 	}
 
 	supply := model.SupplyResponse{
-		CurrentRound:      latest,
-		TotalMoney:        totals.Participating().Raw,
-		OnlineMoney:       totals.Online.Money.Raw,
-		OnlineCirculation: onlineCirculation.Raw,
+		CurrentRound: latest,
+		TotalMoney:   totals.Participating().Raw,
+		OnlineMoney:  totals.Online.Money.Raw,
+		OnlineStake:  onlineCirculation.Raw,
 	}
 
 	return ctx.JSON(http.StatusOK, supply)
