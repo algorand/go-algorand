@@ -701,17 +701,33 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	accountApplicationInformationResourceLimitsTest(t, handlers, unknownAddress, basics.AccountData{}, model.AccountApplicationsInformationParams{},
 		0, 0, false)
 
-	// 6a. Invalid limits - larger than configured max
+	// 6a. Invalid limits - larger than configured max (with includeParams=true, max is 1000)
+	includeParamsTrue := true
 	ctx, rec := newReq(t)
 	err := handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
 		Limit: func() *uint64 {
 			l := uint64(v2.MaxApplicationResults + 1)
 			return &l
 		}(),
+		IncludeParams: &includeParamsTrue,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
 	require.Equal(t, "{\"message\":\"limit 1001 exceeds max applications single batch limit 1000\"}\n", rec.Body.String())
+
+	// 6a2. Invalid limits - larger than configured max (with includeParams=false, max is 100,000)
+	includeParamsFalse := false
+	ctx, rec = newReq(t)
+	err = handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
+		Limit: func() *uint64 {
+			l := uint64(v2.MaxApplicationResultsWithoutParams + 1)
+			return &l
+		}(),
+		IncludeParams: &includeParamsFalse,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"limit 100001 exceeds max applications single batch limit 100000\"}\n", rec.Body.String())
 
 	// 6b. Invalid limits - zero
 	ctx, rec = newReq(t)

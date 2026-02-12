@@ -83,8 +83,11 @@ const MaxAssetResults = 1000
 const DefaultAssetResults = uint64(1000)
 
 // MaxApplicationResults sets a size limit for the number of applications returned in a single request to the
-// /v2/accounts/{address}/applications endpoint
+// /v2/accounts/{address}/applications endpoint when includeParams=true
 const MaxApplicationResults = 1000
+
+// MaxApplicationResultsWithoutParams sets a higher limit when params are excluded, since responses are ~100x smaller
+const MaxApplicationResultsWithoutParams = MaxApplicationResults * 10
 
 // DefaultApplicationResults sets a default size limit for the number of applications returned in a single request to the
 // /v2/accounts/{address}/applications endpoint
@@ -1268,24 +1271,32 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 		appGreaterThan = agt
 	}
 
+	// Determine includeParams first, as it affects limit validation
+	includeParams := false
+	if params.IncludeParams != nil {
+		includeParams = *params.IncludeParams
+	}
+
+	// Choose appropriate max limit based on whether params are included
+	// When params are excluded, responses are ~100x smaller, so we can return more results
+	maxLimit := uint64(MaxApplicationResults)
+	if !includeParams {
+		maxLimit = uint64(MaxApplicationResultsWithoutParams)
+	}
+
 	if params.Limit != nil {
 		if *params.Limit <= 0 {
 			return badRequest(ctx, errors.New(errInvalidLimit), errInvalidLimit, v2.Log)
 		}
 
-		if *params.Limit > MaxApplicationResults {
-			limitErrMsg := fmt.Sprintf("limit %d exceeds max applications single batch limit %d", *params.Limit, MaxApplicationResults)
+		if *params.Limit > maxLimit {
+			limitErrMsg := fmt.Sprintf("limit %d exceeds max applications single batch limit %d", *params.Limit, maxLimit)
 			return badRequest(ctx, errors.New(limitErrMsg), limitErrMsg, v2.Log)
 		}
 	} else {
 		// default limit
 		l := DefaultApplicationResults
 		params.Limit = &l
-	}
-
-	includeParams := false
-	if params.IncludeParams != nil {
-		includeParams = *params.IncludeParams
 	}
 
 	ledger := v2.Node.LedgerForAPI()
@@ -1327,14 +1338,13 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 		}
 
 		if !record.Creator.IsZero() {
-			deleted := false
-			aah.Deleted = &deleted
-
+			// App exists - don't set Deleted field (omit from JSON)
 			if includeParams && record.AppParams != nil {
 				app := AppParamsToApplication(record.Creator.String(), record.AppID, record.AppParams)
 				aah.Params = app.Params
 			}
 		} else {
+			// App deleted - set Deleted=true (only include when true)
 			deleted := true
 			aah.Deleted = &deleted
 		}
