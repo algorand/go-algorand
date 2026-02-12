@@ -175,7 +175,7 @@ func (nc *NodeController) StopAlgod() (err error) {
 	algodPID, err := nc.GetAlgodPID()
 	if err == nil {
 		// Kill algod by PID
-		killed, killErr := killPID(int(algodPID))
+		killed, killErr := killPID(int(algodPID), nc.collectGoroutineStacks)
 		if killErr != nil {
 			return killErr
 		}
