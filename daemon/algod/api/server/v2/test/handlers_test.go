@@ -1309,7 +1309,7 @@ int 1`,
 			})
 			scenario := scenarioFn(mocktracer.TestScenarioInfo{
 				CallingTxn:   appCallTxn.Txn(),
-				MinFee:       basics.MicroAlgos{Raw: txnInfo.CurrentProtocolParams().MinTxnFee},
+				MinFee:       txnInfo.CurrentProtocolParams().MinFee(),
 				CreatedAppID: futureAppID,
 			})
 			appCallTxn.ApprovalProgram = scenario.Program

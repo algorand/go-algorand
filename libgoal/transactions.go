@@ -344,9 +344,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid ba
 		return transactions.Transaction{}, err
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		goOnlineTransaction.GenesisHash = genHash
+		copy(goOnlineTransaction.GenesisHash[:], params.GenesisHash)
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -398,9 +396,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid b
 		},
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		goOfflineTransaction.GenesisHash = genHash
+		copy(goOfflineTransaction.GenesisHash[:], params.GenesisHash)
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -450,9 +446,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		},
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		becomeNonparticipatingTransaction.GenesisHash = genHash
+		copy(becomeNonparticipatingTransaction.GenesisHash[:], params.GenesisHash)
 	}
 	becomeNonparticipatingTransaction.KeyregTxnFields.Nonparticipation = true
 
@@ -499,9 +493,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid bas
 	tx.Header.LastValid = lastValid
 
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		tx.GenesisHash = genHash
+		copy(tx.GenesisHash[:], params.GenesisHash)
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it

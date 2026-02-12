@@ -1433,8 +1433,7 @@ type TransactionParametersResponse struct {
 	// LastRound LastRound indicates the last round seen
 	LastRound basics.Round `json:"last-round"`
 
-	// MinFee The minimum transaction fee (not per byte) required for the
-	// txn to validate for the current network protocol.
+	// MinFee The minimum transaction fee (not per byte) required for the txn to validate for the current network protocol.
 	MinFee uint64 `json:"min-fee"`
 }
 

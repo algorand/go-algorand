@@ -57,7 +57,7 @@ type AssembleBlockStats struct {
 	MaxLength                 int
 	MinPriority               uint64
 	MaxPriority               uint64
-	CommittedCount            int // number of transaction blocks that are included in a block
+	CommittedCount            int // number of transactions removed b/c they were already included in a block
 	StopReason                string
 	TotalLength               uint64
 	EarlyCommittedCount       uint64 // number of transaction groups that were pending on the transaction pool but have been included in previous block
