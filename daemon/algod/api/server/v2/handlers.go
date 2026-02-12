@@ -87,7 +87,7 @@ const DefaultAssetResults = uint64(1000)
 const MaxApplicationResults = 1000
 
 // MaxApplicationResultsWithoutParams sets a higher limit when params are excluded, since responses are ~100x smaller
-const MaxApplicationResultsWithoutParams = MaxApplicationResults * 10
+const MaxApplicationResultsWithoutParams = MaxApplicationResults * 100
 
 // DefaultApplicationResults sets a default size limit for the number of applications returned in a single request to the
 // /v2/accounts/{address}/applications endpoint
