@@ -2162,6 +2162,11 @@ transactionGroupLoop:
 						}
 					}
 				}
+				for _, lkv := range txgroup.KVs {
+					if _, have := base.kvStore[lkv.Key]; !have {
+						base.kvStore[lkv.Key] = lkv.Value
+					}
+				}
 			}
 			err = eval.TransactionGroup(txgroup.TxnGroup...)
 			if err != nil {
