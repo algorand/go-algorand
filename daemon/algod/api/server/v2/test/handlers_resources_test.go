@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -154,10 +155,39 @@ func (l *mockLedger) LookupApplications(addr basics.Address, appIDGT basics.AppI
 		return nil, basics.Round(0), nil
 	}
 
+	// Collect all app IDs owned by this account (both created and opted-in)
+	appIDSet := make(map[basics.AppIndex]bool)
+	for appID := range ad.AppParams {
+		if appID > appIDGT {
+			appIDSet[appID] = true
+		}
+	}
+	for appID := range ad.AppLocalStates {
+		if appID > appIDGT {
+			appIDSet[appID] = true
+		}
+	}
+
+	// Sort app IDs to match database ORDER BY behavior
+	var ownedAppIDs []basics.AppIndex
+	for appID := range appIDSet {
+		ownedAppIDs = append(ownedAppIDs, appID)
+	}
+	slices.Sort(ownedAppIDs)
+
+	// Return up to 'limit' apps (matching database LIMIT behavior)
+	if uint64(len(ownedAppIDs)) > limit {
+		ownedAppIDs = ownedAppIDs[:limit]
+	}
+
+	// Build results for the selected apps
 	var res []ledgercore.AppResourceWithIDs
-	for i := appIDGT + 1; i < appIDGT+1+basics.AppIndex(limit); i++ {
-		apr := ledgercore.AppResourceWithIDs{}
-		if ap, ok := ad.AppParams[i]; ok {
+	for _, appID := range ownedAppIDs {
+		apr := ledgercore.AppResourceWithIDs{
+			AppID: appID,
+		}
+
+		if ap, ok := ad.AppParams[appID]; ok {
 			// Only populate AppParams if requested to match the optimization in the real implementation
 			if includeParams {
 				apr.AppParams = &ap
@@ -165,14 +195,11 @@ func (l *mockLedger) LookupApplications(addr basics.Address, appIDGT basics.AppI
 			apr.Creator = addr
 		}
 
-		if ls, ok := ad.AppLocalStates[i]; ok {
+		if ls, ok := ad.AppLocalStates[appID]; ok {
 			apr.AppLocalState = &ls
 		}
 
-		if apr.AppParams != nil || apr.AppLocalState != nil {
-			apr.AppID = i
-			res = append(res, apr)
-		}
+		res = append(res, apr)
 	}
 	return res, basics.Round(0), nil
 }
