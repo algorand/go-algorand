@@ -345,7 +345,7 @@
             "$ref": "#/parameters/next"
           },
           {
-            "$ref": "#/parameters/include-params"
+            "$ref": "#/parameters/include"
           }
         ],
         "responses": {
@@ -2731,7 +2731,7 @@
           "$ref": "#/definitions/ApplicationLocalState"
         },
         "params": {
-          "description": "\\[appp\\] parameters of the application created by this account including app global data.\n\nThe raw account uses `AppParams` for this type.\nOnly present if the account is the creator and include-params is true.",
+          "description": "\\[appp\\] parameters of the application created by this account including app global data.\n\nThe raw account uses `AppParams` for this type.\nOnly present if the account is the creator and `include=params` is specified.",
           "$ref": "#/definitions/ApplicationParams"
         }
       }
@@ -4275,11 +4275,17 @@
       "name": "tx-type",
       "in": "query"
     },
-    "include-params": {
-      "type": "boolean",
-      "description": "Include application params in the response. Defaults to false.",
-      "name": "include-params",
-      "in": "query"
+    "include": {
+      "name": "include",
+      "description": "Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.",
+      "in": "query",
+      "required": false,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["params"]
+      },
+      "collectionFormat": "csv"
     }
   },
   "responses": {

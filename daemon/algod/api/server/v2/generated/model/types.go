@@ -65,6 +65,11 @@ const (
 	AccountInformationParamsFormatMsgpack AccountInformationParamsFormat = "msgpack"
 )
 
+// Defines values for AccountApplicationsInformationParamsInclude.
+const (
+	AccountApplicationsInformationParamsIncludeParams AccountApplicationsInformationParamsInclude = "params"
+)
+
 // Defines values for AccountApplicationInformationParamsFormat.
 const (
 	AccountApplicationInformationParamsFormatJson    AccountApplicationInformationParamsFormat = "json"
@@ -1107,8 +1112,8 @@ type Catchpoint = string
 // Format defines model for format.
 type Format string
 
-// IncludeParams defines model for include-params.
-type IncludeParams = bool
+// Include defines model for include.
+type Include = []string
 
 // Limit defines model for limit.
 type Limit = uint64
@@ -1499,9 +1504,12 @@ type AccountApplicationsInformationParams struct {
 	// Next The next page of results. Use the next token provided by the previous results.
 	Next *string `form:"next,omitempty" json:"next,omitempty"`
 
-	// IncludeParams Include application params in the response. Defaults to false.
-	IncludeParams *bool `form:"include-params,omitempty" json:"include-params,omitempty"`
+	// Include Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.
+	Include *[]AccountApplicationsInformationParamsInclude `form:"include,omitempty" json:"include,omitempty"`
 }
+
+// AccountApplicationsInformationParamsInclude defines parameters for AccountApplicationsInformation.
+type AccountApplicationsInformationParamsInclude string
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {

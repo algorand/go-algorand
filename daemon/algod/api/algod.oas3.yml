@@ -62,13 +62,21 @@
           "type": "string"
         }
       },
-      "include-params": {
-        "description": "Include application params in the response. Defaults to false.",
+      "include": {
+        "description": "Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.",
+        "explode": false,
         "in": "query",
-        "name": "include-params",
+        "name": "include",
         "schema": {
-          "type": "boolean"
-        }
+          "items": {
+            "enum": [
+              "params"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "style": "form"
       },
       "limit": {
         "description": "Maximum number of results to return.",
@@ -3312,12 +3320,20 @@
             }
           },
           {
-            "description": "Include application params in the response. Defaults to false.",
+            "description": "Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.",
+            "explode": false,
             "in": "query",
-            "name": "include-params",
+            "name": "include",
             "schema": {
-              "type": "boolean"
-            }
+              "items": {
+                "enum": [
+                  "params"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "style": "form"
           }
         ],
         "responses": {

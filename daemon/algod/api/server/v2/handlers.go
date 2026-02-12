@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1273,8 +1274,10 @@ func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address bas
 
 	// Determine includeParams first, as it affects limit validation
 	includeParams := false
-	if params.IncludeParams != nil {
-		includeParams = *params.IncludeParams
+	if params.Include != nil {
+		if slices.Contains(*params.Include, model.AccountApplicationsInformationParamsIncludeParams) {
+			includeParams = true
+		}
 	}
 
 	// Choose appropriate max limit based on whether params are included

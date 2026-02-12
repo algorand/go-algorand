@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 )
 
 type mockLedger struct {
@@ -156,15 +157,15 @@ func (l *mockLedger) LookupApplications(addr basics.Address, appIDGT basics.AppI
 	}
 
 	// Collect all app IDs owned by this account (both created and opted-in)
-	appIDSet := make(map[basics.AppIndex]bool)
+	appIDSet := make(util.Set[basics.AppIndex])
 	for appID := range ad.AppParams {
 		if appID > appIDGT {
-			appIDSet[appID] = true
+			appIDSet.Add(appID)
 		}
 	}
 	for appID := range ad.AppLocalStates {
 		if appID > appIDGT {
-			appIDSet[appID] = true
+			appIDSet.Add(appID)
 		}
 	}
 
@@ -648,15 +649,15 @@ func accountApplicationInformationResourceLimitsTest(t *testing.T, handlers v2.H
 
 	// Build sorted list of expected app IDs from account data (handles sparse IDs)
 	var expectedAppIDs []basics.AppIndex
-	appIDSet := make(map[basics.AppIndex]bool)
+	appIDSet := make(util.Set[basics.AppIndex])
 	for appID := range acctData.AppParams {
 		if appID > basics.AppIndex(inputNextToken) {
-			appIDSet[appID] = true
+			appIDSet.Add(appID)
 		}
 	}
 	for appID := range acctData.AppLocalStates {
 		if appID > basics.AppIndex(inputNextToken) {
-			appIDSet[appID] = true
+			appIDSet.Add(appID)
 		}
 	}
 	for appID := range appIDSet {
@@ -748,29 +749,28 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	accountApplicationInformationResourceLimitsTest(t, handlers, unknownAddress, basics.AccountData{}, model.AccountApplicationsInformationParams{},
 		0, 0, false)
 
-	// 6a. Invalid limits - larger than configured max (with includeParams=true, max is 1000)
-	includeParamsTrue := true
+	// 6a. Invalid limits - larger than configured max (with include=params, max is 1000)
+	includeParams := []model.AccountApplicationsInformationParamsInclude{model.AccountApplicationsInformationParamsIncludeParams}
 	ctx, rec := newReq(t)
 	err := handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
 		Limit: func() *uint64 {
 			l := uint64(v2.MaxApplicationResults + 1)
 			return &l
 		}(),
-		IncludeParams: &includeParamsTrue,
+		Include: &includeParams,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
 	require.Equal(t, "{\"message\":\"limit 1001 exceeds max applications single batch limit 1000\"}\n", rec.Body.String())
 
-	// 6a2. Invalid limits - larger than configured max (with includeParams=false, max is 100,000)
-	includeParamsFalse := false
+	// 6a2. Invalid limits - larger than configured max (without include=params, max is 100,000)
 	ctx, rec = newReq(t)
 	err = handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
 		Limit: func() *uint64 {
 			l := uint64(v2.MaxApplicationResultsWithoutParams + 1)
 			return &l
 		}(),
-		IncludeParams: &includeParamsFalse,
+		// No Include parameter - defaults to IDs only
 	})
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
@@ -788,12 +788,12 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	require.Equal(t, 400, rec.Code)
 	require.Equal(t, "{\"message\":\"limit parameter must be a positive integer\"}\n", rec.Body.String())
 
-	// 7. Test include-params flag
-	includeParams := true
+	// 7. Test include=params flag
+	includeParamsArray := []model.AccountApplicationsInformationParamsInclude{model.AccountApplicationsInformationParamsIncludeParams}
 	ctx, rec = newReq(t)
 	err = handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
-		Limit:         &limit,
-		IncludeParams: &includeParams,
+		Limit:   &limit,
+		Include: &includeParamsArray,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
@@ -805,12 +805,11 @@ func TestAccountApplicationsInformation(t *testing.T) {
 		assert.NotNil(t, (*retWithParams.ApplicationResources)[i].Params, "Expected params for app %d", i+1)
 	}
 
-	// 8. Test exclude include-params flag (default behavior)
-	includeParams = false
+	// 8. Test default behavior (no include parameter - params NOT included)
 	ctx, rec = newReq(t)
 	err = handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
-		Limit:         &limit,
-		IncludeParams: &includeParams,
+		Limit: &limit,
+		// No Include parameter - defaults to IDs + local state only
 	})
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
@@ -820,5 +819,22 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	// Verify that params are NOT included
 	for i := 0; i < rawLimit; i++ {
 		assert.Nil(t, (*retWithoutParams.ApplicationResources)[i].Params, "Expected no params for app %d", i+1)
+	}
+
+	// 9. Test invalid include value (should be ignored, params NOT included)
+	invalidInclude := []model.AccountApplicationsInformationParamsInclude{"invalid-value"}
+	ctx, rec = newReq(t)
+	err = handlers.AccountApplicationsInformation(ctx, addr, model.AccountApplicationsInformationParams{
+		Limit:   &limit,
+		Include: &invalidInclude,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code, "Invalid include values should be ignored, not cause errors")
+	var retInvalid model.AccountApplicationsInformationResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &retInvalid)
+	require.NoError(t, err)
+	// Verify that params are NOT included (invalid value ignored)
+	for i := 0; i < rawLimit; i++ {
+		assert.Nil(t, (*retInvalid.ApplicationResources)[i].Params, "Invalid include value should be ignored")
 	}
 }
