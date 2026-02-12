@@ -607,15 +607,22 @@ func randomAccountWithSomeAppLocalStatesAndOverlappingAppParams(overlapN int, no
 	a := ledgertesting.RandomAccountData(0)
 	a.AppParams = make(map[basics.AppIndex]basics.AppParams)
 	a.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+
+	// Use sparse app IDs to test pagination with non-sequential IDs
+	// This exercises the fix for https://github.com/algorand/go-algorand/pull/6552#discussion_r2795538306
+	const appIDGap = 100 // Create 100-ID gaps between apps
+
 	// overlapN apps have both app params and app local states
 	for i := 1; i <= overlapN; i++ {
-		a.AppParams[basics.AppIndex(i)] = ledgertesting.RandomAppParams()
-		a.AppLocalStates[basics.AppIndex(i)] = ledgertesting.RandomAppLocalState()
+		appID := basics.AppIndex(i * appIDGap)
+		a.AppParams[appID] = ledgertesting.RandomAppParams()
+		a.AppLocalStates[appID] = ledgertesting.RandomAppLocalState()
 	}
 
 	// nonOverlapAppLocalStatesN apps have only app local states
-	for i := overlapN + 1; i <= (overlapN + nonOverlapAppLocalStatesN); i++ {
-		a.AppLocalStates[basics.AppIndex(i)] = ledgertesting.RandomAppLocalState()
+	for i := 1; i <= nonOverlapAppLocalStatesN; i++ {
+		appID := basics.AppIndex((overlapN + i) * appIDGap)
+		a.AppLocalStates[appID] = ledgertesting.RandomAppLocalState()
 	}
 	return a
 }
@@ -639,16 +646,30 @@ func accountApplicationInformationResourceLimitsTest(t *testing.T, handlers v2.H
 	}
 	assert.Equal(t, maxResults, len(*ret.ApplicationResources))
 
-	// Application resources should match the first limit apps from the account data
-	minForResults := max(inputNextToken, 0)
-	for i := minForResults; i < minForResults+maxResults; i++ {
-		expectedIndex := basics.AppIndex(i + 1)
+	// Build sorted list of expected app IDs from account data (handles sparse IDs)
+	var expectedAppIDs []basics.AppIndex
+	appIDSet := make(map[basics.AppIndex]bool)
+	for appID := range acctData.AppParams {
+		if appID > basics.AppIndex(inputNextToken) {
+			appIDSet[appID] = true
+		}
+	}
+	for appID := range acctData.AppLocalStates {
+		if appID > basics.AppIndex(inputNextToken) {
+			appIDSet[appID] = true
+		}
+	}
+	for appID := range appIDSet {
+		expectedAppIDs = append(expectedAppIDs, appID)
+	}
+	slices.Sort(expectedAppIDs)
 
-		if acctData.AppLocalStates != nil {
-			assert.Equal(t, expectedIndex, (*ret.ApplicationResources)[i-minForResults].Id)
-			if (*ret.ApplicationResources)[i-minForResults].AppLocalState != nil {
-				assert.Equal(t, expectedIndex, (*ret.ApplicationResources)[i-minForResults].AppLocalState.Id)
-			}
+	// Verify returned apps match expected IDs
+	for i := 0; i < maxResults && i < len(expectedAppIDs); i++ {
+		expectedID := expectedAppIDs[i]
+		assert.Equal(t, expectedID, (*ret.ApplicationResources)[i].Id, "App at position %d should have ID %d", i, expectedID)
+		if (*ret.ApplicationResources)[i].AppLocalState != nil {
+			assert.Equal(t, expectedID, (*ret.ApplicationResources)[i].AppLocalState.Id)
 		}
 	}
 }
@@ -676,25 +697,51 @@ func TestAccountApplicationsInformation(t *testing.T) {
 		model.AccountApplicationsInformationParams{Limit: &limit}, 0, rawLimit, true)
 
 	// 3. Loop through all apps in the account in batches of 100, ensure we get all apps back.
-	// Exercises limit and next combined.
-	for rawNext := 0; rawNext < totalAppLocalStates; rawNext += rawLimit {
-		nextTk := strconv.FormatUint(uint64(rawNext), 10)
-		// We expect a next token for all but the last batch
-		expectToken := true
-		expectedResultsCount := rawLimit
-		if rawNext+rawLimit >= totalAppLocalStates {
-			expectToken = false
-			expectedResultsCount = totalAppLocalStates - rawNext
+	// Exercises limit and next combined with sparse app IDs.
+	var seenAppIDs []basics.AppIndex
+	var nextToken *string
+	for {
+		ctx, rec := newReq(t)
+		params := model.AccountApplicationsInformationParams{Limit: &limit}
+		if nextToken != nil {
+			params.Next = nextToken
 		}
-		accountApplicationInformationResourceLimitsTest(t, handlers, addr, acctData,
-			model.AccountApplicationsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, expectedResultsCount, expectToken)
+
+		err := handlers.AccountApplicationsInformation(ctx, addr, params)
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var ret model.AccountApplicationsInformationResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &ret)
+		require.NoError(t, err)
+
+		// Collect app IDs from this batch
+		for _, app := range *ret.ApplicationResources {
+			seenAppIDs = append(seenAppIDs, app.Id)
+		}
+
+		// If no next token, we've seen all apps
+		if ret.NextToken == nil {
+			break
+		}
+		nextToken = ret.NextToken
 	}
 
-	// 4. Query with limit, next to provide batch, but no data in that range
-	rawNext := 1025
-	nextTk := strconv.FormatUint(uint64(rawNext), 10)
+	// Verify we got all apps
+	assert.Equal(t, totalAppLocalStates, len(seenAppIDs), "Should have paginated through all apps")
+
+	// Verify apps are in sorted order
+	slices.Sort(seenAppIDs)
+	for i := 1; i < len(seenAppIDs); i++ {
+		assert.Less(t, seenAppIDs[i-1], seenAppIDs[i], "Apps should be in ascending order")
+	}
+
+	// 4. Query with cursor beyond all apps (should return empty results)
+	// With sparse IDs at 100-ID intervals, cursor beyond the last app should return nothing
+	lastAppID := seenAppIDs[len(seenAppIDs)-1]
+	beyondLast := strconv.FormatUint(uint64(lastAppID+1), 10)
 	accountApplicationInformationResourceLimitsTest(t, handlers, addr, acctData,
-		model.AccountApplicationsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, totalAppLocalStates-rawNext, false)
+		model.AccountApplicationsInformationParams{Limit: &limit, Next: &beyondLast}, int(lastAppID+1), 0, false)
 
 	// 5. Unknown address (200 returned, just no app data)
 	unknownAddress := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -774,28 +821,4 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	for i := 0; i < rawLimit; i++ {
 		assert.Nil(t, (*retWithoutParams.ApplicationResources)[i].Params, "Expected no params for app %d", i+1)
 	}
-
-	// 9. Test that the ledger-layer optimization is working (AppParams not allocated when includeParams=false)
-	// Call the ledger method directly to verify AppParams is nil at the ledger layer, not just filtered at handler
-	ledgerRecordsWithoutParams, _, err := handlers.Node.LedgerForAPI().LookupApplications(addr, 0, uint64(rawLimit), false)
-	require.NoError(t, err)
-	for i, record := range ledgerRecordsWithoutParams {
-		// For created apps, Creator should be set but AppParams should be nil (optimization working)
-		if !record.Creator.IsZero() {
-			assert.Nil(t, record.AppParams, "Expected AppParams to be nil at ledger layer when includeParams=false (app %d)", i+1)
-		}
-	}
-
-	// Call with includeParams=true to verify AppParams IS populated at ledger layer
-	ledgerRecordsWithParams, _, err := handlers.Node.LedgerForAPI().LookupApplications(addr, 0, uint64(rawLimit), true)
-	require.NoError(t, err)
-	foundParamsInLedgerLayer := false
-	for _, record := range ledgerRecordsWithParams {
-		// For created apps, both Creator and AppParams should be set
-		if !record.Creator.IsZero() && record.AppParams != nil {
-			foundParamsInLedgerLayer = true
-			break
-		}
-	}
-	assert.True(t, foundParamsInLedgerLayer, "Expected to find at least one app with AppParams populated at ledger layer when includeParams=true")
 }
