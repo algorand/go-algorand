@@ -78,7 +78,8 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[3])
-	assert.Error(t, err)
+	var errProposalSeekerNotLess errProposalSeekerNotLess
+	assert.ErrorAs(t, err, &errProposalSeekerNotLess)
 	assert.Equal(t, effect, NoLateCredentialTrackingImpact)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
@@ -104,7 +105,8 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[0])
-	assert.Error(t, err)
+	var errProposalSeekerFrozen errProposalSeekerFrozen
+	assert.ErrorAs(t, err, &errProposalSeekerFrozen)
 	assert.Equal(t, effect, VerifiedBetterLateCredentialForTracking)
 	assert.Equal(t, s.Lowest, lowestBeforeFreeze)
 	assert.True(t, s.Frozen)
