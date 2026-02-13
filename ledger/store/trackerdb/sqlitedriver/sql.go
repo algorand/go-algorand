@@ -37,6 +37,7 @@ type accountsDbQueries struct {
 	lookupKvPairStmt           *sql.Stmt
 	lookupKeysByRangeStmt      *sql.Stmt
 	lookupCreatorStmt          *sql.Stmt
+	queryable                  db.Queryable
 }
 
 type onlineAccountsDbQueries struct {
@@ -71,7 +72,7 @@ func (sqlRowRef) CreatableRefMarker()     {}
 // AccountsInitDbQueries constructs an AccountsReader backed by sql queries.
 func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
-	qs := &accountsDbQueries{}
+	qs := &accountsDbQueries{queryable: q}
 
 	qs.lookupAccountStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, accountbase.data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
 	if err != nil {
@@ -304,6 +305,76 @@ func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64,
 				results[v.String] = true
 				resultCount++
 			}
+		}
+		return nil
+	})
+	return
+}
+
+// LookupKeysByPrefixCursor returns a page of key-value pairs matching the prefix, starting after cursor.
+// Keys in the exclude map are skipped (they are handled by in-memory deltas).
+func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string]bool) (round basics.Round, results []ledgercore.KvPairResult, err error) {
+	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
+	if end == nil {
+		return 0, nil, fmt.Errorf("lookup by strange prefix %#v", prefix)
+	}
+
+	// The cursor is exclusive: we want keys strictly greater than cursor.
+	queryStart := start
+	if cursor != "" && cursor >= string(start) {
+		queryStart = []byte(cursor)
+	}
+
+	err = db.Retry(func() error {
+		results = nil
+
+		// Build query dynamically to include value column when requested.
+		var selectCols string
+		if includeValues {
+			selectCols = "acctrounds.rnd, kvstore.key, kvstore.value"
+		} else {
+			selectCols = "acctrounds.rnd, kvstore.key"
+		}
+		query := fmt.Sprintf("SELECT %s FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key", selectCols)
+
+		var rows *sql.Rows
+		rows, err = qs.queryable.Query(query, queryStart, end)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		var collected uint64
+
+		for rows.Next() {
+			if limit > 0 && collected >= limit {
+				return nil
+			}
+			var v sql.NullString
+			var val []byte
+
+			if includeValues {
+				err = rows.Scan(&round, &v, &val)
+			} else {
+				err = rows.Scan(&round, &v)
+			}
+			if err != nil {
+				return err
+			}
+			if !v.Valid {
+				continue
+			}
+			key := v.String
+			// Skip the cursor key itself (cursor is exclusive)
+			if key <= cursor {
+				continue
+			}
+			// Skip keys handled by deltas
+			if exclude[key] {
+				continue
+			}
+			results = append(results, ledgercore.KvPairResult{Key: key, Value: val})
+			collected++
 		}
 		return nil
 	})

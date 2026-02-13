@@ -957,6 +957,111 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	}
 }
 
+func TestLookupKeysByPrefixCursor(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	dbs, _ := sqlitedriver.OpenForTesting(t, false)
+	defer dbs.Close()
+
+	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		_ = benchmarkInitBalances(t, 1, tx, protocol.ConsensusCurrentVersion)
+		return nil
+	})
+	require.NoError(t, err)
+
+	qs, err := dbs.MakeAccountsOptimizedReader()
+	require.NoError(t, err)
+	defer qs.Close()
+
+	// Insert test data with a common prefix
+	kvPairs := []struct {
+		key   string
+		value string
+	}{
+		{"DingHo-A", "valA"},
+		{"DingHo-B", "valB"},
+		{"DingHo-C", "valC"},
+		{"DingHo-D", "valD"},
+		{"DingHo-E", "valE"},
+		{"DingHo-F", "valF"},
+		{"Other-Key", "valOther"},
+	}
+
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		writer, err := tx.MakeAccountsOptimizedWriter(true, true, true, true)
+		if err != nil {
+			return
+		}
+		for _, kv := range kvPairs {
+			err = writer.UpsertKvPair(kv.key, []byte(kv.value))
+			require.NoError(t, err)
+		}
+		writer.Close()
+		return nil
+	})
+	require.NoError(t, err)
+
+	t.Run("BasicPagination", func(t *testing.T) {
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 3, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, "DingHo-B", results[1].Key)
+		require.Equal(t, "DingHo-C", results[2].Key)
+		// Values should be nil when includeValues=false
+		require.Nil(t, results[0].Value)
+	})
+
+	t.Run("WithCursor", func(t *testing.T) {
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-C", 3, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		require.Equal(t, "DingHo-D", results[0].Key)
+		require.Equal(t, "DingHo-E", results[1].Key)
+		require.Equal(t, "DingHo-F", results[2].Key)
+	})
+
+	t.Run("WithValues", func(t *testing.T) {
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, []byte("valA"), results[0].Value)
+		require.Equal(t, "DingHo-B", results[1].Key)
+		require.Equal(t, []byte("valB"), results[1].Value)
+	})
+
+	t.Run("WithExclude", func(t *testing.T) {
+		exclude := map[string]bool{"DingHo-B": true, "DingHo-D": true}
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, false, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 4) // A, C, E, F (B and D excluded)
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, "DingHo-C", results[1].Key)
+		require.Equal(t, "DingHo-E", results[2].Key)
+		require.Equal(t, "DingHo-F", results[3].Key)
+	})
+
+	t.Run("PrefixFiltersOtherKeys", func(t *testing.T) {
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 100, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6) // Only DingHo- keys, not Other-Key
+	})
+
+	t.Run("NoResultsPastEnd", func(t *testing.T) {
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-F", 10, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 0)
+	})
+
+	t.Run("ZeroLimitReturnsAll", func(t *testing.T) {
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+	})
+}
+
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
 	// learn something from BenchmarkWritingRandomBalancesDisk
 
