@@ -1436,8 +1436,11 @@ type SupplyResponse struct {
 	// CurrentRound Round
 	CurrentRound basics.Round `json:"current_round"`
 
-	// OnlineMoney OnlineMoney
+	// OnlineMoney Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.
 	OnlineMoney uint64 `json:"online-money"`
+
+	// OnlineStake Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.
+	OnlineStake uint64 `json:"online-stake"`
 
 	// TotalMoney TotalMoney
 	TotalMoney uint64 `json:"total-money"`
