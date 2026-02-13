@@ -345,6 +345,10 @@ func (au *accountUpdates) LookupAssetResources(addr basics.Address, assetIDGT ba
 	return au.lookupAssetResources(addr, assetIDGT, limit)
 }
 
+func (au *accountUpdates) LookupApplicationResources(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	return au.lookupApplicationResources(addr, appIDGT, limit, includeParams)
+}
+
 func (au *accountUpdates) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	return au.lookupKv(rnd, key, true /* take lock */)
 }
@@ -1245,6 +1249,51 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 				AssetResource: ledgercore.AssetResource{
 					AssetHolding: &ah,
 				},
+			}
+		}
+
+		data = append(data, arwi)
+	}
+	// We've found all the resources we could find for this address.
+	currentDbRound := resourceDbRound
+	// The resourceDbRound will not be set if there are no persisted resources
+	if len(data) == 0 {
+		au.accountsMu.RLock()
+		currentDbRound = au.cachedDBRound
+		au.accountsMu.RUnlock()
+	}
+	return data, currentDbRound, nil
+}
+
+// lookupApplicationResources returns all the application resources for a given address, solely based on what is persisted to disk.
+// It does not take into account any in-memory deltas; the round number returned is the latest round number that is known to the database.
+// If includeParams is false, AppParams will not be populated to save memory allocations (app params can be ~50KB each).
+func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) (data []ledgercore.AppResourceWithIDs, validThrough basics.Round, err error) {
+	// Look for resources on disk
+	persistedResources, resourceDbRound, err0 := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(appIDGT), limit, basics.AppCreatable)
+	if err0 != nil {
+		return nil, basics.Round(0), err0
+	}
+
+	data = make([]ledgercore.AppResourceWithIDs, 0, len(persistedResources))
+	for _, pd := range persistedResources {
+		als := pd.Data.GetAppLocalState()
+
+		arwi := ledgercore.AppResourceWithIDs{
+			AppID: basics.AppIndex(pd.Aidx),
+			AppResource: ledgercore.AppResource{
+				AppLocalState: &als,
+			},
+		}
+
+		if !pd.Creator.IsZero() {
+			arwi.Creator = pd.Creator
+
+			// Only populate AppParams if requested to avoid unnecessary memory allocations
+			// (app params can be ~50KB each, vs ~500 bytes for asset params)
+			if includeParams {
+				ap := pd.Data.GetAppParams()
+				arwi.AppResource.AppParams = &ap
 			}
 		}
 

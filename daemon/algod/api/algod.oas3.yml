@@ -62,6 +62,22 @@
           "type": "string"
         }
       },
+      "include": {
+        "description": "Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.",
+        "explode": false,
+        "in": "query",
+        "name": "include",
+        "schema": {
+          "items": {
+            "enum": [
+              "params"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "style": "form"
+      },
       "limit": {
         "description": "Maximum number of results to return.",
         "in": "query",
@@ -170,6 +186,36 @@
           }
         },
         "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator."
+      },
+      "AccountApplicationsInformationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "application-resources": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountApplicationResource"
+                  },
+                  "type": "array"
+                },
+                "next-token": {
+                  "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.",
+                  "type": "string"
+                },
+                "round": {
+                  "description": "The round for which this information is relevant.",
+                  "type": "integer",
+                  "x-go-type": "basics.Round"
+                }
+              },
+              "required": [
+                "round"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "AccountApplicationsInformationResponse contains a list of application resources for an account."
       },
       "AccountAssetResponse": {
         "content": {
@@ -1145,6 +1191,35 @@
           "total-assets-opted-in",
           "total-created-apps",
           "total-created-assets"
+        ],
+        "type": "object"
+      },
+      "AccountApplicationResource": {
+        "description": "AccountApplicationResource describes the account's application resource (local state and params if the account is the creator) for a specific application ID.",
+        "properties": {
+          "app-local-state": {
+            "$ref": "#/components/schemas/ApplicationLocalState"
+          },
+          "created-at-round": {
+            "description": "Round when the account opted into or created the application.",
+            "type": "integer",
+            "x-go-type": "basics.Round"
+          },
+          "deleted": {
+            "description": "Whether the application has been deleted.",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The application ID.",
+            "type": "integer",
+            "x-go-type": "basics.AppIndex"
+          },
+          "params": {
+            "$ref": "#/components/schemas/ApplicationParams"
+          }
+        },
+        "required": [
+          "id"
         ],
         "type": "object"
       },
@@ -3206,6 +3281,131 @@
         "tags": [
           "public",
           "nonparticipating"
+        ]
+      }
+    },
+    "/v2/accounts/{address}/applications": {
+      "get": {
+        "description": "Lookup an account's application holdings (local state and params if the account is the creator).",
+        "operationId": "AccountApplicationsInformation",
+        "parameters": [
+          {
+            "description": "An account public key.",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string",
+              "x-go-type": "basics.Address"
+            },
+            "x-go-type": "basics.Address"
+          },
+          {
+            "description": "Maximum number of results to return.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
+          },
+          {
+            "description": "The next page of results. Use the next token provided by the previous results.",
+            "in": "query",
+            "name": "next",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.",
+            "explode": false,
+            "in": "query",
+            "name": "include",
+            "schema": {
+              "items": {
+                "enum": [
+                  "params"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "application-resources": {
+                      "items": {
+                        "$ref": "#/components/schemas/AccountApplicationResource"
+                      },
+                      "type": "array"
+                    },
+                    "next-token": {
+                      "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.",
+                      "type": "string"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer",
+                      "x-go-type": "basics.Round"
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "AccountApplicationsInformationResponse contains a list of application resources for an account."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed address"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a list of applications held by an account.",
+        "tags": [
+          "public",
+          "experimental"
         ]
       }
     },
