@@ -1033,7 +1033,7 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 	})
 
 	t.Run("WithExclude", func(t *testing.T) {
-		exclude := map[string]bool{"DingHo-B": true, "DingHo-D": true}
+		exclude := map[string][]byte{"DingHo-B": nil, "DingHo-D": nil}
 		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, false, exclude)
 		require.NoError(t, err)
 		require.Len(t, results, 4) // A, C, E, F (B and D excluded)
@@ -1059,6 +1059,96 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 6)
+	})
+
+	t.Run("NullKeyFromLeftJoin", func(t *testing.T) {
+		// Prefix that matches no kvstore rows; LEFT JOIN produces a NULL key row
+		_, results, err := qs.LookupKeysByPrefixCursor("NonExistent-", "", 10, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 0)
+	})
+
+	t.Run("CursorPlusExclude", func(t *testing.T) {
+		exclude := map[string][]byte{"DingHo-D": nil}
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-B", 10, false, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 3) // C, E, F (cursor skips A+B, exclude skips D)
+		require.Equal(t, "DingHo-C", results[0].Key)
+		require.Equal(t, "DingHo-E", results[1].Key)
+		require.Equal(t, "DingHo-F", results[2].Key)
+	})
+
+	t.Run("ValuesWithCursor", func(t *testing.T) {
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-D", 10, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "DingHo-E", results[0].Key)
+		require.Equal(t, []byte("valE"), results[0].Value)
+		require.Equal(t, "DingHo-F", results[1].Key)
+		require.Equal(t, []byte("valF"), results[1].Value)
+	})
+
+	t.Run("ValuesWithExclude", func(t *testing.T) {
+		exclude := map[string][]byte{"DingHo-A": nil}
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, true, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "DingHo-B", results[0].Key)
+		require.Equal(t, []byte("valB"), results[0].Value)
+		require.Equal(t, "DingHo-C", results[1].Key)
+		require.Equal(t, []byte("valC"), results[1].Value)
+	})
+
+	t.Run("ExcludeAllKeys", func(t *testing.T) {
+		exclude := map[string][]byte{
+			"DingHo-A": nil, "DingHo-B": nil, "DingHo-C": nil,
+			"DingHo-D": nil, "DingHo-E": nil, "DingHo-F": nil,
+		}
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, false, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 0)
+	})
+
+	t.Run("LimitExactlyMatchesAvailable", func(t *testing.T) {
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 6, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, "DingHo-F", results[5].Key)
+	})
+
+	t.Run("CursorBetweenKeys", func(t *testing.T) {
+		// Cursor value doesn't match any existing key
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-B5", 10, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 4) // C, D, E, F
+		require.Equal(t, "DingHo-C", results[0].Key)
+		require.Equal(t, "DingHo-F", results[3].Key)
+	})
+
+	t.Run("RoundIsReturned", func(t *testing.T) {
+		round, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 1, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		// Round comes from acctrounds table; verify it matches across calls
+		round2, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 1, true, nil)
+		require.NoError(t, err)
+		require.Equal(t, round, round2)
+	})
+
+	t.Run("ValuesWithCursorAndExclude", func(t *testing.T) {
+		exclude := map[string][]byte{"DingHo-C": nil}
+		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-A", 10, true, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 4) // B, D, E, F (cursor skips A, exclude skips C)
+		require.Equal(t, "DingHo-B", results[0].Key)
+		require.Equal(t, []byte("valB"), results[0].Value)
+		require.Equal(t, "DingHo-D", results[1].Key)
+		require.Equal(t, []byte("valD"), results[1].Value)
+		require.Equal(t, "DingHo-E", results[2].Key)
+		require.Equal(t, []byte("valE"), results[2].Value)
+		require.Equal(t, "DingHo-F", results[3].Key)
+		require.Equal(t, []byte("valF"), results[3].Value)
 	})
 }
 

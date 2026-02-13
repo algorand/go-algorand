@@ -108,7 +108,11 @@ type AccountsReader interface {
 
 	LookupKeyValue(key string) (pv PersistedKVData, err error)
 	LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error)
-	LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string]bool) (round basics.Round, results []ledgercore.KvPairResult, err error)
+	// LookupKeysByPrefixCursor returns a page of key-value pairs matching prefix, starting after cursor.
+	// Keys present in exclude are skipped. Only key membership is checked; the map values are ignored.
+	// The type is map[string][]byte so the caller can pass the delta map directly without allocating
+	// a separate key set.
+	LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, error)
 
 	LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error)
 

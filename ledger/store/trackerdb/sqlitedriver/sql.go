@@ -312,8 +312,11 @@ func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64,
 }
 
 // LookupKeysByPrefixCursor returns a page of key-value pairs matching the prefix, starting after cursor.
-// Keys in the exclude map are skipped (they are handled by in-memory deltas).
-func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string]bool) (round basics.Round, results []ledgercore.KvPairResult, err error) {
+// Keys present in exclude are skipped (they are handled by in-memory deltas).
+// Only key membership is checked; the map values are ignored. The type is
+// map[string][]byte so the caller can pass the delta map directly without
+// allocating a separate key set.
+func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, error) {
 	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
 	if end == nil {
 		return 0, nil, fmt.Errorf("lookup by strange prefix %#v", prefix)
@@ -325,60 +328,76 @@ func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor stri
 		queryStart = []byte(cursor)
 	}
 
-	err = db.Retry(func() error {
-		results = nil
+	selectCols := "acctrounds.rnd, kvstore.key"
+	if includeValues {
+		selectCols += ", kvstore.value"
+	}
+	query := fmt.Sprintf("SELECT %s FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key", selectCols)
 
-		// Build query dynamically to include value column when requested.
-		var selectCols string
-		if includeValues {
-			selectCols = "acctrounds.rnd, kvstore.key, kvstore.value"
-		} else {
-			selectCols = "acctrounds.rnd, kvstore.key"
-		}
-		query := fmt.Sprintf("SELECT %s FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key", selectCols)
+	var round basics.Round
+	var results []ledgercore.KvPairResult
 
-		var rows *sql.Rows
-		rows, err = qs.queryable.Query(query, queryStart, end)
+	err := db.Retry(func() error {
+		rows, err := qs.queryable.Query(query, queryStart, end)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 
-		var collected uint64
-
-		for rows.Next() {
-			if limit > 0 && collected >= limit {
-				return nil
-			}
-			var v sql.NullString
-			var val []byte
-
-			if includeValues {
-				err = rows.Scan(&round, &v, &val)
-			} else {
-				err = rows.Scan(&round, &v)
-			}
-			if err != nil {
-				return err
-			}
-			if !v.Valid {
-				continue
-			}
-			key := v.String
-			// Skip the cursor key itself (cursor is exclusive)
-			if key <= cursor {
-				continue
-			}
-			// Skip keys handled by deltas
-			if exclude[key] {
-				continue
-			}
-			results = append(results, ledgercore.KvPairResult{Key: key, Value: val})
-			collected++
+		rnd, res, err := qs.processKvRows(rows, cursor, limit, includeValues, exclude)
+		if err != nil {
+			return err
 		}
+		round = rnd
+		results = res
 		return nil
 	})
-	return
+	return round, results, err
+}
+
+func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, error) {
+	var round basics.Round
+	var results []ledgercore.KvPairResult
+	if limit > 0 {
+		// add extra capacity for the keys in the delta whose non-deleted values will be added to our results
+		results = make([]ledgercore.KvPairResult, 0, limit+uint64(len(exclude)))
+	}
+	var collected uint64
+	var err error
+
+	for rows.Next() {
+		if limit > 0 && collected >= limit {
+			break
+		}
+
+		var rowKey sql.NullString
+		var val []byte
+
+		if includeValues {
+			err = rows.Scan(&round, &rowKey, &val)
+		} else {
+			err = rows.Scan(&round, &rowKey)
+		}
+		if err != nil {
+			return 0, nil, err
+		}
+
+		if !rowKey.Valid {
+			continue
+		}
+
+		key := rowKey.String
+		if key <= cursor {
+			continue
+		}
+		if _, excluded := exclude[key]; excluded {
+			continue
+		}
+
+		results = append(results, ledgercore.KvPairResult{Key: key, Value: val})
+		collected++
+	}
+	return round, results, nil
 }
 
 // keyPrefixIntervalPreprocessing is implemented to generate an interval for DB queries that look up keys by prefix.

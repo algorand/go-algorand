@@ -269,10 +269,10 @@ func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, res
 	return
 }
 
-func (r *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string]bool) (round basics.Round, results []ledgercore.KvPairResult, err error) {
-	round, err = r.AccountsRound()
+func (r *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, error) {
+	round, err := r.AccountsRound()
 	if err != nil {
-		return
+		return 0, nil, err
 	}
 
 	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
@@ -286,10 +286,15 @@ func (r *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, 
 	iter := r.kvr.NewIter(iterStart, end, false)
 	defer iter.Close()
 
+	var results []ledgercore.KvPairResult
+	if limit > 0 {
+		results = make([]ledgercore.KvPairResult, 0, limit)
+	}
+
 	var collected uint64
 	for iter.Next() {
 		if limit > 0 && collected >= limit {
-			return
+			return round, results, nil
 		}
 
 		key := string(iter.Key())
@@ -298,7 +303,7 @@ func (r *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, 
 			continue
 		}
 		// Skip keys handled by deltas
-		if exclude[key] {
+		if _, excluded := exclude[key]; excluded {
 			continue
 		}
 
@@ -306,7 +311,7 @@ func (r *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, 
 		if includeValues {
 			value, err = iter.Value()
 			if err != nil {
-				return
+				return 0, nil, err
 			}
 		}
 
@@ -314,7 +319,7 @@ func (r *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, 
 		collected++
 	}
 
-	return
+	return round, results, nil
 }
 
 func (r *accountsReader) LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {

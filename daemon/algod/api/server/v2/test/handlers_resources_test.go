@@ -26,11 +26,12 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/algorand/avm-abi/apps"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/avm-abi/apps"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -894,12 +895,6 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 	appID := basics.AppIndex(1)
 	boxNames := []string{"a", "b", "c", "d", "e"}
 	handlers := setupBoxTestHandlers(t, appID, boxNames)
-
-	t.Run("LegacyNoPagination", func(t *testing.T) {
-		// Legacy path (no limit/next params) calls LookupKeysByPrefix which is not
-		// implemented in this mock. Legacy behavior is tested separately via E2E tests.
-		// This test verifies the paginated path only.
-	})
 
 	t.Run("PaginatedBasic", func(t *testing.T) {
 		ctx, rec := newReq(t)
