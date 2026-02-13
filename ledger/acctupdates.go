@@ -1169,9 +1169,9 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return macct.AccountResource(), rnd, nil
 		}
 
-		// check baseAccoiunts again to see if it does not exist
+		// check baseResources again to see if it does not exist
 		if au.baseResources.readNotFound(addr, aidx) {
-			// it seems the account doesnt exist
+			// it seems the resource doesn't exist
 			return ledgercore.AccountResource{}, rnd, nil
 		}
 
@@ -1388,9 +1388,9 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			return macct.AccountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 		}
 
-		// check baseAccoiunts again to see if it does not exist
+		// check baseAccounts again to see if it does not exist
 		if au.baseAccounts.readNotFound(addr) {
-			// it seems the account doesnt exist
+			// it seems the account doesn't exist
 			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
 		}
 
