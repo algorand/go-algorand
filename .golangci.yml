@@ -24,7 +24,8 @@ linters:
     - staticcheck
     - testifylint
     - unused
-  
+    - forbidigo
+
   settings:
     dupword:
       comments-only: true
@@ -101,6 +102,15 @@ linters:
       enable:
         - error-is-as
       disable-all: true
+    forbidigo:
+      analyze_types: true
+      forbid:
+        - p: ^(require|assert)\.Error$
+          pkg: ^github\.com/stretchr/testify/(require|assert)$
+          msg: use ErrorContains, ErrorIs, or ErrorAs instead
+        - p: ^(require|assert)\.Assertions\.Error$
+          pkg: ^github\.com/stretchr/testify/(require|assert)$
+          msg: use ErrorContains, ErrorIs, or ErrorAs instead
 
   exclusions:
     generated: lax
@@ -147,6 +157,8 @@ linters:
         text: '^empty-block: this block is empty, you can remove it'
       - linters: revive
         text: '^superfluous-else: if block ends with .* so drop this else and outdent its block'
+      - linters: forbidigo
+        path-except: ^crypto/
 
 issues:
   # Work our way back over time to be clean against all these
