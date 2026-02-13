@@ -292,3 +292,74 @@ type mockRoleChecker struct{}
 func (m *mockRoleChecker) HasRole(pid peer.ID, role phonebook.Role) bool {
 	return true
 }
+
+func TestDeriveConnLimits_Server(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = ":4160"
+	cfg.IncomingConnectionsLimit = 2400
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2400, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.connMgrHigh)
+	require.Equal(t, 2304, limits.connMgrLow) // 2400 * 96 / 100
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_Client(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 24, limits.rcmgrConns)  // 4 * 6
+	require.Equal(t, 12, limits.connMgrHigh) // 4 * 3
+	require.Equal(t, 8, limits.connMgrLow)   // 4 * 2
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_HybridClient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Hybrid client: EnableP2PHybridMode but no listen addresses
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 24, limits.rcmgrConns)
+	require.Equal(t, 12, limits.connMgrHigh)
+	require.Equal(t, 8, limits.connMgrLow)
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_HybridServer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ":4160"
+	cfg.P2PHybridNetAddress = ":4190"
+	cfg.IncomingConnectionsLimit = 2400
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2400, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.connMgrHigh)
+	require.Equal(t, 2304, limits.connMgrLow)
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_ZeroFanout(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Floor guards prevent zero watermarks when GossipFanout is 0.
+	cfg := config.GetDefaultLocal()
+	cfg.GossipFanout = 0
+	limits := deriveConnLimits(cfg)
+	require.GreaterOrEqual(t, limits.connMgrLow, 1)
+	require.GreaterOrEqual(t, limits.connMgrHigh, limits.connMgrLow)
+	require.GreaterOrEqual(t, limits.rcmgrConns, limits.connMgrHigh)
+}

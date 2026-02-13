@@ -363,6 +363,9 @@ func (s *mockService) ClosePeer(peer peer.ID) error {
 	return nil
 }
 
+func (s *mockService) UnprotectPeer(peer.ID) {
+}
+
 func (s *mockService) Conns() []network.Conn {
 	return nil
 }

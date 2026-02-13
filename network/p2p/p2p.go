@@ -34,6 +34,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
@@ -67,6 +68,7 @@ type Service interface {
 
 	DialPeersUntilTargetCount(targetConnCount int) bool
 	ClosePeer(peer.ID) error
+	UnprotectPeer(peer.ID)
 
 	Conns() []network.Conn
 	ListPeersForTopic(topic string) []peer.ID
@@ -77,15 +79,9 @@ type Service interface {
 	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
-// subset of config.Local needed here
-type nodeSubConfig interface {
-	IsHybridServer() bool
-}
-
 // serviceImpl manages integration with libp2p and implements the Service interface
 type serviceImpl struct {
 	log        logging.Logger
-	subcfg     nodeSubConfig
 	listenAddr string
 	host       host.Host
 	streams    *streamManager
@@ -153,11 +149,17 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		addrFactory = addressFilter
 	}
 
-	rm, err := configureResourceManager(cfg)
+	connLimits := deriveConnLimits(cfg)
+	rm, err := configureResourceManager(connLimits)
 	if err != nil {
 		return nil, "", err
 	}
 
+	cm, err := connmgr.NewConnManager(connLimits.connMgrLow, connLimits.connMgrHigh,
+		connmgr.WithGracePeriod(20*time.Second))
+	if err != nil {
+		return nil, "", err
+	}
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),
 		libp2p.UserAgent(ua),
@@ -168,12 +170,44 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Security(noise.ID, noise.New),
 		enableMetrics,
 		libp2p.ResourceManager(rm),
+		libp2p.ConnectionManager(cm),
 		libp2p.AddrsFactory(addrFactory),
 	)
 	return host, listenAddr, err
 }
 
-func configureResourceManager(cfg config.Local) (network.ResourceManager, error) {
+// connLimitConfig holds derived connection limits for both the connmgr and rcmgr.
+type connLimitConfig struct {
+	connMgrLow  int
+	connMgrHigh int
+	rcmgrConns  int
+}
+
+// deriveConnLimits computes connection manager and resource manager limits
+// from the node configuration. Listen servers use IncomingConnectionsLimit;
+// client nodes use tighter limits based on GossipFanout.
+func deriveConnLimits(cfg config.Local) connLimitConfig {
+	var low, high, rcmgrConns int
+	if cfg.IsListenServer() {
+		high = cfg.IncomingConnectionsLimit
+		low = high * 96 / 100
+		rcmgrConns = high
+	} else {
+		high = cfg.GossipFanout * 3
+		low = cfg.GossipFanout * 2
+		rcmgrConns = cfg.GossipFanout * 6
+	}
+	low = max(low, 1)
+	high = max(high, low)
+	rcmgrConns = max(rcmgrConns, high)
+	return connLimitConfig{
+		connMgrLow:  low,
+		connMgrHigh: high,
+		rcmgrConns:  rcmgrConns,
+	}
+}
+
+func configureResourceManager(limits connLimitConfig) (network.ResourceManager, error) {
 	// see https://github.com/libp2p/go-libp2p/tree/master/p2p/host/resource-manager for more details
 	scalingLimits := rcmgr.DefaultLimits
 	libp2p.SetDefaultServiceLimits(&scalingLimits)
@@ -181,7 +215,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 
 	limitConfig := rcmgr.PartialLimitConfig{
 		System: rcmgr.ResourceLimits{
-			Conns: rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
+			Conns: rcmgr.LimitVal(limits.rcmgrConns),
 		},
 		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
 	}
@@ -229,7 +263,7 @@ func SetPubSubPeerFilter(filter func(checker pstore.RoleChecker, pid peer.ID) bo
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, cfg, h, wsStreamHandlers, cfg.EnableGossipService)
+	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
 
 	for _, pair := range wsStreamHandlers {
@@ -247,7 +281,6 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	}
 	return &serviceImpl{
 		log:        log,
-		subcfg:     cfg,
 		listenAddr: listenAddr,
 		host:       h,
 		streams:    sm,
@@ -297,13 +330,9 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	var numOutgoingConns int
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
-			if s.subcfg.IsHybridServer() {
-				remotePeer := conn.RemotePeer()
-				val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
-				if err == nil && val != nil && val.(bool) {
-					numOutgoingConns++
-				}
-			} else {
+			remotePeer := conn.RemotePeer()
+			val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
+			if err == nil && val != nil && val.(bool) {
 				numOutgoingConns++
 			}
 		}
@@ -336,12 +365,14 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	if s.subcfg.IsHybridServer() {
-		if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
-			return err
-		}
+	if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
+		return err
 	}
-	return s.host.Connect(ctx, *peer)
+	err := s.host.Connect(ctx, *peer)
+	if err == nil {
+		s.host.ConnManager().Protect(peer.ID, "mesh")
+	}
+	return err
 }
 
 // AddrInfo returns the peer.AddrInfo for self
@@ -364,6 +395,12 @@ func (s *serviceImpl) Conns() []network.Conn {
 // ClosePeer closes a connection to the provided peer
 func (s *serviceImpl) ClosePeer(peer peer.ID) error {
 	return s.host.Network().ClosePeer(peer)
+}
+
+// UnprotectPeer removes the "mesh" protection from a peer, allowing
+// the connection manager to trim it if needed.
+func (s *serviceImpl) UnprotectPeer(id peer.ID) {
+	s.host.ConnManager().Unprotect(id, "mesh")
 }
 
 // netAddressToListenAddress converts a netAddress in "ip:port" format to a listen address
