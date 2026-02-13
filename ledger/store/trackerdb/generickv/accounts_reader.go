@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -263,6 +264,54 @@ func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, res
 
 		// inc results in range
 		resultCount++
+	}
+
+	return
+}
+
+func (r *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string]bool) (round basics.Round, results []ledgercore.KvPairResult, err error) {
+	round, err = r.AccountsRound()
+	if err != nil {
+		return
+	}
+
+	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
+
+	// Use cursor as start position if it's past the prefix start
+	iterStart := start
+	if cursor != "" && cursor >= string(start) {
+		iterStart = []byte(cursor)
+	}
+
+	iter := r.kvr.NewIter(iterStart, end, false)
+	defer iter.Close()
+
+	var collected uint64
+	for iter.Next() {
+		if limit > 0 && collected >= limit {
+			return
+		}
+
+		key := string(iter.Key())
+		// Skip the cursor key itself (cursor is exclusive)
+		if key <= cursor {
+			continue
+		}
+		// Skip keys handled by deltas
+		if exclude[key] {
+			continue
+		}
+
+		var value []byte
+		if includeValues {
+			value, err = iter.Value()
+			if err != nil {
+				return
+			}
+		}
+
+		results = append(results, ledgercore.KvPairResult{Key: key, Value: value})
+		collected++
 	}
 
 	return

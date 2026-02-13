@@ -20,6 +20,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
@@ -158,6 +159,24 @@ func (ar *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, re
 	}
 	// return primary results
 	return roundP, nil
+}
+
+// LookupKeysByPrefixCursor implements trackerdb.AccountsReader
+func (ar *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string]bool) (round basics.Round, results []ledgercore.KvPairResult, err error) {
+	roundP, resultsP, errP := ar.primary.LookupKeysByPrefixCursor(prefix, cursor, limit, includeValues, exclude)
+	roundS, _, errS := ar.secondary.LookupKeysByPrefixCursor(prefix, cursor, limit, includeValues, exclude)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// check results match
+	if roundP != roundS {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return roundP, resultsP, nil
 }
 
 // LookupResources implements trackerdb.AccountsReader

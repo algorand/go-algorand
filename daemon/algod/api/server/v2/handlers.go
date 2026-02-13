@@ -118,6 +118,7 @@ type LedgerForAPI interface {
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) ([]byte, error)
 	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
+	LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -1882,6 +1883,88 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 	lastRound := ledger.Latest()
 	keyPrefix := apps.MakeBoxKey(uint64(applicationID), "")
 
+	limit := nilToZero(params.Limit)
+	includeValues := nilToZero(params.Values)
+
+	// When no pagination-related params are provided, preserve current behavior.
+	if limit == 0 && params.Next == nil && !includeValues && (params.Prefix == nil || *params.Prefix == "") {
+		return v2.getApplicationBoxesLegacy(ctx, ledger, lastRound, applicationID, keyPrefix, params)
+	}
+
+	// Parse cursor from next token.
+	var cursor string
+	if params.Next != nil && *params.Next != "" {
+		nextBytes, err := apps.NewAppCallBytes(*params.Next)
+		if err != nil {
+			return badRequest(ctx, err, "invalid next token: "+err.Error(), v2.Log)
+		}
+		nextRaw, err := nextBytes.Raw()
+		if err != nil {
+			return badRequest(ctx, err, "invalid next token: "+err.Error(), v2.Log)
+		}
+		cursor = apps.MakeBoxKey(uint64(applicationID), string(nextRaw))
+	}
+
+	// Parse prefix filter.
+	fullKeyPrefix := keyPrefix
+	if params.Prefix != nil && *params.Prefix != "" {
+		prefixBytes, err := apps.NewAppCallBytes(*params.Prefix)
+		if err != nil {
+			return badRequest(ctx, err, "invalid prefix: "+err.Error(), v2.Log)
+		}
+		prefixRaw, err := prefixBytes.Raw()
+		if err != nil {
+			return badRequest(ctx, err, "invalid prefix: "+err.Error(), v2.Log)
+		}
+		fullKeyPrefix = apps.MakeBoxKey(uint64(applicationID), string(prefixRaw))
+	}
+
+	// Use N+1 pattern: request one extra to detect if there are more pages.
+	// When limit=0, fetch all results (no pagination).
+	fetchLimit := uint64(0)
+	if limit > 0 {
+		fetchLimit = limit + 1
+	}
+
+	results, rnd, err := ledger.LookupKvPairsByPrefix(lastRound, fullKeyPrefix, cursor, fetchLimit, includeValues)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	prefixLen := len(keyPrefix)
+
+	// Determine if there are more pages.
+	var nextToken *string
+	if limit > 0 && uint64(len(results)) > limit {
+		results = results[:limit]
+		// The next token is the last returned box name, encoded in app call arg form.
+		lastBoxName := []byte(results[limit-1].Key[prefixLen:])
+		token := encodeBoxNameAsAppCallBytes(lastBoxName)
+		nextToken = &token
+	}
+
+	responseBoxes := make([]model.BoxDescriptor, len(results))
+	for i, kv := range results {
+		boxName := []byte(kv.Key[prefixLen:])
+		desc := model.BoxDescriptor{Name: boxName}
+		if includeValues {
+			val := kv.Value
+			desc.Value = &val
+		}
+		responseBoxes[i] = desc
+	}
+
+	round := uint64(rnd)
+	response := model.BoxesResponse{
+		Boxes:     responseBoxes,
+		NextToken: nextToken,
+		Round:     &round,
+	}
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// getApplicationBoxesLegacy preserves the original unpaginated behavior.
+func (v2 *Handlers) getApplicationBoxesLegacy(ctx echo.Context, ledger LedgerForAPI, lastRound basics.Round, applicationID basics.AppIndex, keyPrefix string, params model.GetApplicationBoxesParams) error {
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
@@ -1916,6 +1999,11 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 	}
 	response := model.BoxesResponse{Boxes: responseBoxes}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// encodeBoxNameAsAppCallBytes encodes a raw box name as a b64:-prefixed app call arg string.
+func encodeBoxNameAsAppCallBytes(name []byte) string {
+	return "b64:" + base64.StdEncoding.EncodeToString(name)
 }
 
 // GetApplicationBoxByName returns the value of an application's box

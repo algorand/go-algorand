@@ -412,6 +412,15 @@
                     "$ref": "#/components/schemas/BoxDescriptor"
                   },
                   "type": "array"
+                },
+                "next-token": {
+                  "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.",
+                  "type": "string"
+                },
+                "round": {
+                  "description": "The round at which the box data was retrieved.",
+                  "type": "integer",
+                  "x-go-type": "uint64"
                 }
               },
               "required": [
@@ -1770,6 +1779,12 @@
         "properties": {
           "name": {
             "description": "Base64 encoded box name",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "value": {
+            "description": "Base64 encoded box value. Present only when the `values` query parameter is set to true.",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
@@ -4153,7 +4168,7 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, return all Box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all Box names.",
+        "description": "Given an application ID, return all Box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all Box names.\n\nWhen pagination parameters (limit) are provided, returns boxes in sorted order with cursor-based pagination. The response includes the round at which the data was retrieved.",
         "operationId": "GetApplicationBoxes",
         "parameters": [
           {
@@ -4177,6 +4192,40 @@
               "x-go-type": "uint64"
             },
             "x-go-type": "uint64"
+          },
+          {
+            "description": "Maximum number of boxes to return per page. When set, enables paginated responses with sorted results and round information.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "x-go-type": "uint64"
+            },
+            "x-go-type": "uint64"
+          },
+          {
+            "description": "A box name, in the goal app call arg form 'encoding:value', representing the earliest box name to include in results. When provided with limit, enables cursor-based pagination. Use the next-token from a previous response as the value.",
+            "in": "query",
+            "name": "next",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A box name prefix, in the goal app call arg form 'encoding:value', to filter results by. Only boxes whose names start with this prefix will be returned.",
+            "in": "query",
+            "name": "prefix",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "If true, include box values in the response.",
+            "in": "query",
+            "name": "values",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -4190,6 +4239,15 @@
                         "$ref": "#/components/schemas/BoxDescriptor"
                       },
                       "type": "array"
+                    },
+                    "next-token": {
+                      "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.",
+                      "type": "string"
+                    },
+                    "round": {
+                      "description": "The round at which the box data was retrieved.",
+                      "type": "integer",
+                      "x-go-type": "uint64"
                     }
                   },
                   "required": [

@@ -589,6 +589,117 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 	}
 }
 
+// LookupKvPairsByPrefix returns a page of key-value pairs matching the prefix,
+// starting after cursor. It merges in-memory deltas with database results to
+// provide current data. The limit is best-effort.
+func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, includeValues bool) (results []ledgercore.KvPairResult, retRound basics.Round, err error) {
+	needUnlock := true
+	au.accountsMu.RLock()
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
+
+	for {
+		currentDBRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, rndErr := au.roundOffset(round)
+		if rndErr != nil {
+			return nil, 0, rndErr
+		}
+
+		// Walk deltas backwards to collect modifications.
+		// deltaResults tracks the state of each key: nil value means deleted, non-nil means added/updated.
+		type deltaEntry struct {
+			deleted bool
+			value   []byte
+		}
+		deltaResults := make(map[string]deltaEntry)
+		for i := offset; i > 0; {
+			i--
+			for keyInRound, mv := range au.deltas[i].KvMods {
+				if !strings.HasPrefix(keyInRound, keyPrefix) {
+					continue
+				}
+				if keyInRound <= cursor {
+					continue
+				}
+				if _, ok := deltaResults[keyInRound]; ok {
+					continue // later round takes priority
+				}
+				if mv.Data == nil {
+					deltaResults[keyInRound] = deltaEntry{deleted: true}
+				} else {
+					deltaResults[keyInRound] = deltaEntry{deleted: false, value: mv.Data}
+				}
+			}
+		}
+
+		retRound = currentDBRound + basics.Round(currentDeltaLen)
+
+		// Release lock before DB query.
+		au.accountsMu.RUnlock()
+		needUnlock = false
+
+		// Build exclude set for DB: all keys handled by deltas.
+		exclude := make(map[string]bool, len(deltaResults))
+		for k := range deltaResults {
+			exclude[k] = true
+		}
+
+		// Over-request from DB to account for excluded keys.
+		dbLimit := limit
+		if dbLimit > 0 {
+			dbLimit += uint64(len(deltaResults))
+		}
+
+		dbRound, dbResults, dbErr := au.accountsq.LookupKeysByPrefixCursor(keyPrefix, cursor, dbLimit, includeValues, exclude)
+		if dbErr != nil {
+			return nil, 0, dbErr
+		}
+
+		if dbRound == currentDBRound {
+			// Merge DB results with non-deleted delta results.
+			for key, entry := range deltaResults {
+				if entry.deleted {
+					continue
+				}
+				var val []byte
+				if includeValues {
+					val = entry.value
+				}
+				dbResults = append(dbResults, ledgercore.KvPairResult{Key: key, Value: val})
+			}
+
+			// Sort by key.
+			sort.Slice(dbResults, func(i, j int) bool {
+				return dbResults[i].Key < dbResults[j].Key
+			})
+
+			// Trim to limit.
+			if limit > 0 && uint64(len(dbResults)) > limit {
+				dbResults = dbResults[:limit]
+			}
+
+			results = dbResults
+			return
+		}
+
+		// DB round mismatch — retry.
+		if dbRound < currentDBRound {
+			au.log.Errorf("accountUpdates.LookupKvPairsByPrefix: database round %d is behind in-memory round %d", dbRound, currentDBRound)
+			err = &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
+			return
+		}
+		au.accountsMu.RLock()
+		needUnlock = true
+		for currentDBRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
+		}
+	}
+}
+
 // LookupWithoutRewards returns the account data for a given address at a given round.
 func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, err error) {
 	data, validThrough, _, _, err = au.lookupWithoutRewards(rnd, addr, true /* take lock*/)

@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -25,6 +26,10 @@ import (
 
 var boxName string
 var maxBoxes uint64
+var boxLimit uint64
+var boxNext string
+var boxPrefix string
+var boxValues bool
 
 func init() {
 	appCmd.AddCommand(appBoxCmd)
@@ -38,6 +43,10 @@ func init() {
 	appBoxInfoCmd.MarkFlagRequired("name")
 
 	appBoxListCmd.Flags().Uint64VarP(&maxBoxes, "max", "m", 0, "Maximum number of boxes to list. 0 means no limit.")
+	appBoxListCmd.Flags().Uint64VarP(&boxLimit, "limit", "l", 0, "Maximum number of boxes per page. Enables paginated output.")
+	appBoxListCmd.Flags().StringVar(&boxNext, "next", "", "Pagination cursor from a previous response's next-token.")
+	appBoxListCmd.Flags().StringVar(&boxPrefix, "prefix", "", "Filter by box name prefix, in the same form as app-arg.")
+	appBoxListCmd.Flags().BoolVar(&boxValues, "values", false, "If set, include box values in the output.")
 }
 
 var appBoxCmd = &cobra.Command{
@@ -92,12 +101,43 @@ var appBoxListCmd = &cobra.Command{
 	Short: "List all application boxes belonging to an application",
 	Long: "List all application boxes belonging to an application.\n" +
 		"For printable strings, the box name is formatted as 'str:hello'\n" +
-		"For everything else, the box name is formatted as 'b64:A=='. ",
+		"For everything else, the box name is formatted as 'b64:A=='. \n\n" +
+		"Use --limit to enable paginated output. When paginating, --next can be\n" +
+		"used to provide the cursor from a previous response's next-token.\n" +
+		"Use --prefix to filter boxes by name prefix.\n" +
+		"Use --values to include box values in the output.",
 	Args: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, client := getDataDirAndClient()
 
-		// Get app boxes
+		// When limit is set, use paginated mode.
+		if boxLimit > 0 || boxNext != "" || boxPrefix != "" || boxValues {
+			next := boxNext
+			for {
+				boxesRes, err := client.ApplicationBoxesPage(appIdx, boxLimit, next, boxPrefix, boxValues)
+				if err != nil {
+					reportErrorf(errorRequestFail, err)
+				}
+
+				for _, descriptor := range boxesRes.Boxes {
+					encodedName := encodeBytesAsAppCallBytes(descriptor.Name)
+					if boxValues && descriptor.Value != nil {
+						encodedValue := encodeBytesAsAppCallBytes(*descriptor.Value)
+						fmt.Printf("%s -> %s\n", encodedName, encodedValue)
+					} else {
+						reportInfof("%s", encodedName)
+					}
+				}
+
+				if boxesRes.NextToken == nil || *boxesRes.NextToken == "" {
+					break
+				}
+				next = *boxesRes.NextToken
+			}
+			return
+		}
+
+		// Legacy unpaginated mode.
 		boxesRes, err := client.ApplicationBoxes(appIdx, maxBoxes)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)

@@ -475,12 +475,27 @@ func (client RestClient) ApplicationInformation(index basics.AppIndex) (response
 }
 
 type applicationBoxesParams struct {
-	Max uint64 `url:"max,omitempty"`
+	Max    uint64 `url:"max,omitempty"`
+	Limit  uint64 `url:"limit,omitempty"`
+	Next   string `url:"next,omitempty"`
+	Prefix string `url:"prefix,omitempty"`
+	Values bool   `url:"values,omitempty"`
 }
 
 // ApplicationBoxes gets the BoxesResponse associated with the passed application ID
 func (client RestClient) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (response model.BoxesResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{maxBoxNum})
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{Max: maxBoxNum})
+	return
+}
+
+// ApplicationBoxesPage gets a page of boxes for the given application ID with pagination.
+func (client RestClient) ApplicationBoxesPage(appID basics.AppIndex, limit uint64, next string, prefix string, values bool) (response model.BoxesResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{
+		Limit:  limit,
+		Next:   next,
+		Prefix: prefix,
+		Values: values,
+	})
 	return
 }
 
