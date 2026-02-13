@@ -3675,3 +3675,380 @@ func TestOnlineAccountsSuspended(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, updated, 0)
 }
+
+// TestLookupAssetResourcesWithDeltas verifies that lookupAssetResources properly merges
+// in-memory deltas with database results to return current-round data.
+// It commits resources to DB, then adds uncommitted delta modifications across two rounds,
+// and checks the merged view covers: new creations, holding deletions, holding modifications,
+// params-only modifications, params deletions with holding retained, and multi-round
+// backwards walking that picks the most recent delta.
+func TestLookupAssetResourcesWithDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
+
+	accts := setupAccts(5)
+
+	var testAddr basics.Address
+	for addr := range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			testAddr = addr
+			break
+		}
+	}
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	// Round 1: create assets 1000-1004 with params and holdings
+	//   1000: will have holding modified, then overridden in a second delta round
+	//   1001: will be deleted in delta
+	//   1002: will remain unchanged
+	//   1003: will have params-only modification in delta
+	//   1004: will have params deleted in delta (holding remains)
+	{
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(testAddr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos:       basics.MicroAlgos{Raw: 1_000_000},
+				TotalAssetParams: 5,
+				TotalAssets:      5,
+			},
+		})
+		for assetIdx := uint64(1000); assetIdx <= 1004; assetIdx++ {
+			updates.UpsertAssetResource(testAddr, basics.AssetIndex(assetIdx),
+				ledgercore.AssetParamsDelta{
+					Params: &basics.AssetParams{
+						Total:     assetIdx * 1000,
+						UnitName:  fmt.Sprintf("A%d", assetIdx),
+						AssetName: fmt.Sprintf("Asset%d", assetIdx),
+					},
+				},
+				ledgercore.AssetHoldingDelta{
+					Holding: &basics.AssetHolding{Amount: assetIdx * 100},
+				})
+		}
+
+		base := accts[0]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, 1, au, base, opts, nil)
+		auCommitSync(t, 1, au, ml)
+
+		for assetIdx := uint64(1000); assetIdx <= 1004; assetIdx++ {
+			knownCreatables[basics.CreatableIndex(assetIdx)] = true
+		}
+	}
+
+	// Add empty rounds so round 1 data flushes past MaxAcctLookback into DB
+	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
+		var updates ledgercore.AccountDeltas
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts, nil)
+		auCommitSync(t, i, au, ml)
+	}
+
+	// Delta round 1 (uncommitted)
+	deltaRound1 := basics.Round(conf.MaxAcctLookback + 3)
+	{
+		var updates ledgercore.AccountDeltas
+		// 1005: new creation (not in DB)
+		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1005),
+			ledgercore.AssetParamsDelta{
+				Params: &basics.AssetParams{Total: 5000, UnitName: "A1005"},
+			},
+			ledgercore.AssetHoldingDelta{
+				Holding: &basics.AssetHolding{Amount: 5000},
+			})
+		// 1001: delete holding
+		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1001),
+			ledgercore.AssetParamsDelta{},
+			ledgercore.AssetHoldingDelta{Deleted: true})
+		// 1000: modify holding (will be overridden by delta round 2)
+		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1000),
+			ledgercore.AssetParamsDelta{},
+			ledgercore.AssetHoldingDelta{
+				Holding: &basics.AssetHolding{Amount: 9999},
+			})
+		// 1003: modify params only (holding unchanged)
+		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1003),
+			ledgercore.AssetParamsDelta{
+				Params: &basics.AssetParams{Total: 7777, UnitName: "A1003new"},
+			},
+			ledgercore.AssetHoldingDelta{})
+		// 1004: delete params (holding remains)
+		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1004),
+			ledgercore.AssetParamsDelta{Deleted: true},
+			ledgercore.AssetHoldingDelta{})
+
+		base := accts[deltaRound1-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, deltaRound1, au, base, opts, nil)
+	}
+
+	// Delta round 2 (uncommitted): override 1000's holding from round 1
+	deltaRound2 := deltaRound1 + 1
+	{
+		var updates ledgercore.AccountDeltas
+		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1000),
+			ledgercore.AssetParamsDelta{},
+			ledgercore.AssetHoldingDelta{
+				Holding: &basics.AssetHolding{Amount: 5555},
+			})
+
+		base := accts[deltaRound1-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, deltaRound2, au, base, opts, nil)
+	}
+
+	resources, rnd, err := au.LookupAssetResources(testAddr, 0, 100)
+	require.NoError(t, err)
+	require.Equal(t, deltaRound2, rnd)
+
+	// Expected: 1000, 1002, 1003, 1004, 1005. (1001 deleted)
+	require.Len(t, resources, 5)
+
+	assetMap := make(map[basics.AssetIndex]ledgercore.AssetResourceWithIDs)
+	for _, res := range resources {
+		assetMap[res.AssetID] = res
+	}
+
+	// 1000: holding from delta round 2 (most recent), params preserved from DB
+	require.Equal(t, uint64(5555), assetMap[basics.AssetIndex(1000)].AssetHolding.Amount)
+	require.NotNil(t, assetMap[basics.AssetIndex(1000)].AssetParams)
+	require.Equal(t, uint64(1_000_000), assetMap[basics.AssetIndex(1000)].AssetParams.Total)
+
+	// 1001: deleted
+	require.NotContains(t, assetMap, basics.AssetIndex(1001))
+
+	// 1002: unchanged from DB
+	require.Equal(t, uint64(1002*100), assetMap[basics.AssetIndex(1002)].AssetHolding.Amount)
+	require.NotNil(t, assetMap[basics.AssetIndex(1002)].AssetParams)
+	require.Equal(t, uint64(1_002_000), assetMap[basics.AssetIndex(1002)].AssetParams.Total)
+
+	// 1003: params updated in delta, holding preserved from DB
+	require.Equal(t, uint64(1003*100), assetMap[basics.AssetIndex(1003)].AssetHolding.Amount)
+	require.NotNil(t, assetMap[basics.AssetIndex(1003)].AssetParams)
+	require.Equal(t, uint64(7777), assetMap[basics.AssetIndex(1003)].AssetParams.Total)
+	require.Equal(t, "A1003new", assetMap[basics.AssetIndex(1003)].AssetParams.UnitName)
+
+	// 1004: params deleted in delta, holding preserved from DB, no creator
+	require.Equal(t, uint64(1004*100), assetMap[basics.AssetIndex(1004)].AssetHolding.Amount)
+	require.Nil(t, assetMap[basics.AssetIndex(1004)].AssetParams)
+	require.True(t, assetMap[basics.AssetIndex(1004)].Creator.IsZero())
+
+	// 1005: new creation from delta
+	require.Equal(t, uint64(5000), assetMap[basics.AssetIndex(1005)].AssetHolding.Amount)
+	require.NotNil(t, assetMap[basics.AssetIndex(1005)].AssetParams)
+	require.Equal(t, uint64(5000), assetMap[basics.AssetIndex(1005)].AssetParams.Total)
+}
+
+// TestLookupApplicationResourcesWithDeltas verifies that lookupApplicationResources properly
+// merges in-memory deltas with database results to return current-round data.
+// It covers: new creation, local state deletion, local state modification, params-only
+// modification, params deletion with local state retained, multi-round backwards walking,
+// and the includeParams flag.
+func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
+
+	accts := setupAccts(5)
+
+	var testAddr basics.Address
+	for addr := range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			testAddr = addr
+			break
+		}
+	}
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	// Round 1: create apps 2000-2004 with params and local state
+	//   2000: will have local state modified, then overridden in a second delta round
+	//   2001: will be deleted in delta
+	//   2002: will remain unchanged
+	//   2003: will have params-only modification in delta
+	//   2004: will have params deleted in delta (local state remains)
+	{
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(testAddr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
+				TotalAppParams:      5,
+				TotalAppLocalStates: 5,
+			},
+		})
+		for appIdx := uint64(2000); appIdx <= 2004; appIdx++ {
+			updates.UpsertAppResource(testAddr, basics.AppIndex(appIdx),
+				ledgercore.AppParamsDelta{
+					Params: &basics.AppParams{
+						ApprovalProgram: []byte{0x06, 0x81, 0x01},
+						GlobalState:     basics.TealKeyValue{},
+					},
+				},
+				ledgercore.AppLocalStateDelta{
+					LocalState: &basics.AppLocalState{
+						Schema: basics.StateSchema{NumUint: appIdx - 2000},
+					},
+				})
+		}
+
+		base := accts[0]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, 1, au, base, opts, nil)
+		auCommitSync(t, 1, au, ml)
+
+		for appIdx := uint64(2000); appIdx <= 2004; appIdx++ {
+			knownCreatables[basics.CreatableIndex(appIdx)] = true
+		}
+	}
+
+	// Add empty rounds so round 1 data flushes past MaxAcctLookback into DB
+	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
+		var updates ledgercore.AccountDeltas
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts, nil)
+		auCommitSync(t, i, au, ml)
+	}
+
+	// Delta round 1 (uncommitted)
+	deltaRound1 := basics.Round(conf.MaxAcctLookback + 3)
+	{
+		var updates ledgercore.AccountDeltas
+		// 2005: new creation (not in DB)
+		updates.UpsertAppResource(testAddr, basics.AppIndex(2005),
+			ledgercore.AppParamsDelta{
+				Params: &basics.AppParams{ApprovalProgram: []byte{0x06, 0x81, 0x01}},
+			},
+			ledgercore.AppLocalStateDelta{
+				LocalState: &basics.AppLocalState{
+					Schema: basics.StateSchema{NumUint: 50},
+				},
+			})
+		// 2001: delete local state
+		updates.UpsertAppResource(testAddr, basics.AppIndex(2001),
+			ledgercore.AppParamsDelta{},
+			ledgercore.AppLocalStateDelta{Deleted: true})
+		// 2000: modify local state (will be overridden by delta round 2)
+		updates.UpsertAppResource(testAddr, basics.AppIndex(2000),
+			ledgercore.AppParamsDelta{},
+			ledgercore.AppLocalStateDelta{
+				LocalState: &basics.AppLocalState{
+					Schema: basics.StateSchema{NumUint: 99},
+				},
+			})
+		// 2003: modify params only (local state unchanged)
+		updates.UpsertAppResource(testAddr, basics.AppIndex(2003),
+			ledgercore.AppParamsDelta{
+				Params: &basics.AppParams{
+					ApprovalProgram:   []byte{0x06, 0x81, 0x02},
+					ClearStateProgram: []byte{0x06, 0x81, 0x01},
+				},
+			},
+			ledgercore.AppLocalStateDelta{})
+		// 2004: delete params (local state remains)
+		updates.UpsertAppResource(testAddr, basics.AppIndex(2004),
+			ledgercore.AppParamsDelta{Deleted: true},
+			ledgercore.AppLocalStateDelta{})
+
+		base := accts[deltaRound1-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, deltaRound1, au, base, opts, nil)
+	}
+
+	// Delta round 2 (uncommitted): override 2000's local state from round 1
+	deltaRound2 := deltaRound1 + 1
+	{
+		var updates ledgercore.AccountDeltas
+		updates.UpsertAppResource(testAddr, basics.AppIndex(2000),
+			ledgercore.AppParamsDelta{},
+			ledgercore.AppLocalStateDelta{
+				LocalState: &basics.AppLocalState{
+					Schema: basics.StateSchema{NumUint: 42},
+				},
+			})
+
+		base := accts[deltaRound1-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, deltaRound2, au, base, opts, nil)
+	}
+
+	// includeParams=true
+	resources, rnd, err := au.LookupApplicationResources(testAddr, 0, 100, true)
+	require.NoError(t, err)
+	require.Equal(t, deltaRound2, rnd)
+
+	// Expected: 2000, 2002, 2003, 2004, 2005. (2001 deleted)
+	require.Len(t, resources, 5)
+
+	appMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs)
+	for _, res := range resources {
+		appMap[res.AppID] = res
+	}
+
+	// 2000: local state from delta round 2 (most recent), params preserved from DB
+	require.Equal(t, uint64(42), appMap[basics.AppIndex(2000)].AppLocalState.Schema.NumUint)
+	require.NotNil(t, appMap[basics.AppIndex(2000)].AppParams)
+	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2000)].AppParams.ApprovalProgram)
+
+	// 2001: deleted
+	require.NotContains(t, appMap, basics.AppIndex(2001))
+
+	// 2002: unchanged from DB
+	require.Equal(t, uint64(2), appMap[basics.AppIndex(2002)].AppLocalState.Schema.NumUint)
+	require.NotNil(t, appMap[basics.AppIndex(2002)].AppParams)
+
+	// 2003: params updated in delta, local state preserved from DB
+	require.Equal(t, uint64(3), appMap[basics.AppIndex(2003)].AppLocalState.Schema.NumUint)
+	require.NotNil(t, appMap[basics.AppIndex(2003)].AppParams)
+	require.Equal(t, []byte{0x06, 0x81, 0x02}, appMap[basics.AppIndex(2003)].AppParams.ApprovalProgram)
+	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2003)].AppParams.ClearStateProgram)
+
+	// 2004: params deleted in delta, local state preserved from DB, no creator
+	require.Equal(t, uint64(4), appMap[basics.AppIndex(2004)].AppLocalState.Schema.NumUint)
+	require.Nil(t, appMap[basics.AppIndex(2004)].AppParams)
+	require.True(t, appMap[basics.AppIndex(2004)].Creator.IsZero())
+
+	// 2005: new creation from delta
+	require.Equal(t, uint64(50), appMap[basics.AppIndex(2005)].AppLocalState.Schema.NumUint)
+	require.NotNil(t, appMap[basics.AppIndex(2005)].AppParams)
+
+	// includeParams=false should omit AppParams from all results
+	resourcesNoParams, _, err := au.LookupApplicationResources(testAddr, 0, 100, false)
+	require.NoError(t, err)
+	require.Len(t, resourcesNoParams, 5)
+
+	for _, res := range resourcesNoParams {
+		require.Nil(t, res.AppParams, "AppParams should be nil when includeParams=false")
+	}
+}
