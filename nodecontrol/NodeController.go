@@ -17,6 +17,9 @@
 package nodecontrol
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -111,7 +114,7 @@ func (nc NodeController) stopProcesses() (kmdAlreadyStopped bool, err error) {
 	return
 }
 
-func killPID(pid int) (killed bool, err error) {
+func killPID(pid int, beforeKill func()) (killed bool, err error) {
 	process, err := util.FindProcess(pid)
 	if process == nil || err != nil {
 		return false, err
@@ -130,8 +133,38 @@ func killPID(pid int) (killed bool, err error) {
 		}
 		select {
 		case <-waitLong:
+			if beforeKill != nil {
+				beforeKill()
+			}
 			return true, util.KillProcess(pid, syscall.SIGKILL)
 		case <-time.After(time.Millisecond * 100):
 		}
 	}
+}
+
+// collectGoroutineStacks fetches goroutine stacks from the node's pprof endpoint
+// and saves them to a file in the data directory.
+func (nc *NodeController) collectGoroutineStacks() {
+	algodClient, err := nc.AlgodClient()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create algod client for goroutine dump: %v\n", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	goRoutines, err := algodClient.GetGoRoutines(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to fetch goroutine stacks: %v\n", err)
+		return
+	}
+
+	dumpFile := filepath.Join(nc.algodDataDir, fmt.Sprintf("goroutine-dump-%s.txt", time.Now().Format("20060102-150405")))
+	err = os.WriteFile(dumpFile, []byte(goRoutines), 0600)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write goroutine dump to %s: %v\n", dumpFile, err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "goroutine dump saved to %s\n", dumpFile)
 }
