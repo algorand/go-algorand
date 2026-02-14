@@ -91,9 +91,18 @@ func (w *whiteholeNetwork) RegisterHandlers(dispatch []network.TaggedMessageHand
 	w.mux.RegisterHandlers(dispatch)
 }
 
+func (w *whiteholeNetwork) RegisterValidatorHandlers(dispatch []network.TaggedMessageValidatorHandler) {
+	w.mux.RegisterValidatorHandlers(dispatch)
+}
+
 // ClearHandlers deregisters all the existing message handlers.
 func (w *whiteholeNetwork) ClearHandlers() {
 	w.mux.ClearHandlers([]network.Tag{})
+}
+
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (w *whiteholeNetwork) ClearValidatorHandlers() {
+	w.mux.ClearValidatorHandlers([]network.Tag{})
 }
 
 func (w *whiteholeNetwork) Address() (string, bool) {
@@ -326,12 +335,12 @@ func makewhiteholeNetwork(domain *whiteholeDomain) *whiteholeNetwork {
 	return w
 }
 
-func spinNetworkImpl(domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, counter *messageCounter) {
+func spinNetworkImpl(t *testing.T, domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, counter *messageCounter) {
 	whiteholeNet = makewhiteholeNetwork(domain)
 	netImpl := WrapNetwork(whiteholeNet, logging.Base(), config.GetDefaultLocal()).(*networkImpl)
 	counter = startMessageCounter(netImpl)
 	whiteholeNet.Start()
-	netImpl.Start()
+	netImpl.Start(t.Context())
 	return
 }
 
@@ -347,9 +356,9 @@ func TestNetworkImpl(t *testing.T) {
 	}
 	domain.messagesCond = sync.NewCond(&domain.messagesMu)
 
-	net1, counter1 := spinNetworkImpl(domain)
-	net2, counter2 := spinNetworkImpl(domain)
-	net3, counter3 := spinNetworkImpl(domain)
+	net1, counter1 := spinNetworkImpl(t, domain)
+	net2, counter2 := spinNetworkImpl(t, domain)
+	net3, counter3 := spinNetworkImpl(t, domain)
 	defer counter1.stop()
 	defer counter2.stop()
 	defer counter3.stop()
