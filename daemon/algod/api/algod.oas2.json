@@ -4795,7 +4795,7 @@
       "schema": {
         "description": "Supply represents the current supply of MicroAlgos in the system",
         "type": "object",
-        "required": ["online-money", "current_round", "total-money"],
+        "required": ["online-money", "current_round", "total-money", "online-stake"],
         "properties": {
           "current_round": {
             "description": "Round",
@@ -4803,7 +4803,12 @@
             "x-go-type": "basics.Round"
           },
           "online-money": {
-            "description": "OnlineMoney",
+            "description": "Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          },
+          "online-stake": {
+            "description": "Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.",
             "type": "integer",
             "x-go-type": "uint64"
           },
