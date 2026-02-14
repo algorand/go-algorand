@@ -282,7 +282,7 @@
     "/v2/accounts/{address}/assets": {
       "get": {
         "description": "Lookup an account's asset holdings.",
-        "tags": ["public", "experimental"],
+        "tags": ["public", "nonparticipating"],
         "produces": ["application/json"],
         "schemes": ["http"],
         "summary": "Get a list of assets held by an account, inclusive of asset params.",
@@ -329,7 +329,7 @@
     "/v2/accounts/{address}/applications": {
       "get": {
         "description": "Lookup an account's application holdings (local state and params if the account is the creator).",
-        "tags": ["public", "experimental"],
+        "tags": ["public", "nonparticipating"],
         "produces": ["application/json"],
         "schemes": ["http"],
         "summary": "Get a list of applications held by an account.",
