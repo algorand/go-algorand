@@ -2795,7 +2795,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	}
 
 	t.Run("BasicMerge", func(t *testing.T) {
-		results, rnd, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, true)
+		results, rnd, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, true)
 		require.NoError(t, err)
 		require.Equal(t, latestRound, rnd)
 		require.Len(t, results, 5) // A, B(updated), D, E, F — C deleted
@@ -2808,7 +2808,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	})
 
 	t.Run("DeltaNewKeyMergedIn", func(t *testing.T) {
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, true)
 		require.NoError(t, err)
 		f := findKey(results, "pfx-F")
 		require.NotNil(t, f)
@@ -2816,13 +2816,13 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	})
 
 	t.Run("DeltaDeleteRemovesDbKey", func(t *testing.T) {
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, true)
 		require.NoError(t, err)
 		require.Nil(t, findKey(results, "pfx-C"))
 	})
 
 	t.Run("DeltaUpdateOverridesDbValue", func(t *testing.T) {
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, true)
 		require.NoError(t, err)
 		b := findKey(results, "pfx-B")
 		require.NotNil(t, b)
@@ -2830,7 +2830,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	})
 
 	t.Run("WithCursor", func(t *testing.T) {
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-B", 0, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-B", 0, 0, true)
 		require.NoError(t, err)
 		// Should skip A and B; C deleted; D, E, F remain
 		require.Len(t, results, 3)
@@ -2840,7 +2840,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	})
 
 	t.Run("WithLimit", func(t *testing.T) {
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 2, false)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 2, 0, false)
 		require.NoError(t, err)
 		require.Len(t, results, 2)
 		require.Equal(t, "pfx-A", results[0].Key)
@@ -2850,7 +2850,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	t.Run("CutoffSkipsDeltaBeyondPage", func(t *testing.T) {
 		// limit=3: DB returns A, B, D (C excluded via delta). Cutoff="pfx-D".
 		// Delta key F > cutoff, so F should be trimmed.
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 3, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 3, 0, true)
 		require.NoError(t, err)
 		require.Len(t, results, 3)
 		require.Equal(t, "pfx-A", results[0].Key)
@@ -2867,7 +2867,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 		// (full page). cutoff="pfx-E".
 		// pfx-B <= cutoff → merged in. pfx-F > cutoff → excluded.
 		// [pfx-D, pfx-E, pfx-B] → sorted [pfx-B, pfx-D, pfx-E] → trimmed to 2.
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-A", 2, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-A", 2, 0, true)
 		require.NoError(t, err)
 		require.Len(t, results, 2)
 		require.Equal(t, "pfx-B", results[0].Key)
@@ -2879,7 +2879,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	t.Run("PartialPageNoCutoffIncludesDelta", func(t *testing.T) {
 		// Same cursor but limit=4: DB returns [pfx-D, pfx-E] (2 < 4,
 		// partial page). No cutoff → delta key pfx-F is also merged in.
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-A", 4, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-A", 4, 0, true)
 		require.NoError(t, err)
 		require.Len(t, results, 4)
 		require.Equal(t, "pfx-B", results[0].Key)
@@ -2891,7 +2891,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	})
 
 	t.Run("IncludeValuesFalse", func(t *testing.T) {
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, false)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, false)
 		require.NoError(t, err)
 		require.Len(t, results, 5)
 		for _, r := range results {
@@ -2900,7 +2900,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 	})
 
 	t.Run("PrefixFiltering", func(t *testing.T) {
-		results, _, err := au.LookupKvPairsByPrefix(latestRound, "other-", "", 0, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "other-", "", 0, 0, true)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 		require.Equal(t, "other-X", results[0].Key)
@@ -2916,7 +2916,7 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 		rnd3 := au.latest()
 		require.Equal(t, basics.Round(3), rnd3)
 
-		results, _, err := au.LookupKvPairsByPrefix(rnd3, "pfx-", "", 0, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(rnd3, "pfx-", "", 0, 0, true)
 		require.NoError(t, err)
 		d := findKey(results, "pfx-D")
 		require.NotNil(t, d)
@@ -2925,13 +2925,13 @@ func TestLookupKvPairsByPrefix(t *testing.T) {
 
 	t.Run("EmptyResults", func(t *testing.T) {
 		rnd := au.latest()
-		results, _, err := au.LookupKvPairsByPrefix(rnd, "nonexistent-", "", 0, true)
+		results, _, _, err := au.LookupKvPairsByPrefix(rnd, "nonexistent-", "", 0, 0, true)
 		require.NoError(t, err)
 		require.Len(t, results, 0)
 	})
 
 	t.Run("InvalidRound", func(t *testing.T) {
-		_, _, err := au.LookupKvPairsByPrefix(basics.Round(999), "pfx-", "", 0, true)
+		_, _, _, err := au.LookupKvPairsByPrefix(basics.Round(999), "pfx-", "", 0, 0, true)
 		require.Error(t, err)
 	})
 }

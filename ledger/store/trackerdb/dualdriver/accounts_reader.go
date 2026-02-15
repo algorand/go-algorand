@@ -162,19 +162,19 @@ func (ar *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, re
 }
 
 // LookupKeysByPrefixCursor implements trackerdb.AccountsReader
-func (ar *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, error) {
-	roundP, resultsP, errP := ar.primary.LookupKeysByPrefixCursor(prefix, cursor, limit, includeValues, exclude)
-	roundS, _, errS := ar.secondary.LookupKeysByPrefixCursor(prefix, cursor, limit, includeValues, exclude)
+func (ar *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, bool, error) {
+	roundP, resultsP, moreP, errP := ar.primary.LookupKeysByPrefixCursor(prefix, cursor, limit, maxBytes, includeValues, exclude)
+	roundS, _, _, errS := ar.secondary.LookupKeysByPrefixCursor(prefix, cursor, limit, maxBytes, includeValues, exclude)
 	// coalesce errors
 	if err := coalesceErrors(errP, errS); err != nil {
-		return 0, nil, err
+		return 0, nil, false, err
 	}
 	// check results match
 	if roundP != roundS {
-		return 0, nil, ErrInconsistentResult
+		return 0, nil, false, ErrInconsistentResult
 	}
 	// return primary results
-	return roundP, resultsP, nil
+	return roundP, resultsP, moreP, nil
 }
 
 // LookupResources implements trackerdb.AccountsReader

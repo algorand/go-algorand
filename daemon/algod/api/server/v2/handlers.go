@@ -94,6 +94,11 @@ const MaxApplicationResultsWithoutParams = MaxApplicationResults * 100
 // /v2/accounts/{address}/applications endpoint
 const DefaultApplicationResults = uint64(1000)
 
+// MaxBoxFetchBytes is the hard cap on total bytes fetched by paginated box
+// listing responses. The server enforces this limit internally on every
+// paginated request.  Actual response bytes will be larger due to base64/json overhead.
+const MaxBoxFetchBytes = 1_000_000
+
 const (
 	errInvalidLimit      = "limit parameter must be a positive integer"
 	errUnableToParseNext = "unable to parse next token"
@@ -118,7 +123,7 @@ type LedgerForAPI interface {
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) ([]byte, error)
 	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
-	LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, error)
+	LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -1906,6 +1911,12 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 		return v2.getApplicationBoxesLegacy(ctx, ledger, lastRound, applicationID, keyPrefix, params)
 	}
 
+	// Cap limit to the server's MaxAPIBoxPerApplication configuration.
+	algodMax := v2.Node.Config().MaxAPIBoxPerApplication
+	if algodMax > 0 && (limit == 0 || limit > algodMax) {
+		limit = algodMax
+	}
+
 	// Parse cursor from next token.
 	var cursor string
 	if params.Next != nil && *params.Next != "" {
@@ -1934,26 +1945,17 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 		fullKeyPrefix = apps.MakeBoxKey(uint64(applicationID), string(prefixRaw))
 	}
 
-	// Use N+1 pattern: request one extra to detect if there are more pages.
-	// When limit=0, fetch all results (no pagination).
-	fetchLimit := uint64(0)
-	if limit > 0 {
-		fetchLimit = limit + 1
-	}
-
-	results, rnd, err := ledger.LookupKvPairsByPrefix(lastRound, fullKeyPrefix, cursor, fetchLimit, includeValues)
+	results, rnd, moreData, err := ledger.LookupKvPairsByPrefix(lastRound, fullKeyPrefix, cursor, limit, MaxBoxFetchBytes, includeValues)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
 	prefixLen := len(keyPrefix)
 
-	// Determine if there are more pages.
+	// Set next-token when more data exists.
 	var nextToken *string
-	if limit > 0 && uint64(len(results)) > limit {
-		results = results[:limit]
-		// The next token is the last returned box name, encoded in app call arg form.
-		lastBoxName := []byte(results[limit-1].Key[prefixLen:])
+	if moreData && len(results) > 0 {
+		lastBoxName := []byte(results[len(results)-1].Key[prefixLen:])
 		token := encodeBoxNameAsAppCallBytes(lastBoxName)
 		nextToken = &token
 	}

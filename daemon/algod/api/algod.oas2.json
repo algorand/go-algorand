@@ -1818,7 +1818,7 @@
           {
             "type": "integer",
             "x-go-type": "uint64",
-            "description": "Maximum number of boxes to return per page. When set, enables paginated responses with sorted results and round information.",
+            "description": "Maximum number of boxes to return per page. When set, enables paginated responses with sorted results and round information. At algod's discretion, clients may receive fewer than limit results; the presence of next-token is the only reliable signal that more results exist.",
             "name": "limit",
             "in": "query"
           },

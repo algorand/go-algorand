@@ -46,7 +46,19 @@ import (
 // is not covered by the busy timeout.  We rely on sqlite_unlock_notify()
 // to wait for the shared cache lock to be released.  This is enabled in
 // go-sqlite3 with the "sqlite_unlock_notify" Go build tag.
-const busy = 1000
+//
+// Set to 5000ms to reduce flaky "database table is locked" errors caused by
+// lock contention between concurrent readers (e.g., block evaluation querying
+// acctrounds) and the background tracker commit writer (updating acctrounds).
+// This is especially relevant for in-memory shared-cache databases used in
+// tests, where the tight timing of operations like rapid block generation can
+// exhaust retry limits under the previous 1s timeout. The SQLite documentation
+// (https://www.sqlite.org/c3ref/busy_timeout.html) notes that the busy handler
+// is advisory and recommends applications set a timeout that is "at least a few
+// seconds" to accommodate transient lock contention in multi-connection setups.
+// In production, algod is typically the sole writer to its database files, so
+// this timeout rarely triggers, but the higher value provides a safer margin.
+const busy = 5000
 
 // enableFullfsyncStatements is a list of statements we execute to enable a fullfsync.
 // Currently, it's only supported by MacOSX.

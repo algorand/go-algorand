@@ -93,7 +93,7 @@ func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, ma
 	panic("not implemented")
 }
 
-func (l *mockLedger) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, error) {
+func (l *mockLedger) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error) {
 	var results []ledgercore.KvPairResult
 	var keys []string
 	for k := range l.kvstore {
@@ -102,17 +102,24 @@ func (l *mockLedger) LookupKvPairsByPrefix(round basics.Round, keyPrefix string,
 		}
 	}
 	slices.Sort(keys)
+	var bytesAccum uint64
 	for _, k := range keys {
 		if limit > 0 && uint64(len(results)) >= limit {
-			break
+			return results, l.latest, true, nil
 		}
 		var val []byte
 		if includeValues {
 			val = l.kvstore[k]
 		}
-		results = append(results, ledgercore.KvPairResult{Key: k, Value: val})
+		kv := ledgercore.KvPairResult{Key: k, Value: val}
+		itemBytes := kv.ByteSize()
+		if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && len(results) > 0 {
+			return results, l.latest, true, nil
+		}
+		bytesAccum += itemBytes
+		results = append(results, kv)
 	}
-	return results, l.latest, nil
+	return results, l.latest, false, nil
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
@@ -891,6 +898,27 @@ func setupBoxTestHandlers(t *testing.T, appID basics.AppIndex, boxNames []string
 	}
 }
 
+func setupLargeBoxTestHandlers(t *testing.T, appID basics.AppIndex, boxes map[string][]byte) v2.Handlers {
+	t.Helper()
+	ml := mockLedger{
+		accounts: make(map[basics.Address]basics.AccountData),
+		kvstore:  make(map[string][]byte),
+		latest:   basics.Round(10),
+	}
+	for name, value := range boxes {
+		key := apps.MakeBoxKey(uint64(appID), name)
+		ml.kvstore[key] = value
+	}
+	mockNode := makeMockNode(&ml, t.Name(), nil, cannedStatusReportGolden, false)
+	mockNode.config.MaxAPIBoxPerApplication = 0 // unlimited
+	dummyShutdownChan := make(chan struct{})
+	return v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+}
+
 func TestGetApplicationBoxesPagination(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1148,5 +1176,124 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		err = json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.Len(t, resp.Boxes, 2)
+	})
+
+	t.Run("MoreDataTrueWhenOneRemains", func(t *testing.T) {
+		// Regression: limit=4 with 5 boxes. Exactly one box remains after the page.
+		// moreData must be true so the client knows to paginate.
+		ctx, rec := newReq(t)
+		limit := uint64(4)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 4)
+		assert.NotNil(t, resp.NextToken, "exactly one box remains; next-token must be set")
+	})
+
+	t.Run("MoreDataTrueWhenOneRemainsWithCursor", func(t *testing.T) {
+		// Cursor past "c" leaves d, e. limit=1 → return d, e remains.
+		ctx, rec := newReq(t)
+		limit := uint64(1)
+		next := "b64:Yw==" // base64("c")
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Next:  &next,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 1)
+		assert.Equal(t, "d", string(resp.Boxes[0].Name))
+		assert.NotNil(t, resp.NextToken, "e remains; next-token must be set")
+	})
+
+	t.Run("InternalByteCapTruncatesLargeResponse", func(t *testing.T) {
+		// Two 600KB boxes with values=true. Together they exceed the 1MB
+		// server cap (MaxBoxFetchBytes), so only the first box fits.
+		// The default cap is applied when maxBytes is not specified.
+		bigAppID := basics.AppIndex(100)
+		bigHandlers := setupLargeBoxTestHandlers(t, bigAppID, map[string][]byte{
+			"big1": make([]byte, 600_000),
+			"big2": make([]byte, 600_000),
+		})
+
+		ctx, rec := newReq(t)
+		values := true
+		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
+			Values: &values,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+
+		assert.Len(t, resp.Boxes, 1, "only 1 of 2 large boxes should fit under 1MB cap")
+		assert.NotNil(t, resp.NextToken, "more data exists")
+		require.NotNil(t, resp.Boxes[0].Value, "value should be populated")
+	})
+
+	t.Run("InternalByteCapSingleOversizedBox", func(t *testing.T) {
+		// One box with a value > 1MB plus a small box. The guarantee-progress
+		// mechanism must return the first oversized box anyway.
+		bigAppID := basics.AppIndex(101)
+		bigHandlers := setupLargeBoxTestHandlers(t, bigAppID, map[string][]byte{
+			"huge":  make([]byte, 1_500_000),
+			"small": make([]byte, 10),
+		})
+
+		ctx, rec := newReq(t)
+		values := true
+		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
+			Values: &values,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+
+		assert.Len(t, resp.Boxes, 1, "guarantee-progress returns the oversized box")
+		assert.NotNil(t, resp.NextToken, "small box remains")
+		require.NotNil(t, resp.Boxes[0].Value, "value should be populated")
+		assert.Len(t, *resp.Boxes[0].Value, 1_500_000, "value should be complete, not truncated")
+	})
+
+	t.Run("DefaultMaxBytesAppliedOnPaginatedPath", func(t *testing.T) {
+		// When only limit is set (no maxBytes), the server applies the default
+		// MaxBoxFetchBytes (1MB) cap. With two 600KB-value boxes and
+		// values=true, the default cap means only the first box fits.
+		bigAppID := basics.AppIndex(104)
+		bigHandlers := setupLargeBoxTestHandlers(t, bigAppID, map[string][]byte{
+			"big1": make([]byte, 600_000),
+			"big2": make([]byte, 600_000),
+		})
+
+		ctx, rec := newReq(t)
+		limit := uint64(100)
+		values := true
+		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
+			Limit:  &limit,
+			Values: &values,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 1, "default 1MB cap limits to 1 of 2 large boxes")
+		assert.NotNil(t, resp.NextToken, "more data exists")
 	})
 }

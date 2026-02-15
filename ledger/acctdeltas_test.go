@@ -1003,27 +1003,29 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("BasicPagination", func(t *testing.T) {
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 3, false, nil)
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 3, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 3)
 		require.Equal(t, "DingHo-A", results[0].Key)
 		require.Equal(t, "DingHo-B", results[1].Key)
 		require.Equal(t, "DingHo-C", results[2].Key)
+		require.True(t, moreData, "should indicate more data exists")
 		// Values should be nil when includeValues=false
 		require.Nil(t, results[0].Value)
 	})
 
 	t.Run("WithCursor", func(t *testing.T) {
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-C", 3, false, nil)
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-C", 3, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 3)
 		require.Equal(t, "DingHo-D", results[0].Key)
 		require.Equal(t, "DingHo-E", results[1].Key)
 		require.Equal(t, "DingHo-F", results[2].Key)
+		require.False(t, moreData, "no more data after last key")
 	})
 
 	t.Run("WithValues", func(t *testing.T) {
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, true, nil)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, 0, true, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 2)
 		require.Equal(t, "DingHo-A", results[0].Key)
@@ -1034,7 +1036,7 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 
 	t.Run("WithExclude", func(t *testing.T) {
 		exclude := map[string][]byte{"DingHo-B": nil, "DingHo-D": nil}
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, false, exclude)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, 0, false, exclude)
 		require.NoError(t, err)
 		require.Len(t, results, 4) // A, C, E, F (B and D excluded)
 		require.Equal(t, "DingHo-A", results[0].Key)
@@ -1044,33 +1046,35 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 	})
 
 	t.Run("PrefixFiltersOtherKeys", func(t *testing.T) {
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 100, false, nil)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 100, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 6) // Only DingHo- keys, not Other-Key
 	})
 
 	t.Run("NoResultsPastEnd", func(t *testing.T) {
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-F", 10, false, nil)
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-F", 10, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 0)
+		require.False(t, moreData)
 	})
 
 	t.Run("ZeroLimitReturnsAll", func(t *testing.T) {
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, false, nil)
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 6)
+		require.False(t, moreData)
 	})
 
 	t.Run("NullKeyFromLeftJoin", func(t *testing.T) {
 		// Prefix that matches no kvstore rows; LEFT JOIN produces a NULL key row
-		_, results, err := qs.LookupKeysByPrefixCursor("NonExistent-", "", 10, false, nil)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("NonExistent-", "", 10, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 0)
 	})
 
 	t.Run("CursorPlusExclude", func(t *testing.T) {
 		exclude := map[string][]byte{"DingHo-D": nil}
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-B", 10, false, exclude)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-B", 10, 0, false, exclude)
 		require.NoError(t, err)
 		require.Len(t, results, 3) // C, E, F (cursor skips A+B, exclude skips D)
 		require.Equal(t, "DingHo-C", results[0].Key)
@@ -1079,7 +1083,7 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 	})
 
 	t.Run("ValuesWithCursor", func(t *testing.T) {
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-D", 10, true, nil)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-D", 10, 0, true, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 2)
 		require.Equal(t, "DingHo-E", results[0].Key)
@@ -1090,7 +1094,7 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 
 	t.Run("ValuesWithExclude", func(t *testing.T) {
 		exclude := map[string][]byte{"DingHo-A": nil}
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, true, exclude)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, 0, true, exclude)
 		require.NoError(t, err)
 		require.Len(t, results, 2)
 		require.Equal(t, "DingHo-B", results[0].Key)
@@ -1104,22 +1108,23 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 			"DingHo-A": nil, "DingHo-B": nil, "DingHo-C": nil,
 			"DingHo-D": nil, "DingHo-E": nil, "DingHo-F": nil,
 		}
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, false, exclude)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, 0, false, exclude)
 		require.NoError(t, err)
 		require.Len(t, results, 0)
 	})
 
 	t.Run("LimitExactlyMatchesAvailable", func(t *testing.T) {
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 6, false, nil)
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 6, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 6)
 		require.Equal(t, "DingHo-A", results[0].Key)
 		require.Equal(t, "DingHo-F", results[5].Key)
+		require.False(t, moreData, "no more data when all keys fit")
 	})
 
 	t.Run("CursorBetweenKeys", func(t *testing.T) {
 		// Cursor value doesn't match any existing key
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-B5", 10, false, nil)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-B5", 10, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 4) // C, D, E, F
 		require.Equal(t, "DingHo-C", results[0].Key)
@@ -1127,18 +1132,18 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 	})
 
 	t.Run("RoundIsReturned", func(t *testing.T) {
-		round, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 1, false, nil)
+		round, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 1, 0, false, nil)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 		// Round comes from acctrounds table; verify it matches across calls
-		round2, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 1, true, nil)
+		round2, _, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 1, 0, true, nil)
 		require.NoError(t, err)
 		require.Equal(t, round, round2)
 	})
 
 	t.Run("ValuesWithCursorAndExclude", func(t *testing.T) {
 		exclude := map[string][]byte{"DingHo-C": nil}
-		_, results, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-A", 10, true, exclude)
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-A", 10, 0, true, exclude)
 		require.NoError(t, err)
 		require.Len(t, results, 4) // B, D, E, F (cursor skips A, exclude skips C)
 		require.Equal(t, "DingHo-B", results[0].Key)
@@ -1149,6 +1154,99 @@ func TestLookupKeysByPrefixCursor(t *testing.T) {
 		require.Equal(t, []byte("valE"), results[2].Value)
 		require.Equal(t, "DingHo-F", results[3].Key)
 		require.Equal(t, []byte("valF"), results[3].Value)
+	})
+
+	t.Run("MaxBytesLimitsResults", func(t *testing.T) {
+		// Each key is "DingHo-X" (8 bytes), value is "valX" (4 bytes) = 12 bytes per pair.
+		// With includeValues=true and maxBytes=25, should fit 2 pairs (24 bytes) but not 3 (36).
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 25, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.True(t, moreData, "more data should exist")
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, "DingHo-B", results[1].Key)
+	})
+
+	t.Run("MaxBytesGuaranteesOneResult", func(t *testing.T) {
+		// Even with maxBytes=1, should return at least one result for progress.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 1, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		require.True(t, moreData)
+		require.Equal(t, "DingHo-A", results[0].Key)
+	})
+
+	t.Run("MaxBytesZeroIsUnlimited", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 0, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.False(t, moreData)
+	})
+
+	t.Run("MaxBytesWithLimit", func(t *testing.T) {
+		// limit=2 should stop before maxBytes is hit.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, 1000, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.True(t, moreData, "more data with limit=2 and 6 keys")
+	})
+
+	t.Run("MaxBytesKeysOnly", func(t *testing.T) {
+		// Without values, only count key bytes. Each key is 8 bytes.
+		// maxBytes=20 should fit 2 keys (16 bytes) but not 3 (24).
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 20, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.True(t, moreData)
+	})
+
+	t.Run("MoreDataFalseWhenAllFit", func(t *testing.T) {
+		// maxBytes large enough to fit all results.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 10000, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.False(t, moreData)
+	})
+
+	t.Run("MoreDataTrueWithLimit", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 3, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		require.True(t, moreData)
+	})
+
+	t.Run("MoreDataFalseWhenExact", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 6, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.False(t, moreData)
+	})
+
+	t.Run("MoreDataTrueWhenOneRemains", func(t *testing.T) {
+		// Regression: limit=5 with 6 qualifying rows. The 6th row is the only
+		// one past the page — moreData must be true.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 5, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 5)
+		require.True(t, moreData, "exactly one row remains; moreData must be true")
+	})
+
+	t.Run("MoreDataTrueWhenOneRemainsWithCursor", func(t *testing.T) {
+		// Cursor past D leaves E, F. Limit=1 → return E, F remains.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-D", 1, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		require.Equal(t, "DingHo-E", results[0].Key)
+		require.True(t, moreData, "F remains; moreData must be true")
+	})
+
+	t.Run("MaxBytesMoreDataWhenOneRemains", func(t *testing.T) {
+		// Each key is 8 bytes, value is 4 bytes = 12 bytes per pair.
+		// maxBytes=60 fits 5 pairs (60 bytes) but not 6 (72).
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 60, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 5)
+		require.True(t, moreData, "one row remains; moreData must be true")
 	})
 }
 

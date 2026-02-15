@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -591,8 +592,9 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 
 // LookupKvPairsByPrefix returns a page of key-value pairs matching the prefix,
 // starting after cursor. It merges in-memory deltas with database results to
-// provide current data. The limit is best-effort.
-func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, error) {
+// provide current data. The limit and maxBytes are best-effort.
+// The returned bool indicates whether more qualifying results exist beyond what was returned.
+func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error) {
 	needUnlock := true
 	au.accountsMu.RLock()
 	defer func() {
@@ -606,7 +608,7 @@ func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix st
 		currentDeltaLen := len(au.deltas)
 		offset, rndErr := au.roundOffset(round)
 		if rndErr != nil {
-			return nil, 0, rndErr
+			return nil, 0, false, rndErr
 		}
 
 		// Walk deltas backwards to collect modifications.
@@ -622,7 +624,7 @@ func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix st
 					continue
 				}
 				if _, ok := deltaResults[keyInRound]; ok {
-					continue // later round takes priority
+					continue // already seen from a more recent round
 				}
 				deltaResults[keyInRound] = mv.Data
 			}
@@ -634,16 +636,16 @@ func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix st
 		au.accountsMu.RUnlock()
 		needUnlock = false
 
-		dbRound, dbResults, dbErr := au.accountsq.LookupKeysByPrefixCursor(keyPrefix, cursor, limit, includeValues, deltaResults)
+		dbRound, dbResults, dbMoreData, dbErr := au.accountsq.LookupKeysByPrefixCursor(keyPrefix, cursor, limit, maxBytes, includeValues, deltaResults)
 		if dbErr != nil {
-			return nil, 0, dbErr
+			return nil, 0, false, dbErr
 		}
 
 		if dbRound == currentDBRound {
-			// When the DB returned a full page, delta keys beyond the last
+			// When the DB indicated more data exists, delta keys beyond the last
 			// DB key would only be sorted in and trimmed away. Skip them.
 			var cutoff string
-			if limit > 0 && uint64(len(dbResults)) >= limit {
+			if dbMoreData && len(dbResults) > 0 {
 				cutoff = dbResults[len(dbResults)-1].Key
 			}
 
@@ -662,22 +664,40 @@ func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix st
 			}
 
 			// Sort by key.
-			sort.Slice(dbResults, func(i, j int) bool {
-				return dbResults[i].Key < dbResults[j].Key
+			slices.SortFunc(dbResults, func(a, b ledgercore.KvPairResult) int {
+				return strings.Compare(a.Key, b.Key)
 			})
 
-			// Trim to limit.
-			if limit > 0 && uint64(len(dbResults)) > limit {
-				dbResults = dbResults[:limit]
+			// Trim to limit and/or maxBytes.
+			moreData := dbMoreData
+			if limit > 0 || maxBytes > 0 {
+				var bytesAccum uint64
+				trimAt := len(dbResults)
+				for i, kv := range dbResults {
+					itemBytes := kv.ByteSize()
+					if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && i > 0 {
+						trimAt = i
+						break
+					}
+					bytesAccum += itemBytes
+					if limit > 0 && uint64(i+1) >= limit {
+						trimAt = i + 1
+						break
+					}
+				}
+				if trimAt < len(dbResults) {
+					moreData = true
+					dbResults = dbResults[:trimAt]
+				}
 			}
 
-			return dbResults, retRound, nil
+			return dbResults, retRound, moreData, nil
 		}
 
 		// DB round mismatch — retry.
 		if dbRound < currentDBRound {
 			au.log.Errorf("accountUpdates.LookupKvPairsByPrefix: database round %d is behind in-memory round %d", dbRound, currentDBRound)
-			return nil, 0, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
+			return nil, 0, false, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
 		}
 		au.accountsMu.RLock()
 		needUnlock = true

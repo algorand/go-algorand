@@ -650,9 +650,8 @@ end:
 		next = *resp.NextToken
 	}
 
-	sort.Strings(allBoxNames)
-	sort.Strings(boxNames)
-	a.Equal(boxNames, allBoxNames, "all boxes should be returned across pages")
+	sort.Strings(boxNames) // expected order
+	a.Equal(boxNames, allBoxNames, "paginated results should arrive in sorted order")
 	a.GreaterOrEqual(pageCount, 2, "should have paginated across multiple pages")
 
 	// Test with values=true

@@ -30,14 +30,15 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	lookupAccountStmt          *sql.Stmt
-	lookupResourcesStmt        *sql.Stmt
-	lookupAllResourcesStmt     *sql.Stmt
-	lookupLimitedResourcesStmt *sql.Stmt
-	lookupKvPairStmt           *sql.Stmt
-	lookupKeysByRangeStmt      *sql.Stmt
-	lookupCreatorStmt          *sql.Stmt
-	queryable                  db.Queryable
+	lookupAccountStmt                    *sql.Stmt
+	lookupResourcesStmt                  *sql.Stmt
+	lookupAllResourcesStmt               *sql.Stmt
+	lookupLimitedResourcesStmt           *sql.Stmt
+	lookupKvPairStmt                     *sql.Stmt
+	lookupKeysByRangeStmt                *sql.Stmt
+	lookupKeysByRangeCursorStmt          *sql.Stmt
+	lookupKeysByRangeCursorWithValueStmt *sql.Stmt
+	lookupCreatorStmt                    *sql.Stmt
 }
 
 type onlineAccountsDbQueries struct {
@@ -72,7 +73,7 @@ func (sqlRowRef) CreatableRefMarker()     {}
 // AccountsInitDbQueries constructs an AccountsReader backed by sql queries.
 func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
-	qs := &accountsDbQueries{queryable: q}
+	qs := &accountsDbQueries{}
 
 	qs.lookupAccountStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, accountbase.data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
 	if err != nil {
@@ -118,6 +119,16 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	}
 
 	qs.lookupKeysByRangeStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupKeysByRangeCursorStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupKeysByRangeCursorWithValueStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key, kvstore.value FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key")
 	if err != nil {
 		return nil, err
 	}
@@ -316,10 +327,10 @@ func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64,
 // Only key membership is checked; the map values are ignored. The type is
 // map[string][]byte so the caller can pass the delta map directly without
 // allocating a separate key set.
-func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, error) {
+func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, bool, error) {
 	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
 	if end == nil {
-		return 0, nil, fmt.Errorf("lookup by strange prefix %#v", prefix)
+		return 0, nil, false, fmt.Errorf("lookup by strange prefix %#v", prefix)
 	}
 
 	// The cursor is exclusive: we want keys strictly greater than cursor.
@@ -328,48 +339,50 @@ func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor stri
 		queryStart = []byte(cursor)
 	}
 
-	selectCols := "acctrounds.rnd, kvstore.key"
+	stmt := qs.lookupKeysByRangeCursorStmt
 	if includeValues {
-		selectCols += ", kvstore.value"
+		stmt = qs.lookupKeysByRangeCursorWithValueStmt
 	}
-	query := fmt.Sprintf("SELECT %s FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key", selectCols)
 
 	var round basics.Round
 	var results []ledgercore.KvPairResult
+	var moreData bool
 
 	err := db.Retry(func() error {
-		rows, err := qs.queryable.Query(query, queryStart, end)
+		rows, err := stmt.Query(queryStart, end)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 
-		rnd, res, err := qs.processKvRows(rows, cursor, limit, includeValues, exclude)
+		rnd, res, more, err := qs.processKvRows(rows, cursor, limit, maxBytes, includeValues, exclude)
 		if err != nil {
 			return err
 		}
 		round = rnd
 		results = res
+		moreData = more
 		return nil
 	})
-	return round, results, err
+	return round, results, moreData, err
 }
 
-func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, error) {
+// maxPreallocLimit caps the slice pre-allocation to avoid excessive memory use
+// when callers pass very large limit values.
+const maxPreallocLimit = 10000
+
+func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit uint64, maxBytes uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, bool, error) {
 	var round basics.Round
 	var results []ledgercore.KvPairResult
 	if limit > 0 {
 		// add extra capacity for the keys in the delta whose non-deleted values will be added to our results
-		results = make([]ledgercore.KvPairResult, 0, limit+uint64(len(exclude)))
+		results = make([]ledgercore.KvPairResult, 0, min(limit+uint64(len(exclude)), maxPreallocLimit))
 	}
 	var collected uint64
+	var bytesAccum uint64
 	var err error
 
 	for rows.Next() {
-		if limit > 0 && collected >= limit {
-			break
-		}
-
 		var rowKey sql.NullString
 		var val []byte
 
@@ -379,7 +392,7 @@ func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit 
 			err = rows.Scan(&round, &rowKey)
 		}
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, false, err
 		}
 
 		if !rowKey.Valid {
@@ -394,10 +407,48 @@ func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit 
 			continue
 		}
 
-		results = append(results, ledgercore.KvPairResult{Key: key, Value: val})
+		kv := ledgercore.KvPairResult{Key: key, Value: val}
+		itemBytes := kv.ByteSize()
+		if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && collected > 0 {
+			// This item is qualifying but exceeds the byte budget.
+			return round, results, true, nil
+		}
+
+		results = append(results, kv)
+		bytesAccum += itemBytes
 		collected++
+
+		if limit > 0 && collected >= limit {
+			break
+		}
 	}
-	return round, results, nil
+
+	// Peek for one more qualifying row to determine moreData.
+	for rows.Next() {
+		var rowKey sql.NullString
+		var val []byte
+		if includeValues {
+			err = rows.Scan(&round, &rowKey, &val)
+		} else {
+			err = rows.Scan(&round, &rowKey)
+		}
+		if err != nil {
+			return 0, nil, false, err
+		}
+		if !rowKey.Valid {
+			continue
+		}
+		key := rowKey.String
+		if key <= cursor {
+			continue
+		}
+		if _, excluded := exclude[key]; excluded {
+			continue
+		}
+		return round, results, true, nil
+	}
+
+	return round, results, false, nil
 }
 
 // keyPrefixIntervalPreprocessing is implemented to generate an interval for DB queries that look up keys by prefix.
@@ -741,6 +792,8 @@ func (qs *accountsDbQueries) Close() {
 		&qs.lookupLimitedResourcesStmt,
 		&qs.lookupKvPairStmt,
 		&qs.lookupKeysByRangeStmt,
+		&qs.lookupKeysByRangeCursorStmt,
+		&qs.lookupKeysByRangeCursorWithValueStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {

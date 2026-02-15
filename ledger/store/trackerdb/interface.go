@@ -111,8 +111,9 @@ type AccountsReader interface {
 	// LookupKeysByPrefixCursor returns a page of key-value pairs matching prefix, starting after cursor.
 	// Keys present in exclude are skipped. Only key membership is checked; the map values are ignored.
 	// The type is map[string][]byte so the caller can pass the delta map directly without allocating
-	// a separate key set.
-	LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, error)
+	// a separate key set. maxBytes limits the total byte size of returned results (0 = unlimited).
+	// The returned bool indicates whether more qualifying rows exist beyond what was returned.
+	LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, bool, error)
 
 	LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error)
 
