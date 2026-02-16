@@ -58,9 +58,9 @@ func opPoseidon2(cx *EvalContext) error {
 	var poseidon hash.Hash
 
 	switch fs.field {
-	case BLS12_381Poseidon2:
+	case BLS12_381t2:
 		poseidon = bls12_381poseidon2.NewMerkleDamgardHasher()
-	case BN254Poseidon2:
+	case BN254t2:
 		poseidon = bn254poseidon2.NewMerkleDamgardHasher()
 	default:
 		return fmt.Errorf("invalid poseidon2 group %s", config)

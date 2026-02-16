@@ -247,7 +247,7 @@ func TestPoseidon2(t *testing.T) {
 	}
 
 	circuitHashTestVectors := map[string][]string{
-		"BN254Poseidon2": {
+		"BN254t2": {
 			"0",
 			"9508867777362231262564394485161648897131889139474639535709054689562539246209",
 			"0",
@@ -256,7 +256,7 @@ func TestPoseidon2(t *testing.T) {
 			"0",
 			"0",
 		},
-		"BLS12_381Poseidon2": {
+		"BLS12_381t2": {
 			"0",
 			"34960972753749415790402211978912014226528569245540044525901549350192685584856",
 			"0",
@@ -267,7 +267,7 @@ func TestPoseidon2(t *testing.T) {
 		},
 	}
 
-	for _, config := range []string{"BN254Poseidon2", "BLS12_381Poseidon2"} {
+	for _, config := range []string{"BN254t2", "BLS12_381t2"} {
 		for i, preImageTestVector := range preImageTestVectors {
 			var n big.Int
 			n.SetString(circuitHashTestVectors[config][i], 10)
@@ -883,9 +883,9 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 }
 
 func BenchmarkHashes(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "poseidon2 BN254Poseidon2", "poseidon2 BLS12_381Poseidon2", "sha512"} {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111", "poseidon2 BN254t2", "poseidon2 BLS12_381t2", "sha512"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
-			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111" || hash == "poseidon2 BN254Poseidon2" || hash == "poseidon2 BLS12_381Poseidon2") {
+			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111" || hash == "poseidon2 BN254t2" || hash == "poseidon2 BLS12_381t2") {
 				continue
 			}
 			b.Run(hash+"-"+strconv.Itoa(size), func(b *testing.B) {

@@ -812,12 +812,12 @@ var OpSpecs = []OpSpec{
 			chunkSize: 32,
 		}})},
 	{0xe7, "poseidon2", opPoseidon2, proto("b:b{32}"), poseidon2Version, costByFieldAndLength("c", &Poseidon2Configs, []linearCost{
-		BN254Poseidon2: {
+		BN254t2: {
 			baseCost:  7,
 			chunkCost: 350,
 			chunkSize: 32,
 		},
-		BLS12_381Poseidon2: {
+		BLS12_381t2: {
 			baseCost:  7,
 			chunkCost: 350,
 			chunkSize: 32,

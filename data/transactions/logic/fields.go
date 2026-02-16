@@ -880,8 +880,8 @@ var MimcConfigs = FieldGroup{
 type Poseidon2Config int
 
 const (
-	BN254Poseidon2 Poseidon2Config = iota
-	BLS12_381Poseidon2
+	BN254t2 Poseidon2Config = iota
+	BLS12_381t2
 	invalidposeidon2Config // compile-time constant for number of fields
 )
 
@@ -909,8 +909,8 @@ func (fs poseidon2ConfigSpec) Note() string {
 }
 
 var poseidon2ConfigSpecs = [...]poseidon2ConfigSpec{
-	{BN254Poseidon2, "poseidon2 configuration for the BN254 curve"},
-	{BLS12_381Poseidon2, "poseidon2 configuration for the BLS12-381"},
+	{BN254t2, "poseidon2 Merkle-Damgard configuration for BN254 with width = 2, full rounds = 6, partial rounds = 50"},
+	{BLS12_381t2, "poseidon2 Merkle-Damgard configuration for BLS12-381 with width = 2, full rounds = 6, partial rounds = 50"},
 }
 
 func poseidon2ConfigSpecByField(c Poseidon2Config) (poseidon2ConfigSpec, bool) {
