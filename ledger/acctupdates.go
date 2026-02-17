@@ -1380,7 +1380,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 
 		if resourceDbRound < currentDBRound {
 			au.log.Errorf("accountUpdates.lookupAssetResources: database round %d is behind in-memory round %d", resourceDbRound, currentDBRound)
-			return nil, basics.Round(0), &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
+			return nil, 0, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
 		}
 		au.accountsMu.RLock()
 		needUnlock = true
