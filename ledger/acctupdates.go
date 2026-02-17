@@ -1295,7 +1295,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 
 		persistedResources, resourceDbRound, err := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(assetIDGT), dbLimit, basics.AssetCreatable)
 		if err != nil {
-			return nil, basics.Round(0), err
+			return nil, 0, err
 		}
 
 		if resourceDbRound == currentDBRound {
