@@ -1221,6 +1221,10 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 // lookupAssetResources returns all the asset resources for a given address.
 // It merges in-memory deltas with persisted data to provide current-round information.
 func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	if limit == 0 {
+		return nil, basics.Round(0), nil
+	}
+
 	needUnlock := true
 	au.accountsMu.RLock()
 	defer func() {
@@ -1288,10 +1292,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 		// Over-request from DB to compensate for delta deletions that remove DB rows
 		// from the result set. Deletions are the only delta entries that shrink the
 		// page — modifications and new creations cannot reduce the DB contribution.
-		dbLimit := limit
-		if limit > 0 {
-			dbLimit += uint64(numDeltaDeleted)
-		}
+		dbLimit := limit + uint64(numDeltaDeleted)
 
 		persistedResources, resourceDbRound, err := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(assetIDGT), dbLimit, basics.AssetCreatable)
 		if err != nil {
@@ -1371,7 +1372,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 			slices.SortFunc(result, func(a, b ledgercore.AssetResourceWithIDs) int {
 				return cmp.Compare(a.AssetID, b.AssetID)
 			})
-			if limit > 0 && uint64(len(result)) > limit {
+			if uint64(len(result)) > limit {
 				result = result[:limit]
 			}
 
@@ -1394,6 +1395,10 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 // It merges in-memory deltas with persisted data to provide current-round information.
 // If includeParams is false, AppParams will not be populated to save memory allocations (app params can be ~50KB each).
 func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	if limit == 0 {
+		return nil, basics.Round(0), nil
+	}
+
 	needUnlock := true
 	au.accountsMu.RLock()
 	defer func() {
@@ -1461,10 +1466,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 		// Over-request from DB to compensate for delta deletions that remove DB rows
 		// from the result set. Deletions are the only delta entries that shrink the
 		// page — modifications and new creations cannot reduce the DB contribution.
-		dbLimit := limit
-		if limit > 0 {
-			dbLimit += uint64(numDeltaDeleted)
-		}
+		dbLimit := limit + uint64(numDeltaDeleted)
 
 		persistedResources, resourceDbRound, err := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(appIDGT), dbLimit, basics.AppCreatable)
 		if err != nil {
@@ -1550,7 +1552,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 			slices.SortFunc(result, func(a, b ledgercore.AppResourceWithIDs) int {
 				return cmp.Compare(a.AppID, b.AppID)
 			})
-			if limit > 0 && uint64(len(result)) > limit {
+			if uint64(len(result)) > limit {
 				result = result[:limit]
 			}
 
