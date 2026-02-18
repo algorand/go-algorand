@@ -575,7 +575,7 @@ jobs:
       - name: Install and run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck -scan module ./...
+          govulncheck -scan module
 
   # Summary job to verify all builds and packages completed
   release-summary:
