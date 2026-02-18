@@ -55,6 +55,14 @@ contents:
     file_info:
       mode: 0755
 
+  # License file (rpm only; deb uses the copyright file below)
+  - src: COPYING
+    dst: /usr/share/licenses/${DEVTOOLS_PKG_NAME}/COPYING
+    expand: true
+    packager: rpm
+    file_info:
+      mode: 0644
+
   # Debian copyright file (deb only, generated at build time)
   - src: .github/packaging/generated/copyright
     dst: /usr/share/doc/${DEVTOOLS_PKG_NAME}/copyright
