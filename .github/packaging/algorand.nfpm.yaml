@@ -169,6 +169,14 @@ contents:
     file_info:
       mode: 0644
 
+  # License file (rpm only; deb uses the copyright file above)
+  - src: COPYING
+    dst: /usr/share/licenses/${PKG_NAME}/COPYING
+    expand: true
+    packager: rpm
+    file_info:
+      mode: 0644
+
   # DNF automatic update configuration (rpm only)
   - src: installer/rpm/algorand/0dnf-algorand-hourly.cron
     dst: /etc/cron.hourly/0dnf-algorand-hourly.cron
