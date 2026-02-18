@@ -566,17 +566,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          go-version-input: stable
+          go-version: stable
+          cache: false
 
-      - name: Report results
-        if: always()
+      - name: Install and run govulncheck
         run: |
-          echo "## Dependency Vulnerability Scan" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "govulncheck completed. Check job logs for details." >> $GITHUB_STEP_SUMMARY
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck -scan module ./...
 
   # Summary job to verify all builds and packages completed
   release-summary:
