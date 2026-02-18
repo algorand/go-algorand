@@ -18,6 +18,7 @@ package addr
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
@@ -28,6 +29,8 @@ import (
 var errURLNoHost = errors.New("could not parse a host from url")
 
 var errURLColonHost = errors.New("host name starts with a colon")
+
+var errMultiaddrParse = errors.New("failed to parse multiaddr")
 
 // HostColonPortPattern matches "^[-a-zA-Z0-9.]+:\\d+$" e.g. "foo.com.:1234"
 var HostColonPortPattern = regexp.MustCompile(`^[-a-zA-Z0-9.]+:\d+$`)
@@ -78,7 +81,10 @@ func IsMultiaddr(addr string) bool {
 func ParseHostOrURLOrMultiaddr(addr string) (string, error) {
 	if strings.HasPrefix(addr, "/") && !strings.HasPrefix(addr, "//") { // multiaddr starts with '/' but not '//' which is possible for scheme relative URLS
 		_, err := multiaddr.NewMultiaddr(addr)
-		return addr, err
+		if err != nil {
+			return "", fmt.Errorf("%w: %v", errMultiaddrParse, err)
+		}
+		return addr, nil
 	}
 	url, err := ParseHostOrURL(addr)
 	if err != nil {

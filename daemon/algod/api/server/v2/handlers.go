@@ -128,6 +128,7 @@ type LedgerForAPI interface {
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	Totals(rnd basics.Round) (ledgercore.AccountTotals, error)
+	OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
 	WaitWithCancel(r basics.Round) (chan struct{}, func())
@@ -1024,7 +1025,20 @@ func (v2 *Handlers) GetSupply(ctx echo.Context, params model.GetSupplyParams) er
 		totals, err = v2.Node.LedgerForAPI().Totals(latest)
 	}
 	if err != nil {
-		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
+		err = fmt.Errorf("GetSupply(): round %d, LatestTotals failed: %v", latest, err)
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	consensus, err := v2.Node.LedgerForAPI().ConsensusParams(latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d, ConsensusParams failed: %v", latest, err)
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	brnd := agreement.BalanceRound(latest, consensus)
+	onlineCirculation, err := v2.Node.LedgerForAPI().OnlineCirculation(brnd, latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d, OnlineCirculation failed: %v", latest, err)
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
 
@@ -1032,6 +1046,7 @@ func (v2 *Handlers) GetSupply(ctx echo.Context, params model.GetSupplyParams) er
 		CurrentRound: latest,
 		TotalMoney:   totals.Participating().Raw,
 		OnlineMoney:  totals.Online.Money.Raw,
+		OnlineStake:  onlineCirculation.Raw,
 	}
 
 	return ctx.JSON(http.StatusOK, supply)

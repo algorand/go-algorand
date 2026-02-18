@@ -5475,12 +5475,7 @@
       "schema": {
         "description": "Supply represents the current supply of MicroAlgos in the system",
         "type": "object",
-        "required": [
-          "online-money",
-          "current_round",
-          "total-money",
-          "online-stake"
-        ],
+        "required": ["online-money", "current_round", "total-money", "online-stake"],
         "properties": {
           "current_round": {
             "description": "Round",

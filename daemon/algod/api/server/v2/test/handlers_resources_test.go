@@ -221,6 +221,9 @@ func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTota
 func (l *mockLedger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
 	panic("not implemented")
 }
+func (l *mockLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	panic("not implemented")
+}
 func (l *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
 	blk, err := l.Block(rnd)
 	if err != nil {
