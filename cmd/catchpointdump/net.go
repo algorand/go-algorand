@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,6 +35,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/p2p"
+	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/protocol"
 	tools "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
@@ -59,6 +62,10 @@ func init() {
 	netCmd.Flags().BoolVarP(&singleCatchpoint, "single", "s", true, "Download/process only from a single relay")
 	netCmd.Flags().BoolVarP(&loadOnly, "load", "l", false, "Load only, do not dump")
 	netCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
+	netCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. tracker.dump.txt )")
+	netCmd.Flags().BoolVarP(&printDigests, "digest", "d", false, "Print balances and spver digests")
+	netCmd.Flags().BoolVarP(&rawDump, "raw", "R", false, "Dump raw catchpoint data, ignoring ledger database operations")
+	netCmd.Flags().BoolVarP(&onlineOnly, "online-only", "O", false, "Only print online accounts and online round params data")
 }
 
 var netCmd = &cobra.Command{
@@ -77,7 +84,7 @@ var netCmd = &cobra.Command{
 		if relayAddress != "" {
 			addrs = []string{relayAddress}
 		} else {
-			addrs, err = tools.ReadFromSRV("algobootstrap", "tcp", networkName, "", false)
+			addrs, err = tools.ReadFromSRV(context.Background(), "algobootstrap", "tcp", networkName, "", false)
 			if err != nil || len(addrs) == 0 {
 				reportErrorf("Unable to bootstrap records for '%s' : %v", networkName, err)
 			}
@@ -90,19 +97,25 @@ var netCmd = &cobra.Command{
 				reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
 				continue
 			}
-			genesisInitState := ledgercore.InitState{
-				Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
-					UpgradeState: bookkeeping.UpgradeState{
-						CurrentProtocol: protocol.ConsensusCurrentVersion,
-					},
-				}},
+
+			if rawDump {
+				err = rawDumpCatchpointFile(tarName, outFileName)
+			} else {
+				genesisInitState := ledgercore.InitState{
+					Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+						UpgradeState: bookkeeping.UpgradeState{
+							CurrentProtocol: protocol.ConsensusCurrentVersion,
+						},
+					}},
+				}
+				err = loadAndDump(addr, tarName, genesisInitState)
 			}
-			err = loadAndDump(addr, tarName, genesisInitState)
+
 			if err != nil {
-				reportInfof("failed to load/dump from tar file for '%s' : %v", addr, err)
+				reportInfof("failed to process catchpoint for '%s' : %v", addr, err)
 				continue
 			}
-			// clear possible errors from previous run: at this point we've been succeed
+			// clear possible errors from previous run: at this point we've succeeded
 			err = nil
 			if singleCatchpoint {
 				// a catchpoint processes successfully, exit if needed
@@ -161,8 +174,8 @@ func printDownloadProgressLine(progress int, barLength int, url string, dld int6
 	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
-func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCancel context.CancelFunc, err error) {
-	fmt.Printf("downloading %s from %s\n", hint, url)
+func getRemoteDataStream(addr string, url string, client *http.Client, hint string) (result io.ReadCloser, ctxCancel context.CancelFunc, err error) {
+	fmt.Printf("downloading %s from %s %s\n", hint, addr, url)
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
@@ -171,7 +184,7 @@ func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCanc
 	timeoutContext, ctxCancel := context.WithTimeout(context.Background(), config.GetDefaultLocal().MaxCatchpointDownloadDuration)
 	request = request.WithContext(timeoutContext)
 	network.SetUserAgentHeader(request.Header)
-	response, err := http.DefaultClient.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return
 	}
@@ -191,15 +204,66 @@ func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCanc
 	return
 }
 
-func downloadCatchpoint(addr string, round int) (tarName string, err error) {
-	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
-	urlTemplate := "http://" + addr + "/v1/" + genesisID + "/%s/" + strconv.FormatUint(uint64(round), 36)
-	catchpointURL := fmt.Sprintf(urlTemplate, "ledger")
+func doDownloadCatchpoint(url string, wdReader util.WatchdogStreamReader, out io.Writer) error {
+	writeChunkSize := 64 * 1024
 
-	catchpointStream, catchpointCtxCancel, err := getRemoteDataStream(catchpointURL, "catchpoint")
+	var totalBytes int
+	tempBytes := make([]byte, writeChunkSize)
+	lastProgressUpdate := time.Now()
+	progress := -25
+	printDownloadProgressLine(progress, 50, url, 0)
+
+	for {
+		n, err := wdReader.Read(tempBytes)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		totalBytes += n
+		writtenBytes, err := out.Write(tempBytes[:n])
+		if err != nil || n != writtenBytes {
+			return err
+		}
+
+		err = wdReader.Reset()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if time.Since(lastProgressUpdate) > 50*time.Millisecond {
+			lastProgressUpdate = time.Now()
+			printDownloadProgressLine(progress, 50, url, int64(totalBytes))
+			progress++
+		}
+	}
+}
+
+func buildURL(genesisID string, round int, resource string) string {
+	return fmt.Sprintf("/v1/%s/%s/%s", genesisID, resource, strconv.FormatUint(uint64(round), 36))
+}
+
+// Downloads a catchpoint tar file and returns the path to the tar file.
+func downloadCatchpoint(addr string, round int) (string, error) {
+	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
+
+	// attempt to parse as p2p address first
+	var httpClient *http.Client
+	catchpointURL := buildURL(genesisID, round, "ledger")
+	if addrInfo, err := peerstore.PeerInfoFromAddr(addr); err == nil {
+		httpClient, err = p2p.MakeTestHTTPClient(addrInfo)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		httpClient = http.DefaultClient
+		catchpointURL = "http://" + addr + catchpointURL
+	}
+
+	catchpointStream, catchpointCtxCancel, err := getRemoteDataStream(addr, catchpointURL, httpClient, "catchpoint")
 	defer catchpointCtxCancel()
 	if err != nil {
-		return
+		return "", err
 	}
 	defer catchpointStream.Close()
 
@@ -207,78 +271,87 @@ func downloadCatchpoint(addr string, round int) (tarName string, err error) {
 	os.RemoveAll(dirName)
 	err = os.MkdirAll(dirName, 0777)
 	if err != nil && !os.IsExist(err) {
-		return
+		return "", err
 	}
-	tarName = dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
-	file, err2 := os.Create(tarName) // will create a file with 0666 permission.
-	if err2 != nil {
-		return tarName, err2
+	tarName := dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
+	file, err := os.Create(tarName) // will create a file with 0666 permission.
+	if err != nil {
+		return "", err
 	}
-	defer func() {
-		err = file.Close()
-	}()
-	writeChunkSize := 64 * 1024
+	defer file.Close()
 
-	wdReader := util.MakeWatchdogStreamReader(catchpointStream, 4096, 4096, 2*time.Second)
-	var totalBytes int
-	tempBytes := make([]byte, writeChunkSize)
-	lastProgressUpdate := time.Now()
-	progress := -25
-	printDownloadProgressLine(progress, 50, catchpointURL, 0)
-	defer printDownloadProgressLine(0, 0, catchpointURL, 0)
-	var n int
-	for {
-		n, err = wdReader.Read(tempBytes)
-		if err != nil && err != io.EOF {
-			return
-		}
-		totalBytes += n
-		writtenBytes, err2 := file.Write(tempBytes[:n])
-		if err2 != nil || n != writtenBytes {
-			return tarName, err2
-		}
+	wdReader := util.MakeWatchdogStreamReader(catchpointStream, 4096, 4096, 5*time.Second)
+	defer wdReader.Close()
 
-		err = wdReader.Reset()
-		if err != nil {
-			if err == io.EOF {
-				return tarName, nil
-			}
-			return
+	err = doDownloadCatchpoint(catchpointURL, wdReader, file)
+	if err != nil {
+		return "", err
+	}
+
+	printDownloadProgressLine(0, 0, catchpointURL, 0)
+
+	err = file.Close()
+	if err != nil {
+		return "", err
+	}
+
+	err = catchpointStream.Close()
+	if err != nil {
+		return "", err
+	}
+
+	return tarName, nil
+}
+
+func deleteLedgerFiles(deleteTracker bool) error {
+	paths := []string{
+		"./ledger.block.sqlite",
+		"./ledger.block.sqlite-shm",
+		"./ledger.block.sqlite-wal",
+	}
+	if deleteTracker {
+		trackerPaths := []string{
+			"./ledger.tracker.sqlite",
+			"./ledger.tracker.sqlite-shm",
+			"./ledger.tracker.sqlite-wal",
 		}
-		if time.Since(lastProgressUpdate) > 50*time.Millisecond {
-			lastProgressUpdate = time.Now()
-			printDownloadProgressLine(progress, 50, catchpointURL, int64(totalBytes))
-			progress++
+		paths = append(paths, trackerPaths...)
+	}
+
+	for _, path := range paths {
+		err := os.Remove(path)
+		if (err != nil) && !errors.Is(err, os.ErrNotExist) {
+			return err
 		}
 	}
+
+	return nil
 }
 
 func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitState) error {
-	deleteLedgerFiles := func(deleteTracker bool) {
-		os.Remove("./ledger.block.sqlite")
-		os.Remove("./ledger.block.sqlite-shm")
-		os.Remove("./ledger.block.sqlite-wal")
-		if deleteTracker {
-			os.Remove("./ledger.tracker.sqlite")
-			os.Remove("./ledger.tracker.sqlite-shm")
-			os.Remove("./ledger.tracker.sqlite-wal")
-		}
-	}
 	// delete current ledger files.
-	deleteLedgerFiles(true)
+	if err := deleteLedgerFiles(true); err != nil {
+		reportWarnf("Error deleting ledger files: %v", err)
+	}
 	cfg := config.GetDefaultLocal()
 	l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 	if err != nil {
 		reportErrorf("Unable to open ledger : %v", err)
+		return err
 	}
 
-	defer deleteLedgerFiles(!loadOnly)
+	defer func() {
+		if delErr := deleteLedgerFiles(!loadOnly); delErr != nil {
+			reportWarnf("Error deleting ledger files: %v", delErr)
+		}
+	}()
 	defer l.Close()
 
 	catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())
 	err = catchupAccessor.ResetStagingBalances(context.Background(), true)
 	if err != nil {
 		reportErrorf("Unable to initialize catchup database : %v", err)
+		return err
 	}
 
 	stats, err := os.Stat(tarFile)
@@ -297,16 +370,42 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 	fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, reader, tarSize)
 	if err != nil {
 		reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
+		return err
 	}
 
 	if !loadOnly {
 		dirName := "./" + strings.Split(networkName, ".")[0] + "/" + strings.Split(addr, ".")[0]
-		outFile, err := os.OpenFile(dirName+"/"+strconv.FormatUint(uint64(round), 10)+".dump", os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
+		// If user provided -o <filename>, use that; otherwise use <dirName>/<round>.dump
+		dumpFilename := outFileName
+		if dumpFilename == "" {
+			dumpFilename = dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".dump"
+		}
+		outFile, err := os.OpenFile(dumpFilename, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
 		if err != nil {
 			return err
 		}
 		defer outFile.Close()
-		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile, excludedFields.GetSlice())
+		if !onlineOnly {
+			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
+			if err != nil {
+				return err
+			}
+			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				return err
+			}
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Always print online accounts and online round params
+		err = printOnlineAccounts("./ledger.tracker.sqlite", true, outFile)
+		if err != nil {
+			return err
+		}
+		err = printOnlineRoundParams("./ledger.tracker.sqlite", true, outFile)
 		if err != nil {
 			return err
 		}

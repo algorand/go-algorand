@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 package logging
 
 import (
-	"fmt"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,7 +26,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/util/uuid"
 )
@@ -35,9 +34,9 @@ const telemetryPrefix = "/"
 const telemetrySeparator = "/"
 const logBufferDepth = 2
 
-// EnableTelemetry configures and enables telemetry based on the config provided
-func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
-	telemetry, err := makeTelemetryState(cfg, createElasticHook)
+// EnableTelemetryContext configures and enables telemetry based on the config provided
+func EnableTelemetryContext(ctx context.Context, cfg TelemetryConfig, l *logger) (err error) {
+	telemetry, err := makeTelemetryStateContext(ctx, cfg, createElasticHookContext)
 	if err != nil {
 		return
 	}
@@ -70,14 +69,14 @@ func makeLevels(min logrus.Level) []logrus.Level {
 	return levels
 }
 
-func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
+func makeTelemetryStateContext(ctx context.Context, cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
 	telemetry := &telemetryState{}
 	telemetry.history = createLogBuffer(logBufferDepth)
 	if cfg.Enable {
 		if cfg.SessionGUID == "" {
 			cfg.SessionGUID = uuid.New()
 		}
-		hook, err := createTelemetryHook(cfg, telemetry.history, hookFactory)
+		hook, err := createTelemetryHookContext(ctx, cfg, telemetry.history, hookFactory)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +89,7 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 }
 
 // ReadTelemetryConfigOrDefault reads telemetry config from file or defaults if no config file found.
-func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg TelemetryConfig, err error) {
+func ReadTelemetryConfigOrDefault(dataDir string, globalDir string) (cfg TelemetryConfig, err error) {
 	err = nil
 	dataDirProvided := dataDir != ""
 	var configPath string
@@ -107,14 +106,8 @@ func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg Telemet
 	// If the reason is because the directory doesn't exist or we didn't provide a data directory then...
 	if (err != nil && os.IsNotExist(err)) || !dataDirProvided {
 
-		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
-		if err != nil {
-			// If the path could not be opened do nothing, the IsNotExist error
-			// is handled below.
-		} else {
-			// Load the telemetry from the default config path
-			cfg, err = LoadTelemetryConfig(configPath)
-		}
+		configPath = filepath.Join(globalDir, TelemetryConfigFilename)
+		cfg, err = LoadTelemetryConfig(configPath)
 	}
 
 	// If there was some error loading the configuration from the config path...
@@ -122,7 +115,7 @@ func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg Telemet
 		// Create an ephemeral config
 		cfg = createTelemetryConfig()
 
-		// If the error was that the the config wasn't there then it wasn't really an error
+		// If the error was that the config wasn't there then it wasn't really an error
 		if os.IsNotExist(err) {
 			err = nil
 		} else {
@@ -130,35 +123,26 @@ func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg Telemet
 			return
 		}
 	}
-	ver := config.GetCurrentVersion()
-	ch := ver.Channel
-	// Should not happen, but default to "dev" if channel is unspecified.
-	if ch == "" {
-		ch = "dev"
-	}
-	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
-	cfg.Version = ver.String()
 	return cfg, err
 }
 
 // EnsureTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint
 // Err will be non-nil if the file doesn't exist, or if error loading.
 // Cfg will always be valid.
-func EnsureTelemetryConfig(dataDir *string, genesisID string) (TelemetryConfig, error) {
-	cfg, _, err := EnsureTelemetryConfigCreated(dataDir, genesisID)
+func EnsureTelemetryConfig(dataDir *string, globalDir *string) (TelemetryConfig, error) {
+	cfg, _, err := EnsureTelemetryConfigCreated(dataDir, globalDir)
 	return cfg, err
 }
 
 // EnsureTelemetryConfigCreated is the same as EnsureTelemetryConfig but it also returns a bool indicating
 // whether EnsureTelemetryConfig had to create the config.
-func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryConfig, bool, error) {
+func EnsureTelemetryConfigCreated(dataDir *string, globalDir *string) (TelemetryConfig, bool, error) {
 	/*
 		Our logic should be as follows:
-			- We first look inside the provided data-directory.  If a config file is there, load it
-			  and return it
-			- Otherwise, look in the global directory.  If a config file is there, load it and return it.
-			- Otherwise, if a data-directory was provided then save the config file there.
-			- Otherwise, save the config file in the global directory
+			- We first look inside dataDir.  If a config file is there, load and return it
+			- Otherwise, look in the globalDir.  If a config file is there, load and return it.
+			- Otherwise, if dataDir was provided then save a default config there.
+			- Otherwise, save it to globalDir
 
 	*/
 
@@ -175,13 +159,13 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		}
 	}
 	if configPath == "" {
-		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
-		if err != nil {
+		if globalDir == nil {
 			cfg := createTelemetryConfig()
 			// Since GetConfigFilePath failed, there is no chance that we
 			// can save the next config files
 			return cfg, true, err
 		}
+		configPath = filepath.Join(*globalDir, TelemetryConfigFilename)
 		cfg, err = LoadTelemetryConfig(configPath)
 	}
 	created := false
@@ -193,11 +177,11 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 
 			/*
 				There could be a scenario where a data directory was supplied that doesn't exist.
-				In that case, we don't want to create the directory, just save in the global one
+				In that case, we don't want to create the directory, just save in cfgDir
 			*/
 
 			// If the directory exists...
-			if _, err := os.Stat(*dataDir); err == nil {
+			if _, err1 := os.Stat(*dataDir); err1 == nil {
 
 				// Remember, if we had a data directory supplied we want to save the config there
 				configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
@@ -210,15 +194,6 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		// There was no config file, create it.
 		err = cfg.Save(configPath)
 	}
-
-	ver := config.GetCurrentVersion()
-	ch := ver.Channel
-	// Should not happen, but default to "dev" if channel is unspecified.
-	if ch == "" {
-		ch = "dev"
-	}
-	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
-	cfg.Version = ver.String()
 
 	return cfg, created, err
 }
@@ -242,12 +217,6 @@ func (t *telemetryState) logMetrics(l logger, category telemetryspec.Category, m
 
 func (t *telemetryState) logEvent(l logger, category telemetryspec.Category, identifier telemetryspec.Event, details interface{}) {
 	t.logTelemetry(l, buildMessage(string(category), string(identifier)), details)
-}
-
-func (t *telemetryState) logStartOperation(l logger, category telemetryspec.Category, identifier telemetryspec.Operation) TelemetryOperation {
-	op := makeTelemetryOperation(t, category, identifier)
-	t.logTelemetry(l, buildMessage(string(category), string(identifier), "Start"), nil)
-	return op
 }
 
 func buildMessage(args ...string) string {

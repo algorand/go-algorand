@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,43 +18,51 @@ package crypto
 
 // #cgo CFLAGS: -Wall -std=c99
 // #cgo darwin,amd64 CFLAGS: -I${SRCDIR}/libs/darwin/amd64/include
-// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/libs/darwin/amd64/lib/libsodium.a
 // #cgo darwin,arm64 CFLAGS: -I${SRCDIR}/libs/darwin/arm64/include
-// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/libs/darwin/arm64/lib/libsodium.a
 // #cgo linux,amd64 CFLAGS: -I${SRCDIR}/libs/linux/amd64/include
-// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/libs/linux/amd64/lib/libsodium.a
 // #cgo linux,arm64 CFLAGS: -I${SRCDIR}/libs/linux/arm64/include
-// #cgo linux,arm64 LDFLAGS: ${SRCDIR}/libs/linux/arm64/lib/libsodium.a
 // #cgo linux,arm CFLAGS: -I${SRCDIR}/libs/linux/arm/include
-// #cgo linux,arm LDFLAGS: ${SRCDIR}/libs/linux/arm/lib/libsodium.a
+// #cgo linux,riscv64 CFLAGS: -I${SRCDIR}/libs/linux/riscv64/include
 // #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
-// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/libsodium.a
 // #include <stdint.h>
-// #include "sodium.h"
 // enum {
 //	sizeofPtr = sizeof(void*),
 //	sizeofULongLong = sizeof(unsigned long long),
 // };
+// int ed25519_batch_wrapper(const unsigned char **messages2D,
+//                           const unsigned char **publicKeys2D,
+//                           const unsigned char **signatures2D,
+//                           const unsigned char *messages1D,
+//                           const unsigned long long *mlen,
+//                           const unsigned char *publicKeys1D,
+//                           const unsigned char *signatures1D,
+//                           size_t num,
+//                           int *valid_p);
 import "C"
+
 import (
 	"errors"
 	"unsafe"
 )
 
 // BatchVerifier enqueues signatures to be validated in batch.
-type BatchVerifier struct {
-	messages             []Hashable          // contains a slice of messages to be hashed. Each message is varible length
-	publicKeys           []SignatureVerifier // contains a slice of public keys. Each individual public key is 32 bytes.
-	signatures           []Signature         // contains a slice of signatures keys. Each individual signature is 64 bytes.
-	useBatchVerification bool
+type BatchVerifier interface {
+	EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature)
+	GetNumberOfEnqueuedSignatures() int
+	Verify() error
+	VerifyWithFeedback() (failed []bool, err error)
 }
 
-const minBatchVerifierAlloc = 16
+type cgoBatchVerifier struct {
+	messages   []Hashable          // contains a slice of messages to be hashed. Each message is varible length
+	publicKeys []SignatureVerifier // contains a slice of public keys. Each individual public key is 32 bytes.
+	signatures []Signature         // contains a slice of signatures keys. Each individual signature is 64 bytes.
+	useSingle  bool
+}
 
 // Batch verifications errors
 var (
-	ErrBatchVerificationFailed = errors.New("At least one signature didn't pass verification")
-	ErrZeroTransactionInBatch  = errors.New("Could not validate empty signature set")
+	ErrBatchHasFailedSigs = errors.New("At least one signature didn't pass verification")
 )
 
 //export ed25519_randombytes_unsafe
@@ -63,36 +71,50 @@ func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
 	RandBytes(randBuf)
 }
 
-// MakeBatchVerifierWithAlgorithmDefaultSize create a BatchVerifier instance. This function pre-allocates
-// amount of free space to enqueue signatures without expanding. this function always use the batch
-// verification algorithm
-func MakeBatchVerifierWithAlgorithmDefaultSize() *BatchVerifier {
-	return MakeBatchVerifier(minBatchVerifierAlloc, true)
+const minBatchVerifierAlloc = 16
+const useSingleVerifierDefault = true
+
+// ed25519BatchVerifierFactory is the global singleton used for batch signature verification.
+// By default it uses the libsodium implementation. This can be changed during initialization
+// (e.g., by the config package when algod loads) to use the ed25519consensus implementation.
+var ed25519BatchVerifierFactory func(hint int) BatchVerifier = makeLibsodiumBatchVerifier
+
+// SetEd25519BatchVerifier allows the config package to switch the implementation
+// at startup based on configuration. Pass true to use ed25519consensus, false for libsodium.
+func SetEd25519BatchVerifier(useEd25519Consensus bool) {
+	if useEd25519Consensus {
+		ed25519BatchVerifierFactory = makeEd25519ConsensusBatchVerifier
+	} else {
+		ed25519BatchVerifierFactory = makeLibsodiumBatchVerifier
+	}
 }
 
-// MakeBatchVerifierDefaultSize create a BatchVerifier instance. This function pre-allocates
-// amount of free space to enqueue signatures without expanding
-func MakeBatchVerifierDefaultSize(enableBatchVerification bool) *BatchVerifier {
-	return MakeBatchVerifier(minBatchVerifierAlloc, enableBatchVerification)
+// MakeBatchVerifier creates a BatchVerifier instance.
+func MakeBatchVerifier() BatchVerifier {
+	return ed25519BatchVerifierFactory(minBatchVerifierAlloc)
 }
 
-// MakeBatchVerifier create a BatchVerifier instance. This function pre-allocates
-// a given space so it will not expaned the storage
-func MakeBatchVerifier(hint int, enableBatchVerification bool) *BatchVerifier {
+// MakeBatchVerifierWithHint creates a BatchVerifier instance. This function pre-allocates
+// space to enqueue signatures without expanding.
+func MakeBatchVerifierWithHint(hint int) BatchVerifier {
+	return ed25519BatchVerifierFactory(hint)
+}
+
+func makeLibsodiumBatchVerifier(hint int) BatchVerifier {
 	// preallocate enough storage for the expected usage. We will reallocate as needed.
-	if hint < minBatchVerifierAlloc {
+	if hint <= 0 {
 		hint = minBatchVerifierAlloc
 	}
-	return &BatchVerifier{
-		messages:             make([]Hashable, 0, hint),
-		publicKeys:           make([]SignatureVerifier, 0, hint),
-		signatures:           make([]Signature, 0, hint),
-		useBatchVerification: enableBatchVerification,
+	return &cgoBatchVerifier{
+		messages:   make([]Hashable, 0, hint),
+		publicKeys: make([]SignatureVerifier, 0, hint),
+		signatures: make([]Signature, 0, hint),
+		useSingle:  useSingleVerifierDefault,
 	}
 }
 
 // EnqueueSignature enqueues a signature to be enqueued
-func (b *BatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
+func (b *cgoBatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
 	// do we need to reallocate ?
 	if len(b.messages) == cap(b.messages) {
 		b.expand()
@@ -102,7 +124,7 @@ func (b *BatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message 
 	b.signatures = append(b.signatures, sig)
 }
 
-func (b *BatchVerifier) expand() {
+func (b *cgoBatchVerifier) expand() {
 	messages := make([]Hashable, len(b.messages), len(b.messages)*2)
 	publicKeys := make([]SignatureVerifier, len(b.publicKeys), len(b.publicKeys)*2)
 	signatures := make([]Signature, len(b.signatures), len(b.signatures)*2)
@@ -114,78 +136,95 @@ func (b *BatchVerifier) expand() {
 	b.signatures = signatures
 }
 
-// GetNumberOfEnqueuedSignatures returns the number of signatures current enqueue onto the bacth verifier object
-func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
+// GetNumberOfEnqueuedSignatures returns the number of signatures currently enqueued into the BatchVerifier
+func (b *cgoBatchVerifier) GetNumberOfEnqueuedSignatures() int {
 	return len(b.messages)
 }
 
 // Verify verifies that all the signatures are valid. in that case nil is returned
-// if the batch is zero an appropriate error is return.
-func (b *BatchVerifier) Verify() error {
-	if b.GetNumberOfEnqueuedSignatures() == 0 {
-		return ErrZeroTransactionInBatch
-	}
-
-	if b.useBatchVerification {
-		var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
-		for i, m := range b.messages {
-			messages[i] = HashRep(m)
-		}
-		if batchVerificationImpl(messages, b.publicKeys, b.signatures) {
-			return nil
-		}
-		return ErrBatchVerificationFailed
-	}
-	return b.verifyOneByOne()
+func (b *cgoBatchVerifier) Verify() error {
+	_, err := b.VerifyWithFeedback()
+	return err
 }
 
-func (b *BatchVerifier) verifyOneByOne() error {
+// VerifyWithFeedback verifies that all the signatures are valid.
+// if all sigs are valid, nil will be returned for err (failed will have all false)
+// if some signatures are invalid, true will be set in failed at the corresponding indexes, and
+// ErrBatchVerificationFailed for err
+func (b *cgoBatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
+	if len(b.messages) == 0 {
+		return nil, nil
+	}
+
+	if b.useSingle {
+		return b.singleVerify()
+	}
+
+	const estimatedMessageSize = 64
+	msgLengths := make([]uint64, 0, len(b.messages))
+	var messages = make([]byte, 0, len(b.messages)*estimatedMessageSize)
+
+	lenWas := 0
 	for i := range b.messages {
-		verifier := b.publicKeys[i]
-		if !verifier.Verify(b.messages[i], b.signatures[i], false) {
-			return ErrBatchVerificationFailed
-		}
+		messages = HashRepToBuff(b.messages[i], messages)
+		msgLengths = append(msgLengths, uint64(len(messages)-lenWas))
+		lenWas = len(messages)
 	}
-	return nil
+	allValid, failed := cgoBatchVerificationImpl(messages, msgLengths, b.publicKeys, b.signatures)
+	if allValid {
+		return nil, nil
+	}
+	return failed, ErrBatchHasFailedSigs
 }
 
-// batchVerificationImpl invokes the ed25519 batch verification algorithm.
-// it returns true if all the signatures were authentically signed by the owners
-func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) bool {
+func (b *cgoBatchVerifier) singleVerify() (failed []bool, err error) {
+	failed = make([]bool, len(b.messages))
+	var containsFailed bool
 
-	numberOfSignatures := len(messages)
-
-	messagesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
-	messagesLenAllocation := C.malloc(C.size_t(C.sizeofULongLong * numberOfSignatures))
-	publicKeysAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
-	signaturesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
-	valid := C.malloc(C.size_t(C.sizeof_int * numberOfSignatures))
-
-	defer func() {
-		// release staging memory
-		C.free(messagesAllocation)
-		C.free(messagesLenAllocation)
-		C.free(publicKeysAllocation)
-		C.free(signaturesAllocation)
-		C.free(valid)
-	}()
-
-	// load all the data pointers into the array pointers.
-	for i := 0; i < numberOfSignatures; i++ {
-		*(*uintptr)(unsafe.Pointer(uintptr(messagesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&messages[i][0]))
-		*(*C.ulonglong)(unsafe.Pointer(uintptr(messagesLenAllocation) + uintptr(i*C.sizeofULongLong))) = C.ulonglong(len(messages[i]))
-		*(*uintptr)(unsafe.Pointer(uintptr(publicKeysAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&publicKeys[i][0]))
-		*(*uintptr)(unsafe.Pointer(uintptr(signaturesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&signatures[i][0]))
+	for i := range b.messages {
+		failed[i] = !ed25519Verify(ed25519PublicKey(b.publicKeys[i]), HashRep(b.messages[i]), ed25519Signature(b.signatures[i]))
+		if failed[i] {
+			containsFailed = true
+		}
 	}
+	if containsFailed {
+		return failed, ErrBatchHasFailedSigs
+	}
+	return nil, nil
+}
+
+// cgoBatchVerificationImpl invokes the ed25519 batch verification algorithm.
+// it returns true if all the signatures were authentically signed by the owners
+// otherwise, returns false, and sets the indexes of the failed sigs in failed
+func cgoBatchVerificationImpl(messages []byte, msgLengths []uint64, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
+
+	numberOfSignatures := len(msgLengths)
+	valid := make([]C.int, numberOfSignatures)
+	messages2D := make([]*C.uchar, numberOfSignatures)
+	publicKeys2D := make([]*C.uchar, numberOfSignatures)
+	signatures2D := make([]*C.uchar, numberOfSignatures)
 
 	// call the batch verifier
-	allValid := C.crypto_sign_ed25519_open_batch(
-		(**C.uchar)(unsafe.Pointer(messagesAllocation)),
-		(*C.ulonglong)(unsafe.Pointer(messagesLenAllocation)),
-		(**C.uchar)(unsafe.Pointer(publicKeysAllocation)),
-		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
-		C.size_t(len(messages)),
-		(*C.int)(unsafe.Pointer(valid)))
+	// Use unsafe.SliceData to safely get pointers to underlying arrays
+	allValid := C.ed25519_batch_wrapper(
+		(**C.uchar)(unsafe.SliceData(messages2D)),
+		(**C.uchar)(unsafe.SliceData(publicKeys2D)),
+		(**C.uchar)(unsafe.SliceData(signatures2D)),
+		(*C.uchar)(unsafe.SliceData(messages)),
+		(*C.ulonglong)(unsafe.SliceData(msgLengths)),
+		(*C.uchar)(unsafe.SliceData(publicKeys[0][:])),
+		(*C.uchar)(unsafe.SliceData(signatures[0][:])),
+		C.size_t(numberOfSignatures),
+		(*C.int)(unsafe.SliceData(valid)))
 
-	return allValid == 0
+	if allValid == 0 { // all signatures valid
+		return true, nil
+	}
+
+	// not all signatures valid, identify the failed signatures
+	failed = make([]bool, numberOfSignatures)
+	for i := 0; i < numberOfSignatures; i++ {
+		failed[i] = (valid[i] == 0)
+	}
+	return false, failed
 }

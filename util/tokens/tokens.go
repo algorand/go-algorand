@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@ package tokens
 import (
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/util"
@@ -59,7 +59,7 @@ func GetAndValidateAPIToken(dataDir, tokenFilename string) (string, error) {
 // writeAPITokenToDisk persists the APIToken to the datadir
 func writeAPITokenToDisk(dataDir, tokenFilename, apiToken string) error {
 	filepath := tokenFilepath(dataDir, tokenFilename)
-	return ioutil.WriteFile(filepath, []byte(apiToken), 0644)
+	return os.WriteFile(filepath, []byte(apiToken), 0644)
 }
 
 // GenerateAPIToken writes a cryptographically secure APIToken to disk

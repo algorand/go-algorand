@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,7 +106,7 @@ type param struct {
 }
 
 func initCommandsFromDir(dirname string) error {
-	files, err := ioutil.ReadDir(dirname)
+	files, err := os.ReadDir(dirname)
 	if err != nil {
 		return err
 	}
@@ -137,7 +136,7 @@ func initCommandsFromDir(dirname string) error {
 		if err != nil {
 			return err
 		}
-		data, err := ioutil.ReadFile(fullpath)
+		data, err := os.ReadFile(fullpath)
 		if err != nil {
 			return err
 		}

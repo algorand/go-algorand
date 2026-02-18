@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,6 +45,12 @@ type AccountManager struct {
 	log      logging.Logger
 }
 
+// DeleteStateProofKey deletes keys related to a ParticipationID. The function removes
+// all keys up to, and not including, the given round.
+func (manager *AccountManager) DeleteStateProofKey(id account.ParticipationID, round basics.Round) error {
+	return manager.registry.DeleteStateProofKeys(id, round)
+}
+
 // MakeAccountManager creates a new AccountManager with a custom logger
 func MakeAccountManager(log logging.Logger, registry account.ParticipationRegistry) *AccountManager {
 	manager := &AccountManager{}
@@ -62,7 +68,7 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 		if part.OverlapsInterval(rnd, rnd) {
 			partRndSecrets, err := manager.registry.GetForRound(part.ParticipationID, rnd)
 			if err != nil {
-				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				manager.log.Warnf("error while loading round secrets from participation registry: %v", err)
 				continue
 			}
 			out = append(out, partRndSecrets)
@@ -72,12 +78,12 @@ func (manager *AccountManager) Keys(rnd basics.Round) (out []account.Participati
 }
 
 // StateProofKeys returns a list of Participation accounts, and their stateproof secrets
-func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.StateProofRecordForRound) {
+func (manager *AccountManager) StateProofKeys(rnd basics.Round) (out []account.StateProofSecretsForRound) {
 	for _, part := range manager.registry.GetAll() {
-		if part.OverlapsInterval(rnd, rnd) {
-			partRndSecrets, err := manager.registry.GetStateProofForRound(part.ParticipationID, rnd)
+		if part.StateProof != nil && part.OverlapsInterval(rnd, rnd) {
+			partRndSecrets, err := manager.registry.GetStateProofSecretsForRound(part.ParticipationID, rnd)
 			if err != nil {
-				manager.log.Warnf("error while loading round secrets from participation registry: %w", err)
+				manager.log.Warnf("could not load state proof keys from participation registry: %v", err)
 				continue
 			}
 			out = append(out, partRndSecrets)
@@ -92,24 +98,26 @@ func (manager *AccountManager) HasLiveKeys(from, to basics.Round) bool {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	for _, part := range manager.registry.GetAll() {
-		if part.OverlapsInterval(from, to) {
-			return true
-		}
-	}
-	return false
+	return manager.registry.HasLiveKeys(from, to)
 }
 
 // AddParticipation adds a new account.Participation to be managed.
 // The return value indicates if the key has been added (true) or
 // if this is a duplicate key (false).
-func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation) bool {
+// if ephemeral is true then the key is not stored in the internal hashmap and
+// will not be deleted by DeleteOldKeys()
+func (manager *AccountManager) AddParticipation(participation account.PersistedParticipation, ephemeral bool) bool {
 	// Tell the ParticipationRegistry about the Participation. Duplicate entries
 	// are ignored.
 	pid, err := manager.registry.Insert(participation.Participation)
 	if err != nil && err != account.ErrAlreadyInserted {
 		manager.log.Warnf("Failed to insert participation key.")
 	}
+
+	if err == account.ErrAlreadyInserted {
+		return false
+	}
+
 	manager.log.Infof("Inserted key (%s) for account (%s) first valid (%d) last valid (%d)\n",
 		pid, participation.Parent, participation.FirstValid, participation.LastValid)
 
@@ -134,7 +142,9 @@ func (manager *AccountManager) AddParticipation(participation account.PersistedP
 		return false
 	}
 
-	manager.partKeys[partkeyID] = participation
+	if !ephemeral {
+		manager.partKeys[partkeyID] = participation
+	}
 
 	addressString := address.String()
 	manager.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.PartKeyRegisteredEvent, telemetryspec.PartKeyRegisteredEventDetails{
@@ -189,7 +199,7 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 
 	// Delete expired records from participation registry.
 	if err := manager.registry.DeleteExpired(latestHdr.Round, agreementProto); err != nil {
-		manager.log.Warnf("error while deleting expired records from participation registry: %w", err)
+		manager.log.Warnf("error while deleting expired records from participation registry: %v", err)
 	}
 }
 
@@ -203,6 +213,6 @@ func (manager *AccountManager) Record(account basics.Address, round basics.Round
 	// This function updates a cache in the ParticipationRegistry, we must call Flush to persist the changes.
 	err := manager.registry.Record(account, round, participationType)
 	if err != nil {
-		manager.log.Warnf("node.Record: Account %v not able to record participation (%d) on round %d: %w", account, participationType, round, err)
+		manager.log.Warnf("node.Record: Account %v not able to record participation (%d) on round %d: %v", account, participationType, round, err)
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,6 @@ import (
 	"fmt"
 )
 
-var errWalletNameLong = fmt.Errorf("wallet name too long")
-var errPasswordLong = fmt.Errorf("password too long")
 var errCouldNotDecode = fmt.Errorf("could not decode request body")
 var errCouldNotDecodeAddress = fmt.Errorf("could not decode address")
 var errCouldNotDecodeTx = fmt.Errorf("could not decode transaction")

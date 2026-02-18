@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package apply
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,38 +24,17 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
-	res := make(map[basics.AssetIndex]basics.AssetHolding, len(m))
-	for id, val := range m {
-		res[id] = val
-	}
-	return res
-}
-
-func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
-	res := make(map[basics.AssetIndex]basics.AssetParams, len(m))
-	for id, val := range m {
-		res[id] = val
-	}
-	return res
-}
-
 func TestAssetTransfer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Creator
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
-
-	secretDst := keypair()
-	dst := basics.Address(secretDst.SignatureVerifier)
-
-	secretCls := keypair()
-	cls := basics.Address(secretCls.SignatureVerifier)
+	src := ledgertesting.RandomAddress()
+	dst := ledgertesting.RandomAddress()
+	cls := ledgertesting.RandomAddress()
 
 	var total, toSend, dstAmount uint64
 	total = 1000000
@@ -107,7 +85,7 @@ func TestAssetTransfer(t *testing.T) {
 	}
 
 	var ad transactions.ApplyData
-	err := AssetTransfer(tx.AssetTransferTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, &ad)
+	err := AssetTransfer(tx.AssetTransferTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, &ad)
 	require.NoError(t, err)
 
 	if config.Consensus[protocol.ConsensusCurrentVersion].EnableAssetCloseAmount {
@@ -115,21 +93,5 @@ func TestAssetTransfer(t *testing.T) {
 		require.Equal(t, dstAmount-toSend, ad.AssetClosingAmount)
 		require.Equal(t, total-dstAmount+toSend, addrs[src].Assets[1].Amount)
 		require.Equal(t, dstAmount-toSend, addrs[cls].Assets[1].Amount)
-	}
-}
-
-var benchTotal int = 0
-
-func BenchmarkAssetCloning(b *testing.B) {
-	const numAssets = 800
-	assets := make(map[basics.AssetIndex]basics.AssetHolding, numAssets)
-	for j := 0; j < numAssets; j++ {
-		aidx := basics.AssetIndex(rand.Int63n(100000000))
-		assets[aidx] = basics.AssetHolding{Amount: uint64(aidx)}
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		clone := cloneAssetHoldings(assets)
-		benchTotal += len(clone) // make sure the compiler does not optimize out cloneAssetHoldings call
 	}
 }

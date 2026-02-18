@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,15 +19,18 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/rand"
 	"testing"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
@@ -164,9 +167,17 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
+func (b testValidatedBlock) Round() basics.Round {
+	return b.Inside.Round()
+}
+
+func (b testValidatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) Block {
 	b.Inside.BlockHeader.Seed = s
-	return b
+	b.Inside.BlockHeader.Proposer = proposer
+	if !eligible {
+		b.Inside.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
+	return Block(b.Inside)
 }
 
 type testBlockValidator struct{}
@@ -179,7 +190,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round) (ValidatedBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round, _ []basics.Address) (UnfinishedBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
@@ -207,10 +218,7 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 	l.certs = make(map[basics.Round]Certificate)
 	l.nextRound = 1
 
-	l.state = make(map[basics.Address]basics.AccountData)
-	for k, v := range state {
-		l.state[k] = v
-	}
+	l.state = maps.Clone(state)
 
 	l.notifications = make(map[basics.Round]signal)
 
@@ -226,10 +234,7 @@ func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountD
 	l.certs = make(map[basics.Round]Certificate)
 	l.nextRound = 1
 
-	l.state = make(map[basics.Address]basics.AccountData)
-	for k, v := range state {
-		l.state[k] = v
-	}
+	l.state = maps.Clone(state)
 
 	l.notifications = make(map[basics.Round]signal)
 
@@ -245,10 +250,7 @@ func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNum
 
 	l.maxNumBlocks = maxNumBlocks
 
-	l.state = make(map[basics.Address]basics.AccountData)
-	for k, v := range state {
-		l.state[k] = v
-	}
+	l.state = maps.Clone(state)
 
 	l.notifications = make(map[basics.Round]signal)
 
@@ -332,10 +334,10 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 		return basics.OnlineAccountData{}, &LedgerDroppedRoundError{}
 	}
 
-	return l.state[a].OnlineAccountData(), nil
+	return basics_testing.OnlineAccountData(l.state[a]), nil
 }
 
-func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -347,7 +349,7 @@ func (l *testLedger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
+		sum, overflowed = basics.OAddA(sum, basics_testing.OnlineAccountData(rec).VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}
@@ -421,7 +423,7 @@ type testAccountData struct {
 }
 
 func makeProposalsTesting(accs testAccountData, round basics.Round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	ve, err := factory.AssembleBlock(round)
+	ve, err := factory.AssembleBlock(round, accs.addresses)
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -533,11 +535,12 @@ func (v *voteMakerHelper) MakeRandomProposalValue() *proposalValue {
 
 func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*proposal, *proposalValue) {
 	f := testBlockFactory{Owner: 1}
-	ve, err := f.AssembleBlock(r)
+	ub, err := f.AssembleBlock(r, nil)
 	require.NoError(t, err)
+	pb := ub.FinishBlock(committee.Seed{}, basics.Address{}, false)
 
 	var payload unauthenticatedProposal
-	payload.Block = ve.Block()
+	payload.Block = bookkeeping.Block(pb)
 	payload.SeedProof = randomVRFProof()
 
 	propVal := proposalValue{
@@ -545,7 +548,7 @@ func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*pro
 		EncodingDigest: crypto.HashObj(payload),
 	}
 
-	return &proposal{unauthenticatedProposal: payload, ve: ve}, &propVal
+	return &proposal{unauthenticatedProposal: payload}, &propVal
 }
 
 // make a vote for a fixed proposal value

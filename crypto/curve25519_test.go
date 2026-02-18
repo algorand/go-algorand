@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ func TestSignVerifyEmptyMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	pk, sk := ed25519GenerateKey()
 	sig := ed25519Sign(sk, []byte{})
-	if !ed25519Verify(pk, []byte{}, sig, true) {
+	if !ed25519Verify(pk, []byte{}, sig) {
 		t.Errorf("sig of an empty message failed to verify")
 	}
 }
@@ -43,7 +43,7 @@ func TestVerifyZeros(t *testing.T) {
 	var pk SignatureVerifier
 	var sig Signature
 	for x := byte(0); x < 255; x++ {
-		if pk.VerifyBytes([]byte{x}, sig, true) {
+		if pk.VerifyBytes([]byte{x}, sig) {
 			t.Errorf("Zero sig with zero pk successfully verified message %x", x)
 		}
 	}
@@ -84,7 +84,7 @@ func BenchmarkSignVerify(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		sig := c.Sign(s)
-		_ = c.Verify(s, sig, true)
+		_ = c.Verify(s, sig)
 	}
 }
 
@@ -97,7 +97,7 @@ func BenchmarkSign(b *testing.B) {
 		_ = c.Sign(s)
 	}
 }
-func BenchmarkVerify(b *testing.B) {
+func BenchmarkVerify25519(b *testing.B) {
 	c := makeCurve25519Secret()
 	strs := make([]TestingHashable, b.N)
 	sigs := make([]Signature, b.N)
@@ -108,6 +108,6 @@ func BenchmarkVerify(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = c.Verify(strs[i], sigs[i], true)
+		_ = c.Verify(strs[i], sigs[i])
 	}
 }

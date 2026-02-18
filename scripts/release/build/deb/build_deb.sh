@@ -28,12 +28,12 @@ mkdir -p "$PKG_ROOT/usr/bin"
 
 # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
 if [[ "$PKG_NAME" =~ devtools ]]; then
-    BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
+    BIN_FILES=("carpenter" "msgpacktool" "tealdbg")
     UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
     OUTPUT_DEB="$OUTDIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
     REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
 else
-    BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
+    BIN_FILES=("algocfg" "algod" "algoh" "algokey" "diagcfg" "goal" "kmd" "node_exporter")
     OUTPUT_DEB="$OUTDIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
     UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
 fi
@@ -57,7 +57,7 @@ if [[ ! "$PKG_NAME" =~ devtools ]]; then
         cp "./installer/$data" "$PKG_ROOT/var/lib/algorand"
     done
 
-    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet" "alphanet")
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p "$PKG_ROOT/var/lib/algorand/genesis/$dir"
         cp "./installer/genesis/$dir/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis/$dir/genesis.json"

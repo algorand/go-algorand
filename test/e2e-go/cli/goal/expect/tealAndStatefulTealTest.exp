@@ -63,10 +63,13 @@ if { [catch {
 
     # -------------------------- setup accounts ----------------------------------
 
+    # Get suggested fee from network
+    set FEE_AMOUNT [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Network suggested fee: $FEE_AMOUNT"
+
     # Transfer Algos from primary account to account 1
     set MIN_BALANCE 1000000
     set TRANSFER_AMOUNT  [expr {1000 * $MIN_BALANCE}]
-    set FEE_AMOUNT 1000
     set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
 
     # Print the transaction id
@@ -141,9 +144,7 @@ if { [catch {
     ::AlgorandGoal::SplitGroup groupedtransactions.tx split.tx
 
     puts "sign the split transaction"
-    set RAW_TX_1 split-0.tx
-    set RAW_STX_1 signout-0.tx
-    ::AlgorandGoal::SignTransaction $WALLET_1_NAME $WALLET_1_PASSWORD $RAW_TX_1 $RAW_STX_1 $TEST_PRIMARY_NODE_DIR
+    ::AlgorandGoal::SignTransaction $WALLET_1_NAME $WALLET_1_PASSWORD split-0.tx signout-0.tx $TEST_PRIMARY_NODE_DIR
 
     puts "\ncombine into the sign out transaction"
     exec cat signout-0.tx split-1.tx > signout.tx

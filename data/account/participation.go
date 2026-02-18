@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -42,13 +43,14 @@ import (
 // For correctness, all Roots should have no more than one Participation
 // globally active at any time. If this condition is violated, the Root may
 // equivocate. (Algorand tolerates a limited fraction of misbehaving accounts.)
+//
 //msgp:ignore Participation
 type Participation struct {
 	Parent basics.Address
 
 	VRF    *crypto.VRFSecrets
 	Voting *crypto.OneTimeSignatureSecrets
-	// StateProofSecrets is used to sign compact certificates.
+	// StateProofSecrets is used to sign state proofs.
 	StateProofSecrets *merklesignature.Secrets
 
 	// The first and last rounds for which this account is valid, respectively.
@@ -78,8 +80,8 @@ func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // ID creates a ParticipationID hash from the identity file.
-func (id ParticipationKeyIdentity) ID() ParticipationID {
-	return ParticipationID(crypto.HashObj(&id))
+func (id *ParticipationKeyIdentity) ID() ParticipationID {
+	return ParticipationID(crypto.HashObj(id))
 }
 
 // ID computes a ParticipationID.
@@ -103,6 +105,7 @@ func (part Participation) ID() ParticipationID {
 // PersistedParticipation encapsulates the static state of the participation
 // for a single address at any given moment, while providing the ability
 // to handle persistence and deletion of secrets.
+//
 //msgp:ignore PersistedParticipation
 type PersistedParticipation struct {
 	Participation
@@ -141,7 +144,7 @@ func (part Participation) VotingSecrets() *crypto.OneTimeSignatureSecrets {
 	return part.Voting
 }
 
-// StateProofSigner returns the key used to sign on Compact Certificates.
+// StateProofSigner returns the key used to sign on State Proofs.
 // might return nil!
 func (part Participation) StateProofSigner() *merklesignature.Secrets {
 	return part.StateProofSecrets
@@ -168,9 +171,9 @@ func (part Participation) GenerateRegistrationTransaction(fee basics.MicroAlgos,
 			SelectionPK: part.VRF.PK,
 		},
 	}
-	if cert := part.StateProofSigner(); cert != nil {
+	if stateProofSigner := part.StateProofSigner(); stateProofSigner != nil {
 		if includeStateProofKeys { // TODO: remove this check and parameter after the network had enough time to upgrade
-			t.KeyregTxnFields.StateProofPK = *(cert.GetVerifier())
+			t.KeyregTxnFields.StateProofPK = stateProofSigner.GetVerifier().Commitment
 		}
 	}
 	t.KeyregTxnFields.VoteFirst = part.FirstValid
@@ -213,6 +216,11 @@ func (part PersistedParticipation) PersistNewParent() error {
 	})
 }
 
+// DefaultKeyDilution computes the default dilution based on first and last rounds as the sqrt of validity window.
+func DefaultKeyDilution(first, last basics.Round) uint64 {
+	return 1 + uint64(math.Sqrt(float64(last-first)))
+}
+
 // FillDBWithParticipationKeys initializes the passed database with participation keys
 func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firstValid, lastValid basics.Round, keyDilution uint64) (part PersistedParticipation, err error) {
 	if lastValid < firstValid {
@@ -220,10 +228,7 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 		return
 	}
 
-	// TODO: change to ConsensusCurrentVersion when updated
-	interval := config.Consensus[protocol.ConsensusFuture].CompactCertRounds
 	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
-
 	if maxValidPeriod != 0 && uint64(lastValid-firstValid) > maxValidPeriod {
 		return PersistedParticipation{}, fmt.Errorf("the validity period for mss is too large: the limit is %d", maxValidPeriod)
 	}
@@ -239,8 +244,8 @@ func FillDBWithParticipationKeys(store db.Accessor, address basics.Address, firs
 	// Generate a new VRF key, which lives in the participation keys db
 	vrf := crypto.GenerateVRFSecrets()
 
-	// Generate a new key which signs the compact certificates
-	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), interval)
+	// Generate a new key which signs the state proof
+	stateProofSecrets, err := merklesignature.New(uint64(firstValid), uint64(lastValid), merklesignature.KeyLifetimeDefault)
 	if err != nil {
 		return PersistedParticipation{}, err
 	}

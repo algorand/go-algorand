@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package logging
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +24,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -46,15 +44,9 @@ func TestLoadDefaultConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	configDir, err := ioutil.TempDir("", "testdir")
-	defer os.RemoveAll(configDir)
-	currentRoot := config.SetGlobalConfigFileRoot(configDir)
-	defer config.SetGlobalConfigFileRoot(currentRoot)
-
-	_, err = EnsureTelemetryConfig(nil, "")
-
+	temp := t.TempDir()
+	_, err := EnsureTelemetryConfig(nil, &temp)
 	a.Nil(err)
-
 }
 
 func isDefault(cfg TelemetryConfig) bool {
@@ -71,17 +63,13 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
-	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
-	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
-	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
+	temp := t.TempDir()
+	globalLoggingPath := filepath.Join(temp, TelemetryConfigFilename)
 
-	dataDir, err := ioutil.TempDir("", "dataDir")
-	defer os.RemoveAll(dataDir)
+	dataDir := t.TempDir()
 	dataDirLoggingPath := filepath.Join(dataDir, TelemetryConfigFilename)
 
-	_, err = os.Stat(globalLoggingPath)
+	_, err := os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))
 	_, err = os.Stat(dataDirLoggingPath)
 	a.True(os.IsNotExist(err))
@@ -94,7 +82,7 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 	fout.Write([]byte("{\"Enable\":true}"))
 	fout.Close()
 
-	cfg, err := EnsureTelemetryConfig(&dataDir, "")
+	cfg, err := EnsureTelemetryConfig(&dataDir, &temp)
 	a.Nil(err)
 
 	_, err = os.Stat(globalLoggingPath)
@@ -104,7 +92,6 @@ func TestLoggingConfigDataDirFirst(t *testing.T) {
 
 	a.Equal(cfg.FilePath, dataDirLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
-	a.NotEmpty(cfg.Version)
 
 	// We got this from the tiny file we wrote to earlier.
 	a.True(cfg.Enable)
@@ -117,18 +104,14 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
-	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
-	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
+	globalConfigRoot := t.TempDir()
 	globalLoggingPath := filepath.Join(globalConfigRoot, TelemetryConfigFilename)
 
-	_, err = os.Stat(globalLoggingPath)
+	_, err := os.Stat(globalLoggingPath)
 	a.True(os.IsNotExist(err))
 
 	cfgPath := "/missing-directory"
-	cfg, err := EnsureTelemetryConfig(&cfgPath, "")
-
+	cfg, err := EnsureTelemetryConfig(&cfgPath, &globalConfigRoot)
 	a.Nil(err)
 	_, err = os.Stat(globalLoggingPath)
 	a.Nil(err)
@@ -138,7 +121,6 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	defaultCfg := createTelemetryConfig()
 	a.Equal(cfg.FilePath, globalLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
-	a.NotEmpty(cfg.Version)
 
 	a.True(isDefault(cfg))
 
@@ -150,17 +132,15 @@ func TestSaveLoadConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	globalConfigRoot, err := ioutil.TempDir("", "globalConfigRoot")
-	defer os.RemoveAll(globalConfigRoot)
-	oldConfigRoot := config.SetGlobalConfigFileRoot(globalConfigRoot)
-	defer config.SetGlobalConfigFileRoot(oldConfigRoot)
+	globalConfigRoot := t.TempDir()
 
-	configDir, err := ioutil.TempDir("", "testdir")
-	os.RemoveAll(configDir)
-	err = os.Mkdir(configDir, 0777)
+	configDir := t.TempDir()
+	err := os.Mkdir(configDir, 0777)
 
-	cfg, err := EnsureTelemetryConfig(&configDir, "")
+	cfg, err := EnsureTelemetryConfig(&configDir, &globalConfigRoot)
 	cfg.Name = "testname"
+	cfg.ChainID = "would end up set"
+	cfg.Version = "would also be set"
 	err = cfg.Save(cfg.FilePath)
 	a.NoError(err)
 
@@ -178,8 +158,6 @@ func TestSaveLoadConfig(t *testing.T) {
 	a.NoError(err)
 	a.Equal("testname", cfgLoad.Name)
 	a.Equal(cfgLoad, cfg)
-
-	os.RemoveAll(configDir)
 }
 
 func TestAsyncTelemetryHook_CloseDrop(t *testing.T) {
@@ -238,4 +216,35 @@ func TestAsyncTelemetryHook_QueueDepth(t *testing.T) {
 	// writing it off to the underlying hook. when that happens, the total number of sent entries could
 	// be one higher then the maxDepth.
 	require.LessOrEqual(t, hookEntries, maxDepth+1)
+}
+
+// Ensure that errors from inside the telemetryhook.go implementation are not reported to telemetry.
+func TestAsyncTelemetryHook_SelfReporting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const entryCount = 100
+	const maxDepth = 10
+
+	filling := make(chan struct{})
+
+	testHook := makeMockTelemetryHook(logrus.DebugLevel)
+	testHook.cb = func(entry *logrus.Entry) {
+		<-filling // Block while filling
+	}
+
+	hook := createAsyncHook(&testHook, 100, 10)
+	hook.ready = true
+	for i := 0; i < entryCount; i++ {
+		selfEntry := logrus.Entry{
+			Level:   logrus.ErrorLevel,
+			Data:    logrus.Fields{"TelemetryError": true},
+			Message: "Unable to write event",
+		}
+		hook.Fire(&selfEntry)
+	}
+	close(filling)
+	hook.Close()
+
+	require.Len(t, testHook.entries(), 0)
 }

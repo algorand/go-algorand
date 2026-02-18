@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,10 +17,13 @@
 package crypto
 
 import (
-	"github.com/algorand/falcon"
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/falcon"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestSignAndVerifyFalcon(t *testing.T) {
@@ -102,9 +105,28 @@ func TestFalconsFormatConversion(t *testing.T) {
 	falconSig := falcon.CompressedSignature(sig)
 	ctFormat, err := falconSig.ConvertToCT()
 
-	rawFormat, err := key.GetVerifyingKey().GetSignatureFixedLengthHashableRepresentation(sig)
+	rawFormat, err := sig.GetFixedLengthHashableRepresentation()
 	a.NoError(err)
 	a.NotEqual([]byte(sig), rawFormat)
 
 	a.Equal(ctFormat[:], rawFormat)
+}
+
+func TestFalconSignature_ValidateVersion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	msg := TestingHashable{data: []byte("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet")}
+	var seed FalconSeed
+	SystemRNG.RandBytes(seed[:])
+	key, err := GenerateFalconSigner(seed)
+	a.NoError(err)
+
+	byteSig, err := key.Sign(msg)
+	a.NoError(err)
+
+	a.True(byteSig.IsSaltVersionEqual(falcon.CurrentSaltVersion))
+
+	byteSig[1]++
+	a.False(byteSig.IsSaltVersionEqual(falcon.CurrentSaltVersion))
 }

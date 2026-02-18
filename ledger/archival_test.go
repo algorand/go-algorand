@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,9 +21,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
 	mathrand "math/rand"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -31,17 +29,18 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -69,7 +68,7 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger internal.LedgerForEvaluator) (ledgercore.StateDelta, error) {
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger eval.LedgerForEvaluator) (ledgercore.StateDelta, error) {
 	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }
 
@@ -77,7 +76,7 @@ func (wl *wrappedLedger) Latest() basics.Round {
 	return wl.l.Latest()
 }
 
-func (wl *wrappedLedger) trackerDB() db.Pair {
+func (wl *wrappedLedger) trackerDB() trackerdb.Store {
 	return wl.l.trackerDB()
 }
 
@@ -97,6 +96,10 @@ func (wl *wrappedLedger) GenesisProto() config.ConsensusParams {
 	return wl.l.GenesisProto()
 }
 
+func (wl *wrappedLedger) GenesisProtoVersion() protocol.ConsensusVersion {
+	return wl.l.GenesisProtoVersion()
+}
+
 func (wl *wrappedLedger) GenesisAccounts() map[basics.Address]basics.AccountData {
 	return wl.l.GenesisAccounts()
 }
@@ -108,8 +111,8 @@ func getInitState() (genesisInitState ledgercore.InitState) {
 	blk.FeeSink = testSinkAddr
 
 	accts := make(map[basics.Address]basics.AccountData)
-	accts[testPoolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
-	accts[testSinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
+	accts[testPoolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
+	accts[testSinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567890})
 
 	genesisInitState.Accounts = accts
 	genesisInitState.Block = blk
@@ -127,20 +130,13 @@ func TestArchival(t *testing.T) {
 	//
 	// We generate mostly empty blocks, with the exception of timestamps,
 	// which affect participationTracker.committedUpTo()'s return value.
-
-	// This test was causing random crashes on travis when executed with the race detector
-	// due to memory exhustion. For the time being, I'm taking it offline from the ubuntu
-	// configuration where it used to cause failuires.
-	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
-		t.Skip("Skipping the TestArchival as it tend to randomally fail on travis linux-amd64")
-	}
-
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -187,18 +183,8 @@ func TestArchivalRestart(t *testing.T) {
 
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
 
-	// disable deadlock checking code
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
-
-	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
-	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
@@ -219,10 +205,10 @@ func TestArchivalRestart(t *testing.T) {
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -236,10 +222,10 @@ func TestArchivalRestart(t *testing.T) {
 	defer l.Close()
 
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -282,18 +268,18 @@ func makeUnsignedAssetCreateTx(firstValid, lastValid basics.Round, total uint64,
 	return tx, nil
 }
 
-func makeUnsignedAssetDestroyTx(firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
+func makeUnsignedAssetDestroyTx(firstValid, lastValid basics.Round, assetIndex basics.AssetIndex) (transactions.Transaction, error) {
 	var txn transactions.Transaction
 	txn.Type = protocol.AssetConfigTx
-	txn.ConfigAsset = basics.AssetIndex(assetIndex)
+	txn.ConfigAsset = assetIndex
 	txn.FirstValid = firstValid
 	txn.LastValid = lastValid
 	return txn, nil
 }
 
-func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
+func makeUnsignedApplicationCallTx(appIdx basics.AppIndex, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
-	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.ApplicationID = appIdx
 	tx.OnCompletion = onCompletion
 
 	// If creating, set programs
@@ -337,18 +323,8 @@ func TestArchivalCreatables(t *testing.T) {
 	// restart, ensure all assets are there in index unless they were
 	// deleted
 
-	// disable deadlock checking code
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
-
-	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
-	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 
@@ -376,10 +352,10 @@ func TestArchivalCreatables(t *testing.T) {
 	var creators []basics.Address
 	for i := 0; i < maxBlocks; i++ {
 		creator := basics.Address{}
-		_, err = rand.Read(creator[:])
+		_, err := rand.Read(creator[:])
 		require.NoError(t, err)
 		creators = append(creators, creator)
-		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
+		genesisInitState.Accounts[creator] = basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
 	}
 
 	// open ledger
@@ -429,10 +405,10 @@ func TestArchivalCreatables(t *testing.T) {
 		if i >= maxBlocks/2 && i < (3*(maxBlocks/4)) {
 			switch creatableIdxs[createdIdx] {
 			case AssetCreated:
-				tx, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(createdIdx))
+				tx, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, basics.AssetIndex(createdIdx))
 				creatableIdxs[createdIdx] = AssetDeleted
 			case AppCreated:
-				tx, err = makeUnsignedApplicationCallTx(uint64(createdIdx), transactions.DeleteApplicationOC)
+				tx, err = makeUnsignedApplicationCallTx(basics.AppIndex(createdIdx), transactions.DeleteApplicationOC)
 				creatableIdxs[createdIdx] = AppDeleted
 			default:
 				panic("unknown action")
@@ -537,10 +513,10 @@ func TestArchivalCreatables(t *testing.T) {
 	var tx0 transactions.Transaction
 	switch creatableIdxs[creatableToDelete] {
 	case AssetCreated:
-		tx0, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		tx0, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, basics.AssetIndex(creatableToDelete))
 		creatableIdxs[creatableToDelete] = AssetDeleted
 	case AppCreated:
-		tx0, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
+		tx0, err = makeUnsignedApplicationCallTx(basics.AppIndex(creatableToDelete), transactions.DeleteApplicationOC)
 		creatableIdxs[creatableToDelete] = AppDeleted
 	default:
 		panic("unknown action")
@@ -555,10 +531,10 @@ func TestArchivalCreatables(t *testing.T) {
 	var tx1 transactions.Transaction
 	switch creatableIdxs[creatableToDelete] {
 	case AssetCreated:
-		tx1, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		tx1, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, basics.AssetIndex(creatableToDelete))
 		creatableIdxs[creatableToDelete] = AssetDeleted
 	case AppCreated:
-		tx1, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
+		tx1, err = makeUnsignedApplicationCallTx(basics.AppIndex(creatableToDelete), transactions.DeleteApplicationOC)
 		creatableIdxs[creatableToDelete] = AppDeleted
 	default:
 		panic("unknown action")
@@ -679,11 +655,9 @@ func TestArchivalCreatables(t *testing.T) {
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
 	return transactions.SignedTxnInBlock{
-		SignedTxnWithAD: transactions.SignedTxnWithAD{
-			SignedTxn: transactions.SignedTxn{
-				Txn: tx,
-			},
-		},
+		SignedTxnWithAD: transactions.SignedTxn{
+			Txn: tx,
+		}.WithAD(),
 		HasGenesisID: true,
 	}
 }
@@ -692,16 +666,9 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
-	deadlockDisable := deadlock.Opts.Disable
-	deadlock.Opts.Disable = true
-	defer func() {
-		deadlock.Opts.Disable = deadlockDisable
-	}()
-	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
-	require.NoError(t, err)
+
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbPrefix := filepath.Join(dbTempDir, dbName)
-	defer os.RemoveAll(dbTempDir)
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
 
 	genesisInitState := getInitState()
 
@@ -714,9 +681,9 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	for i := 0; i < 50; i++ {
 		addr := basics.Address{}
-		_, err = rand.Read(addr[:])
+		_, err := rand.Read(addr[:])
 		require.NoError(t, err)
-		br := basics.BalanceRecord{AccountData: basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
+		br := basics.BalanceRecord{AccountData: basics_testing.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
 		genesisInitState.Accounts[addr] = br.AccountData
 		balanceRecords = append(balanceRecords, br)
 	}
@@ -726,6 +693,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	cfg.Archival = false
 
 	log := logging.TestingLog(t)
+	log.SetLevel(logging.Info)
 	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
@@ -758,10 +726,10 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -778,10 +746,10 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	defer l.Close()
 
 	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		latest, err = blockLatest(tx)
+		latest, err = blockdb.BlockLatest(tx)
 		require.NoError(t, err)
 
-		earliest, err = blockEarliest(tx)
+		earliest, err = blockdb.BlockEarliest(tx)
 		require.NoError(t, err)
 		return err
 	})
@@ -801,7 +769,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	wl.l.trackerMu.RLock()
 	defer wl.l.trackerMu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
-		if au, ok := trk.(*accountUpdates); ok {
+		if _, ok := trk.(*accountUpdates); ok {
 			wl.l.trackers.waitAccountsWriting()
 			minSave, _ = trk.committedUpTo(rnd)
 			wl.l.trackers.committedUpTo(rnd)
@@ -814,7 +782,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			trackerType = reflect.TypeOf(trk).Elem()
 			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 
-			au = cleanTracker.(*accountUpdates)
+			au := cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
 			au.initialize(cfg)

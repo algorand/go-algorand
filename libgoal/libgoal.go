@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,27 +18,25 @@ package libgoal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-	"github.com/algorand/go-algorand/rpcs"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
@@ -47,20 +45,22 @@ import (
 // defaultKMDTimeoutSecs is the default number of seconds after which kmd will
 // kill itself if there are no requests. This can be overridden with
 // SetKMDStartArgs
-const defaultKMDTimeoutSecs = 60
+const defaultKMDTimeoutSecs = 180
 
 // DefaultKMDDataDir is the name of the directory within the algod data directory where kmd data goes
 const DefaultKMDDataDir = nodecontrol.DefaultKMDDataDir
 
 // Client represents the entry point for all libgoal functions
 type Client struct {
-	nc                   nodecontrol.NodeController
-	kmdStartArgs         nodecontrol.KMDStartArgs
-	dataDir              string
-	cacheDir             string
-	consensus            config.ConsensusProtocols
-	algodVersionAffinity algodclient.APIVersion
-	kmdVersionAffinity   kmdclient.APIVersion
+	nc           nodecontrol.NodeController
+	kmdStartArgs nodecontrol.KMDStartArgs
+	dataDir      string
+	cacheDir     string
+	consensus    config.ConsensusProtocols
+
+	suggestedParamsCache  model.TransactionParametersResponse
+	suggestedParamsExpire time.Time
+	suggestedParamsMaxAge time.Duration
 }
 
 // ClientConfig is data to configure a Client
@@ -134,7 +134,7 @@ func MakeClientFromConfig(config ClientConfig, clientType ClientType) (c Client,
 	return
 }
 
-// Init takes data directory path or an empty string if $ALGORAND_DATA is defined and initializes Client
+// init takes data directory path or an empty string if $ALGORAND_DATA is defined and initializes Client
 func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	// check and assign dataDir
 	dataDir, err := getDataDir(config.AlgodDataDir)
@@ -143,8 +143,6 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	}
 	c.dataDir = dataDir
 	c.cacheDir = config.CacheDir
-	c.algodVersionAffinity = algodclient.APIVersionV1
-	c.kmdVersionAffinity = kmdclient.APIVersionV1
 
 	// Get node controller
 	nc, err := getNodeController(config.BinDir, config.AlgodDataDir)
@@ -199,7 +197,6 @@ func (c *Client) ensureAlgodClient() (*algodclient.RestClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	algod.SetAPIVersionAffinity(c.algodVersionAffinity)
 	return &algod, err
 }
 
@@ -229,7 +226,7 @@ func getDataDir(dataDir string) (string, error) {
 func getNodeController(binDir, dataDir string) (nc nodecontrol.NodeController, err error) {
 	dataDir, err = getDataDir(dataDir)
 	if err != nil {
-		return nodecontrol.NodeController{}, nil
+		return nodecontrol.NodeController{}, err
 	}
 
 	return nodecontrol.MakeNodeController(binDir, dataDir), nil
@@ -506,47 +503,58 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 //
 // validRounds | lastValid | result (lastValid)
 // -------------------------------------------------
-// 	  	 0     |     0     | firstValid + maxTxnLife
-// 		 0     |     N     | lastValid
-// 		 M     |     0     | first + validRounds - 1
-// 		 M     |     M     | error
-//
-func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds uint64) (uint64, uint64, error) {
-	params, err := c.SuggestedParams()
+// 0           |     0     | firstValid + maxTxnLife
+// 0           |     N     | lastValid
+// M           |     0     | first + validRounds - 1
+// M           |     M     | error
+func (c *Client) ComputeValidityRounds(firstValid, lastValid, validRounds basics.Round) (first, last, latest basics.Round, err error) {
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	cparams, ok := c.consensus[protocol.ConsensusVersion(params.ConsensusVersion)]
 	if !ok {
-		return 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
+		return 0, 0, 0, fmt.Errorf("cannot construct transaction: unknown consensus protocol %s", params.ConsensusVersion)
 	}
 
-	return computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+	first, last, err = computeValidityRounds(firstValid, lastValid, validRounds, params.LastRound, cparams.MaxTxnLife)
+	return first, last, params.LastRound, err
 }
 
-func computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife uint64) (uint64, uint64, error) {
+func computeValidityRounds(firstValid, lastValid, validRounds, lastRound basics.Round, maxTxnLife uint64) (basics.Round, basics.Round, error) {
+	lifeAsRounds := basics.Round(maxTxnLife)
 	if validRounds != 0 && lastValid != 0 {
 		return 0, 0, fmt.Errorf("cannot construct transaction: ambiguous input: lastValid = %d, validRounds = %d", lastValid, validRounds)
 	}
 
 	if firstValid == 0 {
-		firstValid = lastRound + 1
+		// current node might be a bit ahead of the network, and to prevent sibling nodes from rejecting the transaction
+		// because it's FirstValid is greater than their pending block evaluator.
+		// For example, a node just added block 100 and immediately sending a new transaction.
+		// The other side is lagging behind by 100ms and its LastRound is 99 so its transaction pools accepts txns for rounds 100+.
+		// This means the node client have to set FirstValid to 100 or below.
+		if lastRound > 0 {
+			firstValid = lastRound
+		} else {
+			// there is no practical sense to set FirstValid to 0, so we set it to 1
+			firstValid = 1
+		}
 	}
 
 	if validRounds != 0 {
 		// MaxTxnLife is the maximum difference between LastValid and FirstValid
 		// so that validRounds = maxTxnLife+1 gives lastValid = firstValid + validRounds - 1 = firstValid + maxTxnLife
-		if validRounds > maxTxnLife+1 {
+		if validRounds > lifeAsRounds+1 {
 			return 0, 0, fmt.Errorf("cannot construct transaction: txn validity period %d is greater than protocol max txn lifetime %d", validRounds-1, maxTxnLife)
 		}
 		lastValid = firstValid + validRounds - 1
 	} else if lastValid == 0 {
-		lastValid = firstValid + maxTxnLife
+		lastValid = firstValid + lifeAsRounds
 	}
 
 	if firstValid > lastValid {
 		return 0, 0, fmt.Errorf("cannot construct transaction: txn would first be valid on round %d which is after last valid round %d", firstValid, lastValid)
-	} else if lastValid-firstValid > maxTxnLife {
+	} else if lastValid-firstValid > lifeAsRounds {
 		return 0, 0, fmt.Errorf("cannot construct transaction: txn validity period ( %d to %d ) is greater than protocol max txn lifetime %d", firstValid, lastValid, maxTxnLife)
 	}
 
@@ -574,7 +582,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	}
 
 	// Get current round, protocol, genesis ID
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -583,7 +591,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 	if !ok {
 		return transactions.Transaction{}, fmt.Errorf("ConstructPayment: unknown consensus protocol %s", params.ConsensusVersion)
 	}
-	fv, lv, err := computeValidityRounds(uint64(firstValid), uint64(lastValid), 0, params.LastRound, cp.MaxTxnLife)
+	fv, lv, err := computeValidityRounds(firstValid, lastValid, 0, params.LastRound, cp.MaxTxnLife)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -593,8 +601,8 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		Header: transactions.Header{
 			Sender:     fromAddr,
 			Fee:        basics.MicroAlgos{Raw: fee},
-			FirstValid: basics.Round(fv),
-			LastValid:  basics.Round(lv),
+			FirstValid: fv,
+			LastValid:  lv,
 			Lease:      lease,
 			Note:       note,
 		},
@@ -616,7 +624,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 		tx.PaymentTxnFields.CloseRemainderTo = closeToAddr
 	}
 
-	tx.Header.GenesisID = params.GenesisID
+	tx.Header.GenesisID = params.GenesisId
 
 	// Check if the protocol supports genesis hash
 	if cp.SupportGenesisHash {
@@ -639,7 +647,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 /* Algod Wrappers */
 
 // Status returns the node status
-func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
+func (c *Client) Status() (resp model.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Status()
@@ -648,25 +656,25 @@ func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
 }
 
 // AccountInformation takes an address and returns its information
-func (c *Client) AccountInformation(account string) (resp v1.Account, err error) {
+func (c *Client) AccountInformation(account string, includeCreatables bool) (resp model.Account, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AccountInformation(account)
+		resp, err = algod.AccountInformation(account, includeCreatables)
 	}
 	return
 }
 
-// AccountInformationV2 takes an address and returns its information
-func (c *Client) AccountInformationV2(account string, includeCreatables bool) (resp generatedV2.Account, err error) {
+// AccountAssetsInformation returns the assets held by an account, including asset params for non-deleted assets.
+func (c *Client) AccountAssetsInformation(account string, next *string, limit *uint64) (resp model.AccountAssetsInformationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.AccountInformationV2(account, includeCreatables)
+		resp, err = algod.AccountAssetsInformation(account, next, limit)
 	}
 	return
 }
 
 // AccountApplicationInformation gets account information about a given app.
-func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp generatedV2.AccountApplicationResponse, err error) {
+func (c *Client) AccountApplicationInformation(accountAddress string, applicationID basics.AppIndex) (resp model.AccountApplicationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountApplicationInformation(accountAddress, applicationID)
@@ -675,7 +683,7 @@ func (c *Client) AccountApplicationInformation(accountAddress string, applicatio
 }
 
 // RawAccountApplicationInformation gets account information about a given app.
-func (c *Client) RawAccountApplicationInformation(accountAddress string, applicationID uint64) (accountResource modelV2.AccountApplicationModel, err error) {
+func (c *Client) RawAccountApplicationInformation(accountAddress string, applicationID basics.AppIndex) (accountResource modelV2.AccountApplicationModel, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
@@ -688,23 +696,10 @@ func (c *Client) RawAccountApplicationInformation(accountAddress string, applica
 }
 
 // AccountAssetInformation gets account information about a given asset.
-func (c *Client) AccountAssetInformation(accountAddress string, assetID uint64) (resp generatedV2.AccountAssetResponse, err error) {
+func (c *Client) AccountAssetInformation(accountAddress string, assetID basics.AssetIndex) (resp model.AccountAssetResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountAssetInformation(accountAddress, assetID)
-	}
-	return
-}
-
-// RawAccountAssetInformation gets account information about a given asset.
-func (c *Client) RawAccountAssetInformation(accountAddress string, assetID uint64) (accountResource modelV2.AccountAssetModel, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		var resp []byte
-		resp, err = algod.RawAccountAssetInformation(accountAddress, assetID)
-		if err == nil {
-			err = protocol.Decode(resp, &accountResource)
-		}
 	}
 	return
 }
@@ -714,7 +709,7 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawAccountInformationV2(account)
+		resp, err = algod.RawAccountInformation(account)
 		if err == nil {
 			err = protocol.Decode(resp, &accountData)
 		}
@@ -723,23 +718,14 @@ func (c *Client) AccountData(account string) (accountData basics.AccountData, er
 }
 
 // AssetInformation takes an asset's index and returns its information
-func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.AssetInformation(index)
-	}
-	return
-}
-
-// AssetInformationV2 takes an asset's index and returns its information
-func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err error) {
+func (c *Client) AssetInformation(index basics.AssetIndex) (resp model.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
 		return
 	}
-	resp, err = algod.AssetInformationV2(index)
+	resp, err = algod.AssetInformation(index)
 	if err != nil {
-		return generatedV2.Asset{}, err
+		return model.Asset{}, err
 	}
 
 	byteLen := func(p *[]byte) int {
@@ -766,7 +752,7 @@ func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err e
 }
 
 // ApplicationInformation takes an app's index and returns its information
-func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Application, err error) {
+func (c *Client) ApplicationInformation(index basics.AppIndex) (resp model.Application, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationInformation(index)
@@ -774,18 +760,28 @@ func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Applicat
 	return
 }
 
-// TransactionInformation takes an address and associated txid and return its information
-func (c *Client) TransactionInformation(addr, txid string) (resp v1.Transaction, err error) {
+// ApplicationBoxes takes an app's index and returns the names of boxes under it
+func (c *Client) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (resp model.BoxesResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.TransactionInformation(addr, txid)
+		resp, err = algod.ApplicationBoxes(appID, maxBoxNum)
+	}
+	return
+}
+
+// GetApplicationBoxByName takes an app's index and box name and returns its value.
+// The box name should be of the form `encoding:value`. See apps.AppCallBytes for more information.
+func (c *Client) GetApplicationBoxByName(index basics.AppIndex, name string) (resp model.BoxResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.GetApplicationBoxByName(index, name)
 	}
 	return
 }
 
 // PendingTransactionInformation returns information about a recently issued
 // transaction based on its txid.
-func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction, err error) {
+func (c *Client) PendingTransactionInformation(txid string) (resp model.PendingTransactionResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionInformation(txid)
@@ -793,18 +789,24 @@ func (c *Client) PendingTransactionInformation(txid string) (resp v1.Transaction
 	return
 }
 
-// PendingTransactionInformationV2 returns information about a recently issued
-// transaction based on its txid.
-func (c *Client) PendingTransactionInformationV2(txid string) (resp generatedV2.PendingTransactionResponse, err error) {
+// ParsedPendingTransaction takes a txid and returns the parsed PendingTransaction response.
+func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.PendingTransactionInformationV2(txid)
+		var resp []byte
+		resp, err = algod.RawPendingTransactionInformation(txid)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txn)
+			if err != nil {
+				return
+			}
+		}
 	}
 	return
 }
 
 // Block takes a round and returns its block
-func (c *Client) Block(round uint64) (resp v1.Block, err error) {
+func (c *Client) Block(round basics.Round) (resp v2.BlockResponseJSON, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
@@ -813,53 +815,50 @@ func (c *Client) Block(round uint64) (resp v1.Block, err error) {
 }
 
 // RawBlock takes a round and returns its block
-func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
+func (c *Client) RawBlock(round basics.Round) (resp []byte, err error) {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.RawBlock(round)
+	if err != nil {
+		return
 	}
-	return
+	return algod.RawBlock(round)
 }
 
 // BookkeepingBlock takes a round and returns its block
-func (c *Client) BookkeepingBlock(round uint64) (block bookkeeping.Block, err error) {
+func (c *Client) BookkeepingBlock(round basics.Round) (block bookkeeping.Block, err error) {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		var resp []byte
-		resp, err = algod.RawBlock(round)
-		if err == nil {
-			var b rpcs.EncodedBlockCert
-			err = protocol.DecodeReflect(resp, &b)
-			if err != nil {
-				return
-			}
-			block = b.Block
-		}
+	if err != nil {
+		return
 	}
-	return
+	blockCert, err := algod.EncodedBlockCert(round)
+	if err != nil {
+		return
+	}
+	return blockCert.Block, nil
 }
 
 // HealthCheck returns an error if something is wrong
 func (c *Client) HealthCheck() error {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		err = algod.HealthCheck()
+	if err != nil {
+		return err
 	}
-	return err
+	return algod.HealthCheck()
 }
 
-// WaitForRound takes a round, waits until it appears and returns its status. This function blocks.
-func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse, err error) {
+// WaitForRound takes a round, waits up to one minute, for it to appear and
+// returns the node status. This function blocks and fails if the block does not
+// appear in one minute.
+func (c *Client) WaitForRound(round basics.Round) (resp model.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.StatusAfterBlock(round)
+	if err != nil {
+		return
 	}
-	return
+	return algod.WaitForRound(round, time.Minute)
 }
 
 // GetBalance takes an address and returns its total balance; if the address doesn't exist, it returns 0.
 func (c *Client) GetBalance(address string) (uint64, error) {
-	resp, err := c.AccountInformation(address)
+	resp, err := c.AccountInformation(address, false)
 	if err != nil {
 		return 0, err
 	}
@@ -876,7 +875,7 @@ func (c Client) AlgodVersions() (resp common.Version, err error) {
 }
 
 // LedgerSupply returns the total number of algos in the system
-func (c Client) LedgerSupply() (resp v1.Supply, err error) {
+func (c Client) LedgerSupply() (resp model.SupplyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.LedgerSupply()
@@ -885,32 +884,33 @@ func (c Client) LedgerSupply() (resp v1.Supply, err error) {
 }
 
 // CurrentRound returns the current known round
-func (c Client) CurrentRound() (lastRound uint64, err error) {
+func (c Client) CurrentRound() (basics.Round, error) {
 	// Get current round
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err := algod.Status()
-		if err == nil {
-			lastRound = resp.LastRound
-		}
+	if err != nil {
+		return 0, err
 	}
-	return
+	resp, err := algod.Status()
+	if err != nil {
+		return 0, err
+	}
+	return resp.LastRound, nil
 }
 
 // SuggestedFee returns the suggested fee per byte by the network
 func (c *Client) SuggestedFee() (fee uint64, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err := algod.SuggestedFee()
+		params, err := algod.SuggestedParams()
 		if err == nil {
-			fee = resp.Fee
+			fee = params.Fee
 		}
 	}
 	return
 }
 
 // SuggestedParams returns the suggested parameters for a new transaction
-func (c *Client) SuggestedParams() (params v1.TransactionParams, err error) {
+func (c *Client) SuggestedParams() (params model.TransactionParametersResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		params, err = algod.SuggestedParams()
@@ -918,9 +918,26 @@ func (c *Client) SuggestedParams() (params v1.TransactionParams, err error) {
 	return
 }
 
+// SetSuggestedParamsCacheAge sets the maximum age for an internal cached version of SuggestedParams() used internally to many libgoal Client functions.
+func (c *Client) SetSuggestedParamsCacheAge(maxAge time.Duration) {
+	c.suggestedParamsMaxAge = maxAge
+}
+
+func (c *Client) cachedSuggestedParams() (params model.TransactionParametersResponse, err error) {
+	if c.suggestedParamsMaxAge == 0 || time.Now().After(c.suggestedParamsExpire) {
+		params, err = c.SuggestedParams()
+		if err == nil && c.suggestedParamsMaxAge != 0 {
+			c.suggestedParamsCache = params
+			c.suggestedParamsExpire = time.Now().Add(c.suggestedParamsMaxAge)
+		}
+		return
+	}
+	return c.suggestedParamsCache, nil
+}
+
 // GetPendingTransactions gets a snapshot of current pending transactions on the node.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransactions, err error) {
+func (c *Client) GetPendingTransactions(maxTxns uint64) (resp model.PendingTransactionsResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.GetPendingTransactions(maxTxns)
@@ -930,7 +947,7 @@ func (c *Client) GetPendingTransactions(maxTxns uint64) (resp v1.PendingTransact
 
 // GetPendingTransactionsByAddress gets a snapshot of current pending transactions on the node for the given address.
 // If maxTxns = 0, fetches as many transactions as possible.
-func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp v1.PendingTransactions, err error) {
+func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (resp model.PendingTransactionsResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.PendingTransactionsByAddr(addr, maxTxns)
@@ -938,10 +955,82 @@ func (c *Client) GetPendingTransactionsByAddress(addr string, maxTxns uint64) (r
 	return
 }
 
+// PendingTransactions represents a parsed PendingTransactionsResponse struct.
+type PendingTransactions struct {
+	TopTransactions   []transactions.SignedTxn `json:"top-transactions"`
+	TotalTransactions uint64                   `json:"total-transactions"`
+}
+
+// GetParsedPendingTransactions returns the parsed response with pending transactions.
+func (c *Client) GetParsedPendingTransactions(maxTxns uint64) (txns PendingTransactions, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.GetRawPendingTransactions(maxTxns)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txns)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
+// GetParsedPendingTransactionsByAddress returns the parsed response with pending transactions by address.
+func (c *Client) GetParsedPendingTransactionsByAddress(addr string, maxTxns uint64) (txns PendingTransactions, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawPendingTransactionsByAddr(addr, maxTxns)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txns)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
+// VerifyParticipationKey checks if a given participationID is installed in a loop until timeout has elapsed.
+func (c *Client) VerifyParticipationKey(timeout time.Duration, participationID string) error {
+	start := time.Now()
+
+	for {
+		keysResp, err := c.GetParticipationKeys()
+		if err != nil {
+			return err
+		}
+		for _, key := range keysResp {
+			if key.Id == participationID {
+				// Installation successful.
+				return nil
+			}
+		}
+
+		if time.Since(start) > timeout {
+			return errors.New("timeout waiting for key to appear")
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+}
+
+// RemoveParticipationKey removes a participation key by its id
+func (c *Client) RemoveParticipationKey(participationID string) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+
+	return algod.RemoveParticipationKeyByID(participationID)
+}
+
 // AddParticipationKey takes a participation key file and sends it to the node.
 // The key will be loaded into the system when the function returns successfully.
-func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostParticipationResponse, err error) {
-	data, err := ioutil.ReadFile(keyfile)
+func (c *Client) AddParticipationKey(keyfile string) (resp model.PostParticipationResponse, err error) {
+	data, err := os.ReadFile(keyfile)
 	if err != nil {
 		return
 	}
@@ -955,7 +1044,7 @@ func (c *Client) AddParticipationKey(keyfile string) (resp generated.PostPartici
 }
 
 // GetParticipationKeys gets the currently installed participation keys.
-func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysResponse, err error) {
+func (c *Client) GetParticipationKeys() (resp model.ParticipationKeysResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetParticipationKeys()
@@ -964,7 +1053,7 @@ func (c *Client) GetParticipationKeys() (resp generated.ParticipationKeysRespons
 }
 
 // GetParticipationKeyByID looks up a specific participation key by its participationID.
-func (c *Client) GetParticipationKeyByID(id string) (resp generated.ParticipationKeyResponse, err error) {
+func (c *Client) GetParticipationKeyByID(id string) (resp model.ParticipationKeyResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetParticipationKeyByID(id)
@@ -991,8 +1080,8 @@ func (c *Client) ExportKey(walletHandle []byte, password, account string) (resp 
 }
 
 // ConsensusParams returns the consensus parameters for the protocol active at the specified round
-func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams, err error) {
-	block, err := c.Block(round)
+func (c *Client) ConsensusParams(round basics.Round) (consensus config.ConsensusParams, err error) {
+	block, err := c.BookkeepingBlock(round)
 	if err != nil {
 		return
 	}
@@ -1006,12 +1095,6 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 	return params, nil
 }
 
-// SetAPIVersionAffinity sets the desired client API version affinity of the algod and kmd clients.
-func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
-	c.algodVersionAffinity = algodVersionAffinity
-	c.kmdVersionAffinity = kmdVersionAffinity
-}
-
 // AbortCatchup aborts the currently running catchup
 func (c *Client) AbortCatchup() error {
 	algod, err := c.ensureAlgodClient()
@@ -1019,7 +1102,6 @@ func (c *Client) AbortCatchup() error {
 		return err
 	}
 	// we need to ensure we're using the v2 status so that we would get the catchpoint information.
-	algod.SetAPIVersionAffinity(algodclient.APIVersionV2)
 	resp, err := algod.Status()
 	if err != nil {
 		return err
@@ -1036,16 +1118,12 @@ func (c *Client) AbortCatchup() error {
 }
 
 // Catchup start catching up to the give catchpoint label.
-func (c *Client) Catchup(catchpointLabel string) error {
+func (c *Client) Catchup(catchpointLabel string, min uint64) (model.CatchpointStartResponse, error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
-		return err
+		return model.CatchpointStartResponse{}, err
 	}
-	_, err = algod.Catchup(catchpointLabel)
-	if err != nil {
-		return err
-	}
-	return nil
+	return algod.Catchup(catchpointLabel, min)
 }
 
 const defaultAppIdx = 1380011588
@@ -1054,7 +1132,7 @@ const defaultAppIdx = 1380011588
 func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string, format string) (result []byte, err error) {
 	switch format {
 	case "json":
-		var gdr generatedV2.DryrunRequest
+		var gdr model.DryrunRequest
 		gdr, err = MakeDryrunStateGenerated(client, txnOrStxn, otherTxns, otherAccts, proto)
 		if err == nil {
 			result = protocol.EncodeJSON(&gdr)
@@ -1081,8 +1159,8 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, otherTxns []transacti
 	return v2.DryrunRequestFromGenerated(&gdr)
 }
 
-// MakeDryrunStateGenerated function creates generatedV2.DryrunRequest data structure
-func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr generatedV2.DryrunRequest, err error) {
+// MakeDryrunStateGenerated function creates model.DryrunRequest data structure
+func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, otherTxns []transactions.SignedTxn, otherAccts []basics.Address, proto string) (dr model.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
 	if txnOrStxnOrSlice != nil {
 		switch txnType := txnOrStxnOrSlice.(type) {
@@ -1117,40 +1195,42 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 			apps := []basics.AppIndex{tx.ApplicationID}
 			apps = append(apps, tx.ForeignApps...)
 			for _, appIdx := range apps {
-				var appParams generatedV2.ApplicationParams
+				var appParams *model.ApplicationParams
 				if appIdx == 0 {
 					// if it is an app create txn then use params from the txn
-					appParams.ApprovalProgram = tx.ApprovalProgram
-					appParams.ClearStateProgram = tx.ClearStateProgram
-					appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
-						NumUint:      tx.GlobalStateSchema.NumUint,
-						NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+					appParams = &model.ApplicationParams{
+						ApprovalProgram:   tx.ApprovalProgram,
+						ClearStateProgram: tx.ClearStateProgram,
+						GlobalStateSchema: &model.ApplicationStateSchema{
+							NumUint:      tx.GlobalStateSchema.NumUint,
+							NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+						},
+						LocalStateSchema: &model.ApplicationStateSchema{
+							NumUint:      tx.LocalStateSchema.NumUint,
+							NumByteSlice: tx.LocalStateSchema.NumByteSlice,
+						},
+						Creator: tx.Sender.String(),
 					}
-					appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
-						NumUint:      tx.LocalStateSchema.NumUint,
-						NumByteSlice: tx.LocalStateSchema.NumByteSlice,
-					}
-					appParams.Creator = tx.Sender.String()
 					// zero is not acceptable by ledger in dryrun/debugger
 					appIdx = defaultAppIdx
 				} else {
 					// otherwise need to fetch app state
-					var app generatedV2.Application
-					if app, err = client.ApplicationInformation(uint64(appIdx)); err != nil {
+					var app model.Application
+					if app, err = client.ApplicationInformation(appIdx); err != nil {
 						return
 					}
 					appParams = app.Params
 					accounts = append(accounts, appIdx.Address())
 				}
-				dr.Apps = append(dr.Apps, generatedV2.Application{
-					Id:     uint64(appIdx),
+				dr.Apps = append(dr.Apps, model.Application{
+					Id:     appIdx,
 					Params: appParams,
 				})
 			}
 
 			for _, acc := range accounts {
-				var info generatedV2.Account
-				if info, err = client.AccountInformationV2(acc.String(), true); err != nil {
+				var info model.Account
+				if info, err = client.AccountInformation(acc.String(), true); err != nil {
 					// ignore error - accounts might have app addresses that were not funded
 					continue
 				}
@@ -1161,18 +1241,18 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 			if dr.Round, err = client.CurrentRound(); err != nil {
 				return
 			}
-			var b v1.Block
-			if b, err = client.Block(dr.Round); err != nil {
+			var b bookkeeping.Block
+			if b, err = client.BookkeepingBlock(dr.Round); err != nil {
 				return
 			}
-			dr.LatestTimestamp = uint64(b.Timestamp)
+			dr.LatestTimestamp = b.BlockHeader.TimeStamp
 		}
 	}
 	return
 }
 
 // Dryrun takes an app's index and returns its information
-func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error) {
+func (c *Client) Dryrun(data []byte) (resp model.DryrunResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		data, err = algod.RawDryrun(data)
@@ -1184,11 +1264,76 @@ func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error
 	return
 }
 
-// TxnProof returns a Merkle proof for a transaction in a block.
-func (c *Client) TxnProof(txid string, round uint64, hashType crypto.HashType) (resp generatedV2.ProofResponse, err error) {
+// SimulateTransactionsRaw simulates a transaction group by taking raw request bytes and returns relevant simulation results.
+func (c *Client) SimulateTransactionsRaw(encodedRequest []byte) (result v2.PreEncodedSimulateResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return
+	}
+	var resp []byte
+	resp, err = algod.RawSimulateRawTransaction(encodedRequest)
+	if err != nil {
+		return
+	}
+	err = protocol.DecodeReflect(resp, &result)
+	return
+}
+
+// SimulateTransactions simulates transactions and returns relevant simulation results.
+func (c *Client) SimulateTransactions(request v2.PreEncodedSimulateRequest) (result v2.PreEncodedSimulateResponse, err error) {
+	return c.SimulateTransactionsRaw(protocol.EncodeReflect(&request))
+}
+
+// TransactionProof returns a Merkle proof for a transaction in a block.
+func (c *Client) TransactionProof(txid string, round basics.Round, hashType crypto.HashType) (resp model.TransactionProofResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		return algod.Proof(txid, round, hashType)
+		return algod.TransactionProof(txid, round, hashType)
+	}
+	return
+}
+
+// LightBlockHeaderProof returns a Merkle proof for a block.
+func (c *Client) LightBlockHeaderProof(round basics.Round) (resp model.LightBlockHeaderProofResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.LightBlockHeaderProof(round)
+	}
+	return
+}
+
+// SetSyncRound sets the sync round on a node w/ EnableFollowMode
+func (c *Client) SetSyncRound(round basics.Round) (err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.SetSyncRound(round)
+	}
+	return
+}
+
+// GetSyncRound gets the sync round on a node w/ EnableFollowMode
+func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetSyncRound()
+	}
+	return
+}
+
+// GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
+func (c *Client) GetLedgerStateDelta(round basics.Round) (rep ledgercore.StateDelta, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.GetLedgerStateDelta(round)
+	}
+	return
+}
+
+// BlockLogs returns all the logs in a block for a given round
+func (c *Client) BlockLogs(round basics.Round) (resp model.BlockLogsResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.BlockLogs(round)
 	}
 	return
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,8 +36,8 @@ type unauthenticatedBundle struct {
 	Step     step          `codec:"step"`
 	Proposal proposalValue `codec:"prop"`
 
-	Votes             []voteAuthenticator             `codec:"vote,allocbound=config.MaxVoteThreshold"`
-	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=config.MaxVoteThreshold"`
+	Votes             []voteAuthenticator             `codec:"vote,allocbound=bounds.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVoteAuthenticator `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
 // bundle is a set of votes, all from the same round, period, and step, and from distinct senders, that reaches quorum.
@@ -48,11 +48,11 @@ type bundle struct {
 
 	U unauthenticatedBundle `codec:"u"`
 
-	Votes             []vote             `codec:"vote,allocbound=config.MaxVoteThreshold"`
-	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=config.MaxVoteThreshold"`
+	Votes             []vote             `codec:"vote,allocbound=bounds.MaxVoteThreshold"`
+	EquivocationVotes []equivocationVote `codec:"eqv,allocbound=bounds.MaxVoteThreshold"`
 }
 
-// voteAuthenticators omit the Round, Period, Step, and Proposal for compression
+// voteAuthenticator omits the Round, Period, Step, and Proposal for compression
 // and to simplify checking logic.
 type voteAuthenticator struct {
 	_struct struct{} `codec:""` // not omitempty
@@ -202,7 +202,8 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 
 		rv := rawVote{Sender: auth.Sender, Round: b.Round, Period: b.Period, Step: b.Step, Proposal: b.Proposal}
 		uv := unauthenticatedVote{R: rv, Cred: auth.Cred, Sig: auth.Sig}
-		avv.verifyVote(ctx, l, uv, i, message{}, results)
+
+		avv.verifyVote(ctx, l, uv, uint64(i), message{}, results) //nolint:errcheck // verifyVote will call EnqueueBacklog, which blocks until the verify task is queued, or returns an error when ctx.Done(), which we are already checking
 	}
 
 	// create verification requests for equivocation votes
@@ -222,7 +223,8 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 			Proposals: auth.Proposals,
 			Sigs:      auth.Sigs,
 		}
-		avv.verifyEqVote(ctx, l, uev, i, message{}, results)
+		avv.verifyEqVote(ctx, l, uev, uint64(i), message{}, results) //nolint:errcheck // verifyVote will call EnqueueBacklog, which blocks until the verify task is queued, or returns an error when ctx.Done(), which we are already checking
+
 	}
 
 	return func() (bundle, error) {

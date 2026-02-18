@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,13 +29,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	clientApi "github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -115,10 +116,10 @@ func getAccountInformation(
 	expectedCountAssets uint64,
 	address string,
 	context string,
-	log logging.Logger) (info generated.Account, err error) {
+	log logging.Logger) (info model.Account, err error) {
 
 	for x := 0; x < 5; x++ { // retry only 5 times
-		info, err = fixture.AlgodClient.AccountInformationV2(address, true)
+		info, err = fixture.AlgodClient.AccountInformation(address, true)
 		if err != nil {
 			return
 		}
@@ -138,7 +139,7 @@ func getAccountInformation(
 func getAccountApplicationInformation(
 	fixture *fixtures.RestClientFixture,
 	address string,
-	appID uint64) (appInfo generated.AccountApplicationResponse, err error) {
+	appID basics.AppIndex) (appInfo model.AccountApplicationResponse, err error) {
 
 	appInfo, err = fixture.AlgodClient.AccountApplicationInformation(address, appID)
 	return
@@ -195,22 +196,26 @@ func signerGrpTxn(
 
 // create 6M unique assets by a different 6,000 accounts, and have a single account opted in, and owning all of them
 func Test5MAssetsScenario1(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 1)
 }
 
 // create 6M unique assets, all created by a single account.
 func Test5MAssetsScenario2(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 2)
 }
 
 // create 6M unique apps by a different 6,000 accounts, and have a single account opted-in all of them.
 // Make an app call to each of them, and make sure the app store some information into the local storage.
 func Test5MAssetsScenario3(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 3)
 }
 
 // create 6M unique apps by a single account. Opt-into all the applications and make sure the app stores information to both the local and global storage.
 func Test5MAssetsScenario4(t *testing.T) {
+	// partitiontest.PartitionTest(t) // partition handled inside test5MAssets
 	test5MAssets(t, 4)
 }
 
@@ -243,12 +248,13 @@ func test5MAssets(t *testing.T, scenario int) {
 	require.NoError(t, err)
 	var genesisHash crypto.Digest
 	copy(genesisHash[:], suggestedParams.GenesisHash)
-	tLife := config.Consensus[protocol.ConsensusVersion(suggestedParams.ConsensusVersion)].MaxTxnLife
+	tLife := basics.Round(config.Consensus[protocol.ConsensusVersion(suggestedParams.ConsensusVersion)].MaxTxnLife)
 
 	// fund the non-wallet base account
 	ba := generateKeys(1)
 	baseAcct := ba[0]
 	sender, err := basics.UnmarshalChecksumAddress(wAcct)
+	require.NoError(t, err)
 	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 1000000000000000, 1, genesisHash)
 	err = signAndBroadcastTransaction(0, &satxn, fixture.LibGoalClient, &fixture)
 	require.NoError(t, err)
@@ -338,11 +344,11 @@ func generateKeys(numAccounts int) (keys []psKey) {
 // prepares a send algo transaction
 func sendAlgoTransaction(
 	t *testing.T,
-	round uint64,
+	round basics.Round,
 	sender basics.Address,
 	receiver basics.Address,
 	amount uint64,
-	tLife uint64,
+	tLife basics.Round,
 	genesisHash crypto.Digest) (txn transactions.Transaction) {
 
 	txn = transactions.Transaction{
@@ -350,8 +356,8 @@ func sendAlgoTransaction(
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(round),
-			LastValid:   basics.Round(round + tLife),
+			FirstValid:  round,
+			LastValid:   round + tLife,
 			GenesisHash: genesisHash,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
@@ -366,9 +372,9 @@ func sendAlgoTransaction(
 func createAssetTransaction(
 	t *testing.T,
 	counter uint64,
-	round uint64,
+	round basics.Round,
 	sender basics.Address,
-	tLife uint64,
+	tLife basics.Round,
 	amount uint64,
 	genesisHash crypto.Digest) (assetTx transactions.Transaction) {
 
@@ -379,8 +385,8 @@ func createAssetTransaction(
 		Header: transactions.Header{
 			Sender:      sender,
 			Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-			FirstValid:  basics.Round(round),
-			LastValid:   basics.Round(round + tLife),
+			FirstValid:  round,
+			LastValid:   round + tLife,
 			GenesisHash: genesisHash,
 			Note:        note,
 		},
@@ -398,9 +404,9 @@ func createAssetTransaction(
 // prepares a send asset transaction
 func sendAssetTransaction(
 	t *testing.T,
-	round uint64,
+	round basics.Round,
 	sender basics.Address,
-	tLife uint64,
+	tLife basics.Round,
 	genesisHash crypto.Digest,
 	assetID basics.AssetIndex,
 	receiver basics.Address,
@@ -441,7 +447,7 @@ func scenarioA(
 	genesisHash crypto.Digest,
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
-	tLife uint64,
+	tLife basics.Round,
 	stopChan <-chan struct{},
 	log logging.Logger) {
 
@@ -459,7 +465,7 @@ func scenarioA(
 		close(txnGrpChan)
 	}()
 
-	firstValid := uint64(2)
+	firstValid := basics.Round(2)
 	counter := uint64(0)
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
 	var err error
@@ -542,7 +548,7 @@ func scenarioA(
 				ownAllAccount.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				asset.AssetID,
 				ownAllAccount.pk,
 				uint64(0))
 
@@ -581,7 +587,7 @@ func scenarioA(
 				nacc.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				asset.AssetID,
 				ownAllAccount.pk,
 				asset.Amount)
 			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
@@ -595,7 +601,7 @@ func scenarioA(
 	require.NoError(t, err)
 
 	log.Infof("Verifying assets...")
-	// Verify the assets are transfered here
+	// Verify the assets are transferred here
 	tAssetAmt := uint64(0)
 	for nai, nacc := range keys {
 		if nacc == ownAllAccount {
@@ -612,7 +618,7 @@ func scenarioA(
 			default:
 			}
 
-			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetId)
+			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetID)
 			require.NoError(t, err)
 
 			tAssetAmt += assHold.AssetHolding.Amount
@@ -629,11 +635,11 @@ func scenarioB(
 	genesisHash crypto.Digest,
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
-	tLife uint64,
+	tLife basics.Round,
 	stopChan <-chan struct{},
 	log logging.Logger) {
 
-	numberOfAssets := uint64(targetCreateableCount) // 6M
+	const numberOfAssets = targetCreateableCount // 6M
 	totalAssetAmount := uint64(0)
 
 	defer func() {
@@ -641,7 +647,7 @@ func scenarioB(
 		close(txnGrpChan)
 	}()
 
-	firstValid := uint64(2)
+	firstValid := basics.Round(2)
 	counter := uint64(0)
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
 	var err error
@@ -673,18 +679,19 @@ func scenarioB(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	info, err := fixture.AlgodClient.AccountInformationV2(baseAcct.pk.String(), false)
+	info, err := fixture.AlgodClient.AccountInformation(baseAcct.pk.String(), false)
 	require.NoError(t, err)
-	require.Equal(t, numberOfAssets, info.TotalAssetsOptedIn)
-	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
+	require.EqualValues(t, numberOfAssets, info.TotalAssetsOptedIn)
+	require.EqualValues(t, numberOfAssets, info.TotalCreatedAssets)
 
 	log.Infof("Verifying assets...")
-	// Verify the assets are transfered here
+	// Verify the assets are transferred here
 	tAssetAmt := uint64(0)
 	counter = 0
-	// this loop iterates over all the range of potentail assets, tries to confirm all of them.
+	// this loop iterates over all the range of potential assets, tries to confirm all of them.
 	// many of these are expected to be non-existing.
-	for aid := uint64(0); counter < numberOfAssets && aid < 2*numberOfAssets; aid++ {
+	startIdx := basics.AssetIndex(1000) // tx counter starts from 1000
+	for aid := startIdx; counter < numberOfAssets && aid < 2*startIdx*numberOfAssets; aid++ {
 		select {
 		case <-stopChan:
 			require.False(t, true, "Test interrupted")
@@ -714,7 +721,7 @@ func scenarioC(
 	genesisHash crypto.Digest,
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
-	tLife uint64,
+	tLife basics.Round,
 	stopChan <-chan struct{},
 	log logging.Logger) {
 
@@ -730,7 +737,7 @@ func scenarioC(
 		close(txnGrpChan)
 	}()
 
-	firstValid := uint64(2)
+	firstValid := basics.Round(2)
 	counter := uint64(0)
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
 	var err error
@@ -803,7 +810,7 @@ func scenarioC(
 				require.Fail(t, "Test errored")
 			default:
 			}
-			optInTx := makeOptInAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
+			optInTx := makeOptInAppTransaction(t, client, app.Id, firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
 
 			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
@@ -852,7 +859,7 @@ func scenarioC(
 				require.Fail(t, "Test errored")
 			default:
 			}
-			optInTx := callAppTransaction(t, client, basics.AppIndex(app.Id), firstValid, ownAllAccount.pk, tLife, genesisHash)
+			optInTx := callAppTransaction(t, client, app.Id, firstValid, ownAllAccount.pk, tLife, genesisHash)
 			counter, txnGroup = queueTransaction(ownAllAccount.sk, optInTx, txnChan, txnGrpChan, counter, txnGroup)
 
 			counter, firstValid, err = checkPoint(counter, firstValid, tLife, false, fixture, log)
@@ -894,18 +901,18 @@ func scenarioD(
 	genesisHash crypto.Digest,
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
-	tLife uint64,
+	tLife basics.Round,
 	stopChan <-chan struct{},
 	log logging.Logger) {
 
 	client := fixture.LibGoalClient
-	numberOfApps := uint64(targetCreateableCount) // 6M
+	const numberOfApps = targetCreateableCount // 6M
 	defer func() {
 		close(txnChan)
 		close(txnGrpChan)
 	}()
 
-	firstValid := uint64(2)
+	firstValid := basics.Round(2)
 	counter := uint64(0)
 	txnGroup := make([]txnKey, 0, maxTxGroupSize)
 	var err error
@@ -938,7 +945,7 @@ func scenarioD(
 
 	// check the results in parallel
 	parallelCheckers := numberOfGoRoutines
-	checkAppChan := make(chan uint64, parallelCheckers)
+	checkAppChan := make(chan basics.AppIndex, parallelCheckers)
 	checkResChan := make(chan uint64, parallelCheckers)
 	var wg sync.WaitGroup
 	var globalStateCheckMu deadlock.Mutex
@@ -960,7 +967,7 @@ func scenarioD(
 				}
 				pass := checkApplicationParams(
 					appCallFields[(*app.Params.GlobalState)[0].Value.Uint],
-					app.Params,
+					*app.Params,
 					baseAcct.pk.String(),
 					&globalStateCheck,
 					&globalStateCheckMu)
@@ -977,7 +984,7 @@ func scenarioD(
 	checked := uint64(0)
 	passed := uint64(0)
 	lastPrint := uint64(0)
-	for i := uint64(0); checked < numberOfApps; {
+	for i := basics.AppIndex(0); checked < numberOfApps; {
 		select {
 		case <-stopChan:
 			require.Fail(t, "Test errored")
@@ -997,7 +1004,7 @@ func scenarioD(
 	close(checkAppChan)
 	wg.Wait()
 
-	require.Equal(t, numberOfApps, passed)
+	require.EqualValues(t, numberOfApps, passed)
 	for _, x := range globalStateCheck {
 		require.True(t, x)
 	}
@@ -1016,18 +1023,15 @@ func handleError(err error, message string, errChan chan<- error) {
 }
 
 // handle the counters to prepare and send transactions in batches of MaxTxnLife transactions
-func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures.RestClientFixture, log logging.Logger) (newCounter, nextFirstValid uint64, err error) {
-	lastRound := firstValid + counter - 1
-	if force || counter == tLife {
+func checkPoint(counter uint64, firstValid basics.Round, tLife basics.Round, force bool, fixture *fixtures.RestClientFixture, log logging.Logger) (newcounter uint64, nextFirstValid basics.Round, err error) {
+	lastRound := firstValid + basics.Round(counter) - 1
+	if force || basics.Round(counter) == tLife {
 		if verbose {
 			fmt.Printf("Waiting for round %d...", int(lastRound))
 		}
-		nodeStat, err := fixture.AlgodClient.WaitForBlock(basics.Round(lastRound - 1))
+		nodeStat, err := fixture.AlgodClient.WaitForRound(lastRound, time.Minute)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to wait for block %d : %w", lastRound, err)
-		}
-		if nodeStat.LastRound < lastRound {
-			return 0, 0, fmt.Errorf("failed to wait for block %d : node is at round %d", lastRound, nodeStat.LastRound)
 		}
 		return 0, nodeStat.LastRound + 1, nil
 	}
@@ -1036,7 +1040,7 @@ func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures
 
 // signs and broadcasts a single transaction
 func signAndBroadcastTransaction(
-	round uint64,
+	round basics.Round,
 	txn *transactions.Transaction,
 	client libgoal.Client,
 	fixture *fixtures.RestClientFixture) error {
@@ -1110,9 +1114,9 @@ func makeAppTransaction(
 	t *testing.T,
 	client libgoal.Client,
 	counter uint64,
-	round uint64,
+	round basics.Round,
 	sender basics.Address,
-	tLife uint64,
+	tLife basics.Round,
 	setCounterInProg bool,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
@@ -1155,7 +1159,7 @@ int 1
 
 	// create the app
 	appTx, err = client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	note := make([]byte, 8)
@@ -1164,8 +1168,8 @@ int 1
 	appTx.Header = transactions.Header{
 		Sender:      sender,
 		Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-		FirstValid:  basics.Round(round),
-		LastValid:   basics.Round(round + tLife),
+		FirstValid:  round,
+		LastValid:   round + tLife,
 		GenesisHash: genesisHash,
 		Note:        note,
 	}
@@ -1177,19 +1181,19 @@ func makeOptInAppTransaction(
 	t *testing.T,
 	client libgoal.Client,
 	appIdx basics.AppIndex,
-	round uint64,
+	round basics.Round,
 	sender basics.Address,
-	tLife uint64,
+	tLife basics.Round,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
+	appTx, err := client.MakeUnsignedAppOptInTx(appIdx, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
 		Sender:      sender,
 		Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-		FirstValid:  basics.Round(round),
-		LastValid:   basics.Round(round + tLife),
+		FirstValid:  round,
+		LastValid:   round + tLife,
 		GenesisHash: genesisHash,
 	}
 	return
@@ -1198,7 +1202,7 @@ func makeOptInAppTransaction(
 // checks and verifies the app params by comparing them against the baseline
 func checkApplicationParams(
 	acTF transactions.ApplicationCallTxnFields,
-	app generated.ApplicationParams,
+	app model.ApplicationParams,
 	creator string,
 	globalStateCheck *[]bool,
 	globalStateCheckMu *deadlock.Mutex) (pass bool) {
@@ -1242,15 +1246,15 @@ func createAccounts(
 	fixture *fixtures.RestClientFixture,
 	numberOfAccounts uint64,
 	baseAcct psKey,
-	firstValid uint64,
+	firstValid basics.Round,
 	balance uint64,
 	counter uint64,
-	tLife uint64,
+	tLife basics.Round,
 	genesisHash crypto.Digest,
 	txnChan chan<- *txnKey,
 	txnGrpChan chan<- []txnKey,
 	stopChan <-chan struct{},
-	log logging.Logger) (newFirstValid uint64, newCounter uint64, keys []psKey) {
+	log logging.Logger) (newFirstValid basics.Round, newcounter uint64, keys []psKey) {
 
 	log.Infof("Creating accounts...")
 
@@ -1283,19 +1287,19 @@ func callAppTransaction(
 	t *testing.T,
 	client libgoal.Client,
 	appIdx basics.AppIndex,
-	round uint64,
+	round basics.Round,
 	sender basics.Address,
-	tLife uint64,
+	tLife basics.Round,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil)
+	appTx, err := client.MakeUnsignedAppNoOpTx(appIdx, nil, libgoal.RefBundle{}, 0)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
 		Sender:      sender,
 		Fee:         basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
-		FirstValid:  basics.Round(round),
-		LastValid:   basics.Round(round + tLife),
+		FirstValid:  round,
+		LastValid:   round + tLife,
 		GenesisHash: genesisHash,
 	}
 	return

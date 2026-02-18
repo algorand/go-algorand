@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -24,11 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-const transactionValidityPeriod = uint64(100) // rounds
+const transactionValidityPeriod = basics.Round(100)
 const transactionFee = uint64(0)
 
 func TestAccountsCanChangeOnlineState(t *testing.T) {
@@ -64,17 +66,17 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	becomesNonparticipating := accountList[2].Address // 10% stake
 
 	// assert that initiallyOfflineAccount is offline
-	initiallyOfflineAccountStatus, err := client.AccountInformation(initiallyOffline)
+	initiallyOfflineAccountStatus, err := client.AccountInformation(initiallyOffline, false)
 	a.NoError(err)
 	a.Equal(initiallyOfflineAccountStatus.Status, basics.Offline.String())
 
 	// assert that initiallyOnlineAccount is online
-	initiallyOnlineAccountStatus, err := client.AccountInformation(initiallyOnline)
+	initiallyOnlineAccountStatus, err := client.AccountInformation(initiallyOnline, false)
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Online.String())
 
 	// assert that the account that will become nonparticipating hasn't yet been marked as such
-	unmarkedAccountStatus, err := client.AccountInformation(becomesNonparticipating)
+	unmarkedAccountStatus, err := client.AccountInformation(becomesNonparticipating, false)
 	a.NoError(err)
 	a.NotEqual(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 
@@ -86,7 +88,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	a.NoError(err, "should be no errors when creating partkeys")
 	a.Equal(initiallyOffline, partkeyResponse.Address().String(), "successful partkey creation should echo account")
 
-	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, nil, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
+	goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(initiallyOffline, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go online tx")
 	wh, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err, "should be able to get unencrypted wallet handle")
@@ -101,6 +103,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	goOfflineUTx, err := client.MakeUnsignedGoOfflineTx(initiallyOnline, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 	a.NoError(err, "should be able to make go offline tx")
 	wh, err = client.GetUnencryptedWalletHandle()
+	a.NoError(err)
 	offlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOfflineUTx)
 	a.NoError(err, "should be no errors when going offline")
 
@@ -112,6 +115,7 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 		becomeNonparticpatingUTx, err := client.MakeUnsignedBecomeNonparticipatingTx(becomesNonparticipating, curRound, curRound+transactionValidityPeriod, transactionFee)
 		a.NoError(err, "should be able to make become-nonparticipating tx")
 		wh, err = client.GetUnencryptedWalletHandle()
+		a.NoError(err)
 		nonparticipatingTxID, err = client.SignAndBroadcastTransaction(wh, nil, becomeNonparticpatingUTx)
 		a.NoError(err, "should be  no errors when marking nonparticipating")
 	}
@@ -122,26 +126,26 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	if doNonparticipationTest {
 		txidsForStatusChange[nonparticipatingTxID] = becomesNonparticipating
 	}
-	txnConfirmationDeadline := curRound + uint64(5)
+	txnConfirmationDeadline := curRound + 5
 	confirmed := fixture.WaitForAllTxnsToConfirm(txnConfirmationDeadline, txidsForStatusChange)
 	a.True(confirmed, "Transactions failed to confirm.")
 
 	_, curRound = fixture.GetBalanceAndRound(initiallyOnline)
-	fixture.WaitForRoundWithTimeout(curRound + uint64(1))
+	fixture.WaitForRoundWithTimeout(curRound + 1)
 
 	// assert that initiallyOffline is now online
-	initiallyOfflineAccountStatus, err = client.AccountInformation(initiallyOffline)
+	initiallyOfflineAccountStatus, err = client.AccountInformation(initiallyOffline, false)
 	a.NoError(err)
 	a.Equal(initiallyOfflineAccountStatus.Status, basics.Online.String())
 
 	// assert that initiallyOnline is now offline
-	initiallyOnlineAccountStatus, err = client.AccountInformation(initiallyOnline)
+	initiallyOnlineAccountStatus, err = client.AccountInformation(initiallyOnline, false)
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Offline.String())
 
 	if doNonparticipationTest {
 		// assert that becomesNonparticipating is no longer participating
-		unmarkedAccountStatus, err = client.AccountInformation(becomesNonparticipating)
+		unmarkedAccountStatus, err = client.AccountInformation(becomesNonparticipating, false)
 		a.NoError(err)
 		a.Equal(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 	}
@@ -168,13 +172,20 @@ func TestCloseOnError(t *testing.T) {
 	// get the current round for partkey creation
 	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
 
+	var partkeyFile string
+	installFunc := func(keyPath string) error {
+		return errors.New("the install directory is provided, so keys should not be installed")
+	}
+	_, partkeyFile, err = participation.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir(), installFunc)
+	a.NoError(err)
+
 	// make a participation key for initiallyOffline
-	_, _, err = client.GenParticipationKeys(initiallyOffline, 0, curRound+1000, 0)
+	_, err = client.AddParticipationKey(partkeyFile)
 	a.NoError(err)
 	// check duplicate keys does not crash
-	_, _, err = client.GenParticipationKeys(initiallyOffline, 0, curRound+1000, 0)
-	errMsg := fmt.Sprintf("ParticipationKeys exist for the range 0 to %d", curRound+1000)
-	a.Equal(errMsg, err.Error())
+	_, err = client.AddParticipationKey(partkeyFile)
+	a.Error(err)
+	a.Contains(err.Error(), "cannot register duplicate participation key")
 	// check lastValid < firstValid does not crash
 	_, _, err = client.GenParticipationKeys(initiallyOffline, curRound+1001, curRound+1000, 0)
 	expected := fmt.Sprintf("FillDBWithParticipationKeys: firstValid %d is after lastValid %d", int(curRound+1001), int(curRound+1000))

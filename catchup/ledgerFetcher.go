@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,27 +23,27 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
 	"strconv"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/util"
 )
 
-var errNoLedgerForRound = errors.New("No ledger available for given round")
+var errNoLedgerForRound = errors.New("no ledger available for given round")
 
 const (
-	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
-	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * basics.MaxEncodedAccountDataSize
+	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk and one account with max resources.
+	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk*(ledger.MaxEncodedBaseAccountDataSize+encoded.MaxEncodedKVDataSize) + ledger.ResourcesPerCatchpointFileChunk*ledger.MaxEncodedBaseResourceDataSize
 	// defaultMinCatchpointFileDownloadBytesPerSecond defines the worst-case scenario download speed we expect to get while downloading a catchpoint file
 	defaultMinCatchpointFileDownloadBytesPerSecond = 20 * 1024
-	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each itration from the incoming http data stream
+	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each iteration from the incoming http data stream
 	catchpointFileStreamReadSize = 4096
 )
 
@@ -72,6 +72,47 @@ func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchup
 	}
 }
 
+func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round, method string) (*http.Response, error) {
+	ledgerURL := network.SubstituteGenesisID(lf.net, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36))
+	lf.log.Debugf("ledger %s %#v peer %#v %T", method, ledgerURL, peer, peer)
+	request, err := http.NewRequestWithContext(ctx, method, ledgerURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	network.SetUserAgentHeader(request.Header)
+	httpClient := peer.GetHTTPClient()
+	if httpClient == nil {
+		return nil, fmt.Errorf("requestLedger: HTTPPeer %s has no http client", peer.GetAddress())
+	}
+	return httpClient.Do(request)
+}
+
+func (lf *ledgerFetcher) headLedger(ctx context.Context, peer network.Peer, round basics.Round) error {
+	httpPeer, ok := peer.(network.HTTPPeer)
+	if !ok {
+		return errNonHTTPPeer
+	}
+	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, lf.config.MaxCatchpointDownloadDuration)
+	defer timeoutContextCancel()
+	response, err := lf.requestLedger(timeoutContext, httpPeer, round, http.MethodHead)
+	if err != nil {
+		lf.log.Debugf("getPeerLedger HEAD : %s", err)
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	// check to see that we had no errors.
+	switch response.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusNotFound: // server could not find a block with that round number.
+		return errNoLedgerForRound
+	default:
+		return fmt.Errorf("headLedger error response status code %d", response.StatusCode)
+	}
+}
+
 func (lf *ledgerFetcher) downloadLedger(ctx context.Context, peer network.Peer, round basics.Round) error {
 	httpPeer, ok := peer.(network.HTTPPeer)
 	if !ok {
@@ -81,26 +122,11 @@ func (lf *ledgerFetcher) downloadLedger(ctx context.Context, peer network.Peer, 
 }
 
 func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round) error {
-	parsedURL, err := network.ParseHostOrURL(peer.GetAddress())
-	if err != nil {
-		return err
-	}
-
-	parsedURL.Path = lf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
-	ledgerURL := parsedURL.String()
-	lf.log.Debugf("ledger GET %#v peer %#v %T", ledgerURL, peer, peer)
-	request, err := http.NewRequest(http.MethodGet, ledgerURL, nil)
-	if err != nil {
-		return err
-	}
-
 	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, lf.config.MaxCatchpointDownloadDuration)
 	defer timeoutContextCancel()
-	request = request.WithContext(timeoutContext)
-	network.SetUserAgentHeader(request.Header)
-	response, err := peer.GetHTTPClient().Do(request)
+	response, err := lf.requestLedger(timeoutContext, peer, round, http.MethodGet)
 	if err != nil {
-		lf.log.Debugf("getPeerLedger GET %v : %s", ledgerURL, err)
+		lf.log.Debugf("getPeerLedger GET : %s", err)
 		return err
 	}
 	defer response.Body.Close()
@@ -114,7 +140,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		return fmt.Errorf("getPeerLedger error response status code %d", response.StatusCode)
 	}
 
-	// at this point, we've already receieved the response headers. ensure that the
+	// at this point, we've already received the response headers. ensure that the
 	// response content type is what we'd like it to be.
 	contentTypes := response.Header["Content-Type"]
 	if len(contentTypes) != 1 {
@@ -146,10 +172,12 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			"writing balances to disk took %d seconds, "+
 				"writing creatables to disk took %d seconds, "+
 				"writing hashes to disk took %d seconds, "+
+				"writing kv pairs to disk took %d seconds, "+
 				"total duration is %d seconds",
 			downloadProgress.BalancesWriteDuration/time.Second,
 			downloadProgress.CreatablesWriteDuration/time.Second,
 			downloadProgress.HashesWriteDuration/time.Second,
+			downloadProgress.KVWriteDuration/time.Second,
 			writeDuration/time.Second)
 	}
 
@@ -166,20 +194,9 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			return fmt.Errorf("getPeerLedger received a tar header with data size of %d", header.Size)
 		}
 		balancesBlockBytes := make([]byte, header.Size)
-		readComplete := int64(0)
-
-		for readComplete < header.Size {
-			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
-			readComplete += int64(bytesRead)
-			if err != nil {
-				if err == io.EOF {
-					if readComplete == header.Size {
-						break
-					}
-					err = fmt.Errorf("getPeerLedger received io.EOF while reading from tar file stream prior of reaching chunk size %d / %d", readComplete, header.Size)
-				}
-				return err
-			}
+		_, err = io.ReadFull(tarReader, balancesBlockBytes)
+		if err != nil {
+			return err
 		}
 		start := time.Now()
 		err = lf.processBalancesBlock(ctx, header.Name, balancesBlockBytes, &downloadProgress)
@@ -202,5 +219,5 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 }
 
 func (lf *ledgerFetcher) processBalancesBlock(ctx context.Context, sectionName string, bytes []byte, downloadProgress *ledger.CatchpointCatchupAccessorProgress) error {
-	return lf.accessor.ProgressStagingBalances(ctx, sectionName, bytes, downloadProgress)
+	return lf.accessor.ProcessStagingBalances(ctx, sectionName, bytes, downloadProgress)
 }

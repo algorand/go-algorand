@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,9 +22,9 @@ import (
 )
 
 // An OnlineAccount corresponds to an account whose AccountData.Status
-// is Online.  This is used for a Merkle tree commitment of online
+// is Online. This is used for a Merkle tree commitment of online
 // accounts, which is subsequently used to validate participants for
-// a compact certificate.
+// a state proof.
 type OnlineAccount struct {
 	// These are a subset of the fields from the corresponding AccountData.
 	Address                 basics.Address
@@ -33,5 +33,5 @@ type OnlineAccount struct {
 	NormalizedOnlineBalance uint64
 	VoteFirstValid          basics.Round
 	VoteLastValid           basics.Round
-	StateProofID            merklesignature.Verifier
+	StateProofID            merklesignature.Commitment
 }

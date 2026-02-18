@@ -10,14 +10,12 @@
 CHANNEL=${1:-stable}
 NAME=${2:-algorand}
 
-if [ ! -z ${PACKAGE_NAME_EXTENSION} ]; then
+if [ -n "${PACKAGE_NAME_EXTENSION}" ]; then
   NAME="${NAME}-${PACKAGE_NAME_EXTENSION}"
 fi
 
-if [ "$CHANNEL" = beta ]; then
-    echo "$NAME-beta"
-elif [ "$CHANNEL" = nightly ]; then
-    echo "$NAME-nightly"
-else
+if [ "$CHANNEL" = stable ]; then
     echo "$NAME"
+else
+    echo "$NAME-$CHANNEL"
 fi

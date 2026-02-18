@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,13 +19,13 @@ package cloudflare
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 )
 
 // deleteDNSRecordRequest creates a new http request for deleting a single DNS records.
-func deleteDNSRecordRequest(zoneID string, authEmail string, authKey string, recordID string) (*http.Request, error) {
+func deleteDNSRecordRequest(zoneID string, authToken string, recordID string) (*http.Request, error) {
 	// construct the query
 	uri, err := url.Parse(fmt.Sprintf("%szones/%s/dns_records/%s", cloudFlareURI, zoneID, recordID))
 	if err != nil {
@@ -35,7 +35,7 @@ func deleteDNSRecordRequest(zoneID string, authEmail string, authKey string, rec
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
@@ -52,10 +52,10 @@ type DeleteDNSRecordResult struct {
 	ID string `json:"id"`
 }
 
-// ParseDeleteDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
+// parseDeleteDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseDeleteDNSRecordResponse(response *http.Response) (*DeleteDNSRecordResponse, error) {
 	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}

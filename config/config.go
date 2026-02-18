@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,11 +19,14 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -33,6 +36,9 @@ const Devnet protocol.NetworkID = "devnet"
 
 // Betanet identifies the 'beta network' use for early releases of feature to the public prior to releasing these to mainnet/testnet
 const Betanet protocol.NetworkID = "betanet"
+
+// Alphanet identifies the 'alpha network' use for performance releases of feature/alphanet to the public prior to releasing these to mainnet/testnet
+const Alphanet protocol.NetworkID = "alphanet"
 
 // Devtestnet identifies the 'development network for tests' use for running tests against development and not generally accessible publicly
 const Devtestnet protocol.NetworkID = "devtestnet"
@@ -61,28 +67,56 @@ const LedgerFilenamePrefix = "ledger"
 // It is used to recover from node crashes.
 const CrashFilename = "crash.sqlite"
 
-// CompactCertFilename is the name of the compact certificate database file.
-// It is used to track in-progress compact certificates.
-const CompactCertFilename = "compactcert.sqlite"
+// StateProofFileName is the name of the state proof database file.
+// It is used to track in-progress state proofs.
+const StateProofFileName = "stateproof.sqlite"
 
 // ParticipationRegistryFilename is the name of the participation registry database file.
 // It is used for tracking participation key metadata.
 const ParticipationRegistryFilename = "partregistry.sqlite"
 
-// ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
+// ConfigurableConsensusProtocolsFilename defines a set of consensus protocols that
 // are to be loaded from the data directory ( if present ), to override the
 // built-in supported consensus protocols.
 const ConfigurableConsensusProtocolsFilename = "consensus.json"
+
+// The default gossip fanout setting when configured as a relay (here, as we
+// do not expose in normal config so it is not in code generated local_defaults.go
+const defaultRelayGossipFanout = 8
+
+// CatchpointTrackingModeUntracked defines the CatchpointTracking mode that does _not_ track catchpoints
+const CatchpointTrackingModeUntracked = -1
+
+// CatchpointTrackingModeAutomatic defines the CatchpointTracking mode that automatically determines catchpoint tracking
+// and storage based on the Archival property and CatchpointInterval.
+const CatchpointTrackingModeAutomatic = 0
+
+// CatchpointTrackingModeTracked defines the CatchpointTracking mode that tracks catchpoint
+// as long as CatchpointInterval > 0
+const CatchpointTrackingModeTracked = 1
+
+// CatchpointTrackingModeStored defines the CatchpointTracking mode that tracks and stores catchpoints
+// as long as CatchpointInterval > 0
+const CatchpointTrackingModeStored = 2
+
+// PlaceholderPublicAddress is a placeholder for the public address generated in certain profiles
+const PlaceholderPublicAddress = "PLEASE_SET_ME"
 
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
 // cannot be loaded, the default config is returned (with the error from loading the
 // custom file).
 func LoadConfigFromDisk(custom string) (c Local, err error) {
+	c, _, err = loadConfigFromFile(filepath.Join(custom, ConfigFilename))
+	return
+}
+
+// LoadConfigFromDiskWithMigrations is like LoadConfigFromDisk but also returns migration results
+func LoadConfigFromDiskWithMigrations(custom string) (c Local, migrations []MigrationResult, err error) {
 	return loadConfigFromFile(filepath.Join(custom, ConfigFilename))
 }
 
-func loadConfigFromFile(configFile string) (c Local, err error) {
+func loadConfigFromFile(configFile string) (c Local, migrations []MigrationResult, err error) {
 	c = defaultLocal
 	c.Version = 0 // Reset to 0 so we get the version from the loaded file.
 	c, err = mergeConfigFromFile(configFile, c)
@@ -93,7 +127,7 @@ func loadConfigFromFile(configFile string) (c Local, err error) {
 	// Migrate in case defaults were changed
 	// If a config file does not have version, it is assumed to be zero.
 	// All fields listed in migrate() might be changed if an actual value matches to default value from a previous version.
-	c, err = migrate(c)
+	c, migrations, err = migrate(c)
 	return
 }
 
@@ -114,16 +148,34 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 	defer f.Close()
 
 	err = loadConfig(f, &source)
+	if err != nil {
+		return source, err
+	}
+	source, err = enrichNetworkingConfig(source)
+	return source, err
+}
 
-	// For now, all relays (listening for incoming connections) are also Archival
-	// We can change this logic in the future, but it's currently the sanest default.
-	if source.NetAddress != "" {
-		source.Archival = true
-		source.EnableLedgerService = true
-		source.EnableBlockService = true
+// enrichNetworkingConfig makes the following tweaks to the config:
+// - If NetAddress is set, enable the ledger and block services
+// - If EnableP2PHybridMode is set, require PublicAddress to be set
+func enrichNetworkingConfig(source Local) (Local, error) {
+	// If the PublicAddress in config file has the PlaceholderPublicAddress, treat it as if it were empty
+	if source.PublicAddress == PlaceholderPublicAddress {
+		source.PublicAddress = ""
 	}
 
-	return source, err
+	if source.NetAddress != "" {
+		source.EnableLedgerService = true
+		source.EnableBlockService = true
+
+		// If gossip fanout has not been explicitly overridden, use defaultRelayGossipFanout
+		// rather then the default gossip fanout setting from defaultLocal
+		if source.GossipFanout == defaultLocal.GossipFanout {
+			source.GossipFanout = defaultRelayGossipFanout
+		}
+	}
+	source.PublicAddress = strings.ToLower(source.PublicAddress)
+	return source, nil
 }
 
 func loadConfig(reader io.Reader, config *Local) error {
@@ -180,7 +232,8 @@ func savePhonebook(entries []string, w io.Writer) error {
 	return enc.Encode(pb)
 }
 
-var globalConfigFileRoot string
+// DataDirectory for the current instance
+var DataDirectory string
 
 // GetConfigFilePath retrieves the full path to a configuration file
 // These are global configurations - not specific to data-directory / network.
@@ -192,12 +245,13 @@ func GetConfigFilePath(file string) (string, error) {
 	return filepath.Join(rootPath, file), nil
 }
 
-// GetGlobalConfigFileRoot returns the current root folder for global configuration files.
-// This will likely only change for tests.
+var globalConfigFileRoot string
+
+// GetGlobalConfigFileRoot returns the root directory for global configuration files.
 func GetGlobalConfigFileRoot() (string, error) {
 	var err error
 	if globalConfigFileRoot == "" {
-		globalConfigFileRoot, err = GetDefaultConfigFilePath()
+		globalConfigFileRoot, err = deriveConfigFilePath()
 		if err == nil {
 			dirErr := os.Mkdir(globalConfigFileRoot, os.ModePerm)
 			if !os.IsExist(dirErr) {
@@ -208,33 +262,43 @@ func GetGlobalConfigFileRoot() (string, error) {
 	return globalConfigFileRoot, err
 }
 
-// SetGlobalConfigFileRoot allows overriding the root folder for global configuration files.
-// It returns the current one so it can be restored, if desired.
-// This will likely only change for tests.
-func SetGlobalConfigFileRoot(rootPath string) string {
-	currentRoot := globalConfigFileRoot
-	globalConfigFileRoot = rootPath
-	return currentRoot
-}
-
-// GetDefaultConfigFilePath retrieves the default directory for global (not per-instance) config files
-// By default we store in ~/.algorand/.
-// This will likely only change for tests.
-func GetDefaultConfigFilePath() (string, error) {
+// deriveConfigFilePath retrieves the directory (~/.algorand) for global (not
+// per-instance) config files.
+func deriveConfigFilePath() (string, error) {
 	currentUser, err := user.Current()
 	if err != nil {
 		return "", err
 	}
 	if currentUser.HomeDir == "" {
-		return "", errors.New("GetDefaultConfigFilePath fail - current user has no home directory")
+		return "", fmt.Errorf("current user %s has no home directory", currentUser.Username)
 	}
 	return filepath.Join(currentUser.HomeDir, ".algorand"), nil
+}
+
+// AnnotateTelemetry adds some extra information to the TelemetryConfig that
+// isn't actually in the config file, but is reported by telemetry.
+func AnnotateTelemetry(cfg *logging.TelemetryConfig, genesisID string) {
+	ver := GetCurrentVersion()
+	ch := ver.Channel
+	// Should not happen, but default to "dev" if channel is unspecified.
+	if ch == "" {
+		ch = "dev"
+	}
+	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
+	cfg.Version = ver.String()
+	cfg.DataDirectory = DataDirectory
 }
 
 const (
 	dnssecSRV = 1 << iota
 	dnssecRelayAddr
 	dnssecTelemetryAddr
+	dnssecTXT
+)
+
+const (
+	txFilterRawMsg    = 1
+	txFilterCanonical = 2
 )
 
 const (
@@ -243,3 +307,90 @@ const (
 	catchupValidationModeVerifyTransactionSignatures = 4
 	catchupValidationModeVerifyApplyData             = 8
 )
+
+// SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
+// if the params contains zero protocols, the existing consensus.json file will be removed if exists.
+func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+
+	if len(params) == 0 {
+		// we have no consensus params to write. In this case, just delete the existing file
+		// ( if any )
+		err := os.Remove(consensusProtocolPath)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	encodedConsensusParams, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
+	return err
+}
+
+// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
+// and merge it with a copy of the Consensus map. Then, it returns it to the caller.
+func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
+	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
+	file, err := os.Open(consensusProtocolPath)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			// this file is not required, only optional. if it's missing, no harm is done.
+			return Consensus, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	configurableConsensus := make(ConsensusProtocols)
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&configurableConsensus)
+	if err != nil {
+		return nil, err
+	}
+	return Consensus.Merge(configurableConsensus), nil
+}
+
+// SetConfigurableConsensusProtocols sets the configurable protocols.
+func SetConfigurableConsensusProtocols(newConsensus ConsensusProtocols) ConsensusProtocols {
+	oldConsensus := Consensus
+	Consensus = newConsensus
+	// Set allocation limits
+	for _, p := range Consensus {
+		checkSetAllocBounds(p)
+	}
+	return oldConsensus
+}
+
+// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directory
+func LoadConfigurableConsensusProtocols(dataDirectory string) error {
+	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
+	if err != nil {
+		return err
+	}
+	if newConsensus != nil {
+		SetConfigurableConsensusProtocols(newConsensus)
+	}
+	return nil
+}
+
+// ApplyShorterUpgradeRoundsForDevNetworks applies a shorter upgrade round time for the Devnet and Betanet networks.
+// This function should not take precedence over settings loaded via `PreloadConfigurableConsensusProtocols`.
+func ApplyShorterUpgradeRoundsForDevNetworks(id protocol.NetworkID) {
+	if id == Betanet || id == Devnet {
+		// Go through all approved upgrades and set to the MinUpgradeWaitRounds valid where MinUpgradeWaitRounds is set
+		for _, p := range Consensus {
+			if p.ApprovedUpgrades != nil {
+				for v := range p.ApprovedUpgrades {
+					if p.MinUpgradeWaitRounds > 0 {
+						p.ApprovedUpgrades[v] = p.MinUpgradeWaitRounds
+					}
+				}
+			}
+		}
+	}
+}

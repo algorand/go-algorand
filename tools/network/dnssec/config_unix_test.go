@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -15,7 +15,6 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 //go:build !windows
-// +build !windows
 
 package dnssec
 
@@ -24,8 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestConfigEmpty(t *testing.T) {

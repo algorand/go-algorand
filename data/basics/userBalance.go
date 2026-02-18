@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,8 @@ package basics
 import (
 	"encoding/binary"
 	"fmt"
-	"reflect"
+	"slices"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/logging"
@@ -41,33 +40,6 @@ const (
 	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
 	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
-
-	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
-	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 850000
-
-	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
-	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
-	// with config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount; note that the decoded
-	// parameter is used only for protecting the decoder against malicious encoded account data stream.
-	// protocol-specific constains would be tested once the decoding is complete.
-	encodedMaxAssetsPerAccount = 1024
-
-	// EncodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxppsOptedIn
-	EncodedMaxAppLocalStates = 64
-
-	// EncodedMaxAppParams is the decoder limit for number of created apps in a single account.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated
-	EncodedMaxAppParams = 64
-
-	// EncodedMaxKeyValueEntries is the decoder limit for the length of a key/value store.
-	// It is verified in TestEncodedAccountAllocationBounds to align with
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxLocalSchemaEntries and
-	// config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries
-	EncodedMaxKeyValueEntries = 1024
 )
 
 func (s Status) String() string {
@@ -97,23 +69,38 @@ func UnmarshalStatus(value string) (s Status, err error) {
 	return
 }
 
-// OnlineAccountData contains the voting information for a single account.
-//msgp:ignore OnlineAccountData
-type OnlineAccountData struct {
-	MicroAlgosWithRewards MicroAlgos
-
-	VoteID      crypto.OneTimeSignatureVerifier
-	SelectionID crypto.VRFVerifier
+// VotingData holds voting-related data
+type VotingData struct {
+	VoteID       crypto.OneTimeSignatureVerifier
+	SelectionID  crypto.VRFVerifier
+	StateProofID merklesignature.Commitment
 
 	VoteFirstValid  Round
 	VoteLastValid   Round
 	VoteKeyDilution uint64
 }
 
+// OnlineAccountData contains the voting information for a single account.
+//
+//msgp:ignore OnlineAccountData
+type OnlineAccountData struct {
+	MicroAlgosWithRewards MicroAlgos
+	VotingData
+
+	IncentiveEligible bool
+	LastProposed      Round
+	LastHeartbeat     Round
+}
+
 // AccountData contains the data associated with a given address.
 //
-// This includes the account balance, cryptographic public keys,
-// consensus delegation status, asset data, and application data.
+// This includes the account balance, cryptographic public keys, consensus
+// status, asset params (for assets made by this account), asset holdings (for
+// assets the account is opted into), and application data (globals if account
+// created, locals if opted-in).  This can be thought of as the fully "hydrated"
+// structure and could take an arbitrary number of db queries to fill. As such,
+// it is mostly used only for shuttling complete accounts into the ledger
+// (genesis, catchpoints, REST API). And a lot of legacy tests.
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -148,8 +135,7 @@ type AccountData struct {
 	// If the account is Status=Offline or Status=Online, its
 	// effective balance (if a transaction were to be issued
 	// against this account) may be higher, as computed by
-	// AccountData.Money().  That function calls
-	// AccountData.WithUpdatedRewards() to apply the deferred
+	// WithUpdatedRewards() which applies the deferred
 	// rewards to AccountData.MicroAlgos.
 	RewardsBase uint64 `codec:"ebase"`
 
@@ -163,11 +149,18 @@ type AccountData struct {
 
 	VoteID       crypto.OneTimeSignatureVerifier `codec:"vote"`
 	SelectionID  crypto.VRFVerifier              `codec:"sel"`
-	StateProofID merklesignature.Verifier        `codec:"stprf"`
+	StateProofID merklesignature.Commitment      `codec:"stprf"`
 
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
+
+	// LastProposed is the last round that the account is known to have
+	// proposed. It is updated at the start of the _next_ round.
+	LastProposed Round `codec:"lpr"`
+	// LastHeartbeat is the last round an account has indicated it is ready to
+	// vote by sending a heartbeat transaction, signed by its partkey.
+	LastHeartbeat Round `codec:"lhb"`
 
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed
@@ -181,7 +174,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=encodedMaxAssetsPerAccount"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=bounds.EncodedMaxAssetsPerAccount"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -198,21 +191,26 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=encodedMaxAssetsPerAccount"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=bounds.EncodedMaxAssetsPerAccount"`
 
 	// AuthAddr is the address against which signatures/multisigs/logicsigs should be checked.
-	// If empty, the address of the account whose AccountData this is is used.
+	// If empty, the address of the account whose AccountData this is used.
 	// A transaction may change an account's AuthAddr to "re-key" the account.
 	// This allows key rotation, changing the members in a multisig, etc.
 	AuthAddr Address `codec:"spend"`
 
+	// IncentiveEligible indicates whether the account came online with the
+	// extra fee required to be eligible for block incentives. At proposal time,
+	// balance limits must also be met to receive incentives.
+	IncentiveEligible bool `codec:"ie"`
+
 	// AppLocalStates stores the local states associated with any applications
 	// that this account has opted in to.
-	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=EncodedMaxAppLocalStates"`
+	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=bounds.EncodedMaxAppLocalStates"`
 
 	// AppParams stores the global parameters and state associated with any
 	// applications that this account has created.
-	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=EncodedMaxAppParams"`
+	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=bounds.EncodedMaxAppParams"`
 
 	// TotalAppSchema stores the sum of all of the LocalStateSchemas
 	// and GlobalStateSchemas in this account (global for applications
@@ -223,6 +221,12 @@ type AccountData struct {
 	// TotalExtraAppPages stores the extra length in pages (MaxAppProgramLen bytes per page)
 	// requested for app program by this account
 	TotalExtraAppPages uint32 `codec:"teap"`
+
+	// Total number of boxes associated with this account, which implies it is an app account.
+	TotalBoxes uint64 `codec:"tbx"`
+
+	// TotalBoxBytes stores the sum of all len(keys) and len(values) of Boxes
+	TotalBoxBytes uint64 `codec:"tbxb"`
 }
 
 // AppLocalState stores the LocalState associated with an application. It also
@@ -240,11 +244,16 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAvailableAppProgramLen"`
-	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAvailableAppProgramLen"`
+	ApprovalProgram   []byte       `codec:"approv,allocbound=bounds.MaxAvailableAppProgramLen"`
+	ClearStateProgram []byte       `codec:"clearp,allocbound=bounds.MaxAvailableAppProgramLen"`
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
+	Version           uint64 `codec:"v"`
+
+	// SizeSponsor, if non-zero, is the account that must hold MBR for
+	// extra program pages, and the global schema.
+	SizeSponsor Address `codec:"ss"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the
@@ -260,10 +269,8 @@ type StateSchemas struct {
 // affecting the original
 func (ap *AppParams) Clone() (res AppParams) {
 	res = *ap
-	res.ApprovalProgram = make([]byte, len(ap.ApprovalProgram))
-	copy(res.ApprovalProgram, ap.ApprovalProgram)
-	res.ClearStateProgram = make([]byte, len(ap.ClearStateProgram))
-	copy(res.ClearStateProgram, ap.ClearStateProgram)
+	res.ApprovalProgram = slices.Clone(ap.ApprovalProgram)
+	res.ClearStateProgram = slices.Clone(ap.ClearStateProgram)
 	res.GlobalState = ap.GlobalState.Clone()
 	return
 }
@@ -306,6 +313,27 @@ type AssetIndex uint64
 // look up the creator of the application, whose balance record contains the
 // AppParams
 type AppIndex uint64
+
+// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual
+// app id, not an index
+type BoxRef struct {
+	App  AppIndex
+	Name string
+}
+
+// HoldingRef is the "hydrated" form of a transactions.HoldingRef - it has the
+// actual asset id and address, not indices
+type HoldingRef struct {
+	Asset   AssetIndex
+	Address Address
+}
+
+// LocalRef is the "hydrated" form of a transactions.LocalRef - it has the
+// actual app id and address, not indices
+type LocalRef struct {
+	App     AppIndex
+	Address Address
+}
 
 // CreatableIndex represents either an AssetIndex or AppIndex, which come from
 // the same namespace of indices as each other (both assets and apps are
@@ -365,14 +393,14 @@ type AssetParams struct {
 
 	// UnitName specifies a hint for the name of a unit of
 	// this asset.
-	UnitName string `codec:"un"`
+	UnitName string `codec:"un,allocbound=bounds.MaxAssetUnitNameBytes"`
 
 	// AssetName specifies a hint for the name of the asset.
-	AssetName string `codec:"an"`
+	AssetName string `codec:"an,allocbound=bounds.MaxAssetNameBytes"`
 
 	// URL specifies a URL where more information about the asset can be
 	// retrieved
-	URL string `codec:"au"`
+	URL string `codec:"au,allocbound=bounds.MaxAssetURLBytes"`
 
 	// MetadataHash specifies a commitment to some unspecified asset
 	// metadata. The format of this metadata is up to the application.
@@ -407,21 +435,10 @@ func (app AppIndex) Address() Address {
 	return Address(crypto.HashObj(app))
 }
 
-// MakeAccountData returns a UserToken
-func MakeAccountData(status Status, algos MicroAlgos) AccountData {
-	return AccountData{Status: status, MicroAlgos: algos}
-}
-
-// Money returns the amount of MicroAlgos associated with the user's account
-func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (money MicroAlgos, rewards MicroAlgos) {
-	e := u.WithUpdatedRewards(proto, rewardsLevel)
-	return e.MicroAlgos, e.RewardedMicroAlgos
-}
-
 // PendingRewards computes the amount of rewards (in microalgos) that
 // have yet to be added to the account balance.
-func PendingRewards(ot *OverflowTracker, proto config.ConsensusParams, microAlgos MicroAlgos, rewardsBase uint64, rewardsLevel uint64) MicroAlgos {
-	rewardsUnits := microAlgos.RewardUnits(proto)
+func PendingRewards(ot *OverflowTracker, unitSize uint64, microAlgos MicroAlgos, rewardsBase uint64, rewardsLevel uint64) MicroAlgos {
+	rewardsUnits := microAlgos.RewardUnits(unitSize)
 	rewardsDelta := ot.Sub(rewardsLevel, rewardsBase)
 	return MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
 }
@@ -429,46 +446,64 @@ func PendingRewards(ot *OverflowTracker, proto config.ConsensusParams, microAlgo
 // WithUpdatedRewards returns an updated number of algos, total rewards and new rewards base
 // to reflect rewards up to some rewards level.
 func WithUpdatedRewards(
-	proto config.ConsensusParams, status Status, microAlgosIn MicroAlgos, rewardedMicroAlgosIn MicroAlgos, rewardsBaseIn uint64, rewardsLevelIn uint64,
+	rewardUnits uint64, status Status, microAlgosIn MicroAlgos, rewardedMicroAlgosIn MicroAlgos, rewardsBaseIn uint64, rewardsLevelIn uint64,
 ) (MicroAlgos, MicroAlgos, uint64) {
-	if status != NotParticipating {
-		var ot OverflowTracker
-		rewardsUnits := microAlgosIn.RewardUnits(proto)
-		rewardsDelta := ot.Sub(rewardsLevelIn, rewardsBaseIn)
-		rewards := MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
-		microAlgosOut := ot.AddA(microAlgosIn, rewards)
-		if ot.Overflowed {
-			logging.Base().Panicf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", microAlgosIn, rewardsUnits, rewardsLevelIn, rewardsBaseIn)
-		}
-		rewardsBaseOut := rewardsLevelIn
-		// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
-		// this rewardAlgos counter could potentially roll over.
-		rewardedMicroAlgosOut := MicroAlgos{Raw: rewardedMicroAlgosIn.Raw + rewards.Raw}
-		return microAlgosOut, rewardedMicroAlgosOut, rewardsBaseOut
+	if status == NotParticipating {
+		return microAlgosIn, rewardedMicroAlgosIn, rewardsBaseIn
 	}
-	return microAlgosIn, rewardedMicroAlgosIn, rewardsBaseIn
+
+	var ot OverflowTracker
+	rewardsUnits := microAlgosIn.RewardUnits(rewardUnits)
+	rewardsDelta := ot.Sub(rewardsLevelIn, rewardsBaseIn)
+	rewards := MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
+	microAlgosOut := ot.AddA(microAlgosIn, rewards)
+	if ot.Overflowed {
+		logging.Base().Panicf("AccountData.WithUpdatedRewards(): overflowed account balance when applying rewards %v + %d*(%d-%d)", microAlgosIn, rewardsUnits, rewardsLevelIn, rewardsBaseIn)
+	}
+	rewardsBaseOut := rewardsLevelIn
+	// The total reward over the lifetime of the account could exceed a 64-bit value. As a result
+	// this rewardAlgos counter could potentially roll over.
+	rewardedMicroAlgosOut := MicroAlgos{Raw: rewardedMicroAlgosIn.Raw + rewards.Raw}
+	return microAlgosOut, rewardedMicroAlgosOut, rewardsBaseOut
 }
 
 // WithUpdatedRewards returns an updated number of algos in an AccountData
 // to reflect rewards up to some rewards level.
-func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {
+func (u AccountData) WithUpdatedRewards(rewardUnit uint64, rewardsLevel uint64) AccountData {
 	u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase = WithUpdatedRewards(
-		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
+		rewardUnit, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
 
 	return u
 }
 
+// BalanceRequirements defines the amounts an account must hold, based on
+// various resources the account has. The names are taken directly from
+// config.ConsensusParams, as this struct only exists so that `basics` does not
+// need to `config` directly.
+type BalanceRequirements struct {
+	MinBalance              uint64
+	AppFlatParamsMinBalance uint64
+	AppFlatOptInMinBalance  uint64
+	BoxFlatMinBalance       uint64
+	BoxByteMinBalance       uint64
+
+	SchemaMinBalancePerEntry uint64
+	SchemaUintMinBalance     uint64
+	SchemaBytesMinBalance    uint64
+}
+
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
-func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
+func (u AccountData) MinBalance(reqs BalanceRequirements) MicroAlgos {
 	return MinBalance(
-		proto,
+		reqs,
 		uint64(len(u.Assets)),
 		u.TotalAppSchema,
 		uint64(len(u.AppParams)), uint64(len(u.AppLocalStates)),
 		uint64(u.TotalExtraAppPages),
+		u.TotalBoxes, u.TotalBoxBytes,
 	)
 }
 
@@ -476,59 +511,48 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) 
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
 func MinBalance(
-	proto *config.ConsensusParams,
+	reqs BalanceRequirements,
 	totalAssets uint64,
 	totalAppSchema StateSchema,
 	totalAppParams uint64, totalAppLocalStates uint64,
 	totalExtraAppPages uint64,
-) (res MicroAlgos) {
+	totalBoxes uint64, totalBoxBytes uint64,
+) MicroAlgos {
 	var min uint64
 
 	// First, base MinBalance
-	min = proto.MinBalance
+	min = reqs.MinBalance
 
 	// MinBalance for each Asset
-	assetCost := MulSaturate(proto.MinBalance, totalAssets)
+	assetCost := MulSaturate(reqs.MinBalance, totalAssets)
 	min = AddSaturate(min, assetCost)
 
 	// Base MinBalance for each created application
-	appCreationCost := MulSaturate(proto.AppFlatParamsMinBalance, totalAppParams)
+	appCreationCost := MulSaturate(reqs.AppFlatParamsMinBalance, totalAppParams)
 	min = AddSaturate(min, appCreationCost)
 
 	// Base MinBalance for each opted in application
-	appOptInCost := MulSaturate(proto.AppFlatOptInMinBalance, totalAppLocalStates)
+	appOptInCost := MulSaturate(reqs.AppFlatOptInMinBalance, totalAppLocalStates)
 	min = AddSaturate(min, appOptInCost)
 
 	// MinBalance for state usage measured by LocalStateSchemas and
 	// GlobalStateSchemas
-	schemaCost := totalAppSchema.MinBalance(proto)
+	schemaCost := totalAppSchema.MinBalance(reqs)
 	min = AddSaturate(min, schemaCost.Raw)
 
 	// MinBalance for each extra app program page
-	extraAppProgramLenCost := MulSaturate(proto.AppFlatParamsMinBalance, totalExtraAppPages)
+	extraAppProgramLenCost := MulSaturate(reqs.AppFlatParamsMinBalance, totalExtraAppPages)
 	min = AddSaturate(min, extraAppProgramLenCost)
 
-	res.Raw = min
-	return res
-}
+	// Base MinBalance for each created box
+	boxBaseCost := MulSaturate(reqs.BoxFlatMinBalance, totalBoxes)
+	min = AddSaturate(min, boxBaseCost)
 
-// OnlineAccountData returns subset of AccountData as OnlineAccountData data structure.
-// Account is expected to be Online otherwise its is cleared out
-func (u AccountData) OnlineAccountData() OnlineAccountData {
-	if u.Status != Online {
-		// if the account is not Online and agreement requests it for some reason, clear it out
-		return OnlineAccountData{}
-	}
+	// Per byte MinBalance for boxes
+	boxByteCost := MulSaturate(reqs.BoxByteMinBalance, totalBoxBytes)
+	min = AddSaturate(min, boxByteCost)
 
-	return OnlineAccountData{
-		MicroAlgosWithRewards: u.MicroAlgos,
-
-		VoteID:          u.VoteID,
-		SelectionID:     u.SelectionID,
-		VoteFirstValid:  u.VoteFirstValid,
-		VoteLastValid:   u.VoteLastValid,
-		VoteKeyDilution: u.VoteKeyDilution,
-	}
+	return MicroAlgos{min}
 }
 
 // VotingStake returns the amount of MicroAlgos associated with the user's account
@@ -538,26 +562,7 @@ func (u OnlineAccountData) VotingStake() MicroAlgos {
 	return u.MicroAlgosWithRewards
 }
 
-// KeyDilution returns the key dilution for this account,
-// returning the default key dilution if not explicitly specified.
-func (u OnlineAccountData) KeyDilution(proto config.ConsensusParams) uint64 {
-	if u.VoteKeyDilution != 0 {
-		return u.VoteKeyDilution
-	}
-
-	return proto.DefaultKeyDilution
-}
-
-// IsZero checks if an AccountData value is the same as its zero value.
-func (u AccountData) IsZero() bool {
-	if u.Assets != nil && len(u.Assets) == 0 {
-		u.Assets = nil
-	}
-
-	return reflect.DeepEqual(u, AccountData{})
-}
-
-// NormalizedOnlineBalance returns a ``normalized'' balance for this account.
+// NormalizedOnlineBalance returns a “normalized” balance for this account.
 //
 // The normalization compensates for rewards that have not yet been applied,
 // by computing a balance normalized to round 0.  To normalize, we estimate
@@ -575,11 +580,11 @@ func (u AccountData) IsZero() bool {
 // on how recently the account has been touched (our rewards do not implement
 // compounding).  However, online accounts have to periodically renew
 // participation keys, so the scale of the inconsistency is small.
-func (u AccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint64 {
-	return NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, proto)
+func (u AccountData) NormalizedOnlineBalance(rewardUnit uint64) uint64 {
+	return NormalizedOnlineAccountBalance(u.Status, u.RewardsBase, u.MicroAlgos, rewardUnit)
 }
 
-// NormalizedOnlineAccountBalance returns a ``normalized'' balance for an account
+// NormalizedOnlineAccountBalance returns a “normalized” balance for an account
 // with the given parameters.
 //
 // The normalization compensates for rewards that have not yet been applied,
@@ -598,26 +603,26 @@ func (u AccountData) NormalizedOnlineBalance(proto config.ConsensusParams) uint6
 // on how recently the account has been touched (our rewards do not implement
 // compounding).  However, online accounts have to periodically renew
 // participation keys, so the scale of the inconsistency is small.
-func NormalizedOnlineAccountBalance(status Status, rewardsBase uint64, microAlgos MicroAlgos, proto config.ConsensusParams) uint64 {
+func NormalizedOnlineAccountBalance(status Status, rewardsBase uint64, microAlgos MicroAlgos, rewardUnit uint64) uint64 {
 	if status != Online {
 		return 0
 	}
 
 	// If this account had one RewardUnit of microAlgos in round 0, it would
 	// have perRewardUnit microAlgos at the account's current rewards level.
-	perRewardUnit := rewardsBase + proto.RewardUnit
+	perRewardUnit := rewardsBase + rewardUnit
 
 	// To normalize, we compute, mathematically,
 	// u.MicroAlgos / perRewardUnit * proto.RewardUnit, as
 	// (u.MicroAlgos * proto.RewardUnit) / perRewardUnit.
-	norm, overflowed := Muldiv(microAlgos.ToUint64(), proto.RewardUnit, perRewardUnit)
+	norm, overflowed := Muldiv(microAlgos.ToUint64(), rewardUnit, perRewardUnit)
 
 	// Mathematically should be impossible to overflow
 	// because perRewardUnit >= proto.RewardUnit, as long
 	// as u.RewardBase isn't huge enough to cause overflow..
 	if overflowed {
 		logging.Base().Panicf("overflow computing normalized balance %d * %d / (%d + %d)",
-			microAlgos.ToUint64(), proto.RewardUnit, rewardsBase, proto.RewardUnit)
+			microAlgos.ToUint64(), rewardUnit, rewardsBase, rewardUnit)
 	}
 
 	return norm

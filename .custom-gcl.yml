@@ -1,0 +1,13 @@
+version: v2.5.0
+name: custom-golangci-lint
+plugins:
+  # partitiontest plugin from local source
+  - module: 'github.com/algorand/go-algorand/cmd/partitiontest_linter'
+    path: ./cmd/partitiontest_linter
+  # errortype plugin for error handling consistency
+  - module: fillmore-labs.com/errortype
+    import: fillmore-labs.com/errortype/gclplugin
+    version: v0.0.7
+  - module: github.com/cce/docnametypo
+    import: github.com/cce/docnametypo/gclplugin
+    version: v0.2.0

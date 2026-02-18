@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,6 +52,19 @@ func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 			}
 
 			// Continue serving the request
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// AllowPNA constructs the Private Network Access middleware function
+func AllowPNA() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Private-Network") == "true" {
+				w.Header().Set("Access-Control-Allow-Private-Network", "true")
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}

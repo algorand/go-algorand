@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,8 +18,6 @@ package fixtures
 
 import (
 	"bytes"
-	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -28,8 +26,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // ExpectFixture is a wrapper for running expect tests
@@ -46,8 +45,7 @@ func (ef *ExpectFixture) initialize(t *testing.T) (err error) {
 	ef.t = t
 	ef.testDir = os.Getenv("TESTDIR")
 	if ef.testDir == "" {
-		ef.testDir, _ = ioutil.TempDir("", "tmp")
-		ef.testDir = filepath.Join(ef.testDir, "expect")
+		ef.testDir = filepath.Join(t.TempDir(), "expect")
 		err = os.MkdirAll(ef.testDir, 0755)
 		if err != nil {
 			ef.t.Errorf("error creating test dir %s, with error %v", ef.testDir, err)
@@ -143,14 +141,13 @@ func skipExpectTests() bool {
 // Run Process all expect script files with suffix Test.exp within the current directory
 func (ef *ExpectFixture) Run() {
 	disabledTest := map[string]string{
-		"pingpongTest.exp":                    "broken",
 		"listExpiredParticipationKeyTest.exp": "flaky",
 	}
 	for testName := range ef.expectFiles {
 		if match, _ := regexp.MatchString(ef.testFilter, testName); match {
 			ef.t.Run(testName, func(t *testing.T) {
 				if reason, ok := disabledTest[testName]; ok {
-					t.Skip(fmt.Sprintf("Skipping %s test: %s", testName, reason))
+					t.Skipf("Skipping %s test: %s", testName, reason)
 				}
 				partitiontest.PartitionTest(t) // Check if this expect test should by run, may SKIP
 
@@ -163,7 +160,7 @@ func (ef *ExpectFixture) Run() {
 				cmd.Stdout = &outBuf
 
 				// Set stderr to be a file descriptor. In other way Go's exec.Cmd::writerDescriptor
-				// attaches goroutine reading that blocks on io.Copy from stderr.
+				// attaches a goroutine reading stderr that blocks on io.Copy from stderr.
 				// Cmd::CombinedOutput sets stderr to stdout and also blocks.
 				// Cmd::Start + Cmd::Wait with manual pipes redirection etc also blocks.
 				// Wrapping 'expect' with 'expect "$@" 2>&1' also blocks on stdout reading.
@@ -194,10 +191,10 @@ func (ef *ExpectFixture) Run() {
 					if ferr != nil {
 						stderr = ferr.Error()
 					}
-					syncTest.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, string(outBuf.Bytes()), stderr)
+					syncTest.Logf("err running '%s': %s\nstdout: %s\nstderr: %s\n", testName, err, outBuf, stderr)
 					syncTest.Fail()
 				} else {
-					// t.Logf("stdout: %s", string(outBuf.Bytes()))
+					syncTest.Logf("stdout: %s", outBuf.String())
 					ef.removeTestDir(workingDir)
 				}
 			})

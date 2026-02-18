@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,10 +28,8 @@ import (
 )
 
 func BenchmarkAlgodStartup(b *testing.B) {
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "BenchmarkAlgodStartup")
-	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
-	genesisFile, err := ioutil.ReadFile("../../installer/genesis/devnet/genesis.json")
+	tmpDir := b.TempDir()
+	genesisFile, err := os.ReadFile("../../installer/genesis/devnet/genesis.json")
 	require.NoError(b, err)
 
 	dataDirectory = &tmpDir
@@ -40,7 +37,7 @@ func BenchmarkAlgodStartup(b *testing.B) {
 	initAndExit = &bInitAndExit
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
-		err := ioutil.WriteFile(filepath.Join(tmpDir, config.GenesisJSONFile), genesisFile, 0766)
+		err := os.WriteFile(filepath.Join(tmpDir, config.GenesisJSONFile), genesisFile, 0766)
 		require.NoError(b, err)
 		fmt.Printf("file %s was written\n", filepath.Join(tmpDir, config.GenesisJSONFile))
 		run()

@@ -8,7 +8,6 @@ if { [catch {
     set TEST_ALGO_DIR [lindex $argv 0]
     set TEST_DATA_DIR [lindex $argv 1]
     set MIN_BALANCE 100000
-    set MIN_TXN_FEE 1000
 
     puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
     puts "TEST_DATA_DIR: $TEST_DATA_DIR"
@@ -39,9 +38,19 @@ if { [catch {
     set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
     puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
 
+    # Get suggested fee from network
+    set MIN_TXN_FEE [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Network suggested fee: $MIN_TXN_FEE"
+
     # Associate a new account with the primary wallet
     set NEW_PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::CreateAccountForWallet $PRIMARY_WALLET_NAME $PRIMARY_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
     ::AlgorandGoal::VerifyAccount $PRIMARY_WALLET_NAME $PRIMARY_WALLET_PASSWORD $NEW_PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # Rename the wallet
+   set SUFFIX "_renamed"
+   set NEW_PRIMARY_WALLET_NAME  $PRIMARY_WALLET_NAME$SUFFIX
+   ::AlgorandGoal::RenameWallet $PRIMARY_WALLET_NAME $PRIMARY_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR $NEW_PRIMARY_WALLET_NAME
+   set PRIMARY_WALLET_NAME $NEW_PRIMARY_WALLET_NAME
 
     set WALLET_NAME_PREFIX "TestWallet_"
     set WALLET_COUNT 3

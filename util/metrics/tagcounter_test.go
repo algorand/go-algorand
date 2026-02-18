@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,8 +22,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestTagCounter(t *testing.T) {
@@ -40,6 +41,7 @@ func TestTagCounter(t *testing.T) {
 	}
 
 	tc := NewTagCounter("tc", "wat")
+	DefaultRegistry().Deregister(tc)
 
 	// check that empty TagCounter cleanly returns no results
 	var sb strings.Builder
@@ -78,6 +80,117 @@ func TestTagCounter(t *testing.T) {
 			t.Errorf("tag[%d] %v wanted %d got %d", i, tag, countin, endcount)
 		}
 	}
+}
+
+func TestTagCounterFilter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tags := make([]string, 17)
+	for i := range tags {
+		tags[i] = fmt.Sprintf("A%c", 'A'+i)
+	}
+	goodTags := tags[:10]
+	badTags := tags[10:]
+	badCount := uint64(0)
+	//t.Logf("tags %v", tags)
+	countsIn := make([]uint64, len(tags))
+	for i := range countsIn {
+		countsIn[i] = uint64(10 * (i + 1))
+		if i >= 10 {
+			badCount += countsIn[i]
+		}
+	}
+
+	tc := NewTagCounterFiltered("tc", "wat", goodTags, "UNK")
+	DefaultRegistry().Deregister(tc)
+
+	// check that empty TagCounter cleanly returns no results
+	var sb strings.Builder
+	tc.WriteMetric(&sb, "")
+	require.Equal(t, "", sb.String())
+
+	result := make(map[string]float64)
+	tc.AddMetric(result)
+	require.Equal(t, 0, len(result))
+
+	var wg sync.WaitGroup
+	wg.Add(len(tags))
+
+	runf := func(tag string, count uint64) {
+		for i := 0; i < int(count); i++ {
+			tc.Add(tag, 1)
+		}
+		wg.Done()
+	}
+
+	for i, tag := range tags {
+		go runf(tag, countsIn[i])
+	}
+	wg.Wait()
+
+	endtags := tc.tagptr.Load().(map[string]*uint64)
+	for i, tag := range goodTags {
+		countin := countsIn[i]
+		endcountp := endtags[tag]
+		if endcountp == nil {
+			t.Errorf("tag[%d] %s nil counter", i, tag)
+			continue
+		}
+		endcount := *endcountp
+		if endcount != countin {
+			t.Errorf("tag[%d] %v wanted %d got %d", i, tag, countin, endcount)
+		}
+	}
+	for _, tag := range badTags {
+		endcountp := endtags[tag]
+		if endcountp == nil {
+			// best, nil entry, never touched the struct
+			continue
+		}
+		endcount := *endcountp
+		if endcount != 0 {
+			t.Errorf("bad tag %v wanted %d got %d", tag, 0, endcount)
+		}
+	}
+	endcountp := endtags["UNK"]
+	endcount := uint64(0)
+	if endcountp != nil {
+		endcount = *endcountp
+	}
+	require.Equal(t, badCount, endcount)
+}
+
+func TestTagCounterWriteMetric(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tc := NewTagCounter("count_msgs_{TAG}", "number of {TAG} messages")
+	DefaultRegistry().Deregister(tc)
+
+	tc.Add("TX", 100)
+	tc.Add("TX", 1)
+	tc.Add("RX", 0)
+
+	var sbOut strings.Builder
+	tc.WriteMetric(&sbOut, `host="myhost"`)
+	txExpected := `# HELP count_msgs_TX number of TX messages
+# TYPE count_msgs_TX counter
+count_msgs_TX{host="myhost"} 101
+`
+	rxExpected := `# HELP count_msgs_RX number of RX messages
+# TYPE count_msgs_RX counter
+count_msgs_RX{host="myhost"} 0
+`
+	expfmt := sbOut.String()
+	require.True(t, expfmt == txExpected+rxExpected || expfmt == rxExpected+txExpected, "bad fmt: %s", expfmt)
+
+	tc2 := NewTagCounter("declared", "number of {TAG}s", "A", "B")
+	DefaultRegistry().Deregister(tc2)
+	aExpected := "# HELP declared_A number of As\n# TYPE declared_A counter\ndeclared_A{host=\"h\"} 0\n"
+	bExpected := "# HELP declared_B number of Bs\n# TYPE declared_B counter\ndeclared_B{host=\"h\"} 0\n"
+	sbOut = strings.Builder{}
+	tc2.WriteMetric(&sbOut, `host="h"`)
+	expfmt = sbOut.String()
+	require.True(t, expfmt == aExpected+bExpected || expfmt == bExpected+aExpected, "bad fmt: %s", expfmt)
 }
 
 func BenchmarkTagCounter(b *testing.B) {

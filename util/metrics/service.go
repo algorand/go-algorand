@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"errors"
 	"os"
 	"strconv"
-	"time"
 )
 
 var (
@@ -32,13 +31,6 @@ var (
 	ErrMetricServiceNotRunning = errors.New("MetricService not running")
 	// ErrMetricUnableToRegister unable to register
 	ErrMetricUnableToRegister = errors.New("Unable to register metric")
-)
-
-var (
-	// the duration of which we'll keep a metric in-memory and keep reporting it.
-	// when a metric time expires, it would get removed.
-	// TODO: implement or remove
-	maxMetricRetensionDuration = time.Duration(5) * time.Minute
 )
 
 // MakeMetricService creates a new metrics server at the given endpoint.

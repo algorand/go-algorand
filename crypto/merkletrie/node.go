@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package merkletrie
 import (
 	"bytes"
 	"encoding/binary"
+	"slices"
 	"sort"
 	"unsafe"
 
@@ -83,7 +84,7 @@ func (n *node) find(cache *merkleTrieCache, d []byte) (bool, error) {
 	if n.leaf() {
 		return 0 == bytes.Compare(d, n.hash), nil
 	}
-	if n.childrenMask.Bit(d[0]) == false {
+	if !n.childrenMask.Bit(d[0]) {
 		return false, nil
 	}
 	childNodeID := n.children[n.indexOf(d[0])].id
@@ -140,8 +141,9 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		}
 		pnode.hash = append(path, d[:idiff]...)
 
+		// create ancestors from pnode up to the new split
 		for i := idiff - 1; i >= 0; i-- {
-			// create a parent node for pnode.
+			// create a parent node for pnode, and move up
 			pnode2, nodeID2 := cache.allocateNewNode()
 			pnode2.childrenMask.SetBit(d[i])
 			pnode2.children = []childEntry{
@@ -152,29 +154,24 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 			}
 			pnode2.hash = append(path, d[:i]...)
 
-			pnode = pnode2
 			nodeID = nodeID2
 		}
 		return nodeID, nil
 	}
 
-	if n.childrenMask.Bit(d[0]) == false {
+	if !n.childrenMask.Bit(d[0]) {
 		// no such child.
-		var childNode *node
-		var childNodeID storedNodeIdentifier
-		childNode, childNodeID = cache.allocateNewNode()
+		childNode, childNodeID := cache.allocateNewNode()
 		childNode.hash = d[1:]
 
 		pnode, nodeID = cache.allocateNewNode()
 		pnode.childrenMask = n.childrenMask
 		pnode.childrenMask.SetBit(d[0])
 
-		pnode.children = make([]childEntry, len(n.children)+1, len(n.children)+1)
+		pnode.children = make([]childEntry, len(n.children)+1)
 		if d[0] > n.children[len(n.children)-1].hashIndex {
 			// the new entry comes after all the existing ones.
-			for i, child := range n.children {
-				pnode.children[i] = child
-			}
+			copy(pnode.children, n.children)
 			pnode.children[len(pnode.children)-1] = childEntry{
 				id:        childNodeID,
 				hashIndex: d[0],
@@ -183,8 +180,8 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 			for i, child := range n.children {
 				if d[0] < child.hashIndex {
 					pnode.children[i] = childEntry{
-						hashIndex: d[0],
 						id:        childNodeID,
+						hashIndex: d[0],
 					}
 					// copy the rest of the items.
 					for ; i < len(n.children); i++ {
@@ -211,7 +208,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		pnode, nodeID = childNode, cache.refurbishNode(curNodeID)
 		pnode.childrenMask = n.childrenMask
 		if len(pnode.children) < len(n.children) {
-			pnode.children = make([]childEntry, len(n.children), len(n.children))
+			pnode.children = make([]childEntry, len(n.children))
 		} else {
 			pnode.children = pnode.children[:len(n.children)]
 		}
@@ -270,7 +267,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
 		pnode.childrenMask = n.childrenMask
 		// we are guaranteed to have other children, because our tree forbids nodes that have exactly one leaf child and no other children.
-		pnode.children = make([]childEntry, len(n.children)-1, len(n.children)-1)
+		pnode.children = make([]childEntry, len(n.children)-1)
 		copy(pnode.children, append(n.children[:childIndex], n.children[childIndex+1:]...))
 		pnode.childrenMask.ClearBit(key[0])
 	} else {
@@ -283,7 +280,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
 		pnode.childrenMask = n.childrenMask
 		if len(pnode.children) < len(n.children) {
-			pnode.children = make([]childEntry, len(n.children), len(n.children))
+			pnode.children = make([]childEntry, len(n.children))
 		} else {
 			pnode.children = pnode.children[:len(n.children)]
 		}
@@ -341,8 +338,7 @@ func deserializeNode(buf []byte) (n *node, s int) {
 	if hashLength2 <= 0 {
 		return nil, hashLength2
 	}
-	n.hash = make([]byte, hashLength)
-	copy(n.hash, buf[hashLength2:hashLength2+int(hashLength)])
+	n.hash = slices.Clone(buf[hashLength2 : hashLength2+int(hashLength)])
 	s = hashLength2 + int(hashLength)
 	isLeaf := (buf[s] == 0)
 	s++
@@ -371,7 +367,7 @@ func deserializeNode(buf []byte) (n *node, s int) {
 		prevChildIndex = childIndex
 		i++
 	}
-	n.children = make([]childEntry, i, i)
+	n.children = make([]childEntry, i)
 	copy(n.children, childEntries[:i])
 	return
 }

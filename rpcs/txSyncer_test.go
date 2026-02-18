@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@ package rpcs
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"net/http"
 	"net/rpc"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -44,9 +44,31 @@ type mockPendingTxAggregate struct {
 	txns []transactions.SignedTxn
 }
 
+var testSource rand.Source
+var testRand *rand.Rand
+
+func init() {
+	testSource = rand.NewSource(12345678)
+	testRand = rand.New(testSource)
+}
+
+func testRandBytes(d []byte) {
+	// We don't need cryptographically strong random bytes for a
+	// unit test, we _do_ need deterministic 'random' bytes so
+	// that _sometimes_ a bloom filter doesn't fail on the data
+	// (e.g. TestSync() below).
+	n, err := testRand.Read(d)
+	if n != len(d) {
+		panic("short rand read")
+	}
+	if err != nil {
+		panic(err)
+	}
+}
+
 func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 	var secret [32]byte
-	crypto.RandBytes(secret[:])
+	testRandBytes(secret[:])
 	sk := crypto.GenerateSignatureSecrets(crypto.Seed(secret))
 	mock := mockPendingTxAggregate{
 		txns: make([]transactions.SignedTxn, txCount),
@@ -54,7 +76,7 @@ func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 
 	for i := 0; i < txCount; i++ {
 		var note [16]byte
-		crypto.RandBytes(note[:])
+		testRandBytes(note[:])
 		tx := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
@@ -80,12 +102,12 @@ func (mock mockPendingTxAggregate) PendingTxGroups() [][]transactions.SignedTxn 
 }
 
 type mockHandler struct {
-	messageCounter int32
+	messageCounter atomic.Int32
 	err            error
 }
 
 func (handler *mockHandler) Handle(txgroup []transactions.SignedTxn) error {
-	atomic.AddInt32(&handler.messageCounter, 1)
+	handler.messageCounter.Add(1)
 	return handler.err
 }
 
@@ -135,6 +157,7 @@ func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 func (client *mockRPCClient) GetAddress() string {
 	return client.rootURL
 }
+
 func (client *mockRPCClient) GetHTTPClient() *http.Client {
 	return nil
 }
@@ -147,20 +170,13 @@ type mockClientAggregator struct {
 func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []network.Peer {
 	return mca.peers
 }
-func (mca *mockClientAggregator) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
-}
 
-const numberOfPeers = 10
-
-func makeMockClientAggregator(t *testing.T, failWithNil bool, failWithError bool) *mockClientAggregator {
-	clients := make([]network.Peer, 0)
-	for i := 0; i < numberOfPeers; i++ {
-		runner := mockRunner{failWithNil: failWithNil, failWithError: failWithError, done: make(chan *rpc.Call)}
-		clients = append(clients, &mockRPCClient{client: &runner, log: logging.TestingLog(t)})
-	}
-	t.Logf("len(mca.clients) = %d", len(clients))
-	return &mockClientAggregator{peers: clients}
+func (mca *mockClientAggregator) GetHTTPClient(address string) (*http.Client, error) {
+	return &http.Client{
+		Transport: &network.HTTPPAddressBoundTransport{
+			Addr:           address,
+			InnerTransport: http.DefaultTransport},
+	}, nil
 }
 
 func TestSyncFromClient(t *testing.T) {
@@ -173,10 +189,12 @@ func TestSyncFromClient(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(clientPool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.syncFromClient(&client))
-	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(1), handler.messageCounter.Load())
 }
 
 func TestSyncFromUnsupportedClient(t *testing.T) {
@@ -188,10 +206,12 @@ func TestSyncFromUnsupportedClient(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
 	require.Error(t, syncer.syncFromClient(&client))
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestSyncFromClientAndQuit(t *testing.T) {
@@ -203,10 +223,12 @@ func TestSyncFromClientAndQuit(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	syncer.cancel()
 	require.Error(t, syncer.syncFromClient(&client))
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestSyncFromClientAndError(t *testing.T) {
@@ -218,9 +240,11 @@ func TestSyncFromClientAndError(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	require.Error(t, syncer.syncFromClient(&client))
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestSyncFromClientAndTimeout(t *testing.T) {
@@ -233,9 +257,11 @@ func TestSyncFromClientAndTimeout(t *testing.T) {
 	handler := mockHandler{}
 	syncTimeout := time.Duration(0)
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	require.Error(t, syncer.syncFromClient(&client))
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestSync(t *testing.T) {
@@ -250,14 +276,16 @@ func TestSync(t *testing.T) {
 
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, rootURL: nodeAURL, log: logging.TestingLog(t)}
-	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
+	clientAgg := mockClientAggregator{peers: []network.Peer{&client}, MockNetwork: mocks.MockNetwork{GenesisID: "test genesisID"}}
 	handler := mockHandler{}
 	syncerPool := makeMockPendingTxAggregate(3)
 	syncer := MakeTxSyncer(syncerPool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.sync())
-	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(1), handler.messageCounter.Load())
 }
 
 func TestNoClientsSync(t *testing.T) {
@@ -267,10 +295,12 @@ func TestNoClientsSync(t *testing.T) {
 	clientAgg := mockClientAggregator{peers: []network.Peer{}}
 	handler := mockHandler{}
 	syncer := MakeTxSyncer(pool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+	// Since syncer is not Started, set the context here
+	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.sync())
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestStartAndStop(t *testing.T) {
@@ -285,7 +315,7 @@ func TestStartAndStop(t *testing.T) {
 
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, rootURL: nodeAURL, log: logging.TestingLog(t)}
-	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
+	clientAgg := mockClientAggregator{peers: []network.Peer{&client}, MockNetwork: mocks.MockNetwork{GenesisID: "test genesisID"}}
 	handler := mockHandler{}
 
 	syncerPool := makeMockPendingTxAggregate(0)
@@ -298,22 +328,22 @@ func TestStartAndStop(t *testing.T) {
 	canStart := make(chan struct{})
 	syncer.Start(canStart)
 	time.Sleep(2 * time.Second)
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 
 	// signal that syncing can start
 	close(canStart)
 	for x := 0; x < 20; x++ {
 		time.Sleep(100 * time.Millisecond)
-		if atomic.LoadInt32(&handler.messageCounter) != 0 {
+		if handler.messageCounter.Load() != 0 {
 			break
 		}
 	}
-	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(1), handler.messageCounter.Load())
 
 	// stop syncing and ensure it doesn't happen
 	syncer.Stop()
 	time.Sleep(2 * time.Second)
-	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(1), handler.messageCounter.Load())
 }
 
 func TestStartAndQuit(t *testing.T) {
@@ -333,12 +363,12 @@ func TestStartAndQuit(t *testing.T) {
 	canStart := make(chan struct{})
 	syncer.Start(canStart)
 	time.Sleep(2 * time.Second)
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 
 	syncer.cancel()
 	time.Sleep(50 * time.Millisecond)
 	// signal that syncing can start, but ensure that it doesn't start (since we quit)
 	close(canStart)
 	time.Sleep(2 * time.Second)
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }

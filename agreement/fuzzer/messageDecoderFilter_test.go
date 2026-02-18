@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package fuzzer
 import (
 	"bytes"
 	"encoding/json"
+
 	"github.com/algorand/go-deadlock"
 
 	//"github.com/algorand/go-algorand/agreement"
@@ -107,7 +108,7 @@ type (
 		EquivocationVotes []equivocationVote `codec:"eqv"`
 	}
 
-	// voteAuthenticators omit the Round, Period, Step, and Proposal for compression
+	// voteAuthenticator omits the Round, Period, Step, and Proposal for compression
 	// and to simplify checking logic.
 	voteAuthenticator struct {
 		Sender basics.Address                      `codec:"snd"`
@@ -324,7 +325,7 @@ func (n *MessageDecoderFilter) getDecodedMessageCounts(tag protocol.Tag) int {
 	return -1
 }
 
-// Unmarshall MessageDecoderFilter
+// Unmarshal MessageDecoderFilter
 func (n *MessageDecoderFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type messageDecoderFilterJSON struct {
 		Name string

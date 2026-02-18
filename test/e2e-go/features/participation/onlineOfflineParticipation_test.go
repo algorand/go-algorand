@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,9 +104,9 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 }
 
 // TestNewAccountCanGoOnlineAndParticipate tests two behaviors:
-// - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
-//   it should not be proposing blocks
-// - When the account balance receives enough stake, it should be proposing after lookback rounds
+//   - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
+//     it should not be proposing blocks
+//   - When the account balance receives enough stake, it should be proposing after lookback rounds
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -124,8 +124,8 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	shortPartKeysProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	shortPartKeysProtocol.SeedLookback = 2
 	shortPartKeysProtocol.SeedRefreshInterval = 8
-	if runtime.GOARCH == "amd64" {
-		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		shortPartKeysProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		shortPartKeysProtocol.AgreementFilterTimeout = 1 * time.Second
 	}
@@ -174,54 +174,62 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.Equal(amountToSendInitial, amt, "new account should be funded with the amount the rich account sent")
 
 	// account adds part key
-	partKeyFirstValid := uint64(0)
-	partKeyValidityPeriod := uint64(10000)
+	const partKeyFirstValid basics.Round = 0
+	const partKeyValidityPeriod = 10000
 	partKeyLastValid := partKeyFirstValid + partKeyValidityPeriod
+
+	maxTxnLife := basics.Round(consensus[protocol.ConsensusVersion("shortpartkeysprotocol")].MaxTxnLife)
+
+	if partKeyLastValid > maxTxnLife {
+		partKeyLastValid = maxTxnLife
+	}
+
 	partkeyResponse, _, err := client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 0)
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, &partkeyResponse, 0, 0, transactionFee, [32]byte{})
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(partkeyResponse, transactionFee, partKeyFirstValid, partKeyLastValid, [32]byte{}, true)
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, goOnlineTx)
 	a.NoError(err, "new account with new partkey should be able to go online")
 
 	fixture.AssertValidTxid(onlineTxID)
-	maxRoundsToWaitForTxnConfirm := uint64(5)
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	const maxRoundsToWaitForTxnConfirm = 5
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 	onlineRound := nodeStatus.LastRound
-	newAccountStatus, err := client.AccountInformation(newAccount)
+	newAccountStatus, err := client.AccountInformation(newAccount, false)
 	a.NoError(err, "client should be able to get information about new account")
 	a.Equal(basics.Online.String(), newAccountStatus.Status, "new account should be online")
 
 	// transfer the funds and close to the new account
 	amountToSend := richBalance - 3*transactionFee - amountToSendInitial - minAcctBalance
 	txn := fixture.SendMoneyAndWait(onlineRound, amountToSend, transactionFee, richAccount, newAccount, newAccount)
-	fundedRound := txn.ConfirmedRound
+	a.NotNil(txn.ConfirmedRound)
+	fundedRound := *txn.ConfirmedRound
 
 	nodeStatus, _ = client.Status()
 	params, err := client.ConsensusParams(nodeStatus.LastRound)
 	a.NoError(err)
-	accountProposesStarting := balanceRoundOf(basics.Round(fundedRound), params)
+	accountProposesStarting := balanceRoundOf(fundedRound, params)
 
 	// Need to wait for funding to take effect on selection, then we can see if we're participating
 	// Stop before the account should become eligible for selection so we can ensure it wasn't
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting-1),
+	err = fixture.WaitForRound(accountProposesStarting-1,
 		time.Duration(uint64(globals.MaxTimePerRound)*uint64(accountProposesStarting-1)))
 	a.NoError(err)
 
 	// Check if the account did not propose any blocks up to this round
-	blockWasProposed := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting)-1,
-		int(accountProposesStarting)-1)
+	blockWasProposed := fixture.VerifyBlockProposedRange(newAccount, accountProposesStarting-1,
+		accountProposesStarting-1)
 	a.False(blockWasProposed, "account should not be selected until BalLookback (round %d) passes", int(accountProposesStarting-1))
 
 	// Now wait until the round where the funded account will be used.
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting), 10*globals.MaxTimePerRound)
+	err = fixture.WaitForRound(accountProposesStarting, 10*globals.MaxTimePerRound)
 	a.NoError(err)
 
-	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting), 1)
+	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, accountProposesStarting, 1)
 	a.True(blockWasProposedByNewAccountRecently, "newly online account should be proposing blocks")
 }
 
@@ -239,11 +247,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	// Make the seed lookback shorter, otherwise will wait for 320 rounds
-	consensus := make(config.ConsensusProtocols)
-
 	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(consensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 
 	// update the config file by setting the ParticipationKeysRefreshInterval to 5 second.
@@ -283,14 +287,15 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	a.Equal(amountToSendInitial, amt, "new account should be funded with the amount the rich account sent")
 
 	// we try to register online with a period in which we don't have stateproof keys
-	partKeyFirstValid := uint64(1)
-	// TODO: Change consensus version when compact certs are deployed
-	partKeyLastValid := config.Consensus[protocol.ConsensusFuture].CompactCertRounds - 1
+	const partKeyFirstValid = 1
+	// TODO: Change consensus version when state proofs are deployed
+	partKeyLastValid := basics.Round(config.Consensus[protocol.ConsensusFuture].StateProofInterval) - 1
 	partkeyResponse, _, err := client.GenParticipationKeys(newAccount, partKeyFirstValid, partKeyLastValid, 1000)
 	a.NoError(err, "rest client should be able to add participation key to new account")
 	a.Equal(newAccount, partkeyResponse.Parent.String(), "partkey response should echo queried account")
 	// account uses part key to go online
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(newAccount, &partkeyResponse, partKeyFirstValid, partKeyLastValid, transactionFee, [32]byte{})
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(partkeyResponse, transactionFee, partKeyFirstValid, partKeyLastValid, [32]byte{}, true)
+	a.NoError(err)
 	a.Equal(goOnlineTx.KeyregTxnFields.StateProofPK.IsEmpty(), false, "stateproof key should not be zero")
 	a.NoError(err, "should be able to make go online tx")
 	a.Equal(newAccount, goOnlineTx.Src().String(), "go online response should echo queried account")
@@ -298,13 +303,14 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	a.NoError(err, "new account with new partkey should be able to go online")
 
 	fixture.AssertValidTxid(onlineTxID)
-	maxRoundsToWaitForTxnConfirm := uint64(5)
+	const maxRoundsToWaitForTxnConfirm = 5
 	nodeStatus, err := client.Status()
+	a.NoError(err)
 	seededRound := nodeStatus.LastRound
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 
-	accountStatus, err := client.AccountInformation(newAccount)
+	accountStatus, err := client.AccountInformation(newAccount, false)
 	a.NoError(err, "client should be able to get information about new account")
 	a.Equal(basics.Online.String(), accountStatus.Status, "new account should be online")
 }

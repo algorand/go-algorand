@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,11 @@
 package util
 
 import (
+	"context"
 	"io"
 	"os"
 	"os/exec"
+	"runtime/pprof"
 	"sync"
 	"time"
 )
@@ -72,4 +74,9 @@ func ExecAndCaptureOutput(command string, args ...string) (string, string, error
 	wg.Wait()
 
 	return string(outputStdout), string(outputStderr), err
+}
+
+// SetGoroutineLabels sets profiler labels for identifying goroutines using the pprof package.
+func SetGoroutineLabels(args ...string) {
+	pprof.SetGoroutineLabels(pprof.WithLabels(context.Background(), pprof.Labels(args...)))
 }

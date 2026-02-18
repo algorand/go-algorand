@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -102,9 +103,7 @@ func (m *multiCloser) Close() error {
 
 // makeMultiCloser returns a Closer that closes all the given closers.
 func makeMultiCloser(closers ...io.Closer) io.Closer {
-	r := make([]io.Closer, len(closers))
-	copy(r, closers)
-	return &multiCloser{r}
+	return &multiCloser{slices.Clone(closers)}
 }
 
 type autopsyTrace struct {
@@ -385,7 +384,7 @@ func (a *Autopsy) extractNextCdv(ch chan<- autopsyTrace) (bounds AutopsyBounds, 
 				close(pch)
 			}
 
-			pch = make(chan autopsyPair, 0)
+			pch = make(chan autopsyPair)
 			acc = autopsyTrace{m: acc.m, p: pch}
 			err = protocol.DecodeStream(a, &acc.x)
 			if err != nil {

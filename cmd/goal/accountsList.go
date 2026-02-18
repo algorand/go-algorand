@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,13 +19,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
@@ -64,11 +63,11 @@ func (accountList *AccountsList) accountListFileName() string {
 	if libgoal.AlgorandDataIsPrivate(dataDir) {
 		return filepath.Join(dataDir, gid, "accountList.json")
 	}
-	cu, err := user.Current()
+	cfgRoot, err := config.GetGlobalConfigFileRoot()
 	if err != nil {
-		reportErrorln("could not get current user info")
+		reportErrorf("unable to find config root: %v", err)
 	}
-	return filepath.Join(cu.HomeDir, ".algorand", gid, "accountList.json")
+	return filepath.Join(cfgRoot, gid, "accountList.json")
 }
 
 // isDefault returns true, if the account is marked is default, false otherwise. If account doesn't exist isDefault
@@ -184,7 +183,7 @@ func (accountList *AccountsList) getNameByAddress(address string) string {
 func (accountList *AccountsList) dumpList() {
 	accountsListJSON, _ := json.MarshalIndent(accountList, "", "  ")
 	accountsListJSON = append(accountsListJSON, '\n')
-	err := ioutil.WriteFile(accountList.accountListFileName(), accountsListJSON, 0644)
+	err := os.WriteFile(accountList.accountListFileName(), accountsListJSON, 0644)
 
 	if err != nil {
 		log.Error(err.Error())
@@ -197,7 +196,7 @@ func (accountList *AccountsList) loadList() {
 	// First, check if the file exists.
 	filename := accountList.accountListFileName()
 	if _, err := os.Stat(filename); err == nil {
-		raw, err := ioutil.ReadFile(filename)
+		raw, err := os.ReadFile(filename)
 		if err != nil {
 			log.Error(err.Error())
 		}
@@ -205,7 +204,7 @@ func (accountList *AccountsList) loadList() {
 	}
 }
 
-func (accountList *AccountsList) outputAccount(addr string, acctInfo generatedV2.Account, multisigInfo *libgoal.MultisigInfo) {
+func (accountList *AccountsList) outputAccount(addr string, acctInfo model.Account, multisigInfo *libgoal.MultisigInfo) {
 	if acctInfo.Address == "" {
 		fmt.Printf("[n/a]\t%s\t%s\t[n/a] microAlgos", accountList.getNameByAddress(addr), addr)
 	} else {

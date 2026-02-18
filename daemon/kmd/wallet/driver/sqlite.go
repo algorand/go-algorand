@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,14 +20,15 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/jmoiron/sqlx"
 	"github.com/mattn/go-sqlite3"
+
+	"github.com/algorand/go-codec/codec"
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/kmd/config"
@@ -36,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-codec/codec"
 )
 
 const (
@@ -54,7 +54,7 @@ const (
 
 var sqliteWalletSupportedTxs = []protocol.TxType{protocol.PaymentTx, protocol.KeyRegistrationTx}
 var disallowedFilenameRegex = regexp.MustCompile("[^a-zA-Z0-9_-]*")
-var databaseFilenameRegex = regexp.MustCompile("^.*\\.db$")
+var databaseFilenameRegex = regexp.MustCompile(`^.*\.db$`)
 
 var walletSchema = `
 CREATE TABLE IF NOT EXISTS metadata (
@@ -119,7 +119,7 @@ func init() {
 	codecHandle.PositiveIntUnsigned = true
 }
 
-// interface{} => msgpack blob
+// encode interface{} => msgpack blob
 func msgpackEncode(obj interface{}) []byte {
 	var b []byte
 	enc := codec.NewEncoderBytes(&b, codecHandle)
@@ -127,7 +127,7 @@ func msgpackEncode(obj interface{}) []byte {
 	return b
 }
 
-// msgpack blob => interface{}
+// decode msgpack blob => interface{}
 func msgpackDecode(b []byte, objptr interface{}) error {
 	dec := codec.NewDecoderBytes(b, codecHandle)
 	return dec.Decode(objptr)
@@ -231,7 +231,7 @@ func walletMetadataFromDBPath(dbPath string) (metadata wallet.Metadata, err erro
 func (swd *SQLiteWalletDriver) potentialWalletPaths() (paths []string, err error) {
 	// List all files and folders in the wallets directory
 	wDir := swd.walletsDir()
-	files, err := ioutil.ReadDir(wDir)
+	files, err := os.ReadDir(wDir)
 	if err != nil {
 		return
 	}
@@ -264,7 +264,7 @@ func (swd *SQLiteWalletDriver) ListWalletMetadatas() (metadatas []wallet.Metadat
 	return metadatas, nil
 }
 
-// findDBPathsById returns the paths to wallets with the specified id
+// findDBPathsByID returns the paths to wallets with the specified id
 func (swd *SQLiteWalletDriver) findDBPathsByID(id []byte) (paths []string, err error) {
 	return swd.findDBPathsByField("ID", id)
 }
@@ -1264,7 +1264,7 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 // MultisigSignProgram starts a multisig signature or adds a signature to a
 // partially signed multisig transaction signature of the passed transaction
 // using the key
-func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (sig crypto.MultisigSig, err error) {
+func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, useLegacyMsig bool) (sig crypto.MultisigSig, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1297,10 +1297,13 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 			return
 		}
 
-		// Sign the transaction
+		// Sign the program
 		from := src
-		progb := logic.Program(data)
-		sig, err = crypto.MultisigSign(&progb, from, version, threshold, pks, *secrets)
+		if useLegacyMsig {
+			sig, err = crypto.MultisigSign(logic.Program(data), from, version, threshold, pks, *secrets)
+		} else {
+			sig, err = crypto.MultisigSign(logic.MultisigProgram{Addr: from, Program: data}, from, version, threshold, pks, *secrets)
+		}
 		return
 	}
 
@@ -1341,10 +1344,14 @@ func (sw *SQLiteWallet) MultisigSignProgram(data []byte, src crypto.Digest, pk c
 		return
 	}
 
-	// Sign the transaction, and merge the multisig into the partial
+	// Sign the program and merge the multisig into the partial
 	version, threshold, pks := partial.Preimage()
-	progb := logic.Program(data)
-	msig2, err := crypto.MultisigSign(&progb, addr, version, threshold, pks, *secrets)
+	var msig2 crypto.MultisigSig
+	if useLegacyMsig {
+		msig2, err = crypto.MultisigSign(logic.Program(data), addr, version, threshold, pks, *secrets)
+	} else {
+		msig2, err = crypto.MultisigSign(logic.MultisigProgram{Addr: addr, Program: data}, addr, version, threshold, pks, *secrets)
+	}
 	if err != nil {
 		return
 	}

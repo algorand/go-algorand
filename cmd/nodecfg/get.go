@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,8 +55,8 @@ var getCmd = &cobra.Command{
 			reportErrorf("Target rootdir '%s' already exists", networkRootDir)
 		}
 
-		if err := doGet(getChannel, getRootDir); err != nil {
-			reportErrorf("Error retrieving configuration: %v", err)
+		if err1 := doGet(getChannel, getRootDir); err1 != nil {
+			reportErrorf("Error retrieving configuration: %v", err1)
 		}
 
 		cfg, err := remote.LoadDeployedNetworkConfigFromDir(getRootDir)

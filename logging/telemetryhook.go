@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/olivere/elastic"
@@ -26,7 +27,8 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-var telemetryDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_drops_total", Description: "telemetry messages not sent to server"})
+var telemetryDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_drops_total", Description: "telemetry messages dropped due to full queues"})
+var telemetryErrors = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_errs_total", Description: "telemetry messages dropped due to server error"})
 
 func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int) *asyncTelemetryHook {
 	return createAsyncHookLevels(wrappedHook, channelDepth, maxQueueDepth, makeLevels(logrus.InfoLevel))
@@ -88,7 +90,8 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 					if entry != nil {
 						err := hook.wrappedHook.Fire(entry)
 						if err != nil {
-							Base().Warnf("Unable to write event %#v to telemetry : %v", entry, err)
+							Base().WithFields(Fields{"TelemetryError": true}).Warnf("Unable to write event %#v to telemetry : %v", entry, err)
+							telemetryErrors.Inc(nil)
 						}
 						hook.wg.Done()
 					} else {
@@ -146,6 +149,9 @@ func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
 
 // Fire is required to implement logrus hook interface
 func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
+	if _, ok := entry.Data["TelemetryError"]; ok {
+		return nil
+	}
 	hook.wg.Add(1)
 	select {
 	case <-hook.quit:
@@ -217,20 +223,20 @@ func (el elasticClientLogger) Printf(format string, v ...interface{}) {
 	case logrus.InfoLevel:
 		el.logger.Infof(format, v...)
 	case logrus.WarnLevel:
-		el.logger.Warnf(format, v...)
+		el.logger.WithFields(Fields{"TelemetryError": true}).Warnf(format, v...)
 	default:
-		el.logger.Errorf(format, v...)
+		el.logger.WithFields(Fields{"TelemetryError": true}).Errorf(format, v...)
 	}
 }
 
-func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+func createElasticHookContext(ctx context.Context, cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
 	// things can recover later.
 	if cfg.URI == "" {
 		return nil, nil
 	}
 
-	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),
+	client, err := elastic.DialContext(ctx, elastic.SetURL(cfg.URI),
 		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
 		elastic.SetSniff(false),
 		elastic.SetGzip(true),
@@ -242,7 +248,7 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		err = fmt.Errorf("Unable to create new elastic client on '%s' using '%s:%s' : %w", cfg.URI, cfg.UserName, cfg.Password, err)
 		return nil, err
 	}
-	hostName := cfg.getHostName()
+	hostName := cfg.getHostGUID()
 	hook, err = elogrus.NewElasticHook(client, hostName, cfg.MinLogLevel, cfg.ChainID)
 
 	if err != nil {
@@ -251,13 +257,13 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	return hook, err
 }
 
-// createTelemetryHook creates the Telemetry log hook, or returns nil if remote logging is not enabled
-func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory hookFactory) (hook logrus.Hook, err error) {
+// createTelemetryHookContext creates the Telemetry log hook, or returns nil if remote logging is not enabled
+func createTelemetryHookContext(ctx context.Context, cfg TelemetryConfig, history *logBuffer, hookFactory hookFactory) (hook logrus.Hook, err error) {
 	if !cfg.Enable {
 		return nil, fmt.Errorf("createTelemetryHook called when telemetry not enabled")
 	}
 
-	hook, err = hookFactory(cfg)
+	hook, err = hookFactory(ctx, cfg)
 
 	if err != nil {
 		return nil, err
@@ -269,7 +275,8 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 }
 
 // Note: This will be removed with the externalized telemetry project. Return whether or not the URI was successfully
-//       updated.
+//
+//	updated.
 func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 	updated := false
 
@@ -284,7 +291,8 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 		copy := tfh.telemetryConfig
 		copy.URI = uri
 		var newHook logrus.Hook
-		newHook, err = tfh.factory(copy)
+
+		newHook, err = tfh.factory(context.Background(), copy)
 
 		if err == nil && newHook != nil {
 			tfh.wrappedHook = newHook

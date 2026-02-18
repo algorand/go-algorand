@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,11 +18,12 @@ package bookkeeping
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -86,7 +87,7 @@ type Genesis struct {
 // LoadGenesisFromFile attempts to load a Genesis structure from a (presumably) genesis.json file.
 func LoadGenesisFromFile(genesisFile string) (genesis Genesis, err error) {
 	// Load genesis.json
-	genesisText, err := ioutil.ReadFile(genesisFile)
+	genesisText, err := os.ReadFile(genesisFile)
 	if err != nil {
 		return
 	}
@@ -99,6 +100,51 @@ func LoadGenesisFromFile(genesisFile string) (genesis Genesis, err error) {
 // of the network and the ledger schema version
 func (genesis Genesis) ID() string {
 	return string(genesis.Network) + "-" + genesis.SchemaID
+}
+
+// Hash is the genesis hash.
+func (genesis Genesis) Hash() crypto.Digest {
+	return crypto.HashObj(genesis)
+}
+
+// Balances returns the genesis account balances.
+func (genesis Genesis) Balances() (GenesisBalances, error) {
+	genalloc := make(map[basics.Address]basics.AccountData)
+	for _, entry := range genesis.Allocation {
+		addr, err := basics.UnmarshalChecksumAddress(entry.Address)
+		if err != nil {
+			return GenesisBalances{}, fmt.Errorf("cannot parse genesis addr %s: %w", entry.Address, err)
+		}
+
+		_, present := genalloc[addr]
+		if present {
+			return GenesisBalances{}, fmt.Errorf("repeated allocation to %s", entry.Address)
+		}
+
+		genalloc[addr] = entry.State.AccountData()
+	}
+
+	feeSink, err := basics.UnmarshalChecksumAddress(genesis.FeeSink)
+	if err != nil {
+		return GenesisBalances{}, fmt.Errorf("cannot parse fee sink addr %s: %w", genesis.FeeSink, err)
+	}
+
+	rewardsPool, err := basics.UnmarshalChecksumAddress(genesis.RewardsPool)
+	if err != nil {
+		return GenesisBalances{}, fmt.Errorf("cannot parse rewards pool addr %s: %w", genesis.RewardsPool, err)
+	}
+
+	return MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
+}
+
+// Block computes the genesis block.
+func (genesis Genesis) Block() (Block, error) {
+	genBal, err := genesis.Balances()
+	if err != nil {
+		return Block{}, err
+	}
+
+	return MakeGenesisBlock(genesis.Proto, genBal, genesis.ID(), genesis.Hash())
 }
 
 // A GenesisAllocation object represents an allocation of algos to
@@ -114,7 +160,7 @@ type GenesisAllocation struct {
 
 	Address string             `codec:"addr"`
 	Comment string             `codec:"comment"`
-	State   basics.AccountData `codec:"state"`
+	State   GenesisAccountData `codec:"state"`
 }
 
 // ToBeHashed impements the crypto.Hashable interface.
@@ -128,6 +174,34 @@ type GenesisBalances struct {
 	FeeSink     basics.Address
 	RewardsPool basics.Address
 	Timestamp   int64
+}
+
+// GenesisAccountData contains a subset of account information that is present in the genesis file.
+type GenesisAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Status          basics.Status                   `codec:"onl"`
+	MicroAlgos      basics.MicroAlgos               `codec:"algo"`
+	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
+	StateProofID    merklesignature.Commitment      `codec:"stprf"`
+	SelectionID     crypto.VRFVerifier              `codec:"sel"`
+	VoteFirstValid  basics.Round                    `codec:"voteFst"`
+	VoteLastValid   basics.Round                    `codec:"voteLst"`
+	VoteKeyDilution uint64                          `codec:"voteKD"`
+}
+
+// AccountData returns a basics.AccountData type for this genesis account.
+func (ga *GenesisAccountData) AccountData() basics.AccountData {
+	return basics.AccountData{
+		Status:          ga.Status,
+		MicroAlgos:      ga.MicroAlgos,
+		VoteID:          ga.VoteID,
+		StateProofID:    ga.StateProofID,
+		SelectionID:     ga.SelectionID,
+		VoteFirstValid:  ga.VoteFirstValid,
+		VoteLastValid:   ga.VoteLastValid,
+		VoteKeyDilution: ga.VoteKeyDilution,
+	}
 }
 
 // MakeGenesisBalances returns the information needed to bootstrap the ledger based on the current time
@@ -167,7 +241,7 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 			Round:          0,
 			Branch:         BlockHash{},
 			Seed:           committee.Seed(genesisHash),
-			TxnCommitments: TxnCommitments{NativeSha512_256Commitment: transactions.Payset{}.CommitGenesis(), Sha256Commitment: crypto.Digest{}},
+			TxnCommitments: TxnCommitments{NativeSha512_256Commitment: transactions.Payset{}.CommitGenesis(), Sha256Commitment: crypto.Digest{}, Sha512Commitment: crypto.Sha512Digest{}},
 			TimeStamp:      genesisBal.Timestamp,
 			GenesisID:      genesisID,
 			RewardsState:   genesisRewardsState,
@@ -176,6 +250,12 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 			},
 			UpgradeVote: UpgradeVote{},
 		},
+	}
+
+	// If a new network is being created in which AVM can't access low numbered
+	// resources, bump the TxnCounter so there won't be any such resources.
+	if params.AppForbidLowResources {
+		blk.TxnCounter = 1000
 	}
 
 	if params.SupportGenesisHash {

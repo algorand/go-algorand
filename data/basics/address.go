@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,23 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 )
-
-// NOTE: Another (partial) implementation of `basics.Address` is in `data/abi`.
-//       The reason of not using this `Address` in `data/abi` is that:
-//       - `data/basics` has C dependencies (`go-algorand/crypto`)
-//       - `go-algorand-sdk` has dependency to `go-algorand` for `ABI`
-//       - if `go-algorand`'s ABI uses `basics.Address`, then it would be
-//         impossible to up the version of `go-algorand` in `go-algorand-sdk`
-
-// This is discussed in:
-// - ISSUE https://github.com/algorand/go-algorand/issues/3355
-// - PR https://github.com/algorand/go-algorand/pull/3375
-
-// There are two solutions:
-// - One is to refactoring `crypto.Digest`, `crypto.Hash` and `basics.Address`
-//   into packages that does not need `libsodium` crypto dependency
-// - The other is wrapping `libsodium` in a driver interface to make crypto
-//   package importable (even if `libsodium` does not exist)
 
 type (
 	// Address is a unique identifier corresponding to ownership of money
@@ -72,7 +55,7 @@ func UnmarshalChecksumAddress(address string) (Address, error) {
 	decoded, err := base32Encoder.DecodeString(address)
 
 	if err != nil {
-		return Address{}, fmt.Errorf("failed to decode address %s to base 32", address)
+		return Address{}, fmt.Errorf("failed to decode address %s from base 32", address)
 	}
 	var short Address
 	if len(decoded) < len(short) {

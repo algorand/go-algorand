@@ -9,6 +9,7 @@ date "+$0 start %Y%m%d_%H%M%S"
 
 # Create an application
 printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
+# shellcheck disable=SC2154  # gcmd is defined in rest.sh
 APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints 2 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
 
 # Good request, non-existent app id
@@ -31,5 +32,5 @@ call_and_verify "App parameter parsing error 1." "/v2/applications/-2" 400 "Inva
 call_and_verify "App parameter parsing error 2." "/v2/applications/not-a-number" 400 "Invalid format for parameter application-id"
 
 # Good request, but invalid query parameters
-call_and_verify "App invalid parameter" "/v2/applications/$APPID?this-should-fail=200" 400 'Unknown parameter detected: this-should-fail'
+call_and_verify "App invalid parameter" "/v2/applications/$APPID?this-should-not-fail=200" 200 '"global-state-schema":{"num-byte-slice":0,"num-uint":2}'
 

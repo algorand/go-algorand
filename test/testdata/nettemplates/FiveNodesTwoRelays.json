@@ -1,0 +1,56 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "LastPartKeyRound": 5000,
+        "Wallets": [
+            {
+                "Name": "LargeWallet",
+                "Stake": 85,
+                "Online": true
+            },
+            {
+                "Name": "SmallWallet",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "NonPartWallet",
+                "Stake": 5,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Relay1",
+            "IsRelay": true
+        },
+        {
+            "Name": "Relay2",
+            "IsRelay": true
+        },
+        {
+            "Name": "PartNode1",
+            "Wallets": [{
+                "Name": "LargeWallet",
+                "ParticipationOnly": true
+            }],
+            "PeerList": "Relay1;Relay2"
+        },
+        {
+            "Name": "PartNode2",
+            "Wallets": [{
+                "Name": "SmallWallet",
+                "ParticipationOnly": true
+            }],
+            "PeerList": "Relay2"
+        },
+        {
+            "Name": "NonPartNode",
+            "Wallets": [{
+                "Name": "NonPartWallet"
+            }],
+            "PeerList": "Relay1"
+        }
+    ]
+}

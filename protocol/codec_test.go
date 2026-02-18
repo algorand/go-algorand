@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,12 +17,17 @@
 package protocol
 
 import (
+	"fmt"
+	"io"
+	"math/rand"
 	"reflect"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-codec/codec"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-codec/codec"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type TestArray [4]uint64
@@ -158,7 +163,7 @@ func TestEncodeJSON(t *testing.T) {
 
 	type ar []string
 	type mp struct {
-		Map map[int]ar `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+		Map map[int]ar `codec:"ld,allocbound=bounds.MaxEvalDeltaAccounts"`
 	}
 
 	var v mp
@@ -198,4 +203,69 @@ func TestEncodeJSON(t *testing.T) {
 
 	require.True(t, reflect.DeepEqual(v, nsv))
 	require.True(t, reflect.DeepEqual(v, sv))
+}
+
+func TestMsgpDecode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var tag Tag = "test"
+	dec := NewMsgpDecoderBytes([]byte{1, 2, 3})
+	err := dec.Decode(&tag)
+	require.Error(t, err)
+
+	data := EncodeMsgp(tag)
+	dec = NewMsgpDecoderBytes(data)
+	var tag2 Tag
+	err = dec.Decode(&tag2)
+	require.Equal(t, tag, tag2)
+	require.NoError(t, err)
+
+	limit := rand.Intn(30)
+	tags := make([]Tag, limit)
+	buf := make([]byte, 0, limit*10)
+	for i := 0; i < limit; i++ {
+		tags[i] = Tag(fmt.Sprintf("tag_%d", i))
+		buf = append(buf, EncodeMsgp(tags[i])...)
+	}
+
+	dec = NewMsgpDecoderBytes(buf)
+	for i := 0; i < limit; i++ {
+		err = dec.Decode(&tag2)
+		require.NoError(t, err)
+		require.Equal(t, tags[i], tag2)
+	}
+	err = dec.Decode(&tag2)
+	require.Error(t, err)
+	require.ErrorIs(t, err, io.EOF)
+}
+
+func TestRandomizeObjectWithPtrField(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testObjA struct {
+		U64 uint64
+	}
+	type testObjB struct {
+		U16  uint16
+		ObjA *testObjA
+	}
+
+	// run a few and fail if all ints are zero
+	sawNonZeroU16 := false
+	sawNonZeroU64 := false
+	for i := 0; i < 10; i++ {
+		obj, err := RandomizeObject(&testObjB{})
+		require.NoError(t, err)
+		objB, ok := obj.(*testObjB)
+		require.True(t, ok)
+		require.NotNil(t, objB.ObjA)
+		if objB.U16 != 0 {
+			sawNonZeroU16 = true
+		}
+		if objB.ObjA.U64 != 0 {
+			sawNonZeroU64 = true
+		}
+	}
+	require.True(t, sawNonZeroU16, "RandomizeObject made all zeroes for testObjB.U16")
+	require.True(t, sawNonZeroU64, "RandomizeObject made all zeroes for testObjA.U64")
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,12 +19,12 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/framework/fixtures"
-	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // TestAlgodWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/algod/expect directory
 func TestAlgodWithExpect(t *testing.T) {
-	partitiontest.PartitionTest(t)
+	// partitiontest.PartitionTest(t)
+	// Causes double partition, so commented out on purpose
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	et := fixtures.MakeExpectTest(t)

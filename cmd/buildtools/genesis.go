@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -102,7 +101,7 @@ var timestampCmd = &cobra.Command{
 			// Write out the genesis file in the same way we do to generate originally
 			// (see gen/generate.go)
 			jsonData := protocol.EncodeJSON(genesis)
-			err = ioutil.WriteFile(timestampFile, append(jsonData, '\n'), 0666)
+			err = os.WriteFile(timestampFile, append(jsonData, '\n'), 0666)
 			if err != nil {
 				reportErrorf("Error saving genesis file '%s': %v\n", timestampFile, err)
 			}
@@ -117,7 +116,7 @@ var dumpGenesisIDCmd = &cobra.Command{
 	Short: "Dump the genesis ID for the specified genesis file",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load genesis
-		genesisText, err := ioutil.ReadFile(genesisFile)
+		genesisText, err := os.ReadFile(genesisFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisFile, err)
 			os.Exit(1)
@@ -139,7 +138,7 @@ var dumpGenesisHashCmd = &cobra.Command{
 	Short: "Dump the genesis Hash for the specified genesis file",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load genesis
-		genesisText, err := ioutil.ReadFile(genesisFile)
+		genesisText, err := os.ReadFile(genesisFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisFile, err)
 			os.Exit(1)
@@ -152,8 +151,7 @@ var dumpGenesisHashCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		hash := crypto.HashObj(genesis)
-		fmt.Print(hash.String())
+		fmt.Print(genesis.Hash().String())
 	},
 }
 
@@ -181,15 +179,15 @@ var ensureCmd = &cobra.Command{
 
 		if createRelease {
 			// In case we're creating first one for network, ensure output directory exists
-			err := os.MkdirAll(releaseNetworkDir, os.ModeDir|os.FileMode(0777))
-			if err != nil {
-				reportErrorf("Error creating release genesis output directory '%s': %v\n", releaseNetworkDir, err)
+			err1 := os.MkdirAll(releaseNetworkDir, os.ModeDir|os.FileMode(0777))
+			if err1 != nil {
+				reportErrorf("Error creating release genesis output directory '%s': %v\n", releaseNetworkDir, err1)
 			}
 
 			// Make sure release genesis file exists and if it does, the hash matches its computed hash
-			err = ensureReleaseGenesis(sourceGenesis, releaseFile)
-			if err != nil {
-				reportErrorf("Error ensuring release genesis file '%s': %v\n", releaseFile, err)
+			err1 = ensureReleaseGenesis(sourceGenesis, releaseFile)
+			if err1 != nil {
+				reportErrorf("Error ensuring release genesis file '%s': %v\n", releaseFile, err1)
 			}
 		} else {
 			// If the target network is custom (not well-known), don't bother with release genesis file
@@ -207,7 +205,7 @@ var ensureCmd = &cobra.Command{
 			} else {
 				// Write source genesis (now updated with release timestamp, if applicable)
 				jsonData := protocol.EncodeJSON(sourceGenesis)
-				err = ioutil.WriteFile(targetFile, jsonData, 0666)
+				err = os.WriteFile(targetFile, jsonData, 0666)
 				if err != nil {
 					reportErrorf("Error writing target genesis file '%s': %v\n", targetFile, err)
 				}
@@ -232,13 +230,13 @@ func ensureReleaseGenesis(src bookkeeping.Genesis, releaseFile string) (err erro
 
 	releaseGenesis = src
 	jsonData := protocol.EncodeJSON(releaseGenesis)
-	err = ioutil.WriteFile(releaseFile, jsonData, 0666)
+	err = os.WriteFile(releaseFile, jsonData, 0666)
 	if err != nil {
 		return fmt.Errorf("error saving file: %v", err)
 	}
 
-	hash := crypto.HashObj(releaseGenesis)
-	err = ioutil.WriteFile(releaseFileHash, []byte(hash.String()), 0666)
+	hash := releaseGenesis.Hash()
+	err = os.WriteFile(releaseFileHash, []byte(hash.String()), 0666)
 	if err != nil {
 		return fmt.Errorf("error saving hash file '%s': %v", releaseFileHash, err)
 	}
@@ -261,13 +259,25 @@ func verifyReleaseGenesis(src bookkeeping.Genesis, releaseFile string) (updateGe
 func verifyGenesisHashes(src, release bookkeeping.Genesis, hashFile string) (err error) {
 	src.Timestamp = release.Timestamp
 
-	srcHash := crypto.HashObj(src)
-	releaseHash := crypto.HashObj(release)
+	srcHash := src.Hash()
+	releaseHash := release.Hash()
+
+	srcHashCrypo := crypto.HashObj(src)
+	releaseHashCrypto := crypto.HashObj(release)
+
+	if srcHash != srcHashCrypo {
+		return fmt.Errorf("source hashes differ - genesis.json our hashing function isn't consistent")
+	}
+
+	if releaseHash != releaseHashCrypto {
+		return fmt.Errorf("release hashes differ - genesis.json our hashing function isn't consistent")
+	}
+
 	if srcHash != releaseHash {
 		return fmt.Errorf("source and release hashes differ - genesis.json may have diverge from released version")
 	}
 
-	relHashBytes, err := ioutil.ReadFile(hashFile)
+	relHashBytes, err := os.ReadFile(hashFile)
 	if err != nil {
 		return fmt.Errorf("error loading release hash file '%s'", hashFile)
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,9 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -91,7 +93,7 @@ func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 }
 
 func makeErasableAccessor(dbfilename string, readOnly bool) (Accessor, error) {
-	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on"})
+	return makeAccessorImpl(dbfilename, readOnly, false, []string{"_secure_delete=on", "_journal_mode=wal"})
 }
 
 func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
@@ -207,13 +209,18 @@ func (db *Accessor) IsSharedCacheConnection() bool {
 
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
+// The return error of fn should be a native sqlite3.Error type or an error wrapping it.
+// DO NOT return a custom error - the internal logic of Atomic expects an sqlite error and uses that value.
 func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
-	return db.atomic(fn, extras...)
+	return db.AtomicContext(context.Background(), fn, nil, extras...)
 }
 
-// Atomic executes a piece of code with respect to the database atomically.
+// AtomicContext executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
-func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
+// Like for Atomic, the return error of fn should be a native sqlite3.Error type or an error wrapping it.
+// If retryClearFn is provided, it will be called in between retries of calls to fn, if the error is a
+// temporary error that will be retried. This helps a caller that might change in-memory state inside fn.
+func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, retryClearFn func(context.Context), extras ...interface{}) (err error) {
 	atomicDeadline := time.Now().Add(time.Second)
 
 	// note that the sql library will drop panics inside an active transaction
@@ -225,6 +232,12 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 				if !ok {
 					err = fmt.Errorf("%v", r)
 				}
+
+				buf := make([]byte, 16*1024)
+				stlen := runtime.Stack(buf, false)
+				errstr := string(buf[:stlen])
+				fmt.Fprintf(os.Stderr, "recovered panic in atomic: %s", errstr)
+
 			}
 		}()
 
@@ -234,7 +247,6 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 
 	var tx *sql.Tx
 	var conn *sql.Conn
-	ctx := context.Background()
 
 	for i := 0; (i == 0) || dbretry(err); i++ {
 		if i > 0 {
@@ -284,9 +296,12 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 		if err != nil {
 			tx.Rollback()
 			if dbretry(err) {
-				continue
+				if retryClearFn != nil {
+					retryClearFn(ctx)
+				}
+				continue // retry
 			} else {
-				break
+				break // exit, returns error
 			}
 		}
 
@@ -295,23 +310,28 @@ func (db *Accessor) atomic(fn idemFn, extras ...interface{}) (err error) {
 			// update the deadline, as it might have been updated.
 			atomicDeadline = txContextData.deadline
 			break
-		} else if !dbretry(err) {
-			break
+		} else if dbretry(err) {
+			if retryClearFn != nil {
+				retryClearFn(ctx)
+			}
+			continue // retry
+		} else {
+			break // exit, returns error
 		}
 	}
 
 	if time.Now().After(atomicDeadline) {
-		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", time.Now().Sub(atomicDeadline))
+		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", time.Since(atomicDeadline))
 	}
 	return
 }
 
-// ResetTransactionWarnDeadline allow the atomic function to extend it's warn deadline by setting a new deadline.
+// ResetTransactionWarnDeadline allow the atomic function to extend its warn deadline by setting a new deadline.
 // The Accessor can be copied and therefore isn't suitable for multi-threading directly,
 // however, the transaction context and transaction object can be used to uniquely associate the request
 // with a particular deadline.
 // the function fails if the given transaction is not on the stack of the provided context.
-func ResetTransactionWarnDeadline(ctx context.Context, tx *sql.Tx, deadline time.Time) (prevDeadline time.Time, err error) {
+func ResetTransactionWarnDeadline(ctx context.Context, tx interface{}, deadline time.Time) (prevDeadline time.Time, err error) {
 	txContextData, ok := ctx.Value(tx).(*txExecutionContext)
 	if !ok {
 		// it's not a valid call. just return an error.
@@ -386,8 +406,12 @@ func (db *Accessor) GetPageSize(ctx context.Context) (pageSize uint64, err error
 
 // dbretry returns true if the error might be temporary
 func dbretry(obj error) bool {
-	err, ok := obj.(sqlite3.Error)
-	return ok && (err.Code == sqlite3.ErrLocked || err.Code == sqlite3.ErrBusy)
+	var sqliteErr sqlite3.Error
+	if errors.As(obj, &sqliteErr) {
+		return sqliteErr.Code == sqlite3.ErrLocked || sqliteErr.Code == sqlite3.ErrBusy
+	}
+
+	return false // Not an sqlite error type
 }
 
 // IsErrBusy examine the input inerr variable of type error and determine if it's a sqlite3 error for the ErrBusy error code.

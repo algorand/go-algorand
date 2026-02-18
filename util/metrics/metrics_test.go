@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,15 +18,18 @@ package metrics
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 type MetricTest struct {
@@ -64,12 +67,12 @@ func (p *MetricTest) createListener(endpoint string) int {
 
 func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	// read the entire request:
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return
 	}
-	lines := strings.Split(string(body), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(body), "\n")
+	for line := range lines {
 		if len(line) < 5 {
 			continue
 		}
@@ -95,6 +98,8 @@ func (p *MetricTest) testMetricsHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func TestSanitizeTelemetryName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	for _, tc := range []struct{ in, out string }{
 		{in: "algod_counter_x", out: "algod_counter_x"},
 		{in: "algod_counter_x{a=b}", out: "algod_counter_x_a_b_"},
@@ -109,6 +114,32 @@ func TestSanitizeTelemetryName(t *testing.T) {
 	} {
 		t.Run(tc.in, func(t *testing.T) {
 			require.Equal(t, tc.out, sanitizeTelemetryName(tc.in))
+		})
+	}
+}
+
+func TestSanitizePrometheusName(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for _, tc := range []struct{ in, out string }{
+		{in: "algod_counter_x", out: "algod_counter_x"},
+		{in: "algod_counter_x{a=b}", out: "algod_counter_x_a_b_"},
+		{in: "this_is1-a-name0", out: "this_is1_a_name0"},
+		{in: "myMetricName1:a=yes", out: "myMetricName1_a_yes"},
+		{in: "myMetricName1:a=yes,b=no", out: "myMetricName1_a_yes_b_no"},
+		{in: "0myMetricName1", out: "_myMetricName1"},
+		{in: "myMetricName1{hello=x}", out: "myMetricName1_hello_x_"},
+		{in: "myMetricName1.moreNames-n.3", out: "myMetricName1_moreNames_n_3"},
+		{in: "-my-metric-name", out: "_my_metric_name"},
+		{in: `label-counter:label="a label value"`, out: "label_counter_label__a_label_value_"},
+		{in: "go/gc/cycles/total:gc-cycles", out: "go_gc_cycles_total_gc_cycles"},
+		{in: "go/gc/heap/allocs:bytes", out: "go_gc_heap_allocs_bytes"},
+		{in: "go/gc/heap/allocs:objects", out: "go_gc_heap_allocs_objects"},
+		{in: "go/memory/classes/os-stacks:bytes", out: "go_memory_classes_os_stacks_bytes"},
+		{in: "go/memory/classes/heap/free:bytes", out: "go_memory_classes_heap_free_bytes"},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			require.Equal(t, tc.out, sanitizePrometheusName(tc.in))
 		})
 	}
 }

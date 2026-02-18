@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -27,8 +26,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/gofrs/flock"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/daemon/kmd/api"
 	"github.com/algorand/go-algorand/daemon/kmd/session"
@@ -55,6 +55,7 @@ type WalletServerConfig struct {
 	DataDir        string
 	Address        string
 	AllowedOrigins []string
+	AllowHeaderPNA bool
 	SessionManager *session.Manager
 	Log            logging.Logger
 	Timeout        *time.Duration
@@ -63,12 +64,10 @@ type WalletServerConfig struct {
 // WalletServer deals with serving API requests
 type WalletServer struct {
 	WalletServerConfig
-	netPath      string
-	pidPath      string
-	lockPath     string
-	fileLock     *flock.Flock
-	sockPath     string
-	tmpSocketDir string
+	netPath  string
+	pidPath  string
+	lockPath string
+	fileLock *flock.Flock
 
 	// This mutex protects shutdown, which lets us know if we died unexpectedly
 	// or as a result of being killed
@@ -144,12 +143,12 @@ func (ws *WalletServer) releaseFileLock() error {
 // Write out a file containing the address kmd is listening on
 func (ws *WalletServer) writeStateFiles(netAddr string) (err error) {
 	// netPath file contains path to sock file
-	err = ioutil.WriteFile(ws.netPath, []byte(netAddr), 0640)
+	err = os.WriteFile(ws.netPath, []byte(netAddr), 0640)
 	if err != nil {
 		return
 	}
 	// pidPath file contains current process ID
-	err = ioutil.WriteFile(ws.pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0640)
+	err = os.WriteFile(ws.pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0640)
 	return
 }
 
@@ -212,7 +211,7 @@ func (ws *WalletServer) start(kill chan os.Signal) (died chan error, sock string
 	// Initialize HTTP server
 	watchdogCB := ws.makeWatchdogCallback(kill)
 	srv := http.Server{
-		Handler: api.Handler(ws.SessionManager, ws.Log, ws.AllowedOrigins, ws.APIToken, watchdogCB),
+		Handler: api.Handler(ws.SessionManager, ws.Log, ws.AllowedOrigins, ws.APIToken, ws.AllowHeaderPNA, watchdogCB),
 	}
 
 	// Read the kill channel and shut down the server gracefully
@@ -225,9 +224,9 @@ func (ws *WalletServer) start(kill chan os.Signal) (died chan error, sock string
 		ws.mux.Unlock()
 
 		// Shut down the server
-		err := srv.Shutdown(context.Background())
-		if err != nil {
-			ws.Log.Warnf("non-nil error stopping kmd wallet HTTP server: %s", err)
+		err1 := srv.Shutdown(context.Background())
+		if err1 != nil {
+			ws.Log.Warnf("non-nil error stopping kmd wallet HTTP server: %s", err1)
 		}
 	}()
 

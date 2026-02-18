@@ -7,21 +7,10 @@ set -o pipefail
 
 export GOPATH=$(go env GOPATH)
 
-# Needed for now because circleci doesn't use makefile yet
-if [ -z "$(which gotestsum)" ]; then
-    GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
-else
-    TEST_RESULTS=${TEST_RESULTS:="$(pwd)"}
-    GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format testname --junitfile ${TEST_RESULTS}/results.xml --jsonfile ${TEST_RESULTS}/testresults.json --"}
-fi
-
-echo "GOTESTCOMMAND will be: ${GOTESTCOMMAND}"
-
 # If one or more -t <pattern> are specified, use GOTESTCOMMAND -run <pattern> for each
 
 TESTPATTERNS=()
 NORACEBUILD=""
-export RUN_EXPECT="FALSE"
 while [ "$1" != "" ]; do
     case "$1" in
         -e)
@@ -48,14 +37,24 @@ if [[ -n $TESTPATTERNS && -n $RUN_EXPECT ]]; then
     exit 1
 fi
 
+if [[ -z $RUN_EXPECT ]]; then
+    RUN_EXPECT="FALSE"
+fi
+
 # Anchor our repo root reference location
 REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"/../..
 
+# Needed for now because circleci doesn't use makefile yet
+TEST_RESULTS=${TEST_RESULTS:="$(pwd)"}
+GOTESTCOMMAND=${GOTESTCOMMAND:="go tool -modfile=${REPO_ROOT}/tool.mod gotestsum --format testname --junitfile ${TEST_RESULTS}/results.xml --jsonfile ${TEST_RESULTS}/testresults.json --"}
+
 if [ "${NORACEBUILD}" = "" ]; then
     # Need bin-race binaries for e2e tests
-    pushd ${REPO_ROOT}
-    make build-race -j4
-    popd
+    if [ "${NO_BUILD}" != "true" ]; then
+        pushd ${REPO_ROOT}
+        make build-e2e
+        popd
+    fi
     RACE_OPTION="-race"
 else
     RACE_OPTION=""

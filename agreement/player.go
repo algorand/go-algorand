@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 // The player implements the top-level state machine functionality of the
 // agreement protocol.
 type player struct {
+	_struct struct{} `codec:","`
 	// Round, Period, and Step hold the current round, period, and step of
 	// the player state machine.
 	Round  round
@@ -39,7 +40,13 @@ type player struct {
 
 	// Deadline contains the time of the next timeout expected by the player
 	// state machine (relevant to the start of the current period).
-	Deadline time.Duration
+	Deadline Deadline `codec:"TimersDeadline"`
+
+	// OldDeadline contains the value of Deadline used from a previous version,
+	// for backwards compatibility when deserializing player.
+	// TODO: remove after consensus upgrade that introduces the Deadline struct.
+	OldDeadline time.Duration `codec:"Deadline,omitempty"`
+
 	// Napping is set when the player is expecting a random timeout (i.e.,
 	// to determine when the player chooses to send a next-vote).
 	Napping bool
@@ -51,6 +58,15 @@ type player struct {
 	// Pending holds the player's proposalTable, which stores proposals that
 	// must be verified after some vote has been verified.
 	Pending proposalTable
+
+	// the history of arrival times of the lowest credential from previous
+	// ronuds, used for calculating the filter timeout dynamically.
+	lowestCredentialArrivals credentialArrivalHistory
+
+	// The period 0 dynamic filter timeout calculated for this round, if set,
+	// even if dynamic filter timeouts are not enabled. It is used for reporting
+	// to telemetry.
+	dynamicFilterTimeout time.Duration
 }
 
 func (p *player) T() stateMachineTag {
@@ -84,10 +100,19 @@ func (p *player) handle(r routerHandle, e event) []action {
 			r.t.logTimeout(*p)
 		}
 
+		var deadlineTimeout time.Duration
+		if e.Proto.Version == "" || e.Proto.Err != nil {
+			r.t.log.Errorf("failed to read valid protocol version for timeout event (proto %v): %v. "+
+				"Falling Back to default deadline timeout.", e.Proto.Version, e.Proto.Err)
+			deadlineTimeout = DefaultDeadlineTimeout()
+		} else {
+			deadlineTimeout = DeadlineTimeout(p.Period, e.Proto.Version)
+		}
+
 		switch p.Step {
 		case soft:
 			// precondition: nap = false
-			actions = p.issueSoftVote(r)
+			actions = p.issueSoftVote(r, deadlineTimeout)
 			p.Step = cert
 			// update tracer state to match player
 			r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -97,20 +122,20 @@ func (p *player) handle(r routerHandle, e event) []action {
 			p.Step = next
 			// update tracer state to match player
 			r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
-			return p.issueNextVote(r)
+			return p.issueNextVote(r, deadlineTimeout)
 		default:
 			if p.Napping {
-				return p.issueNextVote(r) // sets p.Napping to false
+				return p.issueNextVote(r, deadlineTimeout) // sets p.Napping to false
 			}
 			// not napping, so we should enter a new step
 			p.Step++ // note: this must happen before next timeout setting.
 			// TODO add unit test to ensure that deadlines increase monotonically here
 
-			lower, upper := p.Step.nextVoteRanges()
+			lower, upper := p.Step.nextVoteRanges(deadlineTimeout)
 			delta := time.Duration(e.RandomEntropy % uint64(upper-lower))
 
 			p.Napping = true
-			p.Deadline = lower + delta
+			p.Deadline = Deadline{Duration: lower + delta, Type: TimeoutDeadline}
 			return actions
 		}
 	case roundInterruptionEvent:
@@ -142,9 +167,9 @@ func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 	return p.issueFastVote(r)
 }
 
-func (p *player) issueSoftVote(r routerHandle) (actions []action) {
+func (p *player) issueSoftVote(r routerHandle, deadlineTimeout time.Duration) (actions []action) {
 	defer func() {
-		p.Deadline = deadlineTimeout
+		p.Deadline = Deadline{Duration: deadlineTimeout, Type: TimeoutDeadline}
 	}()
 
 	e := r.dispatch(*p, proposalFrozenEvent{}, proposalMachinePeriod, p.Round, p.Period, 0)
@@ -186,7 +211,7 @@ func (p *player) issueCertVote(r routerHandle, e committableEvent) action {
 	return pseudonodeAction{T: attest, Round: p.Round, Period: p.Period, Step: cert, Proposal: e.Proposal}
 }
 
-func (p *player) issueNextVote(r routerHandle) []action {
+func (p *player) issueNextVote(r routerHandle, deadlineTimeout time.Duration) []action {
 	actions := p.partitionPolicy(r)
 
 	a := pseudonodeAction{T: attest, Round: p.Round, Period: p.Period, Step: p.Step, Proposal: bottom}
@@ -210,9 +235,9 @@ func (p *player) issueNextVote(r routerHandle) []action {
 
 	r.t.timeR().RecStep(p.Period, p.Step, a.Proposal)
 
-	_, upper := p.Step.nextVoteRanges()
+	_, upper := p.Step.nextVoteRanges(deadlineTimeout)
 	p.Napping = false
-	p.Deadline = upper
+	p.Deadline = Deadline{Duration: upper, Type: TimeoutDeadline}
 	return actions
 }
 
@@ -250,13 +275,75 @@ func (p *player) issueFastVote(r routerHandle) (actions []action) {
 
 func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []action {
 	return []action{
-		checkpointAction{
+		checkpointAction{ //nolint:staticcheck // explicit assignment for clarity
 			Round:  e.Round,
 			Period: e.Period,
 			Step:   e.Step,
 			Err:    e.Err,
 			done:   e.done,
 		}}
+}
+
+// updateCredentialArrivalHistory is called at the end of a successful
+// uninterrupted round (just after ensureAction is generated) to collect
+// credential arrival times to dynamically set the filter timeout.
+// It returns the time of the lowest credential's arrival from
+// credentialRoundLag rounds ago, if one was collected and added to
+// lowestCredentialArrivals, or zero otherwise.
+func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) time.Duration {
+	if p.Period != 0 {
+		// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
+		return 0
+	}
+
+	if p.Round <= credentialRoundLag {
+		// not sufficiently many rounds had passed to collect any measurement
+		return 0
+	}
+
+	// look up the validatedAt time of the winning proposal-vote from credentialRoundLag ago,
+	// by now we should have seen the lowest credential for that round.
+	credHistoryRound := p.Round - credentialRoundLag
+	re := readLowestEvent{T: readLowestVote, Round: credHistoryRound, Period: 0}
+	re = r.dispatch(*p, re, proposalMachineRound, credHistoryRound, 0, 0).(readLowestEvent)
+	if !re.HasLowestIncludingLate {
+		return 0
+	}
+
+	p.lowestCredentialArrivals.store(re.LowestIncludingLate.validatedAt)
+	return re.LowestIncludingLate.validatedAt
+}
+
+// calculateFilterTimeout chooses the appropriate filter timeout.
+func (p *player) calculateFilterTimeout(ver protocol.ConsensusVersion, tracer *tracer) time.Duration {
+	proto := config.Consensus[ver]
+	if dynamicFilterCredentialArrivalHistory <= 0 || p.Period != 0 {
+		// Either dynamic filter timeout is disabled, or we're not in period 0
+		// and therefore, can't use dynamic timeout
+		return FilterTimeout(p.Period, ver)
+	}
+	defaultTimeout := FilterTimeout(0, ver)
+	if !p.lowestCredentialArrivals.isFull() {
+		// not enough samples, use the default
+		return defaultTimeout
+	}
+
+	dynamicTimeout := p.lowestCredentialArrivals.orderStatistics(dynamicFilterTimeoutCredentialArrivalHistoryIdx) + dynamicFilterTimeoutGraceInterval
+
+	// Make sure the dynamic filter timeout is not too small nor too large
+	clampedTimeout := min(max(dynamicTimeout, dynamicFilterTimeoutLowerBound), defaultTimeout)
+	tracer.log.Debugf("round %d, period %d: dynamicTimeout = %d, clamped timeout = %d", p.Round, p.Period, dynamicTimeout, clampedTimeout)
+	// store dynamicFilterTimeout on the player for debugging & reporting
+	p.dynamicFilterTimeout = dynamicTimeout
+
+	if !proto.DynamicFilterTimeout {
+		// If the dynamic filter timeout is disabled, return the default filter
+		// timeout (after logging what the timeout would have been, if this
+		// feature were enabled).
+		return defaultTimeout
+	}
+
+	return clampedTimeout
 }
 
 func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action {
@@ -273,6 +360,8 @@ func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action
 		if res.Committable {
 			cert := Certificate(e.Bundle)
 			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
+			a0.voteValidatedAt = p.updateCredentialArrivalHistory(r, e.Proto)
+			a0.dynamicFilterTimeout = p.dynamicFilterTimeout
 			actions = append(actions, a0)
 			as := p.enterRound(r, e, p.Round+1)
 			return append(actions, as...)
@@ -326,7 +415,13 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.Deadline = FilterTimeout(target, source.Proto)
+
+	if target != 0 {
+		// We entered a non-0 period, we should reset the filter timeout
+		// calculation mechanism.
+		p.lowestCredentialArrivals.reset()
+	}
+	p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto, r.t), Type: TimeoutFilter}
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -374,11 +469,11 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	switch source := source.(type) {
 	case roundInterruptionEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
+		p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto.Version, r.t), Type: TimeoutFilter}
 	case thresholdEvent:
-		p.Deadline = FilterTimeout(0, source.Proto)
+		p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto, r.t), Type: TimeoutFilter}
 	case filterableMessageEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
+		p.Deadline = Deadline{Duration: p.calculateFilterTimeout(source.Proto.Version, r.t), Type: TimeoutFilter}
 	}
 
 	// update tracer state to match player
@@ -391,7 +486,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 
 	if e.t() == payloadPipelined {
 		e := e.(payloadProcessedEvent)
-		msg := message{MessageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload} // TODO do we want to keep around the original handle?
+		msg := message{messageHandle: 0, Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: e.UnauthenticatedPayload} // TODO do we want to keep around the original handle?
 		a := verifyPayloadAction(messageEvent{T: payloadPresent, Input: msg}, p.Round, e.Period, e.Pinned)
 		actions = append(actions, a)
 	}
@@ -520,8 +615,31 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			err := ef.(filteredEvent).Err
 			return append(actions, disconnectAction(e, err))
 		case voteFiltered:
-			err := ef.(filteredEvent).Err
-			return append(actions, ignoreAction(e, err))
+			ver := e.Proto.Version
+			proto := config.Consensus[ver]
+			if !proto.DynamicFilterTimeout {
+				// Dynamic filter timeout feature disabled, so we filter the
+				// message as usual (keeping earlier behavior)
+				err := ef.(filteredEvent).Err
+				return append(actions, ignoreAction(e, err))
+			}
+			switch ef.(filteredEvent).LateCredentialTrackingNote {
+			case VerifiedBetterLateCredentialForTracking:
+				// Dynamic filter timeout feature enabled, and current message
+				// updated the best credential arrival time
+				v := e.Input.Vote
+				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+			case NoLateCredentialTrackingImpact:
+				// Dynamic filter timeout feature enabled, but current message
+				// may not update the best credential arrival time, so we should
+				// ignore it.
+				err := ef.(filteredEvent).Err
+				return append(actions, ignoreAction(e, err))
+			case UnverifiedLateCredentialForTracking:
+				// In this case, the vote may impact credential tracking, but needs to
+				// be validated. So we do not return here, and continue processing, so that
+				// the votePresent check below will make a verifyVoteAction for this vote.
+			}
 		}
 
 		if e.t() == votePresent {
@@ -570,7 +688,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 
 		// relay as the proposer
-		if e.Input.MessageHandle == nil {
+		if e.Input.messageHandle == nil {
 			var uv unauthenticatedVote
 			switch ef.t() {
 			case payloadPipelined, payloadAccepted:
@@ -592,6 +710,8 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			if freshestRes.Ok && freshestRes.Event.t() == certThreshold && freshestRes.Event.Proposal == e.Input.Proposal.value() {
 				cert := Certificate(freshestRes.Event.Bundle)
 				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
+				a0.voteValidatedAt = p.updateCredentialArrivalHistory(r, e.Proto.Version)
+				a0.dynamicFilterTimeout = p.dynamicFilterTimeout
 				actions = append(actions, a0)
 				as := p.enterRound(r, delegatedE, cert.Round+1)
 				return append(actions, as...)

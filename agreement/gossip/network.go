@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ package gossip
 
 import (
 	"context"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -32,9 +31,11 @@ import (
 )
 
 var messagesHandledTotal = metrics.MakeCounter(metrics.AgreementMessagesHandled)
-var messagesHandledByType = metrics.NewTagCounter("algod_agreement_handled_{TAG}", "Number of agreement messages handled per type")
+var messagesHandledByType = metrics.NewTagCounter("algod_agreement_handled_{TAG}", "Number of agreement {TAG} messages handled",
+	agreementVoteMessageType, agreementProposalMessageType, agreementBundleMessageType)
 var messagesDroppedTotal = metrics.MakeCounter(metrics.AgreementMessagesDropped)
-var messagesDroppedByType = metrics.NewTagCounter("algod_agreement_dropped_{TAG}", "Number of agreement messages handled per type")
+var messagesDroppedByType = metrics.NewTagCounter("algod_agreement_dropped_{TAG}", "Number of agreement {TAG} messages dropped",
+	agreementVoteMessageType, agreementProposalMessageType, agreementBundleMessageType)
 
 const (
 	agreementVoteMessageType     = "vote"
@@ -176,13 +177,4 @@ func (i *networkImpl) Disconnect(h agreement.MessageHandle) {
 	}
 
 	i.net.Disconnect(metadata.raw.Sender)
-}
-
-// broadcastTimeout is currently only used by test code.
-// In test code we want to queue up a bunch of outbound packets and then see that they got through, so we need to wait at least a little bit for them to all go out.
-// Normal agreement state machine code uses GossipNode.Broadcast non-blocking and may drop outbound packets.
-func (i *networkImpl) broadcastTimeout(t protocol.Tag, data []byte, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	return i.net.Broadcast(ctx, t, data, true, nil)
 }

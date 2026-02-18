@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -51,9 +52,13 @@ func TestRequestLogger(t *testing.T) {
 	netA := &WebsocketNetwork{
 		log:       dl,
 		config:    defaultConfig,
-		phonebook: MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: "go-test-network-genesis",
-		NetworkID: config.Devtestnet,
+		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
+		genesisInfo: GenesisInfo{
+			GenesisID: "go-test-network-genesis",
+			NetworkID: config.Devtestnet,
+		},
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 	netA.config.EnableRequestLogger = true
 	netA.setup()
@@ -67,8 +72,8 @@ func TestRequestLogger(t *testing.T) {
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = MakePhonebook(1, 1*time.Millisecond)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+	netB.phonebook = phonebook.MakePhonebook(1, 1*time.Millisecond)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 

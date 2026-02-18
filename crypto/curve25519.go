@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,8 @@ package crypto
 // #cgo linux,arm64 LDFLAGS: ${SRCDIR}/libs/linux/arm64/lib/libsodium.a
 // #cgo linux,arm CFLAGS: -I${SRCDIR}/libs/linux/arm/include
 // #cgo linux,arm LDFLAGS: ${SRCDIR}/libs/linux/arm/lib/libsodium.a
+// #cgo linux,riscv64 CFLAGS: -I${SRCDIR}/libs/linux/riscv64/include
+// #cgo linux,riscv64 LDFLAGS: ${SRCDIR}/libs/linux/riscv64/lib/libsodium.a
 // #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
 // #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/libsodium.a
 // #include <stdint.h>
@@ -35,6 +37,7 @@ import "C"
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -64,6 +67,30 @@ func init() {
 	_ = [C.crypto_sign_ed25519_PUBLICKEYBYTES]byte(ed25519PublicKey{})
 	_ = [C.crypto_sign_ed25519_SECRETKEYBYTES]byte(ed25519PrivateKey{})
 	_ = [C.crypto_sign_ed25519_SEEDBYTES]byte(ed25519Seed{})
+
+	// Check that this platform makes slices []Signature and []SignatureVerifier that use a backing
+	// array of contiguously allocated 64- and 32-byte segments, respectively, with no padding.
+	// These slice's backing arrays are passed to C.ed25519_batch_wrapper. In practice, this check
+	// should always succeed, but to be careful we can double-check, since the Go specification does
+	// not explicitly define platform-specific alignment sizes and slice allocation behavior.
+	length := 1024
+	sigs := make([]Signature, length)        // same as [][64]byte
+	pks := make([]SignatureVerifier, length) // same as [][32]byte
+
+	for i := 1; i < length; i++ {
+		if uintptr(unsafe.Pointer(&sigs[i]))-uintptr(unsafe.Pointer(&sigs[0])) != uintptr(i)*C.crypto_sign_ed25519_BYTES {
+			panic("Unexpected alignment for a slice of signatures")
+		}
+		if uintptr(unsafe.Pointer(&pks[i]))-uintptr(unsafe.Pointer(&pks[0])) != uintptr(i)*C.crypto_sign_ed25519_PUBLICKEYBYTES {
+			panic("Unexpected alignment for a slice of public keys")
+		}
+	}
+	if uintptr(unsafe.Pointer(&sigs[length-1]))-uintptr(unsafe.Pointer(&sigs[0])) != uintptr(length-1)*C.crypto_sign_ed25519_BYTES {
+		panic("Unexpected total size for a backing array of signatures")
+	}
+	if uintptr(unsafe.Pointer(&pks[length-1]))-uintptr(unsafe.Pointer(&pks[0])) != uintptr(length-1)*C.crypto_sign_ed25519_PUBLICKEYBYTES {
+		panic("Unexpected total size for a backing array of public keys")
+	}
 }
 
 // A Seed holds the entropy needed to generate cryptographic keys.
@@ -112,19 +139,14 @@ func ed25519Sign(secret ed25519PrivateKey, data []byte) (sig ed25519Signature) {
 	return
 }
 
-func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature, useBatchVerificationCompatibleVersion bool) bool {
+func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature) bool {
 	// &data[0] will make Go panic if msg is zero length
 	d := (*C.uchar)(C.NULL)
 	if len(data) != 0 {
 		d = (*C.uchar)(&data[0])
 	}
 	// https://download.libsodium.org/doc/public-key_cryptography/public-key_signatures#detached-mode
-	var result C.int
-	if useBatchVerificationCompatibleVersion {
-		result = C.crypto_sign_ed25519_bv_compatible_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
-	} else {
-		result = C.crypto_sign_ed25519_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
-	}
+	result := C.crypto_sign_ed25519_bv_compatible_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
 	return result == 0
 }
 
@@ -193,21 +215,21 @@ func SecretKeyToSeed(secret PrivateKey) (Seed, error) {
 func GenerateSignatureSecrets(seed Seed) *SignatureSecrets {
 	pk0, sk := ed25519GenerateKeySeed(ed25519Seed(seed))
 	pk := SignatureVerifier(pk0)
-	cryptoGenSigSecretsTotal.Inc(map[string]string{})
+	cryptoGenSigSecretsTotal.Inc(nil)
 	return &SignatureSecrets{SignatureVerifier: pk, SK: sk}
 }
 
 // Sign produces a cryptographic Signature of a Hashable message, given
 // cryptographic secrets.
 func (s *SignatureSecrets) Sign(message Hashable) Signature {
-	cryptoSigSecretsSignTotal.Inc(map[string]string{})
+	cryptoSigSecretsSignTotal.Inc(nil)
 	return s.SignBytes(HashRep(message))
 }
 
 // SignBytes signs a message directly, without first hashing.
 // Caller is responsible for domain separation.
 func (s *SignatureSecrets) SignBytes(message []byte) Signature {
-	cryptoSigSecretsSignBytesTotal.Inc(map[string]string{})
+	cryptoSigSecretsSignBytesTotal.Inc(nil)
 	return Signature(ed25519Sign(ed25519PrivateKey(s.SK), message))
 }
 
@@ -215,16 +237,15 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 // signed a Hashable message.
 //
 // It returns true if this is the case; otherwise, it returns false.
-//
-func (v SignatureVerifier) Verify(message Hashable, sig Signature, useBatchVerificationCompatibleVersion bool) bool {
-	cryptoSigSecretsVerifyTotal.Inc(map[string]string{})
-	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig), useBatchVerificationCompatibleVersion)
+func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
+	cryptoSigSecretsVerifyTotal.Inc(nil)
+	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))
 }
 
 // VerifyBytes verifies a signature, where the message is not hashed first.
 // Caller is responsible for domain separation.
 // If the message is a Hashable, Verify() can be used instead.
-func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature, useBatchVerificationCompatibleVersion bool) bool {
-	cryptoSigSecretsVerifyBytesTotal.Inc(map[string]string{})
-	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig), useBatchVerificationCompatibleVersion)
+func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
+	cryptoSigSecretsVerifyBytesTotal.Inc(nil)
+	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
 }

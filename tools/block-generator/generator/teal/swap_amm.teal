@@ -1,0 +1,527 @@
+// SOURCE: https://algoscan.app/app/1000469889
+#pragma version 7
+
+intcblock 0 1 4
+txn NumAppArgs
+intc_0 // 0
+==
+bnz label1
+
+txna ApplicationArgs 0
+pushbytes 0x67c4469e // 0x67c4469e
+==
+bnz label2
+
+txna ApplicationArgs 0
+pushbytes 0xaa6d419d // 0xaa6d419d
+==
+bnz label3
+
+txna ApplicationArgs 0
+pushbytes 0x92e297a1 // 0x92e297a1
+==
+bnz label4
+
+txna ApplicationArgs 0
+pushbytes 0x99b36a95 // 0x99b36a95
+==
+bnz label5
+err
+
+label5:
+
+	txn OnCompletion
+	intc_0 // 0
+	==
+	txn ApplicationID
+	intc_0 // 0
+	!=
+	&&
+	assert
+
+	txna ApplicationArgs 1
+	intc_0 // 0
+	getbyte
+	store 5
+
+	txna ApplicationArgs 2
+	btoi
+	store 6
+
+	load 5
+	load 6
+	callsub label6
+
+	intc_1 // 1
+	return
+
+label4:
+
+	txn OnCompletion
+	intc_0 // 0
+	==
+	txn ApplicationID
+	intc_0 // 0
+	!=
+	&&
+	assert
+
+	txna ApplicationArgs 1
+	intc_0 // 0
+	getbyte
+	callsub label7
+
+	intc_1 // 1
+	return
+
+label3:
+
+	txn OnCompletion
+	intc_0 // 0
+	==
+	txn ApplicationID
+	intc_0 // 0
+	!=
+	&&
+	assert
+
+	txna ApplicationArgs 1
+	intc_0 // 0
+	getbyte
+	store 4
+
+	txn GroupIndex
+	intc_1 // 1
+	-
+	store 3
+
+	load 3
+	gtxns TypeEnum
+	intc_1 // 1
+	==
+	assert
+
+	load 3
+	load 4
+	callsub label8
+
+	intc_1 // 1
+	return
+
+label2:
+
+	txn OnCompletion
+	intc_0 // 0
+	==
+	txn ApplicationID
+	intc_0 // 0
+	!=
+	&&
+	assert
+
+	txna ApplicationArgs 1
+	intc_0 // 0
+	getbyte
+	store 0
+
+	txna ApplicationArgs 2
+	intc_0 // 0
+	getbyte
+	store 1
+
+	txna ApplicationArgs 3
+	store 2
+
+	load 0
+	load 1
+	load 2
+	callsub label9
+
+	intc_1 // 1
+	return
+
+label1:
+
+	txn OnCompletion
+	intc_0 // 0
+	==
+	bnz label10
+
+	txn OnCompletion
+	pushint 5
+	==
+	bnz label11
+	b localsfill
+
+label11:
+
+	txn Sender
+	global CreatorAddress
+	==
+	assert
+
+	intc_1 // 1
+	return
+
+label10:
+
+	txn ApplicationID
+	intc_0 // 0
+	==
+	assert
+
+	intc_1 // 1
+	return
+
+label22:
+
+	store 13
+
+	load 13
+	intc_0 // 0
+	==
+	bnz label12
+
+	global CurrentApplicationAddress
+	load 13
+	asset_holding_get AssetBalance
+	store 15
+	store 14
+
+	load 15
+	bnz label13
+
+	itxn_begin
+	intc_2 // 4
+	itxn_field TypeEnum
+	load 13
+	itxn_field XferAsset
+	global CurrentApplicationAddress
+	itxn_field AssetReceiver
+	intc_0 // 0
+	itxn_field AssetAmount
+	global MinTxnFee
+	itxn_field Fee
+	itxn_submit
+	b label14
+
+label13:
+
+	retsub
+
+label12:
+
+	retsub
+
+label14:
+
+	retsub
+
+label17:
+
+	store 24
+	store 23
+	store 22
+
+	load 22
+	intc_0 // 0
+	==
+	bnz label15
+
+	intc_2 // 4
+	itxn_field TypeEnum
+	load 22
+	itxn_field XferAsset
+	load 23
+	itxn_field AssetReceiver
+	load 24
+	itxn_field AssetAmount
+	intc_0 // 0
+	itxn_field Fee
+	b label16
+
+label15:
+
+	intc_1 // 1
+	itxn_field TypeEnum
+	load 23
+	itxn_field Receiver
+	load 24
+	itxn_field Amount
+	intc_0 // 0
+	itxn_field Fee
+label16:
+
+	retsub
+
+label24:
+
+	store 19
+	store 18
+	store 17
+	store 16
+
+	load 16
+	app_params_get AppAddress
+	store 21
+	store 20
+
+	itxn_begin
+	load 18
+	load 20
+	load 17
+	callsub label17
+	itxn_next
+
+	pushbytes 0x53574150 // "SWAP"
+	itxn_field ApplicationArgs
+	intc_0 // 0
+	itob
+	itxn_field ApplicationArgs
+	intc_0 // 0
+	itxn_field Fee
+	load 16
+	itxn_field ApplicationID
+	load 18
+	load 19
+	<
+	bnz label18
+
+	load 19
+label21:
+
+	itxn_field Assets
+	load 18
+	load 19
+	>
+	bnz label19
+
+	load 19
+	b label20
+
+label19:
+
+	load 18
+	b label20
+
+label18:
+
+	load 18
+	b label21
+
+label20:
+
+	itxn_field Assets
+	pushint 6
+	itxn_field TypeEnum
+	itxn_submit
+	retsub
+
+label9:
+
+	store 9
+	store 8
+	store 7
+
+	load 8
+	txnas Assets
+	callsub label22
+
+	load 9
+	pushint 2
+	extract_uint64
+	store 11
+
+	load 9
+	pushint 10
+	extract_uint64
+	store 12
+
+	intc_0 // 0
+	store 10
+
+label25:
+
+	load 10
+	pushint 85
+	<
+	bz label23
+
+	load 11
+	load 12
+	load 7
+	txnas Assets
+	load 8
+	txnas Assets
+	callsub label24
+
+	load 10
+	intc_1 // 1
+	+
+	store 10
+	b label25
+
+label23:
+
+	retsub
+
+label8:
+
+	store 25
+
+	gtxns Amount
+	pushint 100000
+	>=
+	assert
+
+	itxn_begin
+	load 25
+	txnas Assets
+	global CurrentApplicationAddress
+	intc_0 // 0
+	callsub label17
+	itxn_submit
+
+	intc_1 // 1
+	return
+
+label7:
+
+	store 26
+
+	global CurrentApplicationAddress
+	load 26
+	txnas Assets
+	asset_holding_get AssetBalance
+	store 28
+	store 27
+
+	txn Sender
+	global CreatorAddress
+	==
+	assert
+
+	itxn_begin
+	load 26
+	txnas Assets
+	global CreatorAddress
+	load 27
+	callsub label17
+
+	global CreatorAddress
+	itxn_field AssetCloseTo
+	itxn_submit
+
+	intc_1 // 1
+	return
+
+label6:
+
+	store 30
+	store 29
+
+	txn Sender
+	global CreatorAddress
+	==
+	assert
+
+	itxn_begin
+	load 29
+	txnas Assets
+	global CreatorAddress
+	load 30
+	callsub label17
+	itxn_submit
+
+	intc_1 // 1
+	return
+
+localsfill:
+
+	// 64 bytes
+	byte "Why did the chicken cross the road? The answer has been omitted."
+
+	txn Sender
+	byte "0000000000000000000000000000000000000000000000000000000000000000"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "1111111111111111111111111111111111111111111111111111111111111111"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "2222222222222222222222222222222222222222222222222222222222222222"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "3333333333333333333333333333333333333333333333333333333333333332"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "4444444444444444444444444444444444444444444444444444444444444444"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "5555555555555555555555555555555555555555555555555555555555555555"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "6666666666666666666666666666666666666666666666666666666666666666"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "7777777777777777777777777777777777777777777777777777777777777777"
+	uncover 2
+	app_local_put
+
+	int 1337
+	txn Sender
+	byte "8888888888888888888888888888888888888888888888888888888888888888"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "9999999999999999999999999999999999999999999999999999999999999999"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	dig 2
+	app_local_put
+
+	txn Sender
+	byte "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	uncover 2
+	app_local_put
+
+	int 1
+	return
+

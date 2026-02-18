@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -246,24 +246,83 @@ func NewDecoderBytes(b []byte) Decoder {
 	return codec.NewDecoderBytes(b, CodecHandle)
 }
 
+// NewMsgpDecoderBytes returns a decoder object reading bytes from [b].
+// that works with msgp-serialized objects
+func NewMsgpDecoderBytes(b []byte) *MsgpDecoderBytes {
+	return &MsgpDecoderBytes{b: b, pos: 0}
+}
+
+// MsgpDecoderBytes is a []byte decoder into msgp-encoded objects
+type MsgpDecoderBytes struct {
+	b   []byte
+	pos int
+}
+
+// Decode an objptr from a byte stream
+func (d *MsgpDecoderBytes) Decode(objptr msgp.Unmarshaler) error {
+	if !objptr.CanUnmarshalMsg(objptr) {
+		return fmt.Errorf("object %T cannot be msgp-unmashalled", objptr)
+	}
+	if d.pos >= len(d.b) {
+		return io.EOF
+	}
+
+	rem, err := objptr.UnmarshalMsg(d.b[d.pos:])
+	if err != nil {
+		return err
+	}
+	d.pos = (len(d.b) - len(rem))
+	return nil
+}
+
+// Consumed returns number of bytes consumed so far.
+func (d *MsgpDecoderBytes) Consumed() int {
+	return d.pos
+}
+
+// Remaining returns number of bytes remained in the input buffer.
+func (d *MsgpDecoderBytes) Remaining() int {
+	return len(d.b) - d.pos
+}
+
 // encodingPool holds temporary byte slice buffers used for encoding messages.
 var encodingPool = sync.Pool{
 	New: func() interface{} {
-		return []byte{}
+		return &EncodingBuf{b: make([]byte, 0)}
 	},
+}
+
+// EncodingBuf is a wrapper for a byte slice that can be used for encoding
+type EncodingBuf struct {
+	b []byte
+}
+
+// Bytes returns the underlying byte slice
+func (eb *EncodingBuf) Bytes() []byte {
+	return eb.b
+}
+
+// Update updates the underlying byte slice to the given one if its capacity exceeds the current one.
+func (eb *EncodingBuf) Update(v []byte) *EncodingBuf {
+	if cap(eb.b) < cap(v) {
+		eb.b = v
+	}
+	return eb
 }
 
 // GetEncodingBuf returns a byte slice that can be used for encoding a
 // temporary message.  The byte slice has zero length but potentially
 // non-zero capacity.  The caller gets full ownership of the byte slice,
 // but is encouraged to return it using PutEncodingBuf().
-func GetEncodingBuf() []byte {
-	return encodingPool.Get().([]byte)[:0]
+func GetEncodingBuf() *EncodingBuf {
+	buf := encodingPool.Get().(*EncodingBuf)
+	buf.b = buf.b[:0]
+	return buf
 }
 
 // PutEncodingBuf places a byte slice into the pool of temporary buffers
 // for encoding.  The caller gives up ownership of the byte slice when
 // passing it to PutEncodingBuf().
-func PutEncodingBuf(s []byte) {
-	encodingPool.Put(s)
+func PutEncodingBuf(buf *EncodingBuf) {
+	encodingPool.Put(buf)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,18 +17,17 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -86,7 +85,7 @@ func makeTelemetryTestFixtureWithConfig(minLevel logrus.Level, cfg *TelemetryCon
 	f.l = Base().(logger)
 	f.l.SetLevel(Debug) // Ensure logging doesn't filter anything out
 
-	f.telem, _ = makeTelemetryState(lcfg, func(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+	f.telem, _ = makeTelemetryStateContext(context.Background(), lcfg, func(ctx context.Context, cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return &f.hook, nil
 	})
 	f.l.loggerState.telemetry = f.telem
@@ -140,7 +139,7 @@ func TestCreateHookError(t *testing.T) {
 
 	cfg := createTelemetryConfig()
 	cfg.Enable = true
-	telem, err := makeTelemetryState(cfg, func(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+	telem, err := makeTelemetryStateContext(context.Background(), cfg, func(ctx context.Context, cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return nil, fmt.Errorf("failed")
 	})
 
@@ -159,17 +158,11 @@ func TestTelemetryHook(t *testing.T) {
 
 	f.telem.logMetrics(f.l, testString1, testMetrics{}, nil)
 	f.telem.logEvent(f.l, testString1, testString2, nil)
-	op := f.telem.logStartOperation(f.l, testString1, testString2)
-	time.Sleep(1 * time.Millisecond)
-	op.Stop(f.l, nil)
 
 	entries := f.hookEntries()
-	a.Equal(4, len(entries))
+	a.Equal(2, len(entries))
 	a.Equal(buildMessage(testString1, testString2), entries[0])
 	a.Equal(buildMessage(testString1, testString2), entries[1])
-	a.Equal(buildMessage(testString1, testString2, "Start"), entries[2])
-	a.Equal(buildMessage(testString1, testString2, "Stop"), entries[3])
-	a.NotZero(f.hookData()[3]["duration"])
 }
 
 func TestNilMetrics(t *testing.T) {
@@ -180,23 +173,6 @@ func TestNilMetrics(t *testing.T) {
 	f.telem.logMetrics(f.l, testString1, nil, nil)
 
 	a.Zero(len(f.hookEntries()))
-}
-
-func TestMultipleOperationStop(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-	f := makeTelemetryTestFixture(logrus.InfoLevel)
-
-	op := f.telem.logStartOperation(f.l, testString1, testString2)
-	op.Stop(f.l, nil)
-
-	// Start and stop should result in 2 entries
-	a.Equal(2, len(f.hookEntries()))
-
-	op.Stop(f.l, nil)
-
-	// Calling stop again should not result in another entry
-	a.Equal(2, len(f.hookEntries()))
 }
 
 func TestDetails(t *testing.T) {
@@ -316,13 +292,9 @@ func runLogLevelsTest(t *testing.T, minLevel logrus.Level, expected int) {
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	// See if we got the expected number of entries
 	a.Equal(expected, len(f.hookEntries()))
@@ -344,13 +316,9 @@ func TestLogHistoryLevels(t *testing.T) {
 	f.l.Error("error")
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	data := f.hookData()
 	a.Nil(data[0]["log"]) // Debug
@@ -372,12 +340,9 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 	tempDir := os.TempDir()
-	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()
-	config.SetGlobalConfigFileRoot(tempDir)
 
-	cfg, err := ReadTelemetryConfigOrDefault("", "")
+	cfg, err := ReadTelemetryConfigOrDefault("", tempDir)
 	defaultCfgSettings := createTelemetryConfig()
-	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
 
 	a.Nil(err)
 	a.NotNil(cfg)

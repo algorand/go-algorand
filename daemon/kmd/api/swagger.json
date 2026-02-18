@@ -1422,6 +1422,10 @@
         "public_key": {
           "$ref": "#/definitions/PublicKey"
         },
+        "use_legacy_msig": {
+          "type": "boolean",
+          "x-go-name": "UseLegacyMsig"
+        },
         "wallet_handle_token": {
           "type": "string",
           "x-go-name": "WalletHandleToken"

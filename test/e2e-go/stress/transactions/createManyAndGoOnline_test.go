@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"maps"
 	"path/filepath"
 	"testing"
 
@@ -65,7 +66,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 
 	txidsToAccountsWaveOne := make(map[string]string)
 	const transactionFee = uint64(1)
-	fundingTimeoutRound := uint64(400)
+	const fundingTimeoutRound basics.Round = 400
 	// cascade-create and fund 1000 accounts
 	amountToSend := uint64(560000) // ends up leaving each acct with ~4300 algos, which is more than absolutely necessary to go online
 	txidsToAccountsWaveOnePartOne := cascadeCreateAndFundAccounts(amountToSend, transactionFee, fundingAccount, client, a)
@@ -82,17 +83,13 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 	txidsToAccountsWaveTwo := make(map[string]string)
 	for _, account := range txidsToAccountsWaveOne {
 		txidsToChildAccounts := cascadeCreateAndFundAccounts(amountToSend, transactionFee, account, client, a)
-		for txid, account := range txidsToChildAccounts {
-			txidsToAccountsWaveTwo[txid] = account
-		}
+		maps.Copy(txidsToAccountsWaveTwo, txidsToChildAccounts)
 	}
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(fundingTimeoutRound, txidsToAccountsWaveTwo)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 	for _, account := range txidsToAccountsWaveOne {
 		txidsToChildAccounts := cascadeCreateAndFundAccounts(amountToSend, transactionFee, account, client, a)
-		for txid, account := range txidsToChildAccounts {
-			txidsToAccountsWaveTwo[txid] = account
-		}
+		maps.Copy(txidsToAccountsWaveTwo, txidsToChildAccounts)
 	}
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(fundingTimeoutRound, txidsToAccountsWaveTwo)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
@@ -103,24 +100,20 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 	txidsToAccountsWaveThree := make(map[string]string)
 	for _, account := range txidsToAccountsWaveTwo {
 		txidsToChildAccounts := cascadeCreateAndFundAccounts(amountToSend, transactionFee, account, client, a)
-		for txid, account := range txidsToChildAccounts {
-			txidsToAccountsWaveThree[txid] = account
-		}
+		maps.Copy(txidsToAccountsWaveThree, txidsToChildAccounts)
 	}
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(fundingTimeoutRound, txidsToAccountsWaveThree)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 
 	for _, account := range txidsToAccountsWaveTwo {
 		txidsToChildAccounts := cascadeCreateAndFundAccounts(amountToSend, transactionFee, account, client, a)
-		for txid, account := range txidsToChildAccounts {
-			txidsToAccountsWaveThree[txid] = account
-		}
+		maps.Copy(txidsToAccountsWaveThree, txidsToChildAccounts)
 	}
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(fundingTimeoutRound, txidsToAccountsWaveThree)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 
 	// make funded accounts go online
-	const transactionValidityPeriod = uint64(100) // rounds
+	const transactionValidityPeriod = 100 // rounds
 	_, curRound := fixture.GetBalanceAndRound(fundingAccount)
 	i := 0 // for assert debug messages
 	txidsToAccountsGoOnline := make(map[string]string)
@@ -128,7 +121,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 		partkeyResponse, _, err := client.GenParticipationKeys(account, curRound-10, curRound+1000, 0)
 		a.NoError(err, "should be no errors when creating many partkeys, creation number %v", i)
 		a.Equal(account, partkeyResponse.Address, "successful partkey creation should echo account")
-		goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(account, nil, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
+		goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(account, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 		a.NoError(err, "should be able to make go online tx %v", i)
 		wh, err := client.GetUnencryptedWalletHandle()
 		a.NoError(err, "should be able to get unencrypted wallet handle")
@@ -138,7 +131,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 		txidsToAccountsGoOnline[onlineTxID] = account
 	}
 	// wait for txns to clear
-	goOnlineTimeoutRound := fundingTimeoutRound + uint64(100)
+	goOnlineTimeoutRound := fundingTimeoutRound + 100
 	allConfirmed = fixture.WaitForAllTxnsToConfirm(goOnlineTimeoutRound, txidsToAccountsGoOnline)
 	a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 
@@ -149,7 +142,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 		a.NoError(err, "should be no errors when creating many partkeys, creation number %v", i)
 		a.Equal(account, partkeyResponse.Address, "successful partkey creation should echo account")
 
-		goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(account, nil, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
+		goOnlineUTx, err := client.MakeUnsignedGoOnlineTx(account, curRound, curRound+transactionValidityPeriod, transactionFee, [32]byte{})
 		a.NoError(err, "should be able to make go online tx %v", i)
 		wh, err := client.GetUnencryptedWalletHandle()
 		a.NoError(err, "should be able to get unencrypted wallet handle")
@@ -160,7 +153,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 
 		// use debug counter to wait for batches of transactions to clear before adding more to the pool
 		if i%20 == 0 {
-			goOnlineTimeoutRound = fundingTimeoutRound + uint64(100)
+			goOnlineTimeoutRound = fundingTimeoutRound + 100
 			allConfirmed = fixture.WaitForAllTxnsToConfirm(goOnlineTimeoutRound, txidsToAccountsGoOnline)
 			a.True(allConfirmed, "Not all transactions confirmed. Failing test and aborting early.")
 		}
@@ -173,10 +166,12 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 
 	i = 0 // for assert debug messages
 	for txid, account := range txidsToAccountsGoOnline {
-		accountStatus, err := client.AccountInformation(account)
+		accountStatus, err := client.AccountInformation(account, false)
+		a.NoError(err)
 		_, round := fixture.GetBalanceAndRound(account)
-		curTxStatus, err := client.TransactionInformation(account, txid)
-		a.True(curTxStatus.ConfirmedRound <= round, "go online transaction confirmed on round %d, current round is %d\n", curTxStatus.ConfirmedRound, round)
+		curTxStatus, err := client.PendingTransactionInformation(txid)
+		a.NotNil(curTxStatus.ConfirmedRound)
+		a.True(*curTxStatus.ConfirmedRound <= round, "go online transaction confirmed on round %d, current round is %d\n", curTxStatus.ConfirmedRound, round)
 		a.NoError(err, "should be no error when querying account information (query number %v regarding account %v)", i, account)
 		a.Equal(byte(basics.Online), accountStatus.Status, "account %v should be online by now", account)
 		i++

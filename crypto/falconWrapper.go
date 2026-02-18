@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -102,13 +102,6 @@ func (d *FalconVerifier) GetFixedLengthHashableRepresentation() []byte {
 	return d.PublicKey[:]
 }
 
-// GetSignatureFixedLengthHashableRepresentation returns a serialized version of the signature
-func (d *FalconVerifier) GetSignatureFixedLengthHashableRepresentation(signature FalconSignature) ([]byte, error) {
-	compressedSignature := cfalcon.CompressedSignature(signature)
-	ctSignature, err := compressedSignature.ConvertToCT()
-	return ctSignature[:], err
-}
-
 // NewFalconSigner creates a falconSigner that is used to sign and verify falcon signatures
 func NewFalconSigner() (*FalconSigner, error) {
 	var seed FalconSeed
@@ -118,4 +111,16 @@ func NewFalconSigner() (*FalconSigner, error) {
 		return &FalconSigner{}, err
 	}
 	return &signer, nil
+}
+
+// GetFixedLengthHashableRepresentation returns a serialized version of the signature
+func (s FalconSignature) GetFixedLengthHashableRepresentation() ([]byte, error) {
+	compressedSignature := cfalcon.CompressedSignature(s)
+	ctSignature, err := compressedSignature.ConvertToCT()
+	return ctSignature[:], err
+}
+
+// IsSaltVersionEqual of the signature matches the given version
+func (s FalconSignature) IsSaltVersionEqual(version byte) bool {
+	return (*cfalcon.CompressedSignature)(&s).SaltVersion() == version
 }

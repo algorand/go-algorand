@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,8 @@ import (
 
 // LedgerType is an enum identifying a specific type of LedgerEvent
 // TODO Maybe this should be called LedgerEventType, since these are not actually types of ledgers
-//go:generate stringer -type=LedgerType
+//
+//go:generate go tool -modfile=../../tool.mod stringer -type=LedgerType
 type LedgerType int
 
 const (

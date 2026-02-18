@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,18 +17,21 @@
 package logging
 
 import (
-	"io/ioutil"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestCyclicWrite(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	liveFileName := "live.test"
-	archiveFileName := "archive.test"
+func testCyclicWrite(t *testing.T, liveFileName, archiveFileName string) {
+	t.Helper()
+
 	defer os.Remove(liveFileName)
 	defer os.Remove(archiveFileName)
 
@@ -49,15 +52,58 @@ func TestCyclicWrite(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(secondWrite), n)
 
-	liveData, err := ioutil.ReadFile(liveFileName)
+	liveData, err := os.ReadFile(liveFileName)
 	require.NoError(t, err)
 	require.Len(t, liveData, len(secondWrite))
 	require.Equal(t, byte('B'), liveData[0])
 
-	oldData, err := ioutil.ReadFile(archiveFileName)
+	oldData, err := os.ReadFile(archiveFileName)
 	require.NoError(t, err)
 	require.Len(t, oldData, space)
 	for i := 0; i < space; i++ {
 		require.Equal(t, byte('A'), oldData[i])
 	}
+}
+
+func TestCyclicWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	liveFileName := filepath.Join(tmpDir, "live.test")
+	archiveFileName := filepath.Join(tmpDir, "archive.test")
+
+	testCyclicWrite(t, liveFileName, archiveFileName)
+}
+
+func execCommand(t *testing.T, cmdAndArsg ...string) {
+	t.Helper()
+
+	cmd := exec.Command(cmdAndArsg[0], cmdAndArsg[1:]...)
+	var errOutput strings.Builder
+	cmd.Stderr = &errOutput
+	err := cmd.Run()
+	require.NoError(t, err, errOutput.String())
+}
+
+func TestCyclicWriteAcrossFilesystems(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	isLinux := strings.HasPrefix(runtime.GOOS, "linux")
+
+	// Skip unless CIRCLECI or TEST_MOUNT_TMPFS is set, and we are on a linux system
+	if !isLinux || (os.Getenv("CIRCLECI") == "" && os.Getenv("TEST_MOUNT_TMPFS") == "") {
+		t.Skip("This test must be run on a linux system with administrator privileges")
+	}
+
+	mountDir := t.TempDir()
+	execCommand(t, "sudo", "mount", "-t", "tmpfs", "-o", "size=2K", "tmpfs", mountDir)
+
+	defer execCommand(t, "sudo", "umount", mountDir)
+
+	liveFileName := filepath.Join(t.TempDir(), "live.test")
+	archiveFileName := filepath.Join(mountDir, "archive.test")
+
+	testCyclicWrite(t, liveFileName, archiveFileName)
 }

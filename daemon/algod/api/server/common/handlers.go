@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,13 +18,17 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
+	"github.com/algorand/go-algorand/node"
 )
 
 // GenesisJSON is an httpHandler for route GET /genesis
@@ -66,7 +70,7 @@ func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
 	w := context.Response().Writer
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(lib.SwaggerSpecJSON))
+	_, _ = w.Write([]byte(api.SwaggerSpecJSONEmbed))
 }
 
 // HealthCheck is an httpHandler for route GET /health
@@ -86,6 +90,63 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(nil)
+}
+
+// Ready is a httpHandler for route GET /ready
+// it serves "readiness" probe on if the node is healthy and fully caught-up.
+func Ready(ctx lib.ReqContext, context echo.Context) {
+	// swagger:operation GET /ready Ready
+	//---
+	//     Summary: Returns OK if healthy and fully caught up.
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Responses:
+	//       200:
+	//         description: OK.
+	//       500:
+	//         description: Internal Error.
+	//       503:
+	//         description: Node not ready yet.
+	//       default: { description: Unknown Error }
+	w := context.Response().Writer
+	w.Header().Set("Content-Type", "application/json")
+
+	stat, err := ctx.Node.Status()
+	code := http.StatusOK
+
+	// isReadyFromStat checks the `Node.Status()` result
+	// and decide if the node is at the latest round
+	// must satisfy following sub conditions:
+	// 1. the node is not in a fast-catchup stage
+	// 2. the node's time since last round should be [0, deadline),
+	//    while deadline = agreement.DefaultDeadlineTimeout = 17s
+	// 3. the node's catchup time is 0
+	isReadyFromStat := func(status node.StatusReport) bool {
+		timeSinceLastRound := status.TimeSinceLastRound().Milliseconds()
+
+		return len(status.Catchpoint) == 0 &&
+			timeSinceLastRound >= 0 &&
+			timeSinceLastRound < agreement.DefaultDeadlineTimeout().Milliseconds() &&
+			status.CatchupTime.Milliseconds() == 0
+	}
+
+	if err != nil {
+		code = http.StatusInternalServerError
+		ctx.Log.Error(err)
+	} else if stat.StoppedAtUnsupportedRound {
+		code = http.StatusInternalServerError
+		err = fmt.Errorf("stopped at an unsupported round")
+		ctx.Log.Error(err)
+	} else if !isReadyFromStat(stat) {
+		code = http.StatusServiceUnavailable
+		err = fmt.Errorf("ready failed as the node is catching up")
+		ctx.Log.Info(err)
+	}
+
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(nil)
 }
 
 // VersionsHandler is an httpHandler for route GET /versions
@@ -111,7 +172,7 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 	w.WriteHeader(http.StatusOK)
 	response := VersionsResponse{
 		Body: common.Version{
-			Versions:    []string{"v1", "v2"},
+			Versions:    []string{"v2"},
 			GenesisID:   ctx.Node.GenesisID(),
 			GenesisHash: gh[:],
 			Build: common.BuildVersion{
@@ -125,8 +186,6 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 		},
 	}
 	json.NewEncoder(w).Encode(response.Body)
-
-	return
 }
 
 // CORS

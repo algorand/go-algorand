@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -80,7 +80,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	pingAccount := pingAccountList[0].Address
 
 	pongClient := fixture.GetLibGoalClientForNamedNode("Node")
-	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient.DataDir())
+	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient)
 	a.NoError(err)
 	var pongAccount string
 	for _, acct := range pongAccounts {
@@ -93,7 +93,9 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	}
 
 	pingBalance, err := c.GetBalance(pingAccount)
+	a.NoError(err)
 	pongBalance, err := c.GetBalance(pongAccount)
+	a.NoError(err)
 
 	a.Equal(pingBalance, pongBalance, "both accounts should start with same balance")
 	a.NotEqual(pingAccount, pongAccount, "accounts under study should be different")
@@ -123,40 +125,47 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
 
-		var pongTxInfo, pingTxInfo v1.Transaction
-		pongTxInfo, err = pingClient.PendingTransactionInformation(pongTx.ID().String())
+		var pongTxInfo, pingTxInfo model.PendingTransactionResponse
+		pongTxInfo, err = pongClient.PendingTransactionInformation(pongTx.ID().String())
 		if err == nil {
 			pingTxInfo, err = pingClient.PendingTransactionInformation(pingTx.ID().String())
 		}
-		waitForTransaction = err != nil || pongTxInfo.ConfirmedRound == 0 || pingTxInfo.ConfirmedRound == 0
-
+		waitForTransaction = err != nil || (pongTxInfo.ConfirmedRound != nil && *pongTxInfo.ConfirmedRound == 0) || (pingTxInfo.ConfirmedRound != nil && *pingTxInfo.ConfirmedRound == 0)
 		if waitForTransaction {
 			curStatus, _ := pongClient.Status()
 			curRound := curStatus.LastRound
-			err = fixture.WaitForRoundWithTimeout(curRound + uint64(1))
+			err = fixture.WaitForRoundWithTimeout(curRound + 1)
 			a.NoError(err)
 		}
 	}
 	curStatus, _ := pongClient.Status()
 	curRound := curStatus.LastRound
 
-	if waitForTransaction {
-		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
-		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
-	}
+	confirmed := true
 
-	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
-	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pingTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+5)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pongTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+5)
+
+	pingBalance, err = pongClient.GetBalance(pingAccount)
+	a.NoError(err)
+	pongBalance, err = pongClient.GetBalance(pongAccount)
+	a.NoError(err)
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 
-	if waitForTransaction {
-		fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
-		fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
-	}
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pingTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed ping transaction by round %v", curRound+5)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, pongTxidsToAddresses)
+	a.True(confirmed, "failed to see confirmed pong transaction by round %v", curRound+5)
 
-	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
-	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
+	pingBalance, err = pingClient.GetBalance(pingAccount)
+	a.NoError(err)
+	pongBalance, err = pingClient.GetBalance(pongAccount)
+	a.NoError(err)
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 }

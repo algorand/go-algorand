@@ -63,10 +63,13 @@ if { [catch {
 
     # -------------------------- setup accounts ----------------------------------
 
+    # Get suggested fee from network
+    set FEE_AMOUNT [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Network suggested fee: $FEE_AMOUNT"
+
     # Transfer Algos from primary account to account 1
     set MIN_BALANCE 1000000
     set TRANSFER_AMOUNT  [expr {1000 * $MIN_BALANCE}]
-    set FEE_AMOUNT 1000
     set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
 
     # Print the transaction id
@@ -91,10 +94,7 @@ if { [catch {
     set UNIT_NAME "duckcoin"
     ::AlgorandGoal::AssetCreate $ACCOUNT_1_ADDRESS $WALLET_1_NAME $WALLET_1_PASSWORD $TOTAL_SUPPLY 0 "" $UNIT_NAME $TEST_PRIMARY_NODE_DIR
 
-    # wait about 4 rounds
-    set ASSET_CREATE_WAIT 20
-    puts "Wait $ASSET_CREATE_WAIT for asset creation"
-    exec sleep $ASSET_CREATE_WAIT
+    # no extra waiting here since AssetCreate waits for confirmation
 
     # get asset id
     set ASSET_ID [::AlgorandGoal::AssetLookup $ACCOUNT_1_ADDRESS $UNIT_NAME $TEST_PRIMARY_NODE_DIR]
@@ -124,7 +124,8 @@ if { [catch {
     puts "Generated Teal Source:"
     spawn cat $TEAL_SOURCE
     expect {
-	    -re {^.+$} { close }
+        #nolint:eof not asserting expected output
+        -re {^.+$} { close }
     }
 
     # compile teal assembly to bytecode
@@ -146,10 +147,10 @@ if { [catch {
     # the second payment sends money (the asset) from the Bob to the Alice
     set ZERO_ADDRESS "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
     set LIMIT_TXN_1 "$TEST_ROOT_DIR/limit1.tx"
-    ::AlgorandGoal::TealTxnCreate $TEAL_SOURCE $ACCOUNT_1_ADDRESS $ZERO_ADDRESS 20000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_1 
+    ::AlgorandGoal::TealTxnCreate $TEAL_SOURCE $ACCOUNT_1_ADDRESS $ZERO_ADDRESS 20000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_1
 
     set LIMIT_TXN_2 "$TEST_ROOT_DIR/limit2.tx"
-    ::AlgorandGoal::CreateAssetTransfer $ACCOUNT_1_ADDRESS $ACCOUNT_2_ADDRESS $ASSET_ID 30000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_2 
+    ::AlgorandGoal::CreateAssetTransfer $ACCOUNT_1_ADDRESS $ACCOUNT_2_ADDRESS $ASSET_ID 30000 $TEST_PRIMARY_NODE_DIR $LIMIT_TXN_2
 
     set LIMIT_CMB "$TEST_ROOT_DIR/limitcmb.tx"
     exec cat $LIMIT_TXN_1 $LIMIT_TXN_2 > $LIMIT_CMB

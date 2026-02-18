@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,8 @@ import (
 type Registrar interface {
 	// RegisterHTTPHandler path accepts gorilla/mux path annotations
 	RegisterHTTPHandler(path string, handler http.Handler)
+	// RegisterHTTPHandlerFunc path accepts gorilla/mux path annotations and a HandlerFunc
+	RegisterHTTPHandlerFunc(path string, handler func(response http.ResponseWriter, request *http.Request))
 	// RegisterHandlers exposes global websocket handler registration
 	RegisterHandlers(dispatch []network.TaggedMessageHandler)
 }

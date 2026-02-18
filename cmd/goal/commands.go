@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,12 +17,12 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -30,9 +30,7 @@ import (
 	"github.com/spf13/cobra/doc"
 	"golang.org/x/crypto/ssh/terminal"
 
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -40,11 +38,10 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 var log = logging.Base()
-
-var dataDirs []string
 
 var defaultCacheDir = "goal.cache"
 
@@ -81,9 +78,6 @@ func init() {
 	// kmd.go
 	rootCmd.AddCommand(kmdCmd)
 
-	// logging.go
-	rootCmd.AddCommand(loggingCmd)
-
 	// network.go
 	rootCmd.AddCommand(networkCmd)
 
@@ -98,7 +92,7 @@ func init() {
 
 	// Config
 	defaultDataDirValue := []string{""}
-	rootCmd.PersistentFlags().StringArrayVarP(&dataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
+	rootCmd.PersistentFlags().StringArrayVarP(&datadir.DataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
 	rootCmd.PersistentFlags().StringVarP(&kmdDataDirFlag, "kmddir", "k", "", "Data directory for kmd")
 }
 
@@ -164,7 +158,7 @@ var versionCmd = &cobra.Command{
 	Short: "The current version of the Algorand daemon (algod)",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			response, err := ensureAlgodClient(dataDir).AlgodVersions()
 			if err != nil {
 				fmt.Println(err)
@@ -207,7 +201,7 @@ var reportCmd = &cobra.Command{
 		}
 		fmt.Println(string(data))
 
-		dirs := getDataDirs()
+		dirs := datadir.GetDataDirs()
 		report := len(dirs) > 1
 		for _, dir := range dirs {
 			if report {
@@ -221,7 +215,7 @@ var reportCmd = &cobra.Command{
 			fmt.Printf("Genesis ID from genesis.json: %s\n", genesis.ID())
 		}
 		fmt.Println()
-		onDataDirs(getStatus)
+		datadir.OnDataDirs(getStatus)
 	},
 }
 
@@ -237,7 +231,7 @@ var protoCmd = &cobra.Command{
 
 func readGenesis(dataDir string) (genesis bookkeeping.Genesis, err error) {
 	path := filepath.Join(dataDir, config.GenesisJSONFile)
-	genesisText, err := ioutil.ReadFile(path)
+	genesisText, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
@@ -257,83 +251,21 @@ func resolveKmdDataDir(dataDir string) string {
 		return out
 	}
 	if dataDir == "" {
-		dataDir = resolveDataDir()
+		dataDir = datadir.ResolveDataDir()
 	}
 	if libgoal.AlgorandDataIsPrivate(dataDir) {
 		algodKmdPath, _ := filepath.Abs(filepath.Join(dataDir, libgoal.DefaultKMDDataDir))
 		return algodKmdPath
 	}
-	cu, err := user.Current()
+	cfgRoot, err := config.GetGlobalConfigFileRoot()
 	if err != nil {
-		reportErrorf("could not look up current user while looking for kmd dir: %s", err)
-	}
-	if cu.HomeDir == "" {
-		reportErrorln("user has no home dir while looking for kmd dir")
+		reportErrorf("unable to find config root: %v", err)
 	}
 	genesis, err := readGenesis(dataDir)
 	if err != nil {
 		reportErrorf("could not read genesis.json: %s", err)
 	}
-	return filepath.Join(cu.HomeDir, ".algorand", genesis.ID(), libgoal.DefaultKMDDataDir)
-}
-
-func resolveDataDir() string {
-	// Figure out what data directory to tell algod to use.
-	// If not specified on cmdline with '-d', look for default in environment.
-	var dir string
-	if len(dataDirs) > 0 {
-		dir = dataDirs[0]
-	}
-	if dir == "" {
-		dir = os.Getenv("ALGORAND_DATA")
-	}
-	return dir
-}
-
-func ensureFirstDataDir() string {
-	// Get the target data directory to work against,
-	// then handle the scenario where no data directory is provided.
-	dir := resolveDataDir()
-	if dir == "" {
-		reportErrorln(errorNoDataDirectory)
-	}
-	return dir
-}
-
-func ensureSingleDataDir() string {
-	if len(dataDirs) > 1 {
-		reportErrorln(errorOneDataDirSupported)
-	}
-	return ensureFirstDataDir()
-}
-
-// like ensureSingleDataDir() but doesn't exit()
-func maybeSingleDataDir() string {
-	if len(dataDirs) > 1 {
-		return ""
-	}
-	return resolveDataDir()
-}
-
-func getDataDirs() (dirs []string) {
-	if len(dataDirs) == 0 {
-		reportErrorln(errorNoDataDirectory)
-	}
-	dirs = append(dirs, ensureFirstDataDir())
-	dirs = append(dirs, dataDirs[1:]...)
-	return
-}
-
-func onDataDirs(action func(dataDir string)) {
-	dirs := getDataDirs()
-	report := len(dirs) > 1
-
-	for _, dir := range dirs {
-		if report {
-			reportInfof(infoDataDir, dir)
-		}
-		action(dir)
-	}
+	return filepath.Join(cfgRoot, genesis.ID(), libgoal.DefaultKMDDataDir)
 }
 
 func ensureCacheDir(dataDir string) string {
@@ -347,7 +279,7 @@ func ensureCacheDir(dataDir string) string {
 		return cacheDir
 	}
 	// Put the cache in the user's home directory
-	algorandDir, err := config.GetDefaultConfigFilePath()
+	algorandDir, err := config.GetGlobalConfigFileRoot()
 	if err != nil {
 		reportErrorf("config error %s", err)
 	}
@@ -382,7 +314,6 @@ func getGoalClient(dataDir string, clientType libgoal.ClientType) (client libgoa
 	if err != nil {
 		return
 	}
-	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return
 }
 
@@ -424,18 +355,18 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 		if len(walletID) == 0 {
 			// If we still don't have a default, check if there's only one wallet.
 			// If there is, make it the default and continue
-			wallets, err := kmd.ListWallets()
-			if err != nil {
-				return nil, nil, fmt.Errorf(errCouldNotListWallets, err)
+			wallets, err1 := kmd.ListWallets()
+			if err1 != nil {
+				return nil, nil, fmt.Errorf(errCouldNotListWallets, err1)
 			}
 			if len(wallets) == 1 {
 				// Only one wallet, so it's unambigious
 				walletID = []byte(wallets[0].ID)
 				accountList.setDefaultWalletID(walletID)
 			} else if len(wallets) == 0 {
-				return nil, nil, fmt.Errorf(errNoWallets)
+				return nil, nil, errors.New(errNoWallets)
 			} else {
-				return nil, nil, fmt.Errorf(errNoDefaultWallet)
+				return nil, nil, errors.New(errNoDefaultWallet)
 			}
 		}
 		// Fetch the wallet name (useful for error messages, and to check
@@ -504,7 +435,7 @@ func ensurePassword() []byte {
 }
 
 func reportInfoln(args ...interface{}) {
-	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Println(infoNonPrintableCharacters)
@@ -520,7 +451,7 @@ func reportInfof(format string, args ...interface{}) {
 // reportWarnRawln prints a warning message to stderr. Only use this function if that warning
 // message already indicates that it's a warning. Otherwise, use reportWarnln
 func reportWarnRawln(args ...interface{}) {
-	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+	for line := range strings.SplitSeq(fmt.Sprint(args...), "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Fprintln(os.Stderr, infoNonPrintableCharacters)
@@ -550,21 +481,31 @@ func reportWarnf(format string, args ...interface{}) {
 
 func reportErrorln(args ...interface{}) {
 	outStr := fmt.Sprint(args...)
-	for _, line := range strings.Split(outStr, "\n") {
+	for line := range strings.SplitSeq(outStr, "\n") {
 		printable, line := unicodePrintable(line)
 		if !printable {
 			fmt.Fprintln(os.Stderr, errorNonPrintableCharacters)
 		}
 		fmt.Fprintln(os.Stderr, line)
 	}
-	os.Exit(1)
+	exit(1)
 }
 
 func reportErrorf(format string, args ...interface{}) {
 	reportErrorln(fmt.Sprintf(format, args...))
 }
 
-// writeFile is a wrapper of ioutil.WriteFile which considers the special
+func exit(code int) {
+	if flag.Lookup("test.v") == nil {
+		// normal run
+		os.Exit(code)
+	} else {
+		// testing run. panic, so we can require.Panic
+		panic(code)
+	}
+}
+
+// writeFile is a wrapper of os.WriteFile which considers the special
 // case of stdout filename
 func writeFile(filename string, data []byte, perm os.FileMode) error {
 	var err error
@@ -575,31 +516,28 @@ func writeFile(filename string, data []byte, perm os.FileMode) error {
 		}
 		return nil
 	}
-	return ioutil.WriteFile(filename, data, perm)
+	return os.WriteFile(filename, data, perm)
 }
 
 // writeDryrunReqToFile creates dryrun request object and writes to a file
 func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilename string) (err error) {
 	proto, _ := getProto(protoVersion)
-	accts, err := unmarshalSlice(dumpForDryrunAccts)
-	if err != nil {
-		reportErrorf(err.Error())
-	}
+	accts := util.Map(dumpForDryrunAccts, cliAddress)
 	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
 	if err != nil {
-		reportErrorf(err.Error())
+		reportErrorln(err)
 	}
 	err = writeFile(outFilename, data, 0600)
 	return
 }
 
-// readFile is a wrapper of ioutil.ReadFile which considers the
+// readFile is a wrapper of os.ReadFile which considers the
 // special case of stdin filename
 func readFile(filename string) ([]byte, error) {
 	if filename == stdinFileNameValue {
-		return ioutil.ReadAll(os.Stdin)
+		return io.ReadAll(os.Stdin)
 	}
-	return ioutil.ReadFile(filename)
+	return os.ReadFile(filename)
 }
 
 func checkTxValidityPeriodCmdFlags(cmd *cobra.Command) {

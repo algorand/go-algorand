@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,11 @@ import (
 // EvalMaxArgs is the maximum number of arguments to an LSig
 const EvalMaxArgs = 255
 
+// MaxLogicSigArgSize is the maximum size of an argument to an LSig
+// We use 4096 to match the maximum size of a TEAL value
+// (as defined in `const maxStringSize` in package logic)
+const MaxLogicSigArgSize = 4096
+
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.
 // OR
@@ -33,13 +38,14 @@ type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
-	Logic []byte `codec:"l,allocbound=config.MaxLogicSigMaxSize"`
+	Logic []byte `codec:"l,allocbound=bounds.MaxLogicSigMaxSize"`
 
-	Sig  crypto.Signature   `codec:"sig"`
-	Msig crypto.MultisigSig `codec:"msig"`
+	Sig   crypto.Signature   `codec:"sig"`
+	Msig  crypto.MultisigSig `codec:"msig"`
+	LMsig crypto.MultisigSig `codec:"lmsig"`
 
 	// Args are not signed, but checked by Logic
-	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
+	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=MaxLogicSigArgSize,maxtotalbytes=bounds.MaxLogicSigMaxSize"`
 }
 
 // Blank returns true if there is no content in this LogicSig
@@ -64,7 +70,7 @@ func (lsig *LogicSig) Len() int {
 // different behaviors within the evaluation of a LogicSig,
 // due to differences in msgpack encoding behavior.
 func (lsig *LogicSig) Equal(b *LogicSig) bool {
-	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig)
+	sigs := lsig.Sig == b.Sig && lsig.Msig.Equal(b.Msig) && lsig.LMsig.Equal(b.LMsig)
 	if !sigs {
 		return false
 	}

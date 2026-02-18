@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,13 +19,13 @@ package cloudflare
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 )
 
 // listDNSRecordRequest creates a new http request for listing of DNS records.
-func listDNSRecordRequest(zoneID string, authEmail string, authKey string, recordType string, name string, content string, page uint, perPage uint, order string, direction string, match string) (*http.Request, error) {
+func listDNSRecordRequest(zoneID string, authToken string, recordType string, name string, content string, page uint, perPage uint, order string, direction string, match string) (*http.Request, error) {
 	// verify and validate input parameters.
 	if page == 0 {
 		page = 1
@@ -73,7 +73,7 @@ func listDNSRecordRequest(zoneID string, authEmail string, authKey string, recor
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
@@ -120,7 +120,7 @@ type DNSRecordResponseEntry struct {
 // parseListDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseListDNSRecordResponse(response *http.Response) (*ListDNSRecordResponse, error) {
 	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}

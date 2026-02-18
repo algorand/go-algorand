@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,8 +44,8 @@ var errPseudonodeVerifierClosedChannel = errors.New("crypto verifier closed the 
 var errPseudonodeNoVotes = errors.New("no valid participation keys to generate votes for given round")
 var errPseudonodeNoProposals = errors.New("no valid participation keys to generate proposals for given round")
 
-var pseudonodeBacklogFullByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_dropped_{TAG}", "Number of pseudonode tasks dropped per type")
-var pseudonodeResultTimeoutsByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_timeouts_{TAG}", "Number of pseudonode task result timeouts per type")
+var pseudonodeBacklogFullByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_dropped_{TAG}", "Number of pseudonode {TAG} tasks dropped", "proposal", "vote")
+var pseudonodeResultTimeoutsByType = metrics.NewTagCounter("algod_agreement_pseudonode_tasks_timeouts_{TAG}", "Number of pseudonode {TAG} task result timeouts", "vote", "pvote", "ppayload")
 
 // A pseudonode creates proposals and votes with a KeyManager which holds participation keys.
 //
@@ -220,7 +220,7 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 		n.participationKeys = nil
 		return nil
 	}
-	balanceRound := balanceRound(voteRound, cparams)
+	balanceRound := BalanceRound(voteRound, cparams)
 
 	// measure the time it takes to acquire the voting keys.
 	beforeVotingKeysTime := time.Now()
@@ -284,7 +284,11 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.ParticipationRecordForRound) ([]proposal, []unauthenticatedVote) {
-	ve, err := n.factory.AssembleBlock(round)
+	addresses := make([]basics.Address, len(accounts))
+	for i := range accounts {
+		addresses[i] = accounts[i].Account
+	}
+	ve, err := n.factory.AssembleBlock(round, addresses)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
@@ -295,17 +299,17 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 	votes := make([]unauthenticatedVote, 0, len(accounts))
 	proposals := make([]proposal, 0, len(accounts))
 	for _, acc := range accounts {
-		payload, proposal, err := proposalForBlock(acc.Account, acc.VRF, ve, period, n.ledger)
-		if err != nil {
-			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", acc.Account, err)
+		payload, proposal, pErr := proposalForBlock(acc.Account, acc.VRF, ve, period, n.ledger)
+		if pErr != nil {
+			n.log.Errorf("pseudonode.makeProposals: could not create proposal for block (address %v): %v", acc.Account, pErr)
 			continue
 		}
 
 		// attempt to make the vote
 		rv := rawVote{Sender: acc.Account, Round: round, Period: period, Step: propose, Proposal: proposal}
-		uv, err := makeVote(rv, acc.VotingSigner(), acc.VRF, n.ledger)
-		if err != nil {
-			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", err)
+		uv, vErr := makeVote(rv, acc.VotingSigner(), acc.VRF, n.ledger)
+		if vErr != nil {
+			n.log.Warnf("pseudonode.makeProposals: could not create vote: %v", vErr)
 			continue
 		}
 
@@ -387,7 +391,7 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	asyncVerifyingVotes := len(unverifiedVotes)
 	for i, uv := range unverifiedVotes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, uint64(i), msg, results)
 		if err != nil {
 			orderedResults[i].err = err
 			t.node.log.Infof("pseudonode.makeVotes: failed to enqueue vote verification for (%d, %d): %v", t.round, t.period, err)
@@ -411,20 +415,25 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 	for _, result := range verifiedResults {
 		totalWeight += result.v.Cred.Weight
 	}
-	if t.node.log.IsLevelEnabled(logging.Info) {
+	if t.node.log.IsLevelEnabled(logging.Info) || t.node.log.GetTelemetryEnabled() {
 		for _, result := range verifiedResults {
 			vote := result.v
-			logEvent := logspec.AgreementEvent{
-				Type:         logspec.VoteBroadcast,
-				Sender:       vote.R.Sender.String(),
-				Hash:         vote.R.Proposal.BlockDigest.String(),
-				ObjectRound:  uint64(vote.R.Round),
-				ObjectPeriod: uint64(vote.R.Period),
-				ObjectStep:   uint64(vote.R.Step),
-				Weight:       vote.Cred.Weight,
-				WeightTotal:  totalWeight,
+			if t.node.log.IsLevelEnabled(logging.Info) {
+				logEvent := logspec.AgreementEvent{
+					Type:         logspec.VoteBroadcast,
+					Sender:       vote.R.Sender.String(),
+					Hash:         vote.R.Proposal.BlockDigest.String(),
+					Round:        uint64(t.round),
+					Period:       uint64(t.period),
+					Step:         uint64(t.step),
+					ObjectRound:  uint64(vote.R.Round),
+					ObjectPeriod: uint64(vote.R.Period),
+					ObjectStep:   uint64(vote.R.Step),
+					Weight:       vote.Cred.Weight,
+					WeightTotal:  totalWeight,
+				}
+				t.node.log.with(logEvent).Infof("vote created for broadcast (weight %d, total weight %d)", vote.Cred.Weight, totalWeight)
 			}
-			t.node.log.with(logEvent).Infof("vote created for broadcast (weight %d, total weight %d)", vote.Cred.Weight, totalWeight)
 			if !t.node.log.GetTelemetryEnabled() {
 				continue
 			}
@@ -438,7 +447,9 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 				// Recovered: false,
 			})
 		}
-		t.node.log.Infof("pseudonode.makeVotes: %v votes created for %v at (%v, %v, %v), total weight %v", len(verifiedResults), t.prop, t.round, t.period, t.step, totalWeight)
+		if t.node.log.IsLevelEnabled(logging.Info) {
+			t.node.log.Infof("pseudonode.makeVotes: %v votes created for %v at (%v, %v, %v), total weight %v", len(verifiedResults), t.prop, t.round, t.period, t.step, totalWeight)
+		}
 	}
 	if len(verifiedResults) > 0 {
 		// wait until the persist state is flushed, as we don't want to send any vote unless we've completed flushing it to disk.
@@ -515,7 +526,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	asyncVerifyingVotes := len(votes)
 	for i, uv := range votes {
 		msg := message{Tag: protocol.AgreementVoteTag, UnauthenticatedVote: uv}
-		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, i, msg, results)
+		err := verifier.verifyVote(context.TODO(), t.node.ledger, uv, uint64(i), msg, results)
 		if err != nil {
 			cryptoOutputs[i].err = err
 			t.node.log.Infof("pseudonode.makeProposals: failed to enqueue vote verification for (%d, %d): %v", t.round, t.period, err)
@@ -545,6 +556,8 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.ProposalBroadcast,
 			Hash:         vote.R.Proposal.BlockDigest.String(),
+			Round:        uint64(t.round),
+			Period:       uint64(t.period),
 			ObjectRound:  uint64(vote.R.Round),
 			ObjectPeriod: uint64(vote.R.Period),
 		}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ type reqContext struct {
 	sm *session.Manager
 }
 
-// errorResponse sets the specified status code (should != 200), and fills in the
+// errorResponse sets the specified status code (should != 200), and fills in
 // the response envelope by setting Error to true and a Message to the passed
 // user-readable error message.
 func errorResponse(w http.ResponseWriter, status int, err error) {
@@ -1185,8 +1185,8 @@ func postMultisigProgramSignHandler(ctx reqContext, w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Sign the transaction
-	msig, err := wallet.MultisigSignProgram(req.Program, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword))
+	// Sign the program
+	msig, err := wallet.MultisigSignProgram(req.Program, crypto.Digest(reqAddr), req.PublicKey, req.PartialMsig, []byte(req.WalletPassword), req.UseLegacyMsig)
 	if err != nil {
 		errorResponse(w, http.StatusBadRequest, err)
 		return
@@ -1265,7 +1265,7 @@ func wrapCtx(ctx reqContext, handler func(reqContext, http.ResponseWriter, *http
 	}
 }
 
-// reqCallbackMiddlware calls the reqCB function once per request that passes
+// reqCallbackMiddleware calls the reqCB function once per request that passes
 // through. We use this in server.go to kick a watchdog timer, so that we can
 // kill kmd if we haven't received a request in a while.
 func reqCallbackMiddleware(reqCB func()) func(http.Handler) http.Handler {

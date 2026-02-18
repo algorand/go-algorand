@@ -4,6 +4,9 @@ filename=$(basename "$0")
 scriptname="${filename%.*}"
 date "+${scriptname} start %Y%m%d_%H%M%S"
 
+my_dir="$(dirname "$0")"
+source "$my_dir/rest.sh" "$@"
+
 set -e
 set -x
 set -o pipefail
@@ -12,6 +15,10 @@ export SHELLOPTS
 WALLET=$1
 
 gcmd="goal -w ${WALLET}"
+
+# Get network's minimum fee
+MIN_FEE=$(get_min_fee)
+echo "Network MinFee: $MIN_FEE"
 
 PAYER=$(${gcmd} account list|awk '{ print $3 }')
 MOOCHER=$(${gcmd} account new|awk '{ print $6 }')
@@ -29,7 +36,7 @@ cd ${TEMPDIR}
 ${gcmd} clerk send -a 100 -f "${MOOCHER}" -t "${PAYER}" --fee 2 -o cheap.txn
 # Since goal was modified to allow < minfee when this feature was added, let's confirm
 msgpacktool -d < cheap.txn | grep fee | grep 2
-${gcmd} clerk send -a 100 -f "${PAYER}" -t "${MOOCHER}" --fee 2000 -o expensive.txn
+${gcmd} clerk send -a 100 -f "${PAYER}" -t "${MOOCHER}" --fee $((MIN_FEE * 2)) -o expensive.txn
 cat cheap.txn expensive.txn > both.txn
 ${gcmd} clerk group -i both.txn -o group.txn
 ${gcmd} clerk sign -i group.txn -o group.stx
@@ -40,14 +47,14 @@ ${gcmd} clerk send -a 100 -f "${MOOCHER}" -t "${PAYER}" --fee 0 -o cheap.txn
 # Since goal was modified to allow zero when this feature was added, let's confirm
 # that it's not encoded (should be "omitempty")
 set +e
-FOUND=$(msgpacktool -d < cheap.txn | grep fee)
+FOUND=$(msgpacktool -d < cheap.txn | grep '"fee"')
 set -e
 if [[ $FOUND != "" ]]; then
-    date "+{scriptname} FAIL fee was improperly encoded $FOUND %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL fee was improperly encoded $FOUND %Y%m%d_%H%M%S"
     false
 fi
 
-${gcmd} clerk send -a 100 -f "${PAYER}" -t "${MOOCHER}" --fee 2000 -o expensive.txn
+${gcmd} clerk send -a 100 -f "${PAYER}" -t "${MOOCHER}" --fee $((MIN_FEE * 2)) -o expensive.txn
 cat cheap.txn expensive.txn > both.txn
 ${gcmd} clerk group -i both.txn -o group.txn
 ${gcmd} clerk sign -i group.txn -o group.stx

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -143,7 +143,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	response.WriteHeader(http.StatusOK)
 	_, err = response.Write(txblob)
 	if err != nil {
-		txs.log.Warnf("http block write failed ", err)
+		txs.log.Warn("http block write failed", err)
 	}
 }
 
@@ -166,9 +166,7 @@ func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns []transactions.
 			if encodedLength+txGroupLength > txs.responseSizeLimit {
 				break
 			}
-			for _, tx := range txgroup {
-				missingTxns = append(missingTxns, tx)
-			}
+			missingTxns = append(missingTxns, txgroup...)
 			encodedLength += txGroupLength
 		}
 	}

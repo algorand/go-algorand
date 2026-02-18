@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,9 +54,7 @@ func TestBlockWithTxnEncoding(t *testing.T) {
 	var b Block
 	b.Payset = []transactions.SignedTxnInBlock{
 		{
-			SignedTxnWithAD: transactions.SignedTxnWithAD{
-				SignedTxn: sigtxn,
-			},
+			SignedTxnWithAD: sigtxn.WithAD(),
 		},
 	}
 	enc := protocol.Encode(&b)

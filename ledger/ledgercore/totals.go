@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,9 @@
 package ledgercore
 
 import (
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // AlgoCount represents a total of algos of a certain class
@@ -52,6 +52,15 @@ type AccountTotals struct {
 	RewardsLevel uint64 `codec:"rwdlvl"`
 }
 
+// OnlineRoundParamsData keeps track of parameters needed for agreement from maxBalLookback ago
+type OnlineRoundParamsData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	OnlineSupply    uint64                    `codec:"online"`
+	RewardsLevel    uint64                    `codec:"rwdlvl"`
+	CurrentProtocol protocol.ConsensusVersion `codec:"proto"`
+}
+
 func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 	switch status {
 	case basics.Online:
@@ -69,19 +78,19 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 }
 
 // AddAccount adds an account algos from the total money
-func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) AddAccount(rewardUnit uint64, data AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
-	algos, _ := data.Money(proto, at.RewardsLevel)
+	algos, _ := data.Money(rewardUnit, at.RewardsLevel)
 	sum.Money = ot.AddA(sum.Money, algos)
-	sum.RewardUnits = ot.Add(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
+	sum.RewardUnits = ot.Add(sum.RewardUnits, data.MicroAlgos.RewardUnits(rewardUnit))
 }
 
 // DelAccount removes an account algos from the total money
-func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) DelAccount(rewardUnit uint64, data AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
-	algos, _ := data.Money(proto, at.RewardsLevel)
+	algos, _ := data.Money(rewardUnit, at.RewardsLevel)
 	sum.Money = ot.SubA(sum.Money, algos)
-	sum.RewardUnits = ot.Sub(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
+	sum.RewardUnits = ot.Sub(sum.RewardUnits, data.MicroAlgos.RewardUnits(rewardUnit))
 }
 
 // ApplyRewards adds the reward to the account totals based on the new rewards level
@@ -102,7 +111,7 @@ func (at *AccountTotals) All() basics.MicroAlgos {
 	return res
 }
 
-// Participating returns the sum of algos held under ``participating''
+// Participating returns the sum of algos held under “participating”
 // account status values (Online and Offline).  It excludes MicroAlgos held
 // by NotParticipating accounts.
 func (at *AccountTotals) Participating() basics.MicroAlgos {
@@ -113,7 +122,7 @@ func (at *AccountTotals) Participating() basics.MicroAlgos {
 	return res
 }
 
-// RewardUnits returns the sum of reward units held under ``participating''
+// RewardUnits returns the sum of reward units held under “participating”
 // account status values (Online and Offline).  It excludes units held
 // by NotParticipating accounts.
 func (at *AccountTotals) RewardUnits() uint64 {

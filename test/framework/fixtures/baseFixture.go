@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package fixtures
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
@@ -55,7 +54,7 @@ func (f *baseFixture) initialize(instance Fixture) {
 	}
 	f.testDir = os.Getenv("TESTDIR")
 	if f.testDir == "" {
-		f.testDir, _ = ioutil.TempDir("", "tmp")
+		f.testDir, _ = os.MkdirTemp("", "tmp")
 		f.testDirTmp = true
 	}
 	f.testDataDir = os.Getenv("TESTDATADIR")

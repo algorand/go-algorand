@@ -4,7 +4,7 @@ import os
 import sys
 from goal import Goal
 
-import algosdk.future.transaction as txn
+import algosdk.transaction as txn
 from datetime import datetime
 
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -19,15 +19,24 @@ flo = goal.new_account()
 
 pay = goal.pay(goal.account, receiver=joe, amt=10000)  # under min balance
 txid, err = goal.send(pay, confirm=False)              # errors early
-assert err
+assert "balance 10000 below min 100000" in str(err), err
 
-pay = goal.pay(goal.account, receiver=joe, amt=500_000)
+# Fund joe with extra to cover higher fees
+# Need to account for: base min balance (100k) + asset (100k) + 2 app optins (200k) + multiple txn fees
+# Joe performs ~10 transactions and must maintain min balance throughout
+# Joe's balance fluctuates as assets are created/destroyed and apps are opted in/out
+min_fee = goal.params().min_fee
+# Dynamic funding: base (100k) + max temporary overhead (400k) + txn fees (50 * min_fee as buffer)
+# Increased buffer to account for all transactions joe performs
+joe_funding = 100_000 + 400_000 + (min_fee * 50)
+pay = goal.pay(goal.account, receiver=joe, amt=joe_funding)
 txinfo, err = goal.send(pay)
 assert not err, err
 tx = txinfo['txn']['txn']
-assert tx['amt'] == 500_000
-assert tx['fee'] == 1000
-assert goal.balance(joe) == 500_000
+assert tx['amt'] == joe_funding
+# Check fee is the network's min fee
+assert tx['fee'] == min_fee
+assert goal.balance(joe) == joe_funding
 
 # Asset creation
 acfg = goal.acfg(joe,
@@ -113,7 +122,8 @@ local_state = goal.app_read(app_id, joe)
 assert local_state[b'balance'] == 150_000, local_state
 
 # Pay to logicsig, and spend from there, which requires signing by logicsig
-fund = goal.pay(goal.account, goal.logic_address(yes), 110_000)
+# Fund with: min_balance (100k) + payment (2k) + fee (min_fee) + small buffer
+fund = goal.pay(goal.account, goal.logic_address(yes), 100_000 + 10_000 + min_fee)
 txinfo, err = goal.send(fund)
 assert not err, err
 
@@ -121,7 +131,9 @@ spend = goal.pay(goal.logic_address(yes), joe, 2_000)
 spend = goal.sign_with_program(spend, yes)
 txinfo, err = goal.send(spend)
 assert not err, err
-assert goal.balance(goal.logic_address(yes)) == 107_000, goal.balance(goal.logic_address(yes))
+# Logic address should have: initial_funding - payment - fee = (100k + 10k + min_fee) - 2k - min_fee = 108k
+expected_logic_balance = 108_000
+assert goal.balance(goal.logic_address(yes)) == expected_logic_balance, goal.balance(goal.logic_address(yes))
 
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

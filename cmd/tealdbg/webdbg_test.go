@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,13 +23,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestWebPageFrontendHandlers(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	params := WebPageFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",

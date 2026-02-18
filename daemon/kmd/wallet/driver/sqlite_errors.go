@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ var errDatabaseConnect = fmt.Errorf("error connecting to database")
 var errKeyNotFound = fmt.Errorf("key does not exist in this wallet")
 var errMsigDataNotFound = fmt.Errorf("multisig information (pks, threshold) for address does not exist in this wallet")
 var errSKToPK = fmt.Errorf("could not convert secret key to public key")
-var errSKToSeed = fmt.Errorf("could not convert secret key to seed")
 var errTampering = fmt.Errorf("derived public key mismatch, something fishy is going on with this wallet")
 var errNoMnemonicUX = fmt.Errorf("sqlite wallet driver cannot display mnemonics")
 var errKeyExists = fmt.Errorf("key already exists in wallet")

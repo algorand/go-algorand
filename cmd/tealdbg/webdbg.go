@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,10 +25,12 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/algorand/go-algorand/protocol"
+	"github.com/gorilla/mux"
+
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
-	"github.com/gorilla/mux"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // WebPageFrontend is web page debugging frontend
@@ -124,7 +126,6 @@ func (a *WebPageFrontend) homeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	home.Execute(w, nil)
-	return
 }
 
 func (a *WebPageFrontend) stepHandler(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +149,6 @@ func (a *WebPageFrontend) stepHandler(w http.ResponseWriter, r *http.Request) {
 	s.debugger.Step()
 
 	w.WriteHeader(http.StatusOK)
-	return
 }
 
 func (a *WebPageFrontend) configHandler(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +188,6 @@ func (a *WebPageFrontend) configHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusOK)
-	return
 }
 
 func (a *WebPageFrontend) continueHandler(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +211,6 @@ func (a *WebPageFrontend) continueHandler(w http.ResponseWriter, r *http.Request
 	s.debugger.Resume()
 
 	w.WriteHeader(http.StatusOK)
-	return
 }
 
 func (a *WebPageFrontend) subscribeHandler(w http.ResponseWriter, r *http.Request) {
@@ -248,14 +246,11 @@ func (a *WebPageFrontend) subscribeHandler(w http.ResponseWriter, r *http.Reques
 	a.mu.Unlock()
 
 	// Wait on notifications and forward to the user
-	for {
-		select {
-		case notification := <-notifications:
-			enc := protocol.EncodeJSONStrict(&notification)
-			err = ws.WriteMessage(websocket.TextMessage, enc)
-			if err != nil {
-				return
-			}
+	for notification := range notifications {
+		enc := protocol.EncodeJSONStrict(&notification)
+		err = ws.WriteMessage(websocket.TextMessage, enc)
+		if err != nil {
+			return
 		}
 	}
 }

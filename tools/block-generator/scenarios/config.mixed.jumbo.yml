@@ -1,0 +1,19 @@
+name: "Mixed (jumbo)"
+genesis_accounts: 10000
+genesis_account_balance: 1000000000000
+tx_per_block: 25000
+
+# transaction distribution
+tx_pay_fraction: 0.3
+tx_asset_fraction: 0.7
+
+# payment config
+pay_acct_create_fraction: 0.02
+pay_xfer_fraction: 0.98
+
+# asset config
+asset_create_fraction: 0.001
+asset_optin_fraction: 0.1
+asset_close_fraction: 0.05
+asset_xfer_fraction: 0.849
+asset_delete_fraction: 0

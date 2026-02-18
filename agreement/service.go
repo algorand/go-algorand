@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,8 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
+	"io"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -39,7 +41,7 @@ type Service struct {
 
 	// for exiting
 	quit   chan struct{}
-	done   chan struct{}
+	wg     sync.WaitGroup
 	quitFn context.CancelFunc // TODO instead of storing this, pass a context into Start()
 
 	// external events
@@ -57,6 +59,9 @@ type Service struct {
 	persistRouter  rootRouter
 	persistStatus  player
 	persistActions []action
+
+	// Retain old rounds' period 0 start times.
+	historicalClocks map[round]roundStartTimer
 }
 
 // Parameters holds the parameters necessary to run the agreement protocol.
@@ -68,7 +73,7 @@ type Parameters struct {
 	BlockFactory
 	RandomSource
 	EventsProcessingMonitor
-	timers.Clock
+	timers.Clock[TimeoutType]
 	db.Accessor
 	logging.Logger
 	config.Local
@@ -80,29 +85,47 @@ type parameters Parameters
 
 // externalDemuxSignals used to syncronize the external signals that goes to the demux with the main loop.
 type externalDemuxSignals struct {
-	Deadline             time.Duration
-	FastRecoveryDeadline time.Duration
+	Deadline             Deadline
+	FastRecoveryDeadline Deadline
 	CurrentRound         round
+}
+
+// an interface allowing for measuring the duration since a clock from a previous round,
+// used for measuring the arrival time of a late proposal-vote, for the dynamic filter
+// timeout feature
+type roundStartTimer interface {
+	Since() time.Duration
 }
 
 // MakeService creates a new Agreement Service instance given a set of Parameters.
 //
 // Call Start to start execution and Shutdown to finish execution.
-func MakeService(p Parameters) *Service {
+func MakeService(p Parameters) (*Service, error) {
 	s := new(Service)
 
 	s.parameters = parameters(p)
 
 	s.log = makeServiceLogger(p.Logger)
 
+	// If cadaver directory is not set, use cold data directory (which may also not be set)
+	cadaverDir := p.CadaverDirectory
+	if cadaverDir == "" {
+		cadaverDir = p.ColdDataDir
+	}
 	// GOAL2-541: tracer is not concurrency safe. It should only ever be
 	// accessed by main state machine loop.
-	s.tracer = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget,
+	var err error
+	s.tracer, err = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget, cadaverDir,
 		s.Local.EnableAgreementReporting, s.Local.EnableAgreementTimeMetrics)
+	if err != nil {
+		return nil, err
+	}
 
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
 
-	return s
+	s.historicalClocks = make(map[round]roundStartTimer)
+
+	return s, nil
 }
 
 // SetTracerFilename updates the tracer filename used.
@@ -117,7 +140,6 @@ func (s *Service) Start() {
 	s.quitFn = quitFn
 
 	s.quit = make(chan struct{})
-	s.done = make(chan struct{})
 
 	s.voteVerifier = MakeAsyncVoteVerifier(s.BacklogPool)
 	s.demux = makeDemux(demuxParams{
@@ -143,6 +165,7 @@ func (s *Service) Start() {
 	input := make(chan externalEvent)
 	output := make(chan []action)
 	ready := make(chan externalDemuxSignals)
+	s.wg.Add(2)
 	go s.demuxLoop(ctx, input, output, ready)
 	go s.mainLoop(input, output, ready)
 }
@@ -151,14 +174,23 @@ func (s *Service) Start() {
 //
 // This method returns after all resources have been cleaned up.
 func (s *Service) Shutdown() {
+	s.log.Debug("agreement service is stopping")
+	defer s.log.Debug("agreement service has stopped")
+
 	close(s.quit)
 	s.quitFn()
-	<-s.done
+	s.wg.Wait()
 	s.persistenceLoop.Quit()
+}
+
+// DumpDemuxQueues dumps the demux queues to the given writer.
+func (s *Service) DumpDemuxQueues(w io.Writer) {
+	s.demux.dumpQueues(w)
 }
 
 // demuxLoop repeatedly executes pending actions and then requests the next event from the Service.demux.
 func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, output <-chan []action, ready <-chan externalDemuxSignals) {
+	defer s.wg.Done()
 	for a := range output {
 		s.do(ctx, a)
 		extSignals := <-ready
@@ -172,7 +204,6 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 	s.demux.quit()
 	s.loopback.Quit()
 	s.voteVerifier.Quit()
-	close(s.done)
 }
 
 // mainLoop drives the state machine.
@@ -183,15 +214,16 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 // 3. Drive the state machine with this input to obtain a slice of pending actions.
 // 4. If necessary, persist state to disk.
 func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- externalDemuxSignals) {
-	// setup
-	var clock timers.Clock
+	defer s.wg.Done()
+
+	var clock timers.Clock[TimeoutType]
 	var router rootRouter
 	var status player
 	var a []action
 	var err error
 	raw, err := restore(s.log, s.Accessor)
 	if err == nil {
-		clock, router, status, a, err = decode(raw, s.Clock, s.log)
+		clock, router, status, a, err = decode(raw, s.Clock, s.log, false)
 		if err != nil {
 			reset(s.log, s.Accessor)
 		} else {
@@ -208,7 +240,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+		status = player{Round: nextRound, Step: soft, Deadline: Deadline{Duration: FilterTimeout(0, nextVersion), Type: TimeoutFilter}, lowestCredentialArrivals: makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)}
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: s.Ledger.NextRound()}
@@ -222,7 +254,8 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 
 	for {
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, CurrentRound: status.Round}
+		fastRecoveryDeadline := Deadline{Duration: status.FastRecoveryDeadline, Type: TimeoutFastRecovery}
+		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: fastRecoveryDeadline, CurrentRound: status.Round}
 		e, ok := <-input
 		if !ok {
 			break
@@ -246,7 +279,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 // usage semantics : caller should ensure to call this function only when we have participation
 // keys for the given voting round.
 func (s *Service) persistState(done chan error) (events <-chan externalEvent) {
-	raw := encode(s.Clock, s.persistRouter, s.persistStatus, s.persistActions)
+	raw := encode(s.Clock, s.persistRouter, s.persistStatus, s.persistActions, false)
 	return s.persistenceLoop.Enqueue(s.Clock, s.persistStatus.Round, s.persistStatus.Period, s.persistStatus.Step, raw, done)
 }
 

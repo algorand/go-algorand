@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,8 @@ import (
 
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
+//
+//msgp:allocbound ConsensusVersion bounds.MaxConsensusVersionLen
 type ConsensusVersion string
 
 // DEPRECATEDConsensusV0 is a baseline version of the Algorand consensus protocol.
@@ -45,7 +47,7 @@ const DEPRECATEDConsensusV3 = ConsensusVersion("v3")
 // closes out an account.
 const DEPRECATEDConsensusV4 = ConsensusVersion("v4")
 
-// DEPRECATEDConsensusV5 sets MinTxnFee to 1000 and fixes a blance lookback bug
+// DEPRECATEDConsensusV5 sets MinTxnFee to 1000 and fixes a balance lookback bug
 const DEPRECATEDConsensusV5 = ConsensusVersion("v5")
 
 // DEPRECATEDConsensusV6 adds support for explicit ephemeral-key parameters
@@ -128,7 +130,7 @@ const ConsensusV23 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/e5f565421d720c6f75cdd186f7098495caf9101f",
 )
 
-// ConsensusV24 include the applications, rekeying and teal v2
+// ConsensusV24 include the applications, rekeying and AVM v2
 const ConsensusV24 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/3a83c4c743f8b17adfd73944b4319c25722a6782",
 )
@@ -176,11 +178,79 @@ const ConsensusV32 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/d5ac876d7ede07367dbaa26e149aa42589aac1f7",
 )
 
+// ConsensusV33 enables large blocks, the deeper block history for TEAL
+// and catchpoint generation round after lowering in-memory deltas size (320 -> 4).
+const ConsensusV33 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/830a4e673148498cc7230a0d1ba1ed0a5471acc6",
+)
+
+// ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda to 1.7s.
+const ConsensusV34 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/2dd5435993f6f6d65691140f592ebca5ef19ffbd",
+)
+
+// ConsensusV35 updates the calculation of total stake in state proofs.
+const ConsensusV35 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/433d8e9a7274b6fca703d91213e05c7e6a589e69",
+)
+
+// ConsensusV36 adds box storage in TEAL v8
+const ConsensusV36 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
+)
+
+// ConsensusV37 is a technical upgrade and released in the same time as ConsensusV38.
+// It is needed to allow nodes to build up a necessary state to support state proofs related
+// options in ConsensusV38
+const ConsensusV37 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/1ac4dd1f85470e1fb36c8a65520e1313d7dfed5e",
+)
+
+// ConsensusV38 enables state proof verification using a special tracker,
+// TEAL v9 resources sharing, pre-check ECDSA curve and extra features, and
+// shortens the lambda to 1.5s.
+const ConsensusV38 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/abd3d4823c6f77349fc04c3af7b1e99fe4df699f",
+)
+
+// ConsensusV39 enables dynamic filter timeouts, a deadline timeout of 4 seconds,
+// TEAL v10 logicSig opcode budget pooling along with elliptic curve ops on some pairing friendly curves.
+const ConsensusV39 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/925a46433742afb0b51bb939354bd907fa88bf95",
+)
+
+// ConsensusV40 enables consensus incentives and TEAL v11 featuring the mimc opcode
+const ConsensusV40 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/236dcc18c9c507d794813ab768e467ea42d1b4d9",
+)
+
+// ConsensusV41 enables txn access, Sha512BlockHash, AppVersioning and TEAL v12 including the falcon verify opcode
+const ConsensusV41 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/953304de35264fc3ef91bcd05c123242015eeaed",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
 	"future",
 )
+
+// ConsensusVAlpha1 is the first consensus protocol for AlphaNet, which is the same as
+// v32, but with a 2-second filter timeout and 5M block size.
+const ConsensusVAlpha1 = ConsensusVersion("alpha1")
+
+// ConsensusVAlpha2 is the second consensus protocol for AlphaNet, which increases the
+// filter timeout to 3.5 seconds and uses 5MiB blocks.
+const ConsensusVAlpha2 = ConsensusVersion("alpha2")
+
+// ConsensusVAlpha3 uses the same parameters as ConsensusV33.
+const ConsensusVAlpha3 = ConsensusVersion("alpha3")
+
+// ConsensusVAlpha4 uses the same parameters as ConsensusV34.
+const ConsensusVAlpha4 = ConsensusVersion("alpha4")
+
+// ConsensusVAlpha5 uses the same parameters as ConsensusV36.
+const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
@@ -188,7 +258,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV32
+const ConsensusCurrentVersion = ConsensusV41
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

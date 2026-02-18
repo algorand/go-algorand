@@ -50,30 +50,31 @@ This section briefly describes the expected outcomes of the current build pipeli
 
 1. build
 
-    1. Build (compile) the binaries in a Centos 7 & 8 docker container that will then be used by both `deb` and `rpm` packaging.
+    1. Build (compile) the binaries in a Centos 10 docker container that will then be used by both `deb` and `rpm` packaging.
 
-    1. Docker containers will package `deb` and `rpm` artifacts inside of Ubuntu 18.04 and Centos 7 & 8, respectively.
+    1. Docker containers will package `deb` and `rpm` artifacts inside of Ubuntu 24.04 and Centos 10, respectively.
 
     1. Jenkins will then pause to wait for [the only manual part of the build/package/test phase], which is to forward the `gpg-agent` that establishes a direct between the local machine that contains the signing keys and the remote ec2 instance.
 
-    1. Once the signatures have been verified, the all the build artificats (tarballs, `rpm` and `deb` packages, signatures) to an `s3` bucket.  Included in the bucket are the build logs.
+    1. Once the signatures have been verified, the all the build artifacts (tarballs, `rpm` and `deb` packages, signatures) to an `s3` bucket.  Included in the bucket are the build logs.
 
 1. test
 
     Download the `deb` and `rpm` packages from staging and test and locally.
 
-    This will spin up a local python server that will host both an `APT` repository and a `YUM` repository in Ubuntu 18.04 and Centos 7 docker containers, respectively.
+    This will spin up a local python server that will host both an `APT` repository and a `YUM` repository in Ubuntu and Centos docker containers, respectively.
 
     Each package is downloaded in the respective environment and the following tests are done:
 
     - The signatures are correct.
     - The packages are built from the correct branch and channel and are the correct version.  This done by running `algod -v`.
         + This is done for the following docker containers:
-            - centos:7
-            - quay.io/centos/centos:stream8
-            - fedora:28
-            - ubuntu:16.04
-            - ubuntu:18.04
+            - quay.io/centos/centos:stream9
+            - quay.io/centos/centos:stream10
+            - fedora:41
+            - fedora:42
+            - ubuntu:22.04
+            - ubuntu:24.04
 
     - Creates a test network using `goal`.
     - et. al.

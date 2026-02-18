@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -131,7 +131,7 @@ func addFile(tw *tar.Writer, filePath string) error {
 			return err
 		}
 		// copy the file data to the tarball
-		if _, err := io.Copy(tw, file); err != nil {
+		if _, err := io.CopyN(tw, file, stat.Size()); err != nil {
 			return err
 		}
 	}

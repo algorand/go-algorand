@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,11 +38,8 @@ const (
 	AuctionParams     HashID = "aP"
 	AuctionSettlement HashID = "aS"
 
-	CompactCertCoin HashID = "ccc"
-	CompactCertPart HashID = "ccp"
-	CompactCertSig  HashID = "ccs"
-
 	AgreementSelector                HashID = "AS"
+	BlockHeader256                   HashID = "B256"
 	BlockHeader                      HashID = "BH"
 	BalanceRecord                    HashID = "BR"
 	Credential                       HashID = "CR"
@@ -51,7 +48,13 @@ const (
 	MerkleArrayNode                  HashID = "MA"
 	MerkleVectorCommitmentBottomLeaf HashID = "MB"
 	Message                          HashID = "MX"
+	MultisigProgram                  HashID = "MsigProgram"
+	NetIdentityChallenge             HashID = "NIC"
+	NetIdentityChallengeResponse     HashID = "NIR"
+	NetIdentityVerificationMessage   HashID = "NIV"
 	NetPrioResponse                  HashID = "NPR"
+	OnlineAccount                    HashID = "OA"
+	OnlineRoundParams                HashID = "ORP"
 	OneTimeSigKey1                   HashID = "OT1"
 	OneTimeSigKey2                   HashID = "OT2"
 	PaysetFlat                       HashID = "PF"
@@ -63,9 +66,16 @@ const (
 	Seed                             HashID = "SD"
 	SpecialAddr                      HashID = "SpecialAddr"
 	SignedTxnInBlock                 HashID = "STIB"
-	TestHashable                     HashID = "TE"
-	TxGroup                          HashID = "TG"
-	TxnMerkleLeaf                    HashID = "TL"
-	Transaction                      HashID = "TX"
-	Vote                             HashID = "VO"
+
+	StateProofCoin    HashID = "spc"
+	StateProofMessage HashID = "spm"
+	StateProofPart    HashID = "spp"
+	StateProofSig     HashID = "sps"
+	StateProofVerCtx  HashID = "spv"
+
+	TestHashable  HashID = "TE"
+	TxGroup       HashID = "TG"
+	TxnMerkleLeaf HashID = "TL"
+	Transaction   HashID = "TX"
+	Vote          HashID = "VO"
 )

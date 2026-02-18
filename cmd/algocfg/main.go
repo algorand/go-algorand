@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,12 +21,14 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 )
 
 func init() {
 	// Config
 	defaultDataDirValue := []string{""}
-	rootCmd.PersistentFlags().StringArrayVarP(&dataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
+	rootCmd.PersistentFlags().StringArrayVarP(&datadir.DataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
 }
 
 var rootCmd = &cobra.Command{

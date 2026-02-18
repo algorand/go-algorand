@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,15 +20,15 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
 	"path"
 	"strconv"
 
-	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/websocket"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
@@ -118,7 +118,7 @@ func main() {
 		var data []byte
 		if *dirFlag != "" {
 			blkPath := blockToPath(roundNumber)
-			data, err = ioutil.ReadFile(
+			data, err = os.ReadFile(
 				path.Join(
 					*dirFlag,
 					"v"+versionStr,

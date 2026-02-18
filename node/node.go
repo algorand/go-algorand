@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,17 +21,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
-	"github.com/algorand/go-algorand/compactcert"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -42,23 +43,32 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/heartbeat"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
-	"github.com/algorand/go-algorand/node/indexer"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
-	"github.com/algorand/go-deadlock"
 )
 
 const (
 	participationRegistryFlushMaxWaitDuration = 30 * time.Second
+)
+
+const (
+	bitMismatchingVotingKey = 1 << iota
+	bitMismatchingSelectionKey
+	bitAccountOffline
+	bitAccountIsClosed
 )
 
 // StatusReport represents the current basic status of the node
@@ -78,8 +88,16 @@ type StatusReport struct {
 	CatchpointCatchupTotalAccounts     uint64
 	CatchpointCatchupProcessedAccounts uint64
 	CatchpointCatchupVerifiedAccounts  uint64
+	CatchpointCatchupTotalKVs          uint64
+	CatchpointCatchupProcessedKVs      uint64
+	CatchpointCatchupVerifiedKVs       uint64
 	CatchpointCatchupTotalBlocks       uint64
 	CatchpointCatchupAcquiredBlocks    uint64
+	UpgradePropose                     protocol.ConsensusVersion
+	UpgradeApprove                     bool
+	UpgradeDelay                       basics.Round
+	NextProtocolVoteBefore             basics.Round
+	NextProtocolApprovals              basics.Round
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -112,12 +130,11 @@ type AlgorandFullNode struct {
 	ledgerService            *rpcs.LedgerService
 	txPoolSyncerService      *rpcs.TxSyncer
 
-	indexer *indexer.Indexer
-
-	rootDir     string
-	genesisID   string
-	genesisHash crypto.Digest
-	devMode     bool // is this node operates in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
+	genesisDirs     config.ResolvedGenesisDirs
+	genesisID       string
+	genesisHash     crypto.Digest
+	devMode         bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
+	timestampOffset *int64
 
 	log logging.Logger
 
@@ -135,9 +152,15 @@ type AlgorandFullNode struct {
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
 
+	hybridError                 string // whether the MakeFull switched to non-hybrid mode due to a P2PHybridConfigError and needs to be logged periodically
+	hybridErrorRoutineWaitGroup sync.WaitGroup
+
 	tracer messagetracer.MessageTracer
 
-	compactCert *compactcert.Worker
+	stateProofWorker *stateproof.Worker
+	partHandles      []db.Accessor
+
+	heartbeatService *heartbeat.Service
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -163,115 +186,82 @@ type TxnWithStatus struct {
 // (i.e., it returns a node that participates in consensus)
 func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 	node := new(AlgorandFullNode)
-	node.rootDir = rootDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
-	node.genesisHash = crypto.HashObj(genesis)
+	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
-
-	if node.devMode {
-		cfg.DisableNetworking = true
-	}
 	node.config = cfg
-
-	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)
+	var err error
+	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID(), log)
 	if err != nil {
-		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
 	}
-	p2pNode.SetPrioScheme(node)
-	node.net = p2pNode
 
-	accountListener := makeTopAccountListener(log)
-
-	// load stored data
-	genesisDir := filepath.Join(rootDir, genesis.ID())
-	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
-
-	// create initial ledger, if it doesn't exist
-	err = os.Mkdir(genesisDir, 0700)
-	if err != nil && !os.IsExist(err) {
-		log.Errorf("Unable to create genesis directory: %v", err)
-		return nil, err
-	}
-	var genalloc bookkeeping.GenesisBalances
-	genalloc, err = bootstrapData(genesis, log)
+	genalloc, err := genesis.Balances()
 	if err != nil {
 		log.Errorf("Cannot load genesis allocation: %v", err)
 		return nil, err
 	}
 
-	node.cryptoPool = execpool.MakePool(node)
-	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg)
-	if err != nil {
-		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
-		return nil, err
+	// tie network, block fetcher, and agreement services together
+	var p2pNode network.GossipNode
+	var genesisInfo = network.GenesisInfo{
+		GenesisID: genesis.ID(),
+		NetworkID: genesis.Network,
 	}
-
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
-
-	blockListeners := []ledger.BlockListener{
-		node.transactionPool,
-		node,
-	}
-
-	if node.config.EnableTopAccountsReporting {
-		blockListeners = append(blockListeners, &accountListener)
-	}
-	node.ledger.RegisterBlockListeners(blockListeners)
-	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
-
-	// Indexer setup
-	if cfg.IsIndexerActive && cfg.Archival {
-		node.indexer, err = indexer.MakeIndexer(genesisDir, node.ledger, false)
+recreateNetwork:
+	if cfg.EnableP2PHybridMode {
+		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil)
 		if err != nil {
-			logging.Base().Errorf("failed to make indexer -  %v", err)
+			if _, ok := err.(config.P2PHybridConfigError); !ok {
+				log.Errorf("could not create hybrid p2p node: %v", err)
+				return nil, err
+			}
+			// it was P2PHybridConfigError error so fallback to non-hybrid mode (either P2P or WS)
+			cfg.EnableP2PHybridMode = false
+
+			// indicate we need to start logging the error into the log periodically
+			fallbackNetName := "WS"
+			if cfg.EnableP2P {
+				fallbackNetName = "P2P"
+			}
+			node.hybridError = fmt.Sprintf("could not create hybrid p2p node: %v. Falling back to %s network", err, fallbackNetName)
+			log.Error(node.hybridError)
+
+			goto recreateNetwork
+		}
+	} else if cfg.EnableP2P {
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesisInfo, node, nil, nil)
+		if err != nil {
+			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
 		}
+	} else {
+		var wsNode *network.WebsocketNetwork
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesisInfo, node, nil, nil)
+		if err != nil {
+			log.Errorf("could not create websocket node: %v", err)
+			return nil, err
+		}
+		wsNode.SetPrioScheme(node)
+		p2pNode = wsNode
 	}
+	node.net = p2pNode
 
-	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
-	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
-	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
-
-	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
-	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
+	node.cryptoPool = execpool.MakePool(node, "worker", "cryptoPool")
+	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node, "worker", "lowPriorityCryptoVerificationPool")
+	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node, "worker", "highPriorityCryptoVerificationPool")
+	ledgerPaths := ledger.DirsAndPrefix{
+		DBFilePrefix:        config.LedgerFilenamePrefix,
+		ResolvedGenesisDirs: node.genesisDirs,
+	}
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, cfg)
 	if err != nil {
-		log.Errorf("Cannot load crash data: %v", err)
+		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
 	}
 
-	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
-	agreementLedger := makeAgreementLedger(node.ledger, node.net)
-	var agreementClock timers.Clock
-	if node.devMode {
-		agreementClock = timers.MakeFrozenClock()
-	} else {
-		agreementClock = timers.MakeMonotonicClock(time.Now())
-	}
-	agreementParameters := agreement.Parameters{
-		Logger:         log,
-		Accessor:       crashAccess,
-		Clock:          agreementClock,
-		Local:          node.config,
-		Network:        gossip.WrapNetwork(node.net, log, cfg),
-		Ledger:         agreementLedger,
-		BlockFactory:   node,
-		BlockValidator: blockValidator,
-		KeyManager:     node,
-		RandomSource:   node,
-		BacklogPool:    node.highPriorityCryptoVerificationPool,
-	}
-	node.agreementService = agreement.MakeService(agreementParameters)
-
-	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
-	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
-
-	registry, err := ensureParticipationDB(genesisDir, node.log)
+	registry, err := ensureParticipationDB(node.genesisDirs.ColdGenesisDir, node.log)
 	if err != nil {
 		log.Errorf("unable to initialize the participation registry database: %v", err)
 		return nil, err
@@ -286,65 +276,94 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.oldKeyDeletionNotify = make(chan struct{}, 1)
 
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log, node)
+
+	node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node.transactionPool, node})
+	txHandlerOpts := data.TxHandlerOpts{
+		TxPool:        node.transactionPool,
+		ExecutionPool: node.lowPriorityCryptoVerificationPool,
+		Ledger:        node.ledger,
+		Net:           node.net,
+		Config:        cfg,
+	}
+	node.txHandler, err = data.MakeTxHandler(txHandlerOpts)
+	if err != nil {
+		log.Errorf("Cannot initialize TxHandler: %v", err)
+		return nil, err
+	}
+
+	// The health service registers itself with the network
+	if cfg.IsListenServer() {
+		rpcs.MakeHealthService(node.net)
+	}
+
+	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
+	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
+	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
+
+	// crash data is stored in the cold data directory unless otherwise specified
+	crashPathname := filepath.Join(node.genesisDirs.CrashGenesisDir, config.CrashFilename)
+	crashAccess, err := db.MakeAccessor(crashPathname, false, false)
+	if err != nil {
+		log.Errorf("Cannot load crash data: %v", err)
+		return nil, err
+	}
+
+	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
+	agreementLedger := makeAgreementLedger(node.ledger, node.net)
+	var agreementClock timers.Clock[agreement.TimeoutType]
+	if node.devMode {
+		agreementClock = timers.MakeFrozenClock[agreement.TimeoutType]()
+	} else {
+		agreementClock = timers.MakeMonotonicClock[agreement.TimeoutType](time.Now())
+	}
+
+	agreementParameters := agreement.Parameters{
+		Logger:         log,
+		Accessor:       crashAccess,
+		Clock:          agreementClock,
+		Local:          node.config,
+		Network:        gossip.WrapNetwork(node.net, log, cfg),
+		Ledger:         agreementLedger,
+		BlockFactory:   node,
+		BlockValidator: blockValidator,
+		KeyManager:     node,
+		RandomSource:   node,
+		BacklogPool:    node.highPriorityCryptoVerificationPool,
+	}
+	node.agreementService, err = agreement.MakeService(agreementParameters)
+	if err != nil {
+		log.Errorf("unable to initialize agreement: %v", err)
+		return nil, err
+	}
+
+	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
+	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
+	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
+
 	catchpointCatchupState, err := node.ledger.GetCatchpointCatchupState(context.Background())
 	if err != nil {
 		log.Errorf("unable to determine catchpoint catchup state: %v", err)
 		return nil, err
 	}
 	if catchpointCatchupState != ledger.CatchpointCatchupStateInactive {
-		node.catchpointCatchupService, err = catchup.MakeResumedCatchpointCatchupService(context.Background(), node, node.log, node.net, node.ledger.Ledger, node.config)
+		accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
+		node.catchpointCatchupService, err = catchup.MakeResumedCatchpointCatchupService(context.Background(), node, node.log, node.net, accessor, node.config)
 		if err != nil {
 			log.Errorf("unable to create catchpoint catchup service: %v", err)
 			return nil, err
 		}
+		node.log.Infof("resuming catchpoint catchup from state %d", catchpointCatchupState)
 	}
 
 	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
-	compactCertPathname := filepath.Join(genesisDir, config.CompactCertFilename)
-	compactCertAccess, err := db.MakeAccessor(compactCertPathname, false, false)
-	if err != nil {
-		log.Errorf("Cannot load compact cert data: %v", err)
-		return nil, err
-	}
-	node.compactCert = compactcert.NewWorker(compactCertAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.stateProofWorker = stateproof.NewWorker(node.genesisDirs.StateproofGenesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+
+	node.heartbeatService = heartbeat.NewService(node.accountManager, node.ledger, node, node.log)
 
 	return node, err
-}
-
-func bootstrapData(genesis bookkeeping.Genesis, log logging.Logger) (bookkeeping.GenesisBalances, error) {
-	genalloc := make(map[basics.Address]basics.AccountData)
-	for _, entry := range genesis.Allocation {
-		addr, err := basics.UnmarshalChecksumAddress(entry.Address)
-		if err != nil {
-			log.Errorf("Cannot parse genesis addr %s: %v", entry.Address, err)
-			return bookkeeping.GenesisBalances{}, err
-		}
-
-		_, present := genalloc[addr]
-		if present {
-			err = fmt.Errorf("repeated allocation to %s", entry.Address)
-			log.Error(err)
-			return bookkeeping.GenesisBalances{}, err
-		}
-
-		genalloc[addr] = entry.State
-	}
-
-	feeSink, err := basics.UnmarshalChecksumAddress(genesis.FeeSink)
-	if err != nil {
-		log.Errorf("Cannot parse fee sink addr %s: %v", genesis.FeeSink, err)
-		return bookkeeping.GenesisBalances{}, err
-	}
-
-	rewardsPool, err := basics.UnmarshalChecksumAddress(genesis.RewardsPool)
-	if err != nil {
-		log.Errorf("Cannot parse rewards pool addr %s: %v", genesis.RewardsPool, err)
-		return bookkeeping.GenesisBalances{}, err
-	}
-
-	return bookkeeping.MakeTimestampedGenesisBalances(genalloc, feeSink, rewardsPool, genesis.Timestamp), nil
 }
 
 // Config returns a copy of the node's Local configuration
@@ -353,7 +372,7 @@ func (node *AlgorandFullNode) Config() config.Local {
 }
 
 // Start the node: connect to peers and run the agreement service while obtaining a lock. Doesn't wait for initial sync.
-func (node *AlgorandFullNode) Start() {
+func (node *AlgorandFullNode) Start() error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -363,12 +382,34 @@ func (node *AlgorandFullNode) Start() {
 	// The start network is being called only after the various services start up.
 	// We want to do so in order to let the services register their callbacks with the
 	// network package before any connections are being made.
-	startNetwork := func() {
+	startNetwork := func() error {
 		if !node.config.DisableNetworking {
 			// start accepting connections
-			node.net.Start()
+			err := node.net.Start()
+			if err != nil {
+				return err
+			}
 			node.config.NetAddress, _ = node.net.Address()
 		}
+		return nil
+	}
+
+	if node.hybridError != "" {
+		node.hybridErrorRoutineWaitGroup.Add(1)
+		go func() {
+			defer node.hybridErrorRoutineWaitGroup.Done()
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-node.ctx.Done():
+					return
+				case <-ticker.C:
+					// continue logging the error periodically
+					node.log.Error(node.hybridError)
+				}
+			}
+		}()
 	}
 
 	if node.catchpointCatchupService != nil {
@@ -381,45 +422,51 @@ func (node *AlgorandFullNode) Start() {
 		node.blockService.Start()
 		node.ledgerService.Start()
 		node.txHandler.Start()
-		node.compactCert.Start()
-		startNetwork()
-		// start indexer
-		if idx, err := node.Indexer(); err == nil {
-			err := idx.Start()
-			if err != nil {
-				node.log.Errorf("indexer failed to start, turning it off - %v", err)
-				node.config.IsIndexerActive = false
-			} else {
-				node.log.Info("Indexer was started successfully")
-			}
-		} else {
-			node.log.Infof("Indexer is not available - %v", err)
+		node.stateProofWorker.Start()
+		node.heartbeatService.Start()
+		err := startNetwork()
+		if err != nil {
+			return err
 		}
 
 		node.startMonitoringRoutines()
 	}
+	return nil
+}
 
+// Capabilities returns the node's capabilities for advertising to other nodes.
+func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
+	var caps []p2p.Capability
+	if node.config.Archival && node.config.IsListenServer() {
+		caps = append(caps, p2p.Archival)
+	}
+	if node.config.StoresCatchpoints() && node.config.IsListenServer() {
+		caps = append(caps, p2p.Catchpoints)
+	}
+	if node.config.EnableGossipService && node.config.IsListenServer() {
+		caps = append(caps, p2p.Gossip)
+	}
+	return caps
 }
 
 // startMonitoringRoutines starts the internal monitoring routines used by the node.
 func (node *AlgorandFullNode) startMonitoringRoutines() {
-	node.monitoringRoutinesWaitGroup.Add(3)
-
-	// PKI TODO: Remove this with #2596
-	// Periodically check for new participation keys
-	go node.checkForParticipationKeys(node.ctx.Done())
-
+	node.monitoringRoutinesWaitGroup.Add(2)
 	go node.txPoolGaugeThread(node.ctx.Done())
 	// Delete old participation keys
 	go node.oldKeyDeletionThread(node.ctx.Done())
 
-	// TODO re-enable with configuration flag post V1
-	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
+	if node.config.EnableUsageLog {
+		node.monitoringRoutinesWaitGroup.Add(1)
+		go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, &node.monitoringRoutinesWaitGroup)
+	}
 }
 
 // waitMonitoringRoutines waits for all the monitoring routines to exit. Note that
 // the node.mu must not be taken, and that the node's context should have been canceled.
 func (node *AlgorandFullNode) waitMonitoringRoutines() {
+	node.log.Debug("waiting on node monitoring routines to exit")
+	defer node.log.Debug("done waiting on node monitoring routines to exit")
 	node.monitoringRoutinesWaitGroup.Wait()
 }
 
@@ -433,43 +480,54 @@ func (node *AlgorandFullNode) ListeningAddress() (string, bool) {
 
 // Stop stops running the node. Once a node is closed, it can never start again.
 func (node *AlgorandFullNode) Stop() {
+	node.log.Debug("algorand node is stopping")
+	defer node.log.Debug("algorand node has stopped")
+
 	node.mu.Lock()
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
-		// we want to shut down the compactCert last, since the oldKeyDeletionThread might depend on it when making the
-		// call to LatestSigsFromThisNode.
-		node.compactCert.Shutdown()
-		node.compactCert = nil
+		node.hybridErrorRoutineWaitGroup.Wait()
+
+		// oldKeyDeletionThread uses accountManager registry so must be stopped before accountManager is closed
+		node.accountManager.Registry().Close()
+		for h := range node.partHandles {
+			node.partHandles[h].Close()
+		}
 	}()
 
 	node.net.ClearHandlers()
+	node.net.ClearValidatorHandlers()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
+		node.heartbeatService.Stop()
+		node.stateProofWorker.Stop()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
+		node.agreementService.Accessor.Close()
 		node.catchupService.Stop()
 		node.txPoolSyncerService.Stop()
 		node.blockService.Stop()
 		node.ledgerService.Stop()
 	}
 	node.catchupBlockAuth.Quit()
+	node.log.Debug("crypto worker pools are stopping")
 	node.highPriorityCryptoVerificationPool.Shutdown()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
+	node.log.Debug("crypto worker pools have stopped")
+	node.transactionPool.Shutdown()
 	node.cancelCtx()
-	if node.indexer != nil {
-		node.indexer.Shutdown()
-	}
+	node.ledger.Close()
 }
 
 // note: unlike the other two functions, this accepts a whole filename
 func (node *AlgorandFullNode) getExistingPartHandle(filename string) (db.Accessor, error) {
-	filename = filepath.Join(node.rootDir, node.genesisID, filename)
+	filename = filepath.Join(node.genesisDirs.RootGenesisDir, filename)
 
 	_, err := os.Stat(filename)
 	if err == nil {
@@ -485,14 +543,35 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 
 // writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
 func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
-	var vb *ledgercore.ValidatedBlock
+	var vb *ledgercore.UnfinishedBlock
 	vb, err = node.transactionPool.AssembleDevModeBlock()
 	if err != nil || vb == nil {
 		return
 	}
 
+	// Make a new validated block from this UnfinishedBlock.
+	prevRound := vb.Round() - 1
+	prev, err := node.ledger.BlockHdr(prevRound)
+	if err != nil {
+		return err
+	}
+
+	blk := vb.UnfinishedBlock()
+
+	// Set block timestamp based on offset, if set.
+	// Make sure block timestamp is not greater than MaxInt64.
+	if node.timestampOffset != nil && *node.timestampOffset < math.MaxInt64-prev.TimeStamp {
+		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
+	}
+	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
+	// Zero out payouts if Proposer not set
+	if (blk.BlockHeader.Proposer == basics.Address{}) {
+		blk.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
+	vb2 := ledgercore.MakeValidatedBlock(blk, vb.UnfinishedDeltas())
+
 	// add the newly generated block to the ledger
-	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{})
+	err = node.ledger.AddValidatedBlock(vb2, agreement.Certificate{Round: vb2.Block().Round()})
 	return err
 }
 
@@ -514,14 +593,31 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	return node.broadcastSignedTxGroup(txgroup)
 }
 
+// AsyncBroadcastSignedTxGroup feeds a raw transaction group directly to the transaction pool.
+// This method is intended to be used for performance testing and debugging purposes only.
+func (node *AlgorandFullNode) AsyncBroadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	return node.txHandler.LocalTransaction(txgroup)
+}
+
 // BroadcastInternalSignedTxGroup broadcasts a transaction group that has already been signed.
 // It is originated internally, and in DevMode, it will not advance the round.
 func (node *AlgorandFullNode) BroadcastInternalSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
 	return node.broadcastSignedTxGroup(txgroup)
 }
 
+var broadcastTxSucceeded = metrics.MakeCounter(metrics.BroadcastSignedTxGroupSucceeded)
+var broadcastTxFailed = metrics.MakeCounter(metrics.BroadcastSignedTxGroupFailed)
+
 // broadcastSignedTxGroup broadcasts a transaction group that has already been signed.
 func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.SignedTxn) (err error) {
+	defer func() {
+		if err != nil {
+			broadcastTxFailed.Inc(nil)
+		} else {
+			broadcastTxSucceeded.Inc(nil)
+		}
+	}()
+
 	lastRound := node.ledger.Latest()
 	var b bookkeeping.BlockHeader
 	b, err = node.ledger.BlockHdr(lastRound)
@@ -530,7 +626,7 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	_, err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache())
+	_, err = verify.TxnGroup(txgroup, &b, node.ledger.VerifiedTransactionCache(), node.ledger)
 	if err != nil {
 		node.log.Warnf("malformed transaction: %v", err)
 		return err
@@ -546,7 +642,10 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 	if err != nil {
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
-
+	// DevMode nodes do not broadcast txns to the network
+	if node.devMode {
+		return nil
+	}
 	var enc []byte
 	var txids []transactions.Txid
 	for _, tx := range txgroup {
@@ -562,56 +661,11 @@ func (node *AlgorandFullNode) broadcastSignedTxGroup(txgroup []transactions.Sign
 	return nil
 }
 
-// ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).
-// TxnWithStatus returns the round in which a particular transaction appeared,
-// since that information is not part of the SignedTxn itself.
-func (node *AlgorandFullNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error) {
-	result := make([]TxnWithStatus, 0)
-	for r := minRound; r <= maxRound; r++ {
-		h, err := node.ledger.AddressTxns(addr, r)
-		if err != nil {
-			return nil, err
-		}
-		for _, tx := range h {
-			result = append(result, TxnWithStatus{
-				Txn:            tx.SignedTxn,
-				ConfirmedRound: r,
-				ApplyData:      tx.ApplyData,
-			})
-		}
-	}
-	return result, nil
-}
-
-// GetTransaction looks for the required txID within with a specific account within a range of rounds (inclusive) and
-// returns the SignedTxn and true iff it finds the transaction.
-func (node *AlgorandFullNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool) {
-	// start with the most recent round, and work backwards:
-	// this will abort early if it hits pruned rounds
-	if maxRound < minRound {
-		return TxnWithStatus{}, false
-	}
-	r := maxRound
-	for {
-		h, err := node.ledger.AddressTxns(addr, r)
-		if err != nil {
-			return TxnWithStatus{}, false
-		}
-		for _, tx := range h {
-			if tx.ID() == txID {
-				return TxnWithStatus{
-					Txn:            tx.SignedTxn,
-					ConfirmedRound: r,
-					ApplyData:      tx.ApplyData,
-				}, true
-			}
-		}
-		if r == minRound {
-			break
-		}
-		r--
-	}
-	return TxnWithStatus{}, false
+// Simulate speculatively runs a transaction group against the current
+// blockchain state and returns the effects and/or errors that would result.
+func (node *AlgorandFullNode) Simulate(request simulation.Request) (result simulation.Result, err error) {
+	simulator := simulation.MakeSimulator(node.ledger, node.config.EnableDeveloperAPI)
+	return simulator.Simulate(request)
 }
 
 // GetPendingTransaction looks for the required txID in the recent ledger
@@ -643,6 +697,25 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		// Keep looking in the ledger.
 	}
 
+	// quick check for confirmed transactions with LastValid in future
+	// this supposed to cover most of the cases where REST checks for the most recent txns
+	if r, confirmed := node.ledger.CheckConfirmedTail(txID); confirmed {
+		tx, foundBlk, err := node.ledger.LookupTxid(txID, r)
+		if err == nil && foundBlk {
+			return TxnWithStatus{
+				Txn:            tx.SignedTxn,
+				ConfirmedRound: r,
+				ApplyData:      tx.ApplyData,
+			}, true
+		}
+	}
+	// if found in the pool and not in the tail then return without looking into blocks
+	// because the check appears to be too early
+	if found {
+		return res, found
+	}
+
+	// fallback to blocks lookup
 	var maxLife basics.Round
 	latest := node.ledger.Latest()
 	proto, err := node.ledger.ConsensusParams(latest)
@@ -661,11 +734,24 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		minRound++
 	}
 
+	// If we did find the transaction, we know there is no point
+	// checking rounds earlier or later than validity rounds
+	if found {
+		if tx.Txn.FirstValid > minRound {
+			minRound = tx.Txn.FirstValid
+		}
+
+		if tx.Txn.LastValid < maxRound {
+			maxRound = tx.Txn.LastValid
+		}
+	}
+
 	for r := maxRound; r >= minRound; r-- {
 		tx, found, err := node.ledger.LookupTxid(txID, r)
 		if err != nil || !found {
 			continue
 		}
+
 		return TxnWithStatus{
 			Txn:            tx.SignedTxn,
 			ConfirmedRound: r,
@@ -674,55 +760,78 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	}
 
 	// Return whatever we found in the pool (if anything).
-	return
+	return res, found
 }
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
-func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
+func (node *AlgorandFullNode) Status() (StatusReport, error) {
 	node.syncStatusMu.Lock()
-	s.LastRoundTimestamp = node.lastRoundTimestamp
-	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	lastRoundTimestamp := node.lastRoundTimestamp
+	hasSyncedSinceStartup := node.hasSyncedSinceStartup
 	node.syncStatusMu.Unlock()
 
 	node.mu.Lock()
 	defer node.mu.Unlock()
+	var s StatusReport
+	var err error
 	if node.catchpointCatchupService != nil {
-		// we're in catchpoint catchup mode.
-		lastBlockHeader := node.catchpointCatchupService.GetLatestBlockHeader()
-		s.LastRound = lastBlockHeader.Round
-		s.LastVersion = lastBlockHeader.CurrentProtocol
-		s.NextVersion, s.NextVersionRound, s.NextVersionSupported = lastBlockHeader.NextVersionInfo()
-		s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-
-		// for now, I'm leaving this commented out. Once we refactor some of the ledger locking mechanisms, we
-		// should be able to make this call work.
-		//s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
-
-		// report back the catchpoint catchup progress statistics
-		stats := node.catchpointCatchupService.GetStatistics()
-		s.Catchpoint = stats.CatchpointLabel
-		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
-		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
-		s.CatchpointCatchupVerifiedAccounts = stats.VerifiedAccounts
-		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
-		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
-		s.CatchupTime = time.Now().Sub(stats.StartTime)
+		s = catchpointCatchupStatus(node.catchpointCatchupService.GetLatestBlockHeader(), node.catchpointCatchupService.GetStatistics())
 	} else {
-		// we're not in catchpoint catchup mode
-		var b bookkeeping.BlockHeader
-		s.LastRound = node.ledger.Latest()
-		b, err = node.ledger.BlockHdr(s.LastRound)
-		if err != nil {
-			return
-		}
-		s.LastVersion = b.CurrentProtocol
-		s.NextVersion, s.NextVersionRound, s.NextVersionSupported = b.NextVersionInfo()
-
-		s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-		s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
-		s.SynchronizingTime = node.catchupService.SynchronizingTime()
-		s.CatchupTime = node.catchupService.SynchronizingTime()
+		s, err = latestBlockStatus(node.ledger, node.catchupService)
 	}
+
+	s.LastRoundTimestamp = lastRoundTimestamp
+	s.HasSyncedSinceStartup = hasSyncedSinceStartup
+
+	return s, err
+}
+
+func catchpointCatchupStatus(lastBlockHeader bookkeeping.BlockHeader, stats catchup.CatchpointCatchupStats) (s StatusReport) {
+	// we're in catchpoint catchup mode.
+	s.LastRound = lastBlockHeader.Round
+	s.LastVersion = lastBlockHeader.CurrentProtocol
+	s.NextVersion, s.NextVersionRound, s.NextVersionSupported = lastBlockHeader.NextVersionInfo()
+	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
+
+	// for now, I'm leaving this commented out. Once we refactor some of the ledger locking mechanisms, we
+	// should be able to make this call work.
+	//s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
+
+	// report back the catchpoint catchup progress statistics
+	s.Catchpoint = stats.CatchpointLabel
+	s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
+	s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
+	s.CatchpointCatchupVerifiedAccounts = stats.VerifiedAccounts
+	s.CatchpointCatchupTotalKVs = stats.TotalKVs
+	s.CatchpointCatchupProcessedKVs = stats.ProcessedKVs
+	s.CatchpointCatchupVerifiedKVs = stats.VerifiedKVs
+	s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
+	s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
+	s.CatchupTime = time.Since(stats.StartTime)
+	return
+}
+
+func latestBlockStatus(ledger *data.Ledger, catchupService *catchup.Service) (s StatusReport, err error) {
+	// we're not in catchpoint catchup mode
+	var b bookkeeping.BlockHeader
+	s.LastRound = ledger.Latest()
+	b, err = ledger.BlockHdr(s.LastRound)
+	if err != nil {
+		return
+	}
+	s.LastVersion = b.CurrentProtocol
+	s.NextVersion, s.NextVersionRound, s.NextVersionSupported = b.NextVersionInfo()
+
+	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
+	s.LastCatchpoint = ledger.GetLastCatchpointLabel()
+	s.SynchronizingTime = catchupService.SynchronizingTime()
+	s.CatchupTime = catchupService.SynchronizingTime()
+
+	s.UpgradePropose = b.UpgradeVote.UpgradePropose
+	s.UpgradeApprove = b.UpgradeApprove
+	s.UpgradeDelay = b.UpgradeVote.UpgradeDelay
+	s.NextProtocolVoteBefore = b.NextProtocolVoteBefore
+	s.NextProtocolApprovals = b.UpgradeState.NextProtocolApprovals
 
 	return
 }
@@ -741,22 +850,6 @@ func (node *AlgorandFullNode) GenesisHash() crypto.Digest {
 	defer node.mu.Unlock()
 
 	return node.genesisHash
-}
-
-// PoolStats returns a PoolStatus structure reporting stats about the transaction pool
-func (node *AlgorandFullNode) PoolStats() PoolStats {
-	r := node.ledger.Latest()
-	last, err := node.ledger.Block(r)
-	if err != nil {
-		node.log.Warnf("AlgorandFullNode: could not read ledger's last round: %v", err)
-		return PoolStats{}
-	}
-
-	return PoolStats{
-		NumConfirmed:   uint64(len(last.Payset)),
-		NumOutstanding: uint64(node.transactionPool.PendingCount()),
-		NumExpired:     uint64(node.transactionPool.NumExpired(r)),
-	}
 }
 
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
@@ -779,24 +872,6 @@ func ensureParticipationDB(genesisDir string, log logging.Logger) (account.Parti
 		return nil, err
 	}
 	return account.MakeParticipationRegistry(accessor, log)
-}
-
-// Reload participation keys from disk periodically
-func (node *AlgorandFullNode) checkForParticipationKeys(done <-chan struct{}) {
-	defer node.monitoringRoutinesWaitGroup.Done()
-	ticker := time.NewTicker(node.config.ParticipationKeysRefreshInterval)
-	for {
-		select {
-		case <-ticker.C:
-			err := node.loadParticipationKeys()
-			if err != nil {
-				node.log.Errorf("Could not refresh participation keys: %v", err)
-			}
-		case <-done:
-			ticker.Stop()
-			return
-		}
-	}
 }
 
 // ListParticipationKeys returns all participation keys currently installed on the node
@@ -827,9 +902,7 @@ func (node *AlgorandFullNode) RemoveParticipationKey(partKeyID account.Participa
 		return account.ErrParticipationIDNotFound
 	}
 
-	genID := node.GenesisID()
-
-	outDir := filepath.Join(node.rootDir, genID)
+	outDir := node.genesisDirs.RootGenesisDir
 
 	filename := config.PartKeyFilename(partRecord.ParticipationID.String(), uint64(partRecord.FirstValid), uint64(partRecord.LastValid))
 	fullyQualifiedFilename := filepath.Join(outDir, filepath.Base(filename))
@@ -891,9 +964,7 @@ func createTemporaryParticipationKey(outDir string, partKeyBinary []byte) (strin
 
 // InstallParticipationKey Given a participation key binary stream install the participation key.
 func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
-	genID := node.GenesisID()
-
-	outDir := filepath.Join(node.rootDir, genID)
+	outDir := node.genesisDirs.RootGenesisDir
 
 	fullyQualifiedTempFile, err := createTemporaryParticipationKey(outDir, partKeyBinary)
 	// We need to make sure no tempfile is created/remains if there is an error
@@ -916,7 +987,7 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 	defer inputdb.Close()
 
-	partkey, err := account.RestoreParticipation(inputdb)
+	partkey, err := account.RestoreParticipationWithSecrets(inputdb)
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
@@ -927,20 +998,20 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 	}
 
 	// Tell the AccountManager about the Participation (dupes don't matter) so we ignore the return value
-	_ = node.accountManager.AddParticipation(partkey)
+	// This is ephemeral since we are deleting the file after this function is done
+	added := node.accountManager.AddParticipation(partkey, true)
+	if !added {
+		return account.ParticipationID{}, fmt.Errorf("ParticipationRegistry: cannot register duplicate participation key")
+	}
 
-	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
+	err = insertStateProofToRegistry(partkey, node)
 	if err != nil {
 		return account.ParticipationID{}, err
 	}
 
-	newFilename := config.PartKeyFilename(partkey.ID().String(), uint64(partkey.FirstValid), uint64(partkey.LastValid))
-	newFullyQualifiedFilename := filepath.Join(outDir, filepath.Base(newFilename))
-
-	err = os.Rename(fullyQualifiedTempFile, newFullyQualifiedFilename)
-
+	err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 	if err != nil {
-		return account.ParticipationID{}, nil
+		return account.ParticipationID{}, err
 	}
 
 	return partkey.ID(), nil
@@ -948,8 +1019,8 @@ func (node *AlgorandFullNode) InstallParticipationKey(partKeyBinary []byte) (acc
 
 func (node *AlgorandFullNode) loadParticipationKeys() error {
 	// Generate a list of all potential participation key files
-	genesisDir := filepath.Join(node.rootDir, node.genesisID)
-	files, err := ioutil.ReadDir(genesisDir)
+	genesisDir := node.genesisDirs.RootGenesisDir
+	files, err := os.ReadDir(genesisDir)
 	if err != nil {
 		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read directory %v: %v", genesisDir, err)
 	}
@@ -989,7 +1060,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 				renamedFileName := filepath.Join(fullname, ".old")
 				err = os.Rename(fullname, renamedFileName)
 				if err != nil {
-					node.log.Warn("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
+					node.log.Warnf("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
 				}
 			} else {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
@@ -998,13 +1069,15 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// Tell the AccountManager about the Participation (dupes don't matter)
 			// make sure that all stateproof data (with are not the keys per round)
 			// are being store to the registry in that point
-			added := node.accountManager.AddParticipation(part)
-			if added {
-				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-			} else {
+			// These files are not ephemeral and must be deleted eventually since
+			// this function is called to load files located in the node on startup
+			added := node.accountManager.AddParticipation(part, false)
+			if !added {
 				part.Close()
 				continue
 			}
+			node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
+			node.partHandles = append(node.partHandles, handle)
 			err = insertStateProofToRegistry(part, node)
 			if err != nil {
 				return err
@@ -1030,25 +1103,20 @@ func insertStateProofToRegistry(part account.PersistedParticipation, node *Algor
 
 }
 
-var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
+var txPoolGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
 
 func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	for true {
+	for {
 		select {
 		case <-ticker.C:
-			txPoolGuage.Set(float64(node.transactionPool.PendingCount()), nil)
+			txPoolGauge.Set(uint64(node.transactionPool.PendingCount()))
 		case <-done:
 			return
 		}
 	}
-}
-
-// IsArchival returns true the node is an archival node, false otherwise
-func (node *AlgorandFullNode) IsArchival() bool {
-	return node.config.Archival
 }
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
@@ -1073,6 +1141,7 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
+
 	for {
 		select {
 		case <-done:
@@ -1082,8 +1151,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 
 		r := node.ledger.Latest()
 
-		// We need the latest header to determine the next compact cert
-		// round, if any.
 		latestHdr, err := node.ledger.BlockHdr(r)
 		if err != nil {
 			switch err.(type) {
@@ -1118,7 +1185,7 @@ func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 		// Persist participation registry updates to last-used round and voting key changes.
 		err = node.accountManager.Registry().Flush(participationRegistryFlushMaxWaitDuration)
 		if err != nil {
-			node.log.Warnf("error while flushing the registry: %w", err)
+			node.log.Warnf("error while flushing the registry: %v", err)
 		}
 	}
 }
@@ -1128,35 +1195,13 @@ func (node *AlgorandFullNode) Uint64() uint64 {
 	return crypto.RandUint64()
 }
 
-// Indexer returns a pointer to nodes indexer
-func (node *AlgorandFullNode) Indexer() (*indexer.Indexer, error) {
-	if node.indexer != nil && node.config.IsIndexerActive {
-		return node.indexer, nil
-	}
-	return nil, fmt.Errorf("indexer is not active")
-}
-
-// GetTransactionByID gets transaction by ID
-// this function is intended to be called externally via the REST api interface.
-func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error) {
-	stx, _, err := node.ledger.LookupTxid(txid, rnd)
-	if err != nil {
-		return TxnWithStatus{}, err
-	}
-	return TxnWithStatus{
-		Txn:            stx.SignedTxn,
-		ConfirmedRound: rnd,
-		ApplyData:      stx.ApplyData,
-	}, nil
-}
-
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
 // this function is intended to be called externally via the REST api interface.
 func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
-	if node.indexer != nil {
-		return fmt.Errorf("catching up using a catchpoint is not supported on indexer-enabled nodes")
+	if node.config.Archival {
+		return fmt.Errorf("catching up using a catchpoint is not supported on archive nodes")
 	}
 	if node.catchpointCatchupService != nil {
 		stats := node.catchpointCatchupService.GetStatistics()
@@ -1167,12 +1212,17 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
 	}
 	var err error
-	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, node.ledger.Ledger, node.config)
+	accessor := ledger.MakeCatchpointCatchupAccessor(node.ledger.Ledger, node.log)
+	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, accessor, node.config)
 	if err != nil {
 		node.log.Warnf("unable to create catchpoint catchup service : %v", err)
 		return err
 	}
-	node.catchpointCatchupService.Start(node.ctx)
+	err = node.catchpointCatchupService.Start(node.ctx)
+	if err != nil {
+		node.log.Warn(err.Error())
+		return MakeStartCatchpointError(catchpoint, err)
+	}
 	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)
 	return nil
 }
@@ -1194,12 +1244,12 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 }
 
 // SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back, it returns a
-// channel which contains the updated node context. This function need to work asyncronisly so that the caller could
-// detect and handle the usecase where the node is being shut down while we're switching to/from catchup mode without
+// channel which contains the updated node context. This function need to work asynchronously so that the caller could
+// detect and handle the use case where the node is being shut down while we're switching to/from catchup mode without
 // deadlocking on the shared node mutex.
 func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
 	// create a non-buffered channel to return the newly created context. The fact that it's non-buffered here
-	// is imporant, as it allows us to syncronize the "receiving" of the new context before canceling of the previous
+	// is important, as it allows us to synchronize the "receiving" of the new context before canceling of the previous
 	// one.
 	ctxCh := make(chan context.Context)
 	outCtxCh = ctxCh
@@ -1219,6 +1269,9 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
+			node.net.ClearValidatorHandlers()
+			node.heartbeatService.Stop()
+			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
@@ -1236,6 +1289,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			return
 		}
 		defer node.mu.Unlock()
+
 		// start
 		node.transactionPool.Reset()
 		node.catchupService.Start()
@@ -1244,19 +1298,8 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.blockService.Start()
 		node.ledgerService.Start()
 		node.txHandler.Start()
-
-		// start indexer
-		if idx, err := node.Indexer(); err == nil {
-			err := idx.Start()
-			if err != nil {
-				node.log.Errorf("indexer failed to start, turning it off - %v", err)
-				node.config.IsIndexerActive = false
-			} else {
-				node.log.Info("Indexer was started successfully")
-			}
-		} else {
-			node.log.Infof("Indexer is not available - %v", err)
-		}
+		node.stateProofWorker.Start()
+		node.heartbeatService.Start()
 
 		// Set up a context we can use to cancel goroutines on Stop()
 		node.ctx, node.cancelCtx = context.WithCancel(context.Background())
@@ -1272,27 +1315,23 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 
 }
 
-// validatedBlock satisfies agreement.ValidatedBlock
-type validatedBlock struct {
-	vb *ledgercore.ValidatedBlock
+// unfinishedBlock satisfies agreement.UnfinishedBlock
+type unfinishedBlock struct {
+	blk *ledgercore.UnfinishedBlock
 }
 
-// WithSeed satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
-	lvb := vb.vb.WithSeed(s)
-	return validatedBlock{vb: &lvb}
-}
+// Round satisfies the agreement.UnfinishedBlock interface.
+func (ub unfinishedBlock) Round() basics.Round { return ub.blk.Round() }
 
-// Block satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) Block() bookkeeping.Block {
-	blk := vb.vb.Block()
-	return blk
+// FinishBlock satisfies the agreement.UnfinishedBlock interface.
+func (ub unfinishedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.Block {
+	return agreement.Block(ub.blk.FinishBlock(s, proposer, eligible))
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round, addrs []basics.Address) (agreement.UnfinishedBlock, error) {
 	deadline := time.Now().Add(node.config.ProposalAssemblyTime)
-	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
+	ub, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
 		if errors.Is(err, pools.ErrStaleBlockAssemblyRequest) {
 			// convert specific error to one that would have special handling in the agreement code.
@@ -1311,7 +1350,48 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 		}
 		return nil, err
 	}
-	return validatedBlock{vb: lvb}, nil
+
+	// ensure UnfinishedBlock contains provided addresses
+	for _, addr := range addrs {
+		if !ub.ContainsAddress(addr) {
+			// this should not happen: VotingKeys() and VotingAccountsForRound() should be in sync
+			node.log.Errorf("AlgorandFullNode.AssembleBlock: could not generate a proposal for round %d, proposer %s not in UnfinishedBlock", round, addr)
+			return nil, agreement.ErrAssembleBlockRoundStale
+		}
+	}
+
+	return unfinishedBlock{blk: ub}, nil
+}
+
+// getOfflineClosedStatus will return an int with the appropriate bit(s) set if it is offline and/or online
+func getOfflineClosedStatus(acctData basics.OnlineAccountData) int {
+	rval := 0
+	isOffline := acctData.VoteFirstValid == 0 && acctData.VoteLastValid == 0
+
+	if isOffline {
+		rval = rval | bitAccountOffline
+	}
+
+	isClosed := isOffline && acctData.MicroAlgosWithRewards.Raw == 0
+	if isClosed {
+		rval = rval | bitAccountIsClosed
+	}
+
+	return rval
+}
+
+// VotingAccountsForRound provides a list of addresses that have participation keys valid for the given round.
+// These accounts may not all be eligible to propose, but they are a superset of eligible proposers.
+func (node *AlgorandFullNode) VotingAccountsForRound(round basics.Round) []basics.Address {
+	if node.devMode {
+		return []basics.Address{}
+	}
+	parts := node.accountManager.Keys(round)
+	accounts := make([]basics.Address, len(parts))
+	for i, p := range parts {
+		accounts[i] = p.Account
+	}
+	return accounts
 }
 
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.
@@ -1327,12 +1407,13 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 	accountsData := make(map[basics.Address]basics.OnlineAccountData, len(parts))
 	matchingAccountsKeys := make(map[basics.Address]bool)
 	mismatchingAccountsKeys := make(map[basics.Address]int)
-	const bitMismatchingVotingKey = 1
-	const bitMismatchingSelectionKey = 2
+
 	for _, p := range parts {
 		acctData, hasAccountData := accountsData[p.Account]
 		if !hasAccountData {
 			var err error
+			// LookupAgreement is used to look at the past ~320 rounds of account state
+			// It provides a fast lookup method for online account information
 			acctData, err = node.ledger.LookupAgreement(keysRound, p.Account)
 			if err != nil {
 				node.log.Warnf("node.VotingKeys: Account %v not participating: cannot locate account for round %d : %v", p.Account, keysRound, err)
@@ -1340,6 +1421,8 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 			}
 			accountsData[p.Account] = acctData
 		}
+
+		mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | getOfflineClosedStatus(acctData)
 
 		if acctData.VoteID != p.Voting.OneTimeSignatureVerifier {
 			mismatchingAccountsKeys[p.Account] = mismatchingAccountsKeys[p.Account] | bitMismatchingVotingKey
@@ -1363,14 +1446,22 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 		if matchingAccountsKeys[mismatchingAddr] {
 			continue
 		}
-		if warningFlags&bitMismatchingVotingKey == bitMismatchingVotingKey {
-			node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d", mismatchingAddr, votingRound, keysRound)
+		if warningFlags&bitMismatchingVotingKey != 0 || warningFlags&bitMismatchingSelectionKey != 0 {
+			// If we are closed, upgrade this to info so we don't spam telemetry reporting
+			if warningFlags&bitAccountIsClosed != 0 {
+				node.log.Infof("node.VotingKeys: Address: %v - Account was closed but still has a participation key active.", mismatchingAddr)
+			} else if warningFlags&bitAccountOffline != 0 {
+				// If account is offline, then warn that no registration transaction has been issued or that previous registration transaction is expired.
+				node.log.Warnf("node.VotingKeys: Address: %v - Account is offline.  No registration transaction has been issued or a previous registration transaction has expired", mismatchingAddr)
+			} else {
+				// If the account isn't closed/offline and has a valid participation key, then this key may have been generated
+				// on a different node.
+				node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain voting key differ from participation voting key for round %d. Consider regenerating the participation key for this node.", mismatchingAddr, votingRound, keysRound)
+			}
+
 			continue
 		}
-		if warningFlags&bitMismatchingSelectionKey == bitMismatchingSelectionKey {
-			node.log.Warnf("node.VotingKeys: Account %v not participating on round %d: on chain selection key differ from participation selection key for round %d", mismatchingAddr, votingRound, keysRound)
-			continue
-		}
+
 	}
 	return participations
 }
@@ -1378,4 +1469,54 @@ func (node *AlgorandFullNode) VotingKeys(votingRound, keysRound basics.Round) []
 // Record forwards participation record calls to the participation registry.
 func (node *AlgorandFullNode) Record(account basics.Address, round basics.Round, participationType account.ParticipationAction) {
 	node.accountManager.Record(account, round, participationType)
+}
+
+// IsParticipating implements network.NodeInfo
+//
+// This function is not fully precise. node.ledger and
+// node.accountManager might move relative to each other and there is
+// no synchronization. This is good-enough for current uses of
+// IsParticipating() which is used in networking code to determine if
+// the node should ask for transaction gossip (or skip it to save
+// bandwidth). The current transaction pool size is about 3
+// rounds. Starting to receive transaction gossip 10 rounds in the
+// future when we might propose or vote on blocks in that future is a
+// little extra buffer but seems reasonable at this time. -- bolson
+// 2022-05-18
+func (node *AlgorandFullNode) IsParticipating() bool {
+	round := node.ledger.Latest() + 1
+	return node.accountManager.HasLiveKeys(round, round+10)
+}
+
+// SetSyncRound no-ops
+func (node *AlgorandFullNode) SetSyncRound(_ basics.Round) error {
+	return nil
+}
+
+// GetSyncRound returns 0 (not set) in the base node implementation
+func (node *AlgorandFullNode) GetSyncRound() basics.Round {
+	return 0
+}
+
+// UnsetSyncRound no-ops
+func (node *AlgorandFullNode) UnsetSyncRound() {
+}
+
+// SetBlockTimeStampOffset sets a timestamp offset in the block header.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) SetBlockTimeStampOffset(offset int64) error {
+	if node.devMode {
+		node.timestampOffset = &offset
+		return nil
+	}
+	return fmt.Errorf("cannot set block timestamp offset when not in dev mode")
+}
+
+// GetBlockTimeStampOffset gets a timestamp offset.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) GetBlockTimeStampOffset() (*int64, error) {
+	if node.devMode {
+		return node.timestampOffset, nil
+	}
+	return nil, fmt.Errorf("cannot get block timestamp offset when not in dev mode")
 }

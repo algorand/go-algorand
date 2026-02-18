@@ -1,6 +1,8 @@
 #!/bin/bash
 # shellcheck disable=2009,2093,2164
 
+UPDATER_MIN_VERSION="3.12.2"
+UPDATER_CHANNEL="stable"
 FILENAME=$(basename -- "$0")
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 UPDATETYPE="update"
@@ -22,6 +24,7 @@ GENESIS_NETWORK_DIR_SPEC=""
 SKIP_UPDATE=0
 TOOLS_OUTPUT_DIR=""
 DRYRUN=false
+VERIFY_UPDATER_ARCHIVE="0"
 IS_ROOT=false
 if [ $EUID -eq 0 ]; then
     IS_ROOT=true
@@ -100,6 +103,10 @@ while [ "$1" != "" ]; do
             shift
             TOOLS_OUTPUT_DIR=$1
             ;;
+        -verify)
+            shift
+            VERIFY_UPDATER_ARCHIVE="1"
+            ;;
         -z)
             DRYRUN=true
             ;;
@@ -154,7 +161,7 @@ function validate_channel_specified() {
 
 function determine_current_version() {
     CURRENTVER="$(( ${BINDIR}/algod -v 2>/dev/null || echo 0 ) | head -n 1)"
-    echo Current Version = ${CURRENTVER}
+    echo "Current Version = ${CURRENTVER}"
 }
 
 function get_updater_url() {
@@ -167,6 +174,8 @@ function get_updater_url() {
         UNAME=$(uname -m)
         if [[ "${UNAME}" = "x86_64" ]]; then
             ARCH="amd64"
+        elif [[ "${UNAME}" = "arm64" ]]; then
+            ARCH="arm64"
         else
             echo "This platform ${UNAME} is not supported by updater."
             exit 1
@@ -176,10 +185,6 @@ function get_updater_url() {
         UNAME=$(uname -m)
         if [[ "${UNAME}" = "x86_64" ]]; then
             ARCH="amd64"
-        elif [[ "${UNAME}" = "armv6l" ]]; then
-            ARCH="arm"
-        elif [[ "${UNAME}" = "armv7l" ]]; then
-            ARCH="arm"
         elif [[ "${UNAME}" = "aarch64" ]]; then
             ARCH="arm64"
         else
@@ -187,11 +192,21 @@ function get_updater_url() {
             exit 1
         fi
     else
-        echo "This operation system ${UNAME} is not supported by updater."
+        echo "This operating system ${UNAME} is not supported by updater."
         exit 1
     fi
-    UPDATER_FILENAME="install_master_${OS}-${ARCH}.tar.gz"
-    UPDATER_URL="https://github.com/algorand/go-algorand-doc/raw/master/downloads/installers/${OS}_${ARCH}/${UPDATER_FILENAME}"
+
+    # the updater will auto-update itself to the latest version, this means that the version of updater that is downloaded
+    # can be arbitrary as long as the self-updating functionality is working, hence the hard-coded version
+    UPDATER_FILENAME="install_${UPDATER_CHANNEL}_${OS}-${ARCH}_${UPDATER_MIN_VERSION}.tar.gz"
+    UPDATER_URL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/${UPDATER_FILENAME}"
+
+    # also set variables for signature and checksum validation
+    if [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
+        UPDATER_PUBKEYURL="https://releases.algorand.com/key.pub"
+        UPDATER_SIGURL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/${UPDATER_FILENAME}.sig"
+        UPDATER_CHECKSUMURL="https://algorand-releases.s3.amazonaws.com/channel/${UPDATER_CHANNEL}/hashes_${UPDATER_CHANNEL}_${OS}_${ARCH}_${UPDATER_MIN_VERSION}"
+    fi
 }
 
 # check to see if the binary updater exists. if not, it will automatically the correct updater binary for the current platform
@@ -200,46 +215,122 @@ function check_for_updater() {
     if [[ -s "${SCRIPTPATH}/updater" && -f "${SCRIPTPATH}/updater" ]]; then
         return 0
     fi
+
+    # set UPDATER_URL and UPDATER_ARCHIVE as a global that can be referenced here
+    # UPDATER_PUBKEYURL, UPDATER_SIGURL, UPDATER_CHECKSUMURL will be set to try verification
     get_updater_url
 
-    # check the curl is available.
-    CURL_VER=$(curl -V 2>/dev/null || true)
-    if [ "${CURL_VER}" = "" ]; then
+    # check if curl is available
+    if ! type curl &>/dev/null; then
         # no curl is installed.
         echo "updater binary is missing and cannot be downloaded since curl is missing."
-        if [[ "$(uname)" = "Linux" ]]; then
-            echo "To install curl, run the following command:"
-            echo "apt-get update; apt-get install -y curl"
-        fi
+        echo "To install curl, run the following command:"
+        echo "On Linux: apt-get update; apt-get install -y curl"
+        echo "On Mac: brew install curl"
         exit 1
     fi
 
-    CURL_OUT=$(curl -LJO --silent ${UPDATER_URL})
-    if [ "$?" != "0" ]; then
-        echo "failed to download updater binary from ${UPDATER_URL} using curl."
-        echo "${CURL_OUT}"
+    # create temporary directory for updater archive
+    local UPDATER_TEMPDIR="" UPDATER_ARCHIVE=""
+    UPDATER_TEMPDIR="$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")"
+    UPDATER_ARCHIVE="${UPDATER_TEMPDIR}/${UPDATER_FILENAME}"
+
+    # download updater archive
+    echo "Downloading $UPDATER_URL"
+    if ! curl -sSL "$UPDATER_URL" -o "$UPDATER_ARCHIVE"; then
+        echo "failed to download updater archive from ${UPDATER_URL} using curl."
         exit 1
     fi
 
-    if [ ! -f "${SCRIPTPATH}/${UPDATER_FILENAME}" ]; then
-        echo "downloaded file ${SCRIPTPATH}/${UPDATER_FILENAME} is missing."
+    if [ ! -f "$UPDATER_ARCHIVE" ]; then
+        echo "downloaded file ${UPDATER_ARCHIVE} is missing."
         exit
+    else
+        echo "Downloaded into file ${UPDATER_ARCHIVE}"
     fi
 
-    tar -zxvf "${SCRIPTPATH}/${UPDATER_FILENAME}" updater
-    if [ "$?" != "0" ]; then
-        echo "failed to extract updater binary from ${SCRIPTPATH}/${UPDATER_FILENAME}"
+    # if -verify command line flag is set, try verifying updater archive
+    if [ "$VERIFY_UPDATER_ARCHIVE" = "1" ]; then
+        echo "Starting to verify the updater archive"
+        # check for checksum and signature validation dependencies
+        local GPG_VERIFY="0" CHECKSUM_VERIFY="0"
+        if type gpg >&/dev/null; then
+            GPG_VERIFY="1"
+        else
+            echo "gpg is not available to perform signature validation."
+        fi
+
+        if type sha256sum &>/dev/null; then
+            CHECKSUM_VERIFY="1"
+        else
+            echo "sha256sum is not available to perform checksum validation."
+        fi
+
+        # try signature validation
+        if [ "$GPG_VERIFY" = "1" ]; then
+            local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="$UPDATER_TEMPDIR/key.pub"
+            # try downloading public key
+            if curl -sSL "$UPDATER_PUBKEYURL" -o "$UPDATER_PUBKEYFILE"; then
+                GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
+                if gpg --import "$UPDATER_PUBKEYFILE"; then
+                    if curl -sSL "$UPDATER_SIGURL" -o "$UPDATER_SIGFILE"; then
+                        if ! gpg --verify "$UPDATER_SIGFILE" "$UPDATER_ARCHIVE"; then
+                            echo "failed to verify signature of updater archive."
+                            exit 1
+                        else
+                            echo "Verified signature of updater archive"
+                        fi
+                    else
+                        echo "failed download signature file, cannot perform signature validation."
+                    fi
+                else
+                    echo "failed importing GPG public key, cannot perform signature validation."
+                fi
+                # clean up temporary directory used for signature validation
+                rm -rf "$GNUPGHOME"; unset GNUPGHOME
+            else
+                echo "failed downloading GPG public key, cannot perform signature validation."
+            fi
+        fi
+
+        # try checksum validation
+        if [ "$CHECKSUM_VERIFY" = "1" ]; then
+            local UPDATER_CHECKSUMFILE="$UPDATER_TEMPDIR/updater.checksum"
+            # try downloading checksum file
+            if curl -sSL "$UPDATER_CHECKSUMURL" -o "$UPDATER_CHECKSUMFILE"; then
+                # have to be in same directory as archive
+                pushd "$UPDATER_TEMPDIR"
+                if ! sha256sum --quiet --ignore-missing -c "$UPDATER_CHECKSUMFILE"; then
+                    echo "failed to verify checksum of updater archive."
+                    popd
+                    exit 1
+                else
+                    echo "Verified checksum of updater archive"
+                fi
+                popd
+            else
+                echo "failed downloading checksum file, cannot perform checksum validation."
+            fi
+        fi
+    fi
+
+    # extract and install updater
+    if ! tar -zxf "$UPDATER_ARCHIVE" -C "$UPDATER_TEMPDIR" updater; then
+        echo "failed to extract updater binary from ${UPDATER_ARCHIVE}"
         exit 1
+    else
+        mv "${UPDATER_TEMPDIR}/updater" "$SCRIPTPATH"
     fi
 
-    rm -f "${SCRIPTPATH}/${UPDATER_FILENAME}"
-    echo "updater binary was downloaded"
+    # clean up temp directory
+    rm -rf "$UPDATER_TEMPDIR"
+    echo "updater binary was installed at ${SCRIPTPATH}/updater"
 }
 
 function check_for_update() {
     determine_current_version
     check_for_updater
-    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | sed -n '2 p')"
+    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | tail -1)"
     if [ $? -ne 0 ]; then
         echo "No remote updates found"
         return 1
@@ -254,14 +345,14 @@ function check_for_update() {
 
     if [ ${CURRENTVER} -ge ${LATEST} ]; then
         if [ "${UPDATETYPE}" = "install" ]; then
-            echo No new version found - forcing install anyway
+            echo "No new version found - forcing install anyway"
         else
-            echo No new version found
+            echo "No new version found"
             return 1
         fi
     fi
 
-    echo New version found
+    echo "New version found"
     return 0
 }
 
@@ -310,10 +401,10 @@ function download_update() {
     ${SCRIPTPATH}/updater ver get -c ${CHANNEL} -o ${TARFILE} ${BUCKET} ${SPECIFIC_VERSION}
 
     if [ $? -ne 0 ]; then
-        echo Error downloading update file
+        echo "Error downloading update file"
         exit 1
     fi
-    echo Update Downloaded to ${TARFILE}
+    echo "Update Downloaded to ${TARFILE}"
 }
 
 function check_and_download_update() {
@@ -331,7 +422,7 @@ function download_update_for_current_version() {
 }
 
 function expand_update() {
-    echo Expanding update...
+    echo "Expanding update..."
     if ! tar -zxof "${TARFILE}" -C "${UPDATESRCDIR}"; then
         return 1
     fi
@@ -339,7 +430,7 @@ function expand_update() {
 }
 
 function validate_update() {
-    echo Validating update...
+    echo "Validating update..."
     # We should consider including a version.info file
     # that we can compare against the expected version
     return 0
@@ -399,11 +490,13 @@ function run_systemd_action() {
 }
 
 function backup_binaries() {
-    echo Backing up current binary files...
+    echo "Backing up current binary files..."
     mkdir -p "${BINDIR}/backup"
-    BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
+    BACKUPFILES="algod kmd goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
     [ -f "${BINDIR}/node_exporter" ] && BACKUPFILES="${BACKUPFILES} node_exporter"
+    # If we have algotmpl, we should back it up too
+    [ -f "${BINDIR}/algotmpl" ] && BACKUPFILES="${BACKUPFILES} algotmpl"
     tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" ${BACKUPFILES} >/dev/null 2>&1
 }
 
@@ -442,7 +535,7 @@ function install_new_binaries() {
     if [ ! -d ${UPDATESRCDIR}/bin ]; then
         return 0
     else
-        echo Installing new binary files...
+        echo "Installing new binary files into ${BINDIR}"
         ROLLBACKBIN=1
         rm -rf ${BINDIR}/new
         mkdir ${BINDIR}/new
@@ -461,7 +554,7 @@ function reset_wallets_for_new_ledger() {
     for file in *.partkey *.rootkey; do
         if [ -e "${file}" ]; then
             cp "${file}" "${NEW_VER}/${file}"
-            echo 'Installed genesis account file: ' "${file}"
+            echo "Installed genesis account file: ${file}"
         fi
     done
     popd >/dev/null
@@ -544,12 +637,12 @@ function clean_legacy_logs() {
 
 function startup_node() {
     if [ "${NOSTART}" != "" ]; then
-        echo Auto-start node disabled - not starting
+        echo "Auto-start node disabled - not starting"
         return
     fi
 
     CURDATADIR=$1
-    echo Restarting node in ${CURDATADIR}...
+    echo "Restarting node in ${CURDATADIR}..."
 
     check_install_valid
     if [ $? -ne 0 ]; then
@@ -569,7 +662,7 @@ function startup_nodes() {
 }
 
 function rollback() {
-    echo Rolling back from failed update...
+    echo "Rolling back from failed update..."
     if [ ${ROLLBACKBIN} -ne 0 ]; then
         rollback_binaries
     fi
@@ -597,6 +690,16 @@ function apply_fixups() {
 
     # Delete obsolete algorand binary - renamed to 'goal'
     rm "${BINDIR}/algorand" >/dev/null 2>&1
+
+    # Delete obsolete binaries removed in go-algorand
+    rm "${BINDIR}/carpenter" >/dev/null 2>&1
+    rm "${BINDIR}/catchupsrv" >/dev/null 2>&1
+    rm "${BINDIR}/doberman" >/dev/null 2>&1
+    rm "${BINDIR}/ddconfig.sh" >/dev/null 2>&1
+    rm "${BINDIR}/tealcut" >/dev/null 2>&1
+    rm "${BINDIR}/cc_service" >/dev/null 2>&1
+    rm "${BINDIR}/cc_agent" >/dev/null 2>&1
+    rm "${BINDIR}/cc_client" >/dev/null 2>&1
 
     for DD in ${DATADIRS[@]}; do
         clean_legacy_logs "${DD}"

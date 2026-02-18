@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,10 +19,12 @@ package logic
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestOpSpecs(t *testing.T) {
@@ -58,15 +60,11 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 	return true
 }
 
-func TestOpcodesByVersionReordered(t *testing.T) {
+func TestOpcodesByVersionReordered(t *testing.T) { // nolint:paralleltest // manipulates global OpSpecs
 	partitiontest.PartitionTest(t)
 
 	// Make a copy to restore to the original
-	OpSpecsOrig := make([]OpSpec, len(OpSpecs))
-	for idx, opspec := range OpSpecs {
-		cp := opspec
-		OpSpecsOrig[idx] = cp
-	}
+	OpSpecsOrig := slices.Clone(OpSpecs)
 	defer func() {
 		OpSpecs = OpSpecsOrig
 	}()
@@ -82,16 +80,13 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 
 func TestOpcodesByVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	testOpcodesByVersion(t)
 }
 
 func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
-	OpSpecs2 := make([]OpSpec, len(OpSpecs))
-	for idx, opspec := range OpSpecs {
-		cp := opspec
-		OpSpecs2[idx] = cp
-	}
+	OpSpecs2 := slices.Clone(OpSpecs)
 
 	opSpecs := make([][]OpSpec, LogicVersion)
 	for v := uint64(1); v <= LogicVersion; v++ {
@@ -207,7 +202,7 @@ func TestOpcodesVersioningV2(t *testing.T) {
 
 	// hardcode and ensure amount of new v2 opcodes
 	newOpcodes := 22
-	overwritten := 5 // sha256, keccak256, sha512_256, txn, gtxn
+	overwritten := 3 // sha256, keccak256, sha512_256
 	require.Equal(t, newOpcodes+overwritten, cntAdded)
 
 	require.Equal(t, cntv2, cntv1+newOpcodes)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,6 +44,11 @@ func (m *MockParticipationRegistry) Delete(id account.ParticipationID) error {
 	return nil
 }
 
+// DeleteStateProofKeys removes all stateproof keys preceding a given round (including)
+func (m *MockParticipationRegistry) DeleteStateProofKeys(id account.ParticipationID, round basics.Round) error {
+	return nil
+}
+
 // DeleteExpired removes all records from storage which are expired on the given round.
 func (m *MockParticipationRegistry) DeleteExpired(latestRound basics.Round, agreementProto config.ConsensusParams) error {
 	return nil
@@ -64,9 +69,14 @@ func (m *MockParticipationRegistry) GetForRound(id account.ParticipationID, roun
 	return account.ParticipationRecordForRound{}, nil
 }
 
-// GetStateProofForRound fetches a record with stateproof secrets for a particular round.
-func (m *MockParticipationRegistry) GetStateProofForRound(id account.ParticipationID, round basics.Round) (account.StateProofRecordForRound, error) {
-	return account.StateProofRecordForRound{}, nil
+// GetStateProofSecretsForRound fetches a record with stateproof secrets for a particular round.
+func (m *MockParticipationRegistry) GetStateProofSecretsForRound(id account.ParticipationID, round basics.Round) (account.StateProofSecretsForRound, error) {
+	return account.StateProofSecretsForRound{}, nil
+}
+
+// HasLiveKeys quickly tests to see if there is a valid participation key over some range of rounds
+func (m *MockParticipationRegistry) HasLiveKeys(from, to basics.Round) bool {
+	return false
 }
 
 // Register updates the EffectiveFirst and EffectiveLast fields. If there are multiple records for the account

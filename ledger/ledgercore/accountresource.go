@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,10 +34,26 @@ type AssetResource struct {
 	AssetHolding *basics.AssetHolding
 }
 
+// AssetResourceWithIDs is used to retrieve a asset resource information from the data tier,
+// inclusive of the asset ID and creator address
+type AssetResourceWithIDs struct {
+	AssetResource
+	AssetID basics.AssetIndex
+	Creator basics.Address
+}
+
 // AppResource used to retrieve a generic app resource information from the data tier
 type AppResource struct {
 	AppLocalState *basics.AppLocalState
 	AppParams     *basics.AppParams
+}
+
+// AppResourceWithIDs is used to retrieve an app resource information from the data tier,
+// inclusive of the app ID and creator address
+type AppResourceWithIDs struct {
+	AppResource
+	AppID   basics.AppIndex
+	Creator basics.Address
 }
 
 // AssignAccountResourceToAccountData assigns the Asset/App params/holdings contained

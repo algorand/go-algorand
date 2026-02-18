@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,15 +22,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
-// This test ensures a program compiled with by pre-TEAL v2 go-algorand
-// that includes all the opcodes from TEAL v1 runs in TEAL v2 runModeSignature well
-var sourceTEALv1 = `byte 0x41 // A
+// This test ensures a program compiled with by pre-AVM v2 go-algorand
+// that includes all the opcodes from AVM v1 runs in AVM v2 runModeSignature well
+var sourceV1 = `byte 0x41 // A
 sha256
 byte 0x559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd
 ==
@@ -246,7 +248,7 @@ dup
 ==
 `
 
-var programTEALv1 = "01200500010220ffffffffffffffffff012608014120559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd0142201f675bff07515f5df96737194ea945c36c41e7b4fcef307b7cd4d0e602a6911101432034b99f8dde1ba273c0a28cf5b2e4dbe497f8cb2453de0c8ba6d578c9431a62cb0100200000000000000000000000000000000000000000000000000000000000000000280129122a022b1210270403270512102d2e2f041022082209230a230b240c220d230e230f231022112312231314301525121617182319231a221b21041c1d12222312242512102104231210482829122a2b121027042706121048310031071331013102121022310413103105310613103108311613103109310a1210310b310f1310310c310d1210310e31101310311131121310311331141210311531171210483300003300071333000133000212102233000413103300053300061310330008330016131033000933000a121033000b33000f131033000c33000d121033000e3300101310330011330012131033001333001412103300153300171210483200320112320232041310320327071210350034001040000100234912"
+var programV1 = "01200500010220ffffffffffffffffff012608014120559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd0142201f675bff07515f5df96737194ea945c36c41e7b4fcef307b7cd4d0e602a6911101432034b99f8dde1ba273c0a28cf5b2e4dbe497f8cb2453de0c8ba6d578c9431a62cb0100200000000000000000000000000000000000000000000000000000000000000000280129122a022b1210270403270512102d2e2f041022082209230a230b240c220d230e230f231022112312231314301525121617182319231a221b21041c1d12222312242512102104231210482829122a2b121027042706121048310031071331013102121022310413103105310613103108311613103109310a1210310b310f1310310c310d1210310e31101310311131121310311331141210311531171210483300003300071333000133000212102233000413103300053300061310330008330016131033000933000a121033000b33000f131033000c33000d121033000e3300101310330011330012131033001333001412103300153300171210483200320112320232041310320327071210350034001040000100234912"
 
 func TestBackwardCompatTEALv1(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -260,15 +262,15 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	pk := basics.Address(c.SignatureVerifier)
 
-	program, err := hex.DecodeString(programTEALv1)
+	program, err := hex.DecodeString(programV1)
 	require.NoError(t, err)
 
 	// ensure old program is the same as a new one when assembling without version
-	ops, err := AssembleString(sourceTEALv1)
+	ops, err := AssembleString(sourceV1)
 	require.NoError(t, err)
 	require.Equal(t, program, ops.Program)
-	// ensure the old program is the same as a new one except TEAL version byte
-	opsV2, err := AssembleStringWithVersion(sourceTEALv1, 2)
+	// ensure the old program is the same as a new one except AVM version byte
+	opsV2, err := AssembleStringWithVersion(sourceV1, 2)
 	require.NoError(t, err)
 	require.Equal(t, program[1:], opsV2.Program[1:])
 
@@ -277,23 +279,25 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 		Data:        data[:],
 	})
 
-	ep, tx, _ := makeSampleEnvWithVersion(1)
-	// RekeyTo disallowed on TEAL v0/v1
-	tx.RekeyTo = basics.Address{}
+	stxn := makeSampleTxn()
+	// RekeyTo disallowed on AVM v0/v1
+	stxn.Txn.RekeyTo = basics.Address{}
+	stxn.Lsig.Logic = program
+	stxn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], stxn.Txn.Sender[:], stxn.Txn.Note}
 
-	ep.TxnGroup[0].Lsig.Logic = program
-	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
-
-	// ensure v1 program runs well on latest TEAL evaluator
+	// ensure v1 program runs well on latest evaluator
 	require.Equal(t, uint8(1), program[0])
 
-	// Cost should stay exactly 2140
-	ep.Proto.LogicSigMaxCost = 2139
-	err = CheckSignature(0, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "static cost")
+	maxCost := func(cost uint64) protoOpt {
+		return func(p *config.ConsensusParams) {
+			p.LogicSigMaxCost = cost
+		}
+	}
 
-	ep.Proto.LogicSigMaxCost = 2140
+	// Cost should stay exactly 2140 for v1, even as future changes are made
+	err = CheckSignature(0, optSigParams(maxCost(2139), stxn))
+	require.ErrorContains(t, err, "static cost")
+	ep := optSigParams(maxCost(2140), stxn)
 	err = CheckSignature(0, ep)
 	require.NoError(t, err)
 
@@ -305,45 +309,32 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	// Costs for v2 should be higher because of hash opcode cost changes
-	ep2, tx, _ := makeSampleEnvWithVersion(2)
-	ep2.Proto.LogicSigMaxCost = 2307
-	ep2.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
+	// Costs for v2 programs should be higher because of hash opcode cost changes
 	// Eval doesn't fail, but it would be ok (better?) if it did
-	testLogicBytes(t, opsV2.Program, ep2, "static cost", "")
+	testLogicBytes(t, opsV2.Program, optSigParams(maxCost(2307), stxn), "static cost", "")
+	testLogicBytes(t, opsV2.Program, optSigParams(maxCost(2308), stxn))
 
-	ep2.Proto.LogicSigMaxCost = 2308
-	testLogicBytes(t, opsV2.Program, ep2)
-
-	// ensure v0 program runs well on latest TEAL evaluator
-	ep, tx, _ = makeSampleEnv()
+	// ensure v0 program runs well on latest evaluator
 	program[0] = 0
 	sig = c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
 		Data:        data[:],
 	})
-	ep.TxnGroup[0].Lsig.Logic = program
-	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
+	stxn.Lsig.Logic = program
+	stxn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], stxn.Txn.Sender[:], stxn.Txn.Note}
 
 	// Cost remains the same, because v0 does not get dynamic treatment
-	ep.Proto.LogicSigMaxCost = 2139
-	ep.MinTealVersion = new(uint64) // Was higher because sample txn has a rekey
-	testLogicBytes(t, program, ep, "static cost", "")
-
-	ep.Proto.LogicSigMaxCost = 2140
-	testLogicBytes(t, program, ep)
+	testLogicBytes(t, program, optSigParams(maxCost(2139), stxn), "static cost", "")
+	testLogicBytes(t, program, optSigParams(maxCost(2140), stxn))
 
 	// But in v4, cost is now dynamic and exactly 1 less than v2/v3,
 	// because bnz skips "err". It's caught during Eval
 	program[0] = 4
-	ep.Proto.LogicSigMaxCost = 2306
-	testLogicBytes(t, program, ep, "dynamic cost")
-
-	ep.Proto.LogicSigMaxCost = 2307
-	testLogicBytes(t, program, ep)
+	testLogicBytes(t, program, optSigParams(maxCost(2306), stxn), "dynamic cost")
+	testLogicBytes(t, program, optSigParams(maxCost(2307), stxn))
 }
 
-// ensure v2 fields error on pre TEAL v2 logicsig version
+// ensure v2 fields error on pre v2 logicsig version
 // ensure v2 fields error in v1 program
 func TestBackwardCompatGlobalFields(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -367,24 +358,22 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 
 		ops := testProg(t, text, AssemblerMaxVersion)
 
-		ep, _, _ := makeSampleEnvWithVersion(1)
-		ep.TxnGroup[0].Txn.RekeyTo = basics.Address{} // avoid min teal version issues
-		ep.TxnGroup[0].Lsig.Logic = ops.Program
+		stxn := makeSampleTxn()
+		stxn.Txn.RekeyTo = basics.Address{} // would mess up minavmversion
+		stxn.Lsig.Logic = ops.Program
+		ep := defaultSigParamsWithVersion(1, stxn)
 		_, err := EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "greater than protocol supported version")
+		require.ErrorContains(t, err, "greater than protocol supported version")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 1 // set version to 1
 		_, err = EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
+		require.ErrorContains(t, err, "invalid global field")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 0 // set version to 0
 		_, err = EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
+		require.ErrorContains(t, err, "invalid global field")
 	}
 }
 
@@ -408,13 +397,13 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 
 	for _, fs := range fields {
 		field := fs.field.String()
-		for _, command := range tests {
+		for i, command := range tests {
 			text := fmt.Sprintf(command, field)
 			asmError := "...was introduced in ..."
 			if fs.array {
 				parts := strings.Split(text, " ")
 				op := parts[0]
-				asmError = fmt.Sprintf("%s unknown field: %#v", op, field)
+				asmError = fmt.Sprintf("%#v field of %s can only be used with %d immediates", field, op, i+2)
 			}
 			// check assembler fails in versions before introduction
 			testLine(t, text, assemblerNoVersion, asmError)
@@ -431,29 +420,22 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			ep, tx, _ := makeSampleEnvWithVersion(1)
-			// We'll reject too early if we have a nonzero RekeyTo, because that
-			// field must be zero for every txn in the group if this is an old
-			// TEAL version
-			tx.RekeyTo = basics.Address{}
+			ep := defaultSigParamsWithVersion(1)
 			ep.TxnGroup[0].Lsig.Logic = ops.Program
 
 			// check failure with version check
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "greater than protocol supported version")
+			require.ErrorContains(t, err, "greater than protocol supported version")
 
 			// check opcodes failures
 			ops.Program[0] = 1 // set version to 1
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
+			require.ErrorContains(t, err, "invalid txn field")
 
 			// check opcodes failures
 			ops.Program[0] = 0 // set version to 0
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
+			require.ErrorContains(t, err, "invalid txn field")
 		}
 	}
 }
@@ -461,32 +443,37 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 func TestBackwardCompatAssemble(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// TEAL v1 does not allow branching to the last line
-	// TEAL v2 makes such programs legal
+	// v1 does not allow branching to the last line
+	// v2 makes such programs legal
 	t.Parallel()
-	source := "int 1; int 1; bnz done; done:"
 
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, assemblerNoVersion, Expect{4, "label \"done\" is too far away"})
-	})
+	// Label is ok, it just can't be branched to
+	source := "int 1; done:"
+	testProg(t, source, assemblerNoVersion)
+	testProg(t, source, 0)
+	testProg(t, source, 1)
 
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 0, Expect{4, "label \"done\" is too far away"})
-	})
-
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 1, Expect{4, "label \"done\" is too far away"})
-	})
+	// use multiple lines, so that error report is checked better
+	source = `int 1;
+ int 1;
+ bnz done;
+ done:
+`
+	testProg(t, source, assemblerNoVersion, exp(3, "label \"done\" is too far away", 5))
+	testProg(t, source, 0, exp(3, "label \"done\" is too far away", 5))
+	testProg(t, source, 1, exp(3, "label \"done\" is too far away", 5))
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testLogic(t, source, v, defaultEvalParams(nil))
+			t.Parallel()
+			testLogic(t, source, v, nil)
 		})
 	}
 }
 
 func TestExplicitConstants(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, 4096, maxStringSize, "constant changed, make it version dependent")
 	require.Equal(t, 64, maxByteMathSize, "constant changed, move it version dependent")

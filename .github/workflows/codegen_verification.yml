@@ -1,0 +1,37 @@
+name: "codegen verification"
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+env:
+  SKIP_GO_INSTALLATION: True
+jobs:
+  codegen_verification:
+    runs-on: ubuntu-24.04
+    services:
+      converter:
+        image: swaggerapi/swagger-converter@sha256:dcfd1c2537f5f271cb4ec942d08aa59ca41b9a24078040061a772afca7e548ae # v1.0.4
+        ports:
+          - 8080:8080
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test
+      - name: Run codegen_verification.sh
+        env:
+          SWAGGER_CONVERTER_API: "http://localhost:8080"
+        run: |
+          scripts/travis/codegen_verification.sh
+      - name: Slack Notification
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST --data-urlencode "payload={\"text\": \"Codegen verification failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
+        if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}

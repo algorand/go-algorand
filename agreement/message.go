@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,11 @@ import (
 // A message represents an internal message which is passed between components
 // of the agreement service.
 type message struct {
-	MessageHandle
+	_struct struct{} `codec:","`
+
+	// explicitly unexport this field since we can't define serializers for interface{} type
+	// the only implementation of this is gossip.messageMetadata which doesn't have exported fields to serialize.
+	messageHandle MessageHandle
 
 	Tag protocol.Tag
 
@@ -46,6 +50,8 @@ type message struct {
 // These messages are concatenated as an optimization which prevents proposals
 // from being dropped.
 type compoundMessage struct {
+	_struct struct{} `codec:","`
+
 	Vote     unauthenticatedVote
 	Proposal unauthenticatedProposal
 }

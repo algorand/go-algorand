@@ -53,11 +53,12 @@ proc checkProcessReturnedCodeTest {} {
     }
 
     # test close sending sighup
-    spawn /bin/bash -c "echo 44; sleep 2s; kill -11 $$"
+    spawn /bin/bash -c "echo 44; sleep 2; kill -11 $$"
     expect {
 	44 {
 	    close
 	}
+        eof { puts "expected output not 44"; exit 1 }
     }
     lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     if {$response != 0} {
@@ -67,11 +68,12 @@ proc checkProcessReturnedCodeTest {} {
     }
 
     # same, without close. should get to segv
-    spawn /bin/bash -c "echo 44; sleep 2s; kill -11 $$"
+    spawn /bin/bash -c "echo 44; sleep 2; kill -11 $$"
     expect {
 	44 {
 	    puts "not closing"
 	}
+        eof { puts "expected output not 44"; exit 1 }
     }
     lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     if {$KILLED != "CHILDKILLED" || $KILL_SIGNAL != "SIGSEGV" || $EXP != "segmentation violation"} {

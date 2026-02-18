@@ -9,29 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     name: Check PR Category and Type
     steps:
-      - name: "Failed to find proper PR Type label. Please add one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
-        run: exit 1
-        if: |
-          !contains(github.event.pull_request.labels.*.name, 'New Feature') &&
-          !contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
-          !contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
-      - name: "Found more than one PR Type label. Please add only one of the following: 'New Feature', 'Enhancement', or 'Bug-Fix'"
-        run: exit 1
-        if: |
-          (
-            contains(github.event.pull_request.labels.*.name, 'New Feature') &&
-            contains(github.event.pull_request.labels.*.name, 'Enhancement')
-          ) || (
-            contains(github.event.pull_request.labels.*.name, 'New Feature') &&
-            contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
-          ) || (
-            contains(github.event.pull_request.labels.*.name, 'Enhancement') &&
-            contains(github.event.pull_request.labels.*.name, 'Bug-Fix')
-          )
-      - name: "PR Category is missing from PR title. Please add it like '<category>: <pr title>'"
+      - name: Checking for correct number of required github pr labels
+        uses: mheap/github-action-required-labels@v5
+        with:
+          mode: exactly
+          count: 1
+          labels: "New Feature, Enhancement, Bug-Fix, Not-Yet-Enabled, Skip-Release-Notes"
+
+      - name: "Checking for PR Category in PR title. Should be like '<category>: <pr title>'."
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          if [[ ! "${{ github.event.pull_request.title }}" =~ ^.{2,}\:.{2,} ]]; then
+          if [[ ! "$PR_TITLE" =~ ^.{2,}\:.{2,} ]]; then
+            echo "## PR Category is missing from PR title. Please add it like '<category>: <pr title>'." >> GITHUB_STEP_SUMMARY
             exit 1
           fi
-      - name: "Found at least one PR Type label and Category in the title. Good job!"
-        run: exit 0

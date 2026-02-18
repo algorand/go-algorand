@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package fuzzer
 
 import (
 	"encoding/json"
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -96,7 +97,7 @@ func (n *DropMessageFilter) Marshal() (bytes []byte, err error) {
 
 }
 
-// Unmarshall DropMessageFilter
+// Unmarshal DropMessageFilter
 func (n *DropMessageFilter) Unmarshal(b []byte) NetworkFilterFactory {
 	type dropMessageFilterJSON struct {
 		Name               string

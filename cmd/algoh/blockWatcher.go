@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,15 +20,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 var log = logging.Base()
 
 type blockListener interface {
-	init(uint64)
-	onBlock(v1.Block)
+	init(basics.Round)
+	onBlock(rpcs.EncodedBlockCert)
 }
 
 type blockWatcher struct {
@@ -70,12 +72,13 @@ func runBlockWatcher(watchers []blockListener, client Client, abort <-chan struc
 	}
 }
 
-func (bw *blockWatcher) run(watchers []blockListener, stallDetect time.Duration, curBlock uint64) bool {
+func (bw *blockWatcher) run(watchers []blockListener, stallDetect time.Duration, curBlock basics.Round) bool {
 	lastBlock := time.Now()
 	for {
 		// Inner loop needed during catchup.
 		for {
-			block, err := bw.client.Block(curBlock)
+			// Get the raw block from the client, then parse the block so we can get the bookkeeping block and certificate for proposer address.
+			resp, err := bw.client.RawBlock(curBlock)
 
 			// Generally this error will be due to the new block not being ready. In the case of a stall we will
 			// return, causing the loop to restart and handle any possible stall/catchup.
@@ -87,6 +90,13 @@ func (bw *blockWatcher) run(watchers []blockListener, stallDetect time.Duration,
 					return false
 				}
 				break
+			}
+
+			// Parse the raw block
+			var block rpcs.EncodedBlockCert
+			err = protocol.DecodeReflect(resp, &block)
+			if err != nil {
+				return false
 			}
 
 			curBlock++
@@ -103,7 +113,7 @@ func (bw *blockWatcher) run(watchers []blockListener, stallDetect time.Duration,
 }
 
 // This keeps retrying forever, or until an abort signal is received.
-func (bw *blockWatcher) getLastRound() (uint64, bool) {
+func (bw *blockWatcher) getLastRound() (basics.Round, bool) {
 	for {
 		status, err := bw.client.Status()
 		if err != nil {
@@ -116,7 +126,7 @@ func (bw *blockWatcher) getLastRound() (uint64, bool) {
 	}
 }
 
-func (bw *blockWatcher) blockUntilReady() (curBlock uint64, ok bool) {
+func (bw *blockWatcher) blockUntilReady() (curBlock basics.Round, ok bool) {
 	curBlock, ok = bw.blockIfStalled()
 	if !ok {
 		return
@@ -126,7 +136,7 @@ func (bw *blockWatcher) blockUntilReady() (curBlock uint64, ok bool) {
 }
 
 // blockIfStalled keeps checking status until the LastRound updates.
-func (bw *blockWatcher) blockIfStalled() (uint64, bool) {
+func (bw *blockWatcher) blockIfStalled() (basics.Round, bool) {
 	curBlock, ok := bw.getLastRound()
 	if !ok {
 		return 0, false
@@ -151,7 +161,7 @@ func (bw *blockWatcher) blockIfStalled() (uint64, bool) {
 }
 
 // blockIfCatchup blocks until the lastBlock stops quickly changing. An initial block is passed
-func (bw *blockWatcher) blockIfCatchup(start uint64) (uint64, bool) {
+func (bw *blockWatcher) blockIfCatchup(start basics.Round) (basics.Round, bool) {
 	last := start
 
 	for {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/algorand/go-algorand/logging"
 )
@@ -111,7 +113,7 @@ func (t *ioTrace) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("{\n")
 	for i := 0; i < len(t.events); i++ {
-		buf.WriteString(fmt.Sprintf("\t%v |", t.events[i]))
+		buf.WriteString(fmt.Sprintf("\t%v |", t.events[i].ComparableStr()))
 		if i%2 == 0 {
 			buf.WriteString("\n")
 		}
@@ -140,14 +142,24 @@ func (t ioTrace) Contains(e event) bool {
 	})
 }
 
-// for each event, passes it into the given fn; if returns true, returns true.
-func (t ioTrace) ContainsFn(compareFn func(b event) bool) bool {
-	for _, ev := range t.events {
-		if compareFn(ev) {
-			return true
+func (t ioTrace) ContainsString(s string) bool {
+	return t.ContainsFn(func(b event) bool {
+		return strings.Contains(b.ComparableStr(), s)
+	})
+}
+
+func (t ioTrace) CountEvent(b event) (count int) {
+	for _, e := range t.events {
+		if e.ComparableStr() == b.ComparableStr() {
+			count++
 		}
 	}
-	return false
+	return
+}
+
+// for each event, passes it into the given fn; if returns true, returns true.
+func (t ioTrace) ContainsFn(compareFn func(b event) bool) bool {
+	return slices.ContainsFunc(t.events, compareFn)
 }
 
 func (t ioTrace) countAction() (count int) {
@@ -215,7 +227,7 @@ func (w ioPropWrapper) containsTrace(trace ioTrace) (contains bool, info string,
 	for _, e := range trace.events {
 		valid := checker.addEvent(e)
 		if valid != nil {
-			return false, valid.Error(), nil
+			return false, valid.Error(), nil //nolint:nilerr // intentional
 		}
 	}
 	return true, "", nil
@@ -379,8 +391,8 @@ func (blackhole) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
-// deterministicTraceTestCase encapsulates a traditional unit test test case.
-type determisticTraceTestCase struct {
+// deterministicTraceTestCase encapsulates a traditional unit test case.
+type deterministicTraceTestCase struct {
 	inputs          []event
 	expectedOutputs []event
 	safetyProps     []ioSafetyProp
@@ -388,13 +400,13 @@ type determisticTraceTestCase struct {
 
 // Validate takes a given automata at zero state, drives it with the test case input,
 // and validates the output.
-func (testCase *determisticTraceTestCase) Validate(automaton ioAutomata) (invalidErr error, runtimeErr error) {
+func (testCase *deterministicTraceTestCase) Validate(automaton ioAutomata) (invalidErr error, runtimeErr error) {
 	return testCase.ValidateAsExtension(automaton)
 }
 
 // ValidateAsExtension takes a given automata that is already in some state, drives it
 // with some addition input (an "extension"), and validates the output.
-func (testCase *determisticTraceTestCase) ValidateAsExtension(automaton ioAutomata) (invalidErr error, runtimeErr error) {
+func (testCase *deterministicTraceTestCase) ValidateAsExtension(automaton ioAutomata) (invalidErr error, runtimeErr error) {
 	// suppress error logging from contract-checkers
 	logging.Base().SetOutput(blackhole{})
 	defer func() {
@@ -490,8 +502,8 @@ type testCaseBuilder struct {
 	safetyProps     []ioSafetyProp
 }
 
-func (b *testCaseBuilder) Build() *determisticTraceTestCase {
-	return &determisticTraceTestCase{b.inputs, b.expectedOutputs, b.safetyProps}
+func (b *testCaseBuilder) Build() *deterministicTraceTestCase {
+	return &deterministicTraceTestCase{b.inputs, b.expectedOutputs, b.safetyProps}
 }
 
 func (b *testCaseBuilder) AddInOutPair(input event, output event) {
@@ -541,7 +553,7 @@ func (e wrappedActionEvent) String() string {
 }
 
 func (e wrappedActionEvent) ComparableStr() string {
-	return e.action.String()
+	return e.action.ComparableStr()
 }
 
 // ioAutomataConcretePlayer is a concrete wrapper around root router, implementing ioAutomata.

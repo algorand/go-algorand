@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,7 @@ import (
 	"net/http"
 )
 
-func addHeaders(request *http.Request, authEmail string, authKey string) {
-	request.Header.Add("X-Auth-Email", authEmail)
-	request.Header.Add("X-Auth-Key", authKey)
+func addHeaders(request *http.Request, authToken string) {
+	request.Header.Add("Authorization", "Bearer "+authToken)
 	request.Header.Add("Content-Type", "application/json")
 }

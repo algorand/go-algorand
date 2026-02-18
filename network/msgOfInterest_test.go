@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,20 +51,20 @@ func TestUnmarshallMessageOfInterestErrors(t *testing.T) {
 func TestMarshallMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	bytes := MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
+	bytes := marshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
 	tags, err := unmarshallMessageOfInterest(bytes)
 	require.NoError(t, err)
 	require.Equal(t, tags[protocol.AgreementVoteTag], true)
 	require.Equal(t, 1, len(tags))
 
-	bytes = MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.NetPrioResponseTag})
+	bytes = marshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.NetPrioResponseTag})
 	tags, err = unmarshallMessageOfInterest(bytes)
 	require.NoError(t, err)
 	require.Equal(t, tags[protocol.AgreementVoteTag], true)
 	require.Equal(t, tags[protocol.NetPrioResponseTag], true)
 	require.Equal(t, 2, len(tags))
 
-	bytes = MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.AgreementVoteTag})
+	bytes = marshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag, protocol.AgreementVoteTag})
 	tags, err = unmarshallMessageOfInterest(bytes)
 	require.NoError(t, err)
 	require.Equal(t, tags[protocol.AgreementVoteTag], true)

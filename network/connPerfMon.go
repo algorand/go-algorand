@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,8 +23,10 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/logging"
 )
 
+//msgp:ignore pmStage
 type pmStage int
 
 const (
@@ -44,7 +46,6 @@ const (
 	pmAccumulationIdlingTime        = 2 * time.Second
 	pmMaxMessageWaitTime            = 15 * time.Second
 	pmUndeliveredMessagePenaltyTime = 5 * time.Second
-	pmDesiredMessegeDelayThreshold  = 50 * time.Millisecond
 	pmMessageBucketDuration         = time.Second
 )
 
@@ -57,7 +58,7 @@ type pmMessage struct {
 // pmPeerStatistics is the per-peer resulting datastructure of the performance analysis.
 type pmPeerStatistics struct {
 	peer             Peer    // the peer interface
-	peerDelay        int64   // the peer avarage relative message delay
+	peerDelay        int64   // the peer average relative message delay
 	peerFirstMessage float32 // what percentage of the messages were delivered by this peer before any other peer
 }
 
@@ -138,7 +139,7 @@ func (pm *connectionPerformanceMonitor) ComparePeers(peers []Peer) bool {
 	pm.Lock()
 	defer pm.Unlock()
 	for _, peer := range peers {
-		if pm.monitoredConnections[peer] == false {
+		if !pm.monitoredConnections[peer] {
 			return false
 		}
 	}
@@ -176,10 +177,10 @@ func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 func (pm *connectionPerformanceMonitor) Notify(msg *IncomingMessage) {
 	pm.Lock()
 	defer pm.Unlock()
-	if pm.monitoredConnections[msg.Sender] == false {
+	if !pm.monitoredConnections[msg.Sender] {
 		return
 	}
-	if pm.monitoredMessageTags[msg.Tag] == false {
+	if !pm.monitoredMessageTags[msg.Tag] {
 		return
 	}
 	switch pm.stage {
@@ -195,7 +196,7 @@ func (pm *connectionPerformanceMonitor) Notify(msg *IncomingMessage) {
 	}
 }
 
-// notifyPresync waits until pmPresyncTime has passed and monitor the last arrivial time
+// notifyPresync waits until pmPresyncTime has passed and monitors the last arrival time
 // of messages from each of the peers.
 func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 	pm.peerLastMsgTime[msg.Sender] = msg.Received
@@ -219,7 +220,7 @@ func (pm *connectionPerformanceMonitor) notifyPresync(msg *IncomingMessage) {
 		return
 	}
 	if len(noMsgPeers) > 0 {
-		// we have one or more peers that did not send a single message thoughtout the presync time.
+		// we have one or more peers that did not send a single message throughout the presync time.
 		// ( but less than half ). since we cannot rely on these to send us messages in the future,
 		// we'll disconnect from these peers.
 		pm.advanceStage(pmStageStopped, msg.Received)
@@ -382,4 +383,128 @@ func (pm *connectionPerformanceMonitor) accumulateMessage(msg *IncomingMessage, 
 		}
 		delete(msgBucket.messages, msgDigest)
 	}
+}
+
+type networkAdvanceMonitor struct {
+	// lastNetworkAdvance contains the last timestamp where the agreement protocol was able to make a notable progress.
+	// it used as a watchdog to help us detect connectivity issues ( such as cliques )
+	lastNetworkAdvance time.Time
+
+	mu deadlock.Mutex
+}
+
+func makeNetworkAdvanceMonitor() *networkAdvanceMonitor {
+	return &networkAdvanceMonitor{
+		lastNetworkAdvance: time.Now().UTC(),
+	}
+}
+
+func (m *networkAdvanceMonitor) lastAdvancedWithin(interval time.Duration) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// now < last + interval <=> now - last < interval
+	return time.Now().UTC().Before(m.lastNetworkAdvance.Add(interval))
+}
+
+func (m *networkAdvanceMonitor) updateLastAdvance() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lastNetworkAdvance = time.Now().UTC()
+}
+
+type outgoingConnsCloser struct {
+	log                   logging.Logger
+	net                   outgoingDisconnectable
+	cliqueResolveInterval time.Duration
+	connPerfMonitor       *connectionPerformanceMonitor
+	netAdvMonitor         *networkAdvanceMonitor
+}
+
+type outgoingDisconnectable interface {
+	outgoingPeers() (peers []Peer)
+	numOutgoingPending() int
+	disconnect(badnode Peer, reason disconnectReason)
+	OnNetworkAdvance()
+}
+
+func makeOutgoingConnsCloser(log logging.Logger, net outgoingDisconnectable, connPerfMonitor *connectionPerformanceMonitor, cliqueResolveInterval time.Duration) *outgoingConnsCloser {
+	return &outgoingConnsCloser{
+		log:                   log,
+		net:                   net,
+		cliqueResolveInterval: cliqueResolveInterval,
+		connPerfMonitor:       connPerfMonitor,
+		netAdvMonitor:         makeNetworkAdvanceMonitor(),
+	}
+}
+
+// checkExistingConnectionsNeedDisconnecting check to see if existing connection need to be dropped due to
+// performance issues and/or network being stalled.
+func (cc *outgoingConnsCloser) checkExistingConnectionsNeedDisconnecting(targetConnCount int) bool {
+	// we already connected ( or connecting.. ) to  GossipFanout peers.
+	// get the actual peers.
+	outgoingPeers := cc.net.outgoingPeers()
+	if len(outgoingPeers) < targetConnCount {
+		// reset the performance monitor.
+		cc.connPerfMonitor.Reset([]Peer{})
+		return cc.checkNetworkAdvanceDisconnect()
+	}
+
+	if !cc.connPerfMonitor.ComparePeers(outgoingPeers) {
+		// different set of peers. restart monitoring.
+		cc.connPerfMonitor.Reset(outgoingPeers)
+	}
+
+	// same set of peers.
+	peerStat := cc.connPerfMonitor.GetPeersStatistics()
+	if peerStat == nil {
+		// performance metrics are not yet ready.
+		return cc.checkNetworkAdvanceDisconnect()
+	}
+
+	// update peers with the performance metrics we've gathered.
+	var leastPerformingPeer *wsPeer = nil
+	for _, stat := range peerStat.peerStatistics {
+		wsPeer := stat.peer.(*wsPeer)
+		wsPeer.peerMessageDelay = stat.peerDelay
+		cc.log.Infof("network performance monitor - peer '%s' delay %d first message portion %d%%", wsPeer.GetAddress(), stat.peerDelay, int(stat.peerFirstMessage*100))
+		if wsPeer.throttledOutgoingConnection && leastPerformingPeer == nil {
+			leastPerformingPeer = wsPeer
+		}
+	}
+	if leastPerformingPeer == nil {
+		return cc.checkNetworkAdvanceDisconnect()
+	}
+	cc.net.disconnect(leastPerformingPeer, disconnectLeastPerformingPeer)
+	cc.connPerfMonitor.Reset([]Peer{})
+
+	return true
+}
+
+// checkNetworkAdvanceDisconnect is using the lastNetworkAdvance indicator to see if the network is currently "stuck".
+// if it's seems to be "stuck", a randomly picked peer would be disconnected.
+func (cc *outgoingConnsCloser) checkNetworkAdvanceDisconnect() bool {
+	if cc.netAdvMonitor.lastAdvancedWithin(cc.cliqueResolveInterval) {
+		return false
+	}
+	outgoingPeers := cc.net.outgoingPeers()
+	if len(outgoingPeers) == 0 {
+		return false
+	}
+	if cc.net.numOutgoingPending() > 0 {
+		// we're currently trying to extend the list of outgoing connections. no need to
+		// disconnect any existing connection to free up room for another connection.
+		return false
+	}
+	var peer *wsPeer
+	disconnectPeerIdx := crypto.RandUint63() % uint64(len(outgoingPeers))
+	peer = outgoingPeers[disconnectPeerIdx].(*wsPeer)
+
+	cc.net.disconnect(peer, disconnectCliqueResolve)
+	cc.connPerfMonitor.Reset([]Peer{})
+	cc.net.OnNetworkAdvance()
+	return true
+}
+
+func (cc *outgoingConnsCloser) updateLastAdvance() {
+	cc.netAdvMonitor.updateLastAdvance()
 }

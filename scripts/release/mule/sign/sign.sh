@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=2035,2129
 
-# TODO: This needs to be reworked a bit to support Darwin.
-
 set -exo pipefail
 shopt -s nullglob
 
@@ -10,18 +8,13 @@ echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$NETWORK" ]; then
-    echo "[$0] NETWORK is missing."
-    exit 1
-fi
-
-CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
+CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
-OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
-ARCHS=(amd64 arm arm64)
-ARCH_BITS=(x86_64 armv7l aarch64)
+OS_TYPES=(linux darwin)
+ARCHS=(amd64 arm64 universal)
+ARCH_BITS=(x86_64 aarch64)
 # Note that we don't want to use $GNUPGHOME here because that is a documented env var for the gnupg
 # project and if it's set in the environment mule will automatically pick it up, which could have
 # unintended consequences and be hard to debug.
@@ -40,21 +33,31 @@ then
     find "$GPG_DIR" -type f -exec chmod 600 {} \;
 fi
 
+pushd /root
+cat << EOF > .rpmmacros
+%_gpg_name Algorand RPM <rpm@algorand.com>
+%__gpg /usr/bin/gpg2
+%__gpg_check_password_cmd true
+EOF
+popd
+
 # Note that when downloading from the cloud that we'll get all packages for all architectures.
 if [ -n "$S3_SOURCE" ]
 then
     i=0
-    for arch in "${ARCHS[@]}"; do
-        arch_bit="${ARCH_BITS[$i]}"
-        (
+    for os in "${OS_TYPES[@]}"; do
+        for arch in "${ARCHS[@]}"; do
             mkdir -p "$PKG_DIR/$OS_TYPE/$arch"
-            cd "$PKG_DIR"
-            # Note the underscore after ${arch}!
-            # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
-            # Also, the order of the includes/excludes is important!
-            aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --include "*$arch_bit.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
-        )
-        i=$((i + 1))
+            arch_bit="${ARCH_BITS[$i]}"
+            (
+                cd "$PKG_DIR"
+                # Note the underscore after ${arch}!
+                # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
+                # Also, the order of the includes/excludes is important!
+                aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --include "*$arch_bit.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
+            )
+            i=$((i + 1))
+        done
     done
 fi
 
@@ -66,50 +69,47 @@ cd "$PKG_DIR"
 # Grab the directories directly underneath (max-depth 1) ./tmp/node_pkgs/ into a space-delimited string.
 # This will help us target `linux`, `darwin` and (possibly) `windows` build assets.
 # Note the surrounding parens turns the string created by `find` into an array.
-OS_TYPES=($(find . -mindepth 1 -maxdepth 1 -type d -printf '%f\n'))
 for os in "${OS_TYPES[@]}"; do
-    if [ "$os" = linux ]
-    then
-        for arch in "${ARCHS[@]}"; do
-            if [ -d "$os/$arch" ]
+    for arch in "${ARCHS[@]}"; do
+        if [ -d "$os/$arch" ]
+        then
+            # Only do the subsequent operations in a subshell if the directory is not empty.
+            if stat -t "$os/$arch/"* > /dev/null 2>&1
             then
-                # Only do the subsequent operations in a subshell if the directory is not empty.
-                if stat -t "$os/$arch/"* > /dev/null 2>&1
-                then
-                (
-                    cd "$os/$arch"
+            (
+                cd "$os/$arch"
 
-                    # Clean package directory of any previous operations.
-                    rm -rf hashes* *.sig *.asc *.asc.gz
+                # Clean package directory of any previous operations.
+                rm -rf hashes* *.sig *.asc *.asc.gz
 
-                    for file in *.tar.gz *.deb
-                    do
-                        gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
-                    done
+                for file in *.tar.gz *.deb
+                do
+                    gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
+                done
 
-                    for file in *.rpm
-                    do
-                        gpg -u rpm@algorand.com --detach-sign "$file"
-                    done
+                for file in *.rpm
+                do
+                    rpmsign --addsign "$file"
+                    gpg -u rpm@algorand.com --detach-sign "$file"
+                done
 
-                    HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
-                    md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
-                    shasum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
-                    shasum -a 512 *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
+                md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                sha256sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                sha512sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
 
-                    gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
-                    gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
+                gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
+                gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
 
-                    STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
-                    if [[ -f "$STATUSFILE" ]]; then
-                        gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
-                        gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
-                    fi
-                )
+                STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
+                if [[ -f "$STATUSFILE" ]]; then
+                    gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
+                    gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
                 fi
+            )
             fi
-        done
-    fi
+        fi
+    done
 done
 
 echo

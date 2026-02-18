@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,8 +56,8 @@ func TestBasicPartitionRecovery(t *testing.T) {
 	a.NoError(err)
 
 	// Let the network make some progress
-	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	const waitForRound = 3
+	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Now stop 2nd node
@@ -132,8 +132,8 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 	a.NoError(err)
 
 	// Let the network make some progress
-	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc1), waitForRound)
+	const waitForRound = 3
+	err = fixture.GetAlgodClientForController(nc1).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Stop Node1
@@ -195,8 +195,8 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 	a.NoError(err)
 
 	// Let the network make some progress
-	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc1), waitForRound)
+	const waitForRound = 3
+	err = fixture.GetAlgodClientForController(nc1).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Stop Node1
@@ -251,6 +251,7 @@ func TestPartitionHalfOffline(t *testing.T) {
 		a.NoError(err)
 		// adjust the refresh interval for one hour, so that we won't be reloading the participation key during this test.
 		cfg.ParticipationKeysRefreshInterval = time.Hour
+		cfg.GoMemLimit = 1 * 1024 * 1024 * 1024 // 1GB
 		cfg.SaveToDisk(nodeDir)
 	}
 	fixture.Start()
@@ -263,8 +264,7 @@ func TestPartitionHalfOffline(t *testing.T) {
 
 	// Let the network make some progress
 	client := fixture.LibGoalClient
-	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc1), waitForRound)
+	err = fixture.GetAlgodClientForController(nc1).WaitForRoundWithTimeout(3)
 	a.NoError(err)
 
 	// Stop nodes with 50% of stake

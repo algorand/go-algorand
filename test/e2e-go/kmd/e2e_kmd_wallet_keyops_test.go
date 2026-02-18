@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -380,7 +380,7 @@ func TestSignProgram(t *testing.T) {
 	a.NotEqual(sig, crypto.Signature{})
 
 	ph := logic.Program(program)
-	a.True(secrets.SignatureVerifier.Verify(ph, sig, true))
+	a.True(secrets.SignatureVerifier.Verify(ph, sig))
 }
 
 func BenchmarkSignTransaction(b *testing.B) {

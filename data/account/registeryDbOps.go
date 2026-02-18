@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,8 +21,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/algorand/go-algorand/protocol"
+	"maps"
 	"strings"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type dbOp interface {
@@ -52,6 +55,40 @@ type insertOp struct {
 type appendKeysOp struct {
 	id   ParticipationID
 	keys StateProofKeys
+}
+type deleteStateProofKeysOp struct {
+	ParticipationID ParticipationID
+	round           basics.Round
+}
+
+func (d deleteStateProofKeysOp) apply(db *participationDB) error {
+	err := db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+
+		// Fetch primary key
+		var pk int
+		row := tx.QueryRow(selectPK, d.ParticipationID[:])
+		err := row.Scan(&pk)
+		if err != nil {
+			return fmt.Errorf("unable to scan pk: %w", err)
+		}
+
+		stmt, err := tx.Prepare(deleteStateProofKeysQuery)
+		if err != nil {
+			return fmt.Errorf("unable to prepare state proof delete: %w", err)
+		}
+		defer stmt.Close()
+
+		_, err = stmt.Exec(pk, d.round)
+		if err != nil {
+			return fmt.Errorf("unable to exec state proof delete (pk,rnd) == (%d,%d): %w", pk, d.round, err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		db.log.Warnf("participationDB unable to delete stateProof key: %v", err)
+	}
+	return err
 }
 
 func makeOpRequest(operation dbOp) opRequest {
@@ -114,7 +151,7 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		result, err := tx.Exec(
+		result, err2 := tx.Exec(
 			insertKeysetQuery,
 			i.id[:],
 			i.record.Parent[:],
@@ -123,21 +160,17 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 			i.record.KeyDilution,
 			rawVRF,
 			rawStateProofContext)
-		if err = verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
-			return err
+		if err2 = verifyExecWithOneRowEffected(err2, result, "insert keyset"); err2 != nil {
+			return err2
 		}
-		pk, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("unable to get pk from keyset: %w", err)
+		pk, err2 := result.LastInsertId()
+		if err2 != nil {
+			return fmt.Errorf("unable to get pk from keyset: %w", err2)
 		}
 
 		// Create Rolling entry
-		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
-		if err = verifyExecWithOneRowEffected(err, result, "insert rolling"); err != nil {
-			return err
-		}
-
-		return nil
+		result, err2 = tx.Exec(insertRollingQuery, pk, rawVoting)
+		return verifyExecWithOneRowEffected(err2, result, "insert rolling")
 	})
 	return err
 }
@@ -164,6 +197,11 @@ func (d *deleteOp) apply(db *participationDB) error {
 
 		result, err = tx.Exec(deleteRolling, pk)
 		if err = verifyExecWithOneRowEffected(err, result, "delete rolling"); err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(deleteStateProofByPK, pk)
+		if err != nil {
 			return err
 		}
 
@@ -220,9 +258,7 @@ func (f *flushOp) apply(db *participationDB) error {
 	if err != nil {
 		// put back what we didn't finish with
 		db.mutex.Lock()
-		for id, v := range dirty {
-			db.dirty[id] = v
-		}
+		maps.Copy(db.dirty, dirty)
 		db.mutex.Unlock()
 	}
 

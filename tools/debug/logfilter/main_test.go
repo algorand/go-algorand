@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,14 +19,14 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestLogFilterExamples(t *testing.T) {
@@ -48,7 +48,7 @@ func TestLogFilterExamples(t *testing.T) {
 	for _, exampleFileName := range exampleFiles {
 		// load the expected result file.
 		expectedOutFile := strings.Replace(exampleFileName, ".in", ".out.expected", 1)
-		expectedOutBytes, err := ioutil.ReadFile(expectedOutFile)
+		expectedOutBytes, err := os.ReadFile(expectedOutFile)
 		require.NoError(t, err)
 		expectedErrorCode := 0
 		if strings.Contains(string(expectedOutBytes), "FAIL") {

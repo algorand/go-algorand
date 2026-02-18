@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,11 +17,12 @@
 package main
 
 import (
-	// "bytes"
+	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"html"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -63,61 +64,8 @@ type dispenserSiteConfig struct {
 	topPage string
 }
 
-const topPageTemplate = `
-<html>
-  <head>
-    <title>Algorand dispenser</title>
-    <script src='https://www.google.com/recaptcha/api.js'>
-    </script>
-    <script src="https://code.jquery.com/jquery-3.3.1.min.js"
-    integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
-    crossorigin="anonymous">
-    </script>
-    <script>
-      function loadparam() {
-        const queryString = window.location.search;
-        const urlParams = new URLSearchParams(queryString);
-        $('#target').val(urlParams.get('account'));
-      }
-
-      function onload() {
-        loadparam();
-        $('#dispense').click(function(e) {
-          var recaptcha = grecaptcha.getResponse();
-          var target = $('#target').val();
-
-          $('#status').html('Sending request..');
-          var req = $.post('/dispense', {
-            recaptcha: recaptcha,
-            target: target,
-          }, function(data) {
-            $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
-          }).fail(function() {
-            $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
-          });
-        });
-      }
-    </script>
-  </head>
-  <body onload="onload()">
-    <h1>Algorand dispenser</h1>
-    <div class="g-recaptcha" data-sitekey="{{.RecaptchaSiteKey}}">
-    </div>
-    <div>
-      <p>The dispensed Algos have no monetary value and should only be used to test applications.</p>
-      <p>This service is gracefully provided to enable development on the Algorand blockchain test networks.</p>
-      <p>Please do not abuse it by requesting more Algos than needed.</p>
-    </div>
-    <div>
-      <input id="target" placeholder="target address" size="80">
-      <button id="dispense">Dispense</button>
-    </div>
-    <div>
-      Status: <span id="status"></span>
-    </div>
-  </body>
-</html>
-`
+//go:embed index.html.tpl
+var topPageTemplate string
 
 func getConfig(r *http.Request) dispenserSiteConfig {
 	return configMap[r.Host]
@@ -150,7 +98,7 @@ func (cfg dispenserSiteConfig) checkRecaptcha(remoteip, response string) (r reca
 	}
 
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
@@ -186,11 +134,11 @@ func dispense(w http.ResponseWriter, r *http.Request) {
 	targets := r.Form["target"]
 	if len(targets) != 1 {
 		log.Printf("Corrupted target argument\n")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Corrupted target argument", http.StatusBadRequest)
 		return
 	}
 
-	target := targets[0]
+	target := html.EscapeString(targets[0])
 
 	c, ok := client[r.Host]
 	if !ok {
@@ -219,7 +167,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	configText, err := ioutil.ReadFile(*configFile)
+	configText, err := os.ReadFile(*configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot read config file (%s): %v\n", *configFile, err)
 		os.Exit(1)
@@ -237,7 +185,7 @@ func main() {
 	var hosts []string
 	for h, cfg := range configMap {
 		// Make a cache dir for wallet handle tokens
-		cacheDir, err := ioutil.TempDir("", "dispenser")
+		cacheDir, err := os.MkdirTemp("", "dispenser")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot make temp dir: %v\n", err)
 			os.Exit(1)

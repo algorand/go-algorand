@@ -31,13 +31,13 @@ def build_netgoal_params(template_dict):
     instances = template_dict['instances']
 
     relay_count = 0
-    participating_node_count = 0
-    non_participating_node_count = 0
+    participating_instance_count = 0
+    non_participating_instance_count = 0
 
     for group in template_dict['groups']:
         relay_count += getInstanceCount(instances['relays'], group['percent']['relays'])
-        participating_node_count += getInstanceCount(instances['participatingNodes'], group['percent']['participatingNodes'])
-        non_participating_node_count += getInstanceCount(instances['nonParticipatingNodes'], group['percent']['nonParticipatingNodes'])
+        participating_instance_count += getInstanceCount(instances['participatingNodes'], group['percent']['participatingNodes'])
+        non_participating_instance_count += getInstanceCount(instances['nonParticipatingNodes'], group['percent']['nonParticipatingNodes'])
 
     relay_config = instances['relays']['config']
     participating_node_config = instances['participatingNodes']['config']
@@ -45,13 +45,15 @@ def build_netgoal_params(template_dict):
 
     wallets_count = template_dict['network']['wallets']
     nodes_count = template_dict['network']['nodes']
+    npn_count     =  template_dict['network']['npn']
 
     return [
         '-w', str(wallets_count),
         '-R', str(relay_count),
-        '-N', str(participating_node_count),
-        '-H', str(non_participating_node_count),
+        '-N', str(participating_instance_count),
+        '-X', str(non_participating_instance_count),
         '-n', str(nodes_count),
+        '-x', str(npn_count),
         '--relay-template', relay_config,
         '--node-template', participating_node_config,
         '--non-participating-node-template', non_participating_node_config
@@ -68,11 +70,12 @@ def build_net(template_path, netgoal_params):
 def build_genesis(template_path, netgoal_params, template_dict):
     args = [
         '-t', 'genesis',
+        '--last-part-key-round', str(100_000),
         '-o', f"{template_path}/generated/genesis.json"
     ]
     args.extend(netgoal_params)
     netgoal(args, template_path)
-    if template_dict['network']['ConsensusProtocol']:
+    if 'ConsensusProtocol' in template_dict['network']:
         updateProtocol(f"{template_path}/generated/genesis.json", template_dict['network']['ConsensusProtocol'])
 
 def updateProtocol(genesis_path, consensus_protocol):

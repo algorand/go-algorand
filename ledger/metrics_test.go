@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,7 +34,11 @@ import (
 func TestMetricsReload(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	mt := metricsTracker{}
+	// Use a non-default registry so the test is not affected by metrics
+	// registered by other packages when running with -coverpkg.
+	registry := metrics.MakeRegistry()
+
+	mt := metricsTracker{registry: registry}
 	accts := ledgertesting.RandomAccounts(1, true)
 	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, []map[basics.Address]basics.AccountData{accts})
 
@@ -48,7 +52,7 @@ func TestMetricsReload(t *testing.T) {
 	mt.newBlock(blk, ledgercore.StateDelta{})
 
 	var buf strings.Builder
-	metrics.DefaultRegistry().WriteMetrics(&buf, "")
+	registry.WriteMetrics(&buf, "")
 	lines := strings.Split(buf.String(), "\n")
 	txCount := 0
 	rcCount := 0

@@ -13,7 +13,7 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,14 +70,14 @@ func main() {
 
 	if *allowedRewrites != "" {
 		allowed = make(map[string]bool)
-		for _, f := range strings.Split(*allowedRewrites, ",") {
+		for f := range strings.SplitSeq(*allowedRewrites, ",") {
 			allowed[f] = true
 		}
 	}
 
 	if *forceRewrites != "" {
 		force = make(map[string]bool)
-		for _, f := range strings.Split(*forceRewrites, ",") {
+		for f := range strings.SplitSeq(*forceRewrites, ",") {
 			force[f] = true
 		}
 	}
@@ -135,7 +135,7 @@ func processFile(filename string, useStdin bool) error {
 		defer f.Close()
 	}
 
-	src, err := ioutil.ReadAll(f)
+	src, err := io.ReadAll(f)
 	if err != nil {
 		return err
 	}
@@ -162,18 +162,18 @@ func processFile(filename string, useStdin bool) error {
 			// AST changed.
 			// Print and parse, to update any missing scoping
 			// or position information for subsequent fixers.
-			newSrc, err := gofmtFile(newFile)
-			if err != nil {
-				return err
+			newSrc, err1 := gofmtFile(newFile)
+			if err1 != nil {
+				return err1
 			}
-			newFile, err = parser.ParseFile(fset, filename, newSrc, parserMode)
-			if err != nil {
+			newFile, err1 = parser.ParseFile(fset, filename, newSrc, parserMode)
+			if err1 != nil {
 				if debug {
 					fmt.Printf("%s", newSrc)
-					report(err)
+					report(err1)
 					os.Exit(exitCode)
 				}
-				return err
+				return err1
 			}
 		}
 	}
@@ -209,17 +209,7 @@ func processFile(filename string, useStdin bool) error {
 	}
 
 	fixedSome = true
-	return ioutil.WriteFile(f.Name(), newSrc, 0)
-}
-
-var gofmtBuf bytes.Buffer
-
-func gofmt(n interface{}) string {
-	gofmtBuf.Reset()
-	if err := format.Node(&gofmtBuf, fset, n); err != nil {
-		return "<" + err.Error() + ">"
-	}
-	return gofmtBuf.String()
+	return os.WriteFile(f.Name(), newSrc, 0)
 }
 
 func report(err error) {
@@ -248,7 +238,7 @@ func isGoFile(f os.FileInfo) bool {
 }
 
 func writeTempFile(dir, prefix string, data []byte) (string, error) {
-	file, err := ioutil.TempFile(dir, prefix)
+	file, err := os.CreateTemp(dir, prefix)
 	if err != nil {
 		return "", err
 	}

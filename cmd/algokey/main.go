@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,13 +22,21 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
+
+	"github.com/algorand/go-algorand/config"
 )
+
+var versionCheck bool
 
 var rootCmd = &cobra.Command{
 	Use:   "algokey",
 	Short: "CLI for managing Algorand keys",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		if versionCheck {
+			fmt.Println(config.FormatVersionAndLicense())
+			return
+		}
 		// If no arguments passed, we should fallback to help
 		cmd.HelpFunc()(cmd, args)
 	},
@@ -41,6 +49,7 @@ func init() {
 	rootCmd.AddCommand(signCmd)
 	rootCmd.AddCommand(multisigCmd)
 	rootCmd.AddCommand(partCmd)
+	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 }
 
 func main() {

@@ -15,7 +15,7 @@ fi
 
 if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$|^betanet$ ]]
 then
-    echo "[$0] Network values must be either \`mainnet\`, \`testnet\` or \`betanet\`."
+    echo "[$0] Network values must be either \`mainnet\`, \`testnet\`, or \`betanet\`."
     exit 1
 fi
 
@@ -30,7 +30,7 @@ then
   ./build_releases.sh --tagname "$VERSION" --network testnet --cached
 elif [ "$NETWORK" = betanet ]
 then
-  ./build_releases.sh --tagname "$VERSION" --network betanet
+  ./build_releases.sh --tagname "$VERSION" --network "$NETWORK"
 fi
 
 popd

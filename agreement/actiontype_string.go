@@ -31,8 +31,9 @@ const _actionType_name = "noopignorebroadcastrelaydisconnectbroadcastVotesverify
 var _actionType_index = [...]uint8{0, 4, 10, 19, 24, 34, 48, 58, 71, 83, 89, 100, 106, 112, 120, 129, 139}
 
 func (i actionType) String() string {
-	if i < 0 || i >= actionType(len(_actionType_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_actionType_index)-1 {
 		return "actionType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _actionType_name[_actionType_index[i]:_actionType_index[i+1]]
+	return _actionType_name[_actionType_index[idx]:_actionType_index[idx+1]]
 }

@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+e2e_subs/rekey.sh start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -exo pipefail
 export SHELLOPTS
@@ -12,7 +14,7 @@ gcmd="goal -w ${WALLET}"
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 
-# Rekeying should fail if in a txn group with a < v2 TEAL program
+# Rekeying should fail if in a txn group with a < v2 program
 
 # Make v1 program
 printf 'int 1' > "${TEMPDIR}/simplev1.teal"
@@ -46,12 +48,12 @@ cat "${TEMPDIR}/group0_split-0.stxn" "${TEMPDIR}/group0_split-1.txn" > "${TEMPDI
 RES=$(${gcmd} clerk rawsend -f "${TEMPDIR}/group0_signed.stxn" 2>&1 || true)
 EXPERROR='program version must be >= 2 for this transaction group'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+e2e_subs/rekey.sh FAIL txn group with rekey transaction should require teal version >= 2 %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL txn group with rekey transaction should require version >= 2 %Y%m%d_%H%M%S"
     false
 fi
 
 # Plan: make a txn group. First one is rekey-to payment from $ACCOUNTD, second
-# one is regular payment from v1 escrow. (Should succeed when we send it).
+# one is regular payment from v2 escrow. (Should succeed when we send it).
 
 ${gcmd} clerk send -a 1 -f "${ACCOUNTD}" -t "${ACCOUNTD}" --rekey-to "${ACCOUNT}" -o "${TEMPDIR}/txn2.tx"
 ${gcmd} clerk send -a 1 --from-program "${TEMPDIR}/simple.teal" -t "${ACCOUNTD}" -o "${TEMPDIR}/txn3.tx"
@@ -74,13 +76,18 @@ ${gcmd} account import -m "${mnemonic}"
 
 ${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}" --rekey-to "${ACCOUNTC}"
 
-${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -o "${TEMPDIR}/ntxn"
+# Send with alternate spending key. Test two ways (with different
+# amounts, to help distinguish if failure occurs).  First, by creating
+# a txn in a file, signing, then rawsend
+${gcmd} clerk send -a 80000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -o "${TEMPDIR}/ntxn"
 ${gcmd} clerk sign -S "${ACCOUNTC}" -i "${TEMPDIR}/ntxn" -o "${TEMPDIR}/nstxn"
 ${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn"
+# Then by using goal syntax for send (-S) from rekeyed account
+${gcmd} clerk send -a 20000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -S "${ACCOUNTC}"
 
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
 if [ "$BALANCEB" -ne 200000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=200000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL wanted balance=200000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
@@ -91,7 +98,7 @@ ${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn2"
 
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
 if [ "$BALANCEB" -ne 300000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=300000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL wanted balance=300000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
@@ -101,16 +108,24 @@ ${gcmd} clerk sign -S "${ACCOUNTC}" -i "${TEMPDIR}/ntxn3" -o "${TEMPDIR}/nstxn3"
 
 # This should fail because $ACCOUNT should have signed the transaction.
 if ! ${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn3"; then
-    date '+e2e_subs/rekey.sh OK %Y%m%d_%H%M%S'
+    date "+${scriptname} OK %Y%m%d_%H%M%S"
 else
-    date "+e2e_subs/rekey.sh rawsend should have failed because of a bad signature %Y%m%d_%H%M%S"
+    date "+${scriptname} rawsend should have failed because of a bad signature %Y%m%d_%H%M%S"
+    false
+fi
+
+# This should fail because $ACCOUNT should have signed the transaction.
+if ! ${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -S "${ACCOUNTC}"; then
+    date "+${scriptname} OK %Y%m%d_%H%M%S"
+else
+    date "+${scriptname} send should have failed because of a bad signature %Y%m%d_%H%M%S"
     false
 fi
 
 # Account balance should be the same amount as before.
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
 if [ "$BALANCEB" -ne 300000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=300000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL wanted balance=300000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
@@ -119,7 +134,7 @@ ${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}"
 
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
 if [ "$BALANCEB" -ne 400000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=400000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL wanted balance=400000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
@@ -130,6 +145,6 @@ ${gcmd} clerk rawsend -f "${TEMPDIR}/ctx.stxn"
 
 BALANCED=$(${gcmd} account balance -a "${ACCOUNTD}" | awk '{ print $1 }')
 if [ "$BALANCED" -ne 0 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=0 but got ${BALANCED} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL wanted balance=0 but got ${BALANCED} %Y%m%d_%H%M%S"
     false
 fi

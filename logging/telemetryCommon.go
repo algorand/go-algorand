@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,23 +17,13 @@
 package logging
 
 import (
+	"context"
 	"sync"
-	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
 
-	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-deadlock"
 )
-
-// TelemetryOperation wraps the context for an ongoing telemetry.StartOperation call
-type TelemetryOperation struct {
-	startTime      time.Time
-	category       telemetryspec.Category
-	identifier     telemetryspec.Operation
-	telemetryState *telemetryState
-	pending        int32
-}
 
 type telemetryHook interface {
 	Fire(entry *logrus.Entry) error
@@ -67,6 +57,7 @@ type TelemetryConfig struct {
 	Version            string       `json:"-"`
 	UserName           string
 	Password           string
+	DataDirectory      string `json:"-"` // distinguishes instances on the same node
 }
 
 // MarshalingTelemetryConfig is used for json serialization of the TelemetryConfig
@@ -94,4 +85,4 @@ type asyncTelemetryHook struct {
 // A dummy noop type to get rid of checks like telemetry.hook != nil
 type dummyHook struct{}
 
-type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)
+type hookFactory func(ctx context.Context, cfg TelemetryConfig) (logrus.Hook, error)

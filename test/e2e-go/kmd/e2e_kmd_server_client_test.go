@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,7 +45,7 @@ func TestServerStartsStopsSuccessfully(t *testing.T) {
 	a.NoError(err)
 }
 
-func TestBadAuthFails(t *testing.T) {
+func TestBadAuthErrs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 

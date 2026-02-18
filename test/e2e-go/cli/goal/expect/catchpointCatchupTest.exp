@@ -6,7 +6,7 @@ log_user 1
 #
 # The goal of the test is to demonstrate the catchpoint catchup functionality using the goal command line interface.
 # It does that by deploying a single relay, which advances until it generates a catchpoint.
-# Once it does, another node is started, and instructred to catchup using the catchpoint from the first relay.
+# Once it does, another node is started, and instructed to catchup using the catchpoint from the first relay.
 # To make sure that the second node won't be using the "regular" catchup, we tunnel all the communication between the two using a proxy.
 # The proxy is responsible to filter out block number 2. This would prevent the "regular" catchup from working,
 # and would be a good test ground for the catchpoint catchup.
@@ -37,7 +37,7 @@ proc spawnCatchpointCatchupWebProxy { TARGET_ENDPOINT RUNTIME REQUEST_DELAY } {
         eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
     }
 
-    puts "Web proxy listening address is $WEBPROXY_LISTEN_ADDRESS"
+    puts "[clock format [clock seconds] -format %H:%M:%S]: Web proxy listening address is $WEBPROXY_LISTEN_ADDRESS"
     return $WEBPROXY_LISTEN_ADDRESS
 }
 
@@ -64,12 +64,12 @@ if { [catch {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Update the Primary Node configuration
-    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"CatchpointInterval":4,"EnableRequestLogger":true}} > $TEST_ROOT_DIR/Primary/config.json.new
+    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"MaxAcctLookback": 2, "CatchpointInterval": 4,"EnableRequestLogger":true,"Archival":true}} > $TEST_ROOT_DIR/Primary/config.json.new
     exec rm $TEST_ROOT_DIR/Primary/config.json
     exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
 
     # Update the Second Node configuration
-    exec -- cat "$TEST_ROOT_DIR/Node/config.json" | jq {. |= . + {"CatchupParallelBlocks":2}} > $TEST_ROOT_DIR/Node/config.json.new
+    exec -- cat "$TEST_ROOT_DIR/Node/config.json" | jq {. |= . + {"MaxAcctLookback": 2, "CatchupParallelBlocks":2}} > $TEST_ROOT_DIR/Node/config.json.new
     exec rm $TEST_ROOT_DIR/Node/config.json
     exec mv $TEST_ROOT_DIR/Node/config.json.new $TEST_ROOT_DIR/Node/config.json
 
@@ -83,6 +83,11 @@ if { [catch {
 
 
     # Wait until the primary node reaches round 37. At that point, the catchpoint for round 36 is already done.
+    # The rationale is the following:
+    # 1. MaxTxnLife = 23 and CatchpointLookback = 8 so catchup would load blocks 36-8-23..36 = 5..36
+    # 2. Loading block 2 is blocked by the catchpoint proxy
+    # 3. Next block is 37 that would require balances from round 37-MaxBalLookback = 29 to be accessed, and this is
+    # within the expected range of 5...36
     ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Primary
 
     # Get primary node listening address:
@@ -100,7 +105,7 @@ if { [catch {
         exit 1
     }
 
-    puts "Primary node listening address is $PRIMARY_LISTEN_ADDRESS"
+    puts "[clock format [clock seconds] -format %H:%M:%S]: Primary node listening address is $PRIMARY_LISTEN_ADDRESS"
 
     # start the web proxy
     set WP_SPAWN_ID 0
@@ -115,11 +120,11 @@ if { [catch {
 
     set CATCHPOINT [::AlgorandGoal::GetNodeLastCatchpoint $TEST_ROOT_DIR/Primary]
 
-    puts "Catchpoint is $CATCHPOINT"
+    puts "[clock format [clock seconds] -format %H:%M:%S]: Catchpoint is $CATCHPOINT"
 
     regexp -nocase {([0-9]*)#[A-Z2-7]*} $CATCHPOINT CATCHPOINT_ROUND CATCHPOINT_ROUND
 
-    puts "Catchpoint round is $CATCHPOINT_ROUND"
+    puts "[clock format [clock seconds] -format %H:%M:%S]: Catchpoint round is $CATCHPOINT_ROUND"
 
     # wait for the primary to reach $CATCHPOINT_ROUND + 5, so that the catchpoint file would be saved
     ::AlgorandGoal::WaitForRound [expr {int($CATCHPOINT_ROUND + 5)}] $TEST_ROOT_DIR/Primary
@@ -133,7 +138,7 @@ if { [catch {
     # close the web proxy
     close -i $WP_SPAWN_ID
 
-    puts "catchpointCatchupTest basic test completed"
+    puts "[clock format [clock seconds] -format %H:%M:%S]: catchpointCatchupTest basic test completed"
 
 } EXCEPTION ] } {
    ::AlgorandGoal::Abort "ERROR in catchpointCatchupTest - basic test: $EXCEPTION"
@@ -177,7 +182,7 @@ if { [catch {
     # once the node is started we can clear the ::GLOBAL_TEST_ALGO_DIR, so that shutdown would be done as a network.
     set ::GLOBAL_TEST_ALGO_DIR ""
 
-    ::AlgorandGoal::WaitForRound 38 $TEST_ROOT_DIR/Node
+    ::AlgorandGoal::WaitForRound $CATCHPOINT_ROUND $TEST_ROOT_DIR/Node
 
     ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
 
@@ -186,7 +191,7 @@ if { [catch {
 
     ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Primary
 
-    puts "catchpointCatchupTest stop/start test completed"
+    puts "[clock format [clock seconds] -format %H:%M:%S]: catchpointCatchupTest stop/start test completed"
 } EXCEPTION ] } {
    ::AlgorandGoal::Abort "ERROR in catchpointCatchupTest - stop/start: $EXCEPTION"
 }

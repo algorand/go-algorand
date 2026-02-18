@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,42 +17,40 @@
 package logic
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestGetSourceMap(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	a := require.New(t)
 
 	sourceNames := []string{"test.teal"}
-	offsetToLine := map[int]int{
-		1: 1,
-		2: 2,
-		5: 3,
+	offsetToLocation := map[int]SourceLocation{
+		1:  {Line: 1},
+		2:  {Line: 2},
+		5:  {Line: 3},
+		6:  {Line: 3, Column: 1},
+		7:  {Line: 4},
+		8:  {Line: 5, Column: 5},
+		9:  {Line: 5, Column: 6},
+		10: {Line: 6},
 	}
-	actualSourceMap := GetSourceMap(sourceNames, offsetToLine)
+	actualSourceMap := GetSourceMap(sourceNames, offsetToLocation)
 
 	a.Equal(sourceMapVersion, actualSourceMap.Version)
 	a.Equal(sourceNames, actualSourceMap.Sources)
 	a.Equal([]string{}, actualSourceMap.Names)
-
-	// Check encoding for each line.
-	splitMapping := strings.Split(actualSourceMap.Mapping, ";")
-	for pc := range splitMapping {
-		if line, ok := offsetToLine[pc]; ok {
-			a.Equal(MakeSourceMapLine(0, 0, line, 0), splitMapping[pc])
-		} else {
-			a.Equal("", splitMapping[pc])
-		}
-	}
+	a.Equal(";AACA;AACA;;;AACA;AAAC;AACD;AACK;AAAC;AACN", actualSourceMap.Mappings)
 }
 
 func TestVLQ(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	a := require.New(t)
 
 	a.Equal("AAAA", MakeSourceMapLine(0, 0, 0, 0))

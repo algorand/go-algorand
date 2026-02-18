@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -38,11 +38,9 @@ type createDNSRecord struct {
 // https://community.cloudflare.com/t/cloudflare-api-v4-srv-dns-creation-failure-in-php/25677/7
 type createSRVRecord struct {
 	Type string `json:"type"`
+	Name string `json:"name"`
 	Data struct {
-		Name     string `json:"name"`
 		TTL      uint   `json:"ttl"`
-		Service  string `json:"service"`
-		Proto    string `json:"proto"`
 		Weight   uint   `json:"weight"`
 		Port     uint   `json:"port"`
 		Priority uint   `json:"priority"`
@@ -51,7 +49,7 @@ type createSRVRecord struct {
 }
 
 // createDNSRecordRequest construct a http request that would create a new dns record
-func createDNSRecordRequest(zoneID string, authEmail string, authKey string, recordType string, name string, content string, ttl uint, priority uint, proxied bool) (*http.Request, error) {
+func createDNSRecordRequest(zoneID string, authToken string, recordType string, name string, content string, ttl uint, priority uint, proxied bool) (*http.Request, error) {
 	// verify input arguments
 	ttl = clampTTL(ttl)
 	priority = clampPriority(priority)
@@ -77,12 +75,12 @@ func createDNSRecordRequest(zoneID string, authEmail string, authKey string, rec
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
 // createSRVRecordRequest construct a http request that would create a new dns record
-func createSRVRecordRequest(zoneID string, authEmail string, authKey string, name string, service string, protocol string, weight uint, port uint, ttl uint, priority uint, target string) (*http.Request, error) {
+func createSRVRecordRequest(zoneID string, authToken string, name string, service string, protocol string, weight uint, port uint, ttl uint, priority uint, target string) (*http.Request, error) {
 	// verify input arguments
 	ttl = clampTTL(ttl)
 	priority = clampPriority(priority)
@@ -90,10 +88,8 @@ func createSRVRecordRequest(zoneID string, authEmail string, authKey string, nam
 	requestJSON := createSRVRecord{
 		Type: "SRV",
 	}
-	requestJSON.Data.Name = name
+	requestJSON.Name = service + "." + protocol + "." + name
 	requestJSON.Data.TTL = ttl
-	requestJSON.Data.Service = service
-	requestJSON.Data.Proto = protocol
 	requestJSON.Data.Weight = weight
 	requestJSON.Data.Port = port
 	requestJSON.Data.Priority = priority
@@ -112,7 +108,7 @@ func createSRVRecordRequest(zoneID string, authEmail string, authKey string, nam
 	if err != nil {
 		return nil, err
 	}
-	addHeaders(request, authEmail, authKey)
+	addHeaders(request, authToken)
 	return request, nil
 }
 
@@ -144,12 +140,12 @@ type CreateDNSRecordResult struct {
 // parseCreateDNSRecordResponse parses the response that was received as a result of a ListDNSRecordRequest
 func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResponse, error) {
 	defer response.Body.Close()
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Response status code %d; body = %s", response.StatusCode, string(body))
+		return nil, fmt.Errorf("response status code %d; body = %s", response.StatusCode, string(body))
 	}
 	var parsedReponse CreateDNSRecordResponse
 	if err := json.Unmarshal(body, &parsedReponse); err != nil {
@@ -176,9 +172,7 @@ func clampTTL(ttl uint) uint {
 // clampPriority clamps the input priority value to the accepted range of 0..65535
 // see documentation at https://api.cloudflare.com/#dns-records-for-a-zone-create-dns-record
 func clampPriority(priority uint) uint {
-	if priority < 0 {
-		priority = 0
-	} else if priority > 65535 {
+	if priority > 65535 {
 		priority = 65535
 	}
 	return priority

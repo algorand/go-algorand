@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"testing"
@@ -25,10 +24,8 @@ func TestRejectingLimitListenerBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	const limit = 5
-	attempts := (maxOpenFiles() - limit) / 2
-	if attempts > 256 { // maximum length of accept queue is 128 by default
-		attempts = 256
-	}
+	// maximum length of accept queue is 128 by default
+	attempts := min((maxOpenFiles()-limit)/2, 256)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -57,7 +54,7 @@ func TestRejectingLimitListenerBasic(t *testing.T) {
 					return
 				}
 
-				io.Copy(ioutil.Discard, r.Body)
+				io.Copy(io.Discard, r.Body)
 				r.Body.Close()
 
 				queryCh <- nil

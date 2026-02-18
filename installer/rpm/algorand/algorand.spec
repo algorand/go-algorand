@@ -11,6 +11,7 @@ Requires(pre): shadow-utils
 
 %define SRCDIR go-algorand-rpmbuild
 %define _buildshell /bin/bash
+%define __os_install_post %{?__brp-compress}
 
 %description
 This package provides an implementation of the Algorand protocol.
@@ -28,7 +29,7 @@ This package provides an implementation of the Algorand protocol.
 mkdir -p %{buildroot}/usr/bin
 # NOTE: keep in sync with scripts/build_deb.sh bin_files
 # NOTE: keep in sync with %files section below
-for f in algocfg algod algoh algokey ddconfig.sh diagcfg goal kmd node_exporter; do
+for f in algocfg algod algoh algokey diagcfg goal kmd node_exporter; do
   install -m 755 ${ALGO_BIN}/${f} %{buildroot}/usr/bin/${f}
 done
 
@@ -59,7 +60,7 @@ install -m 644 ${REPO_DIR}/installer/rpm/algorand/algorand.repo %{buildroot}/usr
 
 mkdir -p %{buildroot}/var/lib/algorand/genesis
 if [ "%{RELEASE_GENESIS_PROCESS}" != "x" ]; then
-  genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+  genesis_dirs=("devnet" "testnet" "mainnet" "betanet" "alphanet")
   for dir in "${genesis_dirs[@]}"; do
     mkdir -p %{buildroot}/var/lib/algorand/genesis/${dir}
     cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json %{buildroot}/var/lib/algorand/genesis/${dir}/genesis.json
@@ -76,7 +77,6 @@ fi
 /usr/bin/algod
 /usr/bin/algoh
 /usr/bin/algokey
-/usr/bin/ddconfig.sh
 /usr/bin/diagcfg
 /usr/bin/goal
 /usr/bin/kmd
@@ -89,6 +89,7 @@ fi
   /var/lib/algorand/genesis/testnet/genesis.json
   /var/lib/algorand/genesis/betanet/genesis.json
   /var/lib/algorand/genesis/mainnet/genesis.json
+  /var/lib/algorand/genesis/alphanet/genesis.json
 %endif
 /lib/systemd/system/algorand.service
 /lib/systemd/system/algorand@.service

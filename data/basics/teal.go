@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,7 @@ package basics
 import (
 	"encoding/hex"
 	"fmt"
-
-	"github.com/algorand/go-algorand/config"
+	"maps"
 )
 
 // DeltaAction is an enum of actions that may be performed when applying a
@@ -43,7 +42,7 @@ type ValueDelta struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Action DeltaAction `codec:"at"`
-	Bytes  string      `codec:"bs"`
+	Bytes  string      `codec:"bs,allocbound=bounds.MaxAppBytesValueLen"`
 	Uint   uint64      `codec:"ui"`
 }
 
@@ -69,58 +68,15 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 
 // StateDelta is a map from key/value store keys to ValueDeltas, indicating
 // what should happen for that key
-//msgp:allocbound StateDelta config.MaxStateDeltaKeys
+//
+//msgp:allocbound StateDelta bounds.MaxStateDeltaKeys,bounds.MaxAppBytesKeyLen
 type StateDelta map[string]ValueDelta
 
 // Equal checks whether two StateDeltas are equal. We don't check for nilness
 // equality because an empty map will encode/decode as nil. So if our generated
 // map is empty but not nil, we want to equal a decoded nil off the wire.
 func (sd StateDelta) Equal(o StateDelta) bool {
-	// Lengths should be the same
-	if len(sd) != len(o) {
-		return false
-	}
-	// All keys and deltas should be the same
-	for k, v := range sd {
-		// Other StateDelta must contain key
-		ov, ok := o[k]
-		if !ok {
-			return false
-		}
-
-		// Other StateDelta must have same value for key
-		if ov != v {
-			return false
-		}
-	}
-	return true
-}
-
-// Valid checks whether the keys and values in a StateDelta conform to the
-// consensus parameters' maximum lengths
-func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
-	if len(sd) > 0 && proto.MaxAppKeyLen == 0 {
-		return fmt.Errorf("delta not empty, but proto.MaxAppKeyLen is 0 (why did we make a delta?)")
-	}
-	for key, delta := range sd {
-		if len(key) > proto.MaxAppKeyLen {
-			return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), proto.MaxAppKeyLen)
-		}
-		switch delta.Action {
-		case SetBytesAction:
-			if len(delta.Bytes) > proto.MaxAppBytesValueLen {
-				return fmt.Errorf("value too long for key 0x%x: length was %d", key, len(delta.Bytes))
-			}
-			if sum := len(key) + len(delta.Bytes); sum > proto.MaxAppSumKeyValueLens {
-				return fmt.Errorf("key/value total too long for key 0x%x: sum was %d", key, sum)
-			}
-		case SetUintAction:
-		case DeleteAction:
-		default:
-			return fmt.Errorf("unknown delta action: %v", delta.Action)
-		}
-	}
-	return nil
+	return maps.Equal(sd, o)
 }
 
 // StateSchema sets maximums on the number of each type that may be stored
@@ -129,6 +85,16 @@ type StateSchema struct {
 
 	NumUint      uint64 `codec:"nui"`
 	NumByteSlice uint64 `codec:"nbs"`
+}
+
+// String returns a string representation of a StateSchema
+func (sm StateSchema) String() string {
+	return fmt.Sprintf("{NumUint:%d NumByteSlice:%d}", sm.NumUint, sm.NumByteSlice)
+}
+
+// Empty returns true if the StateSchema has no entries
+func (sm StateSchema) Empty() bool {
+	return sm.NumUint == 0 && sm.NumByteSlice == 0
 }
 
 // AddSchema adds two StateSchemas together
@@ -146,42 +112,42 @@ func (sm StateSchema) SubSchema(osm StateSchema) (out StateSchema) {
 }
 
 // NumEntries counts the total number of values that may be stored for particular schema
-func (sm StateSchema) NumEntries() (tot uint64) {
-	tot = AddSaturate(tot, sm.NumUint)
-	tot = AddSaturate(tot, sm.NumByteSlice)
-	return tot
+func (sm StateSchema) NumEntries() uint64 {
+	return AddSaturate(sm.NumUint, sm.NumByteSlice)
+}
+
+// Allows determines if `other` "fits" within this schema.
+func (sm StateSchema) Allows(other StateSchema) bool {
+	return other.NumUint <= sm.NumUint && other.NumByteSlice <= sm.NumByteSlice
 }
 
 // MinBalance computes the MinBalance requirements for a StateSchema based on
-// the consensus parameters
-func (sm StateSchema) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
+// the requirements for the state values in the schema.
+func (sm StateSchema) MinBalance(reqs BalanceRequirements) MicroAlgos {
 	// Flat cost for each key/value pair
-	flatCost := MulSaturate(proto.SchemaMinBalancePerEntry, sm.NumEntries())
+	flatCost := MulSaturate(reqs.SchemaMinBalancePerEntry, sm.NumEntries())
 
 	// Cost for uints
-	uintCost := MulSaturate(proto.SchemaUintMinBalance, sm.NumUint)
+	uintCost := MulSaturate(reqs.SchemaUintMinBalance, sm.NumUint)
 
 	// Cost for byte slices
-	bytesCost := MulSaturate(proto.SchemaBytesMinBalance, sm.NumByteSlice)
+	bytesCost := MulSaturate(reqs.SchemaBytesMinBalance, sm.NumByteSlice)
 
 	// Sum the separate costs
-	var min uint64
-	min = AddSaturate(min, flatCost)
-	min = AddSaturate(min, uintCost)
+	min := AddSaturate(flatCost, uintCost)
 	min = AddSaturate(min, bytesCost)
 
-	res.Raw = min
-	return res
+	return MicroAlgos{Raw: min}
 }
 
 // TealType is an enum of the types in a TEAL program: Bytes and Uint
 type TealType uint64
 
 const (
-	// TealBytesType represents the type of a byte slice in a TEAL program
+	// TealBytesType represents the type of byte slice in a TEAL program
 	TealBytesType TealType = 1
 
-	// TealUintType represents the type of a uint in a TEAL program
+	// TealUintType represents the type of uint in a TEAL program
 	TealUintType TealType = 2
 )
 
@@ -226,20 +192,14 @@ func (tv *TealValue) String() string {
 
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
-//msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries
+//
+//msgp:allocbound TealKeyValue bounds.EncodedMaxKeyValueEntries,bounds.MaxAppBytesKeyLen
 type TealKeyValue map[string]TealValue
 
 // Clone returns a copy of a TealKeyValue that may be modified without
 // affecting the original
 func (tk TealKeyValue) Clone() TealKeyValue {
-	if tk == nil {
-		return nil
-	}
-	res := make(TealKeyValue, len(tk))
-	for k, v := range tk {
-		res[k] = v
-	}
-	return res
+	return maps.Clone(tk)
 }
 
 // ToStateSchema calculates the number of each value type in a TealKeyValue and

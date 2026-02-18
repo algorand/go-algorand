@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"slices"
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -44,6 +45,7 @@ var (
 	ErrNonEmptyProofForEmptyElements = errors.New("non-empty proof for empty set of elements")
 	ErrUnexpectedTreeDepth           = errors.New("unexpected tree depth")
 	ErrPosOutOfBound                 = errors.New("pos out of bound")
+	ErrProofLengthDigestSizeMismatch = errors.New("proof length and digest size mismatched")
 )
 
 // Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
@@ -222,7 +224,7 @@ func (tree *Tree) Prove(idxs []uint64) (*Proof, error) {
 		idxs = VcIdxs
 	}
 
-	sort.Slice(idxs, func(i, j int) bool { return idxs[i] < idxs[j] })
+	slices.Sort(idxs)
 
 	return tree.createProof(idxs)
 }

@@ -1,0 +1,23 @@
+codecov:
+  require_ci_to_pass: yes
+
+flags:
+  full_coverage:
+    joined: false
+
+ignore:
+  - "**/*_gen.go"
+  - "**/*_gen_test.go"
+  - "**/generated"
+  - "**/*_string.go"  # ignore stringer-generated code
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        informational: true
+    patch:
+      default:
+        target: auto
+        informational: true

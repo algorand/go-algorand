@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,9 +21,8 @@ package participation
 // deterministic.
 
 import (
+	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -31,21 +30,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // installParticipationKey generates a new key for a given account and installs it with the client.
-func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp generated.PostParticipationResponse, part account.Participation, err error) {
-	dir, err := ioutil.TempDir("", "temporary_partkey_dir")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
+func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid basics.Round) (resp model.PostParticipationResponse, part account.Participation, err error) {
 	// Install overlapping participation keys...
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir)
+	installFunc := func(keyPath string) error {
+		return errors.New("the install directory is provided, so keys should not be installed")
+	}
+	part, filePath, err := participation.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir(), installFunc)
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())
@@ -54,14 +54,14 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 	return
 }
 
-func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) generated.NodeStatusResponse {
+func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) model.NodeStatusResponse {
 	txParams, err := client.SuggestedParams()
 	require.NoError(t, err)
 	sAccount := part.Address().String()
 	sWH, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
-	goOnlineTx, err := client.MakeUnsignedGoOnlineTx(sAccount, &part, txParams.LastRound+1, txParams.LastRound+1, txParams.Fee, [32]byte{})
-	require.NoError(t, err)
+	goOnlineTx, err := client.MakeRegistrationTransactionWithGenesisID(part, txParams.MinFee, txParams.LastRound+1, txParams.LastRound+1, [32]byte{}, true)
+	assert.NoError(t, err)
 	require.Equal(t, sAccount, goOnlineTx.Src().String())
 	onlineTxID, err := client.SignAndBroadcastTransaction(sWH, nil, goOnlineTx)
 	require.NoError(t, err)
@@ -80,14 +80,14 @@ func TestKeyRegistration(t *testing.T) {
 		t.Skip()
 	}
 
-	checkKey := func(key generated.ParticipationKey, firstValid, lastValid, lastProposal uint64, msg string) {
+	checkKey := func(key model.ParticipationKey, firstValid, lastValid, lastProposal basics.Round, msg string) {
 		require.NotNil(t, key.EffectiveFirstValid, fmt.Sprintf("%s.EffectiveFirstValid", msg))
 		require.NotNil(t, key.EffectiveLastValid, fmt.Sprintf("%s.EffectiveLastValid", msg))
 		require.NotNil(t, key.LastBlockProposal, fmt.Sprintf("%s.LastBlockProposal", msg))
 
-		assert.Equal(t, int(*(key.EffectiveFirstValid)), int(firstValid), fmt.Sprintf("%s.EffectiveFirstValid", msg))
-		assert.Equal(t, int(*(key.EffectiveLastValid)), int(lastValid), fmt.Sprintf("%s.EffectiveLastValid", msg))
-		assert.Equal(t, int(*(key.LastBlockProposal)), int(lastProposal), fmt.Sprintf("%s.LastBlockProposal", msg))
+		assert.Equal(t, *(key.EffectiveFirstValid), firstValid, fmt.Sprintf("%s.EffectiveFirstValid", msg))
+		assert.Equal(t, *(key.EffectiveLastValid), lastValid, fmt.Sprintf("%s.EffectiveLastValid", msg))
+		assert.Equal(t, *(key.LastBlockProposal), lastProposal, fmt.Sprintf("%s.LastBlockProposal", msg))
 	}
 
 	// Start devmode network and initialize things for the test.
@@ -103,10 +103,10 @@ func TestKeyRegistration(t *testing.T) {
 	sAccount := accountResponse.Address
 
 	// Add an overlapping participation keys for the account on round 1 and 2
-	last := uint64(3_000)
+	last := basics.Round(3_000)
 	numNew := 2
-	for i := 0; i < numNew; i++ {
-		response, part, err := installParticipationKey(t, sClient, sAccount, 0, last+uint64(i))
+	for i := range basics.Round(numNew) {
+		response, part, err := installParticipationKey(t, sClient, sAccount, 0, last+i)
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		registerParticipationAndWait(t, sClient, part)
@@ -120,8 +120,8 @@ func TestKeyRegistration(t *testing.T) {
 	// Zip ahead MaxBalLookback.
 	params, err := fixture.CurrentConsensusParams()
 	require.NoError(t, err)
-	lookback := params.MaxBalLookback
-	for i := uint64(1); i < lookback; i++ {
+	lookback := basics.Round(params.MaxBalLookback)
+	for i := basics.Round(1); i < lookback; i++ {
 		fixture.SendMoneyAndWait(2+i, 0, minTxnFee, sAccount, sAccount, "")
 	}
 

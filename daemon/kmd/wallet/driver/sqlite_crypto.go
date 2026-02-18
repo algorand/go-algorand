@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -232,7 +232,7 @@ func decryptBlobWithPassword(blob []byte, ptType plaintextType, password []byte)
 // extractKeyWithIndex accepts the master derivation key and an index which
 // specifies the key to be derived
 func extractKeyWithIndex(derivationKey []byte, index uint64) (pk crypto.PublicKey, sk crypto.PrivateKey, err error) {
-	// The info tag is just the the utf-8 string representation of the index
+	// The info tag is just the utf-8 string representation of the index
 	info := []byte(fmt.Sprintf(hkdfInfoFormat, index))
 
 	// We can skip hkdf.Extract since our key is long and uniformly random

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,13 +17,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 )
 
 // ddrFromParams converts serialized DryrunRequest to v2.DryrunRequest
@@ -32,7 +32,7 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 		return
 	}
 
-	var gdr generatedV2.DryrunRequest
+	var gdr model.DryrunRequest
 	err1 := protocol.DecodeJSON(dp.DdrBlob, &gdr)
 	if err1 == nil {
 		ddr, err = v2.DryrunRequestFromGenerated(&gdr)
@@ -44,23 +44,6 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 		}
 	}
 
-	return
-}
-
-func convertAccounts(accounts []generatedV2.Account) (records []basics.BalanceRecord, err error) {
-	for _, a := range accounts {
-		var addr basics.Address
-		addr, err = basics.UnmarshalChecksumAddress(a.Address)
-		if err != nil {
-			return
-		}
-		var ad basics.AccountData
-		ad, err = v2.AccountToAccountData(&a)
-		if err != nil {
-			return
-		}
-		records = append(records, basics.BalanceRecord{Addr: addr, AccountData: ad})
-	}
 	return
 }
 
@@ -86,23 +69,26 @@ func balanceRecordsFromDdr(ddr *v2.DryrunRequest) (records []basics.BalanceRecor
 			return
 		}
 		// deserialize app params and update account data
+		if a.Params == nil {
+			err = fmt.Errorf("application %d has no params", a.Id)
+			return
+		}
 		var params basics.AppParams
-		params, err = v2.ApplicationParamsToAppParams(&a.Params)
+		params, err = v2.ApplicationParamsToAppParams(a.Params)
 		if err != nil {
 			return
 		}
-		appIdx := basics.AppIndex(a.Id)
 		ad := accounts[addr]
 		if ad.AppParams == nil {
 			ad.AppParams = make(map[basics.AppIndex]basics.AppParams, 1)
-			ad.AppParams[appIdx] = params
+			ad.AppParams[a.Id] = params
 		} else {
-			ap, ok := ad.AppParams[appIdx]
+			ap, ok := ad.AppParams[a.Id]
 			if ok {
 				v2.MergeAppParams(&ap, &params)
-				ad.AppParams[appIdx] = ap
+				ad.AppParams[a.Id] = ap
 			} else {
-				ad.AppParams[appIdx] = params
+				ad.AppParams[a.Id] = params
 			}
 		}
 		accounts[addr] = ad

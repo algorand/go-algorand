@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@ package libgoal
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 )
 
@@ -72,7 +72,7 @@ func (f *lockedFile) read() (bytes []byte, err error) {
 		}
 	}()
 
-	bytes, err = ioutil.ReadAll(fd)
+	bytes, err = io.ReadAll(fd)
 	return
 }
 

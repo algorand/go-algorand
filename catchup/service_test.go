@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,13 +20,16 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -149,7 +152,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -180,6 +183,117 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 	cl.Logger.Warnf(s, args...)
 }
 
+type periodicSyncDebugLogger struct {
+	periodicSyncLogger
+	debugMsgFilter []string
+	debugMsgs      atomic.Uint32
+}
+
+func (cl *periodicSyncDebugLogger) Debugf(s string, args ...interface{}) {
+	// save debug messages for later inspection.
+	if len(cl.debugMsgFilter) > 0 {
+		for _, filter := range cl.debugMsgFilter {
+			if strings.Contains(s, filter) {
+				cl.debugMsgs.Add(1)
+				break
+			}
+		}
+	} else {
+		cl.debugMsgs.Add(1)
+	}
+	cl.Logger.Debugf(s, args...)
+}
+
+func TestSyncRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Make Ledger
+	local := new(mockedLedger)
+	local.blocks = append(local.blocks, bookkeeping.Block{})
+
+	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	addBlocks(t, remote, blk, 10)
+
+	// Create a network and block service
+	blockServiceConfig := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	ls.RegisterHandlers(&nodeA)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+
+	auth := &mockedAuthenticator{fail: true}
+	initialLocalRound := local.LastRound()
+	require.Zero(t, initialLocalRound)
+
+	// Make Service
+	localCfg := config.GetDefaultLocal()
+	s := MakeService(logging.Base(), localCfg, net, local, auth, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
+	s.roundTimeEstimate = 2 * time.Second
+
+	// Set disable round success
+	err = s.SetDisableSyncRound(3)
+	require.NoError(t, err)
+
+	s.Start()
+	defer s.Stop()
+	// wait past the initial sync - which is known to fail due to the above "auth"
+	time.Sleep(s.roundTimeEstimate*2 - 200*time.Millisecond)
+	require.Equal(t, initialLocalRound, local.LastRound())
+	auth.alter(-1, false)
+
+	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
+	// until the synchronization is complete.
+	waitStart := time.Now()
+	for time.Since(waitStart) < 2*s.roundTimeEstimate {
+		if remote.LastRound() == local.LastRound() {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// Assert that the last block is the one we expect--i.e. disableSyncRound - 1
+	rnd := s.GetDisableSyncRound()
+	rr, lr := rnd-1, local.LastRound()
+	require.Equal(t, rr, lr)
+
+	for r := basics.Round(1); r < rr; r++ {
+		localBlock, err := local.Block(r)
+		require.NoError(t, err)
+		remoteBlock, err := remote.Block(r)
+		require.NoError(t, err)
+		require.Equal(t, remoteBlock.Hash(), localBlock.Hash())
+	}
+
+	// unset syncRound and make sure we finish catching up
+	s.UnsetDisableSyncRound()
+	// wait until the catchup is done
+	waitStart = time.Now()
+	for time.Since(waitStart) < 8*s.roundTimeEstimate {
+		if remote.LastRound() == local.LastRound() {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	rr, lr = remote.LastRound(), local.LastRound()
+	require.Equal(t, rr, lr)
+	for r := basics.Round(1); r < remote.LastRound(); r++ {
+		localBlock, err := local.Block(r)
+		require.NoError(t, err)
+		remoteBlock, err := remote.Block(r)
+		require.NoError(t, err)
+		require.Equal(t, remoteBlock.Hash(), localBlock.Hash())
+	}
+}
+
 func TestPeriodicSync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -200,7 +314,7 @@ func TestPeriodicSync(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -208,24 +322,24 @@ func TestPeriodicSync(t *testing.T) {
 
 	auth := &mockedAuthenticator{fail: true}
 	initialLocalRound := local.LastRound()
-	require.True(t, 0 == initialLocalRound)
+	require.Zero(t, initialLocalRound)
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
-	s.deadlineTimeout = 2 * time.Second
+	s.roundTimeEstimate = 2 * time.Second
 
 	s.Start()
 	defer s.Stop()
 	// wait past the initial sync - which is known to fail due to the above "auth"
-	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
+	time.Sleep(s.roundTimeEstimate*2 - 200*time.Millisecond)
 	require.Equal(t, initialLocalRound, local.LastRound())
 	auth.alter(-1, false)
 
 	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
 	// until the synchronization is complete.
 	waitStart := time.Now()
-	for time.Now().Sub(waitStart) < 10*s.deadlineTimeout {
+	for time.Since(waitStart) < 10*s.roundTimeEstimate {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
@@ -248,7 +362,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 	lastRoundAtStart := local.LastRound()
@@ -266,7 +380,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -284,7 +398,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	s.sync()
 
 	// Asserts that the last block is the one we expect
-	require.Equal(t, lastRoundAtStart+basics.Round(numBlocks), local.LastRound())
+	require.Equal(t, lastRoundAtStart+numBlocks, local.LastRound())
 
 	// Get the same block we wrote
 	block, _, _, err := makeUniversalBlockFetcher(logging.Base(),
@@ -305,7 +419,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 func TestAbruptWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	numberOfBlocks := 100
+	numberOfBlocks := basics.Round(100)
 
 	if testing.Short() {
 		numberOfBlocks = 10
@@ -330,7 +444,7 @@ func TestAbruptWrites(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -343,7 +457,7 @@ func TestAbruptWrites(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := basics.Round(lastRound + 1); i <= basics.Round(numberOfBlocks); i++ {
+		for i := lastRound + 1; i <= numberOfBlocks; i++ {
 			time.Sleep(time.Duration(rand.Uint32()%5) * time.Millisecond)
 			blk, err := remote.Block(i)
 			require.NoError(t, err)
@@ -380,7 +494,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	addBlocks(t, remote, blk, int(numberOfBlocks)-1)
+	addBlocks(t, remote, blk, numberOfBlocks-1)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -388,7 +502,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -416,7 +530,6 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 		localBlock, err := local.Block(i)
 		require.NoError(t, err)
 		require.Equal(t, *blk, localBlock)
-		return
 	}
 }
 
@@ -424,7 +537,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
@@ -443,7 +556,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -597,7 +710,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	ls := rpcs.MakeBlockService(logging.Base(), config, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -605,11 +718,11 @@ func helperTestOnSwitchToUnSupportedProtocol(
 
 	// Make Service
 	s := MakeService(logging.Base(), config, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
-	s.deadlineTimeout = 2 * time.Second
+	s.roundTimeEstimate = 2 * time.Second
 	s.Start()
 	defer s.Stop()
 
-	<-s.done
+	s.workers.Wait()
 	return local, remote
 }
 
@@ -693,6 +806,10 @@ func (m *mockedLedger) Wait(r basics.Round) chan struct{} {
 	return m.chans[r]
 }
 
+func (m *mockedLedger) WaitMem(r basics.Round) chan struct{} {
+	return m.Wait(r)
+}
+
 func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -702,10 +819,15 @@ func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	return m.blocks[r], nil
 }
 
+func (m *mockedLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	blk, err := m.Block(r)
+	return blk.BlockHeader, err
+}
+
 func (m *mockedLedger) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
 	return basics.AccountData{}, errors.New("not needed for mockedLedger")
 }
-func (m *mockedLedger) Circulation(basics.Round) (basics.MicroAlgos, error) {
+func (m *mockedLedger) Circulation(basics.Round, basics.Round) (basics.MicroAlgos, error) {
 	return basics.MicroAlgos{}, errors.New("not needed for mockedLedger")
 }
 func (m *mockedLedger) ConsensusVersion(basics.Round) (protocol.ConsensusVersion, error) {
@@ -726,8 +848,20 @@ func (m *mockedLedger) LookupAgreement(basics.Round, basics.Address) (basics.Onl
 	return basics.OnlineAccountData{}, errors.New("not needed for mockedLedger")
 }
 
-func (m *mockedLedger) IsWritingCatchpointFile() bool {
+func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
 	return false
+}
+
+func (m *mockedLedger) IsBehindCommittingDeltas() bool {
+	return false
+}
+
+type mockedBehindDeltasLedger struct {
+	mockedLedger
+}
+
+func (m *mockedBehindDeltasLedger) IsBehindCommittingDeltas() bool {
+	return true
 }
 
 func testingenvWithUpgrade(
@@ -772,7 +906,6 @@ func (avv *MockVoteVerifier) Parallelism() int {
 
 // Start the catchup service, without starting the periodic sync.
 func (s *Service) testStart() {
-	s.done = make(chan struct{})
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.InitialSyncDone = make(chan struct{})
 }
@@ -781,7 +914,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	numBlocks := 10
+	const numBlocks = 10
 	local := new(mockedLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 	lastRoundAtStart := local.LastRound()
@@ -791,6 +924,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
+	defer remote.Close()
 	addBlocks(t, remote, blk, numBlocks-1)
 
 	// Create a network and block service
@@ -799,7 +933,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -821,130 +955,27 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	}
 }
 
-// TestCreatePeerSelector tests if the correct peer selector coonfigurations are prepared
+// TestCreatePeerSelector tests if the correct peer selector configurations are prepared
 func TestCreatePeerSelector(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Make Service
-	cfg := defaultConfig
+	s := MakeService(logging.Base(), defaultConfig, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps := createPeerSelector(s.net)
 
-	cfg.EnableCatchupFromArchiveServers = true
+	cps, ok := ps.(*classBasedPeerSelector)
+	require.True(t, ok)
 
-	cfg.NetAddress = "someAddress"
-	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps := s.createPeerSelector(true)
-	require.Equal(t, 4, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
-	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].initialRank)
+	require.Equal(t, 4, len(cps.peerSelectors))
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[3].peerClass)
+	require.Equal(t, network.PeersConnectedOut, cps.peerSelectors[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, cps.peerSelectors[1].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivalNodes, cps.peerSelectors[2].peerClass)
+	require.Equal(t, network.PeersConnectedIn, cps.peerSelectors[3].peerClass)
 
-	// cfg.EnableCatchupFromArchiveServers = true; cfg.NetAddress == ""; pipelineFetch = true;
-	cfg.EnableCatchupFromArchiveServers = true
-	cfg.NetAddress = ""
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
-	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
-
-	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
-
-	// cfg.EnableCatchupFromArchiveServers = true;  cfg.NetAddress != ""; pipelineFetch = false
-	cfg.EnableCatchupFromArchiveServers = true
-	cfg.NetAddress = "someAddress"
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
-
-	require.Equal(t, 4, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
-	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].initialRank)
-
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
-	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[3].peerClass)
-
-	// cfg.EnableCatchupFromArchiveServers = true; cfg.NetAddress == ""; pipelineFetch = false
-	cfg.EnableCatchupFromArchiveServers = true
-	cfg.NetAddress = ""
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
-
-	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
-
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookArchivers, ps.peerClasses[2].peerClass)
-
-	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress != ""; pipelineFetch = true
-	cfg.EnableCatchupFromArchiveServers = false
-	cfg.NetAddress = "someAddress"
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
-
-	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
-
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[2].peerClass)
-
-	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = true
-	cfg.EnableCatchupFromArchiveServers = false
-	cfg.NetAddress = ""
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(true)
-
-	require.Equal(t, 2, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
-
-	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress != ""; pipelineFetch = false
-	cfg.EnableCatchupFromArchiveServers = false
-	cfg.NetAddress = "someAddress"
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
-
-	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
-
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
-
-	// cfg.EnableCatchupFromArchiveServers = false; cfg.NetAddress == ""; pipelineFetch = false
-	cfg.EnableCatchupFromArchiveServers = false
-	cfg.NetAddress = ""
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = s.createPeerSelector(false)
-
-	require.Equal(t, 2, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[1].peerClass)
+	require.Equal(t, 3, cps.peerSelectors[0].toleranceFactor)
+	require.Equal(t, 3, cps.peerSelectors[1].toleranceFactor)
+	require.Equal(t, 10, cps.peerSelectors[2].toleranceFactor)
+	require.Equal(t, 3, cps.peerSelectors[3].toleranceFactor)
 }
 
 func TestServiceStartStop(t *testing.T) {
@@ -956,8 +987,8 @@ func TestServiceStartStop(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	s.Start()
 	s.Stop()
-	_, ok := (<-s.done)
-	require.False(t, ok)
+
+	// The test ensures that Stop() returns and does not block forever.
 }
 
 func TestSynchronizingTime(t *testing.T) {
@@ -969,6 +1000,140 @@ func TestSynchronizingTime(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 
 	require.Equal(t, time.Duration(0), s.SynchronizingTime())
-	atomic.StoreInt64(&s.syncStartNS, 1000000)
+	s.syncStartNS.Store(1000000)
 	require.NotEqual(t, time.Duration(0), s.SynchronizingTime())
+}
+
+func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// make sure we download enough blocks to verify state proof 512
+	topBlk := bookkeeping.Block{}
+	topBlk.BlockHeader.Round = 1500
+	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
+	trackingData := bookkeeping.StateProofTrackingData{StateProofNextRound: 512}
+	topBlk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	topBlk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = trackingData
+
+	lookback := lookbackForStateproofsSupport(&topBlk)
+	oldestRound := topBlk.BlockHeader.Round.SubSaturate(basics.Round(lookback))
+	assert.Equal(t, uint64(oldestRound), 512-config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval-config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback)
+
+	// the network has made progress and now it is on round 8000. in this case we would not download blocks to cover 512.
+	// instead, we will download blocks to confirm only the recovery period lookback.
+	topBlk = bookkeeping.Block{}
+	topBlk.BlockHeader.Round = 8000
+	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusCurrentVersion
+	trackingData = bookkeeping.StateProofTrackingData{StateProofNextRound: 512}
+	topBlk.BlockHeader.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
+	topBlk.BlockHeader.StateProofTracking[protocol.StateProofBasic] = trackingData
+
+	lookback = lookbackForStateproofsSupport(&topBlk)
+	oldestRound = topBlk.BlockHeader.Round.SubSaturate(basics.Round(lookback))
+
+	lowestRoundToRetain := 8000 - (8000 % config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval) -
+		config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*(config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals+1) - config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
+
+	assert.Equal(t, uint64(oldestRound), lowestRoundToRetain)
+
+	topBlk = bookkeeping.Block{}
+	topBlk.BlockHeader.Round = 8000
+	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusV32
+	lookback = lookbackForStateproofsSupport(&topBlk)
+	assert.Equal(t, uint64(0), lookback)
+}
+
+// TestServiceLedgerUnavailable checks a local ledger that is unavailable cannot catchup up to remote round
+func TestServiceLedgerUnavailable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Make Ledger
+	local := new(mockedBehindDeltasLedger)
+	local.blocks = append(local.blocks, bookkeeping.Block{})
+
+	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	const numBlocks = 10
+	addBlocks(t, remote, blk, numBlocks)
+
+	// Create a network and block service
+	blockServiceConfig := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	ls.RegisterHandlers(&nodeA)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+
+	require.Equal(t, basics.Round(0), local.LastRound())
+	require.Equal(t, basics.Round(numBlocks+1), remote.LastRound())
+
+	// Make Service
+	auth := &mockedAuthenticator{fail: false}
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupParallelBlocks = 2
+	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
+	s.roundTimeEstimate = 2 * time.Second
+
+	s.testStart()
+	defer s.Stop()
+	s.sync()
+	require.Greater(t, local.LastRound(), basics.Round(0))
+	require.Less(t, local.LastRound(), remote.LastRound())
+}
+
+// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not available
+func TestServiceNoBlockForRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Make Ledger
+	local := new(mockedLedger)
+	local.blocks = append(local.blocks, bookkeeping.Block{})
+
+	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	const numBlocks = 10
+	addBlocks(t, remote, blk, numBlocks)
+
+	// Create a network and block service
+	blockServiceConfig := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	ls.RegisterHandlers(&nodeA)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+
+	require.Equal(t, basics.Round(0), local.LastRound())
+	require.Equal(t, basics.Round(numBlocks+1), remote.LastRound())
+
+	// Make Service
+	auth := &mockedAuthenticator{fail: false}
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupParallelBlocks = 8
+	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
+	pl := &periodicSyncDebugLogger{periodicSyncLogger: periodicSyncLogger{Logger: logging.Base()}}
+	s.log = pl
+	s.roundTimeEstimate = 1 * time.Second
+
+	s.testStart()
+	defer s.Stop()
+	s.sync()
+
+	// without the fix there are about 2k messages (4x catchupRetryLimit)
+	// with the fix expect less than catchupRetryLimit
+	require.Less(t, int(pl.debugMsgs.Load()), catchupRetryLimit)
 }

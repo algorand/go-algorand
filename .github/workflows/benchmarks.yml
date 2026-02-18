@@ -1,0 +1,58 @@
+name: "Benchmark workflow"
+on:
+  # Push and update benchmarks when a commit is merged into master.
+  push:
+    branches:
+      - master
+  # Trigger benchmark test on this PR's commit against master.
+  pull_request:
+    branches:
+      - master
+permissions:
+  # Push benchmark performance graph to gh-pages branch.
+  contents: write
+  deployments: write
+jobs:
+  benchmark:
+    name: Performance regression check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: ./.github/actions/setup-go
+      - run: go version
+      - name: Build go-algorand
+        run: |
+          export SKIP_GO_INSTALLATION=True
+          scripts/travis/build.sh
+      # BenchmarkUintMath - Serves as a proxy for AVM `eval` performance.
+      # Performance degradations suggest either or both:  (1) op code
+      # degradation, (2) `eval` degradation.  (2) suggests a broader performance
+      # issue. 
+      - name: Run benchmark
+        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' -run=^$ | tee benchmark_output.txt
+      - name: Push benchmark result to gh-pages branch
+        if: github.event_name == 'push'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: benchmark_output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+      - name: Evaluate benchmark on PR branch
+        if: github.event.pull_request
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: benchmark_output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          alert-threshold: '200%'
+          comment-on-alert: true
+      - name: Slack Notification
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
+        if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}

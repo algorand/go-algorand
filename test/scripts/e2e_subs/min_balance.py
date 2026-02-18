@@ -5,8 +5,6 @@ from datetime import datetime
 from pathlib import PurePath
 import sys
 
-import algosdk.future.transaction as txn
-
 from goal import Goal
 
 # Set INTERACTIVE True if you want to run a remote debugger interactively on the given PORT

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,8 +20,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -39,8 +40,8 @@ var keyregCmd *cobra.Command
 
 type keyregCmdParams struct {
 	fee         uint64
-	firstValid  uint64
-	lastValid   uint64
+	firstValid  basics.Round
+	lastValid   basics.Round
 	network     string
 	offline     bool
 	txFile      string
@@ -50,8 +51,8 @@ type keyregCmdParams struct {
 
 // There is no node to query, so we do our best here.
 const (
-	txnLife uint64 = 1000
-	minFee  uint64 = 1000
+	txnLife = 1000
+	minFee  = 1000
 )
 
 var validNetworks map[string]crypto.Digest
@@ -74,11 +75,15 @@ func init() {
 	}
 
 	keyregCmd.Flags().Uint64Var(&params.fee, "fee", minFee, "transaction fee")
-	keyregCmd.Flags().Uint64Var(&params.firstValid, "firstvalid", 0, "first round where the transaction may be committed to the ledger")
-	keyregCmd.MarkFlagRequired("firstvalid") // nolint:errcheck
-	keyregCmd.Flags().Uint64Var(&params.lastValid, "lastvalid", 0, fmt.Sprintf("last round where the generated transaction may be committed to the ledger, defaults to firstvalid + %d", txnLife))
+	keyregCmd.Flags().Uint64Var((*uint64)(&params.firstValid), "firstvalid", 0, "first round where the transaction may be committed to the ledger")
+	if err := keyregCmd.MarkFlagRequired("firstvalid"); err != nil {
+		panic(err)
+	}
+	keyregCmd.Flags().Uint64Var((*uint64)(&params.lastValid), "lastvalid", 0, fmt.Sprintf("last round where the generated transaction may be committed to the ledger, defaults to firstvalid + %d", txnLife))
 	keyregCmd.Flags().StringVar(&params.network, "network", "mainnet", "the network where the provided keys will be registered, one of mainnet/testnet/betanet")
-	keyregCmd.MarkFlagRequired("network") // nolint:errcheck
+	if err := keyregCmd.MarkFlagRequired("network"); err != nil {
+		panic(err)
+	}
 	keyregCmd.Flags().BoolVar(&params.offline, "offline", false, "set to bring an account offline")
 	keyregCmd.Flags().StringVarP(&params.txFile, "outputFile", "o", "", fmt.Sprintf("write signed transaction to this file, or '%s' to write to stdout", stdoutFilenameValue))
 	keyregCmd.Flags().StringVar(&params.partkeyFile, "keyfile", "", "participation keys to register, file is opened to fetch metadata for the transaction; only specify when bringing an account online to vote in Algorand consensus")
@@ -89,12 +94,9 @@ func init() {
 		"mainnet": mustConvertB64ToDigest("wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8="),
 		"testnet": mustConvertB64ToDigest("SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI="),
 		"betanet": mustConvertB64ToDigest("mFgazF+2uRS1tMiL9dsj01hJGySEmPN28B/TjjvpVW0="),
-		"devnet":  mustConvertB64ToDigest("sC3P7e2SdbqKJK0tbiCdK9tdSpbe6XeCGKdoNzmlj0E="),
+		"devnet":  mustConvertB64ToDigest("sjkznd5fmOPzTzMi6BAHa2Ir9DyOxu5H7NH3ratQG1w="),
 	}
-	validNetworkList = make([]string, 0, len(validNetworks))
-	for k := range validNetworks {
-		validNetworkList = append(validNetworkList, k)
-	}
+	validNetworkList = slices.Collect(maps.Keys(validNetworks))
 }
 
 func mustConvertB64ToDigest(b64 string) (digest crypto.Digest) {
@@ -192,7 +194,7 @@ func run(params keyregCmdParams) error {
 
 		part = &partkey.Participation
 
-		if params.firstValid < uint64(part.FirstValid) {
+		if params.firstValid < part.FirstValid {
 			return fmt.Errorf("the transaction's firstvalid round (%d) field should be set greater than or equal to the participation key's first valid round (%d). The network will reject key registration transactions that are set to take effect before the participation key's first valid round", params.firstValid, part.FirstValid)
 		}
 	}
@@ -207,8 +209,7 @@ func run(params keyregCmdParams) error {
 		// Generate go-online transaction
 		txn = part.GenerateRegistrationTransaction(
 			basics.MicroAlgos{Raw: params.fee},
-			basics.Round(params.firstValid),
-			basics.Round(params.lastValid),
+			params.firstValid, params.lastValid,
 			[32]byte{},
 			part.StateProofSecrets != nil)
 	} else {
@@ -218,8 +219,8 @@ func run(params keyregCmdParams) error {
 			Header: transactions.Header{
 				Sender:     accountAddress,
 				Fee:        basics.MicroAlgos{Raw: params.fee},
-				FirstValid: basics.Round(params.firstValid),
-				LastValid:  basics.Round(params.lastValid),
+				FirstValid: params.firstValid,
+				LastValid:  params.lastValid,
 			},
 		}
 	}
@@ -244,7 +245,7 @@ func run(params keyregCmdParams) error {
 			return fmt.Errorf("failed to write transaction to stdout: %w", err)
 		}
 	} else {
-		if err = ioutil.WriteFile(params.txFile, data, 0600); err != nil {
+		if err = os.WriteFile(params.txFile, data, 0600); err != nil {
 			return fmt.Errorf("failed to write transaction to '%s': %w", params.txFile, err)
 		}
 	}

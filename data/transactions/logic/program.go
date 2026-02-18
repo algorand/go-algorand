@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,9 +29,20 @@ func (lsl Program) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Program, []byte(lsl)
 }
 
+// MultisigProgram is a wrapper for signing programs with multisig addresses.
+type MultisigProgram struct {
+	Addr    crypto.Digest
+	Program []byte
+}
+
+// ToBeHashed implements crypto.Hashable for MultisigProgram
+func (mp MultisigProgram) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.MultisigProgram, append(mp.Addr[:], mp.Program...)
+}
+
 // HashProgram takes program bytes and returns the Digest
 // This Digest can be used as an Address for a logic controlled account.
 func HashProgram(program []byte) crypto.Digest {
 	pb := Program(program)
-	return crypto.HashObj(&pb)
+	return crypto.HashObj(pb)
 }

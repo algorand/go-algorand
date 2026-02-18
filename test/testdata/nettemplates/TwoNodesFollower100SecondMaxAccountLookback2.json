@@ -1,0 +1,28 @@
+{
+  "Genesis": {
+    "LastPartKeyRound": 3000,
+    "NetworkName": "tbd",
+    "Wallets": [
+      {
+        "Name": "Wallet1",
+        "Stake": 100,
+        "Online": true
+      }
+    ]
+  },
+  "Nodes": [
+    {
+      "Name": "Follower",
+      "Wallets": [],
+      "ConfigJSONOverride": "{\"EnableFollowMode\":true, \"MaxAcctLookback\":2}"
+    },
+    {
+      "Name": "Primary",
+      "IsRelay": true,
+      "Wallets": [
+        { "Name": "Wallet1",
+          "ParticipationOnly": false }
+      ]
+    }
+  ]
+}

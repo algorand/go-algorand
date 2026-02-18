@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 
 func TestPrint(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testcases := []struct {
 		Input    interface{}
@@ -56,6 +57,7 @@ func TestPrint(t *testing.T) {
 	}
 	for i, tc := range testcases {
 		t.Run(fmt.Sprintf("test %d", i), func(t *testing.T) {
+			t.Parallel()
 			ret, err := serializeObjectProperty(tc, "Input")
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, ret)

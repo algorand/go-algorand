@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,11 +30,10 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network"
 )
 
 const (
@@ -54,19 +53,30 @@ const (
 	expectedWorstUploadSpeedBytesPerSecond = 20 * 1024
 )
 
+// LedgerForService defines the ledger interface required for the LedgerService
+type LedgerForService interface {
+	// GetCatchpointStream returns the ReadCloseSize for a request catchpoint round
+	GetCatchpointStream(round basics.Round) (ledger.ReadCloseSizer, error)
+}
+
+// httpGossipNode is a reduced interface for the gossipNode that only includes the methods needed by the LedgerService
+type httpGossipNode interface {
+	RegisterHTTPHandler(path string, handler http.Handler)
+}
+
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
 	// running is non-zero once the service is running, and zero when it's not running. it needs to be at a 32-bit aligned address for RasPI support.
-	running       int32
-	ledger        *data.Ledger
+	running       atomic.Int32
+	ledger        LedgerForService
 	genesisID     string
-	net           network.GossipNode
+	net           httpGossipNode
 	enableService bool
 	stopping      sync.WaitGroup
 }
 
 // MakeLedgerService creates a LedgerService around the provider Ledger and registers it with the HTTP router
-func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *LedgerService {
+func MakeLedgerService(config config.Local, ledger LedgerForService, net httpGossipNode, genesisID string) *LedgerService {
 	service := &LedgerService{
 		ledger:        ledger,
 		genesisID:     genesisID,
@@ -83,25 +93,28 @@ func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.Gos
 // Start listening to catchup requests
 func (ls *LedgerService) Start() {
 	if ls.enableService {
-		atomic.StoreInt32(&ls.running, 1)
+		ls.running.Store(1)
 	}
 }
 
 // Stop servicing catchup requests
 func (ls *LedgerService) Stop() {
 	if ls.enableService {
-		atomic.StoreInt32(&ls.running, 0)
+		logging.Base().Debug("ledger service is stopping")
+		defer logging.Base().Debug("ledger service has stopped")
+
+		ls.running.Store(0)
 		ls.stopping.Wait()
 	}
 }
 
-// ServerHTTP returns ledgers for a particular round
+// ServeHTTP returns ledgers for a particular round
 // Either /v{version}/{genesisID}/ledger/{round} or ?r={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
 func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	ls.stopping.Add(1)
 	defer ls.stopping.Done()
-	if atomic.AddInt32(&ls.running, 0) == 0 {
+	if ls.running.Add(0) == 0 {
 		response.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -111,7 +124,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	genesisID, hasGenesisID := pathVars["genesisID"]
 	if hasVersionStr {
 		if versionStr != "1" {
-			logging.Base().Debugf("http ledger bad version '%s'", versionStr)
+			logging.Base().Debugf("LedgerService.ServeHTTP: bad version '%s'", versionStr)
 			response.WriteHeader(http.StatusBadRequest)
 			response.Write([]byte(fmt.Sprintf("unsupported version '%s'", versionStr)))
 			return
@@ -119,13 +132,13 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	}
 	if hasGenesisID {
 		if ls.genesisID != genesisID {
-			logging.Base().Debugf("http ledger bad genesisID mine=%#v theirs=%#v", ls.genesisID, genesisID)
+			logging.Base().Debugf("LedgerService.ServeHTTP: bad genesisID mine=%#v theirs=%#v", ls.genesisID, genesisID)
 			response.WriteHeader(http.StatusBadRequest)
 			response.Write([]byte(fmt.Sprintf("mismatching genesisID '%s'", genesisID)))
 			return
 		}
 	} else {
-		logging.Base().Debug("http ledger no genesisID")
+		logging.Base().Debug("LedgerService.ServeHTTP: no genesisID")
 		response.WriteHeader(http.StatusBadRequest)
 		response.Write([]byte("missing genesisID"))
 		return
@@ -135,14 +148,14 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		request.Body = http.MaxBytesReader(response, request.Body, ledgerServerMaxBodyLength)
 		err := request.ParseForm()
 		if err != nil {
-			logging.Base().Debugf("http ledger parse form err : %v", err)
+			logging.Base().Debugf("LedgerService.ServeHTTP: parse form err : %v", err)
 			response.WriteHeader(http.StatusBadRequest)
 			response.Write([]byte(fmt.Sprintf("unable to parse form body : %v", err)))
 			return
 		}
 		roundStrs, ok := request.Form["r"]
 		if !ok || len(roundStrs) != 1 {
-			logging.Base().Debugf("http ledger bad round number form arg '%s'", roundStrs)
+			logging.Base().Debugf("LedgerService.ServeHTTP: bad round number form arg '%s'", roundStrs)
 			response.WriteHeader(http.StatusBadRequest)
 			response.Write([]byte("invalid round number specified in 'r' form argument"))
 			return
@@ -152,13 +165,13 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		if ok {
 			if len(versionStrs) == 1 {
 				if versionStrs[0] != "1" {
-					logging.Base().Debugf("http ledger bad version '%s'", versionStr)
+					logging.Base().Debugf("LedgerService.ServeHTTP: bad version '%s'", versionStr)
 					response.WriteHeader(http.StatusBadRequest)
 					response.Write([]byte(fmt.Sprintf("unsupported version specified '%s'", versionStrs[0])))
 					return
 				}
 			} else {
-				logging.Base().Debugf("http ledger wrong number of v=%d args", len(versionStrs))
+				logging.Base().Debugf("LedgerService.ServeHTTP: wrong number of v=%d args", len(versionStrs))
 				response.WriteHeader(http.StatusBadRequest)
 				response.Write([]byte(fmt.Sprintf("invalid number of version specified %d", len(versionStrs))))
 				return
@@ -167,11 +180,13 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	}
 	round, err := strconv.ParseUint(roundStr, 36, 64)
 	if err != nil {
-		logging.Base().Debugf("http ledger round parse fail ('%s'): %v", roundStr, err)
+		logging.Base().Debugf("LedgerService.ServeHTTP: round parse fail ('%s'): %v", roundStr, err)
 		response.WriteHeader(http.StatusBadRequest)
 		response.Write([]byte(fmt.Sprintf("specified round number could not be parsed using base 36 : %v", err)))
 		return
 	}
+	logging.Base().Infof("LedgerService.ServeHTTP: serving catchpoint round %d", round)
+	start := time.Now()
 	cs, err := ls.ledger.GetCatchpointStream(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
@@ -182,35 +197,40 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 			return
 		default:
 			// unexpected error.
-			logging.Base().Warnf("ServeHTTP : failed to retrieve catchpoint %d %v", round, err)
+			logging.Base().Warnf("LedgerService.ServeHTTP : failed to retrieve catchpoint %d %v", round, err)
 			response.WriteHeader(http.StatusInternalServerError)
 			response.Write([]byte(fmt.Sprintf("catchpoint file for round %d could not be retrieved due to internal error : %v", round, err)))
 			return
 		}
 	}
 	defer cs.Close()
-	if conn := ls.net.GetHTTPRequestConnection(request); conn != nil {
-		maxCatchpointFileWritingDuration := 2 * time.Minute
+	response.Header().Set("Content-Type", LedgerResponseContentType)
+	if request.Method == http.MethodHead {
+		response.WriteHeader(http.StatusOK)
+		return
+	}
+	rc := http.NewResponseController(response)
+	maxCatchpointFileWritingDuration := 2 * time.Minute
 
-		catchpointFileSize, err := cs.Size()
-		if err != nil || catchpointFileSize <= 0 {
-			maxCatchpointFileWritingDuration += maxCatchpointFileSize * time.Second / expectedWorstUploadSpeedBytesPerSecond
-		} else {
-			maxCatchpointFileWritingDuration += time.Duration(catchpointFileSize) * time.Second / expectedWorstUploadSpeedBytesPerSecond
-		}
-		conn.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration))
+	catchpointFileSize, err := cs.Size()
+	if err != nil || catchpointFileSize <= 0 {
+		maxCatchpointFileWritingDuration += maxCatchpointFileSize * time.Second / expectedWorstUploadSpeedBytesPerSecond
 	} else {
+		maxCatchpointFileWritingDuration += time.Duration(catchpointFileSize) * time.Second / expectedWorstUploadSpeedBytesPerSecond
+	}
+	if wdErr := rc.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration)); wdErr != nil {
 		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
 	}
 
-	response.Header().Set("Content-Type", LedgerResponseContentType)
 	requestedCompressedResponse := strings.Contains(request.Header.Get("Accept-Encoding"), "gzip")
 	if requestedCompressedResponse {
 		response.Header().Set("Content-Encoding", "gzip")
-		written, err := io.Copy(response, cs)
-		if err != nil {
-			logging.Base().Infof("LedgerService.ServeHTTP : unable to write compressed catchpoint file for round %d, written bytes %d : %v", round, written, err)
+		written, err1 := io.Copy(response, cs)
+		if err1 != nil {
+			logging.Base().Infof("LedgerService.ServeHTTP : unable to write compressed catchpoint file for round %d, written bytes %d : %v", round, written, err1)
 		}
+		elapsed := time.Since(start)
+		logging.Base().Infof("LedgerService.ServeHTTP: served catchpoint round %d in %d sec", round, int(elapsed.Seconds()))
 		return
 	}
 	decompressedGzip, err := gzip.NewReader(cs)
@@ -221,8 +241,11 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		return
 	}
 	defer decompressedGzip.Close()
-	written, err := io.Copy(response, decompressedGzip)
+	written, err := io.Copy(response, decompressedGzip) //nolint:gosec // writing to the network from a local file, no "decompression bomb"
 	if err != nil {
 		logging.Base().Infof("LedgerService.ServeHTTP : unable to write decompressed catchpoint file for round %d, written bytes %d : %v", round, written, err)
+	} else {
+		elapsed := time.Since(start)
+		logging.Base().Infof("LedgerService.ServeHTTP: served catchpoint round %d in %d sec", round, int(elapsed.Seconds()))
 	}
 }

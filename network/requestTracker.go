@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/textproto"
+	"slices"
 	"sort"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -28,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/addr"
 )
 
 const (
@@ -37,21 +42,31 @@ const (
 )
 
 // TrackerRequest hold the tracking data associated with a single request.
+// It supposed by an upstream http.Handler called before the wsNetwork's ServeHTTP
+// and wsNetwork's Listener (see Accept() method)
 type TrackerRequest struct {
-	created            time.Time
-	remoteHost         string
-	remotePort         string
-	remoteAddr         string
-	request            *http.Request
+	created time.Time
+	// remoteHost is IP address of the remote host and it is equal to either
+	// a host part of the remoteAddr or to the value of X-Forwarded-For header (UseXForwardedForAddressField config value).
+	remoteHost string
+	// remotePort is the port of the remote peer as reported by the connection or
+	// by the standard http.Request.RemoteAddr field.
+	remotePort string
+	// remoteAddr is IP:Port of the remote host retrieved from the connection
+	// or from the standard http.Request.RemoteAddr field.
+	// This field is the real address of the remote incoming connection.
+	remoteAddr string
+	// otherPublicAddr is the public address of the other node, as reported by the other node
+	// via the X-Algorand-Location header.
+	// It is used for logging and as a rootURL for when creating a new wsPeer from a request.
+	otherPublicAddr string
+
 	otherTelemetryGUID string
 	otherInstanceName  string
-	otherPublicAddr    string
-	connection         net.Conn
-	noPrune            bool
 }
 
 // makeTrackerRequest creates a new TrackerRequest.
-func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime time.Time, conn net.Conn) *TrackerRequest {
+func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime time.Time) *TrackerRequest {
 	if remoteHost == "" {
 		remoteHost, remotePort, _ = net.SplitHostPort(remoteAddr)
 	}
@@ -61,15 +76,50 @@ func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime ti
 		remoteAddr: remoteAddr,
 		remoteHost: remoteHost,
 		remotePort: remotePort,
-		connection: conn,
 	}
+}
+
+// remoteAddress a best guessed remote address for the request.
+// Rational is the following:
+// remoteAddress() is used either for logging or as rootURL for creating a new wsPeer.
+// rootURL is an address to connect to. It is well defined only for peers from a phonebooks,
+// and for incoming peers the best guess is either otherPublicAddr, remoteHost, or remoteAddr.
+//   - otherPublicAddr is provided by a remote peer by X-Algorand-Location header and cannot be trusted,
+//     but can be used if remoteHost matches to otherPublicAddr value. In this case otherPublicAddr is a better guess
+//     for a rootURL because it might include a port.
+//   - remoteHost is either a real address of the remote peer or a value of X-Forwarded-For header.
+//     Use it if remoteHost was taken from X-Forwarded-For header.
+//     Note, the remoteHost does not include a port since a listening port is not known.
+//   - remoteAddr is used otherwise.
+func (tr *TrackerRequest) remoteAddress() string {
+	if len(tr.otherPublicAddr) != 0 {
+		url, err := addr.ParseHostOrURL(tr.otherPublicAddr)
+		if err == nil && len(tr.remoteHost) > 0 && url.Hostname() == tr.remoteHost {
+			return tr.otherPublicAddr
+		}
+	}
+	url, err := addr.ParseHostOrURL(tr.remoteAddr)
+	if err != nil {
+		// tr.remoteAddr can't be parsed so try to use tr.remoteHost
+		// there is a chance it came from a proxy and has a meaningful value
+		if len(tr.remoteHost) != 0 {
+			return tr.remoteHost
+		}
+		// otherwise fallback to tr.remoteAddr
+		return tr.remoteAddr
+	}
+	if url.Hostname() != tr.remoteHost {
+		// if remoteAddr's host not equal to remoteHost then the remoteHost
+		// is definitely came from a proxy, use it
+		return tr.remoteHost
+	}
+	return tr.remoteAddr
 }
 
 // hostIncomingRequests holds all the requests that are originating from a single host.
 type hostIncomingRequests struct {
-	remoteHost             string
-	requests               []*TrackerRequest            // this is an ordered list, according to the requestsHistory.created
-	additionalHostRequests map[*TrackerRequest]struct{} // additional requests that aren't included in the "requests", and always assumed to be "alive".
+	remoteHost string
+	requests   []*TrackerRequest // this is an ordered list, according to the requestsHistory.created
 }
 
 // findTimestampIndex finds the first an index (i) in the sorted requests array, where requests[i].created is greater than t.
@@ -82,45 +132,6 @@ func (ard *hostIncomingRequests) findTimestampIndex(t time.Time) int {
 		return ard.requests[i].created.After(t)
 	})
 	return i
-}
-
-// convertToAdditionalRequest converts the given trackerRequest into a "additional request".
-// unlike regular tracker requests, additional requests does not get pruned.
-func (ard *hostIncomingRequests) convertToAdditionalRequest(trackerRequest *TrackerRequest) {
-	if _, has := ard.additionalHostRequests[trackerRequest]; has {
-		return
-	}
-
-	i := sort.Search(len(ard.requests), func(i int) bool {
-		return ard.requests[i].created.After(trackerRequest.created)
-	})
-	i--
-	if i < 0 {
-		return
-	}
-	// we could have several entries with the same timestamp, so we need to consider all of them.
-	for ; i >= 0; i-- {
-		if ard.requests[i] == trackerRequest {
-			break
-		}
-		if ard.requests[i].created != trackerRequest.created {
-			// we can't find the item in the list.
-			return
-		}
-	}
-	if i < 0 {
-		return
-	}
-	// ok, item was found at index i.
-	copy(ard.requests[i:], ard.requests[i+1:])
-	ard.requests[len(ard.requests)-1] = nil
-	ard.requests = ard.requests[:len(ard.requests)-1]
-	ard.additionalHostRequests[trackerRequest] = struct{}{}
-}
-
-// removeTrackedConnection removes a trackerRequest from the additional requests map
-func (ard *hostIncomingRequests) removeTrackedConnection(trackerRequest *TrackerRequest) {
-	delete(ard.additionalHostRequests, trackerRequest)
 }
 
 // add adds the trackerRequest at the correct index within the sorted array.
@@ -139,15 +150,15 @@ func (ard *hostIncomingRequests) add(trackerRequest *TrackerRequest) {
 	}
 	// it's going to be added somewhere in the middle.
 	ard.requests = append(ard.requests[:itemIdx], append([]*TrackerRequest{trackerRequest}, ard.requests[itemIdx:]...)...)
-	return
 }
 
 // countConnections counts the number of connection that we have that occurred after the provided specified time
 func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime time.Time) (count uint) {
 	i := ard.findTimestampIndex(rateLimitingWindowStartTime)
-	return uint(len(ard.requests) - i + len(ard.additionalHostRequests))
+	return uint(len(ard.requests) - i)
 }
 
+//msgp:ignore hostsIncomingMap
 type hostsIncomingMap map[string]*hostIncomingRequests
 
 // pruneRequests cleans stale items from the hostRequests maps
@@ -179,9 +190,8 @@ func (him *hostsIncomingMap) addRequest(trackerRequest *TrackerRequest) {
 	requestData, has := (*him)[trackerRequest.remoteHost]
 	if !has {
 		requestData = &hostIncomingRequests{
-			remoteHost:             trackerRequest.remoteHost,
-			requests:               make([]*TrackerRequest, 0, 1),
-			additionalHostRequests: make(map[*TrackerRequest]struct{}),
+			remoteHost: trackerRequest.remoteHost,
+			requests:   make([]*TrackerRequest, 0, 1),
 		}
 		(*him)[trackerRequest.remoteHost] = requestData
 	}
@@ -197,31 +207,13 @@ func (him *hostsIncomingMap) countOriginConnections(remoteHost string, rateLimit
 	return 0
 }
 
-// convertToAdditionalRequest converts the given trackerRequest into a "additional request".
-func (him *hostsIncomingMap) convertToAdditionalRequest(trackerRequest *TrackerRequest) {
-	requestData, has := (*him)[trackerRequest.remoteHost]
-	if !has {
-		return
-	}
-	requestData.convertToAdditionalRequest(trackerRequest)
-}
-
-// removeTrackedConnection removes a trackerRequest from the additional requests map
-func (him *hostsIncomingMap) removeTrackedConnection(trackerRequest *TrackerRequest) {
-	requestData, has := (*him)[trackerRequest.remoteHost]
-	if !has {
-		return
-	}
-	requestData.removeTrackedConnection(trackerRequest)
-}
-
 // RequestTracker tracks the incoming request connections
 type RequestTracker struct {
 	downstreamHandler http.Handler
 	log               logging.Logger
 	config            config.Local
 	// once we detect that we have a misconfigured UseForwardedForAddress, we set this and write an warning message.
-	misconfiguredUseForwardedForAddress bool
+	misconfiguredUseForwardedForAddress atomic.Bool
 
 	listener net.Listener // this is the downsteam listener
 
@@ -247,25 +239,6 @@ func makeRequestsTracker(downstreamHandler http.Handler, log logging.Logger, con
 	}
 }
 
-// requestTrackedConnection used to track the active connections. In particular, it used to remove the
-// tracked connection entry from the RequestTracker once a connection is closed.
-type requestTrackedConnection struct {
-	net.Conn
-	tracker *RequestTracker
-}
-
-// Close removes the connection from the tracker's connections map and call the underlaying Close function.
-func (c *requestTrackedConnection) Close() error {
-	c.tracker.hostRequestsMu.Lock()
-	trackerRequest := c.tracker.acceptedConnections[c.Conn.LocalAddr()]
-	delete(c.tracker.acceptedConnections, c.Conn.LocalAddr())
-	if trackerRequest != nil {
-		c.tracker.hostRequests.removeTrackedConnection(trackerRequest)
-	}
-	c.tracker.hostRequestsMu.Unlock()
-	return c.Conn.Close()
-}
-
 // Accept waits for and returns the next connection to the listener.
 func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 	// the following for loop is a bit tricky :
@@ -277,7 +250,7 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 			return
 		}
 
-		trackerRequest := makeTrackerRequest(conn.RemoteAddr().String(), "", "", time.Now(), conn)
+		trackerRequest := makeTrackerRequest(conn.RemoteAddr().String(), "", "", time.Now())
 		rateLimitingWindowStartTime := trackerRequest.created.Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
 		rt.hostRequestsMu.Lock()
@@ -319,7 +292,6 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 		// add an entry to the acceptedConnections so that the ServeHTTP could find the connection quickly.
 		rt.acceptedConnections[conn.LocalAddr()] = trackerRequest
 		rt.hostRequestsMu.Unlock()
-		conn = &requestTrackedConnection{Conn: conn, tracker: rt}
 		return
 	}
 }
@@ -359,12 +331,12 @@ func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTi
 	}
 }
 
-// pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the acceptedConnectionsMu mutex which is expected to be taken by the caller.
+// pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
 // in case the created is 0, the pruning is disabled for this connection. The HTTP handlers would call Close to have this entry cleared out.
 func (rt *RequestTracker) pruneAcceptedConnections(pruneStartDate time.Time) {
 	localAddrToRemove := []net.Addr{}
 	for localAddr, request := range rt.acceptedConnections {
-		if request.noPrune == false && request.created.Before(pruneStartDate) {
+		if !request.created.Before(pruneStartDate) {
 			localAddrToRemove = append(localAddrToRemove, localAddr)
 		}
 	}
@@ -389,7 +361,7 @@ func (rt *RequestTracker) getWaitUntilNoConnectionsChannel(checkInterval time.Du
 			return len(rt.httpConnections) == 0
 		}
 
-		for true {
+		for {
 			if checkEmpty(rt) {
 				close(done)
 				return
@@ -421,14 +393,6 @@ func (rt *RequestTracker) GetTrackedRequest(request *http.Request) (trackedReque
 	return rt.httpConnections[localAddr]
 }
 
-// GetRequestConnection return the underlying connection for the given request
-func (rt *RequestTracker) GetRequestConnection(request *http.Request) net.Conn {
-	rt.httpConnectionsMu.Lock()
-	defer rt.httpConnectionsMu.Unlock()
-	localAddr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
-	return rt.httpConnections[localAddr].connection
-}
-
 func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	// this function is called only after we've fetched all the headers. on some malicious clients, this could get delayed, so we can't rely on the
 	// tcp-connection established time to align with current time.
@@ -438,28 +402,37 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	localAddr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
 
 	rt.hostRequestsMu.Lock()
+	// Check if the number of connections exceeds the limit
+	acceptedConnections := len(rt.acceptedConnections)
+
+	if acceptedConnections > rt.config.IncomingConnectionsLimit && request.URL.Path != HealthServiceStatusPath {
+		rt.hostRequestsMu.Unlock()
+		// If the limit is exceeded, reject the connection
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "rt_incoming_connection_limit"})
+		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
+			telemetryspec.ConnectPeerFailEventDetails{
+				Address: localAddr.String(), Incoming: true, Reason: "RequestTracker Connection Limit"})
+		response.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
 	trackedRequest := rt.acceptedConnections[localAddr]
+	delete(rt.acceptedConnections, localAddr)
 	if trackedRequest != nil {
-		// update the original tracker request so that it won't get pruned.
-		if trackedRequest.noPrune == false {
-			trackedRequest.noPrune = true
-			rt.hostRequests.convertToAdditionalRequest(trackedRequest)
-		}
 		// create a copy, so we can unlock
-		trackedRequest = makeTrackerRequest(trackedRequest.remoteAddr, trackedRequest.remoteHost, trackedRequest.remotePort, trackedRequest.created, trackedRequest.connection)
+		trackedRequest = makeTrackerRequest(trackedRequest.remoteAddr, trackedRequest.remoteHost, trackedRequest.remotePort, trackedRequest.created)
 	}
 	rt.hostRequestsMu.Unlock()
 
 	// we have no request tracker ? no problem; create one on the fly.
 	if trackedRequest == nil {
-		trackedRequest = makeTrackerRequest(request.RemoteAddr, "", "", time.Now(), nil)
+		trackedRequest = makeTrackerRequest(request.RemoteAddr, "", "", time.Now())
 	}
 
 	// update the origin address.
-	rt.updateRequestRemoteAddr(trackedRequest, request)
+	rt.remoteHostProxyFix(request.Header, trackedRequest)
 
 	rt.httpConnectionsMu.Lock()
-	trackedRequest.request = request
 	trackedRequest.otherTelemetryGUID, trackedRequest.otherInstanceName, trackedRequest.otherPublicAddr = getCommonHeaders(request.Header)
 	rt.httpHostRequests.addRequest(trackedRequest)
 	rt.httpHostRequests.pruneRequests(rateLimitingWindowStartTime)
@@ -482,11 +455,11 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 		rt.log.With("connection", "http").With("count", originConnections).Debugf("Rejected connection due to excessive connections attempt rate")
 		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
 			telemetryspec.ConnectPeerFailEventDetails{
-				Address:      trackedRequest.remoteHost,
-				HostName:     trackedRequest.otherTelemetryGUID,
-				Incoming:     true,
-				InstanceName: trackedRequest.otherInstanceName,
-				Reason:       "Remote IP Connection Rate Limit",
+				Address:       trackedRequest.remoteHost,
+				TelemetryGUID: trackedRequest.otherTelemetryGUID,
+				Incoming:      true,
+				InstanceName:  trackedRequest.otherInstanceName,
+				Reason:        "Remote IP Connection Rate Limit",
 			})
 		response.Header().Add(TooManyRequestsRetryAfterHeader, fmt.Sprintf("%d", rt.config.ConnectionsRateLimitingWindowSeconds))
 		response.WriteHeader(http.StatusTooManyRequests)
@@ -495,16 +468,14 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 	// send the request downstream; in our case, it would go to the router.
 	rt.downstreamHandler.ServeHTTP(response, request)
-
 }
 
-// updateRequestRemoteAddr updates the origin IP address in both the trackedRequest as well as in the request.RemoteAddr string
-func (rt *RequestTracker) updateRequestRemoteAddr(trackedRequest *TrackerRequest, request *http.Request) {
-	originIP := rt.getForwardedConnectionAddress(request.Header)
+// remoteHostProxyFix updates the origin IP address in the trackedRequest
+func (rt *RequestTracker) remoteHostProxyFix(header http.Header, trackedRequest *TrackerRequest) {
+	originIP := rt.getForwardedConnectionAddress(header)
 	if originIP == nil {
 		return
 	}
-	request.RemoteAddr = originIP.String() + ":" + trackedRequest.remotePort
 	trackedRequest.remoteHost = originIP.String()
 }
 
@@ -513,13 +484,29 @@ func (rt *RequestTracker) getForwardedConnectionAddress(header http.Header) (ip 
 	if rt.config.UseXForwardedForAddressField == "" {
 		return
 	}
-	forwardedForString := header.Get(rt.config.UseXForwardedForAddressField)
+	var forwardedForString string
+	// if we're using the standard X-Forwarded-For header(s), we need to parse it.
+	// as UseXForwardedForAddressField defines, use the last value from the last X-Forwarded-For header's list of values.
+	if textproto.CanonicalMIMEHeaderKey(rt.config.UseXForwardedForAddressField) == "X-Forwarded-For" {
+		forwardedForStrings := header.Values(rt.config.UseXForwardedForAddressField)
+		if len(forwardedForStrings) != 0 {
+			forwardedForString = forwardedForStrings[len(forwardedForStrings)-1]
+			ips := strings.Split(forwardedForString, ",")
+			if len(ips) != 0 {
+				forwardedForString = strings.TrimSpace(ips[len(ips)-1])
+			} else {
+				// looks like not possble case now but it's better to handle
+				rt.log.Warnf("header X-Forwarded-For has an invalid value: '%s'", forwardedForString)
+				forwardedForString = ""
+			}
+		}
+	} else {
+		forwardedForString = header.Get(rt.config.UseXForwardedForAddressField)
+	}
+
 	if forwardedForString == "" {
-		rt.httpConnectionsMu.Lock()
-		defer rt.httpConnectionsMu.Unlock()
-		if !rt.misconfiguredUseForwardedForAddress {
+		if rt.misconfiguredUseForwardedForAddress.CompareAndSwap(false, true) {
 			rt.log.Warnf("UseForwardedForAddressField is configured as '%s', but no value was retrieved from header", rt.config.UseXForwardedForAddressField)
-			rt.misconfiguredUseForwardedForAddress = true
 		}
 		return
 	}
@@ -533,10 +520,5 @@ func (rt *RequestTracker) getForwardedConnectionAddress(header http.Header) (ip 
 
 // isLocalhost returns true if the given host is a localhost address.
 func isLocalhost(host string) bool {
-	for _, v := range []string{"localhost", "127.0.0.1", "[::1]", "::1", "[::]"} {
-		if host == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains([]string{"localhost", "127.0.0.1", "[::1]", "::1", "[::]"}, host)
 }

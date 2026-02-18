@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,8 @@ func TestBuilderSanity(t *testing.T) {
 	a.Equal(uint64(len(keys)), numOfKeys)
 
 	s, err := keys[0].SignBytes([]byte{0})
+	a.NoError(err)
+
 	v := keys[0].GetVerifyingKey()
 	err = v.VerifyBytes([]byte{0}, s)
 	a.NoError(err)

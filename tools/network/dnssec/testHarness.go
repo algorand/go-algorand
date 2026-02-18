@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -345,7 +345,7 @@ func (r *testResolver) updateDNSKeyRecord(zone string, key *dns.DNSKEY, sk crypt
 		ok := false
 		for _, ds := range dss {
 			newDS := key.ToDS(ds.DigestType)
-			if strings.ToLower(newDS.Digest) == strings.ToLower(ds.Digest) {
+			if strings.EqualFold(newDS.Digest, ds.Digest) {
 				ok = true
 				break
 			}

@@ -26,7 +26,7 @@ if { [catch {
             set NON_PRINTABLE_CHARS_WARNING 1
             exp_continue
         }
-        {Cannot decode transactions from *: msgpack decode error \[pos 33\]: no matching struct field found when decoding stream map with key \[0G\[0K\[33munexpected_key\[0m} {
+        {Cannot decode transactions from *: Unknown field: \[0G\[0K\[33munexpected_key\[0m} {
             set CANNOT_DECODE_MESSAGE 1
             exp_continue
         }

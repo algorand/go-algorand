@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -92,5 +92,5 @@ func TestEphemeralPublicKeysCommitmentBinaryFormat(t *testing.T) {
 	internal2 := calculateHashOnInternalNode(k1hash, k3hash)
 
 	root := calculateHashOnInternalNode(internal1, internal2)
-	a.Equal(root, signer.GetVerifier()[:])
+	a.Equal(root, signer.GetVerifier().Commitment[:])
 }

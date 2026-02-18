@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -163,24 +163,24 @@ func BenchmarkOldKeysDeletion(b *testing.B) {
 	}()
 
 	// make participation key
-	lastValid := 3000000
+	lastValid := basics.Round(3000000)
 	keyDilution := 10000
 	if kd, err := strconv.Atoi(os.Getenv("DILUTION")); err == nil { // allow setting key dilution via env var
 		keyDilution = kd
 	}
 	if lv, err := strconv.Atoi(os.Getenv("LASTVALID")); err == nil { // allow setting last valid via env var
-		lastValid = lv
+		lastValid = basics.Round(lv)
 	}
 	b.Log("making part keys for firstValid 0 lastValid", lastValid, "dilution", keyDilution)
-	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, basics.Round(lastValid), uint64(keyDilution))
+	part, err := FillDBWithParticipationKeys(partDB, rootAddr, 0, lastValid, uint64(keyDilution))
 	a.NoError(err)
 	a.NotNil(part)
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	b.Log("starting DeleteOldKeys benchmark up to round", b.N)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		errCh := part.DeleteOldKeys(basics.Round(i), proto)
+	for i := range basics.Round(b.N) {
+		errCh := part.DeleteOldKeys(i, proto)
 		err := <-errCh
 		a.NoError(err)
 	}
@@ -344,7 +344,7 @@ func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
 		keyDilution INTEGER NOT NULL DEFAULT 0
 	);`)
 		if err != nil {
-			return nil
+			return err
 		}
 
 		if err := setupSchemaForTest(tx, 2); err != nil {
@@ -362,12 +362,12 @@ func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
 func setupSchemaForTest(tx *sql.Tx, version int) error {
 	_, err := tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", PartTableSchemaName, version)
 	if err != nil {
-		return nil
+		return err
 	}
 	return err
 }
@@ -435,7 +435,7 @@ func BenchmarkFillDB(b *testing.B) {
 
 	tmp := config.Consensus[protocol.ConsensusCurrentVersion]
 	cpy := config.Consensus[protocol.ConsensusCurrentVersion]
-	cpy.CompactCertRounds = 256
+	cpy.StateProofInterval = 256
 	config.Consensus[protocol.ConsensusCurrentVersion] = cpy
 	defer func() { config.Consensus[protocol.ConsensusCurrentVersion] = tmp }()
 
@@ -500,7 +500,7 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
-	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+	maxValidPeriod := basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod)
 	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
@@ -509,7 +509,7 @@ func TestKeyregValidityOverLimit(t *testing.T) {
 	store := createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid := basics.Round(0)
-	lastValid := basics.Round(maxValidPeriod + 1)
+	lastValid := maxValidPeriod + 1
 	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.Error(err)
 }
@@ -531,7 +531,7 @@ func TestFillDBWithParticipationKeys(t *testing.T) {
 	a.NoError(err)
 }
 
-func TestKeyregValidityPeriod(t *testing.T) {
+func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -546,7 +546,7 @@ func TestKeyregValidityPeriod(t *testing.T) {
 		config.Consensus[protocol.ConsensusCurrentVersion] = version
 	}()
 
-	maxValidPeriod := config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod
+	maxValidPeriod := basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].MaxKeyregValidPeriod)
 	dilution := config.Consensus[protocol.ConsensusCurrentVersion].DefaultKeyDilution
 
 	var address basics.Address
@@ -554,7 +554,7 @@ func TestKeyregValidityPeriod(t *testing.T) {
 	store := createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid := basics.Round(0)
-	lastValid := basics.Round(maxValidPeriod)
+	lastValid := maxValidPeriod
 	crypto.RandBytes(address[:])
 	_, err := FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.NoError(err)
@@ -562,7 +562,7 @@ func TestKeyregValidityPeriod(t *testing.T) {
 	store = createMerkleSignatureSchemeTestDB(a)
 	defer store.Close()
 	firstValid = basics.Round(0)
-	lastValid = basics.Round(maxValidPeriod + 1)
+	lastValid = maxValidPeriod + 1
 	_, err = FillDBWithParticipationKeys(*store, address, firstValid, lastValid, dilution)
 	a.Error(err)
 }
@@ -605,4 +605,14 @@ func BenchmarkParticipationSign(b *testing.B) {
 		ephID := basics.OneTimeIDForRound(basics.Round(rnd), keyDilution)
 		_ = part.Voting.Sign(ephID, msg)
 	}
+}
+
+func BenchmarkID(b *testing.B) {
+	pki := ParticipationKeyIdentity{}
+	b.Run("existing", func(b *testing.B) {
+		b.ReportAllocs() // demonstrate this is a single alloc
+		for i := 0; i < b.N; i++ {
+			pki.ID()
+		}
+	})
 }

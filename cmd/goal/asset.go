@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,12 +22,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/libgoal"
 )
 
 var (
-	assetID                 uint64
+	assetID                 basics.AssetIndex
 	assetCreator            string
 	assetTotal              uint64
 	assetDecimals           uint32
@@ -83,13 +84,13 @@ func init() {
 
 	destroyAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the destroy transaction (defaults to creator)")
 	destroyAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Creator account address for asset to destroy")
-	destroyAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to destroy")
-	destroyAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to destroy")
+	destroyAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "Asset ID to destroy")
+	destroyAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Unit name of asset to destroy")
 
 	configAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the config transaction")
 	configAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to configure (defaults to manager)")
-	configAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to configure")
-	configAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to configure")
+	configAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "Asset ID to configure")
+	configAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Unit name of asset to configure")
 	configAssetCmd.Flags().StringVar(&assetNewManager, "new-manager", "", "New manager address")
 	configAssetCmd.Flags().StringVar(&assetNewReserve, "new-reserve", "", "New reserve address")
 	configAssetCmd.Flags().StringVar(&assetNewFreezer, "new-freezer", "", "New freeze address")
@@ -98,8 +99,8 @@ func init() {
 
 	sendAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
-	sendAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being transferred")
-	sendAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being transferred")
+	sendAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "ID of the asset being transferred")
+	sendAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Unit name of the asset being transferred")
 	sendAssetCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (if not specified, uses default account)")
 	sendAssetCmd.Flags().StringVarP(&toAddress, "to", "t", "", "Address to send to money to (required)")
 	sendAssetCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in base units of the asset.")
@@ -109,16 +110,16 @@ func init() {
 
 	freezeAssetCmd.Flags().StringVar(&assetFreezer, "freezer", "", "Address to issue a freeze transaction from")
 	freezeAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
-	freezeAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being frozen")
-	freezeAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being frozen")
+	freezeAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "ID of the asset being frozen")
+	freezeAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Unit name of the asset being frozen")
 	freezeAssetCmd.Flags().StringVar(&account, "account", "", "Account address to freeze/unfreeze")
 	freezeAssetCmd.Flags().BoolVar(&assetFrozen, "freeze", false, "Freeze or unfreeze")
 	freezeAssetCmd.MarkFlagRequired("freezer")
 	freezeAssetCmd.MarkFlagRequired("account")
 	freezeAssetCmd.MarkFlagRequired("freeze")
 
-	optinAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being accepted")
-	optinAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being accepted")
+	optinAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Unit name of the asset being accepted")
+	optinAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "ID of the asset being accepted")
 	optinAssetCmd.Flags().StringVarP(&account, "account", "a", "", "Account address to opt in to using the asset (if not specified, uses default account)")
 	optinAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
 
@@ -130,8 +131,7 @@ func init() {
 	addTxnFlags(freezeAssetCmd)
 	addTxnFlags(optinAssetCmd)
 
-	infoAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset to look up")
-	infoAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "DEPRECATED! Unit name of the asset to look up")
+	infoAssetCmd.Flags().Uint64Var((*uint64)(&assetID), "assetid", 0, "ID of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Unit name of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address of the asset creator")
 }
@@ -147,17 +147,9 @@ var assetCmd = &cobra.Command{
 }
 
 func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
-	if cmd.Flags().Changed("asset") {
-		reportWarnln("The [--asset] flag is deprecated and will be removed in a future release, use [--unitname] instead.")
-	}
+	unitSpecified := cmd.Flags().Changed("unitname")
 
-	if cmd.Flags().Changed("asset") && cmd.Flags().Changed("unitname") {
-		reportErrorf("The [--asset] flag has been replaced by [--unitname], do not provide both flags.")
-	}
-
-	assetOrUnit := cmd.Flags().Changed("asset") || cmd.Flags().Changed("unitname")
-
-	if cmd.Flags().Changed("assetid") && assetOrUnit {
+	if cmd.Flags().Changed("assetid") && unitSpecified {
 		reportErrorf("Only one of [--assetid] or [--unitname and --creator] should be specified")
 	}
 
@@ -165,7 +157,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 		return
 	}
 
-	if !assetOrUnit {
+	if !unitSpecified {
 		reportErrorf("Missing required parameter [--assetid] or [--unitname and --creator] must be specified")
 	}
 
@@ -175,21 +167,29 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 			"creator account is unknown.")
 	}
 
-	response, err := client.AccountInformation(creator)
+	response, err := client.AccountInformation(creator, true)
 	if err != nil {
 		reportErrorf(errorRequestFail, err)
 	}
 
 	nmatch := 0
-	for id, params := range response.AssetParams {
-		if params.UnitName == assetUnitName {
-			assetID = id
-			nmatch++
+	if response.CreatedAssets != nil {
+		for _, asset := range *response.CreatedAssets {
+			params := asset.Params
+			if params.UnitName == nil && assetUnitName == "" {
+				// Since asset unit names can be left blank, try to match
+				// empty unit names in the user's account first.
+				assetID = asset.Index
+				nmatch++
+			} else if params.UnitName != nil && *params.UnitName == assetUnitName {
+				assetID = asset.Index
+				nmatch++
+			}
 		}
 	}
 
 	if nmatch == 0 {
-		reportErrorf("No matches for asset unit name %s in creator %s", assetUnitName, creator)
+		reportErrorf("No matches for asset unit name %s in creator %s; assets %v", assetUnitName, creator, *response.CreatedAssets)
 	}
 
 	if nmatch > 1 {
@@ -221,7 +221,7 @@ var createAssetCmd = &cobra.Command{
 			reportErrorf("The [--clawback] flag and the [--no-clawback] flag are mutually exclusive, do not provide both flags.")
 		}
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(assetCreator)
@@ -283,7 +283,7 @@ var createAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		fv, lv, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		fv, lv, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -298,32 +298,32 @@ var createAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				txn, err := waitForCommit(client, txid, lv)
-				if err != nil {
-					reportErrorf(err.Error())
+				txn, err1 := waitForCommit(client, txid, lv)
+				if err1 != nil {
+					reportErrorln(err1)
 				}
-				if txn.TransactionResults != nil && txn.TransactionResults.CreatedAssetIndex != 0 {
-					reportInfof("Created asset with asset index %d", txn.TransactionResults.CreatedAssetIndex)
+				if txn.AssetIndex != nil && *txn.AssetIndex != 0 {
+					reportInfof("Created asset with asset index %d", *txn.AssetIndex)
 				}
 			}
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -337,7 +337,7 @@ var destroyAssetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
@@ -362,7 +362,7 @@ var destroyAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -377,29 +377,29 @@ var destroyAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lastValid)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lastValid)
+				if err2 != nil {
+					reportErrorln(err2)
 				}
 			}
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -413,7 +413,7 @@ var configAssetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
@@ -455,7 +455,7 @@ var configAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -470,29 +470,29 @@ var configAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lastValid)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lastValid)
+				if err2 != nil {
+					reportErrorln(err2)
 				}
 			}
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -506,7 +506,7 @@ var sendAssetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
@@ -540,7 +540,7 @@ var sendAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -557,29 +557,29 @@ var sendAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lastValid)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lastValid)
+				if err2 != nil {
+					reportErrorln(err2)
 				}
 			}
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -593,7 +593,7 @@ var freezeAssetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
@@ -611,7 +611,7 @@ var freezeAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -626,35 +626,35 @@ var freezeAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lastValid)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lastValid)
+				if err2 != nil {
+					reportErrorln(err2)
 				}
 			}
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
 }
 
-func assetDecimalsFmt(amount uint64, decimals uint32) string {
+func assetDecimalsFmt(amount uint64, decimals uint64) string {
 	// Just return the raw amount with no decimal if decimals is 0
 	if decimals == 0 {
 		return fmt.Sprintf("%d", amount)
@@ -662,7 +662,7 @@ func assetDecimalsFmt(amount uint64, decimals uint32) string {
 
 	// Otherwise, ensure there are decimals digits to the right of the decimal point
 	pow := uint64(1)
-	for i := uint32(0); i < decimals; i++ {
+	for i := uint64(0); i < decimals; i++ {
 		pow *= 10
 	}
 	return fmt.Sprintf("%d.%0*d", amount/pow, decimals, amount%pow)
@@ -676,7 +676,7 @@ var optinAssetCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 		// Opt in txns are always 0
@@ -698,7 +698,7 @@ var optinAssetCmd = &cobra.Command{
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
-		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
+		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
 			reportErrorf("Cannot determine last valid round: %s", err)
 		}
@@ -715,29 +715,29 @@ var optinAssetCmd = &cobra.Command{
 
 		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
-			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
-			if err != nil {
-				reportErrorf(errorSigningTX, err)
+			signedTxn, err2 := client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, tx)
+			if err2 != nil {
+				reportErrorf(errorSigningTX, err2)
 			}
 
-			txid, err := client.BroadcastTransaction(signedTxn)
-			if err != nil {
-				reportErrorf(errorBroadcastingTX, err)
+			txid, err2 := client.BroadcastTransaction(signedTxn)
+			if err2 != nil {
+				reportErrorf(errorBroadcastingTX, err2)
 			}
 
 			// Report tx details to user
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
-				_, err = waitForCommit(client, txid, lastValid)
-				if err != nil {
-					reportErrorf(err.Error())
+				_, err2 = waitForCommit(client, txid, lastValid)
+				if err2 != nil {
+					reportErrorln(err2)
 				}
 			}
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err)
 			}
 		}
 	},
@@ -749,47 +749,61 @@ var infoAssetCmd = &cobra.Command{
 	Long:  `Look up asset information stored on the network, such as asset creator, management addresses, or asset name.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(assetCreator)
 
+		// Helper methods for dereferencing optional asset fields.
+		derefString := func(s *string) string {
+			if s == nil {
+				return ""
+			}
+			return *s
+		}
+		derefBool := func(b *bool) bool {
+			if b == nil {
+				return false
+			}
+			return *b
+		}
+
 		lookupAssetID(cmd, creator, client)
 
-		params, err := client.AssetInformation(assetID)
+		asset, err := client.AssetInformation(assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
 		reserveEmpty := false
-		if params.ReserveAddr == "" {
+		if derefString(asset.Params.Reserve) == "" {
 			reserveEmpty = true
-			params.ReserveAddr = params.Creator
+			asset.Params.Reserve = &asset.Params.Creator
 		}
 
-		reserve, err := client.AccountInformation(params.ReserveAddr)
+		reserve, err := client.AccountAssetInformation(*asset.Params.Reserve, assetID)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
-
-		res := reserve.Assets[assetID]
+		res := reserve.AssetHolding
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
-		fmt.Printf("Creator:          %s\n", params.Creator)
-		reportInfof("Asset name:       %s\n", params.AssetName)
-		reportInfof("Unit name:        %s\n", params.UnitName)
-		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(params.Total, params.Decimals), params.UnitName)
-		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, params.Decimals), params.UnitName)
-		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(params.Total-res.Amount, params.Decimals), params.UnitName)
-		fmt.Printf("Decimals:         %d\n", params.Decimals)
-		fmt.Printf("Default frozen:   %v\n", params.DefaultFrozen)
-		fmt.Printf("Manager address:  %s\n", params.ManagerAddr)
+		fmt.Printf("Creator:          %s\n", asset.Params.Creator)
+		reportInfof("Asset name:       %s", derefString(asset.Params.Name))
+		reportInfof("Unit name:        %s", derefString(asset.Params.UnitName))
+		reportInfof("URL:              %s", derefString(asset.Params.Url))
+		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(asset.Params.Total, asset.Params.Decimals), derefString(asset.Params.UnitName))
+		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
+		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
+		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
+		fmt.Printf("Default frozen:   %v\n", derefBool(asset.Params.DefaultFrozen))
+		fmt.Printf("Manager address:  %s\n", derefString(asset.Params.Manager))
 		if reserveEmpty {
-			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", params.ReserveAddr)
+			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", derefString(asset.Params.Reserve))
 		} else {
-			fmt.Printf("Reserve address:  %s\n", params.ReserveAddr)
+			fmt.Printf("Reserve address:  %s\n", derefString(asset.Params.Reserve))
 		}
-		fmt.Printf("Freeze address:   %s\n", params.FreezeAddr)
-		fmt.Printf("Clawback address: %s\n", params.ClawbackAddr)
+		fmt.Printf("Freeze address:   %s\n", derefString(asset.Params.Freeze))
+		fmt.Printf("Clawback address: %s\n", derefString(asset.Params.Clawback))
 	},
 }

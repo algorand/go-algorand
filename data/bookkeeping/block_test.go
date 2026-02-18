@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package bookkeeping
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -38,12 +39,22 @@ import (
 var delegatesMoney = basics.MicroAlgos{Raw: 1000 * 1000 * 1000}
 
 var proto1 = protocol.ConsensusVersion("Test1")
+var proto1NoBonus = protocol.ConsensusVersion("Test1NoBonus")
 var proto2 = protocol.ConsensusVersion("Test2")
 var proto3 = protocol.ConsensusVersion("Test3")
 var protoUnsupported = protocol.ConsensusVersion("TestUnsupported")
 var protoDelay = protocol.ConsensusVersion("TestDelay")
 
 func init() {
+	verBeforeBonus := protocol.ConsensusV39
+	params1NB := config.Consensus[verBeforeBonus]
+	params1NB.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
+		proto2: 0,
+	}
+	params1NB.MinUpgradeWaitRounds = 0
+	params1NB.MaxUpgradeWaitRounds = 0
+	config.Consensus[proto1NoBonus] = params1NB
+
 	params1 := config.Consensus[protocol.ConsensusCurrentVersion]
 	params1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
 		proto2: 0,
@@ -54,6 +65,8 @@ func init() {
 
 	params2 := config.Consensus[protocol.ConsensusCurrentVersion]
 	params2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	params2.Bonus.BaseAmount = 5_000_000
+	params2.Bonus.DecayInterval = 1_000_000
 	config.Consensus[proto2] = params2
 
 	paramsDelay := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -67,6 +80,7 @@ func init() {
 
 func TestUpgradeVote(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	s := UpgradeState{
 		CurrentProtocol: proto1,
@@ -86,9 +100,9 @@ func TestUpgradeVote(t *testing.T) {
 	s = UpgradeState{
 		CurrentProtocol:        proto1,
 		NextProtocol:           proto2,
-		NextProtocolApprovals:  config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold - 1,
-		NextProtocolVoteBefore: basics.Round(20),
-		NextProtocolSwitchOn:   basics.Round(30),
+		NextProtocolApprovals:  basics.Round(config.Consensus[protocol.ConsensusCurrentVersion].UpgradeThreshold) - 1,
+		NextProtocolVoteBefore: 20,
+		NextProtocolSwitchOn:   30,
 	}
 
 	// Check that applyUpgradeVote rejects concurrent proposal
@@ -108,9 +122,9 @@ func TestUpgradeVote(t *testing.T) {
 	s1, err = s.applyUpgradeVote(basics.Round(20), UpgradeVote{})
 	require.NoError(t, err)
 	require.Equal(t, s1.NextProtocol, protocol.ConsensusVersion(""))
-	require.Equal(t, s1.NextProtocolApprovals, uint64(0))
-	require.Equal(t, s1.NextProtocolVoteBefore, basics.Round(0))
-	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
+	require.Zero(t, s1.NextProtocolApprovals)
+	require.Zero(t, s1.NextProtocolVoteBefore)
+	require.Zero(t, s1.NextProtocolSwitchOn)
 
 	// Check that proposal gets approved with sufficient votes
 	s.NextProtocolApprovals++
@@ -123,13 +137,14 @@ func TestUpgradeVote(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, s1.CurrentProtocol, proto2)
 	require.Equal(t, s1.NextProtocol, protocol.ConsensusVersion(""))
-	require.Equal(t, s1.NextProtocolApprovals, uint64(0))
-	require.Equal(t, s1.NextProtocolVoteBefore, basics.Round(0))
-	require.Equal(t, s1.NextProtocolSwitchOn, basics.Round(0))
+	require.Zero(t, s1.NextProtocolApprovals)
+	require.Zero(t, s1.NextProtocolVoteBefore)
+	require.Zero(t, s1.NextProtocolSwitchOn)
 }
 
 func TestUpgradeVariableDelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	s := UpgradeState{
 		CurrentProtocol: protoDelay,
@@ -156,6 +171,7 @@ func TestUpgradeVariableDelay(t *testing.T) {
 
 func TestMakeBlockUpgrades(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var b Block
 	b.BlockHeader.GenesisID = t.Name()
@@ -206,8 +222,9 @@ func TestMakeBlockUpgrades(t *testing.T) {
 	require.Equal(t, bd2.NextProtocolSwitchOn-bd2.NextProtocolVoteBefore, basics.Round(5))
 }
 
-func TestBlockUnsupported(t *testing.T) {
+func TestBlockUnsupported(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
+	// t.Parallel() not parallel because it modifies config.Consensus
 
 	var b Block
 	b.CurrentProtocol = protoUnsupported
@@ -218,11 +235,12 @@ func TestBlockUnsupported(t *testing.T) {
 	delete(config.Consensus, protoUnsupported)
 
 	err := b1.PreCheck(b.BlockHeader)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "protocol TestUnsupported not supported")
 }
 
 func TestTime(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var prev Block
 	prev.BlockHeader.GenesisID = t.Name()
@@ -243,15 +261,49 @@ func TestTime(t *testing.T) {
 	require.NoError(t, b.PreCheck(prev.BlockHeader))
 
 	b.TimeStamp = prev.TimeStamp - 1
-	require.Error(t, b.PreCheck(prev.BlockHeader))
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad timestamp")
 	b.TimeStamp = prev.TimeStamp + proto.MaxTimestampIncrement
 	require.NoError(t, b.PreCheck(prev.BlockHeader))
 	b.TimeStamp = prev.TimeStamp + proto.MaxTimestampIncrement + 1
-	require.Error(t, b.PreCheck(prev.BlockHeader))
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad timestamp")
+}
+
+func TestBonus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var prev Block
+	prev.CurrentProtocol = proto1NoBonus
+	prev.BlockHeader.GenesisID = t.Name()
+	crypto.RandBytes(prev.BlockHeader.GenesisHash[:])
+
+	b := MakeBlock(prev.BlockHeader)
+	require.NoError(t, b.PreCheck(prev.BlockHeader))
+
+	// proto1 has no bonuses
+	b.Bonus.Raw++
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {1} != {0}")
+
+	prev.CurrentProtocol = proto2
+	prev.Bonus = basics.Algos(5)
+	b = MakeBlock(prev.BlockHeader)
+	require.NoError(t, b.PreCheck(prev.BlockHeader))
+
+	b.Bonus.Raw++
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {5000001} != {5000000}")
+
+	prev.BlockHeader.Round = 10_000_000 - 1
+	b = MakeBlock(prev.BlockHeader)
+	require.NoError(t, b.PreCheck(prev.BlockHeader))
+
+	// since current block is 0 mod decayInterval, bonus goes down to 4,950,000
+	b.Bonus.Raw++
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {4950001} != {4950000}")
 }
 
 func TestRewardsLevel(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -272,6 +324,7 @@ func TestRewardsLevel(t *testing.T) {
 
 func TestRewardsLevelWithResidue(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -294,6 +347,7 @@ func TestRewardsLevelWithResidue(t *testing.T) {
 
 func TestRewardsLevelNoUnits(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -315,6 +369,7 @@ func TestRewardsLevelNoUnits(t *testing.T) {
 
 func TestTinyLevel(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -335,6 +390,7 @@ func TestTinyLevel(t *testing.T) {
 
 func TestRewardsRate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -360,6 +416,7 @@ func TestRewardsRate(t *testing.T) {
 
 func TestRewardsRateRefresh(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var buf bytes.Buffer
 	log := logging.NewLogger()
@@ -385,6 +442,7 @@ func TestRewardsRateRefresh(t *testing.T) {
 
 func TestEncodeDecodeSignedTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
@@ -405,6 +463,7 @@ func TestEncodeDecodeSignedTxn(t *testing.T) {
 
 func TestEncodeMalformedSignedTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
@@ -430,6 +489,7 @@ func TestEncodeMalformedSignedTxn(t *testing.T) {
 
 func TestDecodeMalformedSignedTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var b Block
 	b.BlockHeader.GenesisID = "foo"
@@ -451,6 +511,7 @@ func TestDecodeMalformedSignedTxn(t *testing.T) {
 // running the rounds in the same way eval() is executing them over RewardsRateRefreshInterval rounds.
 func TestInitialRewardsRateCalculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	consensusParams.RewardsCalculationFix = false
@@ -501,7 +562,7 @@ func TestInitialRewardsRateCalculation(t *testing.T) {
 		return true
 	}
 
-	// test expected failuire
+	// test expected failure
 	consensusParams.InitialRewardsRateCalculation = false
 	require.False(t, runTest())
 
@@ -553,6 +614,7 @@ func performRewardsRateCalculation(
 
 func TestNextRewardsRateWithFix(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -596,8 +658,9 @@ func TestNextRewardsRateWithFix(t *testing.T) {
 	}
 }
 
-func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
+func TestNextRewardsRateErrsWithoutFix(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -617,6 +680,7 @@ func TestNextRewardsRateFailsWithoutFix(t *testing.T) {
 
 func TestNextRewardsRateWithFixUsesNewRate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -651,6 +715,7 @@ func TestNextRewardsRateWithFixUsesNewRate(t *testing.T) {
 
 func TestNextRewardsRateWithFixPoolBalanceInsufficient(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -685,6 +750,7 @@ func TestNextRewardsRateWithFixPoolBalanceInsufficient(t *testing.T) {
 
 func TestNextRewardsRateWithFixMaxSpentOverOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -721,6 +787,7 @@ func TestNextRewardsRateWithFixMaxSpentOverOverflow(t *testing.T) {
 
 func TestNextRewardsRateWithFixRewardsWithResidueOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -747,6 +814,7 @@ func TestNextRewardsRateWithFixRewardsWithResidueOverflow(t *testing.T) {
 
 func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	proto, ok := config.Consensus[protocol.ConsensusCurrentVersion]
 	require.True(t, ok)
@@ -773,11 +841,27 @@ func TestNextRewardsRateWithFixNextRewardLevelOverflow(t *testing.T) {
 
 func TestBlock_ContentsMatchHeader(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	a := require.New(t)
+	t.Parallel()
+	for _, cv := range []struct {
+		name string
+		ver  protocol.ConsensusVersion
+	}{
+		{"v32", protocol.ConsensusV32},
+		{"v34", protocol.ConsensusV34},
+		{"current", protocol.ConsensusCurrentVersion},
+		{"future", protocol.ConsensusFuture},
+	} {
+		t.Run(cv.name, func(t *testing.T) {
+			testBlockContentsMatchHeader(t, cv.ver)
+		})
+	}
+}
 
+func testBlockContentsMatchHeader(t *testing.T, cv protocol.ConsensusVersion) {
+	a := require.New(t)
 	// Create a block without SHA256 TxnCommitments
 	var block Block
-	block.CurrentProtocol = protocol.ConsensusV32
+	block.CurrentProtocol = cv
 	crypto.RandBytes(block.BlockHeader.GenesisHash[:])
 
 	for i := 0; i < 1024; i++ {
@@ -811,59 +895,102 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 	a.NoError(err)
 	rootSliceSHA256 := tree.Root()
 
+	tree, err = block.TxnMerkleTreeSHA512()
+	a.NoError(err)
+	rootSliceSHA512 := tree.Root()
+
 	badDigestSlice := []byte("(>^-^)>")
 
-	/* Test V32 */
+	// Get consensus parameters for this version
+	params, ok := config.Consensus[cv]
+	a.True(ok)
+
+	// Initially all roots empty, should fail
+	block.BlockHeader.TxnCommitments = TxnCommitments{}
 	a.False(block.ContentsMatchHeader())
 
+	// Copy the appropriate txn roots based on consensus version
 	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	}
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+	}
 	a.True(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
+	// Test with SHA256 set when it shouldn't be
+	if !params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		a.False(block.ContentsMatchHeader())
+		block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+	}
 
+	// Test with SHA512 set when it shouldn't be
+	if !params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		a.False(block.ContentsMatchHeader())
+		block.BlockHeader.TxnCommitments.Sha512Commitment = crypto.Sha512Digest{}
+	}
+
+	// Test with bad NativeSha512_256Commitment (should fail for all protocols)
 	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], badDigestSlice)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 
+	// Test with missing NativeSha512_256Commitment
 	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+	}
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+	}
 	a.False(block.ContentsMatchHeader())
 
-	/* Test Consensus Future */
-	// Create a block with SHA256 TxnCommitments
-	block.CurrentProtocol = protocol.ConsensusFuture
+	// For protocols with SHA256 enabled, test with bad/missing SHA256 commitment
+	if params.EnableSHA256TxnCommitmentHeader {
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], badDigestSlice)
+		if params.EnableSha512BlockHash {
+			copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		}
+		a.False(block.ContentsMatchHeader())
 
-	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
-	a.False(block.ContentsMatchHeader())
+		// Test with missing SHA256 commitment
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
+		if params.EnableSha512BlockHash {
+			copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], rootSliceSHA512)
+		}
+		a.False(block.ContentsMatchHeader())
+	}
 
-	// Now update the SHA256 header to its correct value
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.True(block.ContentsMatchHeader())
+	// For protocols with SHA512 enabled, test with bad/missing SHA512 commitment
+	if params.EnableSha512BlockHash {
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		if params.EnableSHA256TxnCommitmentHeader {
+			copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		}
+		copy(block.BlockHeader.TxnCommitments.Sha512Commitment[:], badDigestSlice)
+		a.False(block.ContentsMatchHeader())
 
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], badDigestSlice)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
-
-	copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], badDigestSlice)
-	a.False(block.ContentsMatchHeader())
-
-	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
-	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
-	a.False(block.ContentsMatchHeader())
+		// Test with missing SHA512 commitment
+		copy(block.BlockHeader.TxnCommitments.NativeSha512_256Commitment[:], rootSliceSHA512_256)
+		if params.EnableSHA256TxnCommitmentHeader {
+			copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
+		}
+		block.BlockHeader.TxnCommitments.Sha512Commitment = crypto.Sha512Digest{}
+		a.False(block.ContentsMatchHeader())
+	}
 }
 
 func TestBlockHeader_Serialization(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	a := require.New(t)
 
 	// This serialized block header was generated from V32 e2e test, using the old BlockHeader struct which contains only TxnCommitments SHA512_256 value
-	serializedBlkHdr := "8fa26363810081a16ecd0200a466656573c42007dacb4b6d9ed141b17576bd459ae6421d486da3d4ef2247c409a396b82ea221a466726163ce1dcd64fea367656ea7746573742d7631a26768c42032cb340d569e1f9e4d9690c1ba04d77759bae6f353e13af1becf42dcd7d3bdeba470726576c420a2270bc90e3cc48d56081b3b85c15d6a10e14303a6d42ca2537954ce90beec40a570726f746fa6667574757265a472617465ce0ee6b27fa3726e6402a6727763616c72ce0007a120a3727764c420ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa473656564c420a19005a25abad1ad28ec2298baeda9a17693a9ef12127a5ff3e5fa9258c7e9eba2746306a27473ce625ed0eaa374786ec420508f9330176e6064767b0fb7eb0e8bf68ffbaf995a4c7b37ca0217c5a82b4a60"
+	serializedBlkHdr := "8fa3737074810081a16ecd0200a466656573c42007dacb4b6d9ed141b17576bd459ae6421d486da3d4ef2247c409a396b82ea221a466726163ce1dcd64fea367656ea7746573742d7631a26768c42032cb340d569e1f9e4d9690c1ba04d77759bae6f353e13af1becf42dcd7d3bdeba470726576c420a2270bc90e3cc48d56081b3b85c15d6a10e14303a6d42ca2537954ce90beec40a570726f746fa6667574757265a472617465ce0ee6b27fa3726e6402a6727763616c72ce0007a120a3727764c420ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa473656564c420a19005a25abad1ad28ec2298baeda9a17693a9ef12127a5ff3e5fa9258c7e9eba2746306a27473ce625ed0eaa374786ec420508f9330176e6064767b0fb7eb0e8bf68ffbaf995a4c7b37ca0217c5a82b4a60"
 	bytesBlkHdr, err := hex.DecodeString(serializedBlkHdr)
 	a.NoError(err)
 
@@ -873,4 +1000,219 @@ func TestBlockHeader_Serialization(t *testing.T) {
 
 	a.Equal(crypto.Digest{}, blkHdr.TxnCommitments.Sha256Commitment)
 	a.NotEqual(crypto.Digest{}, blkHdr.TxnCommitments.NativeSha512_256Commitment)
+	a.Equal(crypto.Sha512Digest{}, blkHdr.TxnCommitments.Sha512Commitment)
+	a.Equal(crypto.Sha512Digest{}, blkHdr.Branch512)
+}
+
+// TestBlockHeader_PreCheck_Branch512 tests the Branch512 validation in PreCheck
+func TestBlockHeader_PreCheck_Branch512(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	// Test consensus v40 (no EnableSha512BlockHash)
+	cv := protocol.ConsensusV40
+	prevHeader := BlockHeader{Round: 1, GenesisID: "test"}
+	prevHeader.CurrentProtocol = cv
+	crypto.RandBytes(prevHeader.GenesisHash[:])
+	// Make round 2 block that references block 1 as prev
+	currentHeader := BlockHeader{
+		Round: prevHeader.Round + 1, GenesisID: prevHeader.GenesisID, GenesisHash: prevHeader.GenesisHash,
+		Branch: prevHeader.Hash(),
+	}
+	currentHeader.CurrentProtocol = cv
+	// empty Branch512 passes
+	a.NoError(currentHeader.PreCheck(prevHeader))
+	// correct Branch512 fails
+	currentHeader.Branch512 = prevHeader.Hash512()
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 not allowed")
+	// non-empty Branch512 fails
+	crypto.RandBytes(currentHeader.Branch512[:])
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 not allowed")
+
+	// Test consensus future (EnableSha512BlockHash set)
+	cv = protocol.ConsensusFuture
+	prevHeader = BlockHeader{Round: 1, GenesisID: "test"}
+	prevHeader.CurrentProtocol = cv
+	crypto.RandBytes(prevHeader.GenesisHash[:])
+	currentHeader = BlockHeader{
+		Round: prevHeader.Round + 1, GenesisID: prevHeader.GenesisID, GenesisHash: prevHeader.GenesisHash,
+		Branch: prevHeader.Hash(),
+	}
+	currentHeader.CurrentProtocol = cv
+	// empty Branch512 fails
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
+	// correct Branch512 passes
+	currentHeader.Branch512 = prevHeader.Hash512()
+	a.NoError(currentHeader.PreCheck(prevHeader))
+	// incorrect Branch512 fails
+	crypto.RandBytes(currentHeader.Branch512[:])
+	a.ErrorContains(currentHeader.PreCheck(prevHeader), "block branch512 incorrect")
+}
+
+func TestBonusUpgrades(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	ma0 := basics.MicroAlgos{Raw: 0}
+	ma99 := basics.MicroAlgos{Raw: 99}
+	ma100 := basics.MicroAlgos{Raw: 100}
+	ma198 := basics.MicroAlgos{Raw: 198}
+	ma200 := basics.MicroAlgos{Raw: 200}
+
+	old := config.BonusPlan{}
+	plan := config.BonusPlan{}
+
+	// Nothing happens with empty plans
+	a.Equal(ma0, computeBonus(1, ma0, plan, old))
+	a.Equal(ma100, computeBonus(1, ma100, plan, old))
+
+	// When plan doesn't change, just expect decay on the intervals
+	plan.DecayInterval = 100
+	a.Equal(ma100, computeBonus(1, ma100, plan, plan))
+	a.Equal(ma100, computeBonus(99, ma100, plan, plan))
+	a.Equal(ma99, computeBonus(100, ma100, plan, plan))
+	a.Equal(ma100, computeBonus(101, ma100, plan, plan))
+	a.Equal(ma99, computeBonus(10000, ma100, plan, plan))
+
+	// When plan changes, the new decay is in effect
+	d90 := config.BonusPlan{DecayInterval: 90}
+	a.Equal(ma100, computeBonus(100, ma100, d90, plan)) // no decay
+	a.Equal(ma99, computeBonus(180, ma100, d90, plan))  // decay
+
+	// When plan changes and amount is present, it is installed
+	d90.BaseAmount = 200
+	a.Equal(ma200, computeBonus(100, ma100, d90, plan)) // no decay (wrong round and upgrade anyway)
+	a.Equal(ma200, computeBonus(180, ma100, d90, plan)) // no decay (upgrade)
+	a.Equal(ma198, computeBonus(180, ma200, d90, d90))  // decay
+	a.Equal(ma99, computeBonus(180, ma100, d90, d90))   // decay (no install)
+
+	// If there's a baseRound, the amount is installed accordingly
+	d90.BaseRound = 150
+	a.Equal(ma99, computeBonus(90, ma100, d90, plan))   // decay because baseRound delays install
+	a.Equal(ma100, computeBonus(149, ma100, d90, plan)) // no decay (interval) but also not installed yet
+	a.Equal(ma200, computeBonus(150, ma100, d90, plan)) // no decay (upgrade and immediate change)
+	a.Equal(ma200, computeBonus(151, ma100, d90, plan)) // no decay (upgrade and immediate change)
+
+	// same tests, but not the upgrade round. only the "immediate installs" changes
+	a.Equal(ma99, computeBonus(90, ma100, d90, d90))   // decay
+	a.Equal(ma100, computeBonus(149, ma100, d90, d90)) // no decay (interval) but also not installed yet
+	a.Equal(ma200, computeBonus(150, ma100, d90, d90)) // not upgrade, but baseRound means install time
+	a.Equal(ma100, computeBonus(151, ma100, d90, d90)) // no decay (interval)
+}
+
+// TestFirstYearsBonus shows what the bonuses look like
+func TestFirstYearsBonus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	yearSeconds := 365 * 24 * 60 * 60
+	yearRounds := int(float64(yearSeconds) / 2.9)
+
+	plan := config.Consensus[protocol.ConsensusFuture].Bonus
+	sum := uint64(0)
+	bonus := plan.BaseAmount
+	interval := int(plan.DecayInterval)
+	r := 0
+	for i := 0; i < yearRounds; i++ {
+		r++
+		sum += bonus
+		if r%interval == 0 {
+			bonus, _ = basics.Muldiv(bonus, 99, 100)
+		}
+	}
+	suma := sum / 1_000_000 // micro to Algos
+
+	fmt.Printf("paid %d algos\n", suma)
+	fmt.Printf("bonus start: %d end: %d\n", plan.BaseAmount, bonus)
+
+	// pays about 103.5M algos
+	a.InDelta(103_500_000, suma, 100_000)
+
+	// decline about 10%
+	a.InDelta(0.90, float64(bonus)/float64(plan.BaseAmount), 0.01)
+
+	// year 2
+	for i := 0; i < yearRounds; i++ {
+		r++
+		sum += bonus
+		if r%interval == 0 {
+			bonus, _ = basics.Muldiv(bonus, 99, 100)
+		}
+	}
+
+	sum2 := sum / 1_000_000 // micro to Algos
+
+	fmt.Printf("paid %d algos after 2 years\n", sum2)
+	fmt.Printf("bonus end: %d\n", bonus)
+
+	// pays about 196M algos (total for 2 years)
+	a.InDelta(196_300_000, sum2, 100_000)
+
+	// decline to about 81%
+	a.InDelta(0.81, float64(bonus)/float64(plan.BaseAmount), 0.01)
+
+	// year 3
+	for i := 0; i < yearRounds; i++ {
+		r++
+		sum += bonus
+		if r%interval == 0 {
+			bonus, _ = basics.Muldiv(bonus, 99, 100)
+		}
+	}
+
+	sum3 := sum / 1_000_000 // micro to Algos
+
+	fmt.Printf("paid %d algos after 3 years\n", sum3)
+	fmt.Printf("bonus end: %d\n", bonus)
+
+	// pays about 279M algos (total for 3 years)
+	a.InDelta(279_500_000, sum3, 100_000)
+
+	// declined to about 72% (but foundation funding probably gone anyway)
+	a.InDelta(0.72, float64(bonus)/float64(plan.BaseAmount), 0.01)
+}
+
+func TestAlive(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	bh := BlockHeader{
+		Round:       0,
+		GenesisHash: crypto.Digest{0x42},
+	}
+	bh.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+	header := transactions.Header{
+		FirstValid:  5000,
+		LastValid:   5050,
+		GenesisID:   bh.GenesisID,
+		GenesisHash: bh.GenesisHash,
+	}
+
+	bh.Round = header.FirstValid + 1
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive during lifetime %v", err)
+	}
+
+	bh.Round = header.FirstValid
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive at issuance %v", err)
+	}
+
+	bh.Round = header.LastValid
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive at expiry %v", err)
+	}
+
+	bh.Round = header.FirstValid - 1
+	if bh.Alive(header) == nil {
+		t.Errorf("premature transaction alive %v", header)
+	}
+
+	bh.Round = header.LastValid + 1
+	if bh.Alive(header) == nil {
+		t.Errorf("expired transaction alive %v", header)
+	}
 }

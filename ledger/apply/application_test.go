@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,14 +17,15 @@
 package apply
 
 import (
+	"bytes"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -33,93 +34,11 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// Allocate the map of basics.AppParams if it is nil, and return a copy. We do *not*
-// call clone on each basics.AppParams -- callers must do that for any values where
-// they intend to modify a contained reference type.
-func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
-	res := make(map[basics.AppIndex]basics.AppParams, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
-}
-
-// Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
-// call clone on each AppLocalState -- callers must do that for any values
-// where they intend to modify a contained reference type.
-func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
-	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
-}
-
-func TestApplicationCallFieldsEmpty(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
-	ac := transactions.ApplicationCallTxnFields{}
-	a.True(ac.Empty())
-
-	ac.ApplicationID = 1
-	a.False(ac.Empty())
-
-	ac.ApplicationID = 0
-	ac.OnCompletion = 1
-	a.False(ac.Empty())
-
-	ac.OnCompletion = 0
-	ac.ApplicationArgs = make([][]byte, 1)
-	a.False(ac.Empty())
-
-	ac.ApplicationArgs = nil
-	ac.Accounts = make([]basics.Address, 1)
-	a.False(ac.Empty())
-
-	ac.Accounts = nil
-	ac.ForeignApps = make([]basics.AppIndex, 1)
-	a.False(ac.Empty())
-
-	ac.ForeignApps = nil
-	ac.LocalStateSchema = basics.StateSchema{NumUint: 1}
-	a.False(ac.Empty())
-
-	ac.LocalStateSchema = basics.StateSchema{}
-	ac.GlobalStateSchema = basics.StateSchema{NumUint: 1}
-	a.False(ac.Empty())
-
-	ac.GlobalStateSchema = basics.StateSchema{}
-	ac.ApprovalProgram = []byte{1}
-	a.False(ac.Empty())
-
-	ac.ApprovalProgram = []byte{}
-	a.False(ac.Empty())
-
-	ac.ApprovalProgram = nil
-	ac.ClearStateProgram = []byte{1}
-	a.False(ac.Empty())
-
-	ac.ClearStateProgram = []byte{}
-	a.False(ac.Empty())
-
-	ac.ClearStateProgram = nil
-	a.True(ac.Empty())
-
-	ac.ExtraProgramPages = 0
-	a.True(ac.Empty())
-}
-
 func getRandomAddress(a *require.Assertions) basics.Address {
-	const rl = 16
-	b := make([]byte, rl)
-	n, err := rand.Read(b)
+	address := basics.Address{}
+	_, err := rand.Read(address[:])
 	a.NoError(err)
-	a.Equal(rl, n)
-
-	address := crypto.Hash(b)
-	return basics.Address(address)
+	return address
 }
 
 type testBalances struct {
@@ -349,22 +268,9 @@ func (b *testBalances) SetParams(params config.ConsensusParams) {
 	b.proto = params
 }
 
-func TestAppCallCloneEmpty(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-
-	var ls map[basics.AppIndex]basics.AppLocalState
-	cls := cloneAppLocalStates(ls)
-	a.Zero(len(cls))
-
-	var ap map[basics.AppIndex]basics.AppParams
-	cap := cloneAppParams(ap)
-	a.Zero(len(cap))
-}
-
 func TestAppCallGetParam(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -405,6 +311,7 @@ func TestAppCallGetParam(t *testing.T) {
 
 func TestAppCallAddressByIndex(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -415,8 +322,7 @@ func TestAppCallAddressByIndex(t *testing.T) {
 	a.Equal(sender, addr)
 
 	addr, err = ac.AddressByIndex(1, sender)
-	a.Error(err)
-	a.Contains(err.Error(), "invalid Account reference 1")
+	a.ErrorContains(err, "invalid Account reference 1")
 	a.Zero(len(ac.Accounts))
 
 	acc0 := getRandomAddress(a)
@@ -426,52 +332,86 @@ func TestAppCallAddressByIndex(t *testing.T) {
 	a.Equal(acc0, addr)
 
 	addr, err = ac.AddressByIndex(2, sender)
-	a.Error(err)
-	a.Contains(err.Error(), "invalid Account reference 2")
+	a.ErrorContains(err, "invalid Account reference 2")
 }
 
-func TestAppCallCheckPrograms(t *testing.T) {
+func TestAppCallCheckProgramCosts(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
 	var ac transactions.ApplicationCallTxnFields
-	var ep logic.EvalParams
 	// This check is for static costs. v26 is last with static cost checking
 	proto := config.Consensus[protocol.ConsensusV26]
-	ep.Proto = &proto
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	proto.MaxAppProgramCost = 1
-	err := checkPrograms(&ac, &ep)
-	a.Error(err)
-	a.Contains(err.Error(), "check failed on ApprovalProgram")
+	err := checkPrograms(&ac, 0, ep)
+	a.ErrorContains(err, "check failed on ApprovalProgram")
 
 	program := []byte{2, 0x20, 1, 1, 0x22} // version, intcb, int 1
 	ac.ApprovalProgram = program
 	ac.ClearStateProgram = program
 
-	err = checkPrograms(&ac, &ep)
-	a.Error(err)
-	a.Contains(err.Error(), "check failed on ApprovalProgram")
+	err = checkPrograms(&ac, 0, ep)
+	a.ErrorContains(err, "check failed on ApprovalProgram")
 
 	proto.MaxAppProgramCost = 10
-	err = checkPrograms(&ac, &ep)
+	err = checkPrograms(&ac, 0, ep)
 	a.NoError(err)
 
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	err = checkPrograms(&ac, &ep)
-	a.Error(err)
-	a.Contains(err.Error(), "check failed on ClearStateProgram")
+	err = checkPrograms(&ac, 0, ep)
+	a.ErrorContains(err, "check failed on ClearStateProgram")
 
 	ac.ClearStateProgram = program
-	err = checkPrograms(&ac, &ep)
+	err = checkPrograms(&ac, 0, ep)
 	a.NoError(err)
+}
+
+func TestAppCallCheckProgramsWithAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(t)
+
+	var ac transactions.ApplicationCallTxnFields
+	for _, cv := range []protocol.ConsensusVersion{
+		protocol.ConsensusCurrentVersion,
+		protocol.ConsensusFuture,
+	} {
+		proto := config.Consensus[cv]
+		stads := []transactions.SignedTxnWithAD{{}}
+		ep := logic.NewAppEvalParams(stads, &proto, nil)
+		program := []byte{2, 0x20, 1, 1, 0x22} // version, intcb, int 1
+		ac.ApprovalProgram = program
+		ac.ClearStateProgram = bytes.Clone(program)
+
+		err := checkPrograms(&ac, 0, ep)
+		a.NoError(err)
+
+		ep.TxnGroup[0].Txn.Access = []transactions.ResourceRef{{Address: basics.Address{0x01}}}
+		err = checkPrograms(&ac, 0, ep)
+		a.ErrorContains(err, "check failed on ApprovalProgram: pre-sharedResources program")
+
+		ac.ApprovalProgram[0] = 9
+		err = checkPrograms(&ac, 0, ep)
+		a.ErrorContains(err, "check failed on ClearStateProgram: pre-sharedResources program")
+
+		ac.ClearStateProgram[0] = 9
+		err = checkPrograms(&ac, 0, ep)
+		a.NoError(err)
+	}
+
 }
 
 func TestAppCallCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -482,7 +422,7 @@ func TestAppCallCreate(t *testing.T) {
 	// no balance record
 	appIdx, err := createApplication(&ac, b, creator, txnCounter)
 	a.Error(err)
-	a.Equal(basics.AppIndex(0), appIdx)
+	a.Zero(appIdx)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
@@ -510,6 +450,7 @@ func TestAppCallCreate(t *testing.T) {
 // TestAppCallApplyCreate carefully tracks and validates balance record updates
 func TestAppCallApplyCreate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -523,13 +464,16 @@ func TestAppCallApplyCreate(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var ep logic.EvalParams
-	var txnCounter uint64 = 1
 	b := newTestBalances()
+	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
-	err := ApplicationCall(ac, h, b, nil, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "ApplicationCall cannot have nil ApplyData")
+	var txnCounter uint64 = 1
+
+	err := ApplicationCall(ac, h, b, nil, 0, ep, txnCounter)
+	a.ErrorContains(err, "ApplicationCall cannot have nil ApplyData")
 	a.Zero(b.put)
 	a.Zero(b.putAppParams)
 
@@ -537,16 +481,11 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b.balances[creator] = basics.AccountData{}
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 
-	b.SetProto(protocol.ConsensusFuture)
-	proto := b.ConsensusParams()
-	ep.Proto = &proto
-
 	// this test will succeed in creating the app, but then fail
 	// because the mock balances doesn't update the creators table
 	// so it will think the app doesn't exist
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "applications that do not exist")
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
+	a.ErrorContains(err, "only ClearState is supported")
 	a.Equal(1, b.put)
 	a.Equal(1, b.putAppParams)
 
@@ -560,20 +499,16 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	// now we give the creator the app params again
 	cp := basics.AccountData{}
-	cp.AppParams = cloneAppParams(saved.AppParams)
-	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
+	cp.AppParams = maps.Clone(saved.AppParams)
+	cp.AppLocalStates = maps.Clone(saved.AppLocalStates)
 	b.balances[creator] = cp
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "already found app with index")
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
+	a.ErrorContains(err, "already found app with index")
 	a.Equal(uint64(0), uint64(b.allocatedAppIdx))
 	a.Zero(b.put)
 	a.Zero(b.putAppParams)
 	// ensure original balance record in the mock was not changed
 	// this ensure proper cloning and any in-intended in-memory modifications
-	//
-	// known artefact of cloning AppLocalState even with empty update, nil map vs empty map
-	saved.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{}
 	a.Equal(saved, b.balances[creator])
 	saved = b.putBalances[creator]
 
@@ -585,7 +520,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b.balances[creator] = cp
 
 	ac.GlobalStateSchema = basics.StateSchema{NumUint: 1}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(appIdx, b.allocatedAppIdx)
 	a.Equal(1, b.put)
@@ -604,7 +539,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 	txnCounter++
 	appIdx = basics.AppIndex(txnCounter + 1)
 	b.appCreators[appIdx] = creator
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	br = b.putBalances[creator]
 	a.Equal(uint32(1), br.AppParams[appIdx].ExtraProgramPages)
@@ -614,6 +549,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 // TestAppCallApplyCreateOptIn checks balance record fields without tracking substages
 func TestAppCallApplyCreateOptIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -630,23 +566,23 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var ep logic.EvalParams
+	b := newTestBalancesPass()
+	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
-	b := newTestBalancesPass()
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
-	b.SetProto(protocol.ConsensusFuture)
-	proto := b.ConsensusParams()
-	ep.Proto = &proto
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
 	b.delta = transactions.EvalDelta{GlobalDelta: gd}
 
-	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err := ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(appIdx, b.allocatedAppIdx)
 	br := b.balances[creator]
@@ -661,6 +597,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 
 func TestAppCallOptIn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -688,8 +625,7 @@ func TestAppCallOptIn(t *testing.T) {
 	ad.AppLocalStates[appIdx] = basics.AppLocalState{}
 	b.balances = map[basics.Address]basics.AccountData{sender: ad}
 	err = optInApplication(b, sender, appIdx, params)
-	a.Error(err)
-	a.Contains(err.Error(), "has already opted in to app")
+	a.ErrorContains(err, "has already opted in to app")
 	a.Zero(b.put)
 	a.Zero(b.putAppLocalState)
 
@@ -746,7 +682,7 @@ func TestAppCallOptIn(t *testing.T) {
 	prevMaxAppsOptedIn := config.Consensus[protocol.ConsensusV24].MaxAppsOptedIn
 	for _, testProtoVer := range optInCountTest {
 		cparams, ok := config.Consensus[testProtoVer]
-		a.True(ok)
+		a.True(ok, testProtoVer)
 		if cparams.MaxAppsOptedIn > 0 {
 			a.LessOrEqual(prevMaxAppsOptedIn, cparams.MaxAppsOptedIn)
 		}
@@ -769,8 +705,7 @@ func TestAppCallOptIn(t *testing.T) {
 		appIdx++
 		err = optInApplication(b, sender, appIdx, aparams)
 		if cparams.MaxAppsOptedIn > 0 {
-			a.Error(err)
-			a.Contains(err.Error(), "max opted-in apps per acct")
+			a.ErrorContains(err, "max opted-in apps per acct")
 		} else {
 			a.NoError(err)
 		}
@@ -779,6 +714,7 @@ func TestAppCallOptIn(t *testing.T) {
 
 func TestAppCallClearState(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -787,14 +723,13 @@ func TestAppCallClearState(t *testing.T) {
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	b := newTestBalances()
-	var ep logic.EvalParams
+	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep := logic.NewAppEvalParams(nil, &proto, nil)
 
 	ad := &transactions.ApplyData{}
 	b.appCreators = make(map[basics.AppIndex]basics.Address)
 	b.balances = make(map[basics.Address]basics.AccountData, 2)
-	b.SetProto(protocol.ConsensusFuture)
-	proto := b.ConsensusParams()
-	ep.Proto = &proto
 
 	ac := transactions.ApplicationCallTxnFields{
 		ApplicationID: appIdx,
@@ -820,9 +755,8 @@ func TestAppCallClearState(t *testing.T) {
 	b.pass = true
 	// check app not exist and not opted in
 	b.balances[sender] = basics.AccountData{}
-	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "is not currently opted in to app")
+	err := ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
+	a.ErrorContains(err, "is not currently opted in to app")
 	a.Zero(b.put)
 	a.Zero(b.putAppLocalState)
 	a.Zero(b.deleteAppLocalState)
@@ -831,7 +765,7 @@ func TestAppCallClearState(t *testing.T) {
 	b.balances[sender] = basics.AccountData{
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{appIdx: {}},
 	}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Zero(b.putAppLocalState)
@@ -851,7 +785,7 @@ func TestAppCallClearState(t *testing.T) {
 			appIdx: {Schema: basics.StateSchema{NumUint: 10}},
 		},
 	}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Zero(b.putAppLocalState)
@@ -879,7 +813,7 @@ func TestAppCallClearState(t *testing.T) {
 	// one put: to opt out
 	b.pass = false
 	b.delta = transactions.EvalDelta{GlobalDelta: nil}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Zero(b.putAppLocalState)
@@ -895,8 +829,8 @@ func TestAppCallClearState(t *testing.T) {
 	// one to opt out, one deallocate, no error from ApplicationCall
 	b.pass = true
 	b.delta = transactions.EvalDelta{GlobalDelta: nil}
-	b.err = ledgercore.LogicEvalError{Err: fmt.Errorf("test error")}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	b.err = logic.EvalError{Err: fmt.Errorf("test error")}
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Zero(b.putAppLocalState)
@@ -913,7 +847,7 @@ func TestAppCallClearState(t *testing.T) {
 	b.pass = true
 	b.delta = transactions.EvalDelta{GlobalDelta: nil}
 	b.err = fmt.Errorf("test error")
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.Error(err)
 	br = b.putBalances[sender]
 	a.Zero(len(br.AppLocalStates))
@@ -928,7 +862,7 @@ func TestAppCallClearState(t *testing.T) {
 	b.err = nil
 	gd := basics.StateDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
 	b.delta = transactions.EvalDelta{GlobalDelta: gd}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Zero(b.putAppLocalState)
@@ -943,13 +877,14 @@ func TestAppCallClearState(t *testing.T) {
 	b.err = nil
 	logs := []string{"a"}
 	b.delta = transactions.EvalDelta{Logs: []string{"a"}}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
 }
 
 func TestAppCallApplyCloseOut(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -991,8 +926,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 
 	b.pass = false
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
+	a.ErrorContains(err, "transaction rejected by ApprovalProgram")
 	a.Zero(b.put)
 	a.Zero(b.putAppLocalState)
 	a.Zero(b.deleteAppLocalState)
@@ -1004,8 +938,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	b.pass = true
 	b.balances[sender] = basics.AccountData{}
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "is not opted in to any app")
+	a.ErrorContains(err, "is not opted in to any app")
 	a.Zero(b.put)
 	a.Zero(b.putAppLocalState)
 	a.Zero(b.deleteAppLocalState)
@@ -1047,6 +980,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 
 func TestAppCallApplyUpdate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1070,9 +1004,12 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var ep logic.EvalParams
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	b := newTestBalances()
+	b.SetProto(protocol.ConsensusV28)
+	proto := b.ConsensusParams()
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	cbr := basics.AccountData{
@@ -1084,14 +1021,9 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.balances[creator] = cp
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
-	b.SetProto(protocol.ConsensusV28)
-	proto := b.ConsensusParams()
-	ep.Proto = &proto
-
 	b.pass = false
-	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
+	err := ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
+	a.ErrorContains(err, "transaction rejected by ApprovalProgram")
 	a.Zero(b.put)
 	a.Zero(b.putAppParams)
 	br := b.balances[creator]
@@ -1101,7 +1033,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	// check updating on empty sender's balance record - happy case
 	b.pass = true
 	b.balances[sender] = basics.AccountData{}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Zero(b.put)
 	a.Equal(1, b.putAppParams)
@@ -1141,7 +1073,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 
 	logs := []string{"a"}
 	b.delta = transactions.EvalDelta{Logs: []string{"a"}}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
 
@@ -1166,9 +1098,8 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		}
 
 		b.pass = true
-		err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-		a.Error(err)
-		a.Contains(err.Error(), fmt.Sprintf("updateApplication %s program too long", test.name))
+		err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
+		a.ErrorContains(err, fmt.Sprintf("%s program too long", test.name))
 	}
 
 	b.ResetWrites()
@@ -1182,7 +1113,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		ClearStateProgram: []byte{2},
 	}
 	b.pass = true
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 
 	// check extraProgramPages is used and long sum rejected
@@ -1193,14 +1124,14 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		ClearStateProgram: appr,
 	}
 	b.pass = true
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "updateApplication app programs too long")
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
+	a.ErrorContains(err, "app programs too long")
 
 }
 
 func TestAppCallApplyDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1247,8 +1178,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 
 	b.pass = false
 	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
+	a.ErrorContains(err, "transaction rejected by ApprovalProgram")
 	a.Zero(b.put)
 	a.Zero(b.putAppParams)
 	a.Zero(b.deleteAppParams)
@@ -1266,7 +1196,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(appIdx, b.deAllocatedAppIdx)
-	a.Equal(1, b.put)
+	a.Equal(2, b.put) // creator + sponsor (who happen to be the same here)
 	a.Zero(b.putAppParams)
 	a.Equal(1, b.deleteAppParams)
 	br = b.balances[creator]
@@ -1298,7 +1228,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 		err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
 		a.NoError(err)
 		a.Equal(appIdx, b.deAllocatedAppIdx)
-		a.Equal(1, b.put)
+		a.Equal(2, b.put) // creator + sponsor (who happen to be the same here)
 		a.Zero(b.putAppParams)
 		a.Equal(1, b.deleteAppParams)
 		br = b.balances[creator]
@@ -1323,6 +1253,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 
 func TestAppCallApplyCreateClearState(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1338,17 +1269,18 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	b := newTestBalancesPass()
+	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
 	b.SetProto(protocol.ConsensusFuture)
-	proto := b.ConsensusParams()
-	ep.Proto = &proto
 
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
@@ -1357,9 +1289,8 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	b.delta = transactions.EvalDelta{GlobalDelta: gd}
 
 	// check creation on empty balance record
-	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
-	a.Error(err)
-	a.Contains(err.Error(), "not currently opted in")
+	err := ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
+	a.ErrorContains(err, "not currently opted in")
 	a.Equal(appIdx, b.allocatedAppIdx)
 	a.Equal(transactions.EvalDelta{}, ad.EvalDelta)
 	br := b.balances[creator]
@@ -1373,6 +1304,7 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 
 func TestAppCallApplyCreateDelete(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -1388,17 +1320,18 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	b := newTestBalancesPass()
+	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	stads := []transactions.SignedTxnWithAD{{}}
+	ep := logic.NewAppEvalParams(stads, &proto, nil)
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
 	b.SetProto(protocol.ConsensusFuture)
-	proto := b.ConsensusParams()
-	ep.Proto = &proto
 
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
@@ -1407,7 +1340,7 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	b.delta = transactions.EvalDelta{GlobalDelta: gd}
 
 	// check creation on empty balance record
-	err := ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err := ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(appIdx, b.allocatedAppIdx)
 	a.Equal(transactions.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
@@ -1416,7 +1349,7 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 
 	logs := []string{"a"}
 	b.delta = transactions.EvalDelta{Logs: []string{"a"}}
-	err = ApplicationCall(ac, h, b, ad, 0, &ep, txnCounter)
+	err = ApplicationCall(ac, h, b, ad, 0, ep, txnCounter)
 	a.NoError(err)
 	a.Equal(transactions.EvalDelta{Logs: logs}, ad.EvalDelta)
 
