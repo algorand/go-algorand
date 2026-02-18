@@ -250,6 +250,21 @@ jobs:
           echo "Found tools in: ${TOOLSDIR}"
           ls -la "${TOOLSDIR}"
 
+      - name: Generate Debian copyright file
+        run: |
+          mkdir -p .github/packaging/generated
+          cat > .github/packaging/generated/copyright << 'COPYRIGHT_EOF'
+          Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+          Upstream-Name: Algorand
+          Upstream-Contact: Algorand developers <dev@algorand.com>
+          Source: https://github.com/algorand/go-algorand
+
+          Files: *
+          Copyright: Algorand developers <dev@algorand.com>
+          License: AGPL-3+
+          COPYRIGHT_EOF
+          sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> .github/packaging/generated/copyright
+
       - name: Generate unattended-upgrades config
         run: |
           mkdir -p .github/packaging/generated
