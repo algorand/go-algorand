@@ -102,7 +102,7 @@ const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 const dialTimeout = 30 * time.Second
 
-const psmdkDialed = "dialed"
+const cnmgrTag = "algorand-ws-mesh"
 
 // MakeHost creates a libp2p host but does not start listening.
 // Use host.Network().Listen() on the returned address to start listening.
@@ -331,8 +331,7 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
 			remotePeer := conn.RemotePeer()
-			val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
-			if err == nil && val != nil && val.(bool) {
+			if s.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
 				numOutgoingConns++
 			}
 		}
@@ -365,12 +364,11 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
-		return err
-	}
+	// protect before attempting to connect so that checks in Connected handler have up-to-date information
+	s.host.ConnManager().Protect(peer.ID, cnmgrTag)
 	err := s.host.Connect(ctx, *peer)
-	if err == nil {
-		s.host.ConnManager().Protect(peer.ID, "mesh")
+	if err != nil {
+		s.host.ConnManager().Unprotect(peer.ID, cnmgrTag)
 	}
 	return err
 }

@@ -68,17 +68,11 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	remotePeer := stream.Conn().RemotePeer()
 	// reject streams on connections not explicitly dialed by us
 	if stream.Conn().Stat().Direction == network.DirOutbound && stream.Stat().Direction == network.DirInbound {
-		val, err := n.host.Peerstore().Get(remotePeer, psmdkDialed)
-		if err != nil || val != nil && !val.(bool) {
-			// not found or false value
+		if !n.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
 			n.log.Debugf("%s: ignoring incoming stream from non-dialed outgoing peer ID %s", stream.Conn().LocalPeer().String(), remotePeer.String())
 			stream.Close()
 			return
 		}
-		if val == nil {
-			n.log.Warnf("%s: failed to get dialed status for %s (handler)", stream.Conn().LocalPeer().String(), remotePeer.String())
-		}
-
 	}
 
 	n.streamsLock.Lock()
@@ -151,14 +145,9 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	// check if this is outgoing connection but made not by us (serviceImpl.dialNode)
 	// then it was made by some sub component like pubsub, ignore
 	if conn.Stat().Direction == network.DirOutbound {
-		val, err := n.host.Peerstore().Get(remotePeer, psmdkDialed)
-		if err != nil || val != nil && !val.(bool) {
-			// not found or false value
+		if !n.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
 			n.log.Debugf("%s: ignoring non-dialed outgoing peer ID %s", localPeer.String(), remotePeer.String())
 			return
-		}
-		if val == nil {
-			n.log.Warnf("%s: failed to get dialed status for %s", localPeer.String(), remotePeer.String())
 		}
 	}
 
