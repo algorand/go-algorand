@@ -26,17 +26,17 @@ import (
 	"hash"
 	"math/big"
 
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/secp256k1"
-	"github.com/algorand/go-algorand/protocol"
-
-	"github.com/algorand/go-sumhash"
-	"golang.org/x/crypto/sha3"
-
 	bls12_381mimc "github.com/consensys/gnark-crypto/ecc/bls12-381/fr/mimc"
 	bls12_381poseidon2 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr/poseidon2"
 	bn254mimc "github.com/consensys/gnark-crypto/ecc/bn254/fr/mimc"
 	bn254poseidon2 "github.com/consensys/gnark-crypto/ecc/bn254/fr/poseidon2"
+	"golang.org/x/crypto/sha3"
+
+	"github.com/algorand/go-sumhash"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/secp256k1"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 func opPoseidon2(cx *EvalContext) error {
