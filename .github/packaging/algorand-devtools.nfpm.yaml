@@ -23,8 +23,9 @@ description: |
   This package provides development and debugging tools for the Algorand blockchain.
 
 # Require the main algorand package at the same version
+# Note: top-level uses Debian syntax; RPM syntax is in overrides.rpm.depends
 depends:
-  - ${PKG_NAME} >= ${VERSION}
+  - ${PKG_NAME} (>= ${VERSION})
 
 replaces:
   - algorand-devtools
@@ -53,6 +54,14 @@ contents:
     expand: true
     file_info:
       mode: 0755
+
+  # Debian copyright file (deb only, generated at build time)
+  - src: .github/packaging/generated/copyright
+    dst: /usr/share/doc/${DEVTOOLS_PKG_NAME}/copyright
+    expand: true
+    packager: deb
+    file_info:
+      mode: 0644
 
 # RPM-specific configuration
 rpm:
