@@ -25,6 +25,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 env:
   # Disable deadlock detection for release builds
@@ -496,10 +498,90 @@ jobs:
             echo 'RPM package installation test passed!'
           "
 
+  finalize:
+    name: Finalize (SBOM, Attestations)
+    needs: [prepare, package-linux, package-darwin, test-packages]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: packages/
+          merge-multiple: true
+
+      - name: List all artifacts
+        run: |
+          echo "All release artifacts:"
+          find packages/ -type f | sort
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: packages/sbom.spdx.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            packages/*.tar.gz
+            packages/*.deb
+            packages/*.rpm
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v2
+        with:
+          subject-path: |
+            packages/*.tar.gz
+            packages/*.deb
+            packages/*.rpm
+          sbom-path: packages/sbom.spdx.json
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: packages/
+          retention-days: 7
+          if-no-files-found: error
+
+  govulncheck:
+    name: Dependency Vulnerability Scan
+    needs: prepare
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: stable
+
+      - name: Report results
+        if: always()
+        run: |
+          echo "## Dependency Vulnerability Scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "govulncheck completed. Check job logs for details." >> $GITHUB_STEP_SUMMARY
+
   # Summary job to verify all builds and packages completed
   release-summary:
     name: Release Summary
-    needs: [prepare, build, package-linux, package-darwin, test-packages]
+    needs: [prepare, build, package-linux, package-darwin, test-packages, finalize, govulncheck]
     runs-on: ubuntu-24.04
     if: always()
     steps:
@@ -543,13 +625,28 @@ jobs:
             echo "| Package Tests | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
 
+          # Finalize status
+          if [ "${{ needs.finalize.result }}" = "success" ]; then
+            echo "| Finalize (SBOM, Attestations) | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Finalize (SBOM, Attestations) | ❌ |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Govulncheck status (non-blocking)
+          if [ "${{ needs.govulncheck.result }}" = "success" ]; then
+            echo "| Dependency Scan | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Dependency Scan | ⚠️ (non-blocking) |" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Final status
+          # Final status (govulncheck is non-blocking, so exclude from failure check)
           if [ "${{ needs.build.result }}" != "success" ] || \
              [ "${{ needs.package-linux.result }}" != "success" ] || \
              [ "${{ needs.package-darwin.result }}" != "success" ] || \
-             [ "${{ needs.test-packages.result }}" != "success" ]; then
+             [ "${{ needs.test-packages.result }}" != "success" ] || \
+             [ "${{ needs.finalize.result }}" != "success" ]; then
             echo "❌ **Release failed.** Check individual job logs." >> $GITHUB_STEP_SUMMARY
             exit 1
           else
