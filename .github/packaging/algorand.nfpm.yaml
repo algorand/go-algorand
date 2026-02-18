@@ -161,6 +161,29 @@ contents:
       owner: algorand
       group: algorand
 
+  # Debian copyright file (deb only, generated at build time)
+  - src: .github/packaging/generated/copyright
+    dst: /usr/share/doc/${PKG_NAME}/copyright
+    expand: true
+    packager: deb
+    file_info:
+      mode: 0644
+
+  # DNF automatic update configuration (rpm only)
+  - src: installer/rpm/algorand/0dnf-algorand-hourly.cron
+    dst: /etc/cron.hourly/0dnf-algorand-hourly.cron
+    type: config|noreplace
+    packager: rpm
+    file_info:
+      mode: 0755
+
+  - src: installer/rpm/algorand/dnf-cron-algorand.conf
+    dst: /etc/dnf/dnf-cron-algorand.conf
+    type: config|noreplace
+    packager: rpm
+    file_info:
+      mode: 0644
+
   # Unattended upgrades configuration (deb only, generated at build time)
   - src: .github/packaging/generated/51algorand-upgrades
     dst: /etc/apt/apt.conf.d/51algorand-upgrades
@@ -193,3 +216,4 @@ overrides:
     depends:
       - systemd
       - shadow-utils
+      - dnf-automatic
