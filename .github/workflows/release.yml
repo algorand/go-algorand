@@ -557,7 +557,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  govulncheck:
+  vulnerability-scan:
     name: Dependency Vulnerability Scan
     needs: prepare
     runs-on: ubuntu-24.04
@@ -572,15 +572,15 @@ jobs:
           go-version: stable
           cache: false
 
-      - name: Install and run govulncheck
+      - name: Install and run osv-scanner
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck -scan module
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.3
+          osv-scanner --lockfile=go.sum
 
   # Summary job to verify all builds and packages completed
   release-summary:
     name: Release Summary
-    needs: [prepare, build, package-linux, package-darwin, test-packages, finalize, govulncheck]
+    needs: [prepare, build, package-linux, package-darwin, test-packages, finalize, vulnerability-scan]
     runs-on: ubuntu-24.04
     if: always()
     steps:
@@ -632,7 +632,7 @@ jobs:
           fi
 
           # Govulncheck status (non-blocking)
-          if [ "${{ needs.govulncheck.result }}" = "success" ]; then
+          if [ "${{ needs.vulnerability-scan.result }}" = "success" ]; then
             echo "| Dependency Scan | ✅ |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Dependency Scan | ⚠️ (non-blocking) |" >> $GITHUB_STEP_SUMMARY
@@ -640,7 +640,7 @@ jobs:
 
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Final status (govulncheck is non-blocking, so exclude from failure check)
+          # Final status (vulnerability-scan is non-blocking, so exclude from failure check)
           if [ "${{ needs.build.result }}" != "success" ] || \
              [ "${{ needs.package-linux.result }}" != "success" ] || \
              [ "${{ needs.package-darwin.result }}" != "success" ] || \
