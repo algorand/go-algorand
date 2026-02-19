@@ -431,10 +431,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
-	optionalRound, err := getOptionalRound(params.Round)
-	if err != nil {
-		return badRequest(ctx, err, errFailedToParseRound, v2.Log)
-	}
+	optionalRound := getOptionalRound(params.Round)
 
 	// should we skip fetching apps and assets?
 	var excludeCreatedAppsParams bool
@@ -621,10 +618,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address basics.Add
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
-	lastRound, err := getOptionalRound(params.Round)
-	if err != nil {
-		return badRequest(ctx, err, errFailedToParseRound, v2.Log)
-	}
+	lastRound := getOptionalRound(params.Round)
 
 	ledger := v2.Node.LedgerForAPI()
 
@@ -677,10 +671,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address basi
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
-	lastRound, err := getOptionalRound(params.Round)
-	if err != nil {
-		return badRequest(ctx, err, errFailedToParseRound, v2.Log)
-	}
+	lastRound := getOptionalRound(params.Round)
 
 	ledger := v2.Node.LedgerForAPI()
 
@@ -1014,11 +1005,9 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round basics.Round, tx
 // GetSupply gets the current supply reported by the ledger.
 // (GET /v2/ledger/supply)
 func (v2 *Handlers) GetSupply(ctx echo.Context, params model.GetSupplyParams) error {
-	latest, err := getOptionalRound(params.Round)
-	if err != nil {
-		return badRequest(ctx, err, errFailedToParseRound, v2.Log)
-	}
+	latest := getOptionalRound(params.Round)
 	var totals ledgercore.AccountTotals
+	var err error
 	if latest == 0 {
 		latest, totals, err = v2.Node.LedgerForAPI().LatestTotals()
 	} else {
@@ -1905,10 +1894,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID basics.Ap
 		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
 	}
 
-	lastRound, err := getOptionalRound(params.Round)
-	if err != nil {
-		return badRequest(ctx, err, errFailedToParseRound, v2.Log)
-	}
+	lastRound := getOptionalRound(params.Round)
 
 	if lastRound == 0 {
 		lastRound = ledger.Latest()
@@ -2030,10 +2016,7 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID basics.AssetIndex, pa
 		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
 	}
 
-	lastRound, err := getOptionalRound(params.Round)
-	if err != nil {
-		return badRequest(ctx, err, errFailedToParseRound, v2.Log)
-	}
+	lastRound := getOptionalRound(params.Round)
 
 	if lastRound == 0 {
 		lastRound = ledger.Latest()

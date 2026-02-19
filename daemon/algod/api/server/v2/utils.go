@@ -249,13 +249,12 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l LedgerForAPI) *basics.AppIn
 	return (*basics.AppIndex)(computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset))
 }
 
-// getOptionalRound converts an optional round argument into a basics.Round(0) for "latest"
-// or a non-negative integer.
-func getOptionalRound(round *basics.Round) (basics.Round, error) {
+// getOptionalRound converts an optional round pointer to a value, using 0 for "latest".
+func getOptionalRound(round *basics.Round) basics.Round {
 	if round == nil {
-		return basics.Round(0), nil
+		return 0
 	}
-	return *round, nil
+	return *round
 }
 
 // getCodecHandle converts a format string into the encoder + content type

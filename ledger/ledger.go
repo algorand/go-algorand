@@ -555,12 +555,7 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, rnd, withoutRewards, err := l.accts.lookupLatest(0, addr)
-	if err != nil {
-		return basics.AccountData{}, basics.Round(0), basics.MicroAlgos{}, err
-	}
-
-	return data, rnd, withoutRewards, nil
+	return l.accts.lookupLatest(0, addr)
 }
 
 // LookupFullAccount uses the accounts tracker to return the account state (including
@@ -571,11 +566,7 @@ func (l *Ledger) LookupFullAccount(round basics.Round, addr basics.Address) (bas
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, rnd, withoutRewards, err := l.accts.lookupLatest(round, addr)
-	if err != nil {
-		return basics.AccountData{}, 0, basics.MicroAlgos{}, err
-	}
-	return data, rnd, withoutRewards, nil
+	return l.accts.lookupLatest(round, addr)
 }
 
 // LookupAccount uses the accounts tracker to return the account state (without

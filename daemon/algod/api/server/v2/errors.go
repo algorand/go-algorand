@@ -34,7 +34,6 @@ var (
 	errFailedParsingFormatOption               = "failed to parse the format option"
 	errFailedToParseAddress                    = "failed to parse the address"
 	errFailedToParseExclude                    = "failed to parse exclude"
-	errFailedToParseRound                      = "failed to parse round number"
 	errFailedToEncodeResponse                  = "failed to encode response"
 	errInternalFailure                         = "internal failure"
 	errNoValidTxnSpecified                     = "no valid transaction ID was specified"

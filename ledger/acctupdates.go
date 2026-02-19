@@ -704,7 +704,11 @@ func (au *accountUpdates) LatestTotals() (basics.Round, ledgercore.AccountTotals
 func (au *accountUpdates) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	return au.totalsImpl(rnd)
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return ledgercore.AccountTotals{}, err
+	}
+	return au.roundTotals[offset], nil
 }
 
 // ReadCloseSizer interface implements the standard io.Reader and io.Closer as well
@@ -735,15 +739,6 @@ func (au *accountUpdates) latestTotalsImpl() (basics.Round, ledgercore.AccountTo
 	offset := len(au.deltas)
 	rnd := au.cachedDBRound + basics.Round(len(au.deltas))
 	return rnd, au.roundTotals[offset], nil
-}
-
-// totalsImpl returns the totals of all accounts for the given round
-func (au *accountUpdates) totalsImpl(rnd basics.Round) (ledgercore.AccountTotals, error) {
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return ledgercore.AccountTotals{}, err
-	}
-	return au.roundTotals[offset], nil
 }
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
