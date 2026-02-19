@@ -575,7 +575,7 @@ jobs:
       - name: Install and run osv-scanner
         run: |
           go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.3
-          osv-scanner --lockfile=go.sum
+          osv-scanner scan --recursive .
 
   # Summary job to verify all builds and packages completed
   release-summary:
