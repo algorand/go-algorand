@@ -332,10 +332,16 @@ jobs:
           echo "Built RPM packages:"
           ls -la dist/*.rpm
 
+      - name: Copy tarballs from build artifacts
+        run: |
+          find tmp/node_pkgs -name "*.tar.gz" -exec cp {} dist/ \;
+          echo "Tarballs:"
+          ls -la dist/*.tar.gz
+
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum *.deb *.rpm > "hashes_${CHANNEL}_linux_${{ matrix.arch }}_${VERSION}"
+          sha256sum *.tar.gz *.deb *.rpm > "hashes_${CHANNEL}_linux_${{ matrix.arch }}_${VERSION}"
           echo "Checksums:"
           cat "hashes_${CHANNEL}_linux_${{ matrix.arch }}_${VERSION}"
 
