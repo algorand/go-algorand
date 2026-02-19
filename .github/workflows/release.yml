@@ -561,7 +561,6 @@ jobs:
     name: Dependency Vulnerability Scan
     needs: prepare
     runs-on: ubuntu-24.04
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -575,7 +574,25 @@ jobs:
       - name: Install and run osv-scanner
         run: |
           go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.3
-          osv-scanner scan --recursive .
+
+          # Run scan, capture output and exit code
+          osv-scanner scan --recursive . 2>&1 | tee osv-output.txt; SCAN_EXIT=${PIPESTATUS[0]}
+
+          if [ "$SCAN_EXIT" -eq 0 ]; then
+            echo "No vulnerabilities found."
+            exit 0
+          fi
+
+          # Parse summary line for critical count
+          CRITICAL=$(grep -oP '\d+ Critical' osv-output.txt | grep -oP '^\d+' || echo "0")
+
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::Found ${CRITICAL} critical vulnerabilities — failing build."
+            exit 1
+          else
+            echo "::warning::Vulnerabilities found (no criticals). See job log for details."
+            exit 0
+          fi
 
   # Summary job to verify all builds and packages completed
   release-summary:
@@ -631,21 +648,22 @@ jobs:
             echo "| Finalize (SBOM, Attestations) | ❌ |" >> $GITHUB_STEP_SUMMARY
           fi
 
-          # Govulncheck status (non-blocking)
+          # Vulnerability scan status (fails only on criticals)
           if [ "${{ needs.vulnerability-scan.result }}" = "success" ]; then
             echo "| Dependency Scan | ✅ |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Dependency Scan | ⚠️ (non-blocking) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Dependency Scan | ❌ (critical vulnerabilities) |" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Final status (vulnerability-scan is non-blocking, so exclude from failure check)
+          # Final status
           if [ "${{ needs.build.result }}" != "success" ] || \
              [ "${{ needs.package-linux.result }}" != "success" ] || \
              [ "${{ needs.package-darwin.result }}" != "success" ] || \
              [ "${{ needs.test-packages.result }}" != "success" ] || \
-             [ "${{ needs.finalize.result }}" != "success" ]; then
+             [ "${{ needs.finalize.result }}" != "success" ] || \
+             [ "${{ needs.vulnerability-scan.result }}" != "success" ]; then
             echo "❌ **Release failed.** Check individual job logs." >> $GITHUB_STEP_SUMMARY
             exit 1
           else
