@@ -1644,6 +1644,52 @@ itxn_submit;
 	TestApp(t, buy+buy+strings.Repeat(waste, 12)+"int 1", ep)
 }
 
+func TestInnerBudgetIncrementFromFee(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, tx, ledger := MakeSampleEnv()
+
+	waste := `global CurrentApplicationAddress; keccak256; pop;`
+
+	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+	ledger.NewAccount(appAddr(888), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+
+	// For every variation ensure the following:
+	//
+	// 1. The opcode budget is increased, but not more than necessary
+	// 2. The fee credit is deducted
+
+	*ep.FeeCredit = 0
+	TestApp(t, strings.Repeat(waste, 5)+"int 1", ep)
+	require.IsIncreasing(t, []int{0, *ep.PooledApplicationBudget, ep.Proto.MaxAppProgramCost})
+	require.Equal(t, uint64(0), *ep.FeeCredit)
+	TestApp(t, strings.Repeat(waste, 6)+"int 1", ep, "dynamic cost budget exceeded")
+
+	*ep.FeeCredit = ep.Proto.MinTxnFee
+	TestApp(t, strings.Repeat(waste, 6)+"int 1", ep)
+	require.IsIncreasing(t, []int{0, *ep.PooledApplicationBudget, ep.Proto.MaxAppProgramCost})
+	require.Equal(t, uint64(0), *ep.FeeCredit)
+	TestApp(t, strings.Repeat(waste, 11)+"int 1", ep, "dynamic cost budget exceeded")
+
+	*ep.FeeCredit = ep.Proto.MinTxnFee * 2
+	TestApp(t, strings.Repeat(waste, 11)+"int 1", ep)
+	require.IsIncreasing(t, []int{0, *ep.PooledApplicationBudget, ep.Proto.MaxAppProgramCost})
+	require.Equal(t, uint64(0), *ep.FeeCredit)
+	TestApp(t, strings.Repeat(waste, 16)+"int 1", ep, "dynamic cost budget exceeded")
+
+	// Ensure that the fee credit isn't deducted more than necessary
+	*ep.FeeCredit = ep.Proto.MinTxnFee * 3
+	TestApp(t, strings.Repeat(waste, 11)+"int 1", ep)
+	require.IsIncreasing(t, []int{0, *ep.PooledApplicationBudget, ep.Proto.MaxAppProgramCost})
+	require.Equal(t, ep.Proto.MinTxnFee, *ep.FeeCredit)
+
+	// Ensure the group budget is still enforced
+	*ep.FeeCredit = ep.Proto.MinTxnFee * 257
+	TestApp(t, strings.Repeat(waste, 5*257)+"int 1", ep, "dynamic group cost budget exceeded")
+}
+
 func TestIncrementCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

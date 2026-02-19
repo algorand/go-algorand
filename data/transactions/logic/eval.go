@@ -1568,8 +1568,29 @@ func (cx *EvalContext) step() error {
 	}
 
 	if opcost > cx.remainingBudget() {
-		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
-			cx.pc, spec.Name, cx.cost)
+		if cx.runMode != ModeApp {
+			return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
+				cx.pc, spec.Name, cx.cost)
+		}
+
+		requiredExtraBudget := uint64(opcost - cx.remainingBudget())
+		budgetPerMinFee := uint64(cx.Proto.MaxAppProgramCost)
+		requiredMinFees := (requiredExtraBudget + budgetPerMinFee - 1) / budgetPerMinFee
+		requiredFee := cx.Proto.MinTxnFee * requiredMinFees
+
+		if cx.FeeCredit == nil || *cx.FeeCredit < requiredFee {
+			return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
+				cx.pc, spec.Name, cx.cost)
+		}
+		*cx.FeeCredit -= requiredFee
+
+		*cx.pooledAllowedInners -= int(requiredMinFees)
+		if *cx.pooledAllowedInners < 0 {
+			return fmt.Errorf("pc=%3d dynamic group cost budget exceeded, executing %s: local program cost was %d",
+				cx.pc, spec.Name, cx.cost)
+		}
+
+		*cx.PooledApplicationBudget += int(budgetPerMinFee * requiredMinFees)
 	}
 
 	cx.cost += opcost
