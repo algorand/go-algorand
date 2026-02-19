@@ -3707,22 +3707,23 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
-	// Round 1: create assets 1000-1004 with params and holdings
+	// Round 1: create assets 1000-1005 with params and holdings
 	//   1000: will have holding modified, then overridden in a second delta round
-	//   1001: will be deleted in delta
+	//   1001: will have holding deleted in delta (params remain since account is creator)
 	//   1002: will remain unchanged
 	//   1003: will have params-only modification in delta
 	//   1004: will have params deleted in delta (holding remains)
+	//   1005: will have both holding and params deleted in delta
 	{
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(testAddr, ledgercore.AccountData{
 			AccountBaseData: ledgercore.AccountBaseData{
 				MicroAlgos:       basics.MicroAlgos{Raw: 1_000_000},
-				TotalAssetParams: 5,
-				TotalAssets:      5,
+				TotalAssetParams: 6,
+				TotalAssets:      6,
 			},
 		})
-		for assetIdx := uint64(1000); assetIdx <= 1004; assetIdx++ {
+		for assetIdx := uint64(1000); assetIdx <= 1005; assetIdx++ {
 			updates.UpsertAssetResource(testAddr, basics.AssetIndex(assetIdx),
 				ledgercore.AssetParamsDelta{
 					Params: &basics.AssetParams{
@@ -3744,7 +3745,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 		auNewBlock(t, 1, au, base, opts, nil)
 		auCommitSync(t, 1, au, ml)
 
-		for assetIdx := uint64(1000); assetIdx <= 1004; assetIdx++ {
+		for assetIdx := uint64(1000); assetIdx <= 1005; assetIdx++ {
 			knownCreatables[basics.CreatableIndex(assetIdx)] = true
 		}
 	}
@@ -3765,13 +3766,17 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	deltaRound1 := basics.Round(conf.MaxAcctLookback + 3)
 	{
 		var updates ledgercore.AccountDeltas
-		// 1005: new creation (not in DB)
+		// 1005: delete both holding and params
 		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1005),
+			ledgercore.AssetParamsDelta{Deleted: true},
+			ledgercore.AssetHoldingDelta{Deleted: true})
+		// 1006: new creation (not in DB)
+		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1006),
 			ledgercore.AssetParamsDelta{
-				Params: &basics.AssetParams{Total: 5000, UnitName: "A1005"},
+				Params: &basics.AssetParams{Total: 6000, UnitName: "A1006"},
 			},
 			ledgercore.AssetHoldingDelta{
-				Holding: &basics.AssetHolding{Amount: 5000},
+				Holding: &basics.AssetHolding{Amount: 6000},
 			})
 		// 1001: delete holding
 		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1001),
@@ -3818,8 +3823,9 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, deltaRound2, rnd)
 
-	// Expected: 1000, 1002, 1003, 1004, 1005. (1001 deleted)
-	require.Len(t, resources, 5)
+	// Expected: 1000, 1001, 1002, 1003, 1004, 1006.
+	// 1005 fully deleted (both holding and params) — should not appear.
+	require.Len(t, resources, 6)
 
 	assetMap := make(map[basics.AssetIndex]ledgercore.AssetResourceWithIDs)
 	for _, res := range resources {
@@ -3831,8 +3837,11 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.NotNil(t, assetMap[basics.AssetIndex(1000)].AssetParams)
 	require.Equal(t, uint64(1_000_000), assetMap[basics.AssetIndex(1000)].AssetParams.Total)
 
-	// 1001: deleted
-	require.NotContains(t, assetMap, basics.AssetIndex(1001))
+	// 1001: holding deleted but params remain (account is still creator)
+	require.Contains(t, assetMap, basics.AssetIndex(1001))
+	require.Nil(t, assetMap[basics.AssetIndex(1001)].AssetHolding)
+	require.NotNil(t, assetMap[basics.AssetIndex(1001)].AssetParams)
+	require.Equal(t, uint64(1_001_000), assetMap[basics.AssetIndex(1001)].AssetParams.Total)
 
 	// 1002: unchanged from DB
 	require.Equal(t, uint64(1002*100), assetMap[basics.AssetIndex(1002)].AssetHolding.Amount)
@@ -3850,10 +3859,13 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Nil(t, assetMap[basics.AssetIndex(1004)].AssetParams)
 	require.True(t, assetMap[basics.AssetIndex(1004)].Creator.IsZero())
 
-	// 1005: new creation from delta
-	require.Equal(t, uint64(5000), assetMap[basics.AssetIndex(1005)].AssetHolding.Amount)
-	require.NotNil(t, assetMap[basics.AssetIndex(1005)].AssetParams)
-	require.Equal(t, uint64(5000), assetMap[basics.AssetIndex(1005)].AssetParams.Total)
+	// 1005: both holding and params deleted — should not appear
+	require.NotContains(t, assetMap, basics.AssetIndex(1005))
+
+	// 1006: new creation from delta
+	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetHolding.Amount)
+	require.NotNil(t, assetMap[basics.AssetIndex(1006)].AssetParams)
+	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetParams.Total)
 }
 
 // TestLookupApplicationResourcesWithDeltas verifies that lookupApplicationResources properly
@@ -3886,22 +3898,23 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
 
-	// Round 1: create apps 2000-2004 with params and local state
+	// Round 1: create apps 2000-2005 with params and local state
 	//   2000: will have local state modified, then overridden in a second delta round
-	//   2001: will be deleted in delta
+	//   2001: will have local state deleted in delta (params remain since account is creator)
 	//   2002: will remain unchanged
 	//   2003: will have params-only modification in delta
 	//   2004: will have params deleted in delta (local state remains)
+	//   2005: will have both local state and params deleted in delta
 	{
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(testAddr, ledgercore.AccountData{
 			AccountBaseData: ledgercore.AccountBaseData{
 				MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
-				TotalAppParams:      5,
-				TotalAppLocalStates: 5,
+				TotalAppParams:      6,
+				TotalAppLocalStates: 6,
 			},
 		})
-		for appIdx := uint64(2000); appIdx <= 2004; appIdx++ {
+		for appIdx := uint64(2000); appIdx <= 2005; appIdx++ {
 			updates.UpsertAppResource(testAddr, basics.AppIndex(appIdx),
 				ledgercore.AppParamsDelta{
 					Params: &basics.AppParams{
@@ -3924,7 +3937,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 		auNewBlock(t, 1, au, base, opts, nil)
 		auCommitSync(t, 1, au, ml)
 
-		for appIdx := uint64(2000); appIdx <= 2004; appIdx++ {
+		for appIdx := uint64(2000); appIdx <= 2005; appIdx++ {
 			knownCreatables[basics.CreatableIndex(appIdx)] = true
 		}
 	}
@@ -3945,14 +3958,18 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	deltaRound1 := basics.Round(conf.MaxAcctLookback + 3)
 	{
 		var updates ledgercore.AccountDeltas
-		// 2005: new creation (not in DB)
+		// 2005: delete both local state and params
 		updates.UpsertAppResource(testAddr, basics.AppIndex(2005),
+			ledgercore.AppParamsDelta{Deleted: true},
+			ledgercore.AppLocalStateDelta{Deleted: true})
+		// 2006: new creation (not in DB)
+		updates.UpsertAppResource(testAddr, basics.AppIndex(2006),
 			ledgercore.AppParamsDelta{
 				Params: &basics.AppParams{ApprovalProgram: []byte{0x06, 0x81, 0x01}},
 			},
 			ledgercore.AppLocalStateDelta{
 				LocalState: &basics.AppLocalState{
-					Schema: basics.StateSchema{NumUint: 50},
+					Schema: basics.StateSchema{NumUint: 60},
 				},
 			})
 		// 2001: delete local state
@@ -4008,8 +4025,9 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, deltaRound2, rnd)
 
-	// Expected: 2000, 2002, 2003, 2004, 2005. (2001 deleted)
-	require.Len(t, resources, 5)
+	// Expected: 2000, 2001, 2002, 2003, 2004, 2006.
+	// 2005 fully deleted (both local state and params) — should not appear.
+	require.Len(t, resources, 6)
 
 	appMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs)
 	for _, res := range resources {
@@ -4021,8 +4039,11 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	require.NotNil(t, appMap[basics.AppIndex(2000)].AppParams)
 	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2000)].AppParams.ApprovalProgram)
 
-	// 2001: deleted
-	require.NotContains(t, appMap, basics.AppIndex(2001))
+	// 2001: local state deleted but params remain (account is still creator)
+	require.Contains(t, appMap, basics.AppIndex(2001))
+	require.Nil(t, appMap[basics.AppIndex(2001)].AppLocalState)
+	require.NotNil(t, appMap[basics.AppIndex(2001)].AppParams)
+	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2001)].AppParams.ApprovalProgram)
 
 	// 2002: unchanged from DB
 	require.Equal(t, uint64(2), appMap[basics.AppIndex(2002)].AppLocalState.Schema.NumUint)
@@ -4039,9 +4060,12 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	require.Nil(t, appMap[basics.AppIndex(2004)].AppParams)
 	require.True(t, appMap[basics.AppIndex(2004)].Creator.IsZero())
 
-	// 2005: new creation from delta
-	require.Equal(t, uint64(50), appMap[basics.AppIndex(2005)].AppLocalState.Schema.NumUint)
-	require.NotNil(t, appMap[basics.AppIndex(2005)].AppParams)
+	// 2005: both local state and params deleted — should not appear
+	require.NotContains(t, appMap, basics.AppIndex(2005))
+
+	// 2006: new creation from delta
+	require.Equal(t, uint64(60), appMap[basics.AppIndex(2006)].AppLocalState.Schema.NumUint)
+	require.NotNil(t, appMap[basics.AppIndex(2006)].AppParams)
 
 	// includeParams=false should omit AppParams from all results
 	resourcesNoParams, _, err := au.LookupApplicationResources(testAddr, 0, 100, false)

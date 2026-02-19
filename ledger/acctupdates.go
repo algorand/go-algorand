@@ -1233,54 +1233,27 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 		}
 	}()
 
-	// A delta may modify only part of a resource (e.g. holding but not params), so we
-	// track exactly which fields were changed, then overlay these onto DB results.
-	type assetDeltaEntry struct {
-		holdingDeleted  bool
-		holdingModified bool
-		holding         *basics.AssetHolding
-		paramsDeleted   bool
-		paramsModified  bool
-		params          *basics.AssetParams
-	}
-
 	for {
 		currentDBRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
 
 		// Walk deltas backwards; the first entry found for a given asset is the most recent.
-		deltaResults := make(map[basics.AssetIndex]assetDeltaEntry)
+		deltaResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
 		numDeltaDeleted := 0
 
 		for i := currentDeltaLen; i > 0; {
 			i--
-			delta := &au.deltas[i]
-			for _, assetRes := range delta.Accts.AssetResources {
-				if assetRes.Addr != addr || assetRes.Aidx <= assetIDGT {
+			for _, rec := range au.deltas[i].Accts.AssetResources {
+				if rec.Addr != addr || rec.Aidx <= assetIDGT {
 					continue
 				}
-				if _, ok := deltaResults[assetRes.Aidx]; ok {
+				if _, ok := deltaResults[rec.Aidx]; ok {
 					continue
 				}
-
-				entry := assetDeltaEntry{}
-				if assetRes.Holding.Deleted {
-					entry.holdingDeleted = true
-					entry.holdingModified = true
+				deltaResults[rec.Aidx] = rec
+				if rec.Holding.Deleted {
 					numDeltaDeleted++
-				} else if assetRes.Holding.Holding != nil {
-					entry.holdingModified = true
-					entry.holding = assetRes.Holding.Holding
 				}
-				if assetRes.Params.Deleted {
-					entry.paramsDeleted = true
-					entry.paramsModified = true
-				} else if assetRes.Params.Params != nil {
-					entry.paramsModified = true
-					entry.params = assetRes.Params.Params
-				}
-
-				deltaResults[assetRes.Aidx] = entry
 			}
 		}
 
@@ -1316,57 +1289,56 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 				assetID := basics.AssetIndex(pd.Aidx)
 				seenInDB[assetID] = true
 
-				dEntry, inDelta := deltaResults[assetID]
-				if inDelta && dEntry.holdingDeleted {
-					continue
+				d, inDelta := deltaResults[assetID]
+
+				arwi := ledgercore.AssetResourceWithIDs{AssetID: assetID}
+
+				if inDelta && d.Holding.Deleted {
+					// Holding removed by delta — leave AssetHolding nil.
+				} else if inDelta && d.Holding.Holding != nil {
+					arwi.AssetHolding = d.Holding.Holding
+				} else {
+					ah := pd.Data.GetAssetHolding()
+					arwi.AssetHolding = &ah
 				}
 
-				ah := pd.Data.GetAssetHolding()
-				arwi := ledgercore.AssetResourceWithIDs{
-					AssetID: assetID,
-					AssetResource: ledgercore.AssetResource{
-						AssetHolding: &ah,
-					},
-				}
-
-				if inDelta && dEntry.holdingModified {
-					arwi.AssetHolding = dEntry.holding
-				}
-
-				if !pd.Creator.IsZero() && !(inDelta && dEntry.paramsDeleted) {
+				if inDelta && d.Params.Deleted {
+					// Delta deleted params — omit creator and params.
+				} else if inDelta && d.Params.Params != nil {
+					arwi.Creator = pd.Creator
+					arwi.AssetParams = d.Params.Params
+				} else if !pd.Creator.IsZero() {
 					arwi.Creator = pd.Creator
 					ap := pd.Data.GetAssetParams()
 					arwi.AssetParams = &ap
 				}
-				if inDelta && dEntry.paramsModified && !dEntry.paramsDeleted {
-					arwi.Creator = addr
-					arwi.AssetParams = dEntry.params
-				}
 
-				result = append(result, arwi)
+				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
+					result = append(result, arwi)
+				}
 			}
 
 			// Add assets that exist only in deltas (new creations not yet in DB).
 			// Only include delta entries within the DB page range to avoid setting
 			// a next-token that would skip items still in the database.
-			for assetID, dEntry := range deltaResults {
-				if seenInDB[assetID] || dEntry.holdingDeleted || !dEntry.holdingModified {
+			for assetID, d := range deltaResults {
+				if seenInDB[assetID] {
 					continue
 				}
 				if dbHasMore && assetID > dbMaxID {
 					continue
 				}
-				arwi := ledgercore.AssetResourceWithIDs{
-					AssetID: assetID,
-					AssetResource: ledgercore.AssetResource{
-						AssetHolding: dEntry.holding,
-					},
+				arwi := ledgercore.AssetResourceWithIDs{AssetID: assetID}
+				if !d.Holding.Deleted && d.Holding.Holding != nil {
+					arwi.AssetHolding = d.Holding.Holding
 				}
-				if dEntry.params != nil {
+				if !d.Params.Deleted && d.Params.Params != nil {
 					arwi.Creator = addr
-					arwi.AssetParams = dEntry.params
+					arwi.AssetParams = d.Params.Params
 				}
-				result = append(result, arwi)
+				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
+					result = append(result, arwi)
+				}
 			}
 
 			slices.SortFunc(result, func(a, b ledgercore.AssetResourceWithIDs) int {
@@ -1407,54 +1379,27 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 		}
 	}()
 
-	// A delta may modify only part of a resource (e.g. local state but not params),
-	// so we track exactly which fields changed, then overlay these onto DB results.
-	type appDeltaEntry struct {
-		stateDeleted   bool
-		stateModified  bool
-		localState     *basics.AppLocalState
-		paramsDeleted  bool
-		paramsModified bool
-		params         *basics.AppParams
-	}
-
 	for {
 		currentDBRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
 
 		// Walk deltas backwards; the first entry found for a given app is the most recent.
-		deltaResults := make(map[basics.AppIndex]appDeltaEntry)
+		deltaResults := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
 		numDeltaDeleted := 0
 
 		for i := currentDeltaLen; i > 0; {
 			i--
-			delta := &au.deltas[i]
-			for _, appRes := range delta.Accts.AppResources {
-				if appRes.Addr != addr || appRes.Aidx <= appIDGT {
+			for _, rec := range au.deltas[i].Accts.AppResources {
+				if rec.Addr != addr || rec.Aidx <= appIDGT {
 					continue
 				}
-				if _, ok := deltaResults[appRes.Aidx]; ok {
+				if _, ok := deltaResults[rec.Aidx]; ok {
 					continue
 				}
-
-				entry := appDeltaEntry{}
-				if appRes.State.Deleted {
-					entry.stateDeleted = true
-					entry.stateModified = true
+				deltaResults[rec.Aidx] = rec
+				if rec.State.Deleted {
 					numDeltaDeleted++
-				} else if appRes.State.LocalState != nil {
-					entry.stateModified = true
-					entry.localState = appRes.State.LocalState
 				}
-				if appRes.Params.Deleted {
-					entry.paramsDeleted = true
-					entry.paramsModified = true
-				} else if appRes.Params.Params != nil {
-					entry.paramsModified = true
-					entry.params = appRes.Params.Params
-				}
-
-				deltaResults[appRes.Aidx] = entry
 			}
 		}
 
@@ -1490,63 +1435,62 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				appID := basics.AppIndex(pd.Aidx)
 				seenInDB[appID] = true
 
-				dEntry, inDelta := deltaResults[appID]
-				if inDelta && dEntry.stateDeleted {
-					continue
+				d, inDelta := deltaResults[appID]
+
+				arwi := ledgercore.AppResourceWithIDs{AppID: appID}
+
+				if inDelta && d.State.Deleted {
+					// Local state removed by delta — leave AppLocalState nil.
+				} else if inDelta && d.State.LocalState != nil {
+					arwi.AppLocalState = d.State.LocalState
+				} else {
+					als := pd.Data.GetAppLocalState()
+					arwi.AppLocalState = &als
 				}
 
-				als := pd.Data.GetAppLocalState()
-				arwi := ledgercore.AppResourceWithIDs{
-					AppID: appID,
-					AppResource: ledgercore.AppResource{
-						AppLocalState: &als,
-					},
-				}
-
-				if inDelta && dEntry.stateModified {
-					arwi.AppLocalState = dEntry.localState
-				}
-
-				if !pd.Creator.IsZero() && !(inDelta && dEntry.paramsDeleted) {
+				if inDelta && d.Params.Deleted {
+					// Delta deleted params — omit creator and params.
+				} else if inDelta && d.Params.Params != nil {
+					arwi.Creator = pd.Creator
+					if includeParams {
+						arwi.AppResource.AppParams = d.Params.Params
+					}
+				} else if !pd.Creator.IsZero() {
 					arwi.Creator = pd.Creator
 					if includeParams {
 						ap := pd.Data.GetAppParams()
 						arwi.AppResource.AppParams = &ap
 					}
 				}
-				if inDelta && dEntry.paramsModified && !dEntry.paramsDeleted {
-					arwi.Creator = addr
-					if includeParams {
-						arwi.AppResource.AppParams = dEntry.params
-					}
-				}
 
-				result = append(result, arwi)
+				if arwi.AppLocalState != nil || arwi.AppParams != nil {
+					result = append(result, arwi)
+				}
 			}
 
 			// Add apps that exist only in deltas (new opt-ins not yet in DB).
 			// Only include delta entries within the DB page range to avoid setting
 			// a next-token that would skip items still in the database.
-			for appID, dEntry := range deltaResults {
-				if seenInDB[appID] || dEntry.stateDeleted || !dEntry.stateModified {
+			for appID, d := range deltaResults {
+				if seenInDB[appID] {
 					continue
 				}
 				if dbHasMore && appID > dbMaxID {
 					continue
 				}
-				arwi := ledgercore.AppResourceWithIDs{
-					AppID: appID,
-					AppResource: ledgercore.AppResource{
-						AppLocalState: dEntry.localState,
-					},
+				arwi := ledgercore.AppResourceWithIDs{AppID: appID}
+				if !d.State.Deleted && d.State.LocalState != nil {
+					arwi.AppLocalState = d.State.LocalState
 				}
-				if dEntry.params != nil {
+				if !d.Params.Deleted && d.Params.Params != nil {
 					arwi.Creator = addr
 					if includeParams {
-						arwi.AppResource.AppParams = dEntry.params
+						arwi.AppResource.AppParams = d.Params.Params
 					}
 				}
-				result = append(result, arwi)
+				if arwi.AppLocalState != nil || arwi.AppParams != nil {
+					result = append(result, arwi)
+				}
 			}
 
 			slices.SortFunc(result, func(a, b ledgercore.AppResourceWithIDs) int {
