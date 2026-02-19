@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-deadlock"
 )
 
 type asyncVerifyVoteRequest struct {
@@ -57,6 +58,7 @@ type AsyncVoteVerifier struct {
 	execpoolOut     chan interface{}
 	ctx             context.Context
 	ctxCancel       context.CancelFunc
+	enqueueMu       deadlock.RWMutex // guard against avv.ctxCancel between avv.ctx.Done and avv.wg.Add
 }
 
 // MakeAsyncVoteVerifier creates an AsyncVoteVerifier with workers as the number of CPUs
@@ -132,6 +134,8 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 }
 
 func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) error {
+	avv.enqueueMu.RLock()
+	defer avv.enqueueMu.RUnlock()
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -152,6 +156,8 @@ func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader,
 }
 
 func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) error {
+	avv.enqueueMu.RLock()
+	defer avv.enqueueMu.RUnlock()
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -174,7 +180,9 @@ func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReade
 // Quit tells the AsyncVoteVerifier to shutdown and waits until all workers terminate.
 func (avv *AsyncVoteVerifier) Quit() {
 	// indicate we're done and wait for all workers to finish
+	avv.enqueueMu.Lock()
 	avv.ctxCancel()
+	avv.enqueueMu.Unlock()
 
 	// wait until all the tasks we've given the pool are done.
 	avv.wg.Wait()
