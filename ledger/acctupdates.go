@@ -1349,15 +1349,21 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			return
 		}
 
+		deltas := au.deltas[:offset]
 		rewardsVersion = au.versions[offset]
 		rewardsLevel = au.roundTotals[offset].RewardsLevel
 
 		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
 		macct, indeltas := au.accounts[addr]
+		if synchronized {
+			au.accountsMu.RUnlock()
+			needUnlock = false
+		}
+
 		if indeltas {
 			// Check if this is the most recent round, in which case, we can
 			// use a cache of the most recent account state.
-			if offset == uint64(len(au.deltas)) {
+			if offset == uint64(currentDeltaLen) {
 				return macct.data, rnd, rewardsVersion, rewardsLevel, nil
 			}
 			// the account appears in the deltas, but we don't know if it appears in the
@@ -1365,7 +1371,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// backwards to ensure that later updates take priority if present.
 			for offset > 0 {
 				offset--
-				d, ok := au.deltas[offset].Accts.GetData(addr)
+				d, ok := deltas[offset].Accts.GetData(addr)
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
@@ -1380,17 +1386,27 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			rnd = currentDbRound + basics.Round(currentDeltaLen)
 		}
 
+		if synchronized {
+			au.accountsMu.RLock()
+			needUnlock = true
+		}
 		// check the baseAccounts -
 		if macct, has := au.baseAccounts.read(addr); has {
+			// there is a chance the db advanced between deltas check and the baseAccounts check
+			// ensure the round requested is still in the db
+			if macct.Round > rnd {
+				return ledgercore.AccountData{}, 0, "", 0, &RoundOffsetError{rnd, macct.Round}
+			}
+
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
 			return macct.AccountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 		}
 
-		// check baseAccoiunts again to see if it does not exist
+		// check baseAccounts again to see if it does not exist
 		if au.baseAccounts.readNotFound(addr) {
-			// it seems the account doesnt exist
+			// it seems the account does not exist
 			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
 		}
 

@@ -848,7 +848,7 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 				fromAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, fromAccount)
 				require.NoError(t, err)
 				require.Equal(t, i-1, validThrough)
-				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
+				require.Equalf(t, int(moneyAccountsExpectedAmounts[i-1][j]), int(fromAccountDataOld.MicroAlgos.Raw), "Account index : %d (%s)\nRound number : %d (%d)", j, moneyAccounts[j], i, i-1)
 
 				fromAccountDataNew := fromAccountDataOld
 
@@ -887,7 +887,7 @@ func testAcctUpdatesUpdatesCorrectness(t *testing.T, cfg config.Local) {
 					require.NoError(t, err)
 					require.GreaterOrEqual(t, int64(validThrough), int64(basics.Round(checkRound-uint64(testback))))
 					// if we received no error, we want to make sure the reported amount is correct.
-					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
+					require.Equalf(t, int(moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j]), int(acct.MicroAlgos.Raw), "Account index : %d (%s)\nRound number : %d (%d)", j, moneyAccounts[j], checkRound, checkRound-uint64(testback))
 					testback++
 					j--
 				}
