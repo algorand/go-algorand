@@ -642,14 +642,16 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 					stats.ProcessingTime.AddTransaction(transactionGroupDuration)
 				}
 
-				blockGenerationStarts := time.Now()
-				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock(pool.getVotingAccountsForRound(evalRnd))
-				if gerr != nil {
-					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
-				} else {
-					pool.assemblyResults.blk = lvb
+				if votingAccts := pool.getVotingAccountsForRound(evalRnd); len(votingAccts) > 0 {
+					blockGenerationStarts := time.Now()
+					lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock(votingAccts)
+					if gerr != nil {
+						pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
+					} else {
+						pool.assemblyResults.blk = lvb
+					}
+					stats.BlockGenerationDuration = uint64(time.Since(blockGenerationStarts))
 				}
-				stats.BlockGenerationDuration = uint64(time.Since(blockGenerationStarts))
 				pool.assemblyResults.stats = *stats
 				pool.assemblyCond.Broadcast()
 			} else {

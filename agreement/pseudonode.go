@@ -284,6 +284,11 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.ParticipationRecordForRound) ([]proposal, []unauthenticatedVote) {
+	if len(accounts) == 0 {
+		// If we don't have any participating accounts: no need to call AssembleBlock
+		return nil, nil
+	}
+
 	addresses := make([]basics.Address, len(accounts))
 	for i := range accounts {
 		addresses[i] = accounts[i].Account
