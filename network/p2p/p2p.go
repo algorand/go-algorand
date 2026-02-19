@@ -395,10 +395,10 @@ func (s *serviceImpl) ClosePeer(peer peer.ID) error {
 	return s.host.Network().ClosePeer(peer)
 }
 
-// UnprotectPeer removes the "mesh" protection from a peer, allowing
+// UnprotectPeer removes the protection from a peer, allowing
 // the connection manager to trim it if needed.
 func (s *serviceImpl) UnprotectPeer(id peer.ID) {
-	s.host.ConnManager().Unprotect(id, "mesh")
+	s.host.ConnManager().Unprotect(id, cnmgrTag)
 }
 
 // netAddressToListenAddress converts a netAddress in "ip:port" format to a listen address
