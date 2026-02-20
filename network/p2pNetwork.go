@@ -905,7 +905,7 @@ func (n *P2PNetwork) VoteCompressionEnabled() bool {
 func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) error {
 	if stream.Protocol() != p2p.AlgorandWsProtocolV1 {
 		err := fmt.Errorf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)
-		n.log.Warnf(err.Error())
+		n.log.Warn(err.Error())
 		return err
 	}
 
@@ -913,15 +913,15 @@ func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, str
 		var initMsg [1]byte
 		rn, err := stream.Read(initMsg[:])
 		if rn == 0 || err != nil {
-			err := fmt.Errorf("wsStreamHandlerV1: error reading initial message from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			n.log.Warnf(err.Error())
-			return err
+			err1 := fmt.Errorf("wsStreamHandlerV1: error reading initial message from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
+			return err1
 		}
 	} else {
 		if _, err := stream.Write([]byte("1")); err != nil {
-			err := fmt.Errorf("wsStreamHandlerV1: error sending initial message to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			n.log.Warnf(err.Error())
-			return err
+			err1 := fmt.Errorf("wsStreamHandlerV1: error sending initial message to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
+			return err1
 		}
 	}
 
@@ -931,7 +931,7 @@ func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, str
 func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) error {
 	if stream.Protocol() != p2p.AlgorandWsProtocolV22 {
 		err := fmt.Errorf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)
-		n.log.Warnf(err.Error())
+		n.log.Warn(err.Error())
 		return err
 	}
 
@@ -940,33 +940,33 @@ func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, st
 	if incoming {
 		pmi, err = readPeerMetaHeaders(stream, p2pPeer, n.supportedProtocolVersions)
 		if err != nil {
-			err := fmt.Errorf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			n.log.Warnf(err.Error())
+			err1 := fmt.Errorf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
 			_ = stream.Reset()
-			return err
+			return err1
 		}
 		err = writePeerMetaHeaders(stream, p2pPeer, pmi.version, n)
 		if err != nil {
-			err := fmt.Errorf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			n.log.Warnf(err.Error())
+			err1 := fmt.Errorf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
 			_ = stream.Reset()
-			return err
+			return err1
 		}
 	} else {
 		err = writePeerMetaHeaders(stream, p2pPeer, n.protocolVersion, n)
 		if err != nil {
-			err := fmt.Errorf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			n.log.Warnf(err.Error())
+			err1 := fmt.Errorf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
 			_ = stream.Reset()
-			return err
+			return err1
 		}
 		// read the response
 		pmi, err = readPeerMetaHeaders(stream, p2pPeer, n.supportedProtocolVersions)
 		if err != nil {
-			err := fmt.Errorf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			n.log.Warnf(err.Error())
+			err1 := fmt.Errorf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
 			_ = stream.Reset()
-			return err
+			return err1
 		}
 	}
 	return n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
@@ -1032,7 +1032,7 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	if !ok {
 		networkPeerIdentityDisconnect.Inc(nil)
 		err := fmt.Errorf("peer deduplicated before adding because the identity is already known: remote %s, local %s", addr, localAddr)
-		n.log.Warnf(err.Error())
+		n.log.Warn(err.Error())
 		stream.Close()
 		return err
 	}
@@ -1042,7 +1042,7 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	if wsp.didSignalClose.Load() == 1 {
 		networkPeerAlreadyClosed.Inc(nil)
 		err := fmt.Errorf("peer closing %s", addr)
-		n.log.Debugf(err.Error())
+		n.log.Debug(err.Error())
 		n.wsPeersLock.Unlock()
 		return err
 	}
