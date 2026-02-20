@@ -197,7 +197,7 @@ func deriveConnLimits(cfg config.Local) connLimitConfig {
 		low = cfg.GossipFanout * 2
 		rcmgrConns = cfg.GossipFanout * 6
 	}
-	low = max(low, 1)
+	low = max(low, min(high, 1))
 	high = max(high, low)
 	rcmgrConns = max(rcmgrConns, high)
 	return connLimitConfig{

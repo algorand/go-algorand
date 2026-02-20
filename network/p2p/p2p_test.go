@@ -355,11 +355,10 @@ func TestDeriveConnLimits_ZeroFanout(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// Floor guards prevent zero watermarks when GossipFanout is 0.
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = 0
 	limits := deriveConnLimits(cfg)
-	require.GreaterOrEqual(t, limits.connMgrLow, 1)
+	require.GreaterOrEqual(t, limits.connMgrLow, 0) // zero means zero
 	require.GreaterOrEqual(t, limits.connMgrHigh, limits.connMgrLow)
 	require.GreaterOrEqual(t, limits.rcmgrConns, limits.connMgrHigh)
 }

@@ -45,7 +45,7 @@ type streamManager struct {
 }
 
 // StreamHandler is called when a new bidirectional stream for a given protocol and peer is opened.
-type StreamHandler func(ctx context.Context, pid peer.ID, s network.Stream, incoming bool)
+type StreamHandler func(ctx context.Context, pid peer.ID, s network.Stream, incoming bool) error
 
 func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, handlers StreamHandlers, allowIncomingGossip bool) *streamManager {
 	return &streamManager{
@@ -60,12 +60,20 @@ func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, han
 
 // streamHandler is called by libp2p when a new stream is accepted
 func (n *streamManager) streamHandler(stream network.Stream) {
+	dispatched := false
+	remotePeer := stream.Conn().RemotePeer()
+
+	defer func() {
+		if !dispatched {
+			n.host.ConnManager().Unprotect(remotePeer, cnmgrTag)
+		}
+	}()
+
 	if stream.Conn().Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
-		n.log.Debugf("rejecting stream from incoming connection from %s", stream.Conn().RemotePeer().String())
+		n.log.Debugf("rejecting stream from incoming connection from %s", remotePeer.String())
 		stream.Close()
 		return
 	}
-	remotePeer := stream.Conn().RemotePeer()
 	// reject streams on connections not explicitly dialed by us
 	if stream.Conn().Stat().Direction == network.DirOutbound && stream.Stat().Direction == network.DirInbound {
 		if !n.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
@@ -96,7 +104,9 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 			if err1 := n.dispatch(n.ctx, remotePeer, stream, incoming); err1 != nil {
 				n.log.Errorln(err1.Error())
 				_ = stream.Reset()
+				return
 			}
+			dispatched = true
 			return
 		}
 		// otherwise, the old stream is still open, so we can close the new one
@@ -109,15 +119,17 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	if err := n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
 		n.log.Errorln(err.Error())
 		_ = stream.Reset()
+		return
 	}
+
+	dispatched = true
 }
 
 // dispatch the stream to the appropriate handler
 func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream network.Stream, incoming bool) error {
 	for _, pair := range n.handlers {
 		if pair.ProtoID == stream.Protocol() {
-			pair.Handler(ctx, remotePeer, stream, incoming)
-			return nil
+			return pair.Handler(ctx, remotePeer, stream, incoming)
 		}
 	}
 	n.log.Errorf("No handler for protocol %s, peer %s", stream.Protocol(), remotePeer)
@@ -127,7 +139,12 @@ func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream
 // Connected is called when a connection is opened
 // for both incoming (listener -> addConn) and outgoing (dialer -> addConn) connections.
 func (n *streamManager) Connected(net network.Network, conn network.Conn) {
-
+	dispatched := false
+	defer func() {
+		if !dispatched {
+			n.host.ConnManager().Unprotect(conn.RemotePeer(), cnmgrTag)
+		}
+	}()
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
 
@@ -136,9 +153,12 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		return
 	}
 
-	// ensure that only one of the peers initiates the stream
+	// ensure that only one of the peers initiates the stream.
+	// the remote peer will open the stream and our streamHandler will handle it,
+	// so mark dispatched to preserve the cnmgr protection set by dialNode.
 	if localPeer > remotePeer {
 		n.log.Debugf("%s: ignoring a lesser peer ID %s", localPeer.String(), remotePeer.String())
+		dispatched = true
 		return
 	}
 
@@ -156,6 +176,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	if ok {
 		n.streamsLock.Unlock()
 		n.log.Debugf("%s: already have a stream to/from %s", localPeer.String(), remotePeer.String())
+		dispatched = true
 		return // there's already an active stream with this peer for our protocol
 	}
 
@@ -175,11 +196,13 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	n.log.Infof("%s: using protocol %s with peer %s", localPeer.String(), stream.Protocol(), remotePeer.String())
 
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
-	err = n.dispatch(n.ctx, remotePeer, stream, incoming)
-	if err != nil {
+	if err = n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
 		n.log.Errorln(err.Error())
 		_ = stream.Reset()
+		return
 	}
+
+	dispatched = true
 }
 
 // Disconnected is called when a connection is closed
