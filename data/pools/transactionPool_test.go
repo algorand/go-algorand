@@ -992,8 +992,10 @@ func TestLogicSigOK(t *testing.T) {
 	}
 	signedTx := transactions.SignedTxn{
 		Txn: tx,
-		Lsig: transactions.LogicSig{
-			Logic: ops.Program,
+		SignatureFields: transactions.SignatureFields{
+			Lsig: transactions.LogicSig{
+				Logic: ops.Program,
+			},
 		},
 	}
 	require.NoError(t, transactionPool.RememberOne(signedTx))

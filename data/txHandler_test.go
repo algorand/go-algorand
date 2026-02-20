@@ -214,8 +214,10 @@ func makeRandomTransactions(num int) ([]transactions.SignedTxn, []byte) {
 		var addr basics.Address
 		crypto.RandBytes(addr[:])
 		stxns[i] = transactions.SignedTxn{
-			Sig:      sig,
-			AuthAddr: addr,
+			SignatureFields: transactions.SignatureFields{
+				Sig:      sig,
+				AuthAddr: addr,
+			},
 			Txn: transactions.Transaction{
 				Header: transactions.Header{
 					Sender: addr,
@@ -652,9 +654,9 @@ func craftNonCanonical(t *testing.T, stxn *transactions.SignedTxn, blobStxn []by
 	// make non-canonical encoding and ensure it is not accepted
 	stxnNonCanTxn := transactions.SignedTxn{Txn: stxn.Txn}
 	blobTxn := protocol.Encode(&stxnNonCanTxn)
-	stxnNonCanAuthAddr := transactions.SignedTxn{AuthAddr: stxn.AuthAddr}
+	stxnNonCanAuthAddr := transactions.SignedTxn{SignatureFields: transactions.SignatureFields{AuthAddr: stxn.AuthAddr}}
 	blobAuthAddr := protocol.Encode(&stxnNonCanAuthAddr)
-	stxnNonCanAuthSig := transactions.SignedTxn{Sig: stxn.Sig}
+	stxnNonCanAuthSig := transactions.SignedTxn{SignatureFields: transactions.SignatureFields{Sig: stxn.Sig}}
 	blobSig := protocol.Encode(&stxnNonCanAuthSig)
 
 	if blobStxn == nil {

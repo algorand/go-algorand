@@ -516,7 +516,9 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 				OnCompletion:  transactions.ClearStateOC,
 			},
 		},
-		Lsig: lsig,
+		SignatureFields: transactions.SignatureFields{
+			Lsig: lsig,
+		},
 	}
 	ad := transactions.ApplyData{
 		EvalDelta: transactions.EvalDelta{
