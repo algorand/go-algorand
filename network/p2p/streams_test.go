@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -28,11 +29,37 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// syncBuffer is a thread-safe bytes.Buffer for use as a log output target.
+type syncBuffer struct {
+	mu  deadlock.Mutex
+	buf bytes.Buffer
+}
+
+func (sb *syncBuffer) Write(p []byte) (int, error) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.Write(p)
+}
+
+func (sb *syncBuffer) String() string {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	return sb.buf.String()
+}
+
+func (sb *syncBuffer) Reset() {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+	sb.buf.Reset()
+}
 
 // TestConnectedLogsNonDialedOutgoingConnection tests that the Connected function
 // exits early for non-dialed outgoing connections by checking the log output
@@ -40,7 +67,7 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	logBuffer := &strings.Builder{}
+	logBuffer := &syncBuffer{}
 	logger := logging.NewLogger()
 	logger.SetOutput(logBuffer)
 	logger.SetLevel(logging.Debug)
@@ -110,9 +137,7 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 	require.Len(t, conns, 1)
 	require.Equal(t, network.DirOutbound, conns[0].Stat().Direction)
 
-	// Check that the log contains the expected message for non-dialed outgoing connection.
-	// Connected handler runs in a goroutine, so wait for the log message to appear.
-	expectedMsg := "ignoring non-dialed outgoing peer ID"
+	const expectedMsg = "ignoring non-dialed outgoing peer ID"
 	require.Eventually(t, func() bool {
 		logOutput := logBuffer.String()
 		return strings.Contains(logOutput, expectedMsg) && strings.Contains(logOutput, listenerHost.ID().String())
