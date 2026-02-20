@@ -770,10 +770,10 @@ func (c *Client) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (resp
 }
 
 // ApplicationBoxesPage takes an app's index and returns a page of box names with optional values.
-func (c *Client) ApplicationBoxesPage(appID basics.AppIndex, limit uint64, next string, prefix string, values bool) (resp model.BoxesResponse, err error) {
+func (c *Client) ApplicationBoxesPage(appID basics.AppIndex, limit uint64, next string, prefix string, values bool, round basics.Round) (resp model.BoxesResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.ApplicationBoxesPage(appID, limit, next, prefix, values)
+		resp, err = algod.ApplicationBoxesPage(appID, limit, next, prefix, values, round)
 	}
 	return
 }

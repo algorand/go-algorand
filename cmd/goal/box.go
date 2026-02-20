@@ -21,6 +21,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 var boxName string
@@ -28,6 +30,7 @@ var boxLimit uint64
 var boxNext string
 var boxPrefix string
 var boxValues bool
+var boxRound uint64
 
 func init() {
 	appCmd.AddCommand(appBoxCmd)
@@ -44,6 +47,7 @@ func init() {
 	appBoxListCmd.Flags().StringVarP(&boxNext, "next", "n", "", "Pagination cursor from a previous response's next-token.")
 	appBoxListCmd.Flags().StringVarP(&boxPrefix, "prefix", "p", "", "Filter by box name prefix, in the same form as app-arg.")
 	appBoxListCmd.Flags().BoolVarP(&boxValues, "values", "v", false, "If set, include box values in the output.")
+	appBoxListCmd.Flags().Uint64VarP(&boxRound, "round", "r", 0, "Query boxes at a specific round (auto-pinned from first page if not set).")
 }
 
 var appBoxCmd = &cobra.Command{
@@ -120,10 +124,16 @@ var appBoxListCmd = &cobra.Command{
 		}
 
 		next := boxNext
+		round := basics.Round(boxRound)
 		for {
-			boxesRes, err := client.ApplicationBoxesPage(appIdx, limit, next, boxPrefix, boxValues)
+			boxesRes, err := client.ApplicationBoxesPage(appIdx, limit, next, boxPrefix, boxValues, round)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
+			}
+
+			// Auto-pin round from first page for consistent pagination.
+			if round == 0 && boxesRes.Round != nil {
+				round = basics.Round(*boxesRes.Round)
 			}
 
 			for _, descriptor := range boxesRes.Boxes {

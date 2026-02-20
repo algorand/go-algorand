@@ -635,7 +635,7 @@ end:
 	next := ""
 	pageCount := 0
 	for {
-		resp, err := testClient.ApplicationBoxesPage(createdAppID, 3, next, "", false)
+		resp, err := testClient.ApplicationBoxesPage(createdAppID, 3, next, "", false, 0)
 		a.NoError(err)
 		a.NotNil(resp.Round, "paginated response should include round")
 
@@ -655,7 +655,7 @@ end:
 	a.GreaterOrEqual(pageCount, 2, "should have paginated across multiple pages")
 
 	// Test with values=true
-	resp, err := testClient.ApplicationBoxesPage(createdAppID, 2, "", "", true)
+	resp, err := testClient.ApplicationBoxesPage(createdAppID, 2, "", "", true, 0)
 	a.NoError(err)
 	a.Len(resp.Boxes, 2)
 	for _, box := range resp.Boxes {
@@ -663,9 +663,26 @@ end:
 	}
 
 	// Test with prefix filter
-	resp, err = testClient.ApplicationBoxesPage(createdAppID, 100, "", "str:box_", false)
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 100, "", "str:box_", false, 0)
 	a.NoError(err)
 	a.Len(resp.Boxes, 8, "prefix filter should match all boxes")
+
+	// Test round-pinning: fetch page 1 without round, then page 2 with pinned round
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 3, "", "", false, 0)
+	a.NoError(err)
+	a.NotNil(resp.Round, "first page should include round")
+	pinnedRound := basics.Round(*resp.Round)
+	a.NotZero(pinnedRound)
+	a.NotNil(resp.NextToken, "should have more pages")
+
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 3, *resp.NextToken, "", false, pinnedRound)
+	a.NoError(err)
+	a.NotNil(resp.Round, "second page should include round")
+	a.Equal(uint64(pinnedRound), *resp.Round, "pinned round should match across pages")
+
+	// Test round too far in the future returns an error
+	_, err = testClient.ApplicationBoxesPage(createdAppID, 3, "", "", false, pinnedRound+1_000_000)
+	a.Error(err, "round far in the future should fail")
 
 	// Test legacy (no pagination) still works
 	legacyResp, err := testClient.ApplicationBoxes(createdAppID, 0)

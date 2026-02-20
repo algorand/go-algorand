@@ -48,5 +48,6 @@ var (
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
 	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"
+	errRoundTooOld                             = "given round is no longer available; use a more recent round"
 	errFailedRetrievingTracer                  = "failed retrieving the expected tracer from ledger"
 )

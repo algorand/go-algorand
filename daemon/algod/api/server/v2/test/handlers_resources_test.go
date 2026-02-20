@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -54,6 +55,7 @@ type mockLedger struct {
 	accounts map[basics.Address]basics.AccountData
 	kvstore  map[string][]byte
 	latest   basics.Round
+	minRound basics.Round // if > 0, rounds below this return RoundOffsetError
 	blocks   []bookkeeping.Block
 	tracer   logic.EvalTracer
 }
@@ -94,6 +96,9 @@ func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, ma
 }
 
 func (l *mockLedger) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error) {
+	if l.minRound > 0 && round < l.minRound {
+		return nil, 0, false, &ledger.RoundOffsetError{}
+	}
 	var results []ledgercore.KvPairResult
 	var keys []string
 	for k := range l.kvstore {
@@ -1295,5 +1300,89 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, resp.Boxes, 1, "default 1MB cap limits to 1 of 2 large boxes")
 		assert.NotNil(t, resp.NextToken, "more data exists")
+	})
+
+	t.Run("RoundSpecified", func(t *testing.T) {
+		// Specifying a valid round should return results at that round.
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		round := basics.Round(10) // matches mock's latest
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Round: &round,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 3)
+		assert.NotNil(t, resp.Round)
+		assert.Equal(t, uint64(10), *resp.Round)
+	})
+
+	t.Run("RoundTooNew", func(t *testing.T) {
+		// Round beyond latest should return 400.
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		round := basics.Round(999)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Round: &round,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("RoundNotSpecified", func(t *testing.T) {
+		// Without a round, should use latest (existing behavior).
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.NotNil(t, resp.Round)
+		assert.Equal(t, uint64(10), *resp.Round)
+	})
+
+	t.Run("RoundTooOld", func(t *testing.T) {
+		// A round that passes the handler's "not too new" check but is
+		// rejected by the ledger as too old should return 400.
+		ml := mockLedger{
+			accounts: make(map[basics.Address]basics.AccountData),
+			kvstore:  make(map[string][]byte),
+			latest:   basics.Round(10),
+			minRound: basics.Round(5),
+		}
+		for _, name := range boxNames {
+			key := apps.MakeBoxKey(uint64(appID), name)
+			ml.kvstore[key] = []byte("value_" + name)
+		}
+		mockNode := makeMockNode(&ml, t.Name(), nil, cannedStatusReportGolden, false)
+		mockNode.config.MaxAPIBoxPerApplication = 0
+		dummyShutdownChan := make(chan struct{})
+		h := v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+		}
+
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		round := basics.Round(3) // below minRound
+		err := h.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Round: &round,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 400, rec.Code)
+		assert.Contains(t, rec.Body.String(), "no longer available")
 	})
 }
