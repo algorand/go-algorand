@@ -110,9 +110,11 @@ func TestStreamNonDialedOutgoingConnection(t *testing.T) {
 	require.Len(t, conns, 1)
 	require.Equal(t, network.DirOutbound, conns[0].Stat().Direction)
 
-	// Check that the log contains the expected message for non-dialed outgoing connection
-	logOutput := logBuffer.String()
+	// Check that the log contains the expected message for non-dialed outgoing connection.
+	// Connected handler runs in a goroutine, so wait for the log message to appear.
 	expectedMsg := "ignoring non-dialed outgoing peer ID"
-	require.Contains(t, logOutput, expectedMsg)
-	require.Contains(t, logOutput, listenerHost.ID().String())
+	require.Eventually(t, func() bool {
+		logOutput := logBuffer.String()
+		return strings.Contains(logOutput, expectedMsg) && strings.Contains(logOutput, listenerHost.ID().String())
+	}, 5*time.Second, 50*time.Millisecond)
 }
