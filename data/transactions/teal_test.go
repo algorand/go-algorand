@@ -140,8 +140,10 @@ func TestEvalDeltaEqual(t *testing.T) {
 	d1 = EvalDelta{
 		InnerTxns: []SignedTxnWithAD{{
 			SignedTxn: SignedTxn{
-				Lsig: LogicSig{
-					Logic: []byte{0x01},
+				SignatureFields: SignatureFields{
+					Lsig: LogicSig{
+						Logic: []byte{0x01},
+					},
 				},
 			},
 		}},
@@ -149,8 +151,10 @@ func TestEvalDeltaEqual(t *testing.T) {
 	d2 = EvalDelta{
 		InnerTxns: []SignedTxnWithAD{{
 			SignedTxn: SignedTxn{
-				Lsig: LogicSig{
-					Logic: []byte{0x01},
+				SignatureFields: SignatureFields{
+					Lsig: LogicSig{
+						Logic: []byte{0x01},
+					},
 				},
 			},
 		}},
@@ -159,9 +163,11 @@ func TestEvalDeltaEqual(t *testing.T) {
 	d2 = EvalDelta{
 		InnerTxns: []SignedTxnWithAD{{
 			SignedTxn: SignedTxn{
-				Lsig: LogicSig{
-					Logic: []byte{0x02},
-					Args:  [][]byte{},
+				SignatureFields: SignatureFields{
+					Lsig: LogicSig{
+						Logic: []byte{0x02},
+						Args:  [][]byte{},
+					},
 				},
 			},
 		}},

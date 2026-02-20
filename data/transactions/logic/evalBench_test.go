@@ -33,7 +33,12 @@ func BenchmarkCheckSignature(b *testing.B) {
 	txns := txntest.CreateTinyManTxGroup(b, true)
 	ops, err := logic.AssembleString(txntest.TmLsig)
 	require.NoError(b, err)
-	stxns := []transactions.SignedTxn{{Txn: txns[3].Txn(), Lsig: transactions.LogicSig{Logic: ops.Program}}}
+	stxns := []transactions.SignedTxn{{
+		Txn: txns[3].Txn(),
+		SignatureFields: transactions.SignatureFields{
+			Lsig: transactions.LogicSig{Logic: ops.Program},
+		},
+	}}
 	ep := logic.NewSigEvalParams(stxns, &proto, &logic.NoHeaderLedger{})
 	b.ResetTimer()
 

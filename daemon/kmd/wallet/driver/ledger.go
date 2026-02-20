@@ -346,7 +346,9 @@ func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pk crypto.P
 
 	stxn := transactions.SignedTxn{
 		Txn: tx,
-		Sig: sig,
+		SignatureFields: transactions.SignatureFields{
+			Sig: sig,
+		},
 	}
 
 	// Set the AuthAddr if the key we signed with doesn't match the txn sender
