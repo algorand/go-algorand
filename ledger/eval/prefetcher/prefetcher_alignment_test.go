@@ -327,7 +327,7 @@ func (ld *ledgerData) pretend(before ...basics.Address) {
 func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) ledgerData {
 	group := makeGroupFromTxn(txn)
 
-	ch := prefetcher.PrefetchResources(
+	ch := prefetcher.Payset(
 		context.Background(), l, 1,
 		[][]transactions.SignedTxnWithAD{group},
 		feeSink(), config.Consensus[proto])

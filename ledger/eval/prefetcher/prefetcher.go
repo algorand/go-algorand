@@ -87,8 +87,8 @@ type LoadedTransactionGroup struct {
 	Err error
 }
 
-// resourcePrefetcher used to prefetch accounts balances and resources before the evaluator is called.
-type resourcePrefetcher struct {
+// paysetPrefetcher used to prefetch accounts balances and resources before the evaluator is called.
+type paysetPrefetcher struct {
 	ledger          Ledger
 	rnd             basics.Round
 	txnGroups       [][]transactions.SignedTxnWithAD
@@ -97,12 +97,12 @@ type resourcePrefetcher struct {
 	outChan         chan LoadedTransactionGroup
 }
 
-// PrefetchResources loads the resources for the provided transaction group
-// list. It also loads the feeSink account and adds it to the first returned
-// transaction group.  The order of the transaction groups returned by the
-// channel is identical to the one in the input array.
-func PrefetchResources(ctx context.Context, l Ledger, rnd basics.Round, txnGroups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
-	prefetcher := &resourcePrefetcher{
+// Payset loads the resources for the provided transaction group list. It also
+// loads the feeSink account and adds it to the first returned transaction
+// group.  The order of the transaction groups returned by the channel is
+// identical to the one in the input array.
+func Payset(ctx context.Context, l Ledger, rnd basics.Round, txnGroups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
+	prefetcher := &paysetPrefetcher{
 		ledger:          l,
 		rnd:             rnd,
 		txnGroups:       txnGroups,
@@ -295,7 +295,7 @@ func (pq *preloaderTaskQueue) addKvTask(app basics.AppIndex, name []byte, wt *gr
 // prefetch would process the input transaction groups by analyzing each of the transaction groups and building
 // an execution queue that would allow us to fetch all the dependencies for the input transaction groups in order
 // and output these onto a channel.
-func (p *resourcePrefetcher) prefetch(ctx context.Context) {
+func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 	defer close(p.outChan)
 	accountTasks := make(map[basics.Address]*preloaderTask)
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
@@ -390,6 +390,10 @@ func (p *resourcePrefetcher) prefetch(ctx context.Context) {
 				// Prefetch boxes, they ought to be precise
 				for _, br := range stxn.Txn.Boxes {
 					if len(br.Name) == 0 {
+						continue
+					}
+					// defense: we don't even know if WellFormed yet.
+					if br.Index > uint64(len(stxn.Txn.ForeignApps)) {
 						continue
 					}
 					app := stxn.Txn.ApplicationID
@@ -608,7 +612,7 @@ func (gt *groupTask) markCompletionError(err error, task *preloaderTask, groupDo
 	}
 }
 
-func (p *resourcePrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskIdx *atomic.Int64, groupDoneCh chan groupTaskDone) {
+func (p *paysetPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskIdx *atomic.Int64, groupDoneCh chan groupTaskDone) {
 	var task *preloaderTask
 	for {
 		nextTaskIdx := taskIdx.Add(1)
