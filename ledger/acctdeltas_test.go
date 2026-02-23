@@ -3691,11 +3691,15 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	accts := setupAccts(5)
 
-	var testAddr basics.Address
+	var testAddr, addr2 basics.Address
 	for addr := range accts[0] {
 		if addr != testSinkAddr && addr != testPoolAddr {
-			testAddr = addr
-			break
+			if testAddr.IsZero() {
+				testAddr = addr
+			} else {
+				addr2 = addr
+				break
+			}
 		}
 	}
 
@@ -3714,13 +3718,14 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	//   1003: will have params-only modification in delta
 	//   1004: will have params deleted in delta (holding remains)
 	//   1005: will have both holding and params deleted in delta
+	//   1007: will be fully deleted in a committed round; addr2 opts in with zero balance
 	{
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(testAddr, ledgercore.AccountData{
 			AccountBaseData: ledgercore.AccountBaseData{
 				MicroAlgos:       basics.MicroAlgos{Raw: 1_000_000},
-				TotalAssetParams: 6,
-				TotalAssets:      6,
+				TotalAssetParams: 7,
+				TotalAssets:      7,
 			},
 		})
 		for assetIdx := uint64(1000); assetIdx <= 1005; assetIdx++ {
@@ -3737,6 +3742,29 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 				})
 		}
 
+		// 1007: testAddr is creator; addr2 opts in with zero balance and asset will be deleted
+		//       in a committed round to test that surviving holdings of deleted assets are returned.
+		updates.UpsertAssetResource(testAddr, basics.AssetIndex(1007),
+			ledgercore.AssetParamsDelta{
+				Params: &basics.AssetParams{
+					Total:     7000,
+					UnitName:  "A1007",
+					AssetName: "Asset1007",
+				},
+			},
+			ledgercore.AssetHoldingDelta{
+				Holding: &basics.AssetHolding{Amount: 7000},
+			})
+		updates.Upsert(addr2, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos:  basics.MicroAlgos{Raw: 1_000_000},
+				TotalAssets: 1,
+			},
+		})
+		updates.UpsertAssetResource(addr2, basics.AssetIndex(1007),
+			ledgercore.AssetParamsDelta{},
+			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+
 		base := accts[0]
 		newAccts := applyPartialDeltas(base, updates)
 		accts = append(accts, newAccts)
@@ -3748,11 +3776,25 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 		for assetIdx := uint64(1000); assetIdx <= 1005; assetIdx++ {
 			knownCreatables[basics.CreatableIndex(assetIdx)] = true
 		}
+		knownCreatables[basics.CreatableIndex(1007)] = true
 	}
 
-	// Add empty rounds so round 1 data flushes past MaxAcctLookback into DB
+	// Add empty rounds so round 1 data flushes past MaxAcctLookback into DB.
+	// Round 2 destroys asset 1007, committing its deletion; addr2's zero holding survives.
 	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
 		var updates ledgercore.AccountDeltas
+		if i == 2 {
+			updates.Upsert(testAddr, ledgercore.AccountData{
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:       basics.MicroAlgos{Raw: 1_000_000},
+					TotalAssetParams: 6,
+					TotalAssets:      6,
+				},
+			})
+			updates.UpsertAssetResource(testAddr, basics.AssetIndex(1007),
+				ledgercore.AssetParamsDelta{Deleted: true},
+				ledgercore.AssetHoldingDelta{Deleted: true})
+		}
 		base := accts[i-1]
 		newAccts := applyPartialDeltas(base, updates)
 		accts = append(accts, newAccts)
@@ -3866,6 +3908,20 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1006)].AssetParams)
 	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetParams.Total)
+
+	// addr2 opted in to asset 1007 with a zero balance before it was destroyed. The protocol
+	// does not track all opt-outs when an asset is deleted (only the creator's holding is
+	// enforced), so addr2's holding persists in the DB even after the asset params are gone.
+	// The lookup must return a non-nil holding with zero amount and no params or creator.
+	addr2Resources, addr2Rnd, err := au.LookupAssetResources(addr2, 0, 100)
+	require.NoError(t, err)
+	require.Equal(t, deltaRound2, addr2Rnd)
+	require.Len(t, addr2Resources, 1)
+	require.Equal(t, basics.AssetIndex(1007), addr2Resources[0].AssetID)
+	require.NotNil(t, addr2Resources[0].AssetHolding)
+	require.Equal(t, uint64(0), addr2Resources[0].AssetHolding.Amount)
+	require.Nil(t, addr2Resources[0].AssetParams)
+	require.True(t, addr2Resources[0].Creator.IsZero())
 }
 
 // TestLookupApplicationResourcesWithDeltas verifies that lookupApplicationResources properly
