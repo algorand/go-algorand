@@ -111,6 +111,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 		}
 		// otherwise, the old stream is still open, so we can close the new one
 		stream.Close()
+		dispatched = true
 		return
 	}
 	// no old stream
