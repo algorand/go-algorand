@@ -61,13 +61,24 @@ const incomingThreads = 20 // matches to number wsNetwork workers
 // by using the same proportions as pubsub defaults - see GossipSubD, GossipSubDlo, etc.
 func deriveGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams {
 	params := pubsub.DefaultGossipSubParams()
+	if numOutgoingConns <= 1 {
+		// pubsub v0.15.0 requires Dout < D/2, which is unsatisfiable for D <= 1.
+		// Use the all-zero bypass for bootstrapper/minimal nodes.
+		params.D = 0
+		params.Dlo = 0
+		params.Dhi = 0
+		params.Dscore = 0
+		params.Dout = 0
+		return params
+	}
 	params.D = numOutgoingConns
 	params.Dlo = params.D - 1
-	if params.Dlo <= 0 {
-		params.Dlo = params.D
-	}
 	params.Dscore = params.D * 2 / 3
-	params.Dout = params.D * 1 / 3
+	params.Dout = params.D / 3
+	// pubsub v0.15.0 validates Dout < D/2 (integer division)
+	if params.Dout >= params.D/2 {
+		params.Dout = params.D/2 - 1
+	}
 	return params
 }
 

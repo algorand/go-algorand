@@ -1740,6 +1740,12 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 		return len(netB.GetPeers(PeersConnectedOut)) == 1
 	}, time.Second, 50*time.Millisecond)
 
+	// netA is the server for this connection, so it receives the identity
+	// verification message asynchronously over WebSocket -- wait for it.
+	assert.Eventually(t, func() bool {
+		return netA.identityTracker.(*mockIdentityTracker).getSetCount() == 1
+	}, time.Second, 50*time.Millisecond)
+
 	// confirm that at this point the identityTracker was called once per network
 	//	and inserted once per network
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())

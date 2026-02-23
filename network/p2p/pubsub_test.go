@@ -53,21 +53,33 @@ func TestPubsub_GossipSubParamsEdgeCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// D = 1 => Dlo must not drop below 1
-	cfg := config.GetDefaultLocal()
-	cfg.GossipFanout = 1
-	p := deriveGossipSubParams(cfg.GossipFanout)
-	require.Equal(t, 1, p.D)
-	require.Equal(t, 1, p.Dlo)
-	require.Equal(t, 0, p.Dscore)
-	require.Equal(t, 0, p.Dout)
+	// D <= 1 triggers all-zero bypass for pubsub v0.15.0 compatibility
+	for _, fanout := range []int{0, 1} {
+		cfg := config.GetDefaultLocal()
+		cfg.GossipFanout = fanout
+		p := deriveGossipSubParams(cfg.GossipFanout)
+		require.Equal(t, 0, p.D)
+		require.Equal(t, 0, p.Dlo)
+		require.Equal(t, 0, p.Dhi)
+		require.Equal(t, 0, p.Dscore)
+		require.Equal(t, 0, p.Dout)
+	}
 
-	// D = 0 => keep Dlo = D (0) instead of negative
+	// D = 2 => minimal non-zero mesh
+	cfg := config.GetDefaultLocal()
+	cfg.GossipFanout = 2
+	p := deriveGossipSubParams(cfg.GossipFanout)
+	require.Equal(t, 2, p.D)
+	require.Equal(t, 1, p.Dlo)
+	require.Equal(t, 1, p.Dscore)
+	require.Equal(t, 0, p.Dout) // D/3=0, and 0 < D/2=1
+
+	// D = 3 => Dout capped to satisfy Dout < D/2
 	cfg = config.GetDefaultLocal()
-	cfg.GossipFanout = 0
+	cfg.GossipFanout = 3
 	p = deriveGossipSubParams(cfg.GossipFanout)
-	require.Equal(t, 0, p.D)
-	require.Equal(t, 0, p.Dlo)
-	require.Equal(t, 0, p.Dscore)
-	require.Equal(t, 0, p.Dout)
+	require.Equal(t, 3, p.D)
+	require.Equal(t, 2, p.Dlo)
+	require.Equal(t, 2, p.Dscore)
+	require.Equal(t, 0, p.Dout) // D/3=1 but D/2=1, so capped to 0
 }
