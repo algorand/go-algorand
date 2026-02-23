@@ -3919,7 +3919,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Len(t, addr2Resources, 1)
 	require.Equal(t, basics.AssetIndex(1007), addr2Resources[0].AssetID)
 	require.NotNil(t, addr2Resources[0].AssetHolding)
-	require.Equal(t, uint64(0), addr2Resources[0].AssetHolding.Amount)
+	require.Equal(t, basics.AssetHolding{}, addr2Resources[0].AssetHolding)
 	require.Nil(t, addr2Resources[0].AssetParams)
 	require.True(t, addr2Resources[0].Creator.IsZero())
 }
