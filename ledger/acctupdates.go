@@ -1241,7 +1241,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 		deltaResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
 		numDeltaDeleted := 0
 
-		for i := currentDeltaLen-1; i > 0; i-- {
+		for i := currentDeltaLen - 1; i > 0; i-- {
 			for _, rec := range au.deltas[i].Accts.AssetResources {
 				if rec.Addr != addr || rec.Aidx <= assetIDGT {
 					continue
