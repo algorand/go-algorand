@@ -27,6 +27,7 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	connmgrcore "github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -149,16 +150,20 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		addrFactory = addressFilter
 	}
 
-	connLimits := deriveConnLimits(cfg)
-	rm, err := configureResourceManager(connLimits)
-	if err != nil {
-		return nil, "", err
-	}
+	var rm network.ResourceManager
+	var cm connmgrcore.ConnManager
+	connLimits, unbounded := deriveConnLimits(cfg)
+	if !unbounded {
+		rm, err = configureResourceManager(connLimits)
+		if err != nil {
+			return nil, "", err
+		}
 
-	cm, err := connmgr.NewConnManager(connLimits.connMgrLow, connLimits.connMgrHigh,
-		connmgr.WithGracePeriod(20*time.Second))
-	if err != nil {
-		return nil, "", err
+		cm, err = connmgr.NewConnManager(connLimits.connMgrLow, connLimits.connMgrHigh,
+			connmgr.WithGracePeriod(20*time.Second))
+		if err != nil {
+			return nil, "", err
+		}
 	}
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),
@@ -186,8 +191,12 @@ type connLimitConfig struct {
 // deriveConnLimits computes connection manager and resource manager limits
 // from the node configuration. Listen servers use IncomingConnectionsLimit;
 // client nodes use tighter limits based on GossipFanout.
-func deriveConnLimits(cfg config.Local) connLimitConfig {
+func deriveConnLimits(cfg config.Local) (connLimitConfig, bool) {
 	var low, high, rcmgrConns int
+	if cfg.IsListenServer() && cfg.IncomingConnectionsLimit < 0 {
+		// respect config, unbounded configuration
+		return connLimitConfig{}, true
+	}
 	if cfg.IsListenServer() {
 		high = cfg.IncomingConnectionsLimit
 		low = high * 96 / 100
@@ -204,7 +213,7 @@ func deriveConnLimits(cfg config.Local) connLimitConfig {
 		connMgrLow:  low,
 		connMgrHigh: high,
 		rcmgrConns:  rcmgrConns,
-	}
+	}, false
 }
 
 func configureResourceManager(limits connLimitConfig) (network.ResourceManager, error) {
