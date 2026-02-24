@@ -7,7 +7,9 @@
 #   CHANNEL         - Release channel (stable, beta, nightly, dev)
 #   PKG_NAME        - Package name: "algorand" for most channels, "algorand-beta" for beta
 #   DEFAULTNETWORK  - Default genesis network (mainnet, betanet, devnet)
-#   BINDIR          - Directory containing built binaries
+#   BINDIR              - Directory containing built binaries
+#   CONFLICTS_PKG_NAME  - The opposite channel variant to conflict with
+#                         (e.g., "algorand-beta" when building "algorand", and vice versa)
 
 name: ${PKG_NAME}
 arch: ${GOARCH}
@@ -28,11 +30,9 @@ depends:
 recommends:
   - unattended-upgrades
 replaces:
-  - algorand
-  - algorand-beta
+  - ${CONFLICTS_PKG_NAME}
 conflicts:
-  - algorand
-  - algorand-beta
+  - ${CONFLICTS_PKG_NAME}
 
 contents:
   # Main binaries (expand: true required for env var expansion in src/dst)

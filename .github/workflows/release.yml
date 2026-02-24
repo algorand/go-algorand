@@ -206,7 +206,7 @@ jobs:
 
       - name: Install nFPM
         run: |
-          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.45.0
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Compute package names
@@ -216,12 +216,18 @@ jobs:
           if [ "$CHANNEL" = "beta" ]; then
             PKG_NAME="algorand-beta"
             DEVTOOLS_PKG_NAME="algorand-devtools-beta"
+            CONFLICTS_PKG_NAME="algorand"
+            CONFLICTS_DEVTOOLS_PKG_NAME="algorand-devtools"
           else
             PKG_NAME="algorand"
             DEVTOOLS_PKG_NAME="algorand-devtools"
+            CONFLICTS_PKG_NAME="algorand-beta"
+            CONFLICTS_DEVTOOLS_PKG_NAME="algorand-devtools-beta"
           fi
           echo "pkg_name=${PKG_NAME}" >> "$GITHUB_OUTPUT"
           echo "devtools_pkg_name=${DEVTOOLS_PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "conflicts_pkg_name=${CONFLICTS_PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "conflicts_devtools_pkg_name=${CONFLICTS_DEVTOOLS_PKG_NAME}" >> "$GITHUB_OUTPUT"
           echo "Package name: ${PKG_NAME}"
           echo "Devtools package name: ${DEVTOOLS_PKG_NAME}"
 
@@ -291,6 +297,8 @@ jobs:
           SRCDIR: ${{ github.workspace }}
           PKG_NAME: ${{ steps.pkgname.outputs.pkg_name }}
           DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.devtools_pkg_name }}
+          CONFLICTS_PKG_NAME: ${{ steps.pkgname.outputs.conflicts_pkg_name }}
+          CONFLICTS_DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.conflicts_devtools_pkg_name }}
         run: |
           mkdir -p dist
 
@@ -316,6 +324,8 @@ jobs:
           SRCDIR: ${{ github.workspace }}
           PKG_NAME: ${{ steps.pkgname.outputs.pkg_name }}
           DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.devtools_pkg_name }}
+          CONFLICTS_PKG_NAME: ${{ steps.pkgname.outputs.conflicts_pkg_name }}
+          CONFLICTS_DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.conflicts_devtools_pkg_name }}
         run: |
           # Build main algorand package
           nfpm pkg \
