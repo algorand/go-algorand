@@ -7,7 +7,9 @@
 #   CHANNEL             - Release channel (stable, beta, nightly, dev)
 #   PKG_NAME            - Base package name: "algorand" or "algorand-beta"
 #   DEVTOOLS_PKG_NAME   - Devtools package name: "algorand-devtools" or "algorand-devtools-beta"
-#   TOOLSDIR            - Directory containing devtools binaries (tools/ subdirectory)
+#   TOOLSDIR                    - Directory containing devtools binaries (tools/ subdirectory)
+#   CONFLICTS_DEVTOOLS_PKG_NAME - The opposite channel variant to conflict with
+#                                 (e.g., "algorand-devtools-beta" when building "algorand-devtools")
 
 name: ${DEVTOOLS_PKG_NAME}
 arch: ${GOARCH}
@@ -28,12 +30,10 @@ depends:
   - ${PKG_NAME} (>= ${VERSION})
 
 replaces:
-  - algorand-devtools
-  - algorand-devtools-beta
+  - ${CONFLICTS_DEVTOOLS_PKG_NAME}
 
 conflicts:
-  - algorand-devtools
-  - algorand-devtools-beta
+  - ${CONFLICTS_DEVTOOLS_PKG_NAME}
 
 contents:
   # Development tool binaries (expand: true required for env var expansion)
