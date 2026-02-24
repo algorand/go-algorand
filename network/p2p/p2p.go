@@ -150,21 +150,16 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		addrFactory = addressFilter
 	}
 
-	var rm network.ResourceManager
-	var cm connmgrcore.ConnManager
-	connLimits, unbounded := deriveConnLimits(cfg)
-	if !unbounded {
-		rm, err = configureResourceManager(connLimits)
-		if err != nil {
-			return nil, "", err
-		}
-
-		cm, err = connmgr.NewConnManager(connLimits.connMgrLow, connLimits.connMgrHigh,
-			connmgr.WithGracePeriod(20*time.Second))
-		if err != nil {
-			return nil, "", err
-		}
+	connLimits := deriveConnLimits(cfg)
+	rm, err := configureResourceManager(connLimits)
+	if err != nil {
+		return nil, "", err
 	}
+	cm, err := configureConnManager(connLimits)
+	if err != nil {
+		return nil, "", err
+	}
+
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),
 		libp2p.UserAgent(ua),
@@ -183,37 +178,40 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 
 // connLimitConfig holds derived connection limits for both the connmgr and rcmgr.
 type connLimitConfig struct {
-	connMgrLow  int
-	connMgrHigh int
-	rcmgrConns  int
+	connMgrLow         int
+	connMgrHigh        int
+	rcmgrConns         int
+	rcmgrConnsOutbound int
 }
 
 // deriveConnLimits computes connection manager and resource manager limits
 // from the node configuration. Listen servers use IncomingConnectionsLimit;
 // client nodes use tighter limits based on GossipFanout.
-func deriveConnLimits(cfg config.Local) (connLimitConfig, bool) {
-	var low, high, rcmgrConns int
-	if cfg.IsListenServer() && cfg.IncomingConnectionsLimit < 0 {
-		// respect config, unbounded configuration
-		return connLimitConfig{}, true
-	}
+func deriveConnLimits(cfg config.Local) connLimitConfig {
+	var low, high, rcmgrConns, rcmgrConnsOutbound int
+	rcmgrConnsOutbound = cfg.GossipFanout * 3
 	if cfg.IsListenServer() {
-		high = cfg.IncomingConnectionsLimit
-		low = high * 96 / 100
-		rcmgrConns = high
+		if cfg.IncomingConnectionsLimit < 0 {
+			rcmgrConns = 0 // 0 means no total conns
+			high = 0
+			low = 0
+		} else {
+			rcmgrConns = rcmgrConnsOutbound + cfg.IncomingConnectionsLimit
+			high = rcmgrConns
+			low = high * 96 / 100
+		}
 	} else {
-		high = cfg.GossipFanout * 3
+		rcmgrConns = rcmgrConnsOutbound + cfg.GossipFanout*3
+		high = rcmgrConnsOutbound
 		low = cfg.GossipFanout * 2
-		rcmgrConns = cfg.GossipFanout * 6
 	}
-	low = max(low, min(high, 1))
-	high = max(high, low)
-	rcmgrConns = max(rcmgrConns, high)
+
 	return connLimitConfig{
-		connMgrLow:  low,
-		connMgrHigh: high,
-		rcmgrConns:  rcmgrConns,
-	}, false
+		connMgrLow:         low,
+		connMgrHigh:        high,
+		rcmgrConns:         rcmgrConns,
+		rcmgrConnsOutbound: rcmgrConnsOutbound,
+	}
 }
 
 func configureResourceManager(limits connLimitConfig) (network.ResourceManager, error) {
@@ -222,15 +220,29 @@ func configureResourceManager(limits connLimitConfig) (network.ResourceManager, 
 	libp2p.SetDefaultServiceLimits(&scalingLimits)
 	scaledDefaultLimits := scalingLimits.AutoScale()
 
+	systemLimits := rcmgr.ResourceLimits{}
+	if limits.rcmgrConns > 0 {
+		systemLimits.Conns = rcmgr.LimitVal(limits.rcmgrConns)
+	}
+	if limits.rcmgrConnsOutbound > 0 {
+		systemLimits.ConnsOutbound = rcmgr.LimitVal(limits.rcmgrConnsOutbound)
+	}
+
 	limitConfig := rcmgr.PartialLimitConfig{
-		System: rcmgr.ResourceLimits{
-			Conns: rcmgr.LimitVal(limits.rcmgrConns),
-		},
+		System: systemLimits,
 		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
 	}
 	limiter := rcmgr.NewFixedLimiter(limitConfig.Build(scaledDefaultLimits))
 	rm, err := rcmgr.NewResourceManager(limiter)
 	return rm, err
+}
+
+func configureConnManager(limits connLimitConfig) (connmgrcore.ConnManager, error) {
+	if limits.connMgrHigh > 0 && limits.connMgrLow > 0 {
+		return connmgr.NewConnManager(limits.connMgrLow, limits.connMgrHigh,
+			connmgr.WithGracePeriod(20*time.Second))
+	}
+	return nil, nil
 }
 
 // StreamHandlerPair is a struct that contains a protocol ID and a StreamHandler

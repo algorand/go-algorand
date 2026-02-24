@@ -300,11 +300,12 @@ func TestDeriveConnLimits_Server(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = ":4160"
 	cfg.IncomingConnectionsLimit = 2400
-	limits, unbounded := deriveConnLimits(cfg)
-	require.False(t, unbounded)
-	require.Equal(t, 2400, limits.rcmgrConns)
-	require.Equal(t, 2400, limits.connMgrHigh)
-	require.Equal(t, 2304, limits.connMgrLow) // 2400 * 96 / 100
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2400+12, limits.rcmgrConns)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 2412, limits.connMgrHigh)
+	require.Equal(t, 2315, limits.connMgrLow) // 2412 * 96 / 100
 	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
 }
 
@@ -315,9 +316,12 @@ func TestDeriveConnLimits_UnboundedServer(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.NetAddress = ":4160"
 	cfg.IncomingConnectionsLimit = -1
-	limits, unbounded := deriveConnLimits(cfg)
-	require.True(t, unbounded)
-	require.Equal(t, connLimitConfig{}, limits)
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 0, limits.rcmgrConns)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 0, limits.connMgrHigh)
+	require.Equal(t, 0, limits.connMgrLow)
 }
 
 func TestDeriveConnLimits_Client(t *testing.T) {
@@ -326,17 +330,16 @@ func TestDeriveConnLimits_Client(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = 4
-	limits, unbounded := deriveConnLimits(cfg)
-	require.False(t, unbounded)
-	require.Equal(t, 24, limits.rcmgrConns)  // 4 * 6
-	require.Equal(t, 12, limits.connMgrHigh) // 4 * 3
-	require.Equal(t, 8, limits.connMgrLow)   // 4 * 2
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 24, limits.rcmgrConns)         // 4 * 6
+	require.Equal(t, 12, limits.rcmgrConnsOutbound) // 4 * 3
+	require.Equal(t, 12, limits.connMgrHigh)        // 4 * 3
+	require.Equal(t, 8, limits.connMgrLow)          // 4 * 2
 	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
 
 	// ensure cfg.IncomingConnectionsLimit = -1 does not affect client limits
 	cfg.IncomingConnectionsLimit = -1
-	newLimits, unbounded := deriveConnLimits(cfg)
-	require.False(t, unbounded)
+	newLimits := deriveConnLimits(cfg)
 	require.Equal(t, limits, newLimits)
 }
 
@@ -348,9 +351,9 @@ func TestDeriveConnLimits_HybridClient(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableP2PHybridMode = true
 	cfg.GossipFanout = 4
-	limits, unbounded := deriveConnLimits(cfg)
-	require.False(t, unbounded)
+	limits := deriveConnLimits(cfg)
 	require.Equal(t, 24, limits.rcmgrConns)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
 	require.Equal(t, 12, limits.connMgrHigh)
 	require.Equal(t, 8, limits.connMgrLow)
 	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
@@ -365,11 +368,11 @@ func TestDeriveConnLimits_HybridServer(t *testing.T) {
 	cfg.NetAddress = ":4160"
 	cfg.P2PHybridNetAddress = ":4190"
 	cfg.IncomingConnectionsLimit = 2400
-	limits, unbounded := deriveConnLimits(cfg)
-	require.False(t, unbounded)
-	require.Equal(t, 2400, limits.rcmgrConns)
-	require.Equal(t, 2400, limits.connMgrHigh)
-	require.Equal(t, 2304, limits.connMgrLow)
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2412, limits.rcmgrConns)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 2412, limits.connMgrHigh)
+	require.Equal(t, 2315, limits.connMgrLow)
 	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
 }
 
@@ -379,9 +382,9 @@ func TestDeriveConnLimits_ZeroFanout(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = 0
-	limits, unbounded := deriveConnLimits(cfg)
-	require.False(t, unbounded)
+	limits := deriveConnLimits(cfg)
 	require.GreaterOrEqual(t, limits.connMgrLow, 0) // zero means zero
 	require.GreaterOrEqual(t, limits.connMgrHigh, limits.connMgrLow)
 	require.GreaterOrEqual(t, limits.rcmgrConns, limits.connMgrHigh)
+	require.Equal(t, 0, limits.rcmgrConnsOutbound)
 }
