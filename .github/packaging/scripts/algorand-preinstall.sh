@@ -23,7 +23,9 @@ To install this package, first remove the existing package:\n\n\
     fi
 elif command -v rpm &> /dev/null; then
     # RHEL/Fedora/CentOS
-    # Create algorand system user if it doesn't exist
+    # Create algorand system group and user if they don't exist
+    getent group algorand >/dev/null || \
+        groupadd --system algorand >/dev/null
     getent passwd algorand >/dev/null || \
-        useradd --system --home-dir /var/lib/algorand --no-create-home algorand >/dev/null
+        useradd --system --gid algorand --home-dir /var/lib/algorand --no-create-home algorand >/dev/null
 fi
