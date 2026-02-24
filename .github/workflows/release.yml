@@ -591,19 +591,54 @@ jobs:
         run: |
           go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.3
 
-          # Run scan, capture output and exit code
-          osv-scanner scan --recursive . 2>&1 | tee osv-output.txt; SCAN_EXIT=${PIPESTATUS[0]}
+          # Run scan with JSON output for deterministic parsing.
+          # osv-scanner exits non-zero when vulnerabilities are found.
+          set +e
+          osv-scanner scan --recursive --format json . > osv-results.json 2>osv-stderr.txt
+          SCAN_EXIT=$?
+          set -e
 
           if [ "$SCAN_EXIT" -eq 0 ]; then
             echo "No vulnerabilities found."
             exit 0
           fi
 
-          # Parse summary line for critical count
-          CRITICAL=$(grep -oP '\d+ Critical' osv-output.txt | grep -oP '^\d+' || echo "0")
+          # Also produce human-readable table for the job log
+          osv-scanner scan --recursive . 2>&1 || true
+
+          # Check for critical vulnerabilities using structured JSON.
+          # The OSV schema stores severity as CVSS vector strings in
+          # severity[].score. For CVSS_V3, the vector looks like:
+          #   CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+          # We can't easily compute the base score from the vector in jq,
+          # so we check two reliable sources:
+          #
+          # 1. database_specific.severity — used by GitHub Advisory DB and
+          #    Go Vulnerability DB. Values: "CRITICAL", "HIGH", "MODERATE", "LOW".
+          #
+          # 2. database_specific.cvss_score — numeric score included by some
+          #    advisory sources. Critical = >= 9.0.
+          CRITICAL=$(jq '
+            [
+              .results[]?.packages[]?.vulnerabilities[]? |
+              (
+                # Source 1: explicit severity label
+                (.database_specific?.severity? // "" | ascii_upcase | select(. == "CRITICAL")),
+                # Source 2: numeric CVSS score >= 9.0
+                (.database_specific?.cvss_score? // 0 | select(. >= 9.0) | "CRITICAL")
+              )
+            ] | unique | length
+          ' osv-results.json 2>/dev/null || echo "0")
 
           if [ "$CRITICAL" -gt 0 ]; then
-            echo "::error::Found ${CRITICAL} critical vulnerabilities — failing build."
+            echo "::error::Found critical vulnerabilities — failing build. See JSON output for details."
+            # Output the critical findings for debugging
+            jq '.results[]?.packages[]? | select(
+              .vulnerabilities[]? | (
+                (.database_specific?.severity? // "" | ascii_upcase) == "CRITICAL" or
+                (.database_specific?.cvss_score? // 0) >= 9.0
+              )
+            ) | {package: .package.name, version: .package.version, vulns: [.vulnerabilities[].id]}' osv-results.json 2>/dev/null || true
             exit 1
           else
             echo "::warning::Vulnerabilities found (no criticals). See job log for details."
