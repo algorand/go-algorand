@@ -25,23 +25,26 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
-var otelSetupOnce sync.Once
+var (
+	otelSetupOnce sync.Once
+	otelSetupErr  error
+)
 
 // SetupOTelPrometheusExporter initializes an OpenTelemetry MeterProvider backed
 // by the Prometheus default registerer. After this call, any OTEL instruments
 // (e.g. those in go-libp2p-kad-dht) will be visible through
 // prometheus.DefaultGatherer and therefore collected by PrometheusDefaultMetrics.
 // Safe to call multiple times; only the first call takes effect.
+// If the first call fails, subsequent calls return the same error.
 func SetupOTelPrometheusExporter() error {
-	var setupErr error
 	otelSetupOnce.Do(func() {
 		exporter, err := otelprom.New()
 		if err != nil {
-			setupErr = fmt.Errorf("creating OTEL Prometheus exporter: %w", err)
+			otelSetupErr = fmt.Errorf("creating OTEL Prometheus exporter: %w", err)
 			return
 		}
 		provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(exporter))
 		otel.SetMeterProvider(provider)
 	})
-	return setupErr
+	return otelSetupErr
 }
