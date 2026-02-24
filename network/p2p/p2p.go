@@ -143,6 +143,9 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		logging.Base().Debug("p2p NetAddress is not set, not listening")
 		listenAddr = ""
 	}
+	if cfg.IncomingConnectionsLimit == 0 {
+		listenAddr = ""
+	}
 
 	var enableMetrics = func(cfg *libp2p.Config) error { cfg.DisableMetrics = false; return nil }
 	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)

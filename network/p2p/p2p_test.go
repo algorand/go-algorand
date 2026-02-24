@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -29,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -244,6 +246,29 @@ func TestP2PMakeHostAddressFilter(t *testing.T) {
 		require.NotEmpty(t, host.Addrs())
 		host.Close()
 	}
+}
+
+func TestP2PServiceStartZeroIncomingDoesNotListen(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.IncomingConnectionsLimit = 0
+
+	td := t.TempDir()
+	pstore, err := peerstore.NewPeerStore(nil, "test")
+	require.NoError(t, err)
+
+	host, la, err := MakeHost(cfg, td, pstore)
+	require.NoError(t, err)
+
+	svc, err := MakeService(context.Background(), logging.TestingLog(t), cfg, host, la, StreamHandlers{})
+	require.NoError(t, err)
+	defer svc.Close()
+
+	require.NoError(t, svc.Start())
+	require.Empty(t, host.Network().ListenAddresses())
 }
 
 func TestP2PPubSubOptions(t *testing.T) {
