@@ -67,7 +67,7 @@ func (p *HTTPNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
 func (p *HTTPNode) Start() error {
 	go func() {
 		err := p.httpServer.Serve()
-		require.NoError(p.tb, err)
+		require.NotErrorIs(p.tb, err, http.ErrServerClosed)
 	}()
 	return nil
 }
