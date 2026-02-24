@@ -31,7 +31,13 @@ CURRENT_GO_VERSION_MAJOR   := $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1
 
 # If VERSION is set (e.g., VERSION=1.2.3), parse it to override version components.
 # This allows setting the full semantic version at build time.
+# VERSION must be numeric major.minor.patch (e.g., 4.5.0). Pre-release suffixes
+# like 1.2.3-beta are not accepted — the channel is set separately via CHANNEL.
 ifdef VERSION
+  # Validate format: must match N.N.N where each component is numeric
+  ifeq ($(shell echo '$(VERSION)' | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+$$'),0)
+    $(error VERSION must be in major.minor.patch format (e.g., 4.5.0), got: $(VERSION))
+  endif
   VERSION_MAJOR := $(word 1,$(subst ., ,$(VERSION)))
   VERSION_MINOR := $(word 2,$(subst ., ,$(VERSION)))
   VERSION_PATCH := $(word 3,$(subst ., ,$(VERSION)))
