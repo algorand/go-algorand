@@ -36,12 +36,28 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+type mockSub struct {
+	closed *atomic.Bool
+}
+
+func (m *mockSub) Next(ctx context.Context) (*pubsub.Message, error) {
+	if m.closed.Load() {
+		return nil, pubsub.ErrTopicClosed
+	}
+	return nil, nil
+}
+
+func (m *mockSub) Cancel() {}
+
 // mockP2PService implements p2p.Service and counts DialPeersUntilTargetCount invocations.
 // It relies on p2p's meshThreadInner's defer of DialPeersUntilTargetCount to detect invocation.
-type mockP2PService struct{ dialCount atomic.Int32 }
+type mockP2PService struct {
+	dialCount atomic.Int32
+	closed    atomic.Bool
+}
 
 func (m *mockP2PService) Start() error                              { return nil }
-func (m *mockP2PService) Close() error                              { return nil }
+func (m *mockP2PService) Close() error                              { m.closed.Store(true); return nil }
 func (m *mockP2PService) ID() peer.ID                               { return "" }
 func (m *mockP2PService) IDSigner() *p2piface.PeerIDChallengeSigner { return nil }
 func (m *mockP2PService) AddrInfo() peer.AddrInfo                   { return peer.AddrInfo{} }
@@ -52,7 +68,7 @@ func (m *mockP2PService) ClosePeer(peer.ID) error                   { return nil
 func (m *mockP2PService) Conns() []network.Conn                     { return nil }
 func (m *mockP2PService) ListPeersForTopic(string) []peer.ID        { return nil }
 func (m *mockP2PService) Subscribe(string, pubsub.ValidatorEx) (p2piface.SubNextCancellable, error) {
-	return nil, nil
+	return &mockSub{&m.closed}, nil
 }
 func (m *mockP2PService) Publish(context.Context, string, []byte) error { return nil }
 func (m *mockP2PService) GetHTTPClient(*peer.AddrInfo, limitcaller.ConnectionTimeStore, time.Duration) (*http.Client, error) {
@@ -80,7 +96,6 @@ func TestMesh_HybridRelayP2PInnerCall(t *testing.T) {
 
 	mockSvc := &mockP2PService{}
 	net.p2pNetwork.service = mockSvc
-	net.p2pNetwork.relayMessages = false // prevent pubsub startup
 
 	err = net.Start()
 	require.NoError(t, err)
