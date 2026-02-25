@@ -99,7 +99,7 @@ func TestPubsub_GossipSubParamsEdgeCases(t *testing.T) {
 
 	// n >= 12: capped to defaults
 	for n := 12; n <= 20; n++ {
-		p = deriveAlgorandGossipSubParams(20)
+		p = deriveAlgorandGossipSubParams(n)
 		require.Equal(t, 8, p.D)
 		require.Equal(t, 6, p.Dlo)
 		require.Equal(t, 6, p.Dscore)
