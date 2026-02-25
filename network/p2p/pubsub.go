@@ -25,20 +25,43 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"golang.org/x/crypto/blake2b"
+
+	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
 )
 
-func init() {
-	// configure larger overlay parameters
-	pubsub.GossipSubD = 8
-	pubsub.GossipSubDscore = 6
-	pubsub.GossipSubDout = 3
-	pubsub.GossipSubDlo = 6
-	pubsub.GossipSubDhi = 12
-	pubsub.GossipSubDlazy = 12
-	pubsub.GossipSubDirectConnectInitialDelay = 30 * time.Second
-	pubsub.GossipSubIWantFollowupTime = 5 * time.Second
-	pubsub.GossipSubHistoryLength = 10
-	pubsub.GossipSubGossipFactor = 0.1
+// PubSubOption is a function that modifies the pubsub options
+type PubSubOption func(opts *[]pubsub.Option, params *pubsub.GossipSubParams)
+
+// DisablePubSubPeerExchange disables PX (peer exchange) in pubsub
+func DisablePubSubPeerExchange() PubSubOption {
+	return func(opts *[]pubsub.Option, _ *pubsub.GossipSubParams) {
+		*opts = append(*opts, pubsub.WithPeerExchange(false))
+	}
+}
+
+// SetPubSubMetricsTracer sets a pubsub.RawTracer for metrics collection
+func SetPubSubMetricsTracer(metricsTracer pubsub.RawTracer) PubSubOption {
+	return func(opts *[]pubsub.Option, _ *pubsub.GossipSubParams) {
+		*opts = append(*opts, pubsub.WithRawTracer(metricsTracer))
+	}
+}
+
+// SetPubSubPeerFilter sets a pubsub.PeerFilter for peers filtering out
+func SetPubSubPeerFilter(filter func(checker pstore.RoleChecker, pid peer.ID) bool, checker pstore.RoleChecker) PubSubOption {
+	return func(opts *[]pubsub.Option, _ *pubsub.GossipSubParams) {
+		f := func(pid peer.ID, topic string) bool {
+			return filter(checker, pid)
+		}
+		*opts = append(*opts, pubsub.WithPeerFilter(f))
+	}
+}
+
+// SetPubSubHeartbeatInterval sets the heartbeat interval in pubsub GossipSubParams
+// Note: subsequent call of pubsub.WithGossipSubParams is needed.
+func SetPubSubHeartbeatInterval(interval time.Duration) PubSubOption {
+	return func(opts *[]pubsub.Option, params *pubsub.GossipSubParams) {
+		params.HeartbeatInterval = interval
+	}
 }
 
 const (
@@ -57,25 +80,67 @@ const TXTopicName = "algotx01"
 
 const incomingThreads = 20 // matches to number wsNetwork workers
 
-// deriveGossipSubParams derives the gossip sub parameters from the cfg.GossipFanout value
+// deriveAlgorandGossipSubParams derives the gossip sub parameters from the cfg.GossipFanout value
 // by using the same proportions as pubsub defaults - see GossipSubD, GossipSubDlo, etc.
-func deriveGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams {
+func deriveAlgorandGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams {
 	params := pubsub.DefaultGossipSubParams()
-	params.D = numOutgoingConns
-	params.Dlo = params.D - 1
-	if params.Dlo <= 0 {
-		params.Dlo = params.D
+
+	// configure larger overlay parameters
+	// despite the fact D-values are later overridden based on numOutgoingConns,
+	// we still want to give an idea what values might/should be by default.
+	params.D = 8
+	params.Dscore = 6
+	params.Dout = 3
+	params.Dlo = 6
+	params.Dhi = 12
+	params.Dlazy = 12
+	params.DirectConnectInitialDelay = 30 * time.Second
+	params.IWantFollowupTime = 5 * time.Second
+	params.HistoryLength = 10
+	params.GossipFactor = 0.1
+
+	if numOutgoingConns >= 12 {
+		// large number of outgoing conns, cap to the defaults above
+		return params
 	}
-	params.Dhi = max(params.D*2, params.D+2)
-	params.Dscore = params.D * 2 / 3
-	params.Dout = params.D * 1 / 3
+	if numOutgoingConns <= 0 {
+		// no outgoing connections
+		params.D = 0
+		params.Dscore = 0
+		params.Dout = 0
+		params.Dlo = 0
+		params.Dhi = 0
+		params.Dlazy = 0
+		return params
+	}
+	if numOutgoingConns <= 4 {
+		// use some minimal meaningful values satisfying
+		// go-libp2p-pubsub constraints like Dout < Dlo && Dout < D/2
+		// note, Dout=1 requires D >= 4 so that numOutgoingConns <= 4 implies hardcoded values
+		params.D = 4
+		params.Dscore = 1
+		params.Dout = 1
+		params.Dlo = 2
+		params.Dhi = 4
+		params.Dlazy = 4
+		return params
+	}
+
+	// for numOutgoingConns in (4, 12), scale the D parameters proportionally
+	// to the number of outgoing connections, keeping the same proportions as the defaults.
+	//
+	// ratios from the defaults: D/n ~= 2/3, Dlo/D = Dscore/D = 3/4, Dout/D = 3/8, and Dhi = Dlazy = n
+	params.D = numOutgoingConns - numOutgoingConns/3
+	params.Dlo = params.D * 3 / 4
+	params.Dscore = params.D * 3 / 4
+	params.Dhi = numOutgoingConns
+	params.Dlazy = numOutgoingConns
+	params.Dout = params.D * 3 / 8
 	return params
 }
 
-func makePubSub(ctx context.Context, host host.Host, numOutgoingConns int, opts ...pubsub.Option) (*pubsub.PubSub, error) {
-	gossipSubParams := deriveGossipSubParams(numOutgoingConns)
+func makePubSub(ctx context.Context, host host.Host, numOutgoingConns int, pubsubOptions ...PubSubOption) (*pubsub.PubSub, error) {
 	options := []pubsub.Option{
-		pubsub.WithGossipSubParams(gossipSubParams),
 		pubsub.WithPeerScore(&pubsub.PeerScoreParams{
 			DecayInterval: pubsub.DefaultDecayInterval,
 			DecayToZero:   pubsub.DefaultDecayToZero,
@@ -117,7 +182,12 @@ func makePubSub(ctx context.Context, host host.Host, numOutgoingConns int, opts 
 		pubsub.WithValidateWorkers(incomingThreads),
 	}
 
-	options = append(options, opts...)
+	gossipSubParams := deriveAlgorandGossipSubParams(numOutgoingConns)
+	for _, opt := range pubsubOptions {
+		opt(&options, &gossipSubParams)
+	}
+	options = append(options, pubsub.WithGossipSubParams(gossipSubParams))
+
 	return pubsub.NewGossipSub(ctx, host, options...)
 }
 

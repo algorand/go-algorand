@@ -593,9 +593,9 @@ func (n *P2PNetwork) httpdThread() {
 	defer n.wg.Done()
 
 	err := n.httpServer.Serve()
-	if err != nil {
+	if err == http.ErrServerClosed {
+	} else if err != nil {
 		n.log.Errorf("Error serving libp2phttp: %v", err)
-		return
 	}
 }
 

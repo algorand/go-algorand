@@ -857,6 +857,19 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 
 }
 
+// baseTestMeshCreator is a simple wrapper to baseMeshCreator for TestP2PRelay
+// in order to provide custom GossipSubHeartbeatInterval option via makeConfig
+// to speed up heartbeat to reduce test flakiness of TestP2PRelay from pubsub mesh establishment timing
+type baseTestMeshCreator struct {
+	baseMeshCreator
+}
+
+func (c baseTestMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{
+		pubsubOpts: []p2p.PubSubOption{p2p.SetPubSubHeartbeatInterval(200 * time.Millisecond)},
+	}
+}
+
 // TestP2PRelay checks p2p nodes can properly relay messages:
 // netA and netB are started with ForceFetchTransactions so it subscribes to the txn topic,
 // both of them are connected and do not relay messages.
@@ -866,11 +879,6 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 func TestP2PRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Speed up heartbeat to reduce test flakiness from mesh establishment timing
-	oldHeartbeatInterval := pubsub.GossipSubHeartbeatInterval
-	pubsub.GossipSubHeartbeatInterval = 200 * time.Millisecond
-	defer func() { pubsub.GossipSubHeartbeatInterval = oldHeartbeatInterval }()
-
 	cfg := config.GetDefaultLocal()
 	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
 	cfg.ForceFetchTransactions = true
@@ -879,7 +887,7 @@ func TestP2PRelay(t *testing.T) {
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	log.Debugln("Starting netA")
-	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, baseTestMeshCreator{})
 	require.NoError(t, err)
 
 	err = netA.Start()
