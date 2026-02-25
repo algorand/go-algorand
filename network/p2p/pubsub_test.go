@@ -47,14 +47,13 @@ func TestPubsub_GossipSubParamsEdgeCases(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// D = 1 => Dlo must not drop below 1
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = 1
 	p := deriveAlgorandGossipSubParams(cfg.GossipFanout)
-	require.Equal(t, 1, p.D)
-	require.Equal(t, 1, p.Dlo)
-	require.Equal(t, 0, p.Dscore)
-	require.Equal(t, 0, p.Dout)
+	require.Equal(t, 3, p.D)
+	require.Equal(t, 0, p.Dlo)
+	require.Equal(t, 1, p.Dscore)
+	require.Equal(t, 1, p.Dout)
 
 	// D = 0 => keep Dlo = D (0) instead of negative
 	cfg = config.GetDefaultLocal()

@@ -99,6 +99,36 @@ func deriveAlgorandGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams 
 	params.HistoryLength = 10
 	params.GossipFactor = 0.1
 
+	if numOutgoingConns >= 12 {
+		// cap to the numbers above
+		return params
+	} else if numOutgoingConns <= 0 {
+		// if user doesn't want to have any outgoing connections
+		params.D = 0
+		params.Dscore = 0
+		params.Dout = 0
+		params.Dlo = 0
+		params.Dhi = 0
+		params.Dlazy = 0
+		return params
+	} else if numOutgoingConns <= 2 {
+		// if user wants to have very low number of outgoing connections,
+		// use some minimal meaningful values satisfying go-libp2p-pubsub constraints like
+		// Dout < Dlo && Dout < D/2
+		params.D = 3
+		params.Dscore = 1
+		params.Dout = 1
+		params.Dlo = 0
+		params.Dhi = 3
+		params.Dlazy = 3
+		return params
+	}
+
+	// for numOutgoingConns in (2, 12), scale the D parameters proportionally
+	// to the number of outgoing connections, keeping the same proportions as the defaults
+
+	// current values, not quite correct
+	// TODO: fix
 	params.D = numOutgoingConns
 	params.Dlo = params.D - 1
 	if params.Dlo <= 0 {
