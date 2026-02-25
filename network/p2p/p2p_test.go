@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -277,12 +278,12 @@ func TestP2PPubSubOptions(t *testing.T) {
 
 	var opts []pubsub.Option
 	option := DisablePubSubPeerExchange()
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 1)
 
 	tracer := &mockRawTracer{}
 	option = SetPubSubMetricsTracer(tracer)
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 2)
 
 	filterFunc := func(roleChecker peerstore.RoleChecker, pid peer.ID) bool {
@@ -290,8 +291,14 @@ func TestP2PPubSubOptions(t *testing.T) {
 	}
 	checker := &mockRoleChecker{}
 	option = SetPubSubPeerFilter(filterFunc, checker)
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 3)
+
+	option = SetPubSubHeartbeatInterval(100 * time.Millisecond)
+	params := &pubsub.GossipSubParams{}
+	option(&opts, params)
+	require.Len(t, opts, 3) // SetPubSubHeartbeatInterval does not add to opts but updates params
+	require.Equal(t, 100*time.Millisecond, params.HeartbeatInterval)
 }
 
 type mockRawTracer struct{}
