@@ -99,13 +99,43 @@ func deriveAlgorandGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams 
 	params.HistoryLength = 10
 	params.GossipFactor = 0.1
 
-	params.D = numOutgoingConns
-	params.Dlo = params.D - 1
-	if params.Dlo <= 0 {
-		params.Dlo = params.D
+	if numOutgoingConns >= 12 {
+		// large number of outgoing conns, cap to the defaults above
+		return params
 	}
-	params.Dscore = params.D * 2 / 3
-	params.Dout = params.D * 1 / 3
+	if numOutgoingConns <= 0 {
+		// no outgoing connections
+		params.D = 0
+		params.Dscore = 0
+		params.Dout = 0
+		params.Dlo = 0
+		params.Dhi = 0
+		params.Dlazy = 0
+		return params
+	}
+	if numOutgoingConns <= 4 {
+		// use some minimal meaningful values satisfying
+		// go-libp2p-pubsub constraints like Dout < Dlo && Dout < D/2
+		// note, Dout=1 requires D >= 4 so that numOutgoingConns <= 4 implies hardcoded values
+		params.D = 4
+		params.Dscore = 1
+		params.Dout = 1
+		params.Dlo = 2
+		params.Dhi = 4
+		params.Dlazy = 4
+		return params
+	}
+
+	// for numOutgoingConns in (4, 12), scale the D parameters proportionally
+	// to the number of outgoing connections, keeping the same proportions as the defaults.
+	//
+	// ratios from the defaults: D/n ~= 2/3, Dlo/D = Dscore/D = 3/4, Dout/D = 3/8, and Dhi = Dlazy = n
+	params.D = numOutgoingConns - numOutgoingConns/3
+	params.Dlo = params.D * 3 / 4
+	params.Dscore = params.D * 3 / 4
+	params.Dhi = numOutgoingConns
+	params.Dlazy = numOutgoingConns
+	params.Dout = params.D * 3 / 8
 	return params
 }
 
