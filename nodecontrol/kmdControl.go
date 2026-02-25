@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -100,7 +101,19 @@ func (kc KMDController) buildKMDCommand(args KMDStartArgs) *exec.Cmd {
 	startArgs = append(startArgs, kc.kmdDataDir)
 	startArgs = append(startArgs, "-t")
 	startArgs = append(startArgs, fmt.Sprintf("%d", args.TimeoutSecs))
-	return exec.Command(kc.kmd, startArgs...)
+
+	cmd := exec.Command(kc.kmd, startArgs...)
+
+	// On macOS, disable async preemption to prevent SIGURG signals from
+	// interfering with IOKit HID operations used by the Ledger hardware wallet
+	// driver. Go's runtime uses SIGURG for goroutine preemption, but this can
+	// cause kIOReturnError (0xE00002BC) when delivered during HID I/O calls.
+	if runtime.GOOS == "darwin" {
+		cmd.Env = os.Environ()
+		cmd.Env = append(cmd.Env, "GODEBUG=asyncpreemptoff=1")
+	}
+
+	return cmd
 }
 
 // GetKMDPID returns the PID from the kmd.pid file in the kmd data directory, or an error
