@@ -284,6 +284,20 @@ func TestWebsocketNetworkStartStop(t *testing.T) {
 	netA.Stop()
 }
 
+func TestWebsocketNetworkStartZeroIncomingDoesNotListen(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.IncomingConnectionsLimit = 0
+
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+
+	require.Nil(t, netA.listener)
+	_, connected := netA.Address()
+	require.False(t, connected)
+}
+
 func waitReady(t testing.TB, wn *WebsocketNetwork, timeout <-chan time.Time) bool {
 	select {
 	case <-wn.Ready():

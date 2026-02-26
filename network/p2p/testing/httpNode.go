@@ -20,7 +20,6 @@
 package p2p
 
 import (
-	"errors"
 	"net/http"
 	"testing"
 
@@ -68,8 +67,8 @@ func (p *HTTPNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
 func (p *HTTPNode) Start() error {
 	go func() {
 		err := p.httpServer.Serve()
-		if !errors.Is(err, http.ErrServerClosed) {
-			require.NoError(p.tb, err)
+		if err != nil {
+			require.ErrorIs(p.tb, err, http.ErrServerClosed)
 		}
 	}()
 	return nil
