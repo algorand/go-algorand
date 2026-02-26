@@ -169,6 +169,11 @@ func (l *LedgerUSB) ReadPackets() ([]byte, error) {
 // Exchange sends a message to the Ledger device, waits for a response,
 // and returns the response data.
 func (l *LedgerUSB) Exchange(msg []byte) ([]byte, error) {
+	// Mask SIGURG to prevent Go's async preemption from interrupting
+	// macOS IOKit HID calls (causes kIOReturnError on Darwin).
+	cleanup := maskSIGURG()
+	defer cleanup()
+
 	err := l.WritePackets(msg)
 	if err != nil {
 		return nil, err
