@@ -19,6 +19,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -335,6 +336,7 @@ func TestDeriveConnLimits_Server(t *testing.T) {
 	cfg.GossipFanout = 4
 	limits := deriveConnLimits(cfg)
 	require.Equal(t, 2400+12, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.rcmgrConnsInbound)
 	require.Equal(t, 12, limits.rcmgrConnsOutbound)
 	require.Equal(t, 2412, limits.connMgrHigh)
 	require.Equal(t, 2315, limits.connMgrLow) // 2412 * 96 / 100
@@ -350,7 +352,8 @@ func TestDeriveConnLimits_UnboundedServer(t *testing.T) {
 	cfg.IncomingConnectionsLimit = -1
 	cfg.GossipFanout = 4
 	limits := deriveConnLimits(cfg)
-	require.Equal(t, 0, limits.rcmgrConns)
+	require.Equal(t, math.MaxInt, limits.rcmgrConns)
+	require.Equal(t, math.MaxInt, limits.rcmgrConnsInbound)
 	require.Equal(t, 12, limits.rcmgrConnsOutbound)
 	require.Equal(t, 0, limits.connMgrHigh)
 	require.Equal(t, 0, limits.connMgrLow)
@@ -363,7 +366,8 @@ func TestDeriveConnLimits_Client(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = 4
 	limits := deriveConnLimits(cfg)
-	require.Equal(t, 24, limits.rcmgrConns)         // 4 * 6
+	require.Equal(t, 24, limits.rcmgrConns) // 4 * 6
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
 	require.Equal(t, 12, limits.rcmgrConnsOutbound) // 4 * 3
 	require.Equal(t, 12, limits.connMgrHigh)        // 4 * 3
 	require.Equal(t, 8, limits.connMgrLow)          // 4 * 2
@@ -385,6 +389,7 @@ func TestDeriveConnLimits_HybridClient(t *testing.T) {
 	cfg.GossipFanout = 4
 	limits := deriveConnLimits(cfg)
 	require.Equal(t, 24, limits.rcmgrConns)
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
 	require.Equal(t, 12, limits.rcmgrConnsOutbound)
 	require.Equal(t, 12, limits.connMgrHigh)
 	require.Equal(t, 8, limits.connMgrLow)
@@ -402,6 +407,7 @@ func TestDeriveConnLimits_HybridServer(t *testing.T) {
 	cfg.IncomingConnectionsLimit = 2400
 	limits := deriveConnLimits(cfg)
 	require.Equal(t, 2412, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.rcmgrConnsInbound)
 	require.Equal(t, 12, limits.rcmgrConnsOutbound)
 	require.Equal(t, 2412, limits.connMgrHigh)
 	require.Equal(t, 2315, limits.connMgrLow)
@@ -418,5 +424,6 @@ func TestDeriveConnLimits_ZeroFanout(t *testing.T) {
 	require.GreaterOrEqual(t, limits.connMgrLow, 0) // zero means zero
 	require.GreaterOrEqual(t, limits.connMgrHigh, limits.connMgrLow)
 	require.GreaterOrEqual(t, limits.rcmgrConns, limits.connMgrHigh)
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
 	require.Equal(t, 0, limits.rcmgrConnsOutbound)
 }

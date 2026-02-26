@@ -19,6 +19,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"runtime"
@@ -184,6 +185,7 @@ type connLimitConfig struct {
 	connMgrLow         int
 	connMgrHigh        int
 	rcmgrConns         int
+	rcmgrConnsInbound  int
 	rcmgrConnsOutbound int
 }
 
@@ -191,15 +193,17 @@ type connLimitConfig struct {
 // from the node configuration. Listen servers use IncomingConnectionsLimit;
 // client nodes use tighter limits based on GossipFanout.
 func deriveConnLimits(cfg config.Local) connLimitConfig {
-	var low, high, rcmgrConns, rcmgrConnsOutbound int
+	var low, high, rcmgrConns, rcmgrConnsInbound, rcmgrConnsOutbound int
 	rcmgrConnsOutbound = cfg.GossipFanout * 3
 	if cfg.IsListenServer() {
 		if cfg.IncomingConnectionsLimit < 0 {
-			rcmgrConns = 0 // 0 means no total conns
+			rcmgrConns = math.MaxInt
+			rcmgrConnsInbound = math.MaxInt
 			high = 0
 			low = 0
 		} else {
 			rcmgrConns = rcmgrConnsOutbound + cfg.IncomingConnectionsLimit
+			rcmgrConnsInbound = cfg.IncomingConnectionsLimit
 			high = rcmgrConns
 			low = high * 96 / 100
 		}
@@ -213,6 +217,7 @@ func deriveConnLimits(cfg config.Local) connLimitConfig {
 		connMgrLow:         low,
 		connMgrHigh:        high,
 		rcmgrConns:         rcmgrConns,
+		rcmgrConnsInbound:  rcmgrConnsInbound,
 		rcmgrConnsOutbound: rcmgrConnsOutbound,
 	}
 }
@@ -226,6 +231,9 @@ func configureResourceManager(limits connLimitConfig) (network.ResourceManager, 
 	systemLimits := rcmgr.ResourceLimits{}
 	if limits.rcmgrConns > 0 {
 		systemLimits.Conns = rcmgr.LimitVal(limits.rcmgrConns)
+	}
+	if limits.rcmgrConnsInbound > 0 {
+		systemLimits.ConnsInbound = rcmgr.LimitVal(limits.rcmgrConnsInbound)
 	}
 	if limits.rcmgrConnsOutbound > 0 {
 		systemLimits.ConnsOutbound = rcmgr.LimitVal(limits.rcmgrConnsOutbound)
@@ -241,11 +249,9 @@ func configureResourceManager(limits connLimitConfig) (network.ResourceManager, 
 }
 
 func configureConnManager(limits connLimitConfig) (connmgrcore.ConnManager, error) {
-	if limits.connMgrHigh > 0 && limits.connMgrLow > 0 {
-		return connmgr.NewConnManager(limits.connMgrLow, limits.connMgrHigh,
-			connmgr.WithGracePeriod(20*time.Second))
-	}
-	return nil, nil
+	// connMgrLow = 0 and connMgrHigh = 0 mean disabled conns trimming
+	return connmgr.NewConnManager(limits.connMgrLow, limits.connMgrHigh,
+		connmgr.WithGracePeriod(20*time.Second))
 }
 
 // StreamHandlerPair is a struct that contains a protocol ID and a StreamHandler
