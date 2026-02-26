@@ -20,6 +20,7 @@
 package metrics
 
 import (
+	"maps"
 	"math"
 	"strconv"
 	"strings"
@@ -243,8 +244,6 @@ func clonePrometheusMetricLabels(labels map[string]string) map[string]string {
 		return nil
 	}
 	cloned := make(map[string]string, len(labels))
-	for k, v := range labels {
-		cloned[k] = v
-	}
+	maps.Copy(cloned, labels)
 	return cloned
 }
