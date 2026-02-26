@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
@@ -38,12 +39,26 @@ var (
 // If the first call fails, subsequent calls return the same error.
 func SetupOTelPrometheusExporter() error {
 	otelSetupOnce.Do(func() {
-		exporter, err := otelprom.New()
+		exporter, err := otelprom.New(
+			otelprom.WithNamespace("libp2p_io_dht_kad"),
+		)
 		if err != nil {
 			otelSetupErr = fmt.Errorf("creating OTEL Prometheus exporter: %w", err)
 			return
 		}
-		provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(exporter))
+		// Drop the instance_id attribute that kad-dht attaches to every metric
+		// (a per-DHT-object pointer address). It is high-cardinality and useless
+		// for aggregation -- the old OpenCensus bridge filtered it out too.
+		dropInstanceID := sdkmetric.NewView(
+			sdkmetric.Instrument{Name: "*"},
+			sdkmetric.Stream{
+				AttributeFilter: attribute.NewDenyKeysFilter("instance_id"),
+			},
+		)
+		provider := sdkmetric.NewMeterProvider(
+			sdkmetric.WithReader(exporter),
+			sdkmetric.WithView(dropInstanceID),
+		)
 		otel.SetMeterProvider(provider)
 	})
 	return otelSetupErr

@@ -50,10 +50,12 @@ func TestOTelPrometheusExporter(t *testing.T) {
 	counter.Add(ctx, 5, metric.WithAttributes(
 		attribute.String("message_type", "FIND_NODE"),
 		attribute.String("peer_id", "test-peer"),
+		attribute.String("instance_id", "0xdeadbeef"),
 	))
 	counter.Add(ctx, 3, metric.WithAttributes(
 		attribute.String("message_type", "PUT_VALUE"),
 		attribute.String("peer_id", "test-peer-2"),
+		attribute.String("instance_id", "0xdeadbeef"),
 	))
 
 	// Create an OTEL histogram, which is how newer libp2p exports latency/bytes metrics.
@@ -71,8 +73,8 @@ func TestOTelPrometheusExporter(t *testing.T) {
 		attribute.String("peer_id", "test-peer-2"),
 	))
 
-	// The Prometheus exporter adds a _total suffix to counters per OpenMetrics convention.
-	const promName = "test_otel_sent_messages_total"
+	// The namespace prefix and _total counter suffix are both applied.
+	const promName = "libp2p_io_dht_kad_test_otel_sent_messages_total"
 
 	metrics := collectPrometheusMetrics([]string{promName})
 	require.Len(t, metrics, 1)
@@ -89,6 +91,9 @@ func TestOTelPrometheusExporter(t *testing.T) {
 	require.Contains(t, promValue, "} 5\n")
 	require.Contains(t, promValue, "} 3\n")
 
+	// instance_id should be filtered out (high-cardinality pointer address).
+	require.NotContains(t, promValue, "instance_id")
+
 	// Verify it also works through the registry (the way algod actually exports metrics).
 	reg := MakeRegistry()
 	reg.Register(&PrometheusDefaultMetrics)
@@ -99,16 +104,16 @@ func TestOTelPrometheusExporter(t *testing.T) {
 	require.Contains(t, regBuf.String(), promName)
 
 	// Histogram families should be converted into bucket/count/sum metrics.
-	histMetrics := collectPrometheusMetrics([]string{"test_otel_request_latency"})
+	histMetrics := collectPrometheusMetrics([]string{"libp2p_io_dht_kad_test_otel_request_latency"})
 	require.Len(t, histMetrics, 3)
 	var histBuf strings.Builder
 	for _, m := range histMetrics {
 		m.WriteMetric(&histBuf, "")
 	}
 	histValue := histBuf.String()
-	require.Contains(t, histValue, "test_otel_request_latency_bucket")
-	require.Contains(t, histValue, "test_otel_request_latency_count")
-	require.Contains(t, histValue, "test_otel_request_latency_sum")
+	require.Contains(t, histValue, "libp2p_io_dht_kad_test_otel_request_latency_bucket")
+	require.Contains(t, histValue, "libp2p_io_dht_kad_test_otel_request_latency_count")
+	require.Contains(t, histValue, "libp2p_io_dht_kad_test_otel_request_latency_sum")
 	require.Contains(t, histValue, `message_type="FIND_NODE"`)
 	require.Contains(t, histValue, `message_type="PUT_VALUE"`)
 	require.Contains(t, histValue, `le="+Inf"`)
