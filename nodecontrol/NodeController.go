@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -156,7 +157,11 @@ func (nc *NodeController) collectGoroutineStacks() {
 
 	goRoutines, err := algodClient.GetGoRoutines(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to fetch goroutine stacks: %v\n", err)
+		msg := err.Error()
+		if strings.Contains(msg, "404 Not Found") {
+			msg = "pprof most likely disabled, consider setting EnableProfiler=true for further debugging"
+		}
+		fmt.Fprintf(os.Stderr, "cannot fetch goroutine stacks: %s\n", msg)
 		return
 	}
 
