@@ -121,7 +121,7 @@ func (kc *KMDController) StopKMD() (alreadyStopped bool, err error) {
 	kmdPID, err := kc.GetKMDPID()
 	if err == nil {
 		// Kill kmd by PID
-		killed, killErr := killPID(int(kmdPID))
+		killed, killErr := killPID(int(kmdPID), nil)
 		if killErr != nil {
 			return false, killErr
 		}
