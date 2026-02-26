@@ -19,11 +19,11 @@
 package driver
 
 import (
-	"os"
-	"os/signal"
 	"runtime"
-	"syscall"
 )
+
+// #include <signal.h>
+import "C"
 
 // maskSIGURG temporarily blocks SIGURG signals during HID operations on macOS.
 //
@@ -43,12 +43,14 @@ import (
 //	// ... perform HID operations ...
 func maskSIGURG() func() {
 	runtime.LockOSThread()
-	sigChan := make(chan os.Signal, 10)
-	signal.Notify(sigChan, syscall.SIGURG)
+
+	var oldset, newset C.sigset_t
+	C.sigemptyset(&newset)
+	C.sigaddset(&newset, C.SIGURG)
+	C.pthread_sigmask(C.SIG_BLOCK, &newset, &oldset)
 
 	return func() {
-		signal.Stop(sigChan)
-		close(sigChan)
+		C.pthread_sigmask(C.SIG_SETMASK, &oldset, nil)
 		runtime.UnlockOSThread()
 	}
 }
