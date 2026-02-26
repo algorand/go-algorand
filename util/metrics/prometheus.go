@@ -109,8 +109,61 @@ func collectPrometheusMetrics(names []string) []Metric {
 	return result
 }
 
+// statCounter stores single int64 value per stat with labels
+type statCounter struct {
+	name        string
+	description string
+	labels      []map[string]string
+	values      []int64
+}
+
+// WriteMetric outputs Prometheus metrics for all labels/values in statCounter
+func (st *statCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
+	name := sanitizePrometheusName(st.name)
+	counter := MakeCounterUnregistered(MetricName{name, st.description})
+	for i := 0; i < len(st.labels); i++ {
+		counter.AddUint64(uint64(st.values[i]), st.labels[i])
+	}
+	counter.WriteMetric(buf, parentLabels)
+}
+
+// AddMetric outputs all statCounter's labels/values into a map
+func (st *statCounter) AddMetric(values map[string]float64) {
+	counter := MakeCounterUnregistered(MetricName{st.name, st.description})
+	for i := 0; i < len(st.labels); i++ {
+		counter.AddUint64(uint64(st.values[i]), st.labels[i])
+	}
+	counter.AddMetric(values)
+}
+
+// statDistribution stores single float64 sun value per stat with labels
+type statDistribution struct {
+	name        string
+	description string
+	labels      []map[string]string
+	values      []float64
+}
+
+// WriteMetric outputs Prometheus metrics for all labels/values in statCounter
+func (st *statDistribution) WriteMetric(buf *strings.Builder, parentLabels string) {
+	name := sanitizePrometheusName(st.name)
+	gauge := MakeGaugeUnregistered(MetricName{name, st.description})
+	for i := 0; i < len(st.labels); i++ {
+		gauge.SetLabels(uint64(st.values[i]), st.labels[i])
+	}
+	gauge.WriteMetric(buf, parentLabels)
+}
+
+// AddMetric outputs all statCounter's labels/values into a map
+func (st *statDistribution) AddMetric(values map[string]float64) {
+	gauge := MakeGaugeUnregistered(MetricName{st.name, st.description})
+	for i := 0; i < len(st.labels); i++ {
+		gauge.SetLabels(uint64(st.values[i]), st.labels[i])
+	}
+	gauge.AddMetric(values)
+}
+
 func convertPrometheusHistogram(metric *iopc.MetricFamily, convertLabels func(m *iopc.Metric) map[string]string) []Metric {
-	// Reuse the same lightweight adapter structs as the OpenCensus bridge:
 	// counters for bucket/count, and a gauge-like float holder for sum.
 	buckets := statCounter{
 		name:        metric.GetName() + "_bucket",
