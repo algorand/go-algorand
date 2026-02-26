@@ -56,6 +56,21 @@ func TestOTelPrometheusExporter(t *testing.T) {
 		attribute.String("peer_id", "test-peer-2"),
 	))
 
+	// Create an OTEL histogram, which is how newer libp2p exports latency/bytes metrics.
+	hist, err := meter.Float64Histogram(
+		"test_otel_request_latency",
+		metric.WithDescription("Test histogram for OTEL-to-Prometheus bridge"),
+	)
+	require.NoError(t, err)
+	hist.Record(ctx, 5, metric.WithAttributes(
+		attribute.String("message_type", "FIND_NODE"),
+		attribute.String("peer_id", "test-peer"),
+	))
+	hist.Record(ctx, 3, metric.WithAttributes(
+		attribute.String("message_type", "PUT_VALUE"),
+		attribute.String("peer_id", "test-peer-2"),
+	))
+
 	// The Prometheus exporter adds a _total suffix to counters per OpenMetrics convention.
 	const promName = "test_otel_sent_messages_total"
 
@@ -82,4 +97,19 @@ func TestOTelPrometheusExporter(t *testing.T) {
 	var regBuf strings.Builder
 	reg.WriteMetrics(&regBuf, "")
 	require.Contains(t, regBuf.String(), promName)
+
+	// Histogram families should be converted into bucket/count/sum metrics.
+	histMetrics := collectPrometheusMetrics([]string{"test_otel_request_latency"})
+	require.Len(t, histMetrics, 3)
+	var histBuf strings.Builder
+	for _, m := range histMetrics {
+		m.WriteMetric(&histBuf, "")
+	}
+	histValue := histBuf.String()
+	require.Contains(t, histValue, "test_otel_request_latency_bucket")
+	require.Contains(t, histValue, "test_otel_request_latency_count")
+	require.Contains(t, histValue, "test_otel_request_latency_sum")
+	require.Contains(t, histValue, `message_type="FIND_NODE"`)
+	require.Contains(t, histValue, `message_type="PUT_VALUE"`)
+	require.Contains(t, histValue, `le="+Inf"`)
 }
