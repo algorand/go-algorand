@@ -18,6 +18,7 @@ package metrics
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"go.opentelemetry.io/otel"
@@ -39,27 +40,36 @@ var (
 // If the first call fails, subsequent calls return the same error.
 func SetupOTelPrometheusExporter() error {
 	otelSetupOnce.Do(func() {
-		exporter, err := otelprom.New(
-			otelprom.WithNamespace("libp2p_io_dht_kad"),
-		)
+		exporter, err := otelprom.New()
 		if err != nil {
 			otelSetupErr = fmt.Errorf("creating OTEL Prometheus exporter: %w", err)
 			return
 		}
-		// Drop the instance_id attribute that kad-dht attaches to every metric
-		// (a per-DHT-object pointer address). It is high-cardinality and useless
-		// for aggregation -- the old OpenCensus bridge filtered it out too.
-		dropInstanceID := sdkmetric.NewView(
-			sdkmetric.Instrument{Name: "*"},
-			sdkmetric.Stream{
-				AttributeFilter: attribute.NewDenyKeysFilter("instance_id"),
-			},
-		)
 		provider := sdkmetric.NewMeterProvider(
 			sdkmetric.WithReader(exporter),
-			sdkmetric.WithView(dropInstanceID),
+			sdkmetric.WithView(kadDHTView),
 		)
 		otel.SetMeterProvider(provider)
 	})
 	return otelSetupErr
+}
+
+const kadDHTScopePrefix = "github.com/libp2p/go-libp2p-kad-dht"
+const kadDHTMetricPrefix = "libp2p_io_dht_kad_"
+
+// kadDHTView is a custom OTEL View that targets only the kad-dht instrumentation
+// scopes (matching by prefix so both the main scope and the /provider sub-scope
+// are covered). It adds a namespace prefix to match the old OpenCensus metric
+// names and drops the instance_id attribute (a per-DHT pointer address that is
+// high-cardinality and useless for aggregation).
+func kadDHTView(i sdkmetric.Instrument) (sdkmetric.Stream, bool) {
+	if !strings.HasPrefix(i.Scope.Name, kadDHTScopePrefix) {
+		return sdkmetric.Stream{}, false
+	}
+	return sdkmetric.Stream{
+		Name:            kadDHTMetricPrefix + i.Name,
+		Description:     i.Description,
+		Unit:            i.Unit,
+		AttributeFilter: attribute.NewDenyKeysFilter("instance_id"),
+	}, true
 }

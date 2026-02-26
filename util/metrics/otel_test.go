@@ -31,16 +31,17 @@ import (
 
 // TestOTelPrometheusExporter verifies that OTEL instruments are visible through
 // prometheus.DefaultGatherer after SetupOTelPrometheusExporter is called.
-// This is the mechanism by which go-libp2p-kad-dht metrics reach our metrics pipeline.
+// Instruments under the kad-dht scope get a namespace prefix and have
+// instance_id filtered out; other scopes are exported without modification.
 func TestOTelPrometheusExporter(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	err := SetupOTelPrometheusExporter()
 	require.NoError(t, err)
 
-	// Create an OTEL counter, mimicking what kad-dht does internally.
-	meter := otel.Meter("github.com/algorand/go-algorand/util/metrics/test")
-	counter, err := meter.Int64Counter(
+	// Use the kad-dht scope so the view adds the namespace prefix.
+	dhtMeter := otel.Meter("github.com/libp2p/go-libp2p-kad-dht")
+	counter, err := dhtMeter.Int64Counter(
 		"test_otel_sent_messages",
 		metric.WithDescription("Test counter for OTEL-to-Prometheus bridge"),
 	)
@@ -58,8 +59,7 @@ func TestOTelPrometheusExporter(t *testing.T) {
 		attribute.String("instance_id", "0xdeadbeef"),
 	))
 
-	// Create an OTEL histogram, which is how newer libp2p exports latency/bytes metrics.
-	hist, err := meter.Float64Histogram(
+	hist, err := dhtMeter.Float64Histogram(
 		"test_otel_request_latency",
 		metric.WithDescription("Test histogram for OTEL-to-Prometheus bridge"),
 	)
@@ -73,7 +73,8 @@ func TestOTelPrometheusExporter(t *testing.T) {
 		attribute.String("peer_id", "test-peer-2"),
 	))
 
-	// The namespace prefix and _total counter suffix are both applied.
+	// Counter: the kad-dht scope view prepends libp2p_io_dht_kad_ and the
+	// Prometheus exporter appends _total.
 	const promName = "libp2p_io_dht_kad_test_otel_sent_messages_total"
 
 	metrics := collectPrometheusMetrics([]string{promName})
@@ -117,4 +118,19 @@ func TestOTelPrometheusExporter(t *testing.T) {
 	require.Contains(t, histValue, `message_type="FIND_NODE"`)
 	require.Contains(t, histValue, `message_type="PUT_VALUE"`)
 	require.Contains(t, histValue, `le="+Inf"`)
+
+	// Instruments on a non-kad-dht scope should NOT get the prefix.
+	otherMeter := otel.Meter("github.com/algorand/go-algorand/test")
+	otherCounter, err := otherMeter.Int64Counter(
+		"test_other_scope_counter",
+		metric.WithDescription("counter on a non-kad-dht scope"),
+	)
+	require.NoError(t, err)
+	otherCounter.Add(ctx, 1)
+
+	// Should appear under its original name, not prefixed.
+	otherMetrics := collectPrometheusMetrics([]string{"test_other_scope_counter_total"})
+	require.Len(t, otherMetrics, 1)
+	prefixedOther := collectPrometheusMetrics([]string{"libp2p_io_dht_kad_test_other_scope_counter_total"})
+	require.Len(t, prefixedOther, 0)
 }
