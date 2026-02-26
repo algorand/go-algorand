@@ -142,6 +142,7 @@ to have custom `logrus` sub-loggers in unit tests.
 
 ### Metrics
 
-`go-libp2p` uses Prometheus as a metrics library, `go-libp2p-kad-dht` relies on OpenCensus library.
-go-algorand has two collectors (see `util/metrics`) for both Prometheus and OpenCensus for
-counters and gauges with labels. Other types (summary, histogram, distribution) are not supported at the moment.
+`go-libp2p` uses Prometheus as a metrics library, `go-libp2p-kad-dht` uses OpenTelemetry.
+go-algorand bridges both into its own metrics registry (see `util/metrics`): an OTEL-to-Prometheus
+exporter (`SetupOTelPrometheusExporter`) funnels kad-dht instruments into Prometheus, and a
+Prometheus collector converts counters, gauges, and histograms with labels into the internal format.
