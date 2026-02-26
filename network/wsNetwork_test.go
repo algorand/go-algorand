@@ -284,6 +284,20 @@ func TestWebsocketNetworkStartStop(t *testing.T) {
 	netA.Stop()
 }
 
+func TestWebsocketNetworkStartZeroIncomingDoesNotListen(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	netA := makeTestWebsocketNode(t)
+	netA.config.IncomingConnectionsLimit = 0
+
+	require.NoError(t, netA.Start())
+	defer netA.Stop()
+
+	require.Nil(t, netA.listener)
+	_, connected := netA.Address()
+	require.False(t, connected)
+}
+
 func waitReady(t testing.TB, wn *WebsocketNetwork, timeout <-chan time.Time) bool {
 	select {
 	case <-wn.Ready():
@@ -4734,7 +4748,7 @@ func TestWebsocketNetworkHTTPClient(t *testing.T) {
 	require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode) // not enough ws peer headers
 
 	_, err = netB.GetHTTPClient("invalid")
-	require.Error(t, err)
+	require.ErrorContains(t, err, `could not parse a host from url`)
 }
 
 // TestPeerComparisonInBroadcast tests that the peer comparison in the broadcast function works as expected

@@ -65,6 +65,11 @@ const (
 	AccountInformationParamsFormatMsgpack AccountInformationParamsFormat = "msgpack"
 )
 
+// Defines values for AccountApplicationsInformationParamsInclude.
+const (
+	AccountApplicationsInformationParamsIncludeParams AccountApplicationsInformationParamsInclude = "params"
+)
+
 // Defines values for AccountApplicationInformationParamsFormat.
 const (
 	AccountApplicationInformationParamsFormatJson    AccountApplicationInformationParamsFormat = "json"
@@ -245,6 +250,24 @@ type Account struct {
 // * msig
 // * lsig
 type AccountSigType string
+
+// AccountApplicationResource AccountApplicationResource describes the account's application resource (local state and params if the account is the creator) for a specific application ID.
+type AccountApplicationResource struct {
+	// AppLocalState Stores local state associated with an application.
+	AppLocalState *ApplicationLocalState `json:"app-local-state,omitempty"`
+
+	// CreatedAtRound Round when the account opted into or created the application.
+	CreatedAtRound *basics.Round `json:"created-at-round,omitempty"`
+
+	// Deleted Whether the application has been deleted.
+	Deleted *bool `json:"deleted,omitempty"`
+
+	// Id The application ID.
+	Id basics.AppIndex `json:"id"`
+
+	// Params Stores the global information associated with an application.
+	Params *ApplicationParams `json:"params,omitempty"`
+}
 
 // AccountAssetHolding AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.
 type AccountAssetHolding struct {
@@ -1089,6 +1112,9 @@ type Catchpoint = string
 // Format defines model for format.
 type Format string
 
+// Include defines model for include.
+type Include = []string
+
 // Limit defines model for limit.
 type Limit = uint64
 
@@ -1117,6 +1143,17 @@ type AccountApplicationResponse struct {
 
 	// CreatedApp Stores the global information associated with an application.
 	CreatedApp *ApplicationParams `json:"created-app,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round basics.Round `json:"round"`
+}
+
+// AccountApplicationsInformationResponse defines model for AccountApplicationsInformationResponse.
+type AccountApplicationsInformationResponse struct {
+	ApplicationResources *[]AccountApplicationResource `json:"application-resources,omitempty"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter. The next token is the next application ID to use as the pagination cursor.
+	NextToken *string `json:"next-token,omitempty"`
 
 	// Round The round for which this information is relevant.
 	Round basics.Round `json:"round"`
@@ -1399,8 +1436,11 @@ type SupplyResponse struct {
 	// CurrentRound Round
 	CurrentRound basics.Round `json:"current_round"`
 
-	// OnlineMoney OnlineMoney
+	// OnlineMoney Total stake held by accounts with status Online at current_round, including those whose participation keys have expired but have not yet been marked offline.
 	OnlineMoney uint64 `json:"online-money"`
+
+	// OnlineStake Online stake used by agreement to vote for current_round, excluding accounts whose participation keys have expired.
+	OnlineStake uint64 `json:"online-stake"`
 
 	// TotalMoney TotalMoney
 	TotalMoney uint64 `json:"total-money"`
@@ -1458,6 +1498,21 @@ type AccountInformationParamsExclude string
 
 // AccountInformationParamsFormat defines parameters for AccountInformation.
 type AccountInformationParamsFormat string
+
+// AccountApplicationsInformationParams defines parameters for AccountApplicationsInformation.
+type AccountApplicationsInformationParams struct {
+	// Limit Maximum number of results to return.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next The next page of results. Use the next token provided by the previous results.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+
+	// Include Include additional items in the response. Use `params` to include full application parameters (global state, schema, etc.). Multiple values can be comma-separated. Defaults to returning only application IDs and local state.
+	Include *[]AccountApplicationsInformationParamsInclude `form:"include,omitempty" json:"include,omitempty"`
+}
+
+// AccountApplicationsInformationParamsInclude defines parameters for AccountApplicationsInformation.
+type AccountApplicationsInformationParamsInclude string
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {

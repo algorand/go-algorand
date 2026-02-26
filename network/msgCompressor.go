@@ -18,6 +18,7 @@ package network
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -219,7 +220,11 @@ func (c *wsPeerMsgCodec) decompress(tag protocol.Tag, data []byte) ([]byte, erro
 		if c.avdec.enabled {
 			res, err := c.avdec.convert(data)
 			if err != nil {
-				c.log.Warnf("peer %s vote decompress error: %v", c.origin, err)
+				if errors.Is(err, vpack.ErrLikelyUncompressed) {
+					// allow uncompressed AV to pass through without logging an error
+				} else {
+					c.log.Warnf("peer %s vote decompress error: %v", c.origin, err)
+				}
 				// fall back to original data
 				return data, nil
 			}

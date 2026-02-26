@@ -48,6 +48,14 @@ type AppResource struct {
 	AppParams     *basics.AppParams
 }
 
+// AppResourceWithIDs is used to retrieve an app resource information from the data tier,
+// inclusive of the app ID and creator address
+type AppResourceWithIDs struct {
+	AppResource
+	AppID   basics.AppIndex
+	Creator basics.Address
+}
+
 // AssignAccountResourceToAccountData assigns the Asset/App params/holdings contained
 // in the AccountResource to the given basics.AccountData, creating maps if necessary.
 // Returns true if the AccountResource contained a new or updated resource,

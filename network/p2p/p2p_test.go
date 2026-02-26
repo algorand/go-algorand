@@ -17,9 +17,11 @@
 package p2p
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -29,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -76,7 +79,7 @@ func TestNetAddressToListenAddress(t *testing.T) {
 		t.Run(fmt.Sprintf("input: %s", test.input), func(t *testing.T) {
 			res, err := netAddressToListenAddress(test.input)
 			if test.err {
-				require.Error(t, err)
+				require.ErrorContains(t, err, `invalid netAddress`)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.output, res)
@@ -246,18 +249,41 @@ func TestP2PMakeHostAddressFilter(t *testing.T) {
 	}
 }
 
+func TestP2PServiceStartZeroIncomingDoesNotListen(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.IncomingConnectionsLimit = 0
+
+	td := t.TempDir()
+	pstore, err := peerstore.NewPeerStore(nil, "test")
+	require.NoError(t, err)
+
+	host, la, err := MakeHost(cfg, td, pstore)
+	require.NoError(t, err)
+
+	svc, err := MakeService(context.Background(), logging.TestingLog(t), cfg, host, la, StreamHandlers{})
+	require.NoError(t, err)
+	defer svc.Close()
+
+	require.NoError(t, svc.Start())
+	require.Empty(t, host.Network().ListenAddresses())
+}
+
 func TestP2PPubSubOptions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var opts []pubsub.Option
 	option := DisablePubSubPeerExchange()
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 1)
 
 	tracer := &mockRawTracer{}
 	option = SetPubSubMetricsTracer(tracer)
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 2)
 
 	filterFunc := func(roleChecker peerstore.RoleChecker, pid peer.ID) bool {
@@ -265,8 +291,14 @@ func TestP2PPubSubOptions(t *testing.T) {
 	}
 	checker := &mockRoleChecker{}
 	option = SetPubSubPeerFilter(filterFunc, checker)
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 3)
+
+	option = SetPubSubHeartbeatInterval(100 * time.Millisecond)
+	params := &pubsub.GossipSubParams{}
+	option(&opts, params)
+	require.Len(t, opts, 3) // SetPubSubHeartbeatInterval does not add to opts but updates params
+	require.Equal(t, 100*time.Millisecond, params.HeartbeatInterval)
 }
 
 type mockRawTracer struct{}

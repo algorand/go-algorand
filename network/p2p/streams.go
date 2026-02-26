@@ -122,8 +122,14 @@ func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream
 
 // Connected is called when a connection is opened
 // for both incoming (listener -> addConn) and outgoing (dialer -> addConn) connections.
+// This is invoked from libp2p's Swarm.notifyAll which holds a read lock on the notifiees list.
+// We do some read/write operations in this handler for metadata exchange that creates a race condition
+// with StopNotify on network shutdown. To avoid, run the handler as a goroutine.
 func (n *streamManager) Connected(net network.Network, conn network.Conn) {
+	go n.handleConnected(conn)
+}
 
+func (n *streamManager) handleConnected(conn network.Conn) {
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
 

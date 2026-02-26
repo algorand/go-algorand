@@ -231,13 +231,39 @@ var retOneProgram = []byte{2, 0x20, 1, 1, 0x22}
 
 var proto = config.Consensus[protocol.ConsensusFuture]
 
-func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
-	minMoneyAtStart := 100000  // min money start
-	maxMoneyAtStart := 1000000 // max money start
-	return testingenvWithBalances(t, minMoneyAtStart, maxMoneyAtStart, numAccounts, numTxs, offlineAccounts)
+// testEnvOptions defines customizable options for the testing environment
+type testEnvOptions struct {
+	numAccounts          int      // Number of accounts to create
+	numTransactions      int      // Number of transactions to create
+	offlineAccounts      bool     // Whether to make some accounts offline
+	minMoneyAtStart      int      // Minimum starting money (used if accountBalances is nil)
+	maxMoneyAtStart      int      // Maximum starting money (used if accountBalances is nil)
+	numExpiredOnline     int      // Number of online accounts to expire early
+	expiredVoteLastValid uint64   // VoteLastValid to use for expired online accounts
+	accountBalances      []uint64 // Optional: specific balance for each account (length must match numAccounts if provided)
 }
 
-func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+	opts := testEnvOptions{
+		numAccounts:     numAccounts,
+		numTransactions: numTxs,
+		offlineAccounts: offlineAccounts,
+		minMoneyAtStart: 100000,
+		maxMoneyAtStart: 1000000,
+	}
+	return testingenvWithOptions(t, opts)
+}
+
+// testingenvWithOptions creates a test environment with customizable options
+func testingenvWithOptions(t testing.TB, opts testEnvOptions) (*data.Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
+	numAccounts := opts.numAccounts
+	numTxs := opts.numTransactions
+	offlineAccounts := opts.offlineAccounts
+	minMoneyAtStart := opts.minMoneyAtStart
+	maxMoneyAtStart := opts.maxMoneyAtStart
+	numExpiredOnline := opts.numExpiredOnline
+	expiredVoteLastValid := opts.expiredVoteLastValid
+
 	P := numAccounts               // n accounts
 	TXs := numTxs                  // n txns
 	transferredMoney := 100        // max money/txn
@@ -284,7 +310,12 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 		roots[i] = root
 		parts[i] = part.Participation
 
-		startamt := basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+		var startamt basics.MicroAlgos
+		if i < len(opts.accountBalances) {
+			startamt = basics.MicroAlgos{Raw: opts.accountBalances[i]}
+		} else {
+			startamt = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+		}
 		short := root.Address()
 
 		if offlineAccounts && i > P/2 {
@@ -293,6 +324,12 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 			data := basics_testing.MakeAccountData(basics.Online, startamt)
 			data.SelectionID = parts[i].VRFSecrets().PK
 			data.VoteID = parts[i].VotingSecrets().OneTimeSignatureVerifier
+			if numExpiredOnline > 0 && i < numExpiredOnline {
+				if expiredVoteLastValid == 0 {
+					expiredVoteLastValid = 50 // default if zero
+				}
+				data.VoteLastValid = basics.Round(expiredVoteLastValid)
+			}
 			genesis[short] = data
 		}
 		part.Close()
