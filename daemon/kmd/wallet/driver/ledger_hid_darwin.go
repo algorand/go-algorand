@@ -21,6 +21,7 @@ package driver
 import (
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 )
 
@@ -41,11 +42,13 @@ import (
 //	defer cleanup()
 //	// ... perform HID operations ...
 func maskSIGURG() func() {
+	runtime.LockOSThread()
 	sigChan := make(chan os.Signal, 10)
 	signal.Notify(sigChan, syscall.SIGURG)
 
 	return func() {
 		signal.Stop(sigChan)
 		close(sigChan)
+		runtime.UnlockOSThread()
 	}
 }
