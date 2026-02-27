@@ -3411,7 +3411,7 @@
         "summary": "Get a list of applications held by an account.",
         "tags": [
           "public",
-          "experimental"
+          "nonparticipating"
         ]
       }
     },
@@ -3667,7 +3667,7 @@
         "summary": "Get a list of assets held by an account, inclusive of asset params.",
         "tags": [
           "public",
-          "experimental"
+          "nonparticipating"
         ]
       }
     },

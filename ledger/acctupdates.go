@@ -17,10 +17,12 @@
 package ledger
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1216,98 +1218,300 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 	}
 }
 
-// lookupAssetResources returns all the resources for a given address, solely based on what is persisted to disk. It does not
-// take into account any in-memory deltas; the round number returned is the latest round number that is known to the database.
-func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) (data []ledgercore.AssetResourceWithIDs, validThrough basics.Round, err error) {
-	// Look for resources on disk
-	persistedResources, resourceDbRound, err0 := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(assetIDGT), limit, basics.AssetCreatable)
-	if err0 != nil {
-		return nil, basics.Round(0), err0
+// lookupAssetResources returns all the asset resources for a given address.
+// It merges in-memory deltas with persisted data to provide current-round information.
+func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	if limit == 0 {
+		return nil, basics.Round(0), nil
 	}
 
-	data = make([]ledgercore.AssetResourceWithIDs, 0, len(persistedResources))
-	for _, pd := range persistedResources {
-		ah := pd.Data.GetAssetHolding()
+	needUnlock := true
+	au.accountsMu.RLock()
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
 
-		var arwi ledgercore.AssetResourceWithIDs
-		if !pd.Creator.IsZero() {
-			ap := pd.Data.GetAssetParams()
+	for {
+		currentDBRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
 
-			arwi = ledgercore.AssetResourceWithIDs{
-				AssetID: basics.AssetIndex(pd.Aidx),
-				Creator: pd.Creator,
+		// Walk deltas backwards; the first entry found for a given asset is the most recent.
+		deltaResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
+		numDeltaDeleted := 0
 
-				AssetResource: ledgercore.AssetResource{
-					AssetHolding: &ah,
-					AssetParams:  &ap,
-				},
-			}
-		} else {
-			arwi = ledgercore.AssetResourceWithIDs{
-				AssetID: basics.AssetIndex(pd.Aidx),
-
-				AssetResource: ledgercore.AssetResource{
-					AssetHolding: &ah,
-				},
+		for i := currentDeltaLen - 1; i > 0; i-- {
+			for _, rec := range au.deltas[i].Accts.AssetResources {
+				if rec.Addr != addr || rec.Aidx <= assetIDGT {
+					continue
+				}
+				if _, ok := deltaResults[rec.Aidx]; ok {
+					continue
+				}
+				deltaResults[rec.Aidx] = rec
+				if rec.Holding.Deleted {
+					numDeltaDeleted++
+				}
 			}
 		}
 
-		data = append(data, arwi)
-	}
-	// We've found all the resources we could find for this address.
-	currentDbRound := resourceDbRound
-	// The resourceDbRound will not be set if there are no persisted resources
-	if len(data) == 0 {
-		au.accountsMu.RLock()
-		currentDbRound = au.cachedDBRound
+		retRound := currentDBRound + basics.Round(currentDeltaLen)
+
 		au.accountsMu.RUnlock()
+		needUnlock = false
+
+		// Over-request from DB to compensate for delta deletions that remove DB rows
+		// from the result set. Deletions are the only delta entries that shrink the
+		// page — modifications and new creations cannot reduce the DB contribution.
+		dbLimit := limit + uint64(numDeltaDeleted)
+
+		persistedResources, resourceDbRound, err := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(assetIDGT), dbLimit, basics.AssetCreatable)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		if resourceDbRound == currentDBRound {
+			seenInDB := make(map[basics.AssetIndex]bool, len(persistedResources))
+			result := make([]ledgercore.AssetResourceWithIDs, 0, limit)
+
+			// Determine the upper bound of the DB page so we only add delta entries
+			// within range and don't accidentally set a next-token that skips items.
+			var dbHasMore bool
+			var dbMaxID basics.AssetIndex
+			if len(persistedResources) > 0 {
+				dbMaxID = basics.AssetIndex(persistedResources[len(persistedResources)-1].Aidx)
+				dbHasMore = uint64(len(persistedResources)) == dbLimit
+			}
+
+			for _, pd := range persistedResources {
+				assetID := basics.AssetIndex(pd.Aidx)
+				seenInDB[assetID] = true
+
+				d, inDelta := deltaResults[assetID]
+
+				arwi := ledgercore.AssetResourceWithIDs{AssetID: assetID}
+
+				if inDelta && d.Holding.Deleted {
+					// Holding removed by delta — leave AssetHolding nil.
+				} else if inDelta && d.Holding.Holding != nil {
+					arwi.AssetHolding = d.Holding.Holding
+				} else {
+					ah := pd.Data.GetAssetHolding()
+					arwi.AssetHolding = &ah
+				}
+
+				if inDelta && d.Params.Deleted {
+					// Delta deleted params — omit creator and params.
+				} else if inDelta && d.Params.Params != nil {
+					arwi.Creator = pd.Creator
+					arwi.AssetParams = d.Params.Params
+				} else if !pd.Creator.IsZero() {
+					arwi.Creator = pd.Creator
+					ap := pd.Data.GetAssetParams()
+					arwi.AssetParams = &ap
+				}
+
+				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
+					result = append(result, arwi)
+				}
+			}
+
+			// Add assets that exist only in deltas (new creations not yet in DB).
+			// Only include delta entries within the DB page range to avoid setting
+			// a next-token that would skip items still in the database.
+			for assetID, d := range deltaResults {
+				if seenInDB[assetID] {
+					continue
+				}
+				if dbHasMore && assetID > dbMaxID {
+					continue
+				}
+				arwi := ledgercore.AssetResourceWithIDs{AssetID: assetID}
+				if !d.Holding.Deleted && d.Holding.Holding != nil {
+					arwi.AssetHolding = d.Holding.Holding
+				}
+				if !d.Params.Deleted && d.Params.Params != nil {
+					arwi.Creator = addr
+					arwi.AssetParams = d.Params.Params
+				}
+				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
+					result = append(result, arwi)
+				}
+			}
+
+			slices.SortFunc(result, func(a, b ledgercore.AssetResourceWithIDs) int {
+				return cmp.Compare(a.AssetID, b.AssetID)
+			})
+			if uint64(len(result)) > limit {
+				result = result[:limit]
+			}
+
+			return result, retRound, nil
+		}
+
+		if resourceDbRound < currentDBRound {
+			au.log.Errorf("accountUpdates.lookupAssetResources: database round %d is behind in-memory round %d", resourceDbRound, currentDBRound)
+			return nil, 0, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
+		}
+		au.accountsMu.RLock()
+		needUnlock = true
+		for currentDBRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
+		}
 	}
-	return data, currentDbRound, nil
 }
 
-// lookupApplicationResources returns all the application resources for a given address, solely based on what is persisted to disk.
-// It does not take into account any in-memory deltas; the round number returned is the latest round number that is known to the database.
+// lookupApplicationResources returns all the application resources for a given address.
+// It merges in-memory deltas with persisted data to provide current-round information.
 // If includeParams is false, AppParams will not be populated to save memory allocations (app params can be ~50KB each).
-func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) (data []ledgercore.AppResourceWithIDs, validThrough basics.Round, err error) {
-	// Look for resources on disk
-	persistedResources, resourceDbRound, err0 := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(appIDGT), limit, basics.AppCreatable)
-	if err0 != nil {
-		return nil, basics.Round(0), err0
+func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	if limit == 0 {
+		return nil, basics.Round(0), nil
 	}
 
-	data = make([]ledgercore.AppResourceWithIDs, 0, len(persistedResources))
-	for _, pd := range persistedResources {
-		als := pd.Data.GetAppLocalState()
-
-		arwi := ledgercore.AppResourceWithIDs{
-			AppID: basics.AppIndex(pd.Aidx),
-			AppResource: ledgercore.AppResource{
-				AppLocalState: &als,
-			},
+	needUnlock := true
+	au.accountsMu.RLock()
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
 		}
+	}()
 
-		if !pd.Creator.IsZero() {
-			arwi.Creator = pd.Creator
+	for {
+		currentDBRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
 
-			// Only populate AppParams if requested to avoid unnecessary memory allocations
-			// (app params can be ~50KB each, vs ~500 bytes for asset params)
-			if includeParams {
-				ap := pd.Data.GetAppParams()
-				arwi.AppResource.AppParams = &ap
+		// Walk deltas backwards; the first entry found for a given app is the most recent.
+		deltaResults := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
+		numDeltaDeleted := 0
+
+		for i := currentDeltaLen; i > 0; {
+			i--
+			for _, rec := range au.deltas[i].Accts.AppResources {
+				if rec.Addr != addr || rec.Aidx <= appIDGT {
+					continue
+				}
+				if _, ok := deltaResults[rec.Aidx]; ok {
+					continue
+				}
+				deltaResults[rec.Aidx] = rec
+				if rec.State.Deleted {
+					numDeltaDeleted++
+				}
 			}
 		}
 
-		data = append(data, arwi)
-	}
-	// We've found all the resources we could find for this address.
-	currentDbRound := resourceDbRound
-	// The resourceDbRound will not be set if there are no persisted resources
-	if len(data) == 0 {
-		au.accountsMu.RLock()
-		currentDbRound = au.cachedDBRound
+		retRound := currentDBRound + basics.Round(currentDeltaLen)
+
 		au.accountsMu.RUnlock()
+		needUnlock = false
+
+		// Over-request from DB to compensate for delta deletions that remove DB rows
+		// from the result set. Deletions are the only delta entries that shrink the
+		// page — modifications and new creations cannot reduce the DB contribution.
+		dbLimit := limit + uint64(numDeltaDeleted)
+
+		persistedResources, resourceDbRound, err := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(appIDGT), dbLimit, basics.AppCreatable)
+		if err != nil {
+			return nil, basics.Round(0), err
+		}
+
+		if resourceDbRound == currentDBRound {
+			seenInDB := make(map[basics.AppIndex]bool, len(persistedResources))
+			result := make([]ledgercore.AppResourceWithIDs, 0, limit)
+
+			// Determine the upper bound of the DB page so we only add delta entries
+			// within range and don't accidentally set a next-token that skips items.
+			var dbHasMore bool
+			var dbMaxID basics.AppIndex
+			if len(persistedResources) > 0 {
+				dbMaxID = basics.AppIndex(persistedResources[len(persistedResources)-1].Aidx)
+				dbHasMore = uint64(len(persistedResources)) == dbLimit
+			}
+
+			for _, pd := range persistedResources {
+				appID := basics.AppIndex(pd.Aidx)
+				seenInDB[appID] = true
+
+				d, inDelta := deltaResults[appID]
+
+				arwi := ledgercore.AppResourceWithIDs{AppID: appID}
+
+				if inDelta && d.State.Deleted {
+					// Local state removed by delta — leave AppLocalState nil.
+				} else if inDelta && d.State.LocalState != nil {
+					arwi.AppLocalState = d.State.LocalState
+				} else {
+					als := pd.Data.GetAppLocalState()
+					arwi.AppLocalState = &als
+				}
+
+				if inDelta && d.Params.Deleted {
+					// Delta deleted params — omit creator and params.
+				} else if inDelta && d.Params.Params != nil {
+					arwi.Creator = pd.Creator
+					if includeParams {
+						arwi.AppResource.AppParams = d.Params.Params
+					}
+				} else if !pd.Creator.IsZero() {
+					arwi.Creator = pd.Creator
+					if includeParams {
+						ap := pd.Data.GetAppParams()
+						arwi.AppResource.AppParams = &ap
+					}
+				}
+
+				if arwi.AppLocalState != nil || arwi.AppParams != nil {
+					result = append(result, arwi)
+				}
+			}
+
+			// Add apps that exist only in deltas (new opt-ins not yet in DB).
+			// Only include delta entries within the DB page range to avoid setting
+			// a next-token that would skip items still in the database.
+			for appID, d := range deltaResults {
+				if seenInDB[appID] {
+					continue
+				}
+				if dbHasMore && appID > dbMaxID {
+					continue
+				}
+				arwi := ledgercore.AppResourceWithIDs{AppID: appID}
+				if !d.State.Deleted && d.State.LocalState != nil {
+					arwi.AppLocalState = d.State.LocalState
+				}
+				if !d.Params.Deleted && d.Params.Params != nil {
+					arwi.Creator = addr
+					if includeParams {
+						arwi.AppResource.AppParams = d.Params.Params
+					}
+				}
+				if arwi.AppLocalState != nil || arwi.AppParams != nil {
+					result = append(result, arwi)
+				}
+			}
+
+			slices.SortFunc(result, func(a, b ledgercore.AppResourceWithIDs) int {
+				return cmp.Compare(a.AppID, b.AppID)
+			})
+			if uint64(len(result)) > limit {
+				result = result[:limit]
+			}
+
+			return result, retRound, nil
+		}
+
+		if resourceDbRound < currentDBRound {
+			au.log.Errorf("accountUpdates.lookupApplicationResources: database round %d is behind in-memory round %d", resourceDbRound, currentDBRound)
+			return nil, basics.Round(0), &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
+		}
+		au.accountsMu.RLock()
+		needUnlock = true
+		for currentDBRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
+		}
 	}
-	return data, currentDbRound, nil
 }
 
 func (au *accountUpdates) lookupStateDelta(rnd basics.Round) (ledgercore.StateDelta, error) {
