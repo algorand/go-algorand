@@ -195,6 +195,9 @@ type connLimitConfig struct {
 func deriveConnLimits(cfg config.Local) connLimitConfig {
 	var low, high, rcmgrConns, rcmgrConnsInbound, rcmgrConnsOutbound int
 	rcmgrConnsOutbound = cfg.GossipFanout * 3
+	if cfg.EnableDHTProviders {
+		rcmgrConnsOutbound += cfg.GossipFanout * 3
+	}
 	if cfg.IsListenServer() {
 		if cfg.IncomingConnectionsLimit < 0 {
 			rcmgrConns = math.MaxInt
@@ -340,8 +343,16 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 		if numOutgoingConns >= targetConnCount {
 			return numOutgoingConns > preExistingConns
 		}
-		// if we are already connected to this peer, skip it
-		if len(s.host.Network().ConnsToPeer(peerInfo.ID)) > 0 {
+		// if we are already connected to this peer, ensure it's properly handled
+		if conns := s.host.Network().ConnsToPeer(peerInfo.ID); len(conns) > 0 {
+			if !s.host.ConnManager().IsProtected(peerInfo.ID, cnmgrTag) {
+				// connection was established by DHT/pubsub before the mesh thread
+				// could protect it, so handleConnected skipped stream creation.
+				// protect and re-trigger stream setup now.
+				s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
+				go s.streams.handleConnected(conns[0])
+				numOutgoingConns++
+			}
 			continue
 		}
 		err := s.dialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
