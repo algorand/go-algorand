@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate go tool -modfile=../../../tool.mod stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Poseidon2Config,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -877,6 +877,68 @@ var MimcConfigs = FieldGroup{
 	mimcConfigSpecByName,
 }
 
+// Poseidon2Config is an enum for the `poseidon2` opcode
+type Poseidon2Config int
+
+const (
+	// BN254t2 is the default Poseidon2 configuration for the BN254 curve with Merkle-Damgard mode, width = 2, full rounds = 6, partial rounds = 50
+	BN254t2 Poseidon2Config = iota
+	// BLS12_381t2 is the default Poseidon2 configuration for the BLS12-381 curve with Merkle-Damgard mode, width = 2, full rounds = 6, partial rounds = 50
+	BLS12_381t2
+	invalidposeidon2Config // compile-time constant for number of fields
+)
+
+var poseidon2ConfigNames [invalidposeidon2Config]string
+
+type poseidon2ConfigSpec struct {
+	field Poseidon2Config
+	doc   string
+}
+
+func (fs poseidon2ConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs poseidon2ConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs poseidon2ConfigSpec) OpVersion() uint64 {
+	return poseidon2Version
+}
+func (fs poseidon2ConfigSpec) Version() uint64 {
+	return poseidon2Version
+}
+func (fs poseidon2ConfigSpec) Note() string {
+	return fs.doc
+}
+
+var poseidon2ConfigSpecs = [...]poseidon2ConfigSpec{
+	{BN254t2, "poseidon2 Merkle-Damgard configuration for BN254 with width = 2, full rounds = 6, partial rounds = 50"},
+	{BLS12_381t2, "poseidon2 Merkle-Damgard configuration for BLS12-381 with width = 2, full rounds = 6, partial rounds = 50"},
+}
+
+func poseidon2ConfigSpecByField(c Poseidon2Config) (poseidon2ConfigSpec, bool) {
+	if int(c) >= len(poseidon2ConfigSpecs) {
+		return poseidon2ConfigSpec{}, false
+	}
+	return poseidon2ConfigSpecs[c], true
+}
+
+var poseidon2ConfigSpecByName = make(poseidon2ConfigNameSpecMap, len(poseidon2ConfigNames))
+
+type poseidon2ConfigNameSpecMap map[string]poseidon2ConfigSpec
+
+func (s poseidon2ConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// Poseidon2Configs collects details about the constants used to describe Poseidon2Configs
+var Poseidon2Configs = FieldGroup{
+	"Poseidon2 Configurations", "Parameters",
+	poseidon2ConfigNames[:],
+	poseidon2ConfigSpecByName,
+}
+
 // Base64Encoding is an enum for the `base64decode` opcode
 type Base64Encoding int
 
@@ -1669,6 +1731,13 @@ func init() {
 		equal(int(s.field), i)
 		mimcConfigNames[s.field] = s.field.String()
 		mimcConfigSpecByName[s.field.String()] = s
+	}
+
+	equal(len(poseidon2ConfigSpecs), len(poseidon2ConfigNames))
+	for i, s := range poseidon2ConfigSpecs {
+		equal(int(s.field), i)
+		poseidon2ConfigNames[s.field] = s.field.String()
+		poseidon2ConfigSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))

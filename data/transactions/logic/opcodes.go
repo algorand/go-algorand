@@ -83,6 +83,8 @@ const mimcVersion = 11
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 13
 
+const poseidon2Version = 13
+
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 
@@ -807,6 +809,17 @@ var OpSpecs = []OpSpec{
 		BLS12_381Mp111: {
 			baseCost:  10,
 			chunkCost: 550,
+			chunkSize: 32,
+		}})},
+	{0xe7, "poseidon2", opPoseidon2, proto("b:b{32}"), poseidon2Version, costByFieldAndLength("c", &Poseidon2Configs, []linearCost{
+		BN254t2: {
+			baseCost:  7,
+			chunkCost: 350,
+			chunkSize: 32,
+		},
+		BLS12_381t2: {
+			baseCost:  7,
+			chunkCost: 350,
 			chunkSize: 32,
 		}})},
 }
