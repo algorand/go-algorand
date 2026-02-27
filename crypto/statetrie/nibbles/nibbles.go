@@ -120,16 +120,16 @@ func Deserialize(encoding []byte) (Nibbles, error) {
 		if length == 1 {
 			return nil, errors.New("invalid encoding")
 		}
-		ns = makeNibbles(encoding[:length-1], true)
+		ns = MakeNibbles(encoding[:length-1], true)
 	} else if encoding[length-1] == evenIndicator {
-		ns = makeNibbles(encoding[:length-1], false)
+		ns = MakeNibbles(encoding[:length-1], false)
 	} else {
 		return nil, errors.New("invalid encoding")
 	}
 	return ns, nil
 }
 
-// makeNibbles returns a nibble array from the byte array.  If oddLength is true,
+// MakeNibbles returns a nibble array from the byte array.  If oddLength is true,
 // the last 4 bits of the last byte of the array are ignored.
 //
 // [0x12, 0x30], true -> [0x1, 0x2, 0x3]
@@ -138,7 +138,7 @@ func Deserialize(encoding []byte) (Nibbles, error) {
 // [], false -> []
 // never to be called with [], true
 // Allocates a new byte slice.
-func makeNibbles(data []byte, oddLength bool) Nibbles {
+func MakeNibbles(data []byte, oddLength bool) Nibbles {
 	length := len(data) * 2
 	if oddLength {
 		length = length - 1
