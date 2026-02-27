@@ -52,6 +52,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
@@ -94,6 +95,11 @@ const MaxApplicationResultsWithoutParams = MaxApplicationResults * 100
 // /v2/accounts/{address}/applications endpoint
 const DefaultApplicationResults = uint64(1000)
 
+// MaxBoxFetchBytes is the hard cap on total bytes fetched by paginated box
+// listing responses. The server enforces this limit internally on every
+// paginated request.  Actual response bytes will be larger due to base64/json overhead.
+const MaxBoxFetchBytes = 1_000_000
+
 const (
 	errInvalidLimit      = "limit parameter must be a positive integer"
 	errUnableToParseNext = "unable to parse next token"
@@ -118,6 +124,7 @@ type LedgerForAPI interface {
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) ([]byte, error)
 	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
+	LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -1893,10 +1900,102 @@ func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
 // GetApplicationBoxes returns the boxes of an application
 // (GET /v2/applications/{application-id}/boxes)
 func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.AppIndex, params model.GetApplicationBoxesParams) error {
-	ledger := v2.Node.LedgerForAPI()
-	lastRound := ledger.Latest()
+	lgr := v2.Node.LedgerForAPI()
+	lastRound := lgr.Latest()
 	keyPrefix := apps.MakeBoxKey(uint64(applicationID), "")
 
+	// Determine query round: use caller-specified round or latest.
+	queryRound := lastRound
+	if params.Round != nil {
+		queryRound = *params.Round
+		if queryRound > lastRound {
+			return badRequest(ctx, errors.New(errRoundGreaterThanTheLatest), errRoundGreaterThanTheLatest, v2.Log)
+		}
+	}
+
+	limit := nilToZero(params.Limit)
+	includeValues := nilToZero(params.Values)
+
+	// When no pagination-related params are provided, preserve current behavior.
+	if limit == 0 && params.Next == nil && !includeValues && (params.Prefix == nil || *params.Prefix == "") && params.Round == nil {
+		return v2.getApplicationBoxesLegacy(ctx, lgr, queryRound, applicationID, keyPrefix, params)
+	}
+
+	// Cap limit to the server's MaxAPIBoxPerApplication configuration.
+	algodMax := v2.Node.Config().MaxAPIBoxPerApplication
+	if algodMax > 0 && (limit == 0 || limit > algodMax) {
+		limit = algodMax
+	}
+
+	// Parse cursor from next token.
+	var cursor string
+	if params.Next != nil && *params.Next != "" {
+		nextBytes, err := apps.NewAppCallBytes(*params.Next)
+		if err != nil {
+			return badRequest(ctx, err, "invalid next token: "+err.Error(), v2.Log)
+		}
+		nextRaw, err := nextBytes.Raw()
+		if err != nil {
+			return badRequest(ctx, err, "invalid next token: "+err.Error(), v2.Log)
+		}
+		cursor = apps.MakeBoxKey(uint64(applicationID), string(nextRaw))
+	}
+
+	// Parse prefix filter.
+	fullKeyPrefix := keyPrefix
+	if params.Prefix != nil && *params.Prefix != "" {
+		prefixBytes, err := apps.NewAppCallBytes(*params.Prefix)
+		if err != nil {
+			return badRequest(ctx, err, "invalid prefix: "+err.Error(), v2.Log)
+		}
+		prefixRaw, err := prefixBytes.Raw()
+		if err != nil {
+			return badRequest(ctx, err, "invalid prefix: "+err.Error(), v2.Log)
+		}
+		fullKeyPrefix = apps.MakeBoxKey(uint64(applicationID), string(prefixRaw))
+	}
+
+	results, rnd, moreData, err := lgr.LookupKvPairsByPrefix(queryRound, fullKeyPrefix, cursor, limit, MaxBoxFetchBytes, includeValues)
+	if err != nil {
+		var roundOffErr *ledger.RoundOffsetError
+		if errors.As(err, &roundOffErr) {
+			return badRequest(ctx, err, errRoundTooOld, v2.Log)
+		}
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	prefixLen := len(keyPrefix)
+
+	// Set next-token when more data exists.
+	var nextToken *string
+	if moreData && len(results) > 0 {
+		lastBoxName := []byte(results[len(results)-1].Key[prefixLen:])
+		token := encodeBoxNameAsAppCallBytes(lastBoxName)
+		nextToken = &token
+	}
+
+	responseBoxes := make([]model.BoxDescriptor, len(results))
+	for i, kv := range results {
+		boxName := []byte(kv.Key[prefixLen:])
+		desc := model.BoxDescriptor{Name: boxName}
+		if includeValues {
+			val := kv.Value
+			desc.Value = &val
+		}
+		responseBoxes[i] = desc
+	}
+
+	round := uint64(rnd)
+	response := model.BoxesResponse{
+		Boxes:     responseBoxes,
+		NextToken: nextToken,
+		Round:     &round,
+	}
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// getApplicationBoxesLegacy preserves the original unpaginated behavior.
+func (v2 *Handlers) getApplicationBoxesLegacy(ctx echo.Context, ledger LedgerForAPI, lastRound basics.Round, applicationID basics.AppIndex, keyPrefix string, params model.GetApplicationBoxesParams) error {
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
@@ -1931,6 +2030,11 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 	}
 	response := model.BoxesResponse{Boxes: responseBoxes}
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// encodeBoxNameAsAppCallBytes encodes a raw box name as a b64:-prefixed app call arg string.
+func encodeBoxNameAsAppCallBytes(name []byte) string {
+	return "b64:" + base64.StdEncoding.EncodeToString(name)
 }
 
 // GetApplicationBoxByName returns the value of an application's box

@@ -2726,3 +2726,212 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	require.Contains(t, data.Assets, aidx3)
 	require.NotContains(t, data.Assets, aidx2)
 }
+
+// TestLookupKvPairsByPrefix tests the delta-walking + DB merge logic in
+// accountUpdates.LookupKvPairsByPrefix. It sets up KV pairs in the DB
+// (round 1, committed) and overlapping modifications in an uncommitted
+// delta (round 2): an update, a delete, and a new key.
+func TestLookupKvPairsByPrefix(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLookupKvPairsByPrefix")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 2
+	protoParams.SeedLookback = 1
+	protoParams.SeedRefreshInterval = 1
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	accts := setupAccts(1)
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	base := accts[0]
+
+	// Round 1: insert KV pairs into DB.
+	kvRound1 := map[string]ledgercore.KvValueDelta{
+		"pfx-A":   {Data: []byte("valA")},
+		"pfx-B":   {Data: []byte("valB")},
+		"pfx-C":   {Data: []byte("valC")},
+		"pfx-D":   {Data: []byte("valD")},
+		"pfx-E":   {Data: []byte("valE")},
+		"other-X": {Data: []byte("valX")},
+	}
+	var emptyUpdates ledgercore.AccountDeltas
+	opts := auNewBlockOpts{emptyUpdates, testProtocolVersion, protoParams, knownCreatables}
+	auNewBlock(t, 1, au, base, opts, kvRound1)
+	auCommitSync(t, 1, au, ml)
+
+	// Round 2: delta-only modifications (NOT committed).
+	// - "pfx-B" updated to "valB2"
+	// - "pfx-C" deleted (Data == nil)
+	// - "pfx-F" new key
+	kvRound2 := map[string]ledgercore.KvValueDelta{
+		"pfx-B": {Data: []byte("valB2"), OldData: []byte("valB")},
+		"pfx-C": {Data: nil, OldData: []byte("valC")},
+		"pfx-F": {Data: []byte("valF")},
+	}
+	auNewBlock(t, 2, au, base, opts, kvRound2)
+	// No auCommitSync — round 2 stays in memory deltas.
+
+	latestRound := au.latest()
+	require.Equal(t, basics.Round(2), latestRound)
+
+	// Helper to find a result by key.
+	findKey := func(results []ledgercore.KvPairResult, key string) *ledgercore.KvPairResult {
+		for i := range results {
+			if results[i].Key == key {
+				return &results[i]
+			}
+		}
+		return nil
+	}
+
+	t.Run("BasicMerge", func(t *testing.T) {
+		results, rnd, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, true)
+		require.NoError(t, err)
+		require.Equal(t, latestRound, rnd)
+		require.Len(t, results, 5) // A, B(updated), D, E, F — C deleted
+
+		require.Equal(t, "pfx-A", results[0].Key)
+		require.Equal(t, "pfx-B", results[1].Key)
+		require.Equal(t, "pfx-D", results[2].Key)
+		require.Equal(t, "pfx-E", results[3].Key)
+		require.Equal(t, "pfx-F", results[4].Key)
+	})
+
+	t.Run("DeltaNewKeyMergedIn", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, true)
+		require.NoError(t, err)
+		f := findKey(results, "pfx-F")
+		require.NotNil(t, f)
+		require.Equal(t, []byte("valF"), f.Value)
+	})
+
+	t.Run("DeltaDeleteRemovesDbKey", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, true)
+		require.NoError(t, err)
+		require.Nil(t, findKey(results, "pfx-C"))
+	})
+
+	t.Run("DeltaUpdateOverridesDbValue", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, true)
+		require.NoError(t, err)
+		b := findKey(results, "pfx-B")
+		require.NotNil(t, b)
+		require.Equal(t, []byte("valB2"), b.Value)
+	})
+
+	t.Run("WithCursor", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-B", 0, 0, true)
+		require.NoError(t, err)
+		// Should skip A and B; C deleted; D, E, F remain
+		require.Len(t, results, 3)
+		require.Equal(t, "pfx-D", results[0].Key)
+		require.Equal(t, "pfx-E", results[1].Key)
+		require.Equal(t, "pfx-F", results[2].Key)
+	})
+
+	t.Run("WithLimit", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 2, 0, false)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "pfx-A", results[0].Key)
+		require.Equal(t, "pfx-B", results[1].Key)
+	})
+
+	t.Run("CutoffSkipsDeltaBeyondPage", func(t *testing.T) {
+		// limit=3: DB returns A, B, D (C excluded via delta). Cutoff="pfx-D".
+		// Delta key F > cutoff, so F should be trimmed.
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 3, 0, true)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		require.Equal(t, "pfx-A", results[0].Key)
+		require.Equal(t, "pfx-B", results[1].Key)
+		require.Equal(t, []byte("valB2"), results[1].Value)
+		require.Equal(t, "pfx-D", results[2].Key)
+		// F should NOT be present
+		require.Nil(t, findKey(results, "pfx-F"))
+	})
+
+	t.Run("FullPageCutoffWithCursorExcludesDelta", func(t *testing.T) {
+		// cursor="pfx-A", limit=2: deltaResults has pfx-B (below cutoff)
+		// and pfx-F (above cutoff). DB (excl B,C,F) returns [pfx-D, pfx-E]
+		// (full page). cutoff="pfx-E".
+		// pfx-B <= cutoff → merged in. pfx-F > cutoff → excluded.
+		// [pfx-D, pfx-E, pfx-B] → sorted [pfx-B, pfx-D, pfx-E] → trimmed to 2.
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-A", 2, 0, true)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "pfx-B", results[0].Key)
+		require.Equal(t, []byte("valB2"), results[0].Value)
+		require.Equal(t, "pfx-D", results[1].Key)
+		require.Nil(t, findKey(results, "pfx-F"))
+	})
+
+	t.Run("PartialPageNoCutoffIncludesDelta", func(t *testing.T) {
+		// Same cursor but limit=4: DB returns [pfx-D, pfx-E] (2 < 4,
+		// partial page). No cutoff → delta key pfx-F is also merged in.
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "pfx-A", 4, 0, true)
+		require.NoError(t, err)
+		require.Len(t, results, 4)
+		require.Equal(t, "pfx-B", results[0].Key)
+		require.Equal(t, []byte("valB2"), results[0].Value)
+		require.Equal(t, "pfx-D", results[1].Key)
+		require.Equal(t, "pfx-E", results[2].Key)
+		require.Equal(t, "pfx-F", results[3].Key)
+		require.Equal(t, []byte("valF"), results[3].Value)
+	})
+
+	t.Run("IncludeValuesFalse", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "pfx-", "", 0, 0, false)
+		require.NoError(t, err)
+		require.Len(t, results, 5)
+		for _, r := range results {
+			require.Nil(t, r.Value, "expected nil value for key %s", r.Key)
+		}
+	})
+
+	t.Run("PrefixFiltering", func(t *testing.T) {
+		results, _, _, err := au.LookupKvPairsByPrefix(latestRound, "other-", "", 0, 0, true)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		require.Equal(t, "other-X", results[0].Key)
+		require.Equal(t, []byte("valX"), results[0].Value)
+	})
+
+	t.Run("DeltaPriorityLaterRoundWins", func(t *testing.T) {
+		// Add round 3 delta that updates pfx-D.
+		kvRound3 := map[string]ledgercore.KvValueDelta{
+			"pfx-D": {Data: []byte("valD3"), OldData: []byte("valD")},
+		}
+		auNewBlock(t, 3, au, base, opts, kvRound3)
+		rnd3 := au.latest()
+		require.Equal(t, basics.Round(3), rnd3)
+
+		results, _, _, err := au.LookupKvPairsByPrefix(rnd3, "pfx-", "", 0, 0, true)
+		require.NoError(t, err)
+		d := findKey(results, "pfx-D")
+		require.NotNil(t, d)
+		require.Equal(t, []byte("valD3"), d.Value)
+	})
+
+	t.Run("EmptyResults", func(t *testing.T) {
+		rnd := au.latest()
+		results, _, _, err := au.LookupKvPairsByPrefix(rnd, "nonexistent-", "", 0, 0, true)
+		require.NoError(t, err)
+		require.Len(t, results, 0)
+	})
+
+	t.Run("InvalidRound", func(t *testing.T) {
+		_, _, _, err := au.LookupKvPairsByPrefix(basics.Round(999), "pfx-", "", 0, 0, true)
+		require.Error(t, err)
+	})
+}

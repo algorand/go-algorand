@@ -639,6 +639,15 @@ func (l *Ledger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKey
 	return l.accts.LookupKeysByPrefix(round, keyPrefix, maxKeyNum)
 }
 
+// LookupKvPairsByPrefix searches for key-value pairs by prefix with cursor-based pagination.
+// It merges in-memory deltas with database results for current data.
+func (l *Ledger) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	return l.accts.LookupKvPairsByPrefix(round, keyPrefix, cursor, limit, maxBytes, includeValues)
+}
+
 // LookupAgreement returns account data used by agreement.
 func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	l.trackerMu.RLock()

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -585,6 +586,123 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 			au.log.Errorf("accountUpdates.lookupKvPair: database round %d mismatching in-memory round %d", dbRound, currentDBRound)
 			err = &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
 			return
+		}
+	}
+}
+
+// LookupKvPairsByPrefix returns a page of key-value pairs matching the prefix,
+// starting after cursor. It merges in-memory deltas with database results to
+// provide current data. The limit and maxBytes are best-effort.
+// The returned bool indicates whether more qualifying results exist beyond what was returned.
+func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error) {
+	needUnlock := true
+	au.accountsMu.RLock()
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
+
+	for {
+		currentDBRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, rndErr := au.roundOffset(round)
+		if rndErr != nil {
+			return nil, 0, false, rndErr
+		}
+
+		// Walk deltas backwards to collect modifications.
+		// deltaResults maps each key to its value; nil value means deleted.
+		deltaResults := make(map[string][]byte)
+		for i := offset; i > 0; {
+			i--
+			for keyInRound, mv := range au.deltas[i].KvMods {
+				if !strings.HasPrefix(keyInRound, keyPrefix) {
+					continue
+				}
+				if keyInRound <= cursor {
+					continue
+				}
+				if _, ok := deltaResults[keyInRound]; ok {
+					continue // already seen from a more recent round
+				}
+				deltaResults[keyInRound] = mv.Data
+			}
+		}
+
+		retRound := currentDBRound + basics.Round(currentDeltaLen)
+
+		// Release lock before DB query.
+		au.accountsMu.RUnlock()
+		needUnlock = false
+
+		dbRound, dbResults, dbMoreData, dbErr := au.accountsq.LookupKeysByPrefixCursor(keyPrefix, cursor, limit, maxBytes, includeValues, deltaResults)
+		if dbErr != nil {
+			return nil, 0, false, dbErr
+		}
+
+		if dbRound == currentDBRound {
+			// When the DB indicated more data exists, delta keys beyond the last
+			// DB key would only be sorted in and trimmed away. Skip them.
+			var cutoff string
+			if dbMoreData && len(dbResults) > 0 {
+				cutoff = dbResults[len(dbResults)-1].Key
+			}
+
+			// Merge DB results with non-deleted delta results.
+			for key, val := range deltaResults {
+				if val == nil {
+					continue
+				}
+				if cutoff != "" && key > cutoff {
+					continue
+				}
+				if !includeValues {
+					val = nil
+				}
+				dbResults = append(dbResults, ledgercore.KvPairResult{Key: key, Value: val})
+			}
+
+			// Sort by key.
+			slices.SortFunc(dbResults, func(a, b ledgercore.KvPairResult) int {
+				return strings.Compare(a.Key, b.Key)
+			})
+
+			// Trim to limit and/or maxBytes.
+			moreData := dbMoreData
+			if limit > 0 || maxBytes > 0 {
+				var bytesAccum uint64
+				trimAt := len(dbResults)
+				for i, kv := range dbResults {
+					itemBytes := kv.ByteSize()
+					if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && i > 0 {
+						trimAt = i
+						break
+					}
+					bytesAccum += itemBytes
+					if limit > 0 && uint64(i+1) >= limit {
+						trimAt = i + 1
+						break
+					}
+				}
+				if trimAt < len(dbResults) {
+					moreData = true
+					dbResults = dbResults[:trimAt]
+				}
+			}
+
+			return dbResults, retRound, moreData, nil
+		}
+
+		// DB round mismatch — retry.
+		if dbRound < currentDBRound {
+			au.log.Errorf("accountUpdates.LookupKvPairsByPrefix: database round %d is behind in-memory round %d", dbRound, currentDBRound)
+			return nil, 0, false, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
+		}
+		au.accountsMu.RLock()
+		needUnlock = true
+		for currentDBRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
 		}
 	}
 }

@@ -17,6 +17,7 @@
 package test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -30,6 +31,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/avm-abi/apps"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -38,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -51,6 +55,7 @@ type mockLedger struct {
 	accounts map[basics.Address]basics.AccountData
 	kvstore  map[string][]byte
 	latest   basics.Round
+	minRound basics.Round // if > 0, rounds below this return RoundOffsetError
 	blocks   []bookkeeping.Block
 	tracer   logic.EvalTracer
 }
@@ -88,6 +93,38 @@ func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
 
 func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
 	panic("not implemented")
+}
+
+func (l *mockLedger) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error) {
+	if l.minRound > 0 && round < l.minRound {
+		return nil, 0, false, &ledger.RoundOffsetError{}
+	}
+	var results []ledgercore.KvPairResult
+	var keys []string
+	for k := range l.kvstore {
+		if len(k) >= len(keyPrefix) && k[:len(keyPrefix)] == keyPrefix && k > cursor {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	var bytesAccum uint64
+	for _, k := range keys {
+		if limit > 0 && uint64(len(results)) >= limit {
+			return results, l.latest, true, nil
+		}
+		var val []byte
+		if includeValues {
+			val = l.kvstore[k]
+		}
+		kv := ledgercore.KvPairResult{Key: k, Value: val}
+		itemBytes := kv.ByteSize()
+		if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && len(results) > 0 {
+			return results, l.latest, true, nil
+		}
+		bytesAccum += itemBytes
+		results = append(results, kv)
+	}
+	return results, l.latest, false, nil
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
@@ -840,4 +877,512 @@ func TestAccountApplicationsInformation(t *testing.T) {
 	for i := 0; i < rawLimit; i++ {
 		assert.Nil(t, (*retInvalid.ApplicationResources)[i].Params, "Invalid include value should be ignored")
 	}
+}
+
+func setupBoxTestHandlers(t *testing.T, appID basics.AppIndex, boxNames []string) v2.Handlers {
+	t.Helper()
+	ml := mockLedger{
+		accounts: make(map[basics.Address]basics.AccountData),
+		kvstore:  make(map[string][]byte),
+		latest:   basics.Round(10),
+	}
+
+	// Create boxes in the kvstore
+	for _, name := range boxNames {
+		key := apps.MakeBoxKey(uint64(appID), name)
+		ml.kvstore[key] = []byte("value_" + name)
+	}
+
+	mockNode := makeMockNode(&ml, t.Name(), nil, cannedStatusReportGolden, false)
+	mockNode.config.MaxAPIBoxPerApplication = 0 // unlimited
+	dummyShutdownChan := make(chan struct{})
+	return v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+}
+
+func setupLargeBoxTestHandlers(t *testing.T, appID basics.AppIndex, boxes map[string][]byte) v2.Handlers {
+	t.Helper()
+	ml := mockLedger{
+		accounts: make(map[basics.Address]basics.AccountData),
+		kvstore:  make(map[string][]byte),
+		latest:   basics.Round(10),
+	}
+	for name, value := range boxes {
+		key := apps.MakeBoxKey(uint64(appID), name)
+		ml.kvstore[key] = value
+	}
+	mockNode := makeMockNode(&ml, t.Name(), nil, cannedStatusReportGolden, false)
+	mockNode.config.MaxAPIBoxPerApplication = 0 // unlimited
+	dummyShutdownChan := make(chan struct{})
+	return v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+	}
+}
+
+func TestGetApplicationBoxesPagination(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	appID := basics.AppIndex(1)
+	boxNames := []string{"a", "b", "c", "d", "e"}
+	handlers := setupBoxTestHandlers(t, appID, boxNames)
+
+	t.Run("PaginatedBasic", func(t *testing.T) {
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+
+		assert.Len(t, resp.Boxes, 3)
+		assert.NotNil(t, resp.Round)
+		assert.Equal(t, uint64(10), *resp.Round)
+		assert.NotNil(t, resp.NextToken, "should have next-token when more pages exist")
+
+		// Verify box names are sorted
+		assert.Equal(t, "a", string(resp.Boxes[0].Name))
+		assert.Equal(t, "b", string(resp.Boxes[1].Name))
+		assert.Equal(t, "c", string(resp.Boxes[2].Name))
+
+		// Values should not be included by default
+		for _, box := range resp.Boxes {
+			assert.Nil(t, box.Value)
+		}
+	})
+
+	t.Run("PaginatedWithCursor", func(t *testing.T) {
+		// First page
+		ctx, rec := newReq(t)
+		limit := uint64(2)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp1 model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp1)
+		require.NoError(t, err)
+		assert.Len(t, resp1.Boxes, 2)
+		require.NotNil(t, resp1.NextToken)
+
+		// Second page using next-token
+		ctx, rec = newReq(t)
+		err = handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Next:  resp1.NextToken,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp2 model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp2)
+		require.NoError(t, err)
+		assert.Len(t, resp2.Boxes, 2)
+		require.NotNil(t, resp2.NextToken)
+
+		// Third page (should be last)
+		ctx, rec = newReq(t)
+		err = handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Next:  resp2.NextToken,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp3 model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp3)
+		require.NoError(t, err)
+		assert.Len(t, resp3.Boxes, 1)
+		assert.Nil(t, resp3.NextToken, "should have no next-token on last page")
+
+		// Verify all boxes were returned across pages
+		var allNames []string
+		for _, box := range resp1.Boxes {
+			allNames = append(allNames, string(box.Name))
+		}
+		for _, box := range resp2.Boxes {
+			allNames = append(allNames, string(box.Name))
+		}
+		for _, box := range resp3.Boxes {
+			allNames = append(allNames, string(box.Name))
+		}
+		assert.Equal(t, []string{"a", "b", "c", "d", "e"}, allNames)
+	})
+
+	t.Run("PaginatedWithValues", func(t *testing.T) {
+		ctx, rec := newReq(t)
+		limit := uint64(2)
+		values := true
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit:  &limit,
+			Values: &values,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+
+		assert.Len(t, resp.Boxes, 2)
+		for _, box := range resp.Boxes {
+			require.NotNil(t, box.Value)
+			assert.Equal(t, "value_"+string(box.Name), string(*box.Value))
+		}
+	})
+
+	t.Run("PaginatedWithPrefix", func(t *testing.T) {
+		// Create handlers with specific box names for prefix testing
+		prefixAppID := basics.AppIndex(2)
+		prefixBoxNames := []string{"alpha", "beta", "gamma", "alphabeta"}
+		prefixHandlers := setupBoxTestHandlers(t, prefixAppID, prefixBoxNames)
+
+		ctx, rec := newReq(t)
+		limit := uint64(10)
+		prefix := "str:alpha"
+		err := prefixHandlers.GetApplicationBoxes(ctx, prefixAppID, model.GetApplicationBoxesParams{
+			Limit:  &limit,
+			Prefix: &prefix,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+
+		// Should only return boxes starting with "alpha"
+		assert.Len(t, resp.Boxes, 2)
+		var names []string
+		for _, box := range resp.Boxes {
+			names = append(names, string(box.Name))
+		}
+		slices.Sort(names)
+		assert.Equal(t, []string{"alpha", "alphabeta"}, names)
+	})
+
+	t.Run("InvalidNextToken", func(t *testing.T) {
+		ctx, rec := newReq(t)
+		limit := uint64(10)
+		invalidNext := "invalid-encoding"
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Next:  &invalidNext,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("ExactPageSize", func(t *testing.T) {
+		ctx, rec := newReq(t)
+		limit := uint64(5) // exactly matches number of boxes
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 5)
+		assert.Nil(t, resp.NextToken, "no next-token when all boxes fit in one page")
+	})
+
+	t.Run("NextTokenEncodingRoundTrip", func(t *testing.T) {
+		// Verify that the next-token can be used as the next param
+		ctx, rec := newReq(t)
+		limit := uint64(1)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.NextToken)
+
+		// The next token should be decodeable via apps.NewAppCallBytes
+		nextBytes, err := apps.NewAppCallBytes(*resp.NextToken)
+		require.NoError(t, err)
+		raw, err := nextBytes.Raw()
+		require.NoError(t, err)
+		// For box name "a", the raw bytes should be "a"
+		assert.Equal(t, "a", string(raw))
+	})
+
+	t.Run("ValuesWithoutLimit", func(t *testing.T) {
+		// values=true without limit should use paginated path and return all results with values.
+		ctx, rec := newReq(t)
+		values := true
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Values: &values,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 5)
+		assert.Nil(t, resp.NextToken, "no next-token when limit=0 (return all)")
+		for _, box := range resp.Boxes {
+			require.NotNil(t, box.Value, "values should be included")
+		}
+	})
+
+	t.Run("NextWithoutLimit", func(t *testing.T) {
+		// next cursor without limit should return all remaining results, no panic.
+		ctx, rec := newReq(t)
+		next := "b64:" + base64.StdEncoding.EncodeToString([]byte("b"))
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Next: &next,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 3) // c, d, e (after cursor "b")
+		assert.Nil(t, resp.NextToken, "no next-token when limit=0")
+		assert.Equal(t, "c", string(resp.Boxes[0].Name))
+	})
+
+	t.Run("PrefixWithoutLimit", func(t *testing.T) {
+		// prefix without limit should use paginated path and filter by prefix.
+		prefixAppID := basics.AppIndex(3)
+		prefixBoxNames := []string{"alpha", "beta", "alphabeta"}
+		prefixHandlers := setupBoxTestHandlers(t, prefixAppID, prefixBoxNames)
+
+		ctx, rec := newReq(t)
+		prefix := "str:alpha"
+		err := prefixHandlers.GetApplicationBoxes(ctx, prefixAppID, model.GetApplicationBoxesParams{
+			Prefix: &prefix,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 2)
+	})
+
+	t.Run("MoreDataTrueWhenOneRemains", func(t *testing.T) {
+		// Regression: limit=4 with 5 boxes. Exactly one box remains after the page.
+		// moreData must be true so the client knows to paginate.
+		ctx, rec := newReq(t)
+		limit := uint64(4)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 4)
+		assert.NotNil(t, resp.NextToken, "exactly one box remains; next-token must be set")
+	})
+
+	t.Run("MoreDataTrueWhenOneRemainsWithCursor", func(t *testing.T) {
+		// Cursor past "c" leaves d, e. limit=1 → return d, e remains.
+		ctx, rec := newReq(t)
+		limit := uint64(1)
+		next := "b64:Yw==" // base64("c")
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Next:  &next,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 1)
+		assert.Equal(t, "d", string(resp.Boxes[0].Name))
+		assert.NotNil(t, resp.NextToken, "e remains; next-token must be set")
+	})
+
+	t.Run("InternalByteCapTruncatesLargeResponse", func(t *testing.T) {
+		// Two 600KB boxes with values=true. Together they exceed the 1MB
+		// server cap (MaxBoxFetchBytes), so only the first box fits.
+		// The default cap is applied when maxBytes is not specified.
+		bigAppID := basics.AppIndex(100)
+		bigHandlers := setupLargeBoxTestHandlers(t, bigAppID, map[string][]byte{
+			"big1": make([]byte, 600_000),
+			"big2": make([]byte, 600_000),
+		})
+
+		ctx, rec := newReq(t)
+		values := true
+		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
+			Values: &values,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+
+		assert.Len(t, resp.Boxes, 1, "only 1 of 2 large boxes should fit under 1MB cap")
+		assert.NotNil(t, resp.NextToken, "more data exists")
+		require.NotNil(t, resp.Boxes[0].Value, "value should be populated")
+	})
+
+	t.Run("InternalByteCapSingleOversizedBox", func(t *testing.T) {
+		// One box with a value > 1MB plus a small box. The guarantee-progress
+		// mechanism must return the first oversized box anyway.
+		bigAppID := basics.AppIndex(101)
+		bigHandlers := setupLargeBoxTestHandlers(t, bigAppID, map[string][]byte{
+			"huge":  make([]byte, 1_500_000),
+			"small": make([]byte, 10),
+		})
+
+		ctx, rec := newReq(t)
+		values := true
+		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
+			Values: &values,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+
+		assert.Len(t, resp.Boxes, 1, "guarantee-progress returns the oversized box")
+		assert.NotNil(t, resp.NextToken, "small box remains")
+		require.NotNil(t, resp.Boxes[0].Value, "value should be populated")
+		assert.Len(t, *resp.Boxes[0].Value, 1_500_000, "value should be complete, not truncated")
+	})
+
+	t.Run("DefaultMaxBytesAppliedOnPaginatedPath", func(t *testing.T) {
+		// When only limit is set (no maxBytes), the server applies the default
+		// MaxBoxFetchBytes (1MB) cap. With two 600KB-value boxes and
+		// values=true, the default cap means only the first box fits.
+		bigAppID := basics.AppIndex(104)
+		bigHandlers := setupLargeBoxTestHandlers(t, bigAppID, map[string][]byte{
+			"big1": make([]byte, 600_000),
+			"big2": make([]byte, 600_000),
+		})
+
+		ctx, rec := newReq(t)
+		limit := uint64(100)
+		values := true
+		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
+			Limit:  &limit,
+			Values: &values,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 1, "default 1MB cap limits to 1 of 2 large boxes")
+		assert.NotNil(t, resp.NextToken, "more data exists")
+	})
+
+	t.Run("RoundSpecified", func(t *testing.T) {
+		// Specifying a valid round should return results at that round.
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		round := basics.Round(10) // matches mock's latest
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Round: &round,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 3)
+		assert.NotNil(t, resp.Round)
+		assert.Equal(t, uint64(10), *resp.Round)
+	})
+
+	t.Run("RoundTooNew", func(t *testing.T) {
+		// Round beyond latest should return 400.
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		round := basics.Round(999)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Round: &round,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("RoundNotSpecified", func(t *testing.T) {
+		// Without a round, should use latest (existing behavior).
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.NotNil(t, resp.Round)
+		assert.Equal(t, uint64(10), *resp.Round)
+	})
+
+	t.Run("RoundTooOld", func(t *testing.T) {
+		// A round that passes the handler's "not too new" check but is
+		// rejected by the ledger as too old should return 400.
+		ml := mockLedger{
+			accounts: make(map[basics.Address]basics.AccountData),
+			kvstore:  make(map[string][]byte),
+			latest:   basics.Round(10),
+			minRound: basics.Round(5),
+		}
+		for _, name := range boxNames {
+			key := apps.MakeBoxKey(uint64(appID), name)
+			ml.kvstore[key] = []byte("value_" + name)
+		}
+		mockNode := makeMockNode(&ml, t.Name(), nil, cannedStatusReportGolden, false)
+		mockNode.config.MaxAPIBoxPerApplication = 0
+		dummyShutdownChan := make(chan struct{})
+		h := v2.Handlers{
+			Node:     mockNode,
+			Log:      logging.Base(),
+			Shutdown: dummyShutdownChan,
+		}
+
+		ctx, rec := newReq(t)
+		limit := uint64(3)
+		round := basics.Round(3) // below minRound
+		err := h.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit: &limit,
+			Round: &round,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 400, rec.Code)
+		assert.Contains(t, rec.Body.String(), "no longer available")
+	})
 }

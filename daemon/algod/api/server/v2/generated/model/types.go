@@ -565,6 +565,9 @@ type Box struct {
 type BoxDescriptor struct {
 	// Name Base64 encoded box name
 	Name []byte `json:"name"`
+
+	// Value Base64 encoded box value. Present only when the `values` query parameter is set to true.
+	Value *[]byte `json:"value,omitempty"`
 }
 
 // BoxReference References a box of an application.
@@ -1234,6 +1237,12 @@ type BoxResponse = Box
 // BoxesResponse defines model for BoxesResponse.
 type BoxesResponse struct {
 	Boxes []BoxDescriptor `json:"boxes"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.
+	NextToken *string `json:"next-token,omitempty"`
+
+	// Round The round at which the box data was retrieved.
+	Round *uint64 `json:"round,omitempty"`
 }
 
 // CatchpointAbortResponse An catchpoint abort response.
@@ -1563,6 +1572,21 @@ type GetApplicationBoxByNameParams struct {
 type GetApplicationBoxesParams struct {
 	// Max Max number of box names to return. If max is not set, or max == 0, returns all box-names.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
+
+	// Limit Maximum number of boxes to return per page.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next A box name, in the goal app call arg form 'encoding:value', representing the earliest box name to include in results. Use the next-token from a previous response.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+
+	// Prefix A box name prefix, in the goal app call arg form 'encoding:value', to filter results by. Only boxes whose names start with this prefix will be returned.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
+
+	// Values If true, include box values in the response.
+	Values *bool `form:"values,omitempty" json:"values,omitempty"`
+
+	// Round Return box data from the given round. The round must be within the node's available range.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.

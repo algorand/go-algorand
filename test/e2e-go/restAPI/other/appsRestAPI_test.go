@@ -546,6 +546,150 @@ end:
 	assertBoxCount(numberOfBoxesRemaining)
 }
 
+func TestBoxPagination(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	testClient.WaitForRound(1)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(someAddress)
+
+	prog := `#pragma version 8
+    txn ApplicationID
+    bz end
+    txn ApplicationArgs 0
+    byte "create"
+    ==
+    bz end
+    int 5
+    txn ApplicationArgs 1
+    swap
+    box_create
+    assert
+end:
+    int 1
+`
+	ops, err := logic.AssembleString(prog)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	// Create app
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
+		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
+		approval, clearState, basics.StateSchema{}, basics.StateSchema{}, 0, 0,
+	)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	_, err = helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
+	a.NoError(err)
+	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
+	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+
+	// Fund app
+	appFundTxn, err := testClient.SendPaymentFromWallet(
+		wh, nil, someAddress, createdAppID.Address().String(),
+		0, 10_000_000, nil, "", 0, 0,
+	)
+	a.NoError(err)
+	_, err = helper.WaitForTransaction(t, testClient, appFundTxn.ID().String(), 30*time.Second)
+	a.NoError(err)
+
+	// Create 8 boxes with predictable names
+	boxNames := []string{"box_a", "box_b", "box_c", "box_d", "box_e", "box_f", "box_g", "box_h"}
+	for _, name := range boxNames {
+		appArgs := [][]byte{[]byte("create"), []byte(name)}
+		refs := libgoal.RefBundle{Boxes: []basics.BoxRef{{App: 0, Name: name}}}
+		tx, err := testClient.MakeUnsignedAppNoOpTx(createdAppID, appArgs, refs, 0)
+		a.NoError(err)
+		tx, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, tx)
+		a.NoError(err)
+		txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
+		a.NoError(err)
+		_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
+		a.NoError(err)
+	}
+
+	// Test paginated listing
+	var allBoxNames []string
+	next := ""
+	pageCount := 0
+	for {
+		resp, err := testClient.ApplicationBoxesPage(createdAppID, 3, next, "", false, 0)
+		a.NoError(err)
+		a.NotNil(resp.Round, "paginated response should include round")
+
+		for _, box := range resp.Boxes {
+			allBoxNames = append(allBoxNames, string(box.Name))
+		}
+
+		pageCount++
+		if resp.NextToken == nil || *resp.NextToken == "" {
+			break
+		}
+		next = *resp.NextToken
+	}
+
+	sort.Strings(boxNames) // expected order
+	a.Equal(boxNames, allBoxNames, "paginated results should arrive in sorted order")
+	a.GreaterOrEqual(pageCount, 2, "should have paginated across multiple pages")
+
+	// Test with values=true
+	resp, err := testClient.ApplicationBoxesPage(createdAppID, 2, "", "", true, 0)
+	a.NoError(err)
+	a.Len(resp.Boxes, 2)
+	for _, box := range resp.Boxes {
+		a.NotNil(box.Value, "values should be included when requested")
+	}
+
+	// Test with prefix filter
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 100, "", "str:box_", false, 0)
+	a.NoError(err)
+	a.Len(resp.Boxes, 8, "prefix filter should match all boxes")
+
+	// Test round-pinning: fetch page 1 without round, then page 2 with pinned round
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 3, "", "", false, 0)
+	a.NoError(err)
+	a.NotNil(resp.Round, "first page should include round")
+	pinnedRound := basics.Round(*resp.Round)
+	a.NotZero(pinnedRound)
+	a.NotNil(resp.NextToken, "should have more pages")
+
+	resp, err = testClient.ApplicationBoxesPage(createdAppID, 3, *resp.NextToken, "", false, pinnedRound)
+	a.NoError(err)
+	a.NotNil(resp.Round, "second page should include round")
+	a.Equal(uint64(pinnedRound), *resp.Round, "pinned round should match across pages")
+
+	// Test round too far in the future returns an error
+	_, err = testClient.ApplicationBoxesPage(createdAppID, 3, "", "", false, pinnedRound+1_000_000)
+	a.Error(err, "round far in the future should fail")
+
+	// Test legacy (no pagination) still works
+	legacyResp, err := testClient.ApplicationBoxes(createdAppID, 0)
+	a.NoError(err)
+	a.Len(legacyResp.Boxes, 8)
+}
+
 func TestBlockLogs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

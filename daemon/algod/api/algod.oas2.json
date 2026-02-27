@@ -1798,7 +1798,7 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, return all Box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all Box names.",
+        "description": "Given an application ID, return all box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all box names.\n\nPagination mode is enabled when any of the following parameters are provided: limit, next, prefix, values, or round. In pagination mode, results are returned in sorted order with cursor-based pagination. Each response includes the round at which the data was retrieved.\n\nTo paginate: use the next-token from a previous response as the next parameter in the following request. Pin the round parameter to the round value from the first page's response to ensure consistent results across pages. The server enforces a per-response byte cap, so fewer results than limit may be returned even when more exist; the presence of next-token is the only reliable signal that more data is available.",
         "tags": ["public", "nonparticipating"],
         "produces": ["application/json"],
         "schemes": ["http"],
@@ -1813,6 +1813,39 @@
             "x-go-type": "uint64",
             "description": "Max number of box names to return. If max is not set, or max == 0, returns all box-names.",
             "name": "max",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "x-go-type": "uint64",
+            "description": "Maximum number of boxes to return per page.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "A box name, in the goal app call arg form 'encoding:value', representing the earliest box name to include in results. Use the next-token from a previous response.",
+            "name": "next",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "A box name prefix, in the goal app call arg form 'encoding:value', to filter results by. Only boxes whose names start with this prefix will be returned.",
+            "name": "prefix",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "If true, include box values in the response.",
+            "name": "values",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "format": "uint64",
+            "x-go-type": "basics.Round",
+            "description": "Return box data from the given round. The round must be within the node's available range.",
+            "name": "round",
             "in": "query"
           }
         ],
@@ -3519,6 +3552,11 @@
           "description": "Base64 encoded box name",
           "type": "string",
           "format": "byte"
+        },
+        "value": {
+          "description": "Base64 encoded box value. Present only when the `values` query parameter is set to true.",
+          "type": "string",
+          "format": "byte"
         }
       }
     },
@@ -4882,6 +4920,15 @@
             "items": {
               "$ref": "#/definitions/BoxDescriptor"
             }
+          },
+          "next-token": {
+            "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.",
+            "type": "string"
+          },
+          "round": {
+            "description": "The round at which the box data was retrieved.",
+            "type": "integer",
+            "x-go-type": "uint64"
           }
         }
       }
