@@ -195,6 +195,9 @@ type connLimitConfig struct {
 func deriveConnLimits(cfg config.Local) connLimitConfig {
 	var low, high, rcmgrConns, rcmgrConnsInbound, rcmgrConnsOutbound int
 	rcmgrConnsOutbound = cfg.GossipFanout * 3
+	if cfg.EnableDHTProviders {
+		rcmgrConnsOutbound += cfg.GossipFanout * 3
+	}
 	if cfg.IsListenServer() {
 		if cfg.IncomingConnectionsLimit < 0 {
 			rcmgrConns = math.MaxInt
