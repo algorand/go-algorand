@@ -186,7 +186,6 @@ func (m *lruResources) prune(newSize int) (removed int) {
 		removed++
 	}
 
-	// clear the notFound list
-	m.notFound = make(map[accountCreatable]struct{}, len(m.notFound))
+	clear(m.notFound)
 	return
 }
