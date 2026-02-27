@@ -1,0 +1,722 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*-beta'
+      - 'v*-stable'
+      - 'v*-nightly'
+      - 'v*-dev'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 4.5.0)'
+        required: true
+        type: string
+      channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
+          - nightly
+          - dev
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+env:
+  # Disable deadlock detection for release builds
+  ALGORAND_DEADLOCK: disable
+  KMD_NOUSB: True
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      channel: ${{ steps.parse.outputs.channel }}
+      network: ${{ steps.parse.outputs.network }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Parse version and channel
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - use inputs directly
+            VERSION="${{ inputs.version }}"
+            CHANNEL="${{ inputs.channel }}"
+          else
+            # Tag trigger - parse from tag
+            # Expected format: v{major}.{minor}.{patch}-{channel}
+            # Examples: v4.5.0-beta, v4.5.0-stable
+            TAG="${GITHUB_REF_NAME}"
+            echo "Parsing tag: ${TAG}"
+
+            # Extract channel (last component after final hyphen): v4.5.0-beta -> beta
+            CHANNEL="${TAG##*-}"
+
+            # Validate channel first
+            case "$CHANNEL" in
+              beta|stable|nightly|dev) ;;
+              *)
+                echo "Error: Tag must end with -beta, -stable, -nightly, or -dev"
+                echo "Got: ${TAG}"
+                exit 1
+                ;;
+            esac
+
+            # Extract version: v4.5.0-beta -> 4.5.0
+            # Remove the 'v' prefix and the '-channel' suffix
+            VERSION="${TAG#v}"
+            VERSION="${VERSION%-${CHANNEL}}"
+          fi
+
+          # Validate version format (major.minor.patch)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: Invalid version format: ${VERSION}"
+            echo "Expected format: major.minor.patch (e.g., 4.5.0)"
+            echo "Tag format should be: v{major}.{minor}.{patch}-{channel}"
+            exit 1
+          fi
+
+          # Map channel to network
+          case "$CHANNEL" in
+            beta)    NETWORK="betanet" ;;
+            stable)  NETWORK="mainnet" ;;
+            nightly) NETWORK="devnet" ;;
+            dev)     NETWORK="devnet" ;;
+            *)
+              echo "Error: Invalid channel: ${CHANNEL}"
+              exit 1
+              ;;
+          esac
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "channel=${CHANNEL}" >> "$GITHUB_OUTPUT"
+          echo "network=${NETWORK}" >> "$GITHUB_OUTPUT"
+
+          echo "Release Configuration:"
+          echo "  Version: ${VERSION}"
+          echo "  Channel: ${CHANNEL}"
+          echo "  Network: ${NETWORK}"
+
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            os: linux
+            arch: amd64
+            make_target: ci-build
+          - runner: ubuntu-24.04-arm
+            os: linux
+            arch: arm64
+            make_target: ci-build
+          - runner: macos-14
+            os: darwin
+            arch: universal
+            make_target: ci-build-universal
+    runs-on: ${{ matrix.runner }}
+    env:
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+      NETWORK: ${{ needs.prepare.outputs.network }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      FULLVERSION: ${{ needs.prepare.outputs.version }}
+      # These are used by compute_branch_channel.sh and other scripts
+      TRAVIS_BRANCH: ''
+      BRANCH: ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build
+        with:
+          cache-prefix: release-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Build binaries
+        run: |
+          echo "Building for ${{ matrix.os }}-${{ matrix.arch }}"
+          echo "  Version: ${VERSION}"
+          echo "  Channel: ${CHANNEL}"
+          echo "  Network: ${NETWORK}"
+          make ${{ matrix.make_target }}
+
+      - name: List build artifacts
+        run: |
+          echo "Build artifacts:"
+          find tmp/node_pkgs -type f | head -50 || echo "No artifacts found"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.arch }}
+          path: tmp/node_pkgs/
+          retention-days: 7
+          if-no-files-found: error
+
+  package-linux:
+    name: Package Linux ${{ matrix.arch }}
+    needs: [prepare, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+            goarch: amd64
+            rpm_arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            goarch: arm64
+            rpm_arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+      DEFAULTNETWORK: ${{ needs.prepare.outputs.network }}
+      GOARCH: ${{ matrix.goarch }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: false
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-linux-${{ matrix.arch }}
+          path: tmp/node_pkgs/
+
+      - name: Install nFPM
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.45.0
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Compute package names
+        id: pkgname
+        run: |
+          # Only beta channel uses algorand-beta, others use algorand
+          if [ "$CHANNEL" = "beta" ]; then
+            PKG_NAME="algorand-beta"
+            DEVTOOLS_PKG_NAME="algorand-devtools-beta"
+            CONFLICTS_PKG_NAME="algorand"
+            CONFLICTS_DEVTOOLS_PKG_NAME="algorand-devtools"
+          else
+            PKG_NAME="algorand"
+            DEVTOOLS_PKG_NAME="algorand-devtools"
+            CONFLICTS_PKG_NAME="algorand-beta"
+            CONFLICTS_DEVTOOLS_PKG_NAME="algorand-devtools-beta"
+          fi
+          echo "pkg_name=${PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "devtools_pkg_name=${DEVTOOLS_PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "conflicts_pkg_name=${CONFLICTS_PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "conflicts_devtools_pkg_name=${CONFLICTS_DEVTOOLS_PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Package name: ${PKG_NAME}"
+          echo "Devtools package name: ${DEVTOOLS_PKG_NAME}"
+
+      - name: Locate binaries
+        id: binaries
+        run: |
+          # Find the directory containing the built binaries
+          BINDIR=$(find tmp/node_pkgs -type d -name "bin" | head -1)
+          if [ -z "$BINDIR" ]; then
+            echo "Error: Could not find bin directory in artifacts"
+            find tmp/node_pkgs -type f | head -20
+            exit 1
+          fi
+          # Convert to absolute path
+          BINDIR=$(cd "$BINDIR" && pwd)
+          echo "bindir=${BINDIR}" >> "$GITHUB_OUTPUT"
+          echo "Found binaries in: ${BINDIR}"
+          ls -la "${BINDIR}"
+
+          # Find the tools directory (devtools binaries)
+          TOOLSDIR=$(find tmp/node_pkgs -type d -name "tools" | head -1)
+          if [ -z "$TOOLSDIR" ]; then
+            echo "Error: Could not find tools directory in artifacts"
+            exit 1
+          fi
+          TOOLSDIR=$(cd "$TOOLSDIR" && pwd)
+          echo "toolsdir=${TOOLSDIR}" >> "$GITHUB_OUTPUT"
+          echo "Found tools in: ${TOOLSDIR}"
+          ls -la "${TOOLSDIR}"
+
+      - name: Generate Debian copyright file
+        run: |
+          mkdir -p .github/packaging/generated
+          cat > .github/packaging/generated/copyright << 'COPYRIGHT_EOF'
+          Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+          Upstream-Name: Algorand
+          Upstream-Contact: Algorand developers <dev@algorand.com>
+          Source: https://github.com/algorand/go-algorand
+
+          Files: *
+          Copyright: Algorand developers <dev@algorand.com>
+          License: AGPL-3+
+          COPYRIGHT_EOF
+          sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> .github/packaging/generated/copyright
+
+      - name: Generate unattended-upgrades config
+        run: |
+          mkdir -p .github/packaging/generated
+          cat > .github/packaging/generated/51algorand-upgrades << EOF
+          ## This file is provided by the Algorand package to configure
+          ## unattended upgrades for the Algorand node software.
+
+          Unattended-Upgrade::Allowed-Origins {
+            "Algorand:${CHANNEL}";
+          };
+
+          Dpkg::Options {
+             "--force-confdef";
+             "--force-confold";
+          };
+          EOF
+
+      - name: Build Debian packages
+        env:
+          BINDIR: ${{ steps.binaries.outputs.bindir }}
+          TOOLSDIR: ${{ steps.binaries.outputs.toolsdir }}
+          SRCDIR: ${{ github.workspace }}
+          PKG_NAME: ${{ steps.pkgname.outputs.pkg_name }}
+          DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.devtools_pkg_name }}
+          CONFLICTS_PKG_NAME: ${{ steps.pkgname.outputs.conflicts_pkg_name }}
+          CONFLICTS_DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.conflicts_devtools_pkg_name }}
+        run: |
+          mkdir -p dist
+
+          # Build main algorand package
+          nfpm pkg \
+            -f .github/packaging/algorand.nfpm.yaml \
+            -p deb \
+            -t "dist/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
+
+          # Build devtools package
+          nfpm pkg \
+            -f .github/packaging/algorand-devtools.nfpm.yaml \
+            -p deb \
+            -t "dist/${DEVTOOLS_PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
+
+          echo "Built Debian packages:"
+          ls -la dist/*.deb
+
+      - name: Build RPM packages
+        env:
+          BINDIR: ${{ steps.binaries.outputs.bindir }}
+          TOOLSDIR: ${{ steps.binaries.outputs.toolsdir }}
+          SRCDIR: ${{ github.workspace }}
+          PKG_NAME: ${{ steps.pkgname.outputs.pkg_name }}
+          DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.devtools_pkg_name }}
+          CONFLICTS_PKG_NAME: ${{ steps.pkgname.outputs.conflicts_pkg_name }}
+          CONFLICTS_DEVTOOLS_PKG_NAME: ${{ steps.pkgname.outputs.conflicts_devtools_pkg_name }}
+        run: |
+          # Build main algorand package
+          nfpm pkg \
+            -f .github/packaging/algorand.nfpm.yaml \
+            -p rpm \
+            -t "dist/${PKG_NAME}-${VERSION}-1.${{ matrix.rpm_arch }}.rpm"
+
+          # Build devtools package
+          nfpm pkg \
+            -f .github/packaging/algorand-devtools.nfpm.yaml \
+            -p rpm \
+            -t "dist/${DEVTOOLS_PKG_NAME}-${VERSION}-1.${{ matrix.rpm_arch }}.rpm"
+
+          echo "Built RPM packages:"
+          ls -la dist/*.rpm
+
+      - name: Copy tarballs from build artifacts
+        run: |
+          find tmp/node_pkgs -name "*.tar.gz" -exec cp {} dist/ \;
+          echo "Tarballs:"
+          ls -la dist/*.tar.gz
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.deb *.rpm > "hashes_${CHANNEL}_linux_${{ matrix.arch }}_${VERSION}"
+          echo "Checksums:"
+          cat "hashes_${CHANNEL}_linux_${{ matrix.arch }}_${VERSION}"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-linux-${{ matrix.arch }}
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  package-darwin:
+    name: Package Darwin
+    needs: [prepare, build]
+    runs-on: macos-14
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-darwin-universal
+          path: tmp/node_pkgs/
+
+      - name: Organize Darwin packages
+        run: |
+          mkdir -p dist
+
+          # The build step already creates tarballs - copy them
+          find tmp/node_pkgs -name "*.tar.gz" -exec cp {} dist/ \;
+
+          echo "Darwin packages:"
+          ls -la dist/
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          shasum -a 256 *.tar.gz > "hashes_${CHANNEL}_darwin_universal_${VERSION}"
+          echo "Checksums:"
+          cat "hashes_${CHANNEL}_darwin_universal_${VERSION}"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-darwin-universal
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  test-packages:
+    name: Test ${{ matrix.distro }} ${{ matrix.arch }}
+    needs: [prepare, package-linux]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+            distro: ubuntu
+            image: ubuntu:24.04
+            pkg_type: deb
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            distro: ubuntu
+            image: ubuntu:24.04
+            pkg_type: deb
+          - runner: ubuntu-24.04
+            arch: amd64
+            distro: fedora
+            image: fedora:40
+            pkg_type: rpm
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            distro: fedora
+            image: fedora:40
+            pkg_type: rpm
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-linux-${{ matrix.arch }}
+          path: packages/
+
+      - name: Compute package name
+        id: pkgname
+        run: |
+          if [ "$CHANNEL" = "beta" ]; then
+            PKG_NAME="algorand-beta"
+          else
+            PKG_NAME="algorand"
+          fi
+          echo "pkg_name=${PKG_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Test Debian package installation
+        if: matrix.pkg_type == 'deb'
+        run: |
+          PKG_NAME="${{ steps.pkgname.outputs.pkg_name }}"
+          DEB_FILE="packages/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
+
+          echo "Testing: ${DEB_FILE}"
+          ls -la "$DEB_FILE"
+
+          docker run --rm -v "$(pwd)/packages:/packages" ${{ matrix.image }} bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            # Use --no-install-recommends to skip unattended-upgrades (pulls in systemd-resolved which fails in containers)
+            apt-get install -y --no-install-recommends /packages/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb
+
+            # Verify binaries are installed
+            command -v algod
+            command -v goal
+            command -v kmd
+
+            # Verify version output
+            algod -v
+
+            # Verify systemd service file exists
+            test -f /lib/systemd/system/algorand.service
+
+            # Verify data directory
+            test -d /var/lib/algorand
+
+            echo 'Debian package installation test passed!'
+          "
+
+      - name: Test RPM package installation
+        if: matrix.pkg_type == 'rpm'
+        run: |
+          PKG_NAME="${{ steps.pkgname.outputs.pkg_name }}"
+          RPM_ARCH="${{ matrix.arch == 'amd64' && 'x86_64' || 'aarch64' }}"
+          RPM_FILE="packages/${PKG_NAME}-${VERSION}-1.${RPM_ARCH}.rpm"
+
+          echo "Testing: ${RPM_FILE}"
+          ls -la "$RPM_FILE"
+
+          docker run --rm -v "$(pwd)/packages:/packages" ${{ matrix.image }} bash -c "
+            set -e
+            dnf install -y /packages/${PKG_NAME}-${VERSION}-1.${RPM_ARCH}.rpm
+
+            # Verify binaries are installed
+            command -v algod
+            command -v goal
+            command -v kmd
+
+            # Verify version output
+            algod -v
+
+            # Verify systemd service file exists
+            test -f /lib/systemd/system/algorand.service
+
+            # Verify data directory
+            test -d /var/lib/algorand
+
+            echo 'RPM package installation test passed!'
+          "
+
+  finalize:
+    name: Finalize (SBOM, Attestations)
+    needs: [prepare, package-linux, package-darwin, test-packages]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: packages/
+          merge-multiple: true
+
+      - name: List all artifacts
+        run: |
+          echo "All release artifacts:"
+          find packages/ -type f | sort
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: packages/sbom.spdx.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            packages/*.tar.gz
+            packages/*.deb
+            packages/*.rpm
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v2
+        with:
+          subject-path: |
+            packages/*.tar.gz
+            packages/*.deb
+            packages/*.rpm
+          sbom-path: packages/sbom.spdx.json
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: packages/
+          retention-days: 7
+          if-no-files-found: error
+
+  vulnerability-scan:
+    name: Dependency Vulnerability Scan
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install and run osv-scanner
+        run: |
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.3
+
+          # Run scan with JSON output for deterministic parsing.
+          # osv-scanner exits non-zero when vulnerabilities are found.
+          set +e
+          osv-scanner scan --recursive --format json . > osv-results.json 2>osv-stderr.txt
+          SCAN_EXIT=$?
+          set -e
+
+          if [ "$SCAN_EXIT" -eq 0 ]; then
+            echo "No vulnerabilities found."
+            exit 0
+          fi
+
+          # Also produce human-readable table for the job log
+          osv-scanner scan --recursive . 2>&1 || true
+
+          # Check for critical vulnerabilities using structured JSON.
+          # The OSV schema stores severity as CVSS vector strings in
+          # severity[].score. For CVSS_V3, the vector looks like:
+          #   CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H
+          # We can't easily compute the base score from the vector in jq,
+          # so we check two reliable sources:
+          #
+          # 1. database_specific.severity — used by GitHub Advisory DB and
+          #    Go Vulnerability DB. Values: "CRITICAL", "HIGH", "MODERATE", "LOW".
+          #
+          # 2. database_specific.cvss_score — numeric score included by some
+          #    advisory sources. Critical = >= 9.0.
+          CRITICAL=$(jq '
+            [
+              .results[]?.packages[]?.vulnerabilities[]? |
+              (
+                # Source 1: explicit severity label
+                (.database_specific?.severity? // "" | ascii_upcase | select(. == "CRITICAL")),
+                # Source 2: numeric CVSS score >= 9.0
+                (.database_specific?.cvss_score? // 0 | select(. >= 9.0) | "CRITICAL")
+              )
+            ] | unique | length
+          ' osv-results.json 2>/dev/null || echo "0")
+
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::Found critical vulnerabilities — failing build. See JSON output for details."
+            # Output the critical findings for debugging
+            jq '.results[]?.packages[]? | select(
+              .vulnerabilities[]? | (
+                (.database_specific?.severity? // "" | ascii_upcase) == "CRITICAL" or
+                (.database_specific?.cvss_score? // 0) >= 9.0
+              )
+            ) | {package: .package.name, version: .package.version, vulns: [.vulnerabilities[].id]}' osv-results.json 2>/dev/null || true
+            exit 1
+          else
+            echo "::warning::Vulnerabilities found (no criticals). See job log for details."
+            exit 0
+          fi
+
+  # Summary job to verify all builds and packages completed
+  release-summary:
+    name: Release Summary
+    needs: [prepare, build, package-linux, package-darwin, test-packages, finalize, vulnerability-scan]
+    runs-on: ubuntu-24.04
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Channel:** ${{ needs.prepare.outputs.channel }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Network:** ${{ needs.prepare.outputs.network }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Build Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Build status
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            echo "| Build | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Build | ❌ |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Package status
+          if [ "${{ needs.package-linux.result }}" = "success" ]; then
+            echo "| Package Linux | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Package Linux | ❌ |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.package-darwin.result }}" = "success" ]; then
+            echo "| Package Darwin | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Package Darwin | ❌ |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Test status
+          if [ "${{ needs.test-packages.result }}" = "success" ]; then
+            echo "| Package Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Package Tests | ❌ |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Finalize status
+          if [ "${{ needs.finalize.result }}" = "success" ]; then
+            echo "| Finalize (SBOM, Attestations) | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Finalize (SBOM, Attestations) | ❌ |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Vulnerability scan status (fails only on criticals)
+          if [ "${{ needs.vulnerability-scan.result }}" = "success" ]; then
+            echo "| Dependency Scan | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Dependency Scan | ❌ (critical vulnerabilities) |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Final status
+          if [ "${{ needs.build.result }}" != "success" ] || \
+             [ "${{ needs.package-linux.result }}" != "success" ] || \
+             [ "${{ needs.package-darwin.result }}" != "success" ] || \
+             [ "${{ needs.test-packages.result }}" != "success" ] || \
+             [ "${{ needs.finalize.result }}" != "success" ] || \
+             [ "${{ needs.vulnerability-scan.result }}" != "success" ]; then
+            echo "❌ **Release failed.** Check individual job logs." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ **All stages completed successfully!**" >> $GITHUB_STEP_SUMMARY
+          fi
