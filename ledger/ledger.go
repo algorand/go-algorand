@@ -555,11 +555,18 @@ func (l *Ledger) LookupLatest(addr basics.Address) (basics.AccountData, basics.R
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, rnd, withoutRewards, err := l.accts.lookupLatest(addr)
-	if err != nil {
-		return basics.AccountData{}, 0, basics.MicroAlgos{}, err
-	}
-	return data, rnd, withoutRewards, nil
+	return l.accts.lookupLatest(0, addr)
+}
+
+// LookupFullAccount uses the accounts tracker to return the account state (including
+// resources) for a given address, for the given round. The returned account values
+// reflect the changes of all blocks up to and including the returned round number.
+func (l *Ledger) LookupFullAccount(round basics.Round, addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	// Intentionally apply (pending) rewards up to rnd.
+	return l.accts.lookupLatest(round, addr)
 }
 
 // LookupAccount uses the accounts tracker to return the account state (without

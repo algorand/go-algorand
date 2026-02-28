@@ -3205,6 +3205,17 @@
             "style": "form"
           },
           {
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
+          },
+          {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
             "in": "query",
             "name": "format",
@@ -3443,6 +3454,17 @@
               "x-go-type": "basics.AppIndex"
             },
             "x-go-type": "basics.AppIndex"
+          },
+          {
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
@@ -3699,6 +3721,17 @@
               "x-go-type": "basics.AssetIndex"
             },
             "x-go-type": "basics.AssetIndex"
+          },
+          {
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           },
           {
             "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
@@ -4002,6 +4035,17 @@
               "x-go-type": "basics.AppIndex"
             },
             "x-go-type": "basics.AppIndex"
+          },
+          {
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -4265,6 +4309,17 @@
               "x-go-type": "basics.AssetIndex"
             },
             "x-go-type": "basics.AssetIndex"
+          },
+          {
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
           }
         ],
         "responses": {
@@ -5719,6 +5774,19 @@
     "/v2/ledger/supply": {
       "get": {
         "operationId": "GetSupply",
+        "parameters": [
+          {
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "in": "query",
+            "name": "round",
+            "schema": {
+              "minimum": 0,
+              "type": "integer",
+              "x-go-type": "basics.Round"
+            },
+            "x-go-type": "basics.Round"
+          }
+        ],
         "responses": {
           "200": {
             "content": {

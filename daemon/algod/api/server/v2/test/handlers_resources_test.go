@@ -79,6 +79,13 @@ func (l *mockLedger) LookupLatest(addr basics.Address) (basics.AccountData, basi
 	return ad, l.latest, basics.MicroAlgos{Raw: 0}, nil
 }
 
+func (l *mockLedger) LookupFullAccount(optionalRound basics.Round, addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error) {
+	if optionalRound != l.latest {
+		panic("not implemented")
+	}
+	return l.LookupLatest(addr)
+}
+
 func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
 	if value, ok := l.kvstore[key]; ok {
 		return value, nil
@@ -209,6 +216,9 @@ func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert ag
 	panic("not implemented")
 }
 func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTotals, err error) {
+	panic("not implemented")
+}
+func (l *mockLedger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
 	panic("not implemented")
 }
 func (l *mockLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
