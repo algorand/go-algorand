@@ -36,7 +36,6 @@ import (
 type streamManager struct {
 	ctx                 context.Context
 	log                 logging.Logger
-	cfg                 nodeSubConfig
 	host                host.Host
 	handlers            StreamHandlers
 	allowIncomingGossip bool
@@ -46,13 +45,12 @@ type streamManager struct {
 }
 
 // StreamHandler is called when a new bidirectional stream for a given protocol and peer is opened.
-type StreamHandler func(ctx context.Context, pid peer.ID, s network.Stream, incoming bool)
+type StreamHandler func(ctx context.Context, pid peer.ID, s network.Stream, incoming bool) error
 
-func makeStreamManager(ctx context.Context, log logging.Logger, cfg nodeSubConfig, h host.Host, handlers StreamHandlers, allowIncomingGossip bool) *streamManager {
+func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, handlers StreamHandlers, allowIncomingGossip bool) *streamManager {
 	return &streamManager{
 		ctx:                 ctx,
 		log:                 log,
-		cfg:                 cfg,
 		host:                h,
 		handlers:            handlers,
 		allowIncomingGossip: allowIncomingGossip,
@@ -62,17 +60,31 @@ func makeStreamManager(ctx context.Context, log logging.Logger, cfg nodeSubConfi
 
 // streamHandler is called by libp2p when a new stream is accepted
 func (n *streamManager) streamHandler(stream network.Stream) {
+	dispatched := false
+	remotePeer := stream.Conn().RemotePeer()
+
+	defer func() {
+		if !dispatched {
+			n.host.ConnManager().Unprotect(remotePeer, cnmgrTag)
+		}
+	}()
+
 	if stream.Conn().Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
-		n.log.Debugf("rejecting stream from incoming connection from %s", stream.Conn().RemotePeer().String())
+		n.log.Debugf("rejecting stream from incoming connection from %s", remotePeer.String())
 		stream.Close()
 		return
+	}
+	// reject streams on connections not explicitly dialed by us
+	if stream.Conn().Stat().Direction == network.DirOutbound && stream.Stat().Direction == network.DirInbound {
+		if !n.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
+			n.log.Debugf("%s: ignoring incoming stream from non-dialed outgoing peer ID %s", stream.Conn().LocalPeer().String(), remotePeer.String())
+			stream.Close()
+			return
+		}
 	}
 
 	n.streamsLock.Lock()
 	defer n.streamsLock.Unlock()
-
-	// could use stream.ID() for tracking; unique across all conns and peers
-	remotePeer := stream.Conn().RemotePeer()
 
 	if oldStream, ok := n.streams[remotePeer]; ok {
 		// there's already a stream, for some reason, check if it's still open
@@ -92,11 +104,14 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 			if err1 := n.dispatch(n.ctx, remotePeer, stream, incoming); err1 != nil {
 				n.log.Errorln(err1.Error())
 				_ = stream.Reset()
+				return
 			}
+			dispatched = true
 			return
 		}
 		// otherwise, the old stream is still open, so we can close the new one
 		stream.Close()
+		dispatched = true
 		return
 	}
 	// no old stream
@@ -105,15 +120,17 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	if err := n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
 		n.log.Errorln(err.Error())
 		_ = stream.Reset()
+		return
 	}
+
+	dispatched = true
 }
 
 // dispatch the stream to the appropriate handler
 func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream network.Stream, incoming bool) error {
 	for _, pair := range n.handlers {
 		if pair.ProtoID == stream.Protocol() {
-			pair.Handler(ctx, remotePeer, stream, incoming)
-			return nil
+			return pair.Handler(ctx, remotePeer, stream, incoming)
 		}
 	}
 	n.log.Errorf("No handler for protocol %s, peer %s", stream.Protocol(), remotePeer)
@@ -130,6 +147,12 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 }
 
 func (n *streamManager) handleConnected(conn network.Conn) {
+	dispatched := false
+	defer func() {
+		if !dispatched {
+			n.host.ConnManager().Unprotect(conn.RemotePeer(), cnmgrTag)
+		}
+	}()
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
 
@@ -138,23 +161,21 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 		return
 	}
 
-	// ensure that only one of the peers initiates the stream
+	// ensure that only one of the peers initiates the stream.
+	// the remote peer will open the stream and our streamHandler will handle it,
+	// so mark dispatched to preserve the cnmgr protection set by dialNode.
 	if localPeer > remotePeer {
 		n.log.Debugf("%s: ignoring a lesser peer ID %s", localPeer.String(), remotePeer.String())
+		dispatched = true
 		return
 	}
 
 	// check if this is outgoing connection but made not by us (serviceImpl.dialNode)
 	// then it was made by some sub component like pubsub, ignore
-	if n.cfg.IsHybridServer() && conn.Stat().Direction == network.DirOutbound {
-		val, err := n.host.Peerstore().Get(remotePeer, psmdkDialed)
-		if err != nil || val != nil && !val.(bool) {
-			// not found or false value
+	if conn.Stat().Direction == network.DirOutbound {
+		if !n.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
 			n.log.Debugf("%s: ignoring non-dialed outgoing peer ID %s", localPeer.String(), remotePeer.String())
 			return
-		}
-		if val == nil {
-			n.log.Warnf("%s: failed to get dialed status for %s", localPeer.String(), remotePeer.String())
 		}
 	}
 
@@ -163,6 +184,7 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	if ok {
 		n.streamsLock.Unlock()
 		n.log.Debugf("%s: already have a stream to/from %s", localPeer.String(), remotePeer.String())
+		dispatched = true
 		return // there's already an active stream with this peer for our protocol
 	}
 
@@ -182,11 +204,13 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	n.log.Infof("%s: using protocol %s with peer %s", localPeer.String(), stream.Protocol(), remotePeer.String())
 
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
-	err = n.dispatch(n.ctx, remotePeer, stream, incoming)
-	if err != nil {
+	if err = n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
 		n.log.Errorln(err.Error())
 		_ = stream.Reset()
+		return
 	}
+
+	dispatched = true
 }
 
 // Disconnected is called when a connection is closed

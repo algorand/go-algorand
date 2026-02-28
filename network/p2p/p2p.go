@@ -19,6 +19,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"runtime"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	connmgrcore "github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -34,6 +36,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
+	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
@@ -67,6 +70,7 @@ type Service interface {
 
 	DialPeersUntilTargetCount(targetConnCount int) bool
 	ClosePeer(peer.ID) error
+	UnprotectPeer(peer.ID)
 
 	Conns() []network.Conn
 	ListPeersForTopic(topic string) []peer.ID
@@ -77,15 +81,9 @@ type Service interface {
 	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
-// subset of config.Local needed here
-type nodeSubConfig interface {
-	IsHybridServer() bool
-}
-
 // serviceImpl manages integration with libp2p and implements the Service interface
 type serviceImpl struct {
 	log        logging.Logger
-	subcfg     nodeSubConfig
 	listenAddr string
 	host       host.Host
 	streams    *streamManager
@@ -106,7 +104,7 @@ const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 const dialTimeout = 30 * time.Second
 
-const psmdkDialed = "dialed"
+const cnmgrTag = "algorand-ws-mesh"
 
 // MakeHost creates a libp2p host but does not start listening.
 // Use host.Network().Listen() on the returned address to start listening.
@@ -156,7 +154,12 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		addrFactory = addressFilter
 	}
 
-	rm, err := configureResourceManager(cfg)
+	connLimits := deriveConnLimits(cfg)
+	rm, err := configureResourceManager(connLimits)
+	if err != nil {
+		return nil, "", err
+	}
+	cm, err := configureConnManager(connLimits)
 	if err != nil {
 		return nil, "", err
 	}
@@ -171,26 +174,84 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Security(noise.ID, noise.New),
 		enableMetrics,
 		libp2p.ResourceManager(rm),
+		libp2p.ConnectionManager(cm),
 		libp2p.AddrsFactory(addrFactory),
 	)
 	return host, listenAddr, err
 }
 
-func configureResourceManager(cfg config.Local) (network.ResourceManager, error) {
+// connLimitConfig holds derived connection limits for both the connmgr and rcmgr.
+type connLimitConfig struct {
+	connMgrLow         int
+	connMgrHigh        int
+	rcmgrConns         int
+	rcmgrConnsInbound  int
+	rcmgrConnsOutbound int
+}
+
+// deriveConnLimits computes connection manager and resource manager limits
+// from the node configuration. Listen servers use IncomingConnectionsLimit;
+// client nodes use tighter limits based on GossipFanout.
+func deriveConnLimits(cfg config.Local) connLimitConfig {
+	var low, high, rcmgrConns, rcmgrConnsInbound, rcmgrConnsOutbound int
+	rcmgrConnsOutbound = cfg.GossipFanout * 3
+	if cfg.IsListenServer() {
+		if cfg.IncomingConnectionsLimit < 0 {
+			rcmgrConns = math.MaxInt
+			rcmgrConnsInbound = math.MaxInt
+			high = 0
+			low = 0
+		} else {
+			rcmgrConns = rcmgrConnsOutbound + cfg.IncomingConnectionsLimit
+			rcmgrConnsInbound = cfg.IncomingConnectionsLimit
+			high = rcmgrConns
+			low = high * 96 / 100
+		}
+	} else {
+		rcmgrConns = rcmgrConnsOutbound + cfg.GossipFanout*3
+		high = rcmgrConnsOutbound
+		low = cfg.GossipFanout * 2
+	}
+
+	return connLimitConfig{
+		connMgrLow:         low,
+		connMgrHigh:        high,
+		rcmgrConns:         rcmgrConns,
+		rcmgrConnsInbound:  rcmgrConnsInbound,
+		rcmgrConnsOutbound: rcmgrConnsOutbound,
+	}
+}
+
+func configureResourceManager(limits connLimitConfig) (network.ResourceManager, error) {
 	// see https://github.com/libp2p/go-libp2p/tree/master/p2p/host/resource-manager for more details
 	scalingLimits := rcmgr.DefaultLimits
 	libp2p.SetDefaultServiceLimits(&scalingLimits)
 	scaledDefaultLimits := scalingLimits.AutoScale()
 
+	systemLimits := rcmgr.ResourceLimits{}
+	if limits.rcmgrConns > 0 {
+		systemLimits.Conns = rcmgr.LimitVal(limits.rcmgrConns)
+	}
+	if limits.rcmgrConnsInbound > 0 {
+		systemLimits.ConnsInbound = rcmgr.LimitVal(limits.rcmgrConnsInbound)
+	}
+	if limits.rcmgrConnsOutbound > 0 {
+		systemLimits.ConnsOutbound = rcmgr.LimitVal(limits.rcmgrConnsOutbound)
+	}
+
 	limitConfig := rcmgr.PartialLimitConfig{
-		System: rcmgr.ResourceLimits{
-			Conns: rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
-		},
+		System: systemLimits,
 		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
 	}
 	limiter := rcmgr.NewFixedLimiter(limitConfig.Build(scaledDefaultLimits))
 	rm, err := rcmgr.NewResourceManager(limiter)
 	return rm, err
+}
+
+func configureConnManager(limits connLimitConfig) (connmgrcore.ConnManager, error) {
+	// connMgrLow = 0 and connMgrHigh = 0 mean disabled conns trimming
+	return connmgr.NewConnManager(limits.connMgrLow, limits.connMgrHigh,
+		connmgr.WithGracePeriod(20*time.Second))
 }
 
 // StreamHandlerPair is a struct that contains a protocol ID and a StreamHandler
@@ -205,7 +266,7 @@ type StreamHandlers []StreamHandlerPair
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlers, pubsubOptions ...PubSubOption) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, cfg, h, wsStreamHandlers, cfg.EnableGossipService)
+	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
 
 	for _, pair := range wsStreamHandlers {
@@ -218,7 +279,6 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	}
 	return &serviceImpl{
 		log:        log,
-		subcfg:     cfg,
 		listenAddr: listenAddr,
 		host:       h,
 		streams:    sm,
@@ -268,13 +328,8 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 	var numOutgoingConns int
 	for _, conn := range conns {
 		if conn.Stat().Direction == network.DirOutbound {
-			if s.subcfg.IsHybridServer() {
-				remotePeer := conn.RemotePeer()
-				val, err := s.host.Peerstore().Get(remotePeer, psmdkDialed)
-				if err == nil && val != nil && val.(bool) {
-					numOutgoingConns++
-				}
-			} else {
+			remotePeer := conn.RemotePeer()
+			if s.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
 				numOutgoingConns++
 			}
 		}
@@ -307,12 +362,13 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	if s.subcfg.IsHybridServer() {
-		if err := s.host.Peerstore().Put(peer.ID, psmdkDialed, true); err != nil { // mark this peer as explicitly dialed
-			return err
-		}
+	// protect before attempting to connect so that checks in Connected handler have up-to-date information
+	s.host.ConnManager().Protect(peer.ID, cnmgrTag)
+	err := s.host.Connect(ctx, *peer)
+	if err != nil {
+		s.host.ConnManager().Unprotect(peer.ID, cnmgrTag)
 	}
-	return s.host.Connect(ctx, *peer)
+	return err
 }
 
 // AddrInfo returns the peer.AddrInfo for self
@@ -335,6 +391,12 @@ func (s *serviceImpl) Conns() []network.Conn {
 // ClosePeer closes a connection to the provided peer
 func (s *serviceImpl) ClosePeer(peer peer.ID) error {
 	return s.host.Network().ClosePeer(peer)
+}
+
+// UnprotectPeer removes the protection from a peer, allowing
+// the connection manager to trim it if needed.
+func (s *serviceImpl) UnprotectPeer(id peer.ID) {
+	s.host.ConnManager().Unprotect(id, cnmgrTag)
 }
 
 // netAddressToListenAddress converts a netAddress in "ip:port" format to a listen address
