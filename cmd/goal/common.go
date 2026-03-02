@@ -79,7 +79,7 @@ func parseRekey(rekeyToAddress string) basics.Address {
 	}
 	rekeyTo, err := basics.UnmarshalChecksumAddress(rekeyToAddress)
 	if err != nil {
-		reportErrorf("%s", err.Error())
+		reportErrorln(err)
 	}
 	return rekeyTo
 }
