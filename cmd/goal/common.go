@@ -50,6 +50,7 @@ var (
 	noWaitAfterSend    bool
 	dumpForDryrun      bool
 	dumpForDryrunAccts []string
+	rekeyToAddress     string
 )
 
 var dumpForDryrunFormat cmdutil.CobraStringValue = *cmdutil.MakeCobraStringValue("json", []string{"msgp"})
@@ -69,4 +70,16 @@ func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
 	cmd.Flags().StringSliceVar(&dumpForDryrunAccts, "dryrun-accounts", nil, "additional accounts to include into dryrun request obj")
 	cmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
+	cmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+}
+
+func parseRekey(rekeyToAddress string) basics.Address {
+	if rekeyToAddress == "" {
+		return basics.Address{}
+	}
+	rekeyTo, err := basics.UnmarshalChecksumAddress(rekeyToAddress)
+	if err != nil {
+		reportErrorf("%s", err.Error())
+	}
+	return rekeyTo
 }

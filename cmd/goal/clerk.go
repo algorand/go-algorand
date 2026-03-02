@@ -64,7 +64,6 @@ var (
 	logicSigFile       string
 	timeStamp          int64
 	protoVersion       string
-	rekeyToAddress     string
 	signerAddress      string
 	rawOutput          bool
 	requestFilename    string
@@ -108,7 +107,6 @@ func init() {
 	sendCmd.Flags().StringVarP(&toAddress, "to", "t", "", "Address to send to money to (required)")
 	sendCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in microAlgos")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
-	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
 	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source file to use as account logic")
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "Base64 encoded args to pass to transaction logic")
@@ -414,14 +412,7 @@ var sendCmd = &cobra.Command{
 
 		// If rekeying, parse that address
 		// (we don't use accountList.getAddressByName because this address likely doesn't correspond to an account)
-		var rekeyTo basics.Address
-		if rekeyToAddress != "" {
-			var err1 error
-			rekeyTo, err1 = basics.UnmarshalChecksumAddress(rekeyToAddress)
-			if err1 != nil {
-				reportErrorln(err1)
-			}
-		}
+		rekeyTo := parseRekey(rekeyToAddress)
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -434,9 +425,7 @@ var sendCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}
-		if !rekeyTo.IsZero() {
-			payment.RekeyTo = rekeyTo
-		}
+		payment.RekeyTo = rekeyTo
 
 		// ConstructPayment fills in the suggested fee when fee=0. But if the user actually used --fee=0 on the
 		// commandline, we ought to do what they asked (especially now that zero or low fees make sense in
