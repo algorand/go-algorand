@@ -335,10 +335,10 @@ func _() {
 	var x [1]struct{}
 	_ = x[BN254t2-0]
 	_ = x[BLS12_381t2-1]
-	_ = x[invalidposeidon2Config-2]
+	_ = x[invalidPoseidon2Config-2]
 }
 
-const _Poseidon2Config_name = "BN254t2BLS12_381t2invalidposeidon2Config"
+const _Poseidon2Config_name = "BN254t2BLS12_381t2invalidPoseidon2Config"
 
 var _Poseidon2Config_index = [...]uint8{0, 7, 18, 40}
 

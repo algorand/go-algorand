@@ -885,10 +885,10 @@ const (
 	BN254t2 Poseidon2Config = iota
 	// BLS12_381t2 is the default Poseidon2 configuration for the BLS12-381 curve with Merkle-Damgard mode, width = 2, full rounds = 6, partial rounds = 50
 	BLS12_381t2
-	invalidposeidon2Config // compile-time constant for number of fields
+	invalidPoseidon2Config // compile-time constant for number of fields
 )
 
-var poseidon2ConfigNames [invalidposeidon2Config]string
+var poseidon2ConfigNames [invalidPoseidon2Config]string
 
 type poseidon2ConfigSpec struct {
 	field Poseidon2Config
