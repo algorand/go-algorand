@@ -143,6 +143,32 @@ func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream
 // We do some read/write operations in this handler for metadata exchange that creates a race condition
 // with StopNotify on network shutdown. To avoid, run the handler as a goroutine.
 func (n *streamManager) Connected(net network.Network, conn network.Conn) {
+	remotePeer := conn.RemotePeer()
+	localPeer := n.host.ID()
+
+	if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
+		n.log.Debugf("%s: ignoring incoming connection from %s", localPeer.String(), remotePeer.String())
+		n.host.ConnManager().Unprotect(conn.RemotePeer(), cnmgrTag)
+		return
+	}
+
+	// ensure that only one of the peers initiates the stream.
+	// the remote peer will open the stream and our streamHandler will handle it,
+	// so mark dispatched to preserve the cnmgr protection set by dialNode.
+	if localPeer > remotePeer {
+		n.log.Debugf("%s: ignoring a lesser peer ID %s", localPeer.String(), remotePeer.String())
+		return
+	}
+
+	// check if this is outgoing connection but made not by us (serviceImpl.dialNode)
+	// then it was made by some sub component like pubsub, ignore
+	if conn.Stat().Direction == network.DirOutbound {
+		if !n.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
+			n.log.Debugf("%s: ignoring non-dialed outgoing peer ID %s", localPeer.String(), remotePeer.String())
+			return
+		}
+	}
+
 	go n.handleConnected(conn)
 }
 
@@ -155,29 +181,6 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	}()
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
-
-	if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
-		n.log.Debugf("%s: ignoring incoming connection from %s", localPeer.String(), remotePeer.String())
-		return
-	}
-
-	// ensure that only one of the peers initiates the stream.
-	// the remote peer will open the stream and our streamHandler will handle it,
-	// so mark dispatched to preserve the cnmgr protection set by dialNode.
-	if localPeer > remotePeer {
-		n.log.Debugf("%s: ignoring a lesser peer ID %s", localPeer.String(), remotePeer.String())
-		dispatched = true
-		return
-	}
-
-	// check if this is outgoing connection but made not by us (serviceImpl.dialNode)
-	// then it was made by some sub component like pubsub, ignore
-	if conn.Stat().Direction == network.DirOutbound {
-		if !n.host.ConnManager().IsProtected(remotePeer, cnmgrTag) {
-			n.log.Debugf("%s: ignoring non-dialed outgoing peer ID %s", localPeer.String(), remotePeer.String())
-			return
-		}
-	}
 
 	n.streamsLock.Lock()
 	_, ok := n.streams[remotePeer]
