@@ -1241,7 +1241,8 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 		deltaResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
 		numDeltaDeleted := 0
 
-		for i := currentDeltaLen - 1; i > 0; i-- {
+		for i := currentDeltaLen; i > 0; {
+			i--
 			for _, rec := range au.deltas[i].Accts.AssetResources {
 				if rec.Addr != addr || rec.Aidx <= assetIDGT {
 					continue
@@ -1414,7 +1415,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 
 		persistedResources, resourceDbRound, err := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(appIDGT), dbLimit, basics.AppCreatable)
 		if err != nil {
-			return nil, basics.Round(0), err
+			return nil, 0, err
 		}
 
 		if resourceDbRound == currentDBRound {

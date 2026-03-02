@@ -3707,6 +3707,10 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
+	// Zero lookback so all committed rounds flush immediately, leaving deltas[0]
+	// as the first uncommitted round. This is critical for testing that the delta
+	// loop visits index 0.
+	conf.MaxAcctLookback = 0
 	au, _ := newAcctUpdates(t, ml, conf)
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
@@ -3779,8 +3783,8 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 		knownCreatables[basics.CreatableIndex(1007)] = true
 	}
 
-	// Add empty rounds so round 1 data flushes past MaxAcctLookback into DB.
-	// Round 2 destroys asset 1007, committing its deletion; optinAddr's zero holding survives.
+	// Round 2 destroys asset 1007; optinAddr's zero holding survives in DB.
+	// Additional empty rounds (if any) ensure earlier data flushes past MaxAcctLookback.
 	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
 		var updates ledgercore.AccountDeltas
 		if i == 2 {
@@ -3950,6 +3954,10 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	defer ml.Close()
 
 	conf := config.GetDefaultLocal()
+	// Zero lookback so all committed rounds flush immediately, leaving deltas[0]
+	// as the first uncommitted round. This is critical for testing that the delta
+	// loop visits index 0.
+	conf.MaxAcctLookback = 0
 	au, _ := newAcctUpdates(t, ml, conf)
 
 	knownCreatables := make(map[basics.CreatableIndex]bool)
@@ -3998,7 +4006,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 		}
 	}
 
-	// Add empty rounds so round 1 data flushes past MaxAcctLookback into DB
+	// Additional empty rounds (if any) ensure earlier data flushes past MaxAcctLookback into DB.
 	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
 		var updates ledgercore.AccountDeltas
 		base := accts[i-1]
