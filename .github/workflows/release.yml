@@ -454,7 +454,7 @@ jobs:
         if: matrix.pkg_type == 'deb'
         run: |
           PKG_NAME="${{ steps.pkgname.outputs.pkg_name }}"
-          DEB_FILE="packages/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
+          DEB_FILE="packages/algorand_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
 
           echo "Testing: ${DEB_FILE}"
           ls -la "$DEB_FILE"
@@ -464,7 +464,7 @@ jobs:
             export DEBIAN_FRONTEND=noninteractive
             apt-get update
             # Use --no-install-recommends to skip unattended-upgrades (pulls in systemd-resolved which fails in containers)
-            apt-get install -y --no-install-recommends /packages/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb
+            apt-get install -y --no-install-recommends /packages/algorand_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb
 
             # Verify binaries are installed
             command -v algod
