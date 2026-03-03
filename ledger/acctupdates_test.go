@@ -485,7 +485,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates, rnd basics.Ro
 	latest := au.deltas[len(au.deltas)-1].Accts
 	for i := 0; i < latest.Len(); i++ {
 		addr, acct := latest.GetByIdx(i)
-		d, r, withoutRewards, err := au.lookupLatest(addr)
+		d, r, withoutRewards, err := au.lookupLatest(0, addr)
 		require.NoError(t, err)
 		require.Equal(t, rnd, r)
 		require.Equal(t, int(acct.TotalAppParams), len(d.AppParams))
@@ -2049,7 +2049,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 		accts = append(accts, newAccts)
 	}
 
-	ad, _, _, err := au.lookupLatest(addr1)
+	ad, _, _, err := au.lookupLatest(0, addr1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), ad.AssetParams[aidx2].Total)
 	require.Equal(t, uint64(901), ad.Assets[aidx2].Amount)
@@ -2061,7 +2061,7 @@ func TestAcctUpdatesResources(t *testing.T) {
 	require.True(t, ok)
 	require.Empty(t, h)
 
-	ad, _, _, err = au.lookupLatest(addr2)
+	ad, _, _, err = au.lookupLatest(0, addr2)
 	require.NoError(t, err)
 	require.Equal(t, uint64(99), ad.Assets[aidx2].Amount)
 }
@@ -2107,7 +2107,7 @@ func TestAcctUpdatesLookupLatest(t *testing.T) {
 	au, _ := newAcctUpdates(t, ml, conf)
 	// accountUpdates and onlineAccounts are closed via: ml.Close() -> ml.trackers.close()
 	for addr, acct := range accts {
-		acctData, validThrough, withoutRewards, err := au.lookupLatest(addr)
+		acctData, validThrough, withoutRewards, err := au.lookupLatest(0, addr)
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
 
@@ -2260,7 +2260,7 @@ func TestAcctUpdatesLookupLatestRetry(t *testing.T) {
 			}
 
 			// issue a LookupWithoutRewards while persistedData.round != au.cachedDBRound
-			d, validThrough, withoutRewards, err := au.lookupLatest(addr)
+			d, validThrough, withoutRewards, err := au.lookupLatest(0, addr)
 			require.NoError(t, err)
 			require.Equal(t, accts[validThrough][addr].WithUpdatedRewards(proto.RewardUnit, rewardsLevels[validThrough]), d)
 			require.Equal(t, accts[validThrough][addr].MicroAlgos, withoutRewards)
@@ -2454,7 +2454,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 	wg.Add(1)
 	done := make(chan struct{})
 	go func() {
-		ad, _, _, err = au.lookupLatest(addr1)
+		ad, _, _, err = au.lookupLatest(0, addr1)
 		close(done)
 		wg.Done()
 	}()
@@ -2559,7 +2559,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 		}
 		// do not commit two last blocks to keep data in memory deltas
 	}
-	data, rnd, _, err := au.lookupLatest(addr1)
+	data, rnd, _, err := au.lookupLatest(0, addr1)
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(protoParams.MaxBalLookback+3), rnd)
 	require.Len(t, data.Assets, 2)
@@ -2718,7 +2718,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	}
 	// For rounds evicted from cache, perform sanity checks to confirm intended
 	// side effects took effect.
-	data, rnd, _, err := au.lookupLatest(addr1)
+	data, rnd, _, err := au.lookupLatest(0, addr1)
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(kvCnt/kvsPerBlock-1), rnd)
 	require.Len(t, data.Assets, 2)

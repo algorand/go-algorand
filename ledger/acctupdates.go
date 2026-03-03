@@ -704,7 +704,11 @@ func (au *accountUpdates) LatestTotals() (basics.Round, ledgercore.AccountTotals
 func (au *accountUpdates) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	return au.totalsImpl(rnd)
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return ledgercore.AccountTotals{}, err
+	}
+	return au.roundTotals[offset], nil
 }
 
 // ReadCloseSizer interface implements the standard io.Reader and io.Closer as well
@@ -735,15 +739,6 @@ func (au *accountUpdates) latestTotalsImpl() (basics.Round, ledgercore.AccountTo
 	offset := len(au.deltas)
 	rnd := au.cachedDBRound + basics.Round(len(au.deltas))
 	return rnd, au.roundTotals[offset], nil
-}
-
-// totalsImpl returns the totals of all accounts for the given round
-func (au *accountUpdates) totalsImpl(rnd basics.Round) (ledgercore.AccountTotals, error) {
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return ledgercore.AccountTotals{}, err
-	}
-	return au.roundTotals[offset], nil
 }
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
@@ -888,7 +883,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 // The rewards are added to the AccountData before returning.
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccountData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.AccountData, rnd basics.Round, withoutRewards basics.MicroAlgos, err error) {
+func (au *accountUpdates) lookupLatest(optionalRound basics.Round, addr basics.Address) (data basics.AccountData, rnd basics.Round, withoutRewards basics.MicroAlgos, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -969,7 +964,11 @@ func (au *accountUpdates) lookupLatest(addr basics.Address) (data basics.Account
 	for {
 		currentDbRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
-		rnd = au.latest()
+		if optionalRound == 0 {
+			rnd = au.latest()
+		} else {
+			rnd = optionalRound
+		}
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return

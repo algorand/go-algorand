@@ -201,6 +201,14 @@
             "collectionFormat": "csv"
           },
           {
+            "type": "integer",
+            "x-go-type": "basics.Round",
+            "minimum": 0,
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "name": "round",
+            "in": "query"
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -246,6 +254,14 @@
           },
           {
             "$ref": "#/parameters/asset-id"
+          },
+          {
+            "type": "integer",
+            "x-go-type": "basics.Round",
+            "minimum": 0,
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "name": "round",
+            "in": "query"
           },
           {
             "$ref": "#/parameters/format"
@@ -390,6 +406,14 @@
           },
           {
             "$ref": "#/parameters/application-id"
+          },
+          {
+            "type": "integer",
+            "x-go-type": "basics.Round",
+            "minimum": 0,
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "name": "round",
+            "in": "query"
           },
           {
             "$ref": "#/parameters/format"
@@ -739,6 +763,16 @@
         "schemes": ["http"],
         "summary": "Get the current supply reported by the ledger.",
         "operationId": "GetSupply",
+        "parameters": [
+          {
+            "type": "integer",
+            "x-go-type": "basics.Round",
+            "minimum": 0,
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "name": "round",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "$ref": "#/responses/SupplyResponse"
@@ -1759,6 +1793,14 @@
         "parameters": [
           {
             "$ref": "#/parameters/application-id"
+          },
+          {
+            "type": "integer",
+            "x-go-type": "basics.Round",
+            "minimum": 0,
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "name": "round",
+            "in": "query"
           }
         ],
         "responses": {
@@ -1911,6 +1953,14 @@
         "parameters": [
           {
             "$ref": "#/parameters/asset-id"
+          },
+          {
+            "type": "integer",
+            "x-go-type": "basics.Round",
+            "minimum": 0,
+            "description": "Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.",
+            "name": "round",
+            "in": "query"
           }
         ],
         "responses": {

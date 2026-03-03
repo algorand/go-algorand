@@ -1489,6 +1489,9 @@ type AccountInformationParams struct {
 	// Exclude Exclude additional items from the account. Use `all` to exclude asset holdings, application local state, created asset parameters, and created application parameters. Use `created-apps-params` to exclude only the parameters of created applications (returns only application IDs). Use `created-assets-params` to exclude only the parameters of created assets (returns only asset IDs). Multiple values can be comma-separated (e.g., `created-apps-params,created-assets-params`). Note: `all` and `none` cannot be combined with other values. Defaults to `none`.
 	Exclude *[]AccountInformationParamsExclude `form:"exclude,omitempty" json:"exclude,omitempty"`
 
+	// Round Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
+
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
@@ -1516,6 +1519,9 @@ type AccountApplicationsInformationParamsInclude string
 
 // AccountApplicationInformationParams defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParams struct {
+	// Round Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
+
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountApplicationInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
@@ -1534,6 +1540,9 @@ type AccountAssetsInformationParams struct {
 
 // AccountAssetInformationParams defines parameters for AccountAssetInformation.
 type AccountAssetInformationParams struct {
+	// Round Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
+
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *AccountAssetInformationParamsFormat `form:"format,omitempty" json:"format,omitempty"`
 }
@@ -1553,6 +1562,12 @@ type GetPendingTransactionsByAddressParams struct {
 // GetPendingTransactionsByAddressParamsFormat defines parameters for GetPendingTransactionsByAddress.
 type GetPendingTransactionsByAddressParamsFormat string
 
+// GetApplicationByIDParams defines parameters for GetApplicationByID.
+type GetApplicationByIDParams struct {
+	// Round Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
+}
+
 // GetApplicationBoxByNameParams defines parameters for GetApplicationBoxByName.
 type GetApplicationBoxByNameParams struct {
 	// Name A box name, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
@@ -1563,6 +1578,12 @@ type GetApplicationBoxByNameParams struct {
 type GetApplicationBoxesParams struct {
 	// Max Max number of box names to return. If max is not set, or max == 0, returns all box-names.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
+}
+
+// GetAssetByIDParams defines parameters for GetAssetByID.
+type GetAssetByIDParams struct {
+	// Round Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.
@@ -1626,6 +1647,12 @@ type GetTransactionGroupLedgerStateDeltasForRoundParams struct {
 
 // GetTransactionGroupLedgerStateDeltasForRoundParamsFormat defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
 type GetTransactionGroupLedgerStateDeltasForRoundParamsFormat string
+
+// GetSupplyParams defines parameters for GetSupply.
+type GetSupplyParams struct {
+	// Round Include results for the specified round. If not provided, will use the latest round. If sufficient history is not available to service this request, an error will be returned.
+	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
+}
 
 // GenerateParticipationKeysParams defines parameters for GenerateParticipationKeys.
 type GenerateParticipationKeysParams struct {
