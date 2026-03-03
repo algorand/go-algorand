@@ -19,7 +19,6 @@ package p2p
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +33,8 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -45,7 +46,7 @@ const testProto = protocol.ID("/algorand-test/1.0.0")
 
 // mockConnMgr implements connmgrcore.ConnManager for testing.
 type mockConnMgr struct {
-	mu        sync.Mutex
+	mu        deadlock.Mutex
 	protected map[peer.ID]map[string]bool
 }
 
@@ -145,7 +146,7 @@ var _ network.Conn = (*mockConn)(nil)
 
 // mockStream implements network.Stream with controllable behavior.
 type mockStream struct {
-	mu          sync.Mutex
+	mu          deadlock.Mutex
 	conn        *mockConn
 	proto       protocol.ID
 	dir         network.Direction
