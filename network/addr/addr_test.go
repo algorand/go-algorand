@@ -115,14 +115,18 @@ func TestParseHostURLOrMultiaddr(t *testing.T) {
 		"/ip4/192.255.2.8/tcp/8180/ws",
 	}
 
-	badMultiAddrs := []string{
-		"/ip4/256.256.256.256/tcp/8080", // Invalid IPv4 address.
-		"/ip4/127.0.0.1/abc/8080",       // abc is not a valid protocol.
-		"/ip4/127.0.0.1/tcp/abc",        // Port is not a valid number.
-		"/unix",                         // Unix protocol without a path is invalid.
-		"/ip4/127.0.0.1/tcp",            // Missing a port after tcp
-		"/p2p/invalidPeerID",            // Invalid peer ID after p2p.
-		"ip4/127.0.0.1/tcp/8080",        // Missing starting /.
+	badMultiAddrs := []struct {
+		addr string
+		err  error
+	}{
+		{"/ip4/256.256.256.256/tcp/8080", errMultiaddrParse}, // Invalid IPv4 address.
+		{"/ip4/127.0.0.1/abc/8080", errMultiaddrParse},       // abc is not a valid protocol.
+		{"/ip4/127.0.0.1/tcp/abc", errMultiaddrParse},        // Port is not a valid number.
+		{"/unix", errMultiaddrParse},                         // Unix protocol without a path is invalid.
+		{"/ip4/127.0.0.1/tcp", errMultiaddrParse},            // Missing a port after tcp
+		{"/p2p/invalidPeerID", errMultiaddrParse},            // Invalid peer ID after p2p.
+		{"ip4/127.0.0.1/tcp/8080", errURLNoHost},             // Missing starting / - parsed as URL.
+		{":1234", errURLColonHost},                           // Host starts with colon (not IPv6).
 	}
 
 	for _, addr := range validMultiAddrs {
@@ -134,11 +138,11 @@ func TestParseHostURLOrMultiaddr(t *testing.T) {
 		})
 	}
 
-	for _, addr := range badMultiAddrs {
-		t.Run(addr, func(t *testing.T) {
-			_, err := ParseHostOrURLOrMultiaddr(addr)
-			require.Error(t, err)
-			require.False(t, IsMultiaddr(addr))
+	for _, tc := range badMultiAddrs {
+		t.Run(tc.addr, func(t *testing.T) {
+			_, err := ParseHostOrURLOrMultiaddr(tc.addr)
+			require.ErrorIs(t, err, tc.err)
+			require.False(t, IsMultiaddr(tc.addr))
 		})
 	}
 

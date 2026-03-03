@@ -94,7 +94,7 @@ func init() {
 		"mainnet": mustConvertB64ToDigest("wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8="),
 		"testnet": mustConvertB64ToDigest("SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI="),
 		"betanet": mustConvertB64ToDigest("mFgazF+2uRS1tMiL9dsj01hJGySEmPN28B/TjjvpVW0="),
-		"devnet":  mustConvertB64ToDigest("sC3P7e2SdbqKJK0tbiCdK9tdSpbe6XeCGKdoNzmlj0E="),
+		"devnet":  mustConvertB64ToDigest("sjkznd5fmOPzTzMi6BAHa2Ir9DyOxu5H7NH3ratQG1w="),
 	}
 	validNetworkList = slices.Collect(maps.Keys(validNetworks))
 }
