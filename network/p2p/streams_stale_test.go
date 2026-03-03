@@ -1,0 +1,429 @@
+// Copyright (C) 2019-2026 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package p2p
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+
+	connmgrcore "github.com/libp2p/go-libp2p/core/connmgr"
+	ic "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/event"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/protocol"
+	ma "github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
+)
+
+// errDispatchFailed is the sentinel error returned by the failing test handler.
+var errDispatchFailed = errors.New("dispatch failed")
+
+const testProto = protocol.ID("/algorand-test/1.0.0")
+
+// mockConnMgr implements connmgrcore.ConnManager for testing.
+type mockConnMgr struct {
+	mu        sync.Mutex
+	protected map[peer.ID]map[string]bool
+}
+
+func newMockConnMgr() *mockConnMgr {
+	return &mockConnMgr{protected: make(map[peer.ID]map[string]bool)}
+}
+
+func (m *mockConnMgr) Protect(id peer.ID, tag string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.protected[id] == nil {
+		m.protected[id] = make(map[string]bool)
+	}
+	m.protected[id][tag] = true
+}
+
+func (m *mockConnMgr) Unprotect(id peer.ID, tag string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.protected[id] != nil {
+		delete(m.protected[id], tag)
+	}
+	return len(m.protected[id]) > 0
+}
+
+func (m *mockConnMgr) IsProtected(id peer.ID, tag string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.protected[id] != nil && m.protected[id][tag]
+}
+
+func (m *mockConnMgr) TagPeer(peer.ID, string, int)                {}
+func (m *mockConnMgr) UntagPeer(peer.ID, string)                   {}
+func (m *mockConnMgr) UpsertTag(peer.ID, string, func(int) int)    {}
+func (m *mockConnMgr) GetTagInfo(peer.ID) *connmgrcore.TagInfo     { return nil }
+func (m *mockConnMgr) TrimOpenConns(context.Context)               {}
+func (m *mockConnMgr) Notifee() network.Notifiee                   { return nil }
+func (m *mockConnMgr) CheckLimit(connmgrcore.GetConnLimiter) error { return nil }
+func (m *mockConnMgr) Close() error                                { return nil }
+
+// mockHost implements host.Host with only the methods used by streamManager.
+type mockHost struct {
+	id          peer.ID
+	cm          *mockConnMgr
+	newStreamFn func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
+}
+
+func (h *mockHost) ID() peer.ID                          { return h.id }
+func (h *mockHost) ConnManager() connmgrcore.ConnManager { return h.cm }
+func (h *mockHost) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID) (network.Stream, error) {
+	return h.newStreamFn(ctx, p, pids...)
+}
+
+func (h *mockHost) Peerstore() peerstore.Peerstore                      { panic("unused") }
+func (h *mockHost) Addrs() []ma.Multiaddr                               { panic("unused") }
+func (h *mockHost) Network() network.Network                            { panic("unused") }
+func (h *mockHost) Mux() protocol.Switch                                { panic("unused") }
+func (h *mockHost) Connect(context.Context, peer.AddrInfo) error        { panic("unused") }
+func (h *mockHost) SetStreamHandler(protocol.ID, network.StreamHandler) {}
+func (h *mockHost) SetStreamHandlerMatch(protocol.ID, func(protocol.ID) bool, network.StreamHandler) {
+}
+func (h *mockHost) RemoveStreamHandler(protocol.ID) {}
+func (h *mockHost) Close() error                    { return nil }
+func (h *mockHost) EventBus() event.Bus             { panic("unused") }
+
+// Verify interface satisfaction at compile time.
+var _ host.Host = (*mockHost)(nil)
+
+// mockConn implements network.Conn with controllable direction and peer IDs.
+type mockConn struct {
+	remotePeerID peer.ID
+	localPeerID  peer.ID
+	dir          network.Direction
+}
+
+func newMockConn(local, remote peer.ID, dir network.Direction) *mockConn {
+	return &mockConn{localPeerID: local, remotePeerID: remote, dir: dir}
+}
+
+func (c *mockConn) Close() error                       { return nil }
+func (c *mockConn) LocalPeer() peer.ID                 { return c.localPeerID }
+func (c *mockConn) RemotePeer() peer.ID                { return c.remotePeerID }
+func (c *mockConn) RemotePublicKey() ic.PubKey         { return nil }
+func (c *mockConn) ConnState() network.ConnectionState { return network.ConnectionState{} }
+func (c *mockConn) LocalMultiaddr() ma.Multiaddr       { return ma.StringCast("/ip4/127.0.0.1/tcp/4190") }
+func (c *mockConn) RemoteMultiaddr() ma.Multiaddr      { return ma.StringCast("/ip4/1.2.3.4/tcp/4190") }
+func (c *mockConn) Stat() network.ConnStats {
+	return network.ConnStats{Stats: network.Stats{Direction: c.dir}}
+}
+func (c *mockConn) Scope() network.ConnScope                          { return nil }
+func (c *mockConn) ID() string                                        { return "mock-conn" }
+func (c *mockConn) NewStream(context.Context) (network.Stream, error) { panic("unused") }
+func (c *mockConn) GetStreams() []network.Stream                      { return nil }
+func (c *mockConn) IsClosed() bool                                    { return false }
+
+var _ network.Conn = (*mockConn)(nil)
+
+// mockStream implements network.Stream with controllable behavior.
+type mockStream struct {
+	mu          sync.Mutex
+	conn        *mockConn
+	proto       protocol.ID
+	dir         network.Direction
+	readErr     error // error returned by Read
+	resetCalled bool
+	closeCalled bool
+}
+
+func newMockStream(conn *mockConn, proto protocol.ID, dir network.Direction) *mockStream {
+	return &mockStream{conn: conn, proto: proto, dir: dir}
+}
+
+func (s *mockStream) Read(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.readErr != nil {
+		return 0, s.readErr
+	}
+	return 0, nil
+}
+
+func (s *mockStream) Write(p []byte) (int, error) { return len(p), nil }
+
+func (s *mockStream) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closeCalled = true
+	return nil
+}
+
+func (s *mockStream) CloseRead() error  { return nil }
+func (s *mockStream) CloseWrite() error { return nil }
+
+func (s *mockStream) Reset() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resetCalled = true
+	return nil
+}
+
+func (s *mockStream) SetDeadline(time.Time) error      { return nil }
+func (s *mockStream) SetReadDeadline(time.Time) error  { return nil }
+func (s *mockStream) SetWriteDeadline(time.Time) error { return nil }
+func (s *mockStream) Protocol() protocol.ID            { return s.proto }
+func (s *mockStream) SetProtocol(protocol.ID) error    { return nil }
+func (s *mockStream) Stat() network.Stats              { return network.Stats{Direction: s.dir} }
+func (s *mockStream) Conn() network.Conn               { return s.conn }
+func (s *mockStream) ID() string                       { return "mock-stream" }
+func (s *mockStream) Scope() network.StreamScope       { return nil }
+
+func (s *mockStream) wasReset() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.resetCalled
+}
+
+var _ network.Stream = (*mockStream)(nil)
+
+// failingHandler is a StreamHandler that always returns errDispatchFailed.
+func failingHandler(_ context.Context, _ peer.ID, _ network.Stream, _ bool) error {
+	return errDispatchFailed
+}
+
+// newTestStreamManager creates a streamManager with a failing handler for testProto.
+func newTestStreamManager(localID peer.ID, allowIncoming bool) (*streamManager, *mockHost) {
+	cm := newMockConnMgr()
+	h := &mockHost{id: localID, cm: cm}
+	handlers := StreamHandlers{
+		{ProtoID: testProto, Handler: failingHandler},
+	}
+	logger := logging.NewLogger()
+	logger.SetLevel(logging.Debug)
+	sm := makeStreamManager(context.Background(), logger, h, handlers, allowIncoming)
+	return sm, h
+}
+
+// assertStreamMapEmpty checks that sm.streams has no entry for remotePeer.
+func assertStreamMapEmpty(t *testing.T, sm *streamManager, remotePeer peer.ID) {
+	t.Helper()
+	sm.streamsLock.Lock()
+	defer sm.streamsLock.Unlock()
+	_, exists := sm.streams[remotePeer]
+	require.False(t, exists, "expected n.streams[%s] to be cleaned up after dispatch failure", remotePeer)
+}
+
+// --- test cases ---
+
+// TestStream_MapCleanupOnDispatchFailure verifies that n.streams is cleaned up
+// when dispatch (V22 handshake) fails, across all 8 combinations:
+//
+//	directions (inbound/outbound) ×
+//	peer ID orderings (local < remote / local > remote) ×
+//	dial origins (dialNode / DHT-pubsub)
+func TestStream_MapCleanupOnDispatchFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// deterministic peer IDs
+	lowPeer := peer.ID("AAAA-low-peer")
+	highPeer := peer.ID("ZZZZ-high-peer")
+	require.True(t, lowPeer < highPeer)
+
+	// handleConnected path — local node initiates the stream
+
+	// case 1: outbound, localPeer < remotePeer, dialNode
+	//  Connected, peer ID passes, protected, handleConnected, dispatch fails
+	t.Run("outbound_localLow_dialNode", func(t *testing.T) {
+		t.Parallel()
+		sm, h := newTestStreamManager(lowPeer, true)
+		conn := newMockConn(lowPeer, highPeer, network.DirOutbound)
+		stream := newMockStream(conn, testProto, network.DirOutbound)
+		h.newStreamFn = func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error) {
+			return stream, nil
+		}
+		// dialNode would have protected the peer before dialing
+		h.cm.Protect(highPeer, cnmgrTag)
+
+		sm.handleConnected(conn)
+
+		assertStreamMapEmpty(t, sm, highPeer)
+		require.True(t, stream.wasReset())
+		require.False(t, h.cm.IsProtected(highPeer, cnmgrTag))
+	})
+
+	// case 2: outbound, localPeer < remotePeer, DHT dial
+	//  Connected skips (unprotected). DialPeersUntilTargetCount, Protect, handleConnected, dispatch fails
+	t.Run("outbound_localLow_dhtDial", func(t *testing.T) {
+		t.Parallel()
+		sm, h := newTestStreamManager(lowPeer, true)
+		conn := newMockConn(lowPeer, highPeer, network.DirOutbound)
+		stream := newMockStream(conn, testProto, network.DirOutbound)
+		h.newStreamFn = func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error) {
+			return stream, nil
+		}
+		// DialPeersUntilTargetCount protects then calls handleConnected
+		h.cm.Protect(highPeer, cnmgrTag)
+
+		sm.handleConnected(conn)
+
+		assertStreamMapEmpty(t, sm, highPeer)
+		require.True(t, stream.wasReset())
+		require.False(t, h.cm.IsProtected(highPeer, cnmgrTag))
+	})
+
+	// case 3: outbound, localPeer > remotePeer, DHT dial
+	//  Connected defers (peer ID). Remote's stream rejected (unprotected outbound).
+	//  DialPeersUntilTargetCount, Protect, handleConnected (new code skips peer ID check), dispatch fails
+	t.Run("outbound_localHigh_dhtDial", func(t *testing.T) {
+		t.Parallel()
+		sm, h := newTestStreamManager(highPeer, true)
+		conn := newMockConn(highPeer, lowPeer, network.DirOutbound)
+		stream := newMockStream(conn, testProto, network.DirOutbound)
+		h.newStreamFn = func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error) {
+			return stream, nil
+		}
+		h.cm.Protect(lowPeer, cnmgrTag)
+
+		sm.handleConnected(conn)
+
+		assertStreamMapEmpty(t, sm, lowPeer)
+		require.True(t, stream.wasReset())
+		require.False(t, h.cm.IsProtected(lowPeer, cnmgrTag))
+	})
+
+	// case 4: inbound, localPeer < remotePeer, remote's dialNode dialed
+	//  Connected, inbound gossip OK, peer ID passes, handleConnected, dispatch fails
+	t.Run("inbound_localLow_remoteDial", func(t *testing.T) {
+		t.Parallel()
+		sm, h := newTestStreamManager(lowPeer, true)
+		conn := newMockConn(lowPeer, highPeer, network.DirInbound)
+		stream := newMockStream(conn, testProto, network.DirInbound)
+		h.newStreamFn = func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error) {
+			return stream, nil
+		}
+
+		sm.handleConnected(conn)
+
+		assertStreamMapEmpty(t, sm, highPeer)
+		require.True(t, stream.wasReset())
+	})
+
+	// case 5: inbound, localPeer < remotePeer, remote's DHT dialed
+	t.Run("inbound_localLow_remoteDHT", func(t *testing.T) {
+		t.Parallel()
+		sm, h := newTestStreamManager(lowPeer, true)
+		conn := newMockConn(lowPeer, highPeer, network.DirInbound)
+		stream := newMockStream(conn, testProto, network.DirInbound)
+		h.newStreamFn = func(context.Context, peer.ID, ...protocol.ID) (network.Stream, error) {
+			return stream, nil
+		}
+		// No protection from our side (remote's inbound conn)
+
+		sm.handleConnected(conn)
+
+		assertStreamMapEmpty(t, sm, highPeer)
+		require.True(t, stream.wasReset())
+		// Unprotect was called but was a no-op (nothing was protected)
+		require.False(t, h.cm.IsProtected(highPeer, cnmgrTag))
+	})
+
+	// streamHandler path — remote peer creates the stream, our node handles it
+
+	// case 6: outbound, localPeer > remotePeer, our dialNode
+	//  Connected defers (peer ID). Remote opens stream, our streamHandler, dispatch fails
+	t.Run("outbound_localHigh_ourDial", func(t *testing.T) {
+		t.Parallel()
+		sm, h := newTestStreamManager(highPeer, true)
+		// Connection is outbound (we dialed), stream is inbound (remote initiated)
+		conn := newMockConn(highPeer, lowPeer, network.DirOutbound)
+		stream := newMockStream(conn, testProto, network.DirInbound)
+		// Our dialNode protected this peer
+		h.cm.Protect(lowPeer, cnmgrTag)
+
+		sm.streamHandler(stream)
+
+		assertStreamMapEmpty(t, sm, lowPeer)
+		require.True(t, stream.wasReset())
+		// dispatched=false => Unprotect called
+		require.False(t, h.cm.IsProtected(lowPeer, cnmgrTag))
+	})
+
+	// case 7: inbound, localPeer > remotePeer, remote's dialNode dialed us
+	//  Connected defers (peer ID). Remote opens stream, our streamHandler, dispatch fails
+	t.Run("inbound_localHigh_remoteDial", func(t *testing.T) {
+		t.Parallel()
+		sm, h := newTestStreamManager(highPeer, true)
+		// Connection is inbound (remote dialed us), stream is inbound (remote initiated)
+		conn := newMockConn(highPeer, lowPeer, network.DirInbound)
+		stream := newMockStream(conn, testProto, network.DirInbound)
+
+		sm.streamHandler(stream)
+
+		assertStreamMapEmpty(t, sm, lowPeer)
+		require.True(t, stream.wasReset())
+		// No protection was set, so Unprotect is a no-op
+		require.False(t, h.cm.IsProtected(lowPeer, cnmgrTag))
+	})
+
+	// case 8: inbound, localPeer > remotePeer, remote's DHT dialed us
+	//  Connected defers (peer ID). Remote's DHT connection;
+	//  remote opens stream, our streamHandler, dispatch fails
+	t.Run("inbound_localHigh_remoteDHT", func(t *testing.T) {
+		t.Parallel()
+		sm, h := newTestStreamManager(highPeer, true)
+		conn := newMockConn(highPeer, lowPeer, network.DirInbound)
+		stream := newMockStream(conn, testProto, network.DirInbound)
+
+		sm.streamHandler(stream)
+
+		assertStreamMapEmpty(t, sm, lowPeer)
+		require.True(t, stream.wasReset())
+		require.False(t, h.cm.IsProtected(lowPeer, cnmgrTag))
+	})
+}
+
+// TestStream_HandlerCleanupReplacingDeadStream verifies that when streamHandler
+// replaces a dead stream and the new dispatch also fails, the map entry is cleaned up.
+func TestStream_HandlerCleanupReplacingDeadStream(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	localID := peer.ID("ZZZZ-high-peer")
+	remoteID := peer.ID("AAAA-low-peer")
+	sm, h := newTestStreamManager(localID, true)
+
+	// Pre-populate n.streams with a dead (reset) stream
+	conn := newMockConn(localID, remoteID, network.DirInbound)
+	deadStream := newMockStream(conn, testProto, network.DirInbound)
+	deadStream.readErr = network.ErrReset // Read returns error => stream is dead
+	sm.streams[remoteID] = deadStream
+
+	// Protect so that Unprotect tracking works
+	h.cm.Protect(remoteID, cnmgrTag)
+
+	// New stream arrives from remote peer, dispatch will fail
+	newStream := newMockStream(conn, testProto, network.DirInbound)
+	sm.streamHandler(newStream)
+
+	assertStreamMapEmpty(t, sm, remoteID)
+	require.True(t, newStream.wasReset(), "new stream should be reset on dispatch failure")
+}

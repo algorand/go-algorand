@@ -98,7 +98,8 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 				// an error occurred while checking the old stream
 				n.log.Infof("Failed to check old stream with %s: %v", remotePeer, err)
 			}
-			n.streams[stream.Conn().RemotePeer()] = stream
+			// old stream is dead, remove
+			delete(n.streams, remotePeer)
 
 			incoming := stream.Conn().Stat().Direction == network.DirInbound
 			if err1 := n.dispatch(n.ctx, remotePeer, stream, incoming); err1 != nil {
@@ -106,6 +107,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 				_ = stream.Reset()
 				return
 			}
+			n.streams[stream.Conn().RemotePeer()] = stream
 			dispatched = true
 			return
 		}
@@ -115,13 +117,14 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 		return
 	}
 	// no old stream
-	n.streams[stream.Conn().RemotePeer()] = stream
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
 	if err := n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
 		n.log.Errorln(err.Error())
 		_ = stream.Reset()
 		return
 	}
+
+	n.streams[stream.Conn().RemotePeer()] = stream
 
 	dispatched = true
 }
@@ -184,8 +187,8 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 
 	n.streamsLock.Lock()
 	_, ok := n.streams[remotePeer]
+	n.streamsLock.Unlock()
 	if ok {
-		n.streamsLock.Unlock()
 		n.log.Debugf("%s: already have a stream to/from %s", localPeer.String(), remotePeer.String())
 		dispatched = true
 		return // there's already an active stream with this peer for our protocol
@@ -198,12 +201,8 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	stream, err := n.host.NewStream(n.ctx, remotePeer, protos...)
 	if err != nil {
 		n.log.Infof("%s: failed to open stream to %s (%s): %v", localPeer.String(), remotePeer, conn.RemoteMultiaddr().String(), err)
-		n.streamsLock.Unlock()
 		return
 	}
-	n.streams[remotePeer] = stream
-	n.streamsLock.Unlock()
-
 	n.log.Infof("%s: using protocol %s with peer %s", localPeer.String(), stream.Protocol(), remotePeer.String())
 
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
@@ -212,6 +211,10 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 		_ = stream.Reset()
 		return
 	}
+
+	n.streamsLock.Lock()
+	n.streams[remotePeer] = stream
+	n.streamsLock.Unlock()
 
 	dispatched = true
 }
