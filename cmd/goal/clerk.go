@@ -410,9 +410,6 @@ var sendCmd = &cobra.Command{
 			closeToAddressResolved = accountList.getAddressByName(closeToAddress)
 		}
 
-		// If rekeying, parse that address
-		// (we don't use accountList.getAddressByName because this address likely doesn't correspond to an account)
-		rekeyTo := parseRekey(rekeyToAddress)
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, _, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -425,7 +422,10 @@ var sendCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}
-		payment.RekeyTo = rekeyTo
+
+		// If rekeying, parse that address
+		// (we don't use accountList.getAddressByName because this address likely doesn't correspond to an account)
+		payment.RekeyTo = parseRekey(rekeyToAddress)
 
 		// ConstructPayment fills in the suggested fee when fee=0. But if the user actually used --fee=0 on the
 		// commandline, we ought to do what they asked (especially now that zero or low fees make sense in
