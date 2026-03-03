@@ -306,13 +306,13 @@ jobs:
           nfpm pkg \
             -f .github/packaging/algorand.nfpm.yaml \
             -p deb \
-            -t "dist/${PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
+            -t "dist/algorand_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
 
           # Build devtools package
           nfpm pkg \
             -f .github/packaging/algorand-devtools.nfpm.yaml \
             -p deb \
-            -t "dist/${DEVTOOLS_PKG_NAME}_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
+            -t "dist/algorand-devtools_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb"
 
           echo "Built Debian packages:"
           ls -la dist/*.deb
