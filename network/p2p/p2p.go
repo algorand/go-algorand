@@ -351,7 +351,9 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) bool {
 				// protect and re-trigger stream setup now.
 				s.host.ConnManager().Protect(peerInfo.ID, cnmgrTag)
 				go s.streams.handleConnected(conns[0])
-				numOutgoingConns++
+				if conns[0].Stat().Direction == network.DirOutbound {
+					numOutgoingConns++
+				}
 			}
 			continue
 		}

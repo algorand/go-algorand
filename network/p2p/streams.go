@@ -213,9 +213,19 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	}
 
 	n.streamsLock.Lock()
+	defer n.streamsLock.Unlock()
+	if _, exists := n.streams[remotePeer]; exists {
+		// another stream was added in the meantime, close this one and keep the existing one
+		_ = stream.Reset()
+		dispatched = true
+		return
+	}
+	// don't add disconnected / died conns, so Disconnect won't need to clean up
+	if conn.IsClosed() || stream.Conn().IsClosed() {
+		_ = stream.Reset()
+		return // dispatched is still false
+	}
 	n.streams[remotePeer] = stream
-	n.streamsLock.Unlock()
-
 	dispatched = true
 }
 
