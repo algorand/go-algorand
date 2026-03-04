@@ -383,6 +383,54 @@ func TestFeePooling(t *testing.T) {
 	})
 }
 
+// TestGroupChecks checks that the group checks are working
+func TestGroupChecks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// FeePooling was added in v28, but we have now removed the consensus flag,
+	// as we can pretend it was always allowed. Test from v27 to show.
+	ledgertesting.TestConsensusRange(t, 27, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		proto := config.Consensus[cv]
+
+		tx0 := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   addrs[0],
+			Fee:      basics.MicroAlgos{Raw: proto.MinTxnFee},
+			Receiver: addrs[1],
+		}
+
+		// txgroup sets up the Group properly, so it works, but it doesn't let
+		// us test what happens when the group isn't made properly.
+		dl.txgroup("", &tx0, tx0.Noted("again"))
+
+		// so here we make the group and tweak it to see the errors
+
+		showFail := func(txgroup []transactions.SignedTxn, msg string) {
+			t.Helper()
+			err := dl.eval.TestTransactionGroup(txgroup)
+			require.ErrorContains(t, err, msg)
+
+			err = dl.eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
+			require.ErrorContains(t, err, msg)
+		}
+
+		dl.beginBlock()
+		g := makeGroup(t, dl.generator, dl.eval, tx0.Noted("x"), tx0.Noted("y"))
+		g[0].Txn.Group = crypto.Digest{}
+		showFail(g, "[0] had zero Group")
+		g[0].Txn.Group = g[1].Txn.Group
+		g[0].Txn.Group[0]++
+		showFail(g, "inconsistent group values")
+		g[1].Txn.Group[0]++
+		showFail(g, "incomplete group")
+	})
+}
+
 // TestIncentiveEligible checks that keyreg with extra fee turns on the incentive eligible flag
 func TestIncentiveEligible(t *testing.T) {
 	partitiontest.PartitionTest(t)

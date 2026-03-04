@@ -156,12 +156,17 @@ func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.T
 	require.True(t, len(problem) == 0 || problem[0] == "", "Transaction did not fail. Expected: %v", problem)
 }
 
-func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
+func makeGroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) []transactions.SignedTxn {
 	t.Helper()
 	for _, txn := range txns {
 		fillDefaults(t, ledger, eval, txn)
 	}
-	txgroup := txntest.Group(txns...)
+	return txntest.Group(txns...)
+}
+
+func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
+	t.Helper()
+	txgroup := makeGroup(t, ledger, eval, txns...)
 
 	if err := eval.TestTransactionGroup(txgroup); err != nil {
 		return err
