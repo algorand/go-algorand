@@ -1221,10 +1221,6 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 // lookupAssetResources returns all the asset resources for a given address.
 // It merges in-memory deltas with persisted data to provide current-round information.
 func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
-	if limit == 0 {
-		return nil, basics.Round(0), nil
-	}
-
 	needUnlock := true
 	au.accountsMu.RLock()
 	defer func() {
@@ -1232,6 +1228,10 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 			au.accountsMu.RUnlock()
 		}
 	}()
+
+	if limit == 0 {
+		return nil, au.cachedDBRound + basics.Round(len(au.deltas)), nil
+	}
 
 	for {
 		currentDBRound := au.cachedDBRound
@@ -1367,10 +1367,6 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 // It merges in-memory deltas with persisted data to provide current-round information.
 // If includeParams is false, AppParams will not be populated to save memory allocations (app params can be ~50KB each).
 func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
-	if limit == 0 {
-		return nil, basics.Round(0), nil
-	}
-
 	needUnlock := true
 	au.accountsMu.RLock()
 	defer func() {
@@ -1378,6 +1374,10 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 			au.accountsMu.RUnlock()
 		}
 	}()
+
+	if limit == 0 {
+		return nil, au.cachedDBRound + basics.Round(len(au.deltas)), nil
+	}
 
 	for {
 		currentDBRound := au.cachedDBRound
@@ -1505,7 +1505,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 
 		if resourceDbRound < currentDBRound {
 			au.log.Errorf("accountUpdates.lookupApplicationResources: database round %d is behind in-memory round %d", resourceDbRound, currentDBRound)
-			return nil, basics.Round(0), &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
+			return nil, 0, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
 		}
 		au.accountsMu.RLock()
 		needUnlock = true
