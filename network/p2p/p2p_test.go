@@ -17,9 +17,12 @@
 package p2p
 
 import (
+	"context"
 	"fmt"
+	"math"
 	"net"
 	"testing"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -29,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -76,7 +80,7 @@ func TestNetAddressToListenAddress(t *testing.T) {
 		t.Run(fmt.Sprintf("input: %s", test.input), func(t *testing.T) {
 			res, err := netAddressToListenAddress(test.input)
 			if test.err {
-				require.Error(t, err)
+				require.ErrorContains(t, err, `invalid netAddress`)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.output, res)
@@ -246,18 +250,41 @@ func TestP2PMakeHostAddressFilter(t *testing.T) {
 	}
 }
 
+func TestP2PServiceStartZeroIncomingDoesNotListen(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.IncomingConnectionsLimit = 0
+
+	td := t.TempDir()
+	pstore, err := peerstore.NewPeerStore(nil, "test")
+	require.NoError(t, err)
+
+	host, la, err := MakeHost(cfg, td, pstore)
+	require.NoError(t, err)
+
+	svc, err := MakeService(context.Background(), logging.TestingLog(t), cfg, host, la, StreamHandlers{})
+	require.NoError(t, err)
+	defer svc.Close()
+
+	require.NoError(t, svc.Start())
+	require.Empty(t, host.Network().ListenAddresses())
+}
+
 func TestP2PPubSubOptions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	var opts []pubsub.Option
 	option := DisablePubSubPeerExchange()
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 1)
 
 	tracer := &mockRawTracer{}
 	option = SetPubSubMetricsTracer(tracer)
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 2)
 
 	filterFunc := func(roleChecker peerstore.RoleChecker, pid peer.ID) bool {
@@ -265,8 +292,14 @@ func TestP2PPubSubOptions(t *testing.T) {
 	}
 	checker := &mockRoleChecker{}
 	option = SetPubSubPeerFilter(filterFunc, checker)
-	option(&opts)
+	option(&opts, nil)
 	require.Len(t, opts, 3)
+
+	option = SetPubSubHeartbeatInterval(100 * time.Millisecond)
+	params := &pubsub.GossipSubParams{}
+	option(&opts, params)
+	require.Len(t, opts, 3) // SetPubSubHeartbeatInterval does not add to opts but updates params
+	require.Equal(t, 100*time.Millisecond, params.HeartbeatInterval)
 }
 
 type mockRawTracer struct{}
@@ -291,4 +324,106 @@ type mockRoleChecker struct{}
 
 func (m *mockRoleChecker) HasRole(pid peer.ID, role phonebook.Role) bool {
 	return true
+}
+
+func TestDeriveConnLimits_Server(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = ":4160"
+	cfg.IncomingConnectionsLimit = 2400
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2400+12, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 2412, limits.connMgrHigh)
+	require.Equal(t, 2315, limits.connMgrLow) // 2412 * 96 / 100
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_UnboundedServer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = ":4160"
+	cfg.IncomingConnectionsLimit = -1
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, math.MaxInt, limits.rcmgrConns)
+	require.Equal(t, math.MaxInt, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 0, limits.connMgrHigh)
+	require.Equal(t, 0, limits.connMgrLow)
+}
+
+func TestDeriveConnLimits_Client(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 24, limits.rcmgrConns) // 4 * 6
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound) // 4 * 3
+	require.Equal(t, 12, limits.connMgrHigh)        // 4 * 3
+	require.Equal(t, 8, limits.connMgrLow)          // 4 * 2
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+
+	// ensure cfg.IncomingConnectionsLimit = -1 does not affect client limits
+	cfg.IncomingConnectionsLimit = -1
+	newLimits := deriveConnLimits(cfg)
+	require.Equal(t, limits, newLimits)
+}
+
+func TestDeriveConnLimits_HybridClient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Hybrid client: EnableP2PHybridMode but no listen addresses
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.GossipFanout = 4
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 24, limits.rcmgrConns)
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 12, limits.connMgrHigh)
+	require.Equal(t, 8, limits.connMgrLow)
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_HybridServer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ":4160"
+	cfg.P2PHybridNetAddress = ":4190"
+	cfg.IncomingConnectionsLimit = 2400
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2412, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.rcmgrConnsInbound)
+	require.Equal(t, 12, limits.rcmgrConnsOutbound)
+	require.Equal(t, 2412, limits.connMgrHigh)
+	require.Equal(t, 2315, limits.connMgrLow)
+	require.LessOrEqual(t, limits.connMgrHigh, limits.rcmgrConns)
+}
+
+func TestDeriveConnLimits_ZeroFanout(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.GossipFanout = 0
+	limits := deriveConnLimits(cfg)
+	require.GreaterOrEqual(t, limits.connMgrLow, 0) // zero means zero
+	require.GreaterOrEqual(t, limits.connMgrHigh, limits.connMgrLow)
+	require.GreaterOrEqual(t, limits.rcmgrConns, limits.connMgrHigh)
+	require.Equal(t, 0, limits.rcmgrConnsInbound)
+	require.Equal(t, 0, limits.rcmgrConnsOutbound)
 }

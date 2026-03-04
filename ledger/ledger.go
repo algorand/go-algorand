@@ -601,6 +601,13 @@ func (l *Ledger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, 
 	return resources, lookupRound, err
 }
 
+// LookupApplications returns the application resources (local state and params) for a given address, with pagination support.
+// If includeParams is false, AppParams will not be populated to save memory allocations.
+func (l *Ledger) LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	resources, lookupRound, err := l.accts.LookupApplicationResources(addr, appIDGT, limit, includeParams)
+	return resources, lookupRound, err
+}
+
 // lookupResource loads a resource that matches the request parameters from the accounts update
 func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	l.trackerMu.RLock()
