@@ -970,7 +970,7 @@ func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
 			tx.Note = make([]byte, 8)
 			crypto.RandBytes(tx.Note)
 			signedTx := tx.Sign(secrets[i])
-			err := transactionPool.RememberOne(signedTx)
+			err := transactionPool.rememberOne(signedTx)
 			require.NoError(t, err)
 		}
 	}
@@ -1624,7 +1624,7 @@ func TestPoolFeeClassification(t *testing.T) {
 			tx.Note = make([]byte, 1024)
 			crypto.RandBytes(tx.Note)
 			signedTx := tx.Sign(secrets[i])
-			require.NoError(t, transactionPool.RememberOne(signedTx))
+			require.NoError(t, transactionPool.rememberOne(signedTx))
 		}
 	}
 
@@ -1649,7 +1649,7 @@ func TestPoolFeeClassification(t *testing.T) {
 		},
 	}
 	tx.Note = make([]byte, 1024)
-	err := transactionPool.RememberOne(tx.Sign(secrets[0]))
+	err := transactionPool.rememberOne(tx.Sign(secrets[0]))
 	require.Error(t, err)
 	require.Equal(t, TxPoolErrTagFee, ClassifyTxPoolError(err))
 }

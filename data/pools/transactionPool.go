@@ -467,12 +467,6 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 	return nil
 }
 
-// RememberOne stores the provided transaction.
-// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	return pool.Remember([]transactions.SignedTxn{t})
-}
-
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
