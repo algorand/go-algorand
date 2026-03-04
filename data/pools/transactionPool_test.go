@@ -682,7 +682,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 
 func TestTxPoolReevalMetricsRecordLedgerDuplicate(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	// t.Parallel() Reeval hits a global counter
 
 	// Sanity: ensure tags cover the scenarios we expect to record.
 	require.Contains(t, TxPoolErrTags, TxPoolErrTagTxID)
@@ -1594,7 +1594,7 @@ func TestPoolFeeClassification(t *testing.T) {
 
 func TestPoolLeaseReevalClassification(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	// t.Parallel() Reeval hits a global counter
 
 	origCounter := txPoolReevalCounter
 	txPoolReevalCounter = metrics.NewTagCounter(
