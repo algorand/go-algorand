@@ -161,54 +161,29 @@ type preloaderTask struct {
 	groupTaskIndex int
 }
 
-// preloaderTaskQueue is a dynamic linked list of enqueued entries, optimized for non-synchronized insertion and
-// synchronized extraction
-type preloaderTaskQueue struct {
-	next    *preloaderTaskQueue
-	used    int
-	entries []*preloaderTask
-	baseIdx int
+type preloaderTaskQueue util.PagedQueue[*preloaderTask]
+
+func allocPreloaderQueue(count int) *preloaderTaskQueue {
+	return (*preloaderTaskQueue)(util.NewPagedQueue[*preloaderTask](count))
+}
+
+func (pq *preloaderTaskQueue) append(t *preloaderTask) *preloaderTaskQueue {
+	return (*preloaderTaskQueue)((*util.PagedQueue[*preloaderTask])(pq).Append(t))
+}
+
+func (pq *preloaderTaskQueue) length() int64 {
+	return int64((*util.PagedQueue[*preloaderTask])(pq).Len())
+}
+
+func (pq *preloaderTaskQueue) getTaskAtIndex(idx int) (*preloaderTaskQueue, *preloaderTask) {
+	page, task := (*util.PagedQueue[*preloaderTask])(pq).Get(idx)
+	return (*preloaderTaskQueue)(page), task
 }
 
 type groupTaskDone struct {
 	groupIdx int64
 	err      error
 	task     *preloaderTask
-}
-
-func allocPreloaderQueue(count int) *preloaderTaskQueue {
-	if count < 4 {
-		count = 4
-	}
-	return &preloaderTaskQueue{
-		entries: make([]*preloaderTask, count),
-	}
-}
-
-// append places the task on the queue, allocating a new page if the current
-// one is full, and returning the active page.
-func (pq *preloaderTaskQueue) append(t *preloaderTask) *preloaderTaskQueue {
-	if pq.used >= len(pq.entries) {
-		pq.next = &preloaderTaskQueue{
-			entries: make([]*preloaderTask, len(pq.entries)*2),
-			baseIdx: pq.baseIdx + pq.used,
-		}
-		pq = pq.next
-	}
-	pq.entries[pq.used] = t
-	pq.used++
-	return pq
-}
-
-func (pq *preloaderTaskQueue) getTaskAtIndex(idx int) (*preloaderTaskQueue, *preloaderTask) {
-	localIdx := idx - pq.baseIdx
-	if pq.used > localIdx {
-		return pq, pq.entries[localIdx]
-	}
-	if pq.next != nil {
-		return pq.next.getTaskAtIndex(idx)
-	}
-	return pq, nil
 }
 
 type accountCreatableKey struct {
@@ -474,8 +449,7 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 		totalKVs += task.kvCount
 	}
 
-	// queue points to the last page, so we can get the total count easily
-	tasksCount := int64(queue.baseIdx + queue.used)
+	tasksCount := queue.length()
 
 	// update all the groups task :
 	// allocate the correct number of balances, as well as
