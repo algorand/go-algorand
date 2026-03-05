@@ -164,11 +164,10 @@ type preloaderTask struct {
 // preloaderTaskQueue is a dynamic linked list of enqueued entries, optimized for non-synchronized insertion and
 // synchronized extraction
 type preloaderTaskQueue struct {
-	next               *preloaderTaskQueue
-	used               int
-	entries            []*preloaderTask
-	baseIdx            int
-	maxTxnGroupEntries int
+	next    *preloaderTaskQueue
+	used    int
+	entries []*preloaderTask
+	baseIdx int
 }
 
 type groupTaskDone struct {
@@ -177,30 +176,27 @@ type groupTaskDone struct {
 	task     *preloaderTask
 }
 
-func allocPreloaderQueue(count int, maxTxnGroupEntries int) preloaderTaskQueue {
-	return preloaderTaskQueue{
-		entries:            make([]*preloaderTask, count*2+maxTxnGroupEntries*2),
-		maxTxnGroupEntries: maxTxnGroupEntries,
+func allocPreloaderQueue(count int) *preloaderTaskQueue {
+	if count < 4 {
+		count = 4
+	}
+	return &preloaderTaskQueue{
+		entries: make([]*preloaderTask, count),
 	}
 }
 
-// enqueue places the queued entry on the queue, returning the latest queue
-// ( in case the current "page" ran out of space )
-func (pq *preloaderTaskQueue) enqueue(t *preloaderTask) {
+// append places the task on the queue, allocating a new page if the current
+// one is full, and returning the active page.
+func (pq *preloaderTaskQueue) append(t *preloaderTask) *preloaderTaskQueue {
+	if pq.used >= len(pq.entries) {
+		pq.next = &preloaderTaskQueue{
+			entries: make([]*preloaderTask, len(pq.entries)*2),
+			baseIdx: pq.baseIdx + pq.used,
+		}
+		pq = pq.next
+	}
 	pq.entries[pq.used] = t
 	pq.used++
-}
-
-func (pq *preloaderTaskQueue) expand() *preloaderTaskQueue {
-	if cap(pq.entries)-pq.used < pq.maxTxnGroupEntries {
-		pq.next = &preloaderTaskQueue{
-			entries:            make([]*preloaderTask, cap(pq.entries)*2),
-			used:               0,
-			baseIdx:            pq.baseIdx + pq.used,
-			maxTxnGroupEntries: pq.maxTxnGroupEntries,
-		}
-		return pq.next
-	}
 	return pq
 }
 
@@ -220,9 +216,9 @@ type accountCreatableKey struct {
 	cidx    basics.CreatableIndex
 }
 
-func (pq *preloaderTaskQueue) addAccountTask(addr *basics.Address, wt *groupTask, accountTasks map[basics.Address]*preloaderTask) {
+func (pq *preloaderTaskQueue) addAccountTask(addr *basics.Address, wt *groupTask, accountTasks map[basics.Address]*preloaderTask) *preloaderTaskQueue {
 	if addr.IsZero() {
-		return
+		return pq
 	}
 	if _, have := accountTasks[*addr]; !have {
 		newTask := &preloaderTask{
@@ -232,28 +228,30 @@ func (pq *preloaderTaskQueue) addAccountTask(addr *basics.Address, wt *groupTask
 		}
 		wt.balancesCount++
 		accountTasks[*addr] = newTask
-		pq.enqueue(newTask)
+		pq = pq.append(newTask)
 	}
+	return pq
 }
 
-func (pq *preloaderTaskQueue) addAssetTask(aid basics.AssetIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
-
-	pq.addResourceTask(nil, basics.CreatableIndex(aid), basics.AssetCreatable, wt, resourceTasks)
+func (pq *preloaderTaskQueue) addAssetTask(aid basics.AssetIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) *preloaderTaskQueue {
+	return pq.addResourceTask(nil, basics.CreatableIndex(aid), basics.AssetCreatable, wt, resourceTasks)
 }
 
-func (pq *preloaderTaskQueue) addHoldingTask(addr basics.Address, aid basics.AssetIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
-	pq.addResourceTask(&addr, basics.CreatableIndex(aid), basics.AssetCreatable, wt, resourceTasks)
-}
-func (pq *preloaderTaskQueue) addAppTask(aid basics.AppIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
-	pq.addResourceTask(nil, basics.CreatableIndex(aid), basics.AppCreatable, wt, resourceTasks)
-}
-func (pq *preloaderTaskQueue) addLocalsTask(addr basics.Address, aid basics.AppIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
-	pq.addResourceTask(&addr, basics.CreatableIndex(aid), basics.AppCreatable, wt, resourceTasks)
+func (pq *preloaderTaskQueue) addHoldingTask(addr basics.Address, aid basics.AssetIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) *preloaderTaskQueue {
+	return pq.addResourceTask(&addr, basics.CreatableIndex(aid), basics.AssetCreatable, wt, resourceTasks)
 }
 
-func (pq *preloaderTaskQueue) addResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) {
+func (pq *preloaderTaskQueue) addAppTask(aid basics.AppIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) *preloaderTaskQueue {
+	return pq.addResourceTask(nil, basics.CreatableIndex(aid), basics.AppCreatable, wt, resourceTasks)
+}
+
+func (pq *preloaderTaskQueue) addLocalsTask(addr basics.Address, aid basics.AppIndex, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) *preloaderTaskQueue {
+	return pq.addResourceTask(&addr, basics.CreatableIndex(aid), basics.AppCreatable, wt, resourceTasks)
+}
+
+func (pq *preloaderTaskQueue) addResourceTask(addr *basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType, wt *groupTask, resourceTasks map[accountCreatableKey]*preloaderTask) *preloaderTaskQueue {
 	if cidx == 0 {
-		return
+		return pq
 	}
 	key := accountCreatableKey{
 		cidx: cidx,
@@ -271,13 +269,14 @@ func (pq *preloaderTaskQueue) addResourceTask(addr *basics.Address, cidx basics.
 		}
 		wt.resourcesCount++
 		resourceTasks[key] = newTask
-		pq.enqueue(newTask)
+		pq = pq.append(newTask)
 	}
+	return pq
 }
 
-func (pq *preloaderTaskQueue) addKvTask(app basics.AppIndex, name []byte, wt *groupTask, kvTasks map[string]*preloaderTask) {
+func (pq *preloaderTaskQueue) addKvTask(app basics.AppIndex, name []byte, wt *groupTask, kvTasks map[string]*preloaderTask) *preloaderTaskQueue {
 	if app == 0 || len(name) == 0 {
-		return
+		return pq
 	}
 	key := apps.MakeBoxKey(uint64(app), string(name))
 	if _, have := kvTasks[key]; !have {
@@ -288,8 +287,9 @@ func (pq *preloaderTaskQueue) addKvTask(app basics.AppIndex, name []byte, wt *gr
 		}
 		wt.kvCount++
 		kvTasks[key] = newTask
-		pq.enqueue(newTask)
+		pq = pq.append(newTask)
 	}
+	return pq
 }
 
 // prefetch would process the input transaction groups by analyzing each of the transaction groups and building
@@ -301,9 +301,11 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 	resourceTasks := make(map[accountCreatableKey]*preloaderTask)
 	kvTasks := make(map[string]*preloaderTask)
 
-	// the extra two are for the sender account data, plus the application global state
-	maxTxnGroupEntries := p.consensusParams.MaxTxGroupSize * (2 + p.consensusParams.MaxAppTotalTxnReferences)
-	tasksQueue := allocPreloaderQueue(len(p.txnGroups), maxTxnGroupEntries)
+	txnCount := 0
+	for _, group := range p.txnGroups {
+		txnCount += len(group)
+	}
+	tasksQueue := allocPreloaderQueue(4 * txnCount) // 4 is just an approximation
 
 	// totalBalances counts the total number of balances over all the transaction groups
 	totalBalances := 0
@@ -316,6 +318,9 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 		groupsReady[i] = new(groupTask) // this ensures each allocated groupTask is 64-bit aligned
 	}
 
+	// iterate over the transaction groups and add resources that are very likely to be accessed
+	queue := tasksQueue
+
 	// Add fee sink to the first group
 	if len(p.txnGroups) > 0 {
 		// the feeSinkAddr is known to be non-empty
@@ -326,65 +331,62 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 		}
 		groupsReady[0].balancesCount++
 		accountTasks[p.feeSinkAddr] = feeSinkPreloader
-		tasksQueue.enqueue(feeSinkPreloader)
+		queue = queue.append(feeSinkPreloader)
 	}
-
-	// iterate over the transaction groups and add resources that are very likely to be accessed
-	queue := &tasksQueue
 	for i := range p.txnGroups {
 		task := groupsReady[i]
 		for j := range p.txnGroups[i] {
 			stxn := &p.txnGroups[i][j]
 			switch stxn.Txn.Type {
 			case protocol.PaymentTx:
-				queue.addAccountTask(&stxn.Txn.Receiver, task, accountTasks)
-				queue.addAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks)
+				queue = queue.addAccountTask(&stxn.Txn.Receiver, task, accountTasks)
+				queue = queue.addAccountTask(&stxn.Txn.CloseRemainderTo, task, accountTasks)
 			case protocol.AssetConfigTx:
-				queue.addAssetTask(stxn.Txn.ConfigAsset, task, resourceTasks)
+				queue = queue.addAssetTask(stxn.Txn.ConfigAsset, task, resourceTasks)
 			case protocol.AssetTransferTx:
 				if !stxn.Txn.AssetSender.IsZero() {
-					queue.addAssetTask(stxn.Txn.XferAsset, task, resourceTasks)
-					queue.addHoldingTask(stxn.Txn.AssetSender, stxn.Txn.XferAsset, task, resourceTasks)
+					queue = queue.addAssetTask(stxn.Txn.XferAsset, task, resourceTasks)
+					queue = queue.addHoldingTask(stxn.Txn.AssetSender, stxn.Txn.XferAsset, task, resourceTasks)
 				} else {
 					if stxn.Txn.AssetAmount == 0 && (stxn.Txn.AssetReceiver == stxn.Txn.Sender) { // opt in
-						queue.addAssetTask(stxn.Txn.XferAsset, task, resourceTasks)
+						queue = queue.addAssetTask(stxn.Txn.XferAsset, task, resourceTasks)
 					}
 					if stxn.Txn.AssetAmount != 0 { // zero transfer is noop
-						queue.addHoldingTask(stxn.Txn.Sender, stxn.Txn.XferAsset, task, resourceTasks)
+						queue = queue.addHoldingTask(stxn.Txn.Sender, stxn.Txn.XferAsset, task, resourceTasks)
 					}
 				}
 				if !stxn.Txn.AssetReceiver.IsZero() {
 					if stxn.Txn.AssetAmount != 0 || (stxn.Txn.AssetReceiver == stxn.Txn.Sender) {
 						// if not zero transfer or opt in then prefetch
-						queue.addHoldingTask(stxn.Txn.AssetReceiver, stxn.Txn.XferAsset, task, resourceTasks)
+						queue = queue.addHoldingTask(stxn.Txn.AssetReceiver, stxn.Txn.XferAsset, task, resourceTasks)
 					}
 				}
 				if !stxn.Txn.AssetCloseTo.IsZero() {
-					queue.addHoldingTask(stxn.Txn.AssetCloseTo, stxn.Txn.XferAsset, task, resourceTasks)
+					queue = queue.addHoldingTask(stxn.Txn.AssetCloseTo, stxn.Txn.XferAsset, task, resourceTasks)
 				}
 			case protocol.AssetFreezeTx:
 				if !stxn.Txn.FreezeAccount.IsZero() {
-					queue.addAssetTask(stxn.Txn.FreezeAsset, task, resourceTasks)
-					queue.addHoldingTask(stxn.Txn.FreezeAccount, stxn.Txn.FreezeAsset, task, resourceTasks)
-					queue.addAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks) // Why do we need the actual freeze account?
+					queue = queue.addAssetTask(stxn.Txn.FreezeAsset, task, resourceTasks)
+					queue = queue.addHoldingTask(stxn.Txn.FreezeAccount, stxn.Txn.FreezeAsset, task, resourceTasks)
+					queue = queue.addAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks) // Why do we need the actual freeze account?
 				}
 			case protocol.ApplicationCallTx:
 				if stxn.Txn.ApplicationID != 0 {
 					// load the global - so that we'll have the program
-					queue.addAppTask(stxn.Txn.ApplicationID, task, resourceTasks)
+					queue = queue.addAppTask(stxn.Txn.ApplicationID, task, resourceTasks)
 					// load the local - so that we'll have the local state
 					// TODO: this is something we need to decide if we want to enable, since not
 					// every application call would use local storage.
 					if (stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.OptInOC) ||
 						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.CloseOutOC) ||
 						(stxn.Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC) {
-						queue.addLocalsTask(stxn.Txn.Sender, stxn.Txn.ApplicationID, task, resourceTasks)
+						queue = queue.addLocalsTask(stxn.Txn.Sender, stxn.Txn.ApplicationID, task, resourceTasks)
 					}
 				}
 
 				// Prefetch ForeignApps since they're likely to be accessed
 				for _, appID := range stxn.Txn.ForeignApps {
-					queue.addAppTask(appID, task, resourceTasks)
+					queue = queue.addAppTask(appID, task, resourceTasks)
 				}
 
 				// Prefetch boxes, they ought to be precise
@@ -401,7 +403,7 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 						app = stxn.Txn.ForeignApps[br.Index-1]
 					}
 					if app != 0 {
-						queue.addKvTask(app, br.Name, task, kvTasks)
+						queue = queue.addKvTask(app, br.Name, task, kvTasks)
 					}
 				}
 
@@ -416,12 +418,12 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 
 					for _, rr := range stxn.Txn.Access {
 						if rr.App != 0 {
-							queue.addResourceTask(nil, basics.CreatableIndex(rr.App), basics.AppCreatable, task, resourceTasks)
+							queue = queue.addResourceTask(nil, basics.CreatableIndex(rr.App), basics.AppCreatable, task, resourceTasks)
 						}
 						if !rr.Holding.Empty() {
 							addr, asset, err := rr.Holding.Resolve(stxn.Txn.Access, stxn.Txn.Sender)
 							if err == nil {
-								queue.addHoldingTask(addr, asset, task, resourceTasks)
+								queue = queue.addHoldingTask(addr, asset, task, resourceTasks)
 								accountInCrossProduct.Add(addr)
 								assetInCrossProduct.Add(asset)
 							}
@@ -429,7 +431,7 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 						if !rr.Locals.Empty() {
 							addr, app, err := rr.Locals.Resolve(stxn.Txn.Access, stxn.Txn.Sender, stxn.Txn.ApplicationID)
 							if err == nil {
-								queue.addLocalsTask(addr, app, task, resourceTasks)
+								queue = queue.addLocalsTask(addr, app, task, resourceTasks)
 								accountInCrossProduct.Add(addr)
 							}
 						}
@@ -439,7 +441,7 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 								if app == 0 {
 									app = stxn.Txn.ApplicationID
 								}
-								queue.addKvTask(app, []byte(name), task, kvTasks)
+								queue = queue.addKvTask(app, []byte(name), task, kvTasks)
 							}
 						}
 					}
@@ -448,10 +450,10 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 					// cross-products are present to be directly accessed.
 					for _, rr := range stxn.Txn.Access {
 						if !rr.Address.IsZero() && !accountInCrossProduct.Contains(rr.Address) {
-							queue.addAccountTask(&rr.Address, task, accountTasks)
+							queue = queue.addAccountTask(&rr.Address, task, accountTasks)
 						}
 						if rr.Asset != 0 && !assetInCrossProduct.Contains(rr.Asset) {
-							queue.addAssetTask(rr.Asset, task, resourceTasks)
+							queue = queue.addAssetTask(rr.Asset, task, resourceTasks)
 						}
 					}
 				}
@@ -459,29 +461,21 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 			case protocol.StateProofTx:
 			case protocol.KeyRegistrationTx: // No extra accounts besides the sender
 			case protocol.HeartbeatTx:
-				queue.addAccountTask(&stxn.Txn.HbAddress, task, accountTasks)
+				queue = queue.addAccountTask(&stxn.Txn.HbAddress, task, accountTasks)
 			}
 
 			// If you add new addresses here, also add them in getTxnAddresses().
 			if !stxn.Txn.Sender.IsZero() {
-				queue.addAccountTask(&stxn.Txn.Sender, task, accountTasks)
+				queue = queue.addAccountTask(&stxn.Txn.Sender, task, accountTasks)
 			}
 		}
 		totalBalances += task.balancesCount
 		totalResources += task.resourcesCount
 		totalKVs += task.kvCount
-		// expand the queue if needed.
-		queue = queue.expand()
 	}
 
-	// find the number of tasks
-	tasksCount := int64(0)
-	for lastQueueEntry := &tasksQueue; ; lastQueueEntry = lastQueueEntry.next {
-		if lastQueueEntry.next == nil {
-			tasksCount = int64(lastQueueEntry.baseIdx + lastQueueEntry.used)
-			break
-		}
-	}
+	// queue points to the last page, so we can get the total count easily
+	tasksCount := int64(queue.baseIdx + queue.used)
 
 	// update all the groups task :
 	// allocate the correct number of balances, as well as
@@ -519,7 +513,7 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 	defer taskIdx.Store(tasksCount)
 	// create a few go-routines to asynchronously perform prefetches
 	for range asyncAccountLoadingThreadCount {
-		go p.asyncPrefetchRoutine(&tasksQueue, &taskIdx, groupDoneCh)
+		go p.asyncPrefetchRoutine(tasksQueue, &taskIdx, groupDoneCh)
 	}
 
 	// iterate on the transaction groups tasks. This array retains the original order.
