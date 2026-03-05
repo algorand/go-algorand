@@ -19,6 +19,7 @@ package p2p
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -419,7 +420,6 @@ func TestStream_HandlerKeepsOldStreamOnDispatchFailure(t *testing.T) {
 
 	// Protect so that Unprotect tracking works
 	h.cm.Protect(remoteID, cnmgrTag)
-
 	// New stream arrives from remote peer, dispatch will fail
 	newStream := newMockStream(conn, testProto, network.DirInbound)
 	sm.streamHandler(newStream)
@@ -432,4 +432,103 @@ func TestStream_HandlerKeepsOldStreamOnDispatchFailure(t *testing.T) {
 	require.Equal(t, oldStream, current, "map should still reference the old stream")
 	require.False(t, oldStream.closeCalled, "old stream should not be closed")
 	require.True(t, newStream.wasReset(), "new stream should be reset on dispatch failure")
+}
+
+// blockingMockStream wraps mockStream but makes Read block until the stream is
+// explicitly unblocked or closed, simulating a live yamux stream with no data.
+type blockingMockStream struct {
+	mockStream
+	blockCh chan struct{} // closed to unblock Read
+}
+
+func newBlockingMockStream(conn *mockConn, proto protocol.ID, dir network.Direction) *blockingMockStream {
+	return &blockingMockStream{
+		mockStream: mockStream{conn: conn, proto: proto, dir: dir},
+		blockCh:    make(chan struct{}),
+	}
+}
+
+func (s *blockingMockStream) Read(p []byte) (int, error) {
+	<-s.blockCh
+	return 0, io.EOF
+}
+
+func (s *blockingMockStream) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closeCalled = true
+	// Unblock any pending Read.
+	select {
+	case <-s.blockCh:
+	default:
+		close(s.blockCh)
+	}
+	return nil
+}
+
+// TestStream_DeadlockStreamHandlerAndDisconnected simulates that
+// streamHandler holding streamsLock while calling oldStream.Read can deadlock
+// with Disconnected, which also needs the lock to close that same stream, as seen in wild.
+//
+// Sequence:
+//  1. streamHandler acquires streamsLock, finds an existing (blocking) stream,
+//     calls oldStream.Read([]byte{}) — blocks while holding the lock.
+//  2. Peer disconnects, triggering Disconnected.
+//  3. Disconnected tries to acquire streamsLock — blocked.
+//  4. Read won't return because only Disconnected (or Close) would unblock it.
+//  5. Deadlock: both goroutines wait on each other.
+func TestStream_DeadlockStreamHandlerAndDisconnected(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	localID := peer.ID("ZZZZ-high-peer")
+	remoteID := peer.ID("AAAA-low-peer")
+	sm, h := newTestStreamManager(localID, true)
+
+	conn := newMockConn(localID, remoteID, network.DirInbound)
+
+	// Pre-populate streams with a blocking stream (simulates a live idle connection).
+	oldStream := newBlockingMockStream(conn, testProto, network.DirInbound)
+	sm.streams[remoteID] = oldStream
+
+	h.cm.Protect(remoteID, cnmgrTag)
+
+	// A new stream arrives for the same peer — streamHandler will find the old
+	// stream and call Read on it while holding streamsLock.
+	newStream := newMockStream(conn, testProto, network.DirInbound)
+
+	streamHandlerDone := make(chan struct{})
+	go func() {
+		sm.streamHandler(newStream)
+		close(streamHandlerDone)
+	}()
+
+	// Give streamHandler time to acquire the lock and block on Read.
+	time.Sleep(50 * time.Millisecond)
+
+	// Simulate the peer disconnecting — Disconnected needs streamsLock.
+	disconnectedDone := make(chan struct{})
+	go func() {
+		sm.Disconnected(nil, conn)
+		close(disconnectedDone)
+	}()
+
+	// Both goroutines should complete within a reasonable time.
+	// If there's a deadlock, this test will time out.
+	timeout := time.After(2 * time.Second)
+
+	select {
+	case <-disconnectedDone:
+		// Disconnected completed, which should have unblocked Read.
+	case <-timeout:
+		oldStream.Close() // unblock and fail
+		t.Fatal("deadlock detected: Disconnected blocked on streamsLock held by streamHandler which is blocked on oldStream.Read")
+	}
+
+	select {
+	case <-streamHandlerDone:
+	case <-time.After(2 * time.Second):
+		oldStream.Close() // unblock and fail
+		t.Fatal("streamHandler did not complete after Disconnected finished")
+	}
 }
