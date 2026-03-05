@@ -19,7 +19,6 @@ package p2p
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -83,40 +82,13 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 		}
 	}
 
-	n.streamsLock.Lock()
-	defer n.streamsLock.Unlock()
-
-	if oldStream, ok := n.streams[remotePeer]; ok {
-		// there's already a stream, for some reason, check if it's still open
-		buf := []byte{} // empty buffer for checking
-		_, err := oldStream.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				// old stream was closed by the peer
-				n.log.Infof("Old stream with %s was closed", remotePeer)
-			} else {
-				// an error occurred while checking the old stream
-				n.log.Infof("Failed to check old stream with %s: %v", remotePeer, err)
-			}
-			// old stream is dead, remove
-			delete(n.streams, remotePeer)
-
-			incoming := stream.Conn().Stat().Direction == network.DirInbound
-			if err1 := n.dispatch(n.ctx, remotePeer, stream, incoming); err1 != nil {
-				n.log.Errorln(err1.Error())
-				_ = stream.Reset()
-				return
-			}
-			n.streams[stream.Conn().RemotePeer()] = stream
-			dispatched = true
-			return
-		}
-		// otherwise, the old stream is still open, so we can close the new one
-		stream.Close()
-		dispatched = true
-		return
-	}
-	// no old stream
+	// Never do blocking I/O (like stream.Read) while holding streamsLock —
+	// that causes a deadlock with Disconnected which also needs the lock to
+	// close the old stream.
+	//
+	// Dispatch the new stream first (outside the lock), then swap the map
+	// entry only on success. This avoids dropping a healthy old stream when
+	// the replacement fails dispatch.
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
 	if err := n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
 		n.log.Errorln(err.Error())
@@ -124,9 +96,17 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 		return
 	}
 
-	n.streams[stream.Conn().RemotePeer()] = stream
+	n.streamsLock.Lock()
+	oldStream := n.streams[remotePeer]
+	n.streams[remotePeer] = stream
+	n.streamsLock.Unlock()
 
 	dispatched = true
+
+	if oldStream != nil {
+		n.log.Infof("Replacing old stream with %s", remotePeer)
+		oldStream.Close()
+	}
 }
 
 // dispatch the stream to the appropriate handler

@@ -402,9 +402,9 @@ func TestStream_MapCleanupOnDispatchFailure(t *testing.T) {
 	})
 }
 
-// TestStream_HandlerCleanupReplacingDeadStream verifies that when streamHandler
-// replaces a dead stream and the new dispatch also fails, the map entry is cleaned up.
-func TestStream_HandlerCleanupReplacingDeadStream(t *testing.T) {
+// TestStream_HandlerKeepsOldStreamOnDispatchFailure verifies that when a new
+// stream arrives but dispatch fails, the existing stream is preserved.
+func TestStream_HandlerKeepsOldStreamOnDispatchFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -412,11 +412,10 @@ func TestStream_HandlerCleanupReplacingDeadStream(t *testing.T) {
 	remoteID := peer.ID("AAAA-low-peer")
 	sm, h := newTestStreamManager(localID, true)
 
-	// Pre-populate n.streams with a dead (reset) stream
+	// Pre-populate n.streams with an existing stream
 	conn := newMockConn(localID, remoteID, network.DirInbound)
-	deadStream := newMockStream(conn, testProto, network.DirInbound)
-	deadStream.readErr = network.ErrReset // Read returns error => stream is dead
-	sm.streams[remoteID] = deadStream
+	oldStream := newMockStream(conn, testProto, network.DirInbound)
+	sm.streams[remoteID] = oldStream
 
 	// Protect so that Unprotect tracking works
 	h.cm.Protect(remoteID, cnmgrTag)
@@ -425,6 +424,12 @@ func TestStream_HandlerCleanupReplacingDeadStream(t *testing.T) {
 	newStream := newMockStream(conn, testProto, network.DirInbound)
 	sm.streamHandler(newStream)
 
-	assertStreamMapEmpty(t, sm, remoteID)
+	// Old stream is kept because new dispatch failed
+	sm.streamsLock.Lock()
+	current, exists := sm.streams[remoteID]
+	sm.streamsLock.Unlock()
+	require.True(t, exists, "old stream should still be in the map")
+	require.Equal(t, oldStream, current, "map should still reference the old stream")
+	require.False(t, oldStream.closeCalled, "old stream should not be closed")
 	require.True(t, newStream.wasReset(), "new stream should be reset on dispatch failure")
 }
