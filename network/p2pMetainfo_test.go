@@ -81,9 +81,10 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	assert.Equal(t, "mockFeatures", metaInfo.features)
 	mockStream.AssertExpectations(t)
 
-	// Error case: incomplete length read
+	// Error case: incomplete length read then EOF
 	mockStream = new(MockStream)
 	mockStream.On("Read", mock.Anything).Return([]byte{1}, nil).Once()
+	mockStream.On("Read", mock.Anything).Return([]byte{}, fmt.Errorf("EOF")).Once()
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
 	assert.ErrorContains(t, err, "error reading response message length")
 	mockStream.AssertExpectations(t)
@@ -95,10 +96,11 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	assert.ErrorContains(t, err, "error reading response message length")
 	mockStream.AssertExpectations(t)
 
-	// Error case: incomplete message read
+	// Error case: incomplete message read then EOF
 	mockStream = new(MockStream)
 	mockStream.On("Read", mock.Anything).Return(lengthBytes, nil).Once()
-	mockStream.On("Read", mock.Anything).Return(data[:len(data)/2], nil).Once() // Return only half the data
+	mockStream.On("Read", mock.Anything).Return(data[:len(data)/2], nil).Once()
+	mockStream.On("Read", mock.Anything).Return([]byte{}, fmt.Errorf("EOF")).Once()
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
 	assert.ErrorContains(t, err, "error reading response message")
 	mockStream.AssertExpectations(t)
@@ -135,6 +137,26 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	mockStream.On("Read", mock.Anything).Return(incompatibleData, nil).Once()
 	_, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
 	assert.ErrorContains(t, err, "does not support any of the supported protocol versions")
+	mockStream.AssertExpectations(t)
+
+	// Verify short reads are handled: length arrives in two reads
+	mockStream = new(MockStream)
+	mockStream.On("Read", mock.Anything).Return(lengthBytes[:1], nil).Once()
+	mockStream.On("Read", mock.Anything).Return(lengthBytes[1:], nil).Once()
+	mockStream.On("Read", mock.Anything).Return(data, nil).Once()
+	metaInfo, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
+	assert.NoError(t, err)
+	assert.Equal(t, "1.0", metaInfo.version)
+	mockStream.AssertExpectations(t)
+
+	// Verify short reads are handled: body arrives in two reads
+	mockStream = new(MockStream)
+	mockStream.On("Read", mock.Anything).Return(lengthBytes, nil).Once()
+	mockStream.On("Read", mock.Anything).Return(data[:len(data)/2], nil).Once()
+	mockStream.On("Read", mock.Anything).Return(data[len(data)/2:], nil).Once()
+	metaInfo, err = readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
+	assert.NoError(t, err)
+	assert.Equal(t, "1.0", metaInfo.version)
 	mockStream.AssertExpectations(t)
 }
 
