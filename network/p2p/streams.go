@@ -221,7 +221,7 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 		return
 	}
 	// don't add disconnected / died conns, so Disconnect won't need to clean up
-	if conn.IsClosed() || stream.Conn().IsClosed() {
+	if stream.Conn().IsClosed() {
 		_ = stream.Reset()
 		return // dispatched is still false
 	}
