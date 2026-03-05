@@ -2044,7 +2044,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 		ops.ReportMultipleErrors("", &sb)
 		return badRequest(ctx, err, sb.String(), v2.Log)
 	}
-	pd := logic.HashProgram(ops.Program)
+	pd := logic.SigDigest(ops.Program)
 	addr := basics.Address(pd)
 
 	// If source map flag is enabled, then return the map.

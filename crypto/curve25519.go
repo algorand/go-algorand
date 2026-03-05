@@ -39,6 +39,8 @@ import (
 	"fmt"
 	"unsafe"
 
+	"filippo.io/edwards25519"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -248,4 +250,12 @@ func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 func (v SignatureVerifier) VerifyBytes(message []byte, sig Signature) bool {
 	cryptoSigSecretsVerifyBytesTotal.Inc(nil)
 	return ed25519Verify(ed25519PublicKey(v), message, ed25519Signature(sig))
+}
+
+// IsEd25519CurvePoint reports whether b encodes a valid point on the
+// Edwards25519 curve. Any 32-byte value for which this returns true could
+// potentially serve as an Ed25519 public key.
+func IsEd25519CurvePoint(b Digest) bool {
+	_, err := new(edwards25519.Point).SetBytes(b[:])
+	return err == nil
 }

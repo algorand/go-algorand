@@ -999,6 +999,55 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	require.Greater(t, currentCounter, initCounter)
 }
 
+// TestTxnValidationLogicSigV13 verifies TEAL v13+ LogicSig
+// address behavior for a program whose legacy HashProgram is on-curve:
+// 1. SigDigest produces a different digest that is off-curve.
+// 2. Sender = SigDigest(program) is accepted for unsigned LogicSig validation.
+// 3. Sender = HashProgram(program) is rejected when the digests differ.
+func TestTxnValidationLogicSigV13(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var program []byte
+	for i := range 1000 {
+		ops, err := logic.AssembleString(fmt.Sprintf("#pragma version 13\nint %d", i))
+		require.NoError(t, err)
+		legacyHash := logic.HashProgram(ops.Program)
+		if crypto.IsEd25519CurvePoint(legacyHash) {
+			digest := logic.SigDigest(ops.Program)
+			require.NotEqual(t, legacyHash, digest)
+			require.False(t, crypto.IsEd25519CurvePoint(digest))
+			program = ops.Program
+			break
+		}
+	}
+	require.NotEmpty(t, program, "failed to find a v13 program with curve-point legacy hash")
+
+	_, signed, _, _ := generateTestObjects(1, 1, 0, 50)
+	stxn := signed[0]
+	stxn.Sig = crypto.Signature{}
+	stxn.Msig = crypto.MultisigSig{}
+	stxn.Lsig = transactions.LogicSig{Logic: program}
+
+	// LogicSig sender must match the LogicSig account digest.
+	stxn.Txn.Sender = basics.Address(logic.SigDigest(program))
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+	dummyLedger := DummyLedgerForSignature{}
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{stxn}, &blkHdr, &dummyLedger, nil)
+	require.NoError(t, err)
+	groupCtx.consensusParams.LogicSigVersion = 13
+	groupCtx.evalParams.Proto = &groupCtx.consensusParams
+	require.NoError(t, verifyTxn(0, groupCtx))
+
+	// Legacy hash sender must be rejected for v13+ when it differs.
+	stxn.Txn.Sender = basics.Address(logic.HashProgram(program))
+	blkHdr = createDummyBlockHeader(protocol.ConsensusFuture)
+	groupCtx, err = PrepareGroupContext([]transactions.SignedTxn{stxn}, &blkHdr, &dummyLedger, nil)
+	require.NoError(t, err)
+	groupCtx.consensusParams.LogicSigVersion = 13
+	groupCtx.evalParams.Proto = &groupCtx.consensusParams
+	require.ErrorContains(t, verifyTxn(0, groupCtx), "LogicNot signed and not a Logic-only account")
+}
+
 // TestTxnGroupCacheUpdateLogicWithSig makes sure that a payment transaction contains logicsig signed with single signature is valid (and added to the cache) only
 // if the logic passes and the signature is correct.
 // for this, we will break the signature and make sure that txn verification fails.

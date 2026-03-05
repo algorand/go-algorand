@@ -414,9 +414,9 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 		numSigs++
 	}
 	if numSigs == 0 {
-		// if the txn.Authorizer() == hash(Logic) then this is a (potentially) valid operation on a contract-only account
-		program := logic.Program(lsig.Logic)
-		lhash := crypto.HashObj(&program)
+		// if txn.Authorizer() matches the LogicSig account digest, this is a
+		// (potentially) valid operation on a contract-only account
+		lhash := logic.SigDigest(lsig.Logic)
 		if crypto.Digest(txn.Authorizer()) == lhash {
 			return nil
 		}
