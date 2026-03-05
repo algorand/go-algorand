@@ -445,10 +445,13 @@ jobs:
         run: |
           if [ "$CHANNEL" = "beta" ]; then
             PKG_NAME="algorand-beta"
+            DEVTOOLS_PKG_NAME="algorand-devtools-beta"
           else
             PKG_NAME="algorand"
+            DEVTOOLS_PKG_NAME="algorand-devtools"
           fi
           echo "pkg_name=${PKG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "devtools_pkg_name=${DEVTOOLS_PKG_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Test Debian package installation
         if: matrix.pkg_type == 'deb'
@@ -480,13 +483,24 @@ jobs:
             # Verify data directory
             test -d /var/lib/algorand
 
-            echo 'Debian package installation test passed!'
+            echo 'Debian main package test passed!'
+
+            # Install and test devtools package
+            apt-get install -y --no-install-recommends /packages/algorand-devtools_${CHANNEL}_linux-${{ matrix.arch }}_${VERSION}.deb
+
+            # Verify devtools binaries are installed
+            command -v carpenter
+            command -v tealdbg
+            command -v msgpacktool
+
+            echo 'Debian devtools package test passed!'
           "
 
       - name: Test RPM package installation
         if: matrix.pkg_type == 'rpm'
         run: |
           PKG_NAME="${{ steps.pkgname.outputs.pkg_name }}"
+          DEVTOOLS_PKG_NAME="${{ steps.pkgname.outputs.devtools_pkg_name }}"
           RPM_ARCH="${{ matrix.arch == 'amd64' && 'x86_64' || 'aarch64' }}"
           RPM_FILE="packages/${PKG_NAME}-${VERSION}-1.${RPM_ARCH}.rpm"
 
@@ -511,7 +525,17 @@ jobs:
             # Verify data directory
             test -d /var/lib/algorand
 
-            echo 'RPM package installation test passed!'
+            echo 'RPM main package test passed!'
+
+            # Install and test devtools package
+            dnf install -y /packages/${DEVTOOLS_PKG_NAME}-${VERSION}-1.${RPM_ARCH}.rpm
+
+            # Verify devtools binaries are installed
+            command -v carpenter
+            command -v tealdbg
+            command -v msgpacktool
+
+            echo 'RPM devtools package test passed!'
           "
 
   finalize:
