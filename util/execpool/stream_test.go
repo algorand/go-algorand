@@ -122,8 +122,8 @@ func testStreamToBatchCore(wg *sync.WaitGroup, mockJobs <-chan *mockJob, done <-
 	sv.WaitForStop()
 }
 
-// TestStreamToBatchBasic tests the basic functionality
-func TestStreamToBatchBasic(t *testing.T) {
+// TestStream_ToBatchBasic tests the basic functionality
+func TestStream_ToBatchBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numJobs := 400
@@ -197,8 +197,8 @@ func TestStreamToBatchBasic(t *testing.T) {
 	}
 }
 
-// TestNoInputYet let the service start and get to the timeout without any inputs
-func TestNoInputYet(t *testing.T) {
+// TestStream_NoInputYet let the service start and get to the timeout without any inputs
+func TestStream_NoInputYet(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numJobs := 1
@@ -228,8 +228,8 @@ func TestNoInputYet(t *testing.T) {
 	wg.Wait()
 }
 
-// TestMutipleBatchAttempts tests the behavior when multiple batch attempts will fail and the stream blocks
-func TestMutipleBatchAttempts(t *testing.T) {
+// TestStream_MultipleBatchAttempts tests the behavior when multiple batch attempts will fail and the stream blocks
+func TestStream_MultipleBatchAttempts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	mp := mockPool{
@@ -297,9 +297,9 @@ func TestMutipleBatchAttempts(t *testing.T) {
 	sv.WaitForStop()
 }
 
-// TestErrors tests all the cases where exec pool returned error is handled
+// TestStream_Errors tests all the cases where exec pool returned error is handled
 // by ending the stream processing
-func TestErrors(t *testing.T) {
+func TestStream_Errors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	mp := mockPool{
@@ -371,9 +371,9 @@ func TestErrors(t *testing.T) {
 	sv.WaitForStop()
 }
 
-// TestPendingJobOnRestart makes sure a pending job in the exec pool is cancled
-// when the Stream ctx is cancled, and a now one started with a new ctx
-func TestPendingJobOnRestart(t *testing.T) {
+// TestStream_PendingJobOnRestart makes sure a pending job in the exec pool is canceled
+// when the Stream ctx is canceled, and a new one started with a new ctx
+func TestStream_PendingJobOnRestart(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	mp := mockPool{
@@ -429,7 +429,7 @@ func TestPendingJobOnRestart(t *testing.T) {
 	<-mp.asyncDelay
 	<-mp.asyncDelay
 
-	// wait for the notifiation from cleanup before checking the TestPendingJobOnRestart
+	// wait for the notifiation from cleanup before checking the TestStream_PendingJobOnRestart
 	<-mbp.notify
 	require.Error(t, mj.returnError)
 	require.False(t, mj.processed)
