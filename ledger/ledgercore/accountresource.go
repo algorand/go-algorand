@@ -29,7 +29,7 @@ type KvPairResult struct {
 
 // ByteSize returns the total byte size of the key-value pair.
 func (kv KvPairResult) ByteSize() uint64 {
-	return uint64(len(kv.Key)) + uint64(len(kv.Value))
+	return uint64(len(kv.Key) + len(kv.Value))
 }
 
 // AccountResource used to retrieve a generic resource information from the data tier

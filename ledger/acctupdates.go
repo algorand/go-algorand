@@ -604,6 +604,10 @@ func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix st
 		}
 	}()
 
+	if limit == 0 {
+		return nil, au.cachedDBRound + basics.Round(len(au.deltas)), false, nil
+	}
+
 	for {
 		currentDBRound := au.cachedDBRound
 		currentDeltaLen := len(au.deltas)
@@ -650,7 +654,8 @@ func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix st
 				cutoff = dbResults[len(dbResults)-1].Key
 			}
 
-			// Merge DB results with non-deleted delta results.
+			// Merge DB results with non-deleted delta results into allResults
+			allResults := dbResults
 			for key, val := range deltaResults {
 				if val == nil {
 					continue
@@ -661,38 +666,37 @@ func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix st
 				if !includeValues {
 					val = nil
 				}
-				dbResults = append(dbResults, ledgercore.KvPairResult{Key: key, Value: val})
+				allResults = append(allResults, ledgercore.KvPairResult{Key: key, Value: val})
 			}
 
 			// Sort by key.
-			slices.SortFunc(dbResults, func(a, b ledgercore.KvPairResult) int {
+			slices.SortFunc(allResults, func(a, b ledgercore.KvPairResult) int {
 				return strings.Compare(a.Key, b.Key)
 			})
 
 			// Trim to limit and/or maxBytes.
 			moreData := dbMoreData
-			if limit > 0 || maxBytes > 0 {
-				var bytesAccum uint64
-				trimAt := len(dbResults)
-				for i, kv := range dbResults {
-					itemBytes := kv.ByteSize()
-					if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && i > 0 {
-						trimAt = i
-						break
-					}
-					bytesAccum += itemBytes
-					if limit > 0 && uint64(i+1) >= limit {
-						trimAt = i + 1
-						break
-					}
+			var bytesAccum uint64
+			trimAt := len(allResults)
+			for i, kv := range allResults {
+				itemBytes := kv.ByteSize()
+				// We always allow at least one result, regardless of byte cap
+				if bytesAccum+itemBytes > maxBytes && i > 0 {
+					trimAt = i
+					break
 				}
-				if trimAt < len(dbResults) {
-					moreData = true
-					dbResults = dbResults[:trimAt]
+				bytesAccum += itemBytes
+				if uint64(i+1) >= limit {
+					trimAt = i + 1
+					break
 				}
 			}
+			if trimAt < len(allResults) {
+				moreData = true
+				allResults = allResults[:trimAt]
+			}
 
-			return dbResults, retRound, moreData, nil
+			return allResults, retRound, moreData, nil
 		}
 
 		// DB round mismatch — retry.

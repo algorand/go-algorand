@@ -1241,8 +1241,8 @@ type BoxesResponse struct {
 	// NextToken Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.
 	NextToken *string `json:"next-token,omitempty"`
 
-	// Round The round at which the box data was retrieved.
-	Round *uint64 `json:"round,omitempty"`
+	// Round The round for which this information is relevant.
+	Round *basics.Round `json:"round,omitempty"`
 }
 
 // CatchpointAbortResponse An catchpoint abort response.
