@@ -1090,8 +1090,15 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 		delete(n.wsPeers, remotePeerID)
 		removed = true
 	}
+	_, knownPeer := n.wsPeersToIDs[peer]
 	delete(n.wsPeersToIDs, peer) // always delete reverse entry for this exact wsPeer
 	n.wsPeersLock.Unlock()
+
+	// Throttle slots are per-wsPeer, not per map entry: release for any
+	// known wsPeer on its first cleanup, even if it was already replaced.
+	if knownPeer && peer.throttledOutgoingConnection {
+		n.throttledOutgoingConnections.Add(int32(1))
+	}
 
 	if !removed {
 		// stale close from an old stream/wsPeer that was already replaced; skip
@@ -1122,9 +1129,6 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 			AVCount:          peer.avMessageCount.Load(),
 			PPCount:          peer.ppMessageCount.Load(),
 		})
-	if peer.throttledOutgoingConnection {
-		n.throttledOutgoingConnections.Add(int32(1))
-	}
 }
 
 func (n *P2PNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {

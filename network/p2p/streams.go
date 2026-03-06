@@ -97,6 +97,14 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	}
 
 	n.streamsLock.Lock()
+	// If the connection closed while we were dispatching, Disconnected has
+	// already fired (or will fire) and won't find this entry to clean up.
+	// Avoid adding a stale stream to the map.
+	if stream.Conn().IsClosed() {
+		n.streamsLock.Unlock()
+		_ = stream.Reset()
+		return // dispatched stays false → defer will Unprotect
+	}
 	oldStream := n.streams[remotePeer]
 	n.streams[remotePeer] = stream
 	n.streamsLock.Unlock()
