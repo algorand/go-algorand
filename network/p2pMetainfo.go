@@ -70,17 +70,17 @@ type peerMetaInfo struct {
 
 func readPeerMetaHeaders(stream io.ReadWriter, p2pPeer peer.ID, netProtoSupportedVersions []string) (peerMetaInfo, error) {
 	var msgLenBytes [2]byte
-	rn, err := stream.Read(msgLenBytes[:])
-	if rn != 2 || err != nil {
+	_, err := io.ReadFull(stream, msgLenBytes[:])
+	if err != nil {
 		err0 := fmt.Errorf("error reading response message length from peer %s: %w", p2pPeer, err)
 		return peerMetaInfo{}, err0
 	}
 
 	msgLen := binary.BigEndian.Uint16(msgLenBytes[:])
 	msgBytes := make([]byte, msgLen)
-	rn, err = stream.Read(msgBytes[:])
-	if rn != int(msgLen) || err != nil {
-		err0 := fmt.Errorf("error reading response message from peer %s: %w, expected: %d, read: %d", p2pPeer, err, msgLen, rn)
+	_, err = io.ReadFull(stream, msgBytes)
+	if err != nil {
+		err0 := fmt.Errorf("error reading response message from peer %s: %w", p2pPeer, err)
 		return peerMetaInfo{}, err0
 	}
 	var responseHeaders peerMetaHeaders

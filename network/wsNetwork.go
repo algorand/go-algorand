@@ -672,7 +672,7 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
-	if wn.relayMessages {
+	if wn.relayMessages && wn.config.IncomingConnectionsLimit != 0 {
 		listener, err := net.Listen("tcp", wn.config.NetAddress)
 		if err != nil {
 			wn.log.Errorf("network could not listen %v: %s", wn.config.NetAddress, err)
@@ -684,6 +684,8 @@ func (wn *WebsocketNetwork) Start() error {
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
+	}
+	if wn.relayMessages {
 		wn.throttledOutgoingConnections.Store(int32(wn.config.GossipFanout / 2))
 	} else {
 		// on non-relay, all the outgoing connections are throttled.
