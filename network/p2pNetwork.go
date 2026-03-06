@@ -1082,12 +1082,24 @@ func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 }
 
 func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disconnectReason) {
-	n.service.UnprotectPeer(remotePeerID)
+	removed := false
+
 	n.wsPeersLock.Lock()
-	n.identityTracker.removeIdentity(peer)
-	delete(n.wsPeers, remotePeerID)
-	delete(n.wsPeersToIDs, peer)
+	n.identityTracker.removeIdentity(peer) // safe: removeIdentity is already pointer-checked
+	if cur, ok := n.wsPeers[remotePeerID]; ok && cur == peer {
+		delete(n.wsPeers, remotePeerID)
+		removed = true
+	}
+	delete(n.wsPeersToIDs, peer) // always delete reverse entry for this exact wsPeer
 	n.wsPeersLock.Unlock()
+
+	if !removed {
+		// stale close from an old stream/wsPeer that was already replaced; skip
+		// unprotect, disconnect telemetry, and counter updates.
+		return
+	}
+
+	n.service.UnprotectPeer(remotePeerID)
 	n.wsPeersChangeCounter.Add(1)
 
 	eventDetails := telemetryspec.PeerEventDetails{
