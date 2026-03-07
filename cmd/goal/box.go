@@ -100,15 +100,15 @@ var appBoxInfoCmd = &cobra.Command{
 var appBoxListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all application boxes belonging to an application",
-	Long: "List all application boxes belonging to an application.\n" +
-		"For printable strings, the box name is formatted as 'str:hello'\n" +
-		"For everything else, the box name is formatted as 'b64:A=='. \n\n" +
-		"Results are fetched in pages. Use --limit to control the page size\n" +
-		"(default: 1000, or 100 with --values). When there are more results,\n" +
-		"next-token is printed after each page. Use --next to resume from a\n" +
-		"previous next-token.\n" +
-		"Use --prefix to filter boxes by name prefix.\n" +
-		"Use --values to include box values in the output.",
+	Long: `List all application boxes belonging to an application.
+For printable strings, the box name is formatted as 'str:hello'
+For everything else, the box name is formatted as 'b64:A=='.
+
+Use --limit to fetch a single page of results.
+When there are more results, next-token is printed.
+Use --next and --round to resume from a limited request.
+Use --prefix to filter boxes by name prefix.
+Use --values to include box values in the output.`,
 	Args: validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		_, client := getDataDirAndClient()
@@ -150,8 +150,8 @@ var appBoxListCmd = &cobra.Command{
 				break
 			}
 			next = *boxesRes.NextToken
-			if boxLimit > 0 {
-				// Stop after a page if a limit was explicitly specified
+			if boxLimit > 0 || boxNext != "" {
+				// Stop after a page if a limit or next-token was explicitly specified
 				reportInfof("next-token: %s", next)
 				break
 			}

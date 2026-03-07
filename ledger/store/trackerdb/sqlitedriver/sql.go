@@ -30,15 +30,17 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	lookupAccountStmt                    *sql.Stmt
-	lookupResourcesStmt                  *sql.Stmt
-	lookupAllResourcesStmt               *sql.Stmt
-	lookupLimitedResourcesStmt           *sql.Stmt
+	lookupAccountStmt          *sql.Stmt
+	lookupResourcesStmt        *sql.Stmt
+	lookupAllResourcesStmt     *sql.Stmt
+	lookupLimitedResourcesStmt *sql.Stmt
+
 	lookupKvPairStmt                     *sql.Stmt
 	lookupKeysByRangeStmt                *sql.Stmt
 	lookupKeysByRangeCursorStmt          *sql.Stmt
 	lookupKeysByRangeCursorWithValueStmt *sql.Stmt
-	lookupCreatorStmt                    *sql.Stmt
+
+	lookupCreatorStmt *sql.Stmt
 }
 
 type onlineAccountsDbQueries struct {
@@ -382,6 +384,22 @@ func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit 
 	var bytesAccum uint64
 	var err error
 
+	qualifies := func(rowKey sql.NullString) bool {
+		if !rowKey.Valid {
+			return false
+		}
+
+		key := rowKey.String
+		if key <= cursor {
+			return false
+		}
+
+		if _, excluded := exclude[key]; excluded {
+			return false
+		}
+		return true
+	}
+
 	for rows.Next() {
 		var rowKey sql.NullString
 		var val []byte
@@ -394,20 +412,11 @@ func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit 
 		if err != nil {
 			return 0, nil, false, err
 		}
-
-		if !rowKey.Valid {
+		if !qualifies(rowKey) {
 			continue
 		}
 
-		key := rowKey.String
-		if key <= cursor {
-			continue
-		}
-		if _, excluded := exclude[key]; excluded {
-			continue
-		}
-
-		kv := ledgercore.KvPairResult{Key: key, Value: val}
+		kv := ledgercore.KvPairResult{Key: rowKey.String, Value: val}
 		itemBytes := kv.ByteSize()
 		if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && collected > 0 {
 			// This item is qualifying but exceeds the byte budget.
@@ -435,14 +444,7 @@ func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit 
 		if err != nil {
 			return 0, nil, false, err
 		}
-		if !rowKey.Valid {
-			continue
-		}
-		key := rowKey.String
-		if key <= cursor {
-			continue
-		}
-		if _, excluded := exclude[key]; excluded {
+		if !qualifies(rowKey) {
 			continue
 		}
 		return round, results, true, nil

@@ -282,7 +282,7 @@
     "/v2/accounts/{address}/assets": {
       "get": {
         "description": "Lookup an account's asset holdings.",
-        "tags": ["public", "experimental"],
+        "tags": ["public", "nonparticipating"],
         "produces": ["application/json"],
         "schemes": ["http"],
         "summary": "Get a list of assets held by an account, inclusive of asset params.",
@@ -329,7 +329,7 @@
     "/v2/accounts/{address}/applications": {
       "get": {
         "description": "Lookup an account's application holdings (local state and params if the account is the creator).",
-        "tags": ["public", "experimental"],
+        "tags": ["public", "nonparticipating"],
         "produces": ["application/json"],
         "schemes": ["http"],
         "summary": "Get a list of applications held by an account.",
@@ -1798,7 +1798,7 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, return all box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all box names.\n\nPagination mode is enabled when any of the following parameters are provided: limit, next, prefix, values, or round. In pagination mode, results are returned in sorted order with cursor-based pagination. Each response includes the round at which the data was retrieved.\n\nTo paginate: use the next-token from a previous response as the next parameter in the following request. Pin the round parameter to the round value from the first page's response to ensure consistent results across pages. The server enforces a per-response byte cap, so fewer results than limit may be returned even when more exist; the presence of next-token is the only reliable signal that more data is available.",
+        "description": "Given an application ID, return all box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all box names.\n\nPagination mode is enabled when any of the following parameters are provided: limit, next, prefix, values, or round. In pagination mode box values can be requested and results are returned in sorted order.\n\nTo paginate: use the next-token from a previous response as the next parameter in the following request. Pin the round parameter to the round value from the first page's response to ensure consistent results across pages. The server enforces a per-response byte limit, so fewer results than limit may be returned even when more exist; the presence of next-token is the only reliable signal that more data is available.",
         "tags": ["public", "nonparticipating"],
         "produces": ["application/json"],
         "schemes": ["http"],
@@ -4910,25 +4910,25 @@
       }
     },
     "BoxesResponse": {
-      "description": "Box names of an application",
+      "description": "Boxes of an application",
       "schema": {
         "type": "object",
         "required": ["boxes"],
         "properties": {
-          "boxes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/BoxDescriptor"
-            }
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer",
+            "x-go-type": "basics.Round"
           },
           "next-token": {
             "description": "Used for pagination, when making another request provide this token with the next parameter. The next token is the box name to use as the pagination cursor, encoded in the goal app call arg form.",
             "type": "string"
           },
-          "round": {
-            "description": "The round at which the box data was retrieved.",
-            "type": "integer",
-            "x-go-type": "uint64"
+          "boxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/BoxDescriptor"
+            }
           }
         }
       }

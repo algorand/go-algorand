@@ -95,10 +95,10 @@ const MaxApplicationResultsWithoutParams = MaxApplicationResults * 100
 // /v2/accounts/{address}/applications endpoint
 const DefaultApplicationResults = uint64(1000)
 
-// MaxBoxFetchBytes is the hard cap on total bytes fetched by paginated box
+// maxBoxFetchBytes is the hard cap on total bytes fetched by paginated box
 // listing responses. The server enforces this limit internally on every
 // paginated request.  Actual response bytes will be larger due to base64/json overhead.
-const MaxBoxFetchBytes = 1_000_000
+const maxBoxFetchBytes = 1_000_000
 
 const (
 	errInvalidLimit      = "limit parameter must be a positive integer"
@@ -1197,10 +1197,6 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 // AccountAssetsInformation looks up an account's asset holdings.
 // (GET /v2/accounts/{address}/assets)
 func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Address, params model.AccountAssetsInformationParams) error {
-	if !v2.Node.Config().EnableExperimentalAPI {
-		return ctx.String(http.StatusNotFound, "/v2/accounts/{address}/assets was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
-	}
-
 	var assetGreaterThan uint64 = 0
 	if params.Next != nil {
 		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
@@ -1281,10 +1277,6 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Ad
 
 // AccountApplicationsInformation returns application resources for a specific address.
 func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address basics.Address, params model.AccountApplicationsInformationParams) error {
-	if !v2.Node.Config().EnableExperimentalAPI {
-		return ctx.String(http.StatusNotFound, "/v2/accounts/{address}/applications was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
-	}
-
 	var appGreaterThan uint64 = 0
 	if params.Next != nil {
 		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
@@ -1955,7 +1947,9 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 		fullKeyPrefix = apps.MakeBoxKey(uint64(applicationID), string(prefixRaw))
 	}
 
-	results, rnd, moreData, err := lgr.LookupKvPairsByPrefix(queryRound, fullKeyPrefix, cursor, limit, MaxBoxFetchBytes, includeValues)
+	// We can't use the "limit+1" trick here because the request may be limited by
+	// byte size, not lack of more results.
+	results, rnd, moreData, err := lgr.LookupKvPairsByPrefix(queryRound, fullKeyPrefix, cursor, limit, maxBoxFetchBytes, includeValues)
 	if err != nil {
 		var roundOffErr *ledger.RoundOffsetError
 		if errors.As(err, &roundOffErr) {
