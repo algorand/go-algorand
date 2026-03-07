@@ -4140,3 +4140,235 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 		require.Nil(t, res.AppParams, "AppParams should be nil when includeParams=false")
 	}
 }
+
+// TestLookupAppResourcesParamsOnlyDeletion exercises the scenario where an app
+// creator has params but no local state in the DB (never opted in) and a delta
+// deletes those params. Two bugs interact here:
+//
+//  1. The else fallback in the DB merge calls GetAppLocalState() without first
+//     checking pd.Data.IsHolding(), producing a phantom zero-value AppLocalState
+//     on a row that has no local state. This causes the deleted-params row to
+//     survive the (AppLocalState != nil || AppParams != nil) filter when it
+//     should be excluded.
+//
+//  2. numDeltaDeleted only counts State.Deleted. A params-only deletion
+//     (Params.Deleted=true, State.Deleted=false) is not counted, so the DB
+//     over-request is too small and the result page is short once the phantom
+//     local state issue is also fixed.
+//
+// Setup: 4 apps (3000-3003) committed to DB. App 3000 has params only (no
+// local state). Apps 3001-3003 have both params and local state.
+// Delta: delete params for app 3000.
+// Query with limit=3: should return 3001, 3002, 3003.
+func TestLookupAppResourcesParamsOnlyDeletion(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
+
+	accts := setupAccts(5)
+
+	var creatorAddr basics.Address
+	for addr := range accts[0] {
+		if addr != testSinkAddr && addr != testPoolAddr {
+			creatorAddr = addr
+			break
+		}
+	}
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.MaxAcctLookback = 0
+	au, _ := newAcctUpdates(t, ml, conf)
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	// Round 1: create apps 3000-3003.
+	//   3000: params only, no local state (creator who never opted in)
+	//   3001-3003: both params and local state
+	{
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(creatorAddr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
+				TotalAppParams:      4,
+				TotalAppLocalStates: 3,
+			},
+		})
+		// 3000: params only
+		updates.UpsertAppResource(creatorAddr, basics.AppIndex(3000),
+			ledgercore.AppParamsDelta{
+				Params: &basics.AppParams{
+					ApprovalProgram: []byte{0x06, 0x81, 0x01},
+				},
+			},
+			ledgercore.AppLocalStateDelta{})
+		// 3001-3003: params + local state
+		for appIdx := uint64(3001); appIdx <= 3003; appIdx++ {
+			updates.UpsertAppResource(creatorAddr, basics.AppIndex(appIdx),
+				ledgercore.AppParamsDelta{
+					Params: &basics.AppParams{
+						ApprovalProgram: []byte{0x06, 0x81, 0x01},
+					},
+				},
+				ledgercore.AppLocalStateDelta{
+					LocalState: &basics.AppLocalState{
+						Schema: basics.StateSchema{NumUint: appIdx - 3000},
+					},
+				})
+		}
+
+		base := accts[0]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, 1, au, base, opts, nil)
+		auCommitSync(t, 1, au, ml)
+
+		for appIdx := uint64(3000); appIdx <= 3003; appIdx++ {
+			knownCreatables[basics.CreatableIndex(appIdx)] = true
+		}
+	}
+
+	// Flush past MaxAcctLookback
+	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
+		var updates ledgercore.AccountDeltas
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts, nil)
+		auCommitSync(t, i, au, ml)
+	}
+
+	// Delta (uncommitted): delete params for app 3000 (which has no local state).
+	// State.Deleted is false because there was no local state to delete.
+	deltaRound := basics.Round(conf.MaxAcctLookback + 3)
+	{
+		var updates ledgercore.AccountDeltas
+		updates.UpsertAppResource(creatorAddr, basics.AppIndex(3000),
+			ledgercore.AppParamsDelta{Deleted: true},
+			ledgercore.AppLocalStateDelta{})
+
+		base := accts[deltaRound-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, deltaRound, au, base, opts, nil)
+	}
+
+	// Query with limit=3. After filtering out 3000 (both params and local state
+	// nil), we should still get 3 results: 3001, 3002, 3003.
+	resources, rnd, err := au.LookupApplicationResources(creatorAddr, 0, 3, true)
+	require.NoError(t, err)
+	require.Equal(t, deltaRound, rnd)
+	require.Len(t, resources, 3, "params-only deletion should not cause a short page")
+	require.Equal(t, basics.AppIndex(3001), resources[0].AppID)
+	require.Equal(t, basics.AppIndex(3002), resources[1].AppID)
+	require.Equal(t, basics.AppIndex(3003), resources[2].AppID)
+}
+
+// TestLookupAssetResourcesEmptyPageDoesNotError verifies that looking up an empty page
+// (no resources for the account) returns an empty result and current round, not an error.
+func TestLookupAssetResourcesEmptyPageDoesNotError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
+
+	accts := setupAccts(2)
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	// Step 1: use default lookback config (do not override MaxAcctLookback).
+	// We then advance enough rounds so persisted DB round moves forward.
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	latestRound := basics.Round(conf.MaxAcctLookback + 2)
+
+	// Step 2: commit empty rounds to push DB round forward while keeping
+	// the target address absent from all in-memory and persisted resources.
+	for i := basics.Round(1); i <= latestRound; i++ {
+		var updates ledgercore.AccountDeltas
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts, nil)
+		auCommitSync(t, i, au, ml)
+	}
+
+	// Step 3: choose an address that definitely does not exist in the fixture accounts.
+	var missingAddr basics.Address
+	missingAddr[0] = 0xA5
+	for {
+		if _, ok := accts[0][missingAddr]; !ok {
+			break
+		}
+		missingAddr[0]++
+	}
+
+	// Step 4: lookup should produce an empty page at current round, not an error.
+	resources, rnd, err := au.LookupAssetResources(missingAddr, 0, 10)
+	require.NoError(t, err)
+	require.Equal(t, latestRound, rnd)
+	require.Len(t, resources, 0)
+}
+
+// TestLookupApplicationResourcesEmptyPageDoesNotError verifies that looking up an empty page
+// (no resources for the account) returns an empty result and current round, not an error.
+func TestLookupApplicationResourcesEmptyPageDoesNotError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
+
+	accts := setupAccts(2)
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	// Step 1: use default lookback config (do not override MaxAcctLookback).
+	// We then advance enough rounds so persisted DB round moves forward.
+	conf := config.GetDefaultLocal()
+	au, _ := newAcctUpdates(t, ml, conf)
+
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	latestRound := basics.Round(conf.MaxAcctLookback + 2)
+
+	// Step 2: commit empty rounds to push DB round forward while keeping
+	// the target address absent from all in-memory and persisted resources.
+	for i := basics.Round(1); i <= latestRound; i++ {
+		var updates ledgercore.AccountDeltas
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts, nil)
+		auCommitSync(t, i, au, ml)
+	}
+
+	// Step 3: choose an address that definitely does not exist in the fixture accounts.
+	var missingAddr basics.Address
+	missingAddr[0] = 0x5A
+	for {
+		if _, ok := accts[0][missingAddr]; !ok {
+			break
+		}
+		missingAddr[0]++
+	}
+
+	// Step 4: lookup should produce an empty page at current round, not an error.
+	resources, rnd, err := au.LookupApplicationResources(missingAddr, 0, 10, true)
+	require.NoError(t, err)
+	require.Equal(t, latestRound, rnd)
+	require.Len(t, resources, 0)
+}
