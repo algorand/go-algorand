@@ -157,7 +157,7 @@ type preloaderTask struct {
 
 	// the transaction group task to put the loaded data into
 	groupTask *groupTask
-	// the index at which to place the resource (int groupTask)
+	// the index at which to place the resource (in groupTask)
 	groupTaskIndex int
 }
 
