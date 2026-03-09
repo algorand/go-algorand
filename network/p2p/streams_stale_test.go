@@ -436,6 +436,7 @@ func TestStream_HandlerKeepsOldStreamOnDispatchFailure(t *testing.T) {
 	require.Equal(t, oldStream, current, "map should still reference the old stream")
 	require.False(t, oldStream.closeCalled, "old stream should not be closed")
 	require.True(t, newStream.wasReset(), "new stream should be reset on dispatch failure")
+	require.True(t, h.cm.IsProtected(remoteID, cnmgrTag), "peer should remain conn-manager protected after failed replacement")
 }
 
 // blockingMockStream wraps mockStream but makes Read block until the stream is

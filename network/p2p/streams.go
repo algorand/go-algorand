@@ -93,6 +93,13 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	if err := n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
 		n.log.Errorln(err.Error())
 		_ = stream.Reset()
+		// If there's already a stream for this peer, preserve its protection.
+		n.streamsLock.Lock()
+		_, hasExisting := n.streams[remotePeer]
+		n.streamsLock.Unlock()
+		if hasExisting {
+			dispatched = true
+		}
 		return
 	}
 
