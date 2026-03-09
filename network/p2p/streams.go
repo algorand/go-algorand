@@ -40,6 +40,7 @@ type streamManager struct {
 	allowIncomingGossip bool
 
 	streams     map[peer.ID]network.Stream
+	inflight    map[peer.ID]int
 	streamsLock deadlock.Mutex
 }
 
@@ -54,19 +55,40 @@ func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, han
 		handlers:            handlers,
 		allowIncomingGossip: allowIncomingGossip,
 		streams:             make(map[peer.ID]network.Stream),
+		inflight:            make(map[peer.ID]int),
+	}
+}
+
+func (n *streamManager) beginPeerAttempt(remotePeer peer.ID) {
+	n.streamsLock.Lock()
+	n.inflight[remotePeer]++
+	n.streamsLock.Unlock()
+}
+
+func (n *streamManager) endPeerAttempt(remotePeer peer.ID) {
+	shouldUnprotect := false
+
+	n.streamsLock.Lock()
+	if count := n.inflight[remotePeer]; count <= 1 {
+		delete(n.inflight, remotePeer)
+	} else {
+		n.inflight[remotePeer] = count - 1
+	}
+	_, hasStream := n.streams[remotePeer]
+	_, hasInflight := n.inflight[remotePeer]
+	shouldUnprotect = !hasStream && !hasInflight
+	n.streamsLock.Unlock()
+
+	if shouldUnprotect {
+		n.host.ConnManager().Unprotect(remotePeer, cnmgrTag)
 	}
 }
 
 // streamHandler is called by libp2p when a new stream is accepted
 func (n *streamManager) streamHandler(stream network.Stream) {
-	dispatched := false
 	remotePeer := stream.Conn().RemotePeer()
-
-	defer func() {
-		if !dispatched {
-			n.host.ConnManager().Unprotect(remotePeer, cnmgrTag)
-		}
-	}()
+	n.beginPeerAttempt(remotePeer)
+	defer n.endPeerAttempt(remotePeer)
 
 	if stream.Conn().Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
 		n.log.Debugf("rejecting stream from incoming connection from %s", remotePeer.String())
@@ -93,13 +115,6 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	if err := n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
 		n.log.Errorln(err.Error())
 		_ = stream.Reset()
-		// If there's already a stream for this peer, preserve its protection.
-		n.streamsLock.Lock()
-		_, hasExisting := n.streams[remotePeer]
-		n.streamsLock.Unlock()
-		if hasExisting {
-			dispatched = true
-		}
 		return
 	}
 
@@ -110,13 +125,11 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	if stream.Conn().IsClosed() {
 		n.streamsLock.Unlock()
 		_ = stream.Reset()
-		return // dispatched stays false → defer will Unprotect
+		return
 	}
 	oldStream := n.streams[remotePeer]
 	n.streams[remotePeer] = stream
 	n.streamsLock.Unlock()
-
-	dispatched = true
 
 	if oldStream != nil {
 		n.log.Infof("Replacing old stream with %s", remotePeer)
@@ -171,21 +184,16 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 }
 
 func (n *streamManager) handleConnected(conn network.Conn) {
-	dispatched := false
-	defer func() {
-		if !dispatched {
-			n.host.ConnManager().Unprotect(conn.RemotePeer(), cnmgrTag)
-		}
-	}()
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
+	n.beginPeerAttempt(remotePeer)
+	defer n.endPeerAttempt(remotePeer)
 
 	n.streamsLock.Lock()
 	_, ok := n.streams[remotePeer]
 	n.streamsLock.Unlock()
 	if ok {
 		n.log.Debugf("%s: already have a stream to/from %s", localPeer.String(), remotePeer.String())
-		dispatched = true
 		return // there's already an active stream with this peer for our protocol
 	}
 
@@ -212,16 +220,14 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 	if _, exists := n.streams[remotePeer]; exists {
 		// another stream was added in the meantime, close this one and keep the existing one
 		_ = stream.Reset()
-		dispatched = true
 		return
 	}
 	// don't add disconnected / died conns, so Disconnect won't need to clean up
 	if stream.Conn().IsClosed() {
 		_ = stream.Reset()
-		return // dispatched is still false
+		return
 	}
 	n.streams[remotePeer] = stream
-	dispatched = true
 }
 
 // Disconnected is called when a connection is closed

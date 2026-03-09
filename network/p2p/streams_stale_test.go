@@ -49,10 +49,14 @@ const testProto = protocol.ID("/algorand-test/1.0.0")
 type mockConnMgr struct {
 	mu        deadlock.Mutex
 	protected map[peer.ID]map[string]bool
+	unprotect map[peer.ID]int
 }
 
 func newMockConnMgr() *mockConnMgr {
-	return &mockConnMgr{protected: make(map[peer.ID]map[string]bool)}
+	return &mockConnMgr{
+		protected: make(map[peer.ID]map[string]bool),
+		unprotect: make(map[peer.ID]int),
+	}
 }
 
 func (m *mockConnMgr) Protect(id peer.ID, tag string) {
@@ -67,6 +71,7 @@ func (m *mockConnMgr) Protect(id peer.ID, tag string) {
 func (m *mockConnMgr) Unprotect(id peer.ID, tag string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.unprotect[id]++
 	if m.protected[id] != nil {
 		delete(m.protected[id], tag)
 	}
@@ -77,6 +82,12 @@ func (m *mockConnMgr) IsProtected(id peer.ID, tag string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.protected[id] != nil && m.protected[id][tag]
+}
+
+func (m *mockConnMgr) UnprotectCalls(id peer.ID) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.unprotect[id]
 }
 
 func (m *mockConnMgr) TagPeer(peer.ID, string, int)                {}
@@ -631,4 +642,144 @@ func TestStream_DisconnectedCanRunWhileDispatchIsBlocked(t *testing.T) {
 	sm.streamsLock.Unlock()
 	require.True(t, exists, "replacement stream should be tracked after dispatch completes")
 	require.Equal(t, newStream, current, "replacement stream should be installed after disconnect cleanup")
+}
+
+func TestStream_ConcurrentFailureDoesNotUnprotectWhileAnotherAttemptInFlight(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	localID := peer.ID("ZZZZ-high-peer")
+	remoteID := peer.ID("AAAA-low-peer")
+	conn := newMockConn(localID, remoteID, network.DirInbound)
+
+	var successStream *mockStream
+	var failStream *mockStream
+	successStarted := make(chan struct{})
+	releaseSuccess := make(chan struct{})
+	handler := func(_ context.Context, _ peer.ID, s network.Stream, _ bool) error {
+		switch s {
+		case successStream:
+			closeSignal(successStarted)
+			<-releaseSuccess
+			return nil
+		case failStream:
+			return errDispatchFailed
+		default:
+			return nil
+		}
+	}
+	sm, h := newTestStreamManagerWithHandler(localID, true, handler)
+	h.cm.Protect(remoteID, cnmgrTag)
+	successStream = newMockStream(conn, testProto, network.DirInbound)
+	failStream = newMockStream(conn, testProto, network.DirInbound)
+
+	successDone := make(chan struct{})
+	go func() {
+		sm.streamHandler(successStream)
+		close(successDone)
+	}()
+
+	select {
+	case <-successStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("success dispatch did not start")
+	}
+
+	failDone := make(chan struct{})
+	go func() {
+		sm.streamHandler(failStream)
+		close(failDone)
+	}()
+	select {
+	case <-failDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("failed dispatch did not complete")
+	}
+
+	require.True(t, h.cm.IsProtected(remoteID, cnmgrTag), "failed attempt must not unprotect while another attempt is in flight")
+	require.Equal(t, 0, h.cm.UnprotectCalls(remoteID), "no unprotect should happen before the in-flight attempt completes")
+
+	closeSignal(releaseSuccess)
+	select {
+	case <-successDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("success dispatch did not complete")
+	}
+
+	sm.streamsLock.Lock()
+	current, exists := sm.streams[remoteID]
+	sm.streamsLock.Unlock()
+	require.True(t, exists, "successful stream should be tracked")
+	require.Equal(t, successStream, current, "successful stream should be in the map")
+	require.True(t, h.cm.IsProtected(remoteID, cnmgrTag), "peer should remain protected after successful stream install")
+	require.Equal(t, 0, h.cm.UnprotectCalls(remoteID), "successful stream install should not unprotect")
+	require.True(t, failStream.wasReset(), "failed stream should be reset")
+}
+
+func TestStream_ConcurrentFailedAttemptsUnprotectOnce(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	localID := peer.ID("ZZZZ-high-peer")
+	remoteID := peer.ID("AAAA-low-peer")
+	conn := newMockConn(localID, remoteID, network.DirInbound)
+
+	var streamA *mockStream
+	var streamB *mockStream
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	handler := func(_ context.Context, _ peer.ID, s network.Stream, _ bool) error {
+		switch s {
+		case streamA, streamB:
+			started <- struct{}{}
+			<-release
+			return errDispatchFailed
+		default:
+			return errDispatchFailed
+		}
+	}
+	sm, h := newTestStreamManagerWithHandler(localID, true, handler)
+	h.cm.Protect(remoteID, cnmgrTag)
+	streamA = newMockStream(conn, testProto, network.DirInbound)
+	streamB = newMockStream(conn, testProto, network.DirInbound)
+
+	doneA := make(chan struct{})
+	go func() {
+		sm.streamHandler(streamA)
+		close(doneA)
+	}()
+	doneB := make(chan struct{})
+	go func() {
+		sm.streamHandler(streamB)
+		close(doneB)
+	}()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(2 * time.Second):
+			t.Fatal("expected both dispatch attempts to start")
+		}
+	}
+	closeSignal(release)
+
+	select {
+	case <-doneA:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first failed dispatch did not complete")
+	}
+	select {
+	case <-doneB:
+	case <-time.After(2 * time.Second):
+		t.Fatal("second failed dispatch did not complete")
+	}
+
+	sm.streamsLock.Lock()
+	_, exists := sm.streams[remoteID]
+	sm.streamsLock.Unlock()
+	require.False(t, exists, "no stream should remain after two failed attempts")
+	require.False(t, h.cm.IsProtected(remoteID, cnmgrTag), "peer should be unprotected after all attempts failed")
+	require.Equal(t, 1, h.cm.UnprotectCalls(remoteID), "peer should be unprotected exactly once")
+	require.True(t, streamA.wasReset(), "first failed stream should be reset")
+	require.True(t, streamB.wasReset(), "second failed stream should be reset")
 }
