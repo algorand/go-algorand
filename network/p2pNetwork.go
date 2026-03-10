@@ -1082,12 +1082,36 @@ func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 }
 
 func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disconnectReason) {
-	n.service.UnprotectPeer(remotePeerID)
+	removed := false
+
 	n.wsPeersLock.Lock()
-	n.identityTracker.removeIdentity(peer)
-	delete(n.wsPeers, remotePeerID)
-	delete(n.wsPeersToIDs, peer)
+	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
+	if cur, ok := n.wsPeers[remotePeerID]; ok && cur == peer {
+		delete(n.wsPeers, remotePeerID)
+		removed = true
+	}
+	_, knownPeer := n.wsPeersToIDs[peer]
+	delete(n.wsPeersToIDs, peer) // always delete reverse entry for this exact wsPeer
+
+	// Unprotect while still holding wsPeersLock so we can't race with a new
+	// wsPeer insertion for the same remotePeerID between map deletion and
+	// unprotect.
+	if removed {
+		n.service.UnprotectPeer(remotePeerID)
+	}
 	n.wsPeersLock.Unlock()
+
+	// Throttle slots are per-wsPeer, not per map entry: release for any
+	// known wsPeer on its first cleanup, even if it was already replaced.
+	if knownPeer && peer.throttledOutgoingConnection {
+		n.throttledOutgoingConnections.Add(int32(1))
+	}
+
+	if !removed {
+		// stale close from an old stream/wsPeer that was already replaced; skip
+		// unprotect, disconnect telemetry, and counter updates.
+		return
+	}
 	n.wsPeersChangeCounter.Add(1)
 
 	eventDetails := telemetryspec.PeerEventDetails{
@@ -1110,9 +1134,6 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 			AVCount:          peer.avMessageCount.Load(),
 			PPCount:          peer.ppMessageCount.Load(),
 		})
-	if peer.throttledOutgoingConnection {
-		n.throttledOutgoingConnections.Add(int32(1))
-	}
 }
 
 func (n *P2PNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
