@@ -128,6 +128,113 @@ func TestPagedQueueGetPanicOnLowIndex(t *testing.T) {
 	})
 }
 
+// TestPagedQueuePtr checks that Ptr returns a stable pointer to the correct entry across page boundaries.
+func TestPagedQueuePtr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	head := NewPagedQueue[int](4)
+	cur := head
+	for i := 0; i < 10; i++ {
+		cur = cur.Append(i)
+	}
+
+	// collect pointers to all entries, then mutate through them
+	ptrs := make([]*int, 10)
+	page := head
+	for i := range 10 {
+		page, ptrs[i] = page.Ptr(i)
+		require.NotNil(t, ptrs[i])
+		require.Equal(t, i, *ptrs[i])
+	}
+
+	for i, p := range ptrs {
+		*p = i * 100
+	}
+
+	// verify mutations are visible via Get
+	for i := range 10 {
+		_, val := head.Get(i)
+		require.Equal(t, i*100, val)
+	}
+}
+
+// TestPagedQueuePtrBeyondEnd checks that Ptr returns nil for an out-of-bounds index.
+func TestPagedQueuePtrBeyondEnd(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	head := NewPagedQueue[int](4)
+	cur := head
+	for i := 0; i < 3; i++ {
+		cur = cur.Append(i)
+	}
+
+	_, p := head.Ptr(100)
+	require.Nil(t, p)
+}
+
+// TestPagedQueuePtrPanicOnLowIndex checks that Ptr panics when the index is below the page's baseIdx.
+func TestPagedQueuePtrPanicOnLowIndex(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	head := NewPagedQueue[int](4)
+	cur := head
+	for i := 0; i < 8; i++ {
+		cur = cur.Append(i)
+	}
+
+	require.Panics(t, func() { cur.Ptr(0) })
+}
+
+// TestPagedQueueAllPtrs checks that AllPtrs yields stable pointers in insertion order.
+func TestPagedQueueAllPtrs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	head := NewPagedQueue[int](4)
+	cur := head
+	const n = 15
+	for i := 0; i < n; i++ {
+		cur = cur.Append(i)
+	}
+
+	// collect pointers then mutate through them
+	var ptrs []*int
+	for p := range head.AllPtrs() {
+		ptrs = append(ptrs, p)
+	}
+	require.Len(t, ptrs, n)
+	for i, p := range ptrs {
+		*p = i * 10
+	}
+	for idx, v := range head.All2() {
+		require.Equal(t, idx*10, v)
+	}
+}
+
+// TestPagedQueueAllPtrs2 checks that AllPtrs2 yields correct indices and stable pointers across page boundaries.
+func TestPagedQueueAllPtrs2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	head := NewPagedQueue[int](4)
+	cur := head
+	const n = 15
+	for i := 0; i < n; i++ {
+		cur = cur.Append(i)
+	}
+
+	for idx, p := range head.AllPtrs2() {
+		require.Equal(t, idx, *p)
+		*p = idx * 10
+	}
+	for idx, v := range head.All2() {
+		require.Equal(t, idx*10, v)
+	}
+}
+
 // TestPagedQueueAll checks that the iterator yields all entries in insertion order.
 func TestPagedQueueAll(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -173,6 +280,45 @@ func TestPagedQueueAllEarlyReturn(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		require.Equal(t, i, collected[i])
 	}
+}
+
+// TestPagedQueueAll2 checks that All2 yields correct queue-wide indices and values across page boundaries.
+func TestPagedQueueAll2(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	head := NewPagedQueue[int](4)
+	cur := head
+	const n = 15
+	for i := 0; i < n; i++ {
+		cur = cur.Append(i * 10)
+	}
+
+	for idx, v := range head.All2() {
+		require.Equal(t, idx*10, v)
+	}
+}
+
+// TestPagedQueueAll2EarlyReturn checks that breaking early from All2() works without panicking.
+func TestPagedQueueAll2EarlyReturn(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	head := NewPagedQueue[int](4)
+	cur := head
+	for i := 0; i < 12; i++ {
+		cur = cur.Append(i)
+	}
+
+	var collected []int
+	for idx, v := range head.All2() {
+		require.Equal(t, idx, v)
+		collected = append(collected, v)
+		if len(collected) == 5 {
+			break
+		}
+	}
+	require.Len(t, collected, 5)
 }
 
 // TestPagedQueuePageGrowth checks that pages double in size and all values survive across many page boundaries.

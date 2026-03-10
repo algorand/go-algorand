@@ -97,11 +97,11 @@ type paysetPrefetcher struct {
 	outChan         chan LoadedTransactionGroup
 }
 
-// Payset loads the resources for the provided transaction group list. It also
+// BlockReferences loads the resources for the provided transaction group list. It also
 // loads the feeSink account and adds it to the first returned transaction
 // group.  The order of the transaction groups returned by the channel is
 // identical to the one in the input array.
-func Payset(ctx context.Context, l Ledger, rnd basics.Round, txnGroups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
+func BlockReferences(ctx context.Context, l Ledger, rnd basics.Round, txnGroups [][]transactions.SignedTxnWithAD, feeSinkAddr basics.Address, consensusParams config.ConsensusParams) <-chan LoadedTransactionGroup {
 	prefetcher := &paysetPrefetcher{
 		ledger:          l,
 		rnd:             rnd,
@@ -343,7 +343,6 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 				if !stxn.Txn.FreezeAccount.IsZero() {
 					queue = queue.addAssetTask(stxn.Txn.FreezeAsset, task, resourceTasks)
 					queue = queue.addHoldingTask(stxn.Txn.FreezeAccount, stxn.Txn.FreezeAsset, task, resourceTasks)
-					queue = queue.addAccountTask(&stxn.Txn.FreezeAccount, task, accountTasks) // Why do we need the actual freeze account?
 				}
 			case protocol.ApplicationCallTx:
 				if stxn.Txn.ApplicationID != 0 {
@@ -499,9 +498,15 @@ func (p *paysetPrefetcher) prefetch(ctx context.Context) {
 			select {
 			case done := <-groupDoneCh:
 				if done.err != nil {
-					groupsReady[done.groupIdx].err =
-						fmt.Errorf("prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %w",
+					var e error
+					if done.task.key != "" {
+						e = fmt.Errorf("prefetch failed for groupIdx %d, kv: %x, cause: %w",
+							done.groupIdx, done.task.key, done.err)
+					} else {
+						e = fmt.Errorf("prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %w",
 							done.groupIdx, done.task.address, done.task.creatableIndex, done.task.creatableType, done.err)
+					}
+					groupsReady[done.groupIdx].err = e
 				}
 				if done.groupIdx > i {
 					// mark future txngroup as ready.
@@ -631,7 +636,6 @@ func (p *paysetPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskI
 					CreatableIndex: task.creatableIndex,
 					CreatableType:  task.creatableType,
 				}
-				// update all the group tasks with the new acquired balance.
 				task.groupTask.markCompletionResource(task.groupTaskIndex, re, groupDoneCh)
 				continue
 			}

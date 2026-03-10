@@ -74,7 +74,7 @@ type prefetcherTestLedger struct {
 	balances            map[basics.Address]ledgercore.AccountData
 	creators            map[basics.CreatableIndex]basics.Address
 	kvs                 map[string][]byte
-	errorTriggerAddress map[basics.Address]bool
+	errorTriggerAddress *basics.Address
 }
 
 const errorTriggerCreatableIndex = 1000001
@@ -88,7 +88,7 @@ func (l *prefetcherTestLedger) CheckDup(config.ConsensusParams, basics.Round, ba
 	return nil
 }
 func (l *prefetcherTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	if _, has := l.errorTriggerAddress[addr]; has {
+	if l.errorTriggerAddress != nil && *l.errorTriggerAddress == addr {
 		return ledgercore.AccountData{}, l.round, lookupError{}
 	}
 	if data, has := l.balances[addr]; has {
@@ -116,7 +116,7 @@ func (l *prefetcherTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.Cr
 }
 
 func (l *prefetcherTestLedger) LookupKv(_ basics.Round, name string) ([]byte, error) {
-	if name == errorTriggerKvName {
+	if name[11:] == errorTriggerKvName {
 		return nil, errors.New("error looking up kv")
 	}
 	if val, has := l.kvs[name]; has {
@@ -192,6 +192,7 @@ func convertLoadedResourcesEntries(entries []prefetcher.LoadedResourceEntry) map
 }
 
 func compareLoadedResourcesEntries(t *testing.T, expected []prefetcher.LoadedResourceEntry, actual []prefetcher.LoadedResourceEntry) {
+	t.Helper()
 	expectedForTest := convertLoadedResourcesEntries(expected)
 	actualForTest := convertLoadedResourcesEntries(actual)
 	require.Equal(t, expectedForTest, actualForTest)
@@ -200,11 +201,10 @@ func compareLoadedResourcesEntries(t *testing.T, expected []prefetcher.LoadedRes
 func getPrefetcherTestLedger(rnd basics.Round) *prefetcherTestLedger {
 
 	var ledger = &prefetcherTestLedger{
-		round:               rnd,
-		balances:            make(map[basics.Address]ledgercore.AccountData),
-		creators:            make(map[basics.CreatableIndex]basics.Address),
-		kvs:                 make(map[string][]byte),
-		errorTriggerAddress: make(map[basics.Address]bool),
+		round:    rnd,
+		balances: make(map[basics.Address]ledgercore.AccountData),
+		creators: make(map[basics.CreatableIndex]basics.Address),
+		kvs:      make(map[string][]byte),
 	}
 	ledger.balances[makeAddress(1)] = ledgercore.AccountData{
 		AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
@@ -468,16 +468,10 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
 					},
 				},
-				{
-					Address: makeAddressPtr(3),
-					Data: &ledgercore.AccountData{
-						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
-					},
-				},
 			},
 			resources: []prefetcher.LoadedResourceEntry{
 				{
-					Address:        makeAddressPtr(2),
+					Address:        makeAddressPtr(2), // The creator of 1001 in the test ledger
 					CreatableIndex: 1001,
 					CreatableType:  basics.AssetCreatable,
 					Resource:       &ledgercore.AccountResource{},
@@ -578,6 +572,95 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "application transaction using access",
+			signedTxn: transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.ApplicationCallTx,
+					Header: transactions.Header{
+						Sender: makeAddress(1),
+					},
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: 10,
+						Access: []transactions.ResourceRef{
+							{Address: makeAddress(4)},
+							{Address: makeAddress(5)},
+							{Address: makeAddress(6)},
+							{App: 2001},
+							{App: 2002},
+							{Asset: 1001},
+							{Asset: 1002},
+							// Since we have this cross product we won't prefetch the Address or Asset in it.
+							{Holding: transactions.HoldingRef{
+								Address: 3,
+								Asset:   7,
+							}},
+						},
+					},
+				},
+			},
+			accounts: []prefetcher.LoadedAccountDataEntry{
+				{
+					Address: &feeSinkAddr,
+					Data: &ledgercore.AccountData{
+						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+					},
+				},
+				{
+					Address: makeAddressPtr(1),
+					Data: &ledgercore.AccountData{
+						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 100000000}},
+					},
+				},
+				// 4 and 5 are here because when using Access, if accounts are
+				// not used in a cross product, they are assumed prefetch
+				// worthy.
+				{
+					Address: makeAddressPtr(4),
+					Data: &ledgercore.AccountData{
+						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+					},
+				},
+				{
+					Address: makeAddressPtr(5),
+					Data: &ledgercore.AccountData{
+						AccountBaseData: ledgercore.AccountBaseData{MicroAlgos: basics.MicroAlgos{Raw: 0}},
+					},
+				},
+			},
+			resources: []prefetcher.LoadedResourceEntry{
+				{ // Since 1001 is not used in a cross product, it is prefetched
+					Address:        makeAddressPtr(2), // 2 is the creator for 1001
+					CreatableIndex: 1001,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+				{
+					Address:        makeAddressPtr(15), // 15 is the creator for 2001
+					CreatableIndex: 2001,
+					CreatableType:  basics.AppCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+				{
+					Address:        nil,
+					CreatableIndex: 2002,
+					CreatableType:  basics.AppCreatable,
+					Resource:       nil,
+				},
+				{
+					Address:        nil,
+					CreatableIndex: 10,
+					CreatableType:  basics.AppCreatable,
+					Resource:       nil,
+				},
+				{ // Fetch the explicit cross-product resource
+					Address:        makeAddressPtr(6),
+					CreatableIndex: 1002,
+					CreatableType:  basics.AssetCreatable,
+					Resource:       &ledgercore.AccountResource{},
+				},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -589,7 +672,7 @@ func TestEvaluatorPrefetcher(t *testing.T) {
 			groups[0] = make([]transactions.SignedTxnWithAD, 1)
 			groups[0][0].SignedTxn = testCase.signedTxn
 
-			preloadedTxnGroupsCh := prefetcher.Payset(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
+			preloadedTxnGroupsCh := prefetcher.BlockReferences(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 
 			loadedTxnGroup, ok := <-preloadedTxnGroupsCh
 			require.True(t, ok)
@@ -641,7 +724,7 @@ func TestAssetLookupError(t *testing.T) {
 		}
 	}
 
-	preloadedTxnGroupsCh := prefetcher.Payset(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
+	preloadedTxnGroupsCh := prefetcher.BlockReferences(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
 
 	receivedNumGroups := 0
 	for loadedTxnGroup := range preloadedTxnGroupsCh {
@@ -649,6 +732,64 @@ func TestAssetLookupError(t *testing.T) {
 		if err := loadedTxnGroup.Err; err != nil {
 			errorReceived = true
 			require.ErrorContains(t, err, "prefetch failed for groupIdx 2, address: AIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGFFWAF4, creatableIndex 1000002, creatableType 0, cause: asset lookup error")
+		}
+		require.Equal(t, txnPerGroup, len(loadedTxnGroup.TxnGroup))
+	}
+	require.True(t, errorReceived)
+	require.Equal(t, numGroups, receivedNumGroups)
+}
+
+// Test for error from LookupKV
+func TestBoxLookupError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const rnd = 5
+	var feeSinkAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	ledger := getPrefetcherTestLedger(rnd)
+	appTxn :=
+		transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: transactions.Header{
+					Sender: makeAddress(1),
+				},
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: 1002,
+					ForeignApps:   []basics.AppIndex{2002},
+					Boxes:         []transactions.BoxRef{{Index: 1, Name: []byte("GOODKV")}},
+				},
+			},
+		}
+
+	errorReceived := false
+	const numGroups = 5
+	const txnPerGroup = 2
+	groups := make([][]transactions.SignedTxnWithAD, numGroups)
+	for i := 0; i < numGroups; i++ {
+		groups[i] = make([]transactions.SignedTxnWithAD, txnPerGroup)
+		for j := 0; j < txnPerGroup; j++ {
+			groups[i][j].SignedTxn = appTxn
+			if i == 2 {
+				// force error in asset lookup in the second txn group only
+				// (need to asssigned the entire Boxes slice to avoid modifying
+				// other txns)
+				groups[i][j].SignedTxn.Txn.ApplicationCallTxnFields.Boxes = []transactions.BoxRef{{
+					Index: 1,
+					Name:  []byte("BADKV"),
+				}}
+			}
+		}
+	}
+
+	preloadedTxnGroupsCh := prefetcher.BlockReferences(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
+
+	receivedNumGroups := 0
+	for loadedTxnGroup := range preloadedTxnGroupsCh {
+		receivedNumGroups++
+		if err := loadedTxnGroup.Err; err != nil {
+			errorReceived = true
+			require.ErrorContains(t, err, "prefetch failed for groupIdx 2, kv:")
+			require.ErrorContains(t, err, "cause: error looking up kv")
 		}
 		require.Equal(t, txnPerGroup, len(loadedTxnGroup.TxnGroup))
 	}
@@ -694,7 +835,7 @@ func TestGetCreatorForRoundError(t *testing.T) {
 			}
 		}
 	}
-	preloadedTxnGroupsCh := prefetcher.Payset(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
+	preloadedTxnGroupsCh := prefetcher.BlockReferences(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
 
 	receivedNumGroups := 0
 	for loadedTxnGroup := range preloadedTxnGroupsCh {
@@ -747,8 +888,8 @@ func TestLookupWithoutRewards(t *testing.T) {
 			}
 		}
 	}
-	ledger.errorTriggerAddress[createAssetFailedTxn.Txn.Sender] = true
-	preloadedTxnGroupsCh := prefetcher.Payset(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
+	ledger.errorTriggerAddress = &createAssetFailedTxn.Txn.Sender
+	preloadedTxnGroupsCh := prefetcher.BlockReferences(context.Background(), ledger, rnd+100, groups, feeSinkAddr, config.Consensus[proto])
 
 	receivedNumGroups := 0
 	for loadedTxnGroup := range preloadedTxnGroupsCh {
@@ -803,7 +944,7 @@ func TestEvaluatorPrefetcherQueueExpansion(t *testing.T) {
 			addr += 2
 		}
 	}
-	preloadedTxnGroupsCh := prefetcher.Payset(context.Background(), ledger, rnd, txnGroups, feeSinkAddr, config.Consensus[proto])
+	preloadedTxnGroupsCh := prefetcher.BlockReferences(context.Background(), ledger, rnd, txnGroups, feeSinkAddr, config.Consensus[proto])
 	groupsCount := 0
 	addressCount := 0
 	uniqueAccounts := make(map[basics.Address]bool)
@@ -872,7 +1013,7 @@ func BenchmarkPrefetcherApps(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	preloadedTxnGroupsCh := prefetcher.Payset(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
+	preloadedTxnGroupsCh := prefetcher.BlockReferences(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 	for k := range preloadedTxnGroupsCh {
 		require.NoError(b, k.Err)
 	}
@@ -910,7 +1051,7 @@ func BenchmarkPrefetcherPayment(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	preloadedTxnGroupsCh := prefetcher.Payset(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
+	preloadedTxnGroupsCh := prefetcher.BlockReferences(context.Background(), ledger, rnd, groups, feeSinkAddr, config.Consensus[proto])
 	for k := range preloadedTxnGroupsCh {
 		require.NoError(b, k.Err)
 	}

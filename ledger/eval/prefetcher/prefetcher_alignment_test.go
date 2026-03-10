@@ -327,7 +327,7 @@ func (ld *ledgerData) pretend(before ...basics.Address) {
 func prefetch(t *testing.T, l prefetcher.Ledger, txn transactions.Transaction) ledgerData {
 	group := makeGroupFromTxn(txn)
 
-	ch := prefetcher.Payset(
+	ch := prefetcher.BlockReferences(
 		context.Background(), l, 1,
 		[][]transactions.SignedTxnWithAD{group},
 		feeSink(), config.Consensus[proto])
@@ -815,7 +815,7 @@ func TestEvaluatorPrefetcherAlignmentAssetClawback(t *testing.T) {
 func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	assetID := basics.AssetIndex(5)
+	const assetID = 5
 	l := &prefetcherAlignmentTestLedger{
 		balances: map[basics.Address]ledgercore.AccountData{
 			rewardsPool(): {
@@ -859,12 +859,12 @@ func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
 			},
 		},
 		creators: map[basics.CreatableIndex]basics.Address{
-			basics.CreatableIndex(assetID): makeAddress(1),
+			assetID: makeAddress(1),
 		},
 	}
 
 	txn := transactions.Transaction{
-		Type: protocol.AssetTransferTx,
+		Type: protocol.AssetFreezeTx,
 		Header: transactions.Header{
 			Sender:      makeAddress(2),
 			GenesisHash: genesisHash(),

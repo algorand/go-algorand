@@ -104,3 +104,63 @@ func (pq *PagedQueue[T]) All() iter.Seq[T] {
 		}
 	}
 }
+
+// All2 returns an iterator over all entries in the queue in insertion order,
+// yielding the queue-wide index and value of each entry.
+func (pq *PagedQueue[T]) All2() iter.Seq2[int, T] {
+	return func(yield func(int, T) bool) {
+		for page := pq; page != nil; page = page.next {
+			for i, t := range page.entries {
+				if !yield(page.baseIdx+i, t) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// Ptr returns a pointer to the entry at idx, along with the page it lives on
+// for efficient subsequent calls. Because PagedQueue never relocates entries,
+// the pointer remains valid for the lifetime of the queue. If idx is beyond
+// the end, nil is returned. If idx is too low, Ptr panics.
+func (pq *PagedQueue[T]) Ptr(idx int) (*PagedQueue[T], *T) {
+	localIdx := idx - pq.baseIdx
+	if localIdx < len(pq.entries) {
+		return pq, &pq.entries[localIdx]
+	}
+	if pq.next != nil {
+		return pq.next.Ptr(idx)
+	}
+	return pq, nil
+}
+
+// AllPtrs returns an iterator over pointers to all entries in the queue in
+// insertion order. Because PagedQueue never relocates entries, the pointers
+// remain valid for the lifetime of the queue.
+func (pq *PagedQueue[T]) AllPtrs() iter.Seq[*T] {
+	return func(yield func(*T) bool) {
+		for page := pq; page != nil; page = page.next {
+			for i := range page.entries {
+				if !yield(&page.entries[i]) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// AllPtrs2 returns an iterator over all entries in the queue in insertion
+// order, yielding the queue-wide index and a pointer to each entry. Because
+// PagedQueue never relocates entries, the pointers remain valid for the
+// lifetime of the queue.
+func (pq *PagedQueue[T]) AllPtrs2() iter.Seq2[int, *T] {
+	return func(yield func(int, *T) bool) {
+		for page := pq; page != nil; page = page.next {
+			for i := range page.entries {
+				if !yield(page.baseIdx+i, &page.entries[i]) {
+					return
+				}
+			}
+		}
+	}
+}
