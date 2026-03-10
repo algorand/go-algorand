@@ -1092,6 +1092,13 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 	}
 	_, knownPeer := n.wsPeersToIDs[peer]
 	delete(n.wsPeersToIDs, peer) // always delete reverse entry for this exact wsPeer
+
+	// Unprotect while still holding wsPeersLock so we can't race with a new
+	// wsPeer insertion for the same remotePeerID between map deletion and
+	// unprotect.
+	if removed {
+		n.service.UnprotectPeer(remotePeerID)
+	}
 	n.wsPeersLock.Unlock()
 
 	// Throttle slots are per-wsPeer, not per map entry: release for any
@@ -1105,8 +1112,6 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 		// unprotect, disconnect telemetry, and counter updates.
 		return
 	}
-
-	n.service.UnprotectPeer(remotePeerID)
 	n.wsPeersChangeCounter.Add(1)
 
 	eventDetails := telemetryspec.PeerEventDetails{
