@@ -23,7 +23,7 @@ import "iter"
 // with `get` can be from multiple threads, after all appends have been
 // completed.  These are roughly the same rules that a growing slice would have,
 // but PagedQueue avoids copying to grow by using a paged approach.  Random
-// access would pay a penalty to access entries by folling the links, but
+// access would pay a penalty to access entries by following the links, but
 // processing in FIFO order has negligible extra cost.
 //
 // The zero value is a valid empty queue; NewPagedQueue is only needed to

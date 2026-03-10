@@ -1284,7 +1284,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 	const appID = 1115
 
 	// We're going to access app1 and app2 to match the prefetcher's assumption
-	// that ot should prefetch apps
+	// that it should prefetch apps
 	ops, err := logic.AssembleString(`#pragma version 5
 int 1; byte "A"
 app_global_get_ex; pop; pop
