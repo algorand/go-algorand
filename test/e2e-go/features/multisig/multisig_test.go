@@ -20,11 +20,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // create a 2 out of 3 multisig address

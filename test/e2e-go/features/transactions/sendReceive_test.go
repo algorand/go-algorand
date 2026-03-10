@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
-
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )

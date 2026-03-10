@@ -20,8 +20,9 @@ package rapidgen
 
 import (
 	"fmt"
-	"pgregory.net/rapid"
 	"strings"
+
+	"pgregory.net/rapid"
 )
 
 // DomainWithPort generates an RFC 1035 compliant domain name with a port.

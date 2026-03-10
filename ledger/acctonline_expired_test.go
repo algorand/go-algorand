@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
@@ -32,7 +34,6 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // onlineAcctModel provides a simple interface for tracking accounts

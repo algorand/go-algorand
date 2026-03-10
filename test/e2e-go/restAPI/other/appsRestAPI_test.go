@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -33,11 +35,9 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
+	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-
-	helper "github.com/algorand/go-algorand/test/e2e-go/restAPI"
 )
 
 func TestPendingTransactionInfoInnerTxnAssetCreate(t *testing.T) {

@@ -20,10 +20,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/test/reflectionhelpers"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestAccounts(t *testing.T) {

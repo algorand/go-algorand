@@ -24,13 +24,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/stretchr/testify/require"
 )
 
 type accountsV2Reader struct {

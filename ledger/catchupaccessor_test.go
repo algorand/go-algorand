@@ -28,6 +28,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/msgp/msgp"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -41,7 +43,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/msgp/msgp"
 )
 
 func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]byte, last64KIndex int) {

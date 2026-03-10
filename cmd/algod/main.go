@@ -29,6 +29,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gofrs/flock"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod"
@@ -41,9 +45,6 @@ import (
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
-	"github.com/gofrs/flock"
-
-	"github.com/algorand/go-deadlock"
 )
 
 var dataDirectory = flag.String("d", "", "Root Algorand daemon data path")

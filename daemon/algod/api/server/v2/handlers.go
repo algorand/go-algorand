@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -82,6 +83,17 @@ const MaxAssetResults = 1000
 // /v2/accounts/{address}/assets endpoint
 const DefaultAssetResults = uint64(1000)
 
+// MaxApplicationResults sets a size limit for the number of applications returned in a single request to the
+// /v2/accounts/{address}/applications endpoint when includeParams=true
+const MaxApplicationResults = 1000
+
+// MaxApplicationResultsWithoutParams sets a higher limit when params are excluded, since responses are ~100x smaller
+const MaxApplicationResultsWithoutParams = MaxApplicationResults * 100
+
+// DefaultApplicationResults sets a default size limit for the number of applications returned in a single request to the
+// /v2/accounts/{address}/applications endpoint
+const DefaultApplicationResults = uint64(1000)
+
 const (
 	errInvalidLimit      = "limit parameter must be a positive integer"
 	errUnableToParseNext = "unable to parse next token"
@@ -111,8 +123,10 @@ type LedgerForAPI interface {
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
+	LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error)
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
+	OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
 	WaitWithCancel(r basics.Round) (chan struct{}, func())
@@ -416,13 +430,36 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 	}
 
 	// should we skip fetching apps and assets?
-	if params.Exclude != nil {
-		switch *params.Exclude {
-		case "all":
-			return v2.basicAccountInformation(ctx, address, handle, contentType)
-		case "none", "":
-		default:
-			return badRequest(ctx, err, errFailedToParseExclude, v2.Log)
+	var excludeCreatedAppsParams bool
+	var excludeCreatedAssetsParams bool
+	if params.Exclude != nil && len(*params.Exclude) > 0 {
+		excludeValues := *params.Exclude
+
+		// Handle special cases that must be alone
+		if len(excludeValues) == 1 {
+			val := strings.TrimSpace(string(excludeValues[0]))
+			if val == "all" {
+				return v2.basicAccountInformation(ctx, address, handle, contentType)
+			}
+			if val == "none" || val == "" {
+				// Default behavior - include everything
+				excludeValues = nil
+			}
+		}
+
+		// Parse exclusions
+		for _, excludeVal := range excludeValues {
+			val := strings.TrimSpace(string(excludeVal))
+			switch val {
+			case "created-apps-params":
+				excludeCreatedAppsParams = true
+			case "created-assets-params":
+				excludeCreatedAssetsParams = true
+			case "all", "none":
+				return badRequest(ctx, fmt.Errorf("'%s' cannot be combined with other exclude values", val), errFailedToParseExclude, v2.Log)
+			default:
+				return badRequest(ctx, fmt.Errorf("invalid exclude value: %s", val), errFailedToParseExclude, v2.Log)
+			}
 		}
 	}
 
@@ -470,7 +507,10 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address basics.Address,
 		return internalError(ctx, err, fmt.Sprintf("could not retrieve consensus information for last round (%d)", lastRound), v2.Log)
 	}
 
-	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards)
+	account, err := AccountDataToAccount(address.String(), &record, lastRound, &consensus, amountWithoutPendingRewards, AccountDataToAccountOptions{
+		ExcludeCreatedAppsParams:   excludeCreatedAppsParams,
+		ExcludeCreatedAssetsParams: excludeCreatedAssetsParams,
+	})
 	if err != nil {
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
@@ -586,7 +626,7 @@ func (v2 *Handlers) AccountAssetInformation(ctx echo.Context, address basics.Add
 
 	if record.AssetParams != nil {
 		asset := AssetParamsToAsset(address.String(), assetID, record.AssetParams)
-		response.CreatedAsset = &asset.Params
+		response.CreatedAsset = asset.Params
 	}
 
 	if record.AssetHolding != nil {
@@ -634,7 +674,7 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address basi
 
 	if record.AppParams != nil {
 		app := AppParamsToApplication(address.String(), applicationID, record.AppParams)
-		response.CreatedApp = &app.Params
+		response.CreatedApp = app.Params
 	}
 
 	if record.AppLocalState != nil {
@@ -939,7 +979,20 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round basics.Round, tx
 func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 	latest, totals, err := v2.Node.LedgerForAPI().LatestTotals()
 	if err != nil {
-		err = fmt.Errorf("GetSupply(): round %d, failed: %v", latest, err)
+		err = fmt.Errorf("GetSupply(): round %d, LatestTotals failed: %v", latest, err)
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	params, err := v2.Node.LedgerForAPI().ConsensusParams(latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d, ConsensusParams failed: %v", latest, err)
+		return internalError(ctx, err, errInternalFailure, v2.Log)
+	}
+
+	brnd := agreement.BalanceRound(latest, params)
+	onlineCirculation, err := v2.Node.LedgerForAPI().OnlineCirculation(brnd, latest)
+	if err != nil {
+		err = fmt.Errorf("GetSupply(): round %d, OnlineCirculation failed: %v", latest, err)
 		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
 
@@ -947,6 +1000,7 @@ func (v2 *Handlers) GetSupply(ctx echo.Context) error {
 		CurrentRound: latest,
 		TotalMoney:   totals.Participating().Raw,
 		OnlineMoney:  totals.Online.Money.Raw,
+		OnlineStake:  onlineCirculation.Raw,
 	}
 
 	return ctx.JSON(http.StatusOK, supply)
@@ -1136,10 +1190,6 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 // AccountAssetsInformation looks up an account's asset holdings.
 // (GET /v2/accounts/{address}/assets)
 func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Address, params model.AccountAssetsInformationParams) error {
-	if !v2.Node.Config().EnableExperimentalAPI {
-		return ctx.String(http.StatusNotFound, "/v2/accounts/{address}/assets was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
-	}
-
 	var assetGreaterThan uint64 = 0
 	if params.Next != nil {
 		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
@@ -1207,13 +1257,117 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address basics.Ad
 
 		if !record.Creator.IsZero() {
 			asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
-			aah.AssetParams = &asset.Params
+			aah.AssetParams = asset.Params
 		}
 
 		assetHoldings = append(assetHoldings, aah)
 	}
 
 	response.AssetHoldings = &assetHoldings
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// AccountApplicationsInformation returns application resources for a specific address.
+func (v2 *Handlers) AccountApplicationsInformation(ctx echo.Context, address basics.Address, params model.AccountApplicationsInformationParams) error {
+	var appGreaterThan uint64 = 0
+	if params.Next != nil {
+		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
+		if err0 != nil {
+			return badRequest(ctx, err0, fmt.Sprintf("%s: %v", errUnableToParseNext, err0), v2.Log)
+		}
+		appGreaterThan = agt
+	}
+
+	// Determine includeParams first, as it affects limit validation
+	includeParams := false
+	if params.Include != nil {
+		if slices.Contains(*params.Include, model.AccountApplicationsInformationParamsIncludeParams) {
+			includeParams = true
+		}
+	}
+
+	// Choose appropriate max limit based on whether params are included
+	// When params are excluded, responses are ~100x smaller, so we can return more results
+	maxLimit := uint64(MaxApplicationResults)
+	if !includeParams {
+		maxLimit = uint64(MaxApplicationResultsWithoutParams)
+	}
+
+	if params.Limit != nil {
+		if *params.Limit <= 0 {
+			return badRequest(ctx, errors.New(errInvalidLimit), errInvalidLimit, v2.Log)
+		}
+
+		if *params.Limit > maxLimit {
+			limitErrMsg := fmt.Sprintf("limit %d exceeds max applications single batch limit %d", *params.Limit, maxLimit)
+			return badRequest(ctx, errors.New(limitErrMsg), limitErrMsg, v2.Log)
+		}
+	} else {
+		// default limit
+		l := DefaultApplicationResults
+		params.Limit = &l
+	}
+
+	ledger := v2.Node.LedgerForAPI()
+
+	// Logic
+	// 1. Get the account's application resources subject to limits
+	// 2. Handle empty response
+	// 3. Prepare JSON response
+
+	// We intentionally request one more than the limit to determine if there are more applications.
+	records, lookupRound, err := ledger.LookupApplications(address, basics.AppIndex(appGreaterThan), *params.Limit+1, includeParams)
+
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	// prepare JSON response
+	response := model.AccountApplicationsInformationResponse{Round: lookupRound}
+
+	// If the total count is greater than the limit, we set the next token to the last application ID being returned
+	if uint64(len(records)) > *params.Limit {
+		// we do not include the last record in the response
+		records = records[:*params.Limit]
+		nextTk := strconv.FormatUint(uint64(records[len(records)-1].AppID), 10)
+		response.NextToken = &nextTk
+	}
+
+	applicationResources := make([]model.AccountApplicationResource, 0, len(records))
+
+	for _, record := range records {
+		// Skip if neither local state nor params exist (shouldn't happen)
+		if record.AppLocalState == nil && record.AppParams == nil {
+			v2.Log.Warnf("AccountApplicationsInformation: application %d has neither local state nor params", record.AppID)
+			continue
+		}
+
+		aah := model.AccountApplicationResource{
+			Id: record.AppID,
+		}
+
+		if !record.Creator.IsZero() {
+			// App exists - don't set Deleted field (omit from JSON)
+			if includeParams && record.AppParams != nil {
+				app := AppParamsToApplication(record.Creator.String(), record.AppID, record.AppParams)
+				aah.Params = app.Params
+			}
+		} else {
+			// App deleted - set Deleted=true (only include when true)
+			deleted := true
+			aah.Deleted = &deleted
+		}
+
+		if record.AppLocalState != nil {
+			appLocalState := AppLocalState(*record.AppLocalState, record.AppID)
+			aah.AppLocalState = &appLocalState
+		}
+
+		applicationResources = append(applicationResources, aah)
+	}
+
+	response.ApplicationResources = &applicationResources
 
 	return ctx.JSON(http.StatusOK, response)
 }

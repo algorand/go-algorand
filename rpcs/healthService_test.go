@@ -22,10 +22,11 @@ import (
 	"path"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestHealthService_ServeHTTP(t *testing.T) {

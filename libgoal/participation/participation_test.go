@@ -17,13 +17,13 @@
 package participation
 
 import (
-	"github.com/algorand/go-algorand/data/account"
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/test/partitiontest"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"testing"
+	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestGenParticipationKeysTo_Install(t *testing.T) {

@@ -19,11 +19,12 @@ package dualdriver
 import (
 	"context"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/google/go-cmp/cmp"
 )
 
 type accountsReaderExt struct {

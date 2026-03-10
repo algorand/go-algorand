@@ -14,30 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package prefetcher
+//go:build !darwin
 
-import (
-	"fmt"
+package driver
 
-	"github.com/algorand/go-algorand/data/basics"
-)
-
-// GroupTaskError indicates the group index of the unfulfilled resource
-type GroupTaskError struct {
-	err            error
-	GroupIdx       int64
-	Address        *basics.Address
-	CreatableIndex basics.CreatableIndex
-	CreatableType  basics.CreatableType
-}
-
-// Error satisfies builtin interface `error`
-func (err *GroupTaskError) Error() string {
-	return fmt.Sprintf("prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %v",
-		err.GroupIdx, err.Address, err.CreatableIndex, err.CreatableType, err.err)
-}
-
-// Unwrap provides access to the underlying error
-func (err *GroupTaskError) Unwrap() error {
-	return err.err
+// maskSIGURG is a no-op on non-Darwin platforms.
+//
+// On macOS, Go's SIGURG-based async preemption can interfere with IOKit HID
+// calls, but this is not an issue on other platforms. See ledger_hid_darwin.go
+// for the Darwin-specific implementation.
+func maskSIGURG() func() {
+	return func() {}
 }
