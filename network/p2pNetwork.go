@@ -1085,7 +1085,7 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 	removed := false
 
 	n.wsPeersLock.Lock()
-	n.identityTracker.removeIdentity(peer) // safe: removeIdentity is already pointer-checked
+	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
 	if cur, ok := n.wsPeers[remotePeerID]; ok && cur == peer {
 		delete(n.wsPeers, remotePeerID)
 		removed = true
