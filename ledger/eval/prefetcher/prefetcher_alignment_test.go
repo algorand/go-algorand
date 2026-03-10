@@ -1782,7 +1782,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallWithForeignAppBox(t *testing
 	boxValue := []byte("foreign-value")
 
 	// We're going to access app1's globals to match our prefetcher's expectation that apps get accessed.
-	ops, err := logic.AssembleString(`#pragma version 5
+	ops, err := logic.AssembleString(`#pragma version 10
 int 1
 byte "A"
 app_global_get_ex
@@ -1873,7 +1873,31 @@ int 1`)
 	}
 
 	requested, prefetched := run(t, l, txn)
-
 	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
+
+	txnWithAccess := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(2),
+			GenesisHash: genesisHash(),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: appID,
+			Access: []transactions.ResourceRef{
+				{App: foreignAppID},
+				{Box: transactions.BoxRef{
+					Index: 1,
+					Name:  boxName,
+				}},
+			},
+		},
+	}
+
+	requestedWithA, prefetchedWithA := run(t, l, txnWithAccess)
+	prefetchedWithA.pretend(rewardsPool())
+	require.Equal(t, requestedWithA, prefetchedWithA)
+
+	// fetches for the txn with Access should match
+	require.Equal(t, requestedWithA, requested)
 }
