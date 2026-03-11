@@ -365,7 +365,7 @@ func randomAccountWithAppParams(N int) basics.AccountData {
 func setupTestForLargeResources(t *testing.T, acctSize, maxResults int, accountMaker func(int) basics.AccountData) (handlers v2.Handlers, fakeAddr basics.Address, acctData basics.AccountData) {
 	ml := mockLedger{
 		accounts: make(map[basics.Address]basics.AccountData),
-		latest:   basics.Round(10),
+		latest:   10,
 	}
 	fakeAddr = ledgertesting.RandomAddress()
 
@@ -883,7 +883,7 @@ func setupBoxTestHandlers(t *testing.T, appID basics.AppIndex, boxNames []string
 	ml := mockLedger{
 		accounts: make(map[basics.Address]basics.AccountData),
 		kvstore:  make(map[string][]byte),
-		latest:   basics.Round(10),
+		latest:   10,
 	}
 
 	// Create boxes in the kvstore
@@ -907,7 +907,7 @@ func setupLargeBoxTestHandlers(t *testing.T, appID basics.AppIndex, boxes map[st
 	ml := mockLedger{
 		accounts: make(map[basics.Address]basics.AccountData),
 		kvstore:  make(map[string][]byte),
-		latest:   basics.Round(10),
+		latest:   10,
 	}
 	for name, value := range boxes {
 		key := apps.MakeBoxKey(uint64(appID), name)
@@ -946,7 +946,7 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 
 		assert.Len(t, resp.Boxes, 3)
 		assert.NotNil(t, resp.Round)
-		assert.Equal(t, uint64(10), *resp.Round)
+		assert.Equal(t, basics.Round(10), *resp.Round)
 		assert.NotNil(t, resp.NextToken, "should have next-token when more pages exist")
 
 		// Verify box names are sorted
@@ -1318,7 +1318,7 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, resp.Boxes, 3)
 		assert.NotNil(t, resp.Round)
-		assert.Equal(t, uint64(10), *resp.Round)
+		assert.Equal(t, basics.Round(10), *resp.Round)
 	})
 
 	t.Run("RoundTooNew", func(t *testing.T) {
@@ -1348,7 +1348,7 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		err = json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.NotNil(t, resp.Round)
-		assert.Equal(t, uint64(10), *resp.Round)
+		assert.Equal(t, basics.Round(10), *resp.Round)
 	})
 
 	t.Run("RoundTooOld", func(t *testing.T) {
@@ -1357,8 +1357,8 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		ml := mockLedger{
 			accounts: make(map[basics.Address]basics.AccountData),
 			kvstore:  make(map[string][]byte),
-			latest:   basics.Round(10),
-			minRound: basics.Round(5),
+			latest:   10,
+			minRound: 5,
 		}
 		for _, name := range boxNames {
 			key := apps.MakeBoxKey(uint64(appID), name)
