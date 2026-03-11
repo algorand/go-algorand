@@ -131,9 +131,12 @@ Use --values to include box values in the output.`,
 				reportErrorf(errorRequestFail, err)
 			}
 
-			// Auto-pin round from first page for consistent pagination.
-			if round == 0 && boxesRes.Round != nil {
-				round = basics.Round(*boxesRes.Round)
+			if round == 0 {
+				// Auto-pin round from first page for consistent pagination.
+				round = *boxesRes.Round
+				if len(boxesRes.Boxes) == 0 {
+					reportErrorf("No matching boxes found")
+				}
 			}
 
 			for _, descriptor := range boxesRes.Boxes {
