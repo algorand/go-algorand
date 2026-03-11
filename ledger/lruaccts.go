@@ -166,7 +166,6 @@ func (m *lruAccounts) prune(newSize int) (removed int) {
 		removed++
 	}
 
-	// clear the notFound list
-	m.notFound = make(map[basics.Address]struct{}, len(m.notFound))
+	clear(m.notFound)
 	return
 }

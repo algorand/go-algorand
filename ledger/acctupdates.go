@@ -1292,9 +1292,9 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return macct.AccountResource(), rnd, nil
 		}
 
-		// check baseAccoiunts again to see if it does not exist
+		// check baseResources again to see if it does not exist
 		if au.baseResources.readNotFound(addr, aidx) {
-			// it seems the account doesnt exist
+			// it seems the resource doesn't exist
 			return ledgercore.AccountResource{}, rnd, nil
 		}
 
@@ -1372,7 +1372,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 					continue
 				}
 				deltaResults[rec.Aidx] = rec
-				if rec.Holding.Deleted {
+				if rec.Holding.Deleted || rec.Params.Deleted {
 					numDeltaDeleted++
 				}
 			}
@@ -1393,7 +1393,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 			return nil, 0, err
 		}
 
-		if resourceDbRound == currentDBRound {
+		if resourceDbRound == currentDBRound || (len(persistedResources) == 0 && resourceDbRound == 0) {
 			seenInDB := make(map[basics.AssetIndex]bool, len(persistedResources))
 			result := make([]ledgercore.AssetResourceWithIDs, 0, limit)
 
@@ -1418,7 +1418,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 					// Holding removed by delta — leave AssetHolding nil.
 				} else if inDelta && d.Holding.Holding != nil {
 					arwi.AssetHolding = d.Holding.Holding
-				} else {
+				} else if pd.Data.IsHolding() {
 					ah := pd.Data.GetAssetHolding()
 					arwi.AssetHolding = &ah
 				}
@@ -1518,7 +1518,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 					continue
 				}
 				deltaResults[rec.Aidx] = rec
-				if rec.State.Deleted {
+				if rec.State.Deleted || rec.Params.Deleted {
 					numDeltaDeleted++
 				}
 			}
@@ -1539,7 +1539,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 			return nil, 0, err
 		}
 
-		if resourceDbRound == currentDBRound {
+		if resourceDbRound == currentDBRound || (len(persistedResources) == 0 && resourceDbRound == 0) {
 			seenInDB := make(map[basics.AppIndex]bool, len(persistedResources))
 			result := make([]ledgercore.AppResourceWithIDs, 0, limit)
 
@@ -1564,7 +1564,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 					// Local state removed by delta — leave AppLocalState nil.
 				} else if inDelta && d.State.LocalState != nil {
 					arwi.AppLocalState = d.State.LocalState
-				} else {
+				} else if pd.Data.IsHolding() {
 					als := pd.Data.GetAppLocalState()
 					arwi.AppLocalState = &als
 				}
@@ -1714,9 +1714,9 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			return macct.AccountData.GetLedgerCoreAccountData(), rnd, rewardsVersion, rewardsLevel, nil
 		}
 
-		// check baseAccoiunts again to see if it does not exist
+		// check baseAccounts again to see if it does not exist
 		if au.baseAccounts.readNotFound(addr) {
-			// it seems the account doesnt exist
+			// it seems the account doesn't exist
 			return ledgercore.AccountData{}, rnd, rewardsVersion, rewardsLevel, nil
 		}
 
