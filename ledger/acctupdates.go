@@ -635,9 +635,8 @@ func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix st
 			}
 		}
 
-		retRound := currentDBRound + basics.Round(currentDeltaLen)
+		retRound := currentDBRound + basics.Round(offset)
 
-		// Release lock before DB query.
 		au.accountsMu.RUnlock()
 		needUnlock = false
 
