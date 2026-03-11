@@ -2493,6 +2493,7 @@ func TestAcctUpdatesLookupLatestCacheRetry(t *testing.T) {
 // and checks au.resources with deleted resources are not counted toward totals
 func TestAcctUpdatesLookupResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// t.Parallel() config.Consensus is modified
 
 	accts := setupAccts(1)
 
@@ -2572,6 +2573,7 @@ func TestAcctUpdatesLookupResources(t *testing.T) {
 // validating that a StateDelta can be retrieved for expected rounds containing the same updates.
 func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	// t.Parallel() config.Consensus is modified
 
 	const initialBlocksCount = 1
 	accts := setupAccts(1)
@@ -2733,7 +2735,7 @@ func TestAcctUpdatesLookupStateDelta(t *testing.T) {
 // delta (round 2): an update, a delete, and a new key.
 func TestLookupKvPairsByPrefix(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	// t.Parallel() config.Consensus is modified
 
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLookupKvPairsByPrefix")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
