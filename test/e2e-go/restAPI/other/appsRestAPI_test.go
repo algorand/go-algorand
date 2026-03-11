@@ -678,7 +678,7 @@ end:
 	resp, err = testClient.ApplicationBoxesPage(createdAppID, 3, *resp.NextToken, "", false, pinnedRound)
 	a.NoError(err)
 	a.NotNil(resp.Round, "second page should include round")
-	a.Equal(uint64(pinnedRound), *resp.Round, "pinned round should match across pages")
+	a.Equal(basics.Round(pinnedRound), *resp.Round, "pinned round should match across pages")
 
 	// Test round too far in the future returns an error
 	_, err = testClient.ApplicationBoxesPage(createdAppID, 3, "", "", false, pinnedRound+1_000_000)
