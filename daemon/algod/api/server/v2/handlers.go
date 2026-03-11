@@ -1979,11 +1979,10 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 		responseBoxes[i] = desc
 	}
 
-	round := uint64(rnd)
 	response := model.BoxesResponse{
 		Boxes:     responseBoxes,
 		NextToken: nextToken,
-		Round:     &round,
+		Round:     &rnd,
 	}
 	return ctx.JSON(http.StatusOK, response)
 }
