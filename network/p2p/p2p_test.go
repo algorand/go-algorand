@@ -359,6 +359,23 @@ func TestDeriveConnLimits_UnboundedServer(t *testing.T) {
 	require.Equal(t, 0, limits.connMgrLow)
 }
 
+func TestDeriveConnLimits_DHTProviders(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = ":4160"
+	cfg.IncomingConnectionsLimit = 2400
+	cfg.GossipFanout = 4
+	cfg.EnableDHTProviders = true
+	limits := deriveConnLimits(cfg)
+	require.Equal(t, 2400+12+12, limits.rcmgrConns)
+	require.Equal(t, 2400, limits.rcmgrConnsInbound)
+	require.Equal(t, 24, limits.rcmgrConnsOutbound)
+	require.Equal(t, 2424, limits.connMgrHigh)
+	require.Equal(t, 2327, limits.connMgrLow) // 2424 * 96 / 100
+}
+
 func TestDeriveConnLimits_Client(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
