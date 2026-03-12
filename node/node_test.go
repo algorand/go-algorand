@@ -1261,6 +1261,10 @@ func TestNodeSetCatchpointCatchupMode(t *testing.T) {
 			// "start" catchpoint catchup => close services
 			outCh := n.SetCatchpointCatchupMode(true)
 			<-outCh
+			// make sure SetCatchpointCatchupMode' goroutine has completely finished
+			// to prevent data race on stop/start services
+			n.waitMonitoringRoutines()
+
 			// "stop" catchpoint catchup => resume services
 			outCh = n.SetCatchpointCatchupMode(false)
 			<-outCh

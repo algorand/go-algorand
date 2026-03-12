@@ -411,7 +411,7 @@ func (g *generator) WriteAccount(output io.Writer, accountString string) error {
 			nameBytes := []byte(a.name)
 			asset := model.Asset{
 				Index: a.assetID,
-				Params: model.AssetParams{
+				Params: &model.AssetParams{
 					Creator:  accountString,
 					Decimals: 0,
 					Clawback: &accountString,

@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"errors"
 	"fmt"
 	"log"
@@ -28,8 +29,6 @@ import (
 	"text/template"
 
 	"github.com/spf13/cobra"
-
-	_ "embed"
 )
 
 //go:embed typeAnalyzer/main.tmpl

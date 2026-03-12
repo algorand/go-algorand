@@ -20,9 +20,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) { // nolint:paralleltest // Sets shared OS environment variable.

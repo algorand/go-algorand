@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -68,8 +69,12 @@ func balanceRecordsFromDdr(ddr *v2.DryrunRequest) (records []basics.BalanceRecor
 			return
 		}
 		// deserialize app params and update account data
+		if a.Params == nil {
+			err = fmt.Errorf("application %d has no params", a.Id)
+			return
+		}
 		var params basics.AppParams
-		params, err = v2.ApplicationParamsToAppParams(&a.Params)
+		params, err = v2.ApplicationParamsToAppParams(a.Params)
 		if err != nil {
 			return
 		}

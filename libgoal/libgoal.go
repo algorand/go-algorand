@@ -1195,20 +1195,22 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 			apps := []basics.AppIndex{tx.ApplicationID}
 			apps = append(apps, tx.ForeignApps...)
 			for _, appIdx := range apps {
-				var appParams model.ApplicationParams
+				var appParams *model.ApplicationParams
 				if appIdx == 0 {
 					// if it is an app create txn then use params from the txn
-					appParams.ApprovalProgram = tx.ApprovalProgram
-					appParams.ClearStateProgram = tx.ClearStateProgram
-					appParams.GlobalStateSchema = &model.ApplicationStateSchema{
-						NumUint:      tx.GlobalStateSchema.NumUint,
-						NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+					appParams = &model.ApplicationParams{
+						ApprovalProgram:   tx.ApprovalProgram,
+						ClearStateProgram: tx.ClearStateProgram,
+						GlobalStateSchema: &model.ApplicationStateSchema{
+							NumUint:      tx.GlobalStateSchema.NumUint,
+							NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+						},
+						LocalStateSchema: &model.ApplicationStateSchema{
+							NumUint:      tx.LocalStateSchema.NumUint,
+							NumByteSlice: tx.LocalStateSchema.NumByteSlice,
+						},
+						Creator: tx.Sender.String(),
 					}
-					appParams.LocalStateSchema = &model.ApplicationStateSchema{
-						NumUint:      tx.LocalStateSchema.NumUint,
-						NumByteSlice: tx.LocalStateSchema.NumByteSlice,
-					}
-					appParams.Creator = tx.Sender.String()
 					// zero is not acceptable by ledger in dryrun/debugger
 					appIdx = defaultAppIdx
 				} else {

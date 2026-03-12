@@ -607,9 +607,9 @@ func (n *P2PNetwork) httpdThread() {
 	defer n.wg.Done()
 
 	err := n.httpServer.Serve()
-	if err != nil {
+	if err == http.ErrServerClosed {
+	} else if err != nil {
 		n.log.Errorf("Error serving libp2phttp: %v", err)
-		return
 	}
 }
 
@@ -916,34 +916,37 @@ func (n *P2PNetwork) VoteCompressionEnabled() bool {
 // wsStreamHandlerV1 is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
 // TODO: remove after consensus v41 takes effect.
-func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) {
+func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) error {
 	if stream.Protocol() != p2p.AlgorandWsProtocolV1 {
-		n.log.Warnf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)
-		return
+		err := fmt.Errorf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)
+		n.log.Warn(err.Error())
+		return err
 	}
 
 	if incoming {
 		var initMsg [1]byte
 		rn, err := stream.Read(initMsg[:])
 		if rn == 0 || err != nil {
-			n.log.Warnf("wsStreamHandlerV1: error reading initial message from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			return
+			err1 := fmt.Errorf("wsStreamHandlerV1: error reading initial message from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
+			return err1
 		}
 	} else {
-		_, err := stream.Write([]byte("1"))
-		if err != nil {
-			n.log.Warnf("wsStreamHandlerV1: error sending initial message: %v", err)
-			return
+		if _, err := stream.Write([]byte("1")); err != nil {
+			err1 := fmt.Errorf("wsStreamHandlerV1: error sending initial message to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
+			return err1
 		}
 	}
 
-	n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo{})
+	return n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo{})
 }
 
-func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) {
+func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) error {
 	if stream.Protocol() != p2p.AlgorandWsProtocolV22 {
-		n.log.Warnf("unknown protocol %s from peer%s", stream.Protocol(), p2pPeer)
-		return
+		err := fmt.Errorf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)
+		n.log.Warn(err.Error())
+		return err
 	}
 
 	var err error
@@ -951,35 +954,39 @@ func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, st
 	if incoming {
 		pmi, err = readPeerMetaHeaders(stream, p2pPeer, n.supportedProtocolVersions)
 		if err != nil {
-			n.log.Warnf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			err1 := fmt.Errorf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
 			_ = stream.Reset()
-			return
+			return err1
 		}
 		err = writePeerMetaHeaders(stream, p2pPeer, pmi.version, n)
 		if err != nil {
-			n.log.Warnf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			err1 := fmt.Errorf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
 			_ = stream.Reset()
-			return
+			return err1
 		}
 	} else {
 		err = writePeerMetaHeaders(stream, p2pPeer, n.protocolVersion, n)
 		if err != nil {
-			n.log.Warnf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			err1 := fmt.Errorf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
 			_ = stream.Reset()
-			return
+			return err1
 		}
 		// read the response
 		pmi, err = readPeerMetaHeaders(stream, p2pPeer, n.supportedProtocolVersions)
 		if err != nil {
-			n.log.Warnf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			err1 := fmt.Errorf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			n.log.Warn(err1.Error())
 			_ = stream.Reset()
-			return
+			return err1
 		}
 	}
-	n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
+	return n.baseWsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
 }
 
-func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool, pmi peerMetaInfo) {
+func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool, pmi peerMetaInfo) error {
 	// get address for peer ID
 	ma := stream.Conn().RemoteMultiaddr()
 	addr := ma.String()
@@ -1038,18 +1045,20 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 	n.wsPeersLock.Unlock()
 	if !ok {
 		networkPeerIdentityDisconnect.Inc(nil)
-		n.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
+		err := fmt.Errorf("peer deduplicated before adding because the identity is already known: remote %s, local %s", addr, localAddr)
+		n.log.Warn(err.Error())
 		stream.Close()
-		return
+		return err
 	}
 
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
 	if wsp.didSignalClose.Load() == 1 {
 		networkPeerAlreadyClosed.Inc(nil)
-		n.log.Debugf("peer closing %s", addr)
+		err := fmt.Errorf("peer closing %s", addr)
+		n.log.Debug(err.Error())
 		n.wsPeersLock.Unlock()
-		return
+		return err
 	}
 	n.wsPeers[p2pPeer] = wsp
 	n.wsPeersToIDs[wsp] = p2pPeer
@@ -1077,6 +1086,7 @@ func (n *P2PNetwork) baseWsStreamHandler(ctx context.Context, p2pPeer peer.ID, s
 			Incoming:      incoming,
 			InstanceName:  wsp.InstanceName,
 		})
+	return nil
 }
 
 // peerRemoteClose called from wsPeer to report that it has closed
@@ -1086,11 +1096,36 @@ func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 }
 
 func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disconnectReason) {
+	removed := false
+
 	n.wsPeersLock.Lock()
-	n.identityTracker.removeIdentity(peer)
-	delete(n.wsPeers, remotePeerID)
-	delete(n.wsPeersToIDs, peer)
+	n.identityTracker.removeIdentity(peer) // safe: removeIdentity only deletes if the stored identity matches this exact wsPeer
+	if cur, ok := n.wsPeers[remotePeerID]; ok && cur == peer {
+		delete(n.wsPeers, remotePeerID)
+		removed = true
+	}
+	_, knownPeer := n.wsPeersToIDs[peer]
+	delete(n.wsPeersToIDs, peer) // always delete reverse entry for this exact wsPeer
+
+	// Unprotect while still holding wsPeersLock so we can't race with a new
+	// wsPeer insertion for the same remotePeerID between map deletion and
+	// unprotect.
+	if removed {
+		n.service.UnprotectPeer(remotePeerID)
+	}
 	n.wsPeersLock.Unlock()
+
+	// Throttle slots are per-wsPeer, not per map entry: release for any
+	// known wsPeer on its first cleanup, even if it was already replaced.
+	if knownPeer && peer.throttledOutgoingConnection {
+		n.throttledOutgoingConnections.Add(int32(1))
+	}
+
+	if !removed {
+		// stale close from an old stream/wsPeer that was already replaced; skip
+		// unprotect, disconnect telemetry, and counter updates.
+		return
+	}
 	n.wsPeersChangeCounter.Add(1)
 
 	eventDetails := telemetryspec.PeerEventDetails{
@@ -1113,9 +1148,6 @@ func (n *P2PNetwork) removePeer(peer *wsPeer, remotePeerID peer.ID, reason disco
 			AVCount:          peer.avMessageCount.Load(),
 			PPCount:          peer.ppMessageCount.Load(),
 		})
-	if peer.throttledOutgoingConnection {
-		n.throttledOutgoingConnections.Add(int32(1))
-	}
 }
 
 func (n *P2PNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {

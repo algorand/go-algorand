@@ -318,9 +318,12 @@ func TestP2PSubmitWS(t *testing.T) {
 }
 
 type mockService struct {
-	id    peer.ID
-	addrs []ma.Multiaddr
-	peers map[peer.ID]peer.AddrInfo
+	id               peer.ID
+	addrs            []ma.Multiaddr
+	peers            map[peer.ID]peer.AddrInfo
+	unprotectStarted chan struct{}
+	unprotectRelease <-chan struct{}
+	unprotectCalls   atomic.Int32
 }
 
 func (s *mockService) Start() error {
@@ -355,6 +358,20 @@ func (s *mockService) ClosePeer(peer peer.ID) error {
 	return nil
 }
 
+func (s *mockService) UnprotectPeer(peer.ID) {
+	s.unprotectCalls.Add(1)
+	if s.unprotectStarted != nil {
+		select {
+		case <-s.unprotectStarted:
+		default:
+			close(s.unprotectStarted)
+		}
+	}
+	if s.unprotectRelease != nil {
+		<-s.unprotectRelease
+	}
+}
+
 func (s *mockService) Conns() []network.Conn {
 	return nil
 }
@@ -385,6 +402,78 @@ func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
 		id:    id,
 		addrs: addrs,
 	}
+}
+
+func TestP2PRemovePeerHoldsLockAcrossUnprotect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	remotePeerID := peer.ID("12D3KooWRemotePeer")
+	oldPeer := &wsPeer{}
+	newPeer := &wsPeer{}
+	unprotectRelease := make(chan struct{})
+
+	mockSvc := &mockService{
+		id:               peer.ID("12D3KooWSelfPeer"),
+		unprotectStarted: make(chan struct{}),
+		unprotectRelease: unprotectRelease,
+	}
+	net := &P2PNetwork{
+		log:             logging.TestingLog(t),
+		service:         mockSvc,
+		wsPeers:         make(map[peer.ID]*wsPeer),
+		wsPeersToIDs:    make(map[*wsPeer]peer.ID),
+		identityTracker: noopIdentityTracker{},
+	}
+	net.wsPeers[remotePeerID] = oldPeer
+	net.wsPeersToIDs[oldPeer] = remotePeerID
+
+	removeDone := make(chan struct{})
+	go func() {
+		net.removePeer(oldPeer, remotePeerID, disconnectReasonNone)
+		close(removeDone)
+	}()
+
+	select {
+	case <-mockSvc.unprotectStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("removePeer did not enter UnprotectPeer")
+	}
+
+	addDone := make(chan struct{})
+	go func() {
+		net.wsPeersLock.Lock()
+		net.wsPeers[remotePeerID] = newPeer
+		net.wsPeersToIDs[newPeer] = remotePeerID
+		net.wsPeersLock.Unlock()
+		close(addDone)
+	}()
+
+	select {
+	case <-addDone:
+		t.Fatal("wsPeersLock was released while UnprotectPeer was still running")
+	case <-time.After(100 * time.Millisecond):
+		// expected: add path stays blocked until UnprotectPeer returns
+	}
+
+	close(unprotectRelease)
+
+	select {
+	case <-removeDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("removePeer did not finish after UnprotectPeer was released")
+	}
+	select {
+	case <-addDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("add path did not complete after removePeer finished")
+	}
+
+	require.Equal(t, int32(1), mockSvc.unprotectCalls.Load(), "expected exactly one unprotect call")
+	net.wsPeersLock.RLock()
+	current, ok := net.wsPeers[remotePeerID]
+	net.wsPeersLock.RUnlock()
+	require.True(t, ok, "replacement peer should be present")
+	require.Equal(t, newPeer, current, "replacement peer should remain mapped")
 }
 
 func TestP2PNetworkAddress(t *testing.T) {
@@ -846,6 +935,19 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 
 }
 
+// baseTestMeshCreator is a simple wrapper to baseMeshCreator for TestP2PRelay
+// in order to provide custom GossipSubHeartbeatInterval option via makeConfig
+// to speed up heartbeat to reduce test flakiness of TestP2PRelay from pubsub mesh establishment timing
+type baseTestMeshCreator struct {
+	baseMeshCreator
+}
+
+func (c baseTestMeshCreator) makeConfig(wsnet *WebsocketNetwork, p2pnet *P2PNetwork) networkConfig {
+	return networkConfig{
+		pubsubOpts: []p2p.PubSubOption{p2p.SetPubSubHeartbeatInterval(200 * time.Millisecond)},
+	}
+}
+
 // TestP2PRelay checks p2p nodes can properly relay messages:
 // netA and netB are started with ForceFetchTransactions so it subscribes to the txn topic,
 // both of them are connected and do not relay messages.
@@ -855,11 +957,6 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 func TestP2PRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Speed up heartbeat to reduce test flakiness from mesh establishment timing
-	oldHeartbeatInterval := pubsub.GossipSubHeartbeatInterval
-	pubsub.GossipSubHeartbeatInterval = 200 * time.Millisecond
-	defer func() { pubsub.GossipSubHeartbeatInterval = oldHeartbeatInterval }()
-
 	cfg := config.GetDefaultLocal()
 	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
 	cfg.ForceFetchTransactions = true
@@ -868,7 +965,7 @@ func TestP2PRelay(t *testing.T) {
 	log := logging.TestingLog(t)
 	genesisInfo := GenesisInfo{genesisID, config.Devtestnet}
 	log.Debugln("Starting netA")
-	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, nil)
+	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisInfo, &nopeNodeInfo{}, nil, baseTestMeshCreator{})
 	require.NoError(t, err)
 
 	err = netA.Start()
