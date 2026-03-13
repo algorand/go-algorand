@@ -50,6 +50,7 @@ const (
 )
 
 const operationTimeout = time.Second * 5
+const advertiseTimeout = time.Second * 20
 const maxAdvertisementInterval = time.Hour * 22
 
 // CapabilitiesDiscovery exposes Discovery interfaces and wraps underlying DHT methods to provide capabilities advertisement for the node
@@ -143,27 +144,36 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 			case <-c.dht.Context().Done():
 				return
 			case <-nextExecution:
-				var err error
+				var anyErr error
 				advertisementInterval := maxAdvertisementInterval
 				for _, capa := range capabilities {
-					ttl, err0 := c.advertise(c.dht.Context(), string(capa))
+					// Use a bounded timeout so a single slow Provide doesn't
+					// starve remaining capabilities or hold the goroutine for
+					// the full 60s RoutingDiscovery timeout.
+					ctx, cancel := context.WithTimeout(c.dht.Context(), advertiseTimeout)
+					ttl, err0 := c.advertise(ctx, string(capa))
+					cancel()
 					if err0 != nil {
-						err = err0
-						loggerFn := c.log.Errorf
+						anyErr = err0
+						if c.dht.Context().Err() != nil {
+							// DHT context canceled (shutdown), exit immediately
+							return
+						}
+						loggerFn := c.log.Warnf
 						if err0 == kbucket.ErrLookupFailure {
 							// No peers in a routing table, it is typical for startup and not an error
 							loggerFn = c.log.Debugf
 						}
 						loggerFn("failed to advertise for capability %s: %v", capa, err0)
-						break
+						continue
 					}
 					if ttl < advertisementInterval {
 						advertisementInterval = ttl
 					}
 					c.log.Infof("advertised capability %s", capa)
 				}
-				// If we failed to advertise, retry every according to exp jitter delays until successful
-				if err != nil {
+				// If any capability failed to advertise, retry according to exp jitter delays
+				if anyErr != nil {
 					nextExecution = time.After(eb.Delay())
 				} else {
 					// Otherwise, ensure we're at the correct interval
