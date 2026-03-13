@@ -280,6 +280,7 @@ var createAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -359,6 +360,7 @@ var destroyAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -452,6 +454,7 @@ var configAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -537,6 +540,7 @@ var sendAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -608,6 +612,7 @@ var freezeAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -695,6 +700,7 @@ var optinAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
