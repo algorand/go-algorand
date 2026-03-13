@@ -5,6 +5,7 @@ go 1.25.0
 toolchain go1.25.3
 
 require (
+	filippo.io/edwards25519 v1.2.0
 	github.com/DataDog/zstd v1.5.2
 	github.com/algorand/avm-abi v0.2.0
 	github.com/algorand/falcon v0.1.0
@@ -64,7 +65,6 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.0.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

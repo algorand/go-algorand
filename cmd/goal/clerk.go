@@ -388,7 +388,7 @@ var sendCmd = &cobra.Command{
 		}
 		if program != nil {
 			if account == "" {
-				ph := logic.HashProgram(program)
+				ph := logic.SigDigest(program)
 				pha := basics.Address(ph)
 				account = pha.String()
 			}
@@ -1155,7 +1155,7 @@ var compileCmd = &cobra.Command{
 				}
 			}
 			if !signProgram && shouldPrintAdditionalInfo {
-				pd := logic.HashProgram(program)
+				pd := logic.SigDigest(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
 			}

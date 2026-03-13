@@ -17,12 +17,16 @@
 package transactions
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -57,6 +61,76 @@ func TestLogicSigSizeAfterPooling(t *testing.T) {
 
 	// TODO: Update this when lsig pooling graduates from vFuture
 	testLogicSize(t, tealOK, tealTooLong, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+}
+
+func TestLogicSigV13SigDigestAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	baseAcct := accountList[0].Address
+
+	walletHandler, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	var program []byte
+	for i := range 1000 {
+		ops, assembleErr := logic.AssembleString(fmt.Sprintf(`#pragma version 13
+int %d`, i))
+		a.NoError(assembleErr)
+		if crypto.IsEd25519CurvePoint(logic.HashProgram(ops.Program)) {
+			program = ops.Program
+			break
+		}
+	}
+	a.NotNil(program, "failed to find v13 program with on-curve legacy HashProgram digest")
+
+	sigAddr := basics.Address(logic.SigDigest(program))
+	legacyAddr := basics.Address(logic.HashProgram(program))
+	a.NotEqual(sigAddr, legacyAddr)
+
+	// Fund the SigDigest-derived contract account so it can pay transaction fee.
+	fundTxn, err := client.ConstructPayment(baseAcct, sigAddr.String(), 0, 2_000_000, nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+	fundStxn, err := client.SignTransactionWithWallet(walletHandler, nil, fundTxn)
+	a.NoError(err)
+	fundTxID, err := client.BroadcastTransaction(fundStxn)
+	a.NoError(err)
+
+	_, curRound := fixture.GetBalanceAndRound(baseAcct)
+	a.True(fixture.WaitForTxnConfirmation(curRound+5, fundTxID))
+
+	// Positive case: sender matches SigDigest(program), so unsigned LogicSig
+	// contract-account validation should pass.
+	goodTxn, err := client.ConstructPayment(sigAddr.String(), baseAcct, 0, 1000, nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+	goodStxn := transactions.SignedTxn{
+		Txn:  goodTxn,
+		Lsig: transactions.LogicSig{Logic: program},
+	}
+	goodTxID, err := client.BroadcastTransaction(goodStxn)
+	a.NoError(err)
+
+	_, curRound = fixture.GetBalanceAndRound(baseAcct)
+	a.True(fixture.WaitForTxnConfirmation(curRound+5, goodTxID))
+
+	// Negative case: sender uses legacy HashProgram(program), which must fail
+	// when it differs from SigDigest(program) for v13+.
+	badTxn, err := client.ConstructPayment(legacyAddr.String(), baseAcct, 0, 1000, nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+	badStxn := transactions.SignedTxn{
+		Txn:  badTxn,
+		Lsig: transactions.LogicSig{Logic: program},
+	}
+	err = client.BroadcastTransactionGroup([]transactions.SignedTxn{badStxn})
+	a.ErrorContains(err, "LogicNot signed and not a Logic-only account")
 }
 
 // testLogicSize takes two TEAL programs, one expected to be ok and one expected to be too long
