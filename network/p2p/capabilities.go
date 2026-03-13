@@ -19,7 +19,6 @@ package p2p
 import (
 	"context"
 	randv1 "math/rand"
-	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -130,40 +129,16 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 		eb := ebf()
 
 		for {
-			// shuffle capabilities to advertise in random order
-			// since the DHT's internal advertisement happens concurrently for peers in its routing table
-			// any peer error does not prevent advertisement of other peers.
-			// on repeated advertisement, we want to avoid the same order to make sure all capabilities are advertised.
-			if len(capabilities) > 1 {
-				rand.Shuffle(len(capabilities), func(i, j int) {
-					capabilities[i], capabilities[j] = capabilities[j], capabilities[i]
-				})
-			}
 			select {
 			case <-c.dht.Context().Done():
 				return
 			case <-nextExecution:
-				var err error
-				advertisementInterval := maxAdvertisementInterval
-				for _, capa := range capabilities {
-					ttl, err0 := c.advertise(c.dht.Context(), string(capa))
-					if err0 != nil {
-						err = err0
-						loggerFn := c.log.Errorf
-						if err0 == kbucket.ErrLookupFailure {
-							// No peers in a routing table, it is typical for startup and not an error
-							loggerFn = c.log.Debugf
-						}
-						loggerFn("failed to advertise for capability %s: %v", capa, err0)
-						break
-					}
-					if ttl < advertisementInterval {
-						advertisementInterval = ttl
-					}
-					c.log.Infof("advertised capability %s", capa)
+				advertisementInterval, anyErr := c.advertiseCaps(capabilities)
+				if c.dht.Context().Err() != nil {
+					return
 				}
-				// If we failed to advertise, retry every according to exp jitter delays until successful
-				if err != nil {
+				// If any capability failed to advertise, retry according to exp jitter delays
+				if anyErr != nil {
 					nextExecution = time.After(eb.Delay())
 				} else {
 					// Otherwise, ensure we're at the correct interval
@@ -173,6 +148,46 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 			}
 		}
 	}()
+}
+
+// advertiseCaps advertises all capabilities concurrently and returns
+// the minimum re-advertisement interval and the first error encountered (if any)
+func (c *CapabilitiesDiscovery) advertiseCaps(capabilities []Capability) (time.Duration, error) {
+	type result struct {
+		capa Capability
+		ttl  time.Duration
+		err  error
+	}
+	results := make(chan result, len(capabilities))
+	for _, capa := range capabilities {
+		go func(cap Capability) {
+			ttl, err := c.advertise(c.dht.Context(), string(cap))
+			results <- result{capa: cap, ttl: ttl, err: err}
+		}(capa)
+	}
+
+	var anyErr error
+	advertisementInterval := maxAdvertisementInterval
+	for range capabilities {
+		r := <-results
+		if r.err != nil {
+			if anyErr == nil {
+				anyErr = r.err
+			}
+			loggerFn := c.log.Warnf
+			if r.err == kbucket.ErrLookupFailure {
+				// No peers in a routing table, it is typical for startup and not an error
+				loggerFn = c.log.Debugf
+			}
+			loggerFn("failed to advertise for capability %s: %v", r.capa, r.err)
+			continue
+		}
+		if r.ttl < advertisementInterval {
+			advertisementInterval = r.ttl
+		}
+		c.log.Infof("advertised capability %s", r.capa)
+	}
+	return advertisementInterval, anyErr
 }
 
 // Sizer exposes the Size method
