@@ -597,8 +597,20 @@ func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.
 
 // LookupAssets loads asset resources that match the request parameters from the ledger.
 func (l *Ledger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
 	resources, lookupRound, err := l.accts.LookupAssetResources(addr, assetIDGT, limit)
 	return resources, lookupRound, err
+}
+
+// LookupApplications returns the application resources (local state and params) for a given address, with pagination support.
+// If includeParams is false, AppParams will not be populated to save memory allocations.
+func (l *Ledger) LookupApplications(addr basics.Address, appIDGT basics.AppIndex, limit uint64, includeParams bool) ([]ledgercore.AppResourceWithIDs, basics.Round, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	return l.accts.LookupApplicationResources(addr, appIDGT, limit, includeParams)
 }
 
 // lookupResource loads a resource that matches the request parameters from the accounts update

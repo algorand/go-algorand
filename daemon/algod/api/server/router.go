@@ -22,10 +22,9 @@ import (
 	"net"
 	"net/http"
 
-	"golang.org/x/sync/semaphore"
-
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"

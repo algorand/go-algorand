@@ -254,7 +254,9 @@ func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, 
 		for _, ap := range *ai.CreatedAssets {
 			assetID := ap.Index
 			pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
-			pps.cinfo.AssetParams[assetID] = ap.Params
+			if ap.Params != nil {
+				pps.cinfo.AssetParams[assetID] = *ap.Params
+			}
 		}
 	}
 	// assets held
@@ -273,7 +275,9 @@ func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, 
 		for _, ap := range *ai.CreatedApps {
 			appID := ap.Id
 			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
-			pps.cinfo.AppParams[appID] = ap.Params
+			if ap.Params != nil {
+				pps.cinfo.AppParams[appID] = *ap.Params
+			}
 		}
 	}
 	// apps opted into
@@ -436,7 +440,9 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
 					_, has := pps.cinfo.AssetParams[assetID]
 					if !has {
-						newAssets[assetID] = ap.Params
+						if ap.Params != nil {
+							newAssets[assetID] = *ap.Params
+						}
 					}
 				}
 			}
@@ -807,7 +813,9 @@ func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
 		for _, ap := range *ai.CreatedApps {
 			appID := ap.Id
 			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
-			pps.cinfo.AppParams[appID] = ap.Params
+			if ap.Params != nil {
+				pps.cinfo.AppParams[appID] = *ap.Params
+			}
 		}
 	}
 

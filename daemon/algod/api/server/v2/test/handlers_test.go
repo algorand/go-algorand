@@ -33,16 +33,11 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
-	"github.com/algorand/go-algorand/daemon/algod/api/server"
-	"github.com/algorand/go-algorand/ledger/eval"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-codec/codec"
 
@@ -52,6 +47,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data"
@@ -63,6 +59,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -83,6 +81,11 @@ func setupMockNodeForMethodGetWithShutdown(t *testing.T, status node.StatusRepor
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	return setupTestForMethodGetWithMockLedger(t, mockLedger, rootkeys, stxns, status, devmode, shutdown, releasefunc)
+}
+
+// setupTestForMethodGetWithMockLedger allows for providing a custom mockLedger for testing
+func setupTestForMethodGetWithMockLedger(t *testing.T, mockLedger *data.Ledger, rootkeys []account.Root, stxns []transactions.SignedTxn, status node.StatusReport, devmode bool, shutdown chan struct{}, releasefunc func()) (v2.Handlers, echo.Context, *httptest.ResponseRecorder, []account.Root, []transactions.SignedTxn, func()) {
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, status, devmode)
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -138,6 +141,151 @@ func TestAccountInformation(t *testing.T) {
 	t.Parallel()
 
 	accountInformationTest(t, poolAddr, 200)
+}
+
+func TestAccountInformationExcludeCreatedAppsParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Test with poolAddr which is in the golden data
+	t.Run("exclude=none", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeNone := []model.AccountInformationParamsExclude{"none"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeNone})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		// With exclude=none, created apps should be present (if any exist)
+		// Just verify the response is valid
+		require.NotNil(t, response.Address)
+	})
+
+	t.Run("exclude=created-apps-params", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeParams := []model.AccountInformationParamsExclude{"created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify that if created apps exist, they have IDs but no params
+		if response.CreatedApps != nil {
+			for _, app := range *response.CreatedApps {
+				require.Nil(t, app.Params, "Expected params to be absent with exclude=created-apps-params")
+				require.NotZero(t, app.Id, "Expected app ID to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=all", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeAll := []model.AccountInformationParamsExclude{"all"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeAll})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify all resources are excluded
+		require.Nil(t, response.CreatedApps)
+		require.Nil(t, response.CreatedAssets)
+		require.Nil(t, response.Assets)
+		require.Nil(t, response.AppsLocalState)
+	})
+
+	t.Run("invalid-exclude-value", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"invalid-value"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("exclude=created-assets-params", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeParams := []model.AccountInformationParamsExclude{"created-assets-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeParams})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify that if created assets exist, they have IDs but no params
+		if response.CreatedAssets != nil {
+			for _, asset := range *response.CreatedAssets {
+				require.Nil(t, asset.Params, "Expected params to be absent with exclude=created-assets-params")
+				require.NotZero(t, asset.Index, "Expected asset index to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=comma-delimited-both", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		excludeBoth := []model.AccountInformationParamsExclude{"created-apps-params", "created-assets-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &excludeBoth})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var response model.AccountResponse
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// Verify both apps and assets have no params
+		if response.CreatedApps != nil {
+			for _, app := range *response.CreatedApps {
+				require.Nil(t, app.Params, "Expected app params to be absent")
+				require.NotZero(t, app.Id, "Expected app ID to be present")
+			}
+		}
+		if response.CreatedAssets != nil {
+			for _, asset := range *response.CreatedAssets {
+				require.Nil(t, asset.Params, "Expected asset params to be absent")
+				require.NotZero(t, asset.Index, "Expected asset index to be present")
+			}
+		}
+	})
+
+	t.Run("exclude=all-with-others-fails", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"all", "created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
+
+	t.Run("exclude=none-with-others-fails", func(t *testing.T) {
+		handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+		defer releasefunc()
+
+		invalidExclude := []model.AccountInformationParamsExclude{"none", "created-apps-params"}
+		err := handler.AccountInformation(c, poolAddr, model.AccountInformationParams{Exclude: &invalidExclude})
+		require.NoError(t, err)
+		require.Equal(t, 400, rec.Code)
+	})
 }
 
 func getBlockTest(t *testing.T, blockNum basics.Round, format string, expectedCode int) {
@@ -545,10 +693,38 @@ func TestGetSupply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	a := require.New(t)
+	opts := testEnvOptions{
+		numAccounts:     3,
+		numTransactions: 1,
+		offlineAccounts: true,
+		// Make one online account expire early (at round 50)
+		numExpiredOnline:     1,
+		expiredVoteLastValid: 50,
+		accountBalances:      []uint64{500_000, 300_000, 200_000},
+	}
+	mockLedger, rootkeys, _, stxns, releasefunc := testingenvWithOptions(t, opts)
+	shutdown := make(chan struct{})
+	handler, c, rec, _, _, _ := setupTestForMethodGetWithMockLedger(t, mockLedger, rootkeys, stxns, cannedStatusReportGolden, false, shutdown, releasefunc)
 	defer releasefunc()
+	insertRounds(a, handler, 375)
 	err := handler.GetSupply(c)
 	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var supplyResponse model.SupplyResponse
+	a.NoError(json.Unmarshal(rec.Body.Bytes(), &supplyResponse))
+	t.Logf("Total Money: %d, Online Money: %d, Online Circulation: %d",
+		supplyResponse.TotalMoney, supplyResponse.OnlineMoney, supplyResponse.OnlineStake)
+
+	a.Equal(basics.Round(375), supplyResponse.CurrentRound)
+	a.Equal(uint64(1_000_000), supplyResponse.TotalMoney)
+	a.Equal(uint64(800_000), supplyResponse.OnlineMoney)
+	a.Equal(uint64(300_000), supplyResponse.OnlineStake)
+
+	totals, err := mockLedger.Totals(basics.Round(supplyResponse.CurrentRound))
+	a.NoError(err)
+	a.Equal(totals.Participating().Raw, supplyResponse.TotalMoney)
+	a.Equal(totals.Online.Money.Raw, supplyResponse.OnlineMoney)
 }
 
 func TestGetStatus(t *testing.T) {
@@ -1131,7 +1307,14 @@ func TestSimulateTransaction(t *testing.T) {
 	// prepare node and handler
 	numAccounts := 5
 	offlineAccounts := true
-	mockLedger, roots, _, _, releasefunc := testingenvWithBalances(t, 999_998, 999_999, numAccounts, 1, offlineAccounts)
+	opts := testEnvOptions{
+		numAccounts:     numAccounts,
+		numTransactions: 1,
+		offlineAccounts: offlineAccounts,
+		minMoneyAtStart: 999_998,
+		maxMoneyAtStart: 999_999,
+	}
+	mockLedger, roots, _, _, releasefunc := testingenvWithOptions(t, opts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
@@ -1718,7 +1901,7 @@ func TestTealDryrun(t *testing.T) {
 	gdr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: model.ApplicationParams{
+			Params: &model.ApplicationParams{
 				ApprovalProgram: sucOps.Program,
 			},
 		},

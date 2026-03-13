@@ -21,10 +21,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/stretchr/testify/require"
 )
 
 // DbOpenTest opens a db file for testing purposes.

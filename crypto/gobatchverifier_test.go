@@ -31,10 +31,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // ensure internal ed25519 types match the expected []byte lengths used by ed25519consensus package

@@ -31,7 +31,6 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/algorand/go-codec/codec"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"

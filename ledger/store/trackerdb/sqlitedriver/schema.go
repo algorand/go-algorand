@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -35,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/mattn/go-sqlite3"
 )
 
 var accountsSchema = []string{

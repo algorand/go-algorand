@@ -26,8 +26,9 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/websocket"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"

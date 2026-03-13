@@ -19,10 +19,9 @@ package main
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/config"
-
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 

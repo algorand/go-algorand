@@ -22,14 +22,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/crypto/blake2b"
+
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
-	"github.com/algorand/go-deadlock"
-	"golang.org/x/crypto/blake2b"
 )
 
 const numBuckets = 128

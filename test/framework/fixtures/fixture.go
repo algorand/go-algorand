@@ -19,8 +19,9 @@ package fixtures
 import (
 	"testing"
 
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // TestingTB is identical to testing.TB, beside the private method.

@@ -19,10 +19,11 @@ package testsuite
 import (
 	"context"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/stretchr/testify/require"
 )
 
 func init() {

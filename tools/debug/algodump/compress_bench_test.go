@@ -32,10 +32,11 @@ import (
 	"testing"
 
 	"github.com/DataDog/zstd"
-	"github.com/algorand/go-algorand/network/vpack"
-	"github.com/algorand/go-algorand/protocol"
 	kzstd "github.com/klauspost/compress/zstd"
 	"github.com/valyala/gozstd"
+
+	"github.com/algorand/go-algorand/network/vpack"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // testCorpus holds all the test data loaded from message files
