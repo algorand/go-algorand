@@ -129,7 +129,7 @@ type roundCowBase struct {
 	// execution. The AccountData is always an historical one, then therefore won't be changing.
 	// The underlying (accountupdates) infrastructure may provide additional cross-round caching which
 	// are beyond the scope of this cache.
-	// The account data store here is always the account data without the rewards.
+	// The account data stored here is always the account data without the rewards.
 	accounts map[basics.Address]ledgercore.AccountData
 
 	// The online accounts that we've already accessed during this round evaluation. This is a
@@ -1121,11 +1121,11 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup ...transactions.SignedTxnWi
 		}
 	}
 
-	// We check against the group's expressed willingness to pay, which shows up
-	// in `usage`, not the current congestion level.  This check can't know for
-	// sure the Fees will be enough if the group contains inner txns, but that
-	// will be checked during AVM execution. But this is the only chance to
-	// check that the top-level fees are enough for the top-level txns.
+	// We can only check against usage for the top-level transactions.  This
+	// check can't know for sure the Fees will be enough if the group contains
+	// inner txns, but that will be checked during AVM execution. But this is
+	// the only chance to check that the top-level fees are enough for the
+	// top-level txns.
 	usage, feesPaid := transactions.SummarizeFees(txgroup, eval.proto)
 	if err := CheckGroupFees(feesPaid, usage, eval.proto.MinFee()); err != nil {
 		return err
@@ -2066,8 +2066,7 @@ func (validator *evalTxValidator) run() {
 		RewardsPool: validator.block.BlockHeader.RewardsPool,
 	}
 
-	var unverifiedTxnGroups [][]transactions.SignedTxn
-	unverifiedTxnGroups = make([][]transactions.SignedTxn, 0, len(validator.txgroups))
+	unverifiedTxnGroups := make([][]transactions.SignedTxn, 0, len(validator.txgroups))
 	for _, group := range validator.txgroups {
 		signedTxnGroup := make([]transactions.SignedTxn, len(group))
 		for j, txn := range group {
@@ -2124,7 +2123,7 @@ func Eval(ctx context.Context, l LedgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	accountLoadingCtx, accountLoadingCancel := context.WithCancel(ctx)
-	preloadedTxnsData := prefetcher.PrefetchAccounts(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
+	preloadedTxnsData := prefetcher.BlockReferences(accountLoadingCtx, l, blk.Round()-1, paysetgroups, blk.BlockHeader.FeeSink, blk.ConsensusProtocol())
 	// ensure that before we exit from this method, the account loading is no longer active.
 	defer func() {
 		accountLoadingCancel()
@@ -2209,6 +2208,11 @@ transactionGroupLoop:
 						} else {
 							base.appParams[appKey] = cachedAppParams{exists: false}
 						}
+					}
+				}
+				for _, lkv := range txgroup.KVs {
+					if _, have := base.kvStore[lkv.Key]; !have {
+						base.kvStore[lkv.Key] = lkv.Value
 					}
 				}
 			}
