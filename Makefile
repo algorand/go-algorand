@@ -158,10 +158,10 @@ generate:
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
 api:
-	make -C daemon/algod/api
+	$(MAKE) -j7 -C daemon/algod/api
 
 logic:
-	make -C data/transactions/logic
+	$(MAKE) -C data/transactions/logic
 
 MSGP := go run github.com/algorand/msgp@v1.1.62
 %/msgp_gen.go: ALWAYS

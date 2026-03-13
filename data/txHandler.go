@@ -387,8 +387,6 @@ func (handler *TxHandler) postProcessReportErrors(err error) {
 		switch txGroupErr.Reason {
 		case verify.TxGroupErrorReasonNotWellFormed:
 			transactionMessagesTxnNotWellFormed.Inc(nil)
-		case verify.TxGroupErrorReasonInvalidFee:
-			transactionMessagesTxGroupInvalidFee.Inc(nil)
 		case verify.TxGroupErrorReasonHasNoSig:
 			fallthrough
 		case verify.TxGroupErrorReasonSigNotWellFormed:

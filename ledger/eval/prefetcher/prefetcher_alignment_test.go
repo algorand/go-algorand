@@ -374,6 +374,8 @@ func run(t *testing.T, l *prefetcherAlignmentTestLedger, txn transactions.Transa
 	l.requestedCreators = nil
 	l.requestedKvs = nil
 
+	txn.Header.Fee = l.GenesisProto().MinFee()
+
 	runEval(t, l, txn)
 	requestedData := ledgerData{
 		Accounts: l.requestedBalances,

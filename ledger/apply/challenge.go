@@ -31,7 +31,7 @@ type ChallengePeriod int
 const (
 	// ChRisky indicates that a challenge is in effect, and the initial grace period is running out.
 	ChRisky ChallengePeriod = iota
-	// ChActive indicates that a challenege is in effect, and the grace period
+	// ChActive indicates that a challenge is in effect, and the grace period
 	// has run out, so accounts can be suspended
 	ChActive
 )
@@ -78,7 +78,7 @@ func FindChallenge(rules config.ProposerPayoutRules, current basics.Round, heade
 	return challenge{lastChallenge, challengeHdr.Seed, rules.ChallengeBits}
 }
 
-// IsZero returns true if the challenge is empty (used to indicate no challenege)
+// IsZero returns true if the challenge is empty (used to indicate no challenge)
 func (ch challenge) IsZero() bool {
 	return ch == challenge{}
 }

@@ -154,3 +154,19 @@ func WrapSignedTxnsWithAD(txgroup []SignedTxn) []SignedTxnWithAD {
 	}
 	return txgroupad
 }
+
+// SummarizeFees takes a group and returns required fees, the total amount paid,
+// and the tip promised. The returned `usage` expresses how many basic
+// transaction fees must be paid by the group.
+func SummarizeFees(txgroup []SignedTxnWithAD) (usage basics.Micros, paid basics.MicroAlgos) {
+	// TODO: We want to prevent the 2A fee paid to become incentive eligible
+	// from being reused for inners. Since that is expressed as a fixed fee, the
+	// best way to do it might be to not count it in `paid`.  The "obvious" way
+	// to do it (by adjusting the KeyReg's FeeFactor() is more difficult because
+	// the 2A fee is not defined in units of MinFee().
+	for _, txad := range txgroup {
+		usage = basics.AddSaturate(usage, txad.SignedTxn.Txn.FeeFactor())
+		paid = paid.AddSaturate(txad.SignedTxn.Txn.Fee)
+	}
+	return usage, paid
+}
