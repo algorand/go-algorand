@@ -65,10 +65,11 @@ type ConsensusParams struct {
 	// a "basic transaction".  Larger notes require extra fees.
 	MaxTxnNoteBytes int
 
-	// MaxAbsoluteTxnNoteBytes is the absolute maximum size of a transaction's Note field,
-	// even with extra fees paid. Provides DoS protection. When set equal to MaxTxnNoteBytes,
-	// effectively disables large notes. When set higher, allows notes up to this size with
-	// appropriate fees (1000 FeeFactor units per byte over MaxTxnNoteBytes).
+	// MaxAbsoluteTxnNoteBytes is the absolute maximum size of a transaction's
+	// Note field, even with extra fees paid. Provides DoS protection. When set
+	// equal to MaxTxnNoteBytes, effectively disables large notes. When set
+	// higher, allows notes up to this size with appropriate fees (1000
+	// FeeFactor units per byte over MaxTxnNoteBytes).
 	MaxAbsoluteTxnNoteBytes int
 
 	// MaxTxnLife is how long a transaction can be live for:
@@ -258,8 +259,12 @@ type ConsensusParams struct {
 	// max number of ApplicationArgs for an ApplicationCall transaction
 	MaxAppArgs int
 
-	// max sum([len(arg) for arg in txn.ApplicationArgs])
+	// max sum([len(arg) for arg in txn.ApplicationArgs]) w/o paying extra
 	MaxAppTotalArgLen int
+
+	// MaxAbsoluteTotalArgLen is the absolute maximum length of app args,
+	// with anything longer than MaxAppTotalArgLen costing extra
+	MaxAbsoluteTotalArgLen int
 
 	// maximum byte len of application approval program or clear state
 	// When MaxExtraAppProgramPages > 0, this is the size of those pages.
@@ -770,7 +775,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
-	checkSetMax(p.MaxAppTotalArgLen, &bounds.MaxAppTotalArgLen)
+	checkSetMax(p.MaxAbsoluteTotalArgLen, &bounds.MaxAppTotalArgLen)
 	checkSetMax(p.MaxAssetNameBytes, &bounds.MaxAssetNameBytes)
 	checkSetMax(p.MaxAssetUnitNameBytes, &bounds.MaxAssetUnitNameBytes)
 	checkSetMax(p.MaxAssetURLBytes, &bounds.MaxAssetURLBytes)
@@ -1084,6 +1089,7 @@ func initConsensusProtocols() {
 
 	v24.MaxAppArgs = 16
 	v24.MaxAppTotalArgLen = 2048
+	v24.MaxAbsoluteTotalArgLen = 2048
 	v24.MaxAppProgramLen = 1024
 	v24.MaxAppTotalProgramLen = 2048 // No effect until v28, when MaxAppProgramLen increased
 	v24.MaxAppKeyLen = 64
@@ -1484,6 +1490,7 @@ func initConsensusProtocols() {
 	vFuture.LoadTracking = true
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
+	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

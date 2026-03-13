@@ -104,10 +104,11 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 		MaxAppTxnForeignAssets:   6,
 		MaxAppTotalTxnReferences: 7,
 
-		MaxAppArgs:        12,
-		MaxAppTotalArgLen: 800,
+		MaxAppArgs:             12,
+		MaxAppTotalArgLen:      800,
+		MaxAbsoluteTotalArgLen: 2000,
 
-		MaxAppProgramLen:             900,
+		MaxAppProgramLen:             800,
 		MaxAppTotalProgramLen:        1200, // Weird, but better tests
 		MaxExtraAppProgramPages:      2,
 		MaxAbsoluteExtraProgramPages: 4,

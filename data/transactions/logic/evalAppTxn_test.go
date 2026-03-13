@@ -1189,10 +1189,12 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+"int DeleteApplication; itxn_field OnCompletion"+s, ep)
 
 	TestApp(t, p+"int 800; bzero; itxn_field ApplicationArgs"+s, ep)
-	TestApp(t, p+"int 801; bzero; itxn_field ApplicationArgs", ep,
+	// 2000 is now ok because of MaxAbsoluteAppTotalArgLen
+	TestApp(t, p+"int 2000; bzero; itxn_field ApplicationArgs"+s, ep)
+	TestApp(t, p+"int 2001; bzero; itxn_field ApplicationArgs"+s, ep,
 		"length too long")
-	TestApp(t, p+"int 401; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs", ep,
-		"length too long")
+	TestApp(t, p+"int 401; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs"+s, ep)
+	TestApp(t, p+"int 1001; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs"+s, ep, "length too long")
 
 	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 12)+s, ep)
 	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 13)+s, ep,
@@ -1221,12 +1223,15 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 7)+s, ep,
 		"too many foreign assets")
 
-	TestApp(t, p+"int 2700; bzero; itxn_field ApprovalProgram"+s, ep)
-	TestApp(t, p+"int 2701; bzero; itxn_field ApprovalProgram"+s, ep,
-		"may not exceed 2700")
-	TestApp(t, p+"int 2700; bzero; itxn_field ClearStateProgram"+s, ep)
-	TestApp(t, p+"int 2701; bzero; itxn_field ClearStateProgram"+s, ep,
-		"may not exceed 2700")
+	TestApp(t, p+"int 2400; bzero; itxn_field ApprovalProgram"+s, ep)
+	// ok now, b/c of MaxAbsoluteExtraProgramPages
+	TestApp(t, p+"int 2401; bzero; itxn_field ApprovalProgram"+s, ep)
+	TestApp(t, p+"int 4001; bzero; itxn_field ApprovalProgram"+s, ep,
+		"may not exceed 4000")
+	TestApp(t, p+"int 2400; bzero; itxn_field ClearStateProgram"+s, ep)
+	TestApp(t, p+"int 2401; bzero; itxn_field ClearStateProgram"+s, ep)
+	TestApp(t, p+"int 4001; bzero; itxn_field ClearStateProgram"+s, ep,
+		"may not exceed 4000")
 
 	TestApp(t, p+"int 30; itxn_field GlobalNumUint"+s, ep)
 	TestApp(t, p+"int 31; itxn_field GlobalNumUint"+s, ep, "31 is larger than max=30")
@@ -1265,13 +1270,13 @@ func TestBigApplCreation(t *testing.T) {
 			basic := "itxn_field " + pgm + "Program"
 			pages := "itxn_field " + pgm + "ProgramPages"
 			TestApp(t, p+`int 1000; bzero; `+pages+`
-                  int 1000; bzero; `+pages+`
-                  int 700; bzero; `+pages+`
+                  int 2000; bzero; `+pages+`
+                  int 200; bzero; `+pages+`
                  `+s, ep)
 			TestApp(t, p+`int 1000; bzero; `+pages+`
-                  int 1000; bzero; `+pages+`
-                  int 701; bzero; `+pages+`
-                 `+s, ep, "may not exceed 2700")
+                  int 2000; bzero; `+pages+`
+                  int 2001; bzero; `+pages+`
+                 `+s, ep, "may not exceed 4000")
 
 			// Test the basic ApprovalProgram field resets
 			TestApp(t, p+`int 1000; bzero; `+pages+`
@@ -1284,14 +1289,16 @@ func TestBigApplCreation(t *testing.T) {
                   int 100; bzero; `+basic+`
                   int 1000; bzero; `+pages+`
                   int 1000; bzero; `+pages+`
-                  int 600; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 900; bzero; `+pages+`
                  `+s, ep)
 			TestApp(t, p+`int 1000; bzero; `+pages+`
                   int 100; bzero; `+basic+`
                   int 1000; bzero; `+pages+`
                   int 1000; bzero; `+pages+`
-                  int 601; bzero; `+pages+`
-                 `+s, ep, "may not exceed 2700")
+                  int 1000; bzero; `+pages+`
+                  int 901; bzero; `+pages+`
+                 `+s, ep, "may not exceed 4000")
 		})
 	}
 }

@@ -839,12 +839,31 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 
 	// It's static, set the name to show
 	// the static value
-	if bounds[0] == bounds[1] {
+	switch {
+	case bounds[0] == bounds[1]:
 		switch at {
 		case avmBytes:
 			name = fmt.Sprintf("[%d]byte", bounds[0])
 		case avmUint64:
 			name = fmt.Sprintf("%d", bounds[0])
+		}
+	case bounds[0] == 0 && bounds[1] != 0:
+		switch at {
+		case avmBytes:
+			if bounds[1] != maxStringSize {
+				name = fmt.Sprintf("[<=%d]byte", bounds[1])
+			}
+		case avmUint64:
+			if bounds[1] != math.MaxUint64 {
+				name += fmt.Sprintf(" (<= %d)", bounds[1])
+			}
+		}
+	case bounds[0] != 0 && bounds[1] != 0:
+		switch at {
+		case avmBytes:
+			name = fmt.Sprintf("[%d-%d]byte", bounds[0], bounds[1])
+		case avmUint64:
+			name += fmt.Sprintf(" (%d-%d)", bounds[0], bounds[1])
 		}
 	}
 
@@ -5471,7 +5490,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		for _, arg := range txn.ApplicationArgs {
 			total += len(arg)
 		}
-		if total > cx.Proto.MaxAppTotalArgLen {
+		if total > cx.Proto.MaxAbsoluteTotalArgLen {
 			return errors.New("total application args length too long")
 		}
 		if len(txn.ApplicationArgs) >= cx.Proto.MaxAppArgs {
@@ -5489,25 +5508,25 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		}
 		txn.Accounts = append(txn.Accounts, new)
 	case ApprovalProgram:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 		txn.ApprovalProgram = slices.Clone(sv.Bytes)
 	case ClearStateProgram:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 		txn.ClearStateProgram = slices.Clone(sv.Bytes)
 	case ApprovalProgramPages:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)
 		if len(txn.ApprovalProgram) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 	case ClearStateProgramPages:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		txn.ClearStateProgram = append(txn.ClearStateProgram, sv.Bytes...)
 		if len(txn.ClearStateProgram) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)

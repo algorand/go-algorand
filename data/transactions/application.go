@@ -497,9 +497,9 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	}
 
 	// Limit total length of all arguments
-	if argSum > uint64(proto.MaxAppTotalArgLen) {
+	if argSum > uint64(proto.MaxAbsoluteTotalArgLen) {
 		return fmt.Errorf("tx.ApplicationArgs total length is too long. %d > %d",
-			argSum, proto.MaxAppTotalArgLen)
+			argSum, proto.MaxAbsoluteTotalArgLen)
 	}
 
 	if len(ac.Access) > 0 {
