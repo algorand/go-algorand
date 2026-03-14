@@ -512,7 +512,8 @@ var createAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -592,7 +593,8 @@ var updateAppCmd = &cobra.Command{
 		}
 		tx.ExtraProgramPages = extraPages
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -662,7 +664,8 @@ var optInAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -732,7 +735,8 @@ var closeOutAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -802,7 +806,8 @@ var clearAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -871,7 +876,8 @@ var callAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -941,7 +947,8 @@ var deleteAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -1445,7 +1452,8 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		appCallTxn.RekeyTo = parseRekey(rekeyToAddress)
 		appCallTxn.Note = parseNoteField(cmd)
 		appCallTxn.Lease = parseLease(cmd)
 

@@ -138,7 +138,13 @@ func txns(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txnt
 func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.Txn, problem ...string) {
 	t.Helper()
 	fillDefaults(t, ledger, eval, txn)
-	err := eval.TransactionGroup(txn.SignedTxn().WithAD())
+	txgroup := []transactions.SignedTxn{txn.SignedTxn()}
+
+	err := eval.TestTransactionGroup(txgroup)
+	if err == nil {
+		err = eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
+	}
+
 	if err != nil {
 		if len(problem) == 1 && problem[0] != "" {
 			require.Contains(t, err.Error(), problem[0])
@@ -150,12 +156,21 @@ func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.T
 	require.True(t, len(problem) == 0 || problem[0] == "", "Transaction did not fail. Expected: %v", problem)
 }
 
-func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
+func makeGroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) []transactions.SignedTxn {
 	t.Helper()
 	for _, txn := range txns {
 		fillDefaults(t, ledger, eval, txn)
 	}
-	txgroup := txntest.Group(txns...)
+	return txntest.Group(txns...)
+}
+
+func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
+	t.Helper()
+	txgroup := makeGroup(t, ledger, eval, txns...)
+
+	if err := eval.TestTransactionGroup(txgroup); err != nil {
+		return err
+	}
 
 	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup)...)
 }
