@@ -18,7 +18,7 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.0.0 // indirect
+	filippo.io/edwards25519 v1.1.1 // indirect
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/algorand/falcon v0.1.0 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
