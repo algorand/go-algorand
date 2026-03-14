@@ -135,9 +135,9 @@ func (s *Service) SetTracerFilename(filename string) {
 
 // Start executing the agreement protocol.
 func (s *Service) Start() {
-	s.parameters.Network.Start()
 	ctx, quitFn := context.WithCancel(context.Background())
 	s.quitFn = quitFn
+	s.parameters.Network.Start(ctx)
 
 	s.quit = make(chan struct{})
 
