@@ -3122,6 +3122,19 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			return
 		}
 
+		// proto marks a subroutine entry point and must always have a label so
+		// that the disassembly can be validly reassembled. If we encounter a
+		// proto without a pending label (e.g. a subroutine that is never
+		// targeted by a callsub), create one now and trigger a rerun so the
+		// label appears before the opcode in the output.
+		if op.Name == "proto" {
+			if _, hasLabel := dis.pendingLabels[dis.pc]; !hasLabel {
+				dis.labelCount++
+				label := fmt.Sprintf("label%d", dis.labelCount)
+				dis.putLabel(label, dis.pc) // sets rerun=true since target <= pc
+			}
+		}
+
 		// ds.pcOffset tracks where in the output each opcode maps to assembly
 		ds.pcOffset = append(ds.pcOffset, PCOffset{dis.pc, out.Len()})
 
