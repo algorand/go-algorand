@@ -50,7 +50,7 @@ type ResourceTracker struct {
 	MaxApps int
 
 	// The map value is the size of the box loaded from the ledger prior to any writes. This is used
-	// to track the box read budget.
+	// to track the read budget.
 	Boxes    map[basics.BoxRef]BoxStat
 	MaxBoxes int
 

@@ -196,7 +196,6 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
 			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
 			tx.ExtraProgramPages = uint32(totalPages - 1)
-			fmt.Print("Set ExtraProgramPages to", tx.ExtraProgramPages)
 		}
 	}
 	// Do the fee last, so the FeeFactor is accurate.

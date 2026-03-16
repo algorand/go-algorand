@@ -1173,8 +1173,6 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		cx.ioBudget = basics.MulSaturate(bumps, cx.Proto.BytesPerBoxReference)
 
 		used := uint64(0)
-		var surplus int64
-		var overflow bool
 
 		// First count the extra reading required for any large programs that are available.
 		basicAppProgramLimit := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
@@ -1185,7 +1183,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			}
 			appSize := len(params.ApprovalProgram) + len(params.ClearStateProgram)
 			if appSize > basicAppProgramLimit {
-				used += uint64(appSize - basicAppProgramLimit)
+				used = basics.AddSaturate(used, uint64(appSize-basicAppProgramLimit))
 			}
 		}
 
@@ -1207,26 +1205,26 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			cx.available.boxes[br] = false
 
 			used = basics.AddSaturate(used, size)
-			surplus, overflow = basics.ODiff(cx.ioBudget, used)
-			// we defer the check if we have cx.UnnamedResources, so we can ask for the entire surplus at the end.
-			if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
-				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
-				if !cx.Proto.EnableBareBudgetError {
-					// We return an EvalError here because we used to do
-					// that. It is wrong, and means that there could be a
-					// ClearState call in an old block that failed on read
-					// quota, but we allowed to execute anyway.  If testnet and
-					// mainnet have no such transactions, we can remove
-					// EnableBareBudgetError and this code.
-					err = EvalError{err, "", false}
-				}
-				return false, nil, err
+		}
+
+		surplus, overflow := basics.ODiff(cx.ioBudget, used)
+		if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
+			err := fmt.Errorf("read budget exceeded (%d > %d)", used, cx.ioBudget)
+			if !cx.Proto.EnableBareBudgetError {
+				// We return an EvalError here because we used to do
+				// that. It is wrong, and means that there could be a
+				// ClearState call in an old block that failed on read
+				// quota, but we allowed to execute anyway.  If testnet and
+				// mainnet have no such transactions, we can remove
+				// EnableBareBudgetError and this code.
+				err = EvalError{err, "", false}
 			}
+			return false, nil, err
 		}
 
 		// Report the surplus/deficit to the policy, and find out if we should continue
 		if cx.UnnamedResources != nil && !cx.UnnamedResources.IOSurplus(surplus) {
-			return false, nil, fmt.Errorf("box read budget (%d) exceeded despite policy", cx.ioBudget)
+			return false, nil, fmt.Errorf("read budget exceeded despite policy (%d)", cx.ioBudget)
 		}
 
 		cx.readBudgetChecked = true

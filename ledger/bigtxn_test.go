@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
@@ -45,7 +46,7 @@ func TestBigAppCreate(t *testing.T) {
 
 		proto := config.Consensus[cv]
 
-		// This make bytecode about ~3900 bytes long, and goings into Approval
+		// This make bytecode about ~3900 bytes long, and goes into Approval
 		// and ClearState, so we're just under 8k, and requires no extra fee.
 		dl.txn(&txntest.Txn{
 			Fee:             proto.MinFee(),
@@ -54,7 +55,7 @@ func TestBigAppCreate(t *testing.T) {
 			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1300),
 		})
 
-		// But now an extra fee is required, because 1400*3*2 > 8196
+		// But now an extra fee is required, because 1400*3*2=8400 > 8196
 		dl.txn(&txntest.Txn{
 			Fee:             proto.MinFee(),
 			Type:            "appl",
@@ -62,12 +63,14 @@ func TestBigAppCreate(t *testing.T) {
 			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
 		}, "txgroup with 1mA fees is less than")
 
-		dl.txn(&txntest.Txn{
+		stib := dl.txn(&txntest.Txn{
 			Fee:             1_500, // ~200 bytes over limit, so about 1.2mA needed
 			Type:            "appl",
 			Sender:          addrs[0],
 			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
 		})
+		// extra program pages gets populated for us. have a look see.
+		require.EqualValues(t, 4, stib.Txn.ExtraProgramPages)
 
 		// In fact, dl.txn() knows how to compute the fee, so if we leave it
 		// empty, we can see what it sets it too.
@@ -93,7 +96,7 @@ func TestBigAppCall(t *testing.T) {
 
 		// proto := config.Consensus[cv]
 
-		// createApp takes care of figuring out and setting the fee
+		// createApp takes care of figuring out and setting the fee and extra pages
 		appID := dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 1400))
 
 		call := txntest.Txn{
@@ -101,6 +104,38 @@ func TestBigAppCall(t *testing.T) {
 			Sender:        addrs[0],
 			ApplicationID: appID,
 		}
+		dl.txn(&call, "read budget exceeded (210 > 0)")
+
+		// An empty box ref increases quota
+		call.Boxes = []transactions.BoxRef{{}}
+		dl.txn(&call)
+
+		// You can also get read budget from a real box ref, especially since
+		// this box doesn't exist.
+		call.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("nothing")}}
+		dl.txn(&call)
+
+		// Even bigger, this will take two box refs
+
+		// createApp takes care of figuring out and setting the fee and extra pages
+		appID = dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 2000))
+
+		call = txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[0],
+			ApplicationID: appID,
+		}
+		dl.txn(&call, "read budget exceeded (3810 > 0)")
+
+		// An empty box ref increases quota by 2048. Not enough
+		call.Boxes = []transactions.BoxRef{{}}
+		dl.txn(&call, "read budget exceeded (3810 > 2048)")
+		call.Boxes = []transactions.BoxRef{{}, {}} // two is enough
+		dl.txn(&call)
+
+		// You can also get read budget from a real box ref, especially since
+		// this box doesn't exist.
+		call.Boxes = []transactions.BoxRef{{}, {Index: 0, Name: []byte("nothing")}}
 		dl.txn(&call)
 	})
 }

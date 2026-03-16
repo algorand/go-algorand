@@ -587,7 +587,7 @@ func TestBoxIOBudgets(t *testing.T) {
 		// It works at the start, because call still has enough brs.
 		dl.txn(call.Args("check", "x", "\x00"))
 		call.Boxes = call.Boxes[:len(call.Boxes)-1] // remove one ref
-		dl.txn(call.Args("check", "x", "\x00"), "box read budget")
+		dl.txn(call.Args("check", "x", "\x00"), "read budget")
 
 		// Give a budget over 32768, confirm failure anyway
 		// Use a transaction group with 5 txns, each with 8 box refs (except the last one)
@@ -694,7 +694,7 @@ func TestBoxInners(t *testing.T) {
 		checkY := call.Args("check", "y", "B")
 		require.Len(t, checkY.Boxes, 2)
 		// can't see x and y because read budget is only 2*1024
-		dl.txgroup("box read budget", checkX, checkY)
+		dl.txgroup("read budget", checkX, checkY)
 		checkY.Boxes = append(checkY.Boxes, transactions.BoxRef{})
 		dl.txgroup("", checkX, checkY)
 

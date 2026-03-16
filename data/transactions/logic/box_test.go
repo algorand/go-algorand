@@ -459,9 +459,9 @@ func TestBoxReadBudget(t *testing.T) {
 			ledger.NewBox(appID, "third", make([]byte, 101), appAddr)
 
 			// Budget exceeded
-			TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep, "box read budget (300) exceeded")
+			TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep, "read budget (300) exceeded")
 			// Still exceeded if we don't touch the boxes
-			TestApp(t, `int 1`, ep, "box read budget (300) exceeded")
+			TestApp(t, `int 1`, ep, "read budget (300) exceeded")
 
 			// Still exceeded with one box ref (remove the original box refs)
 			if access {
@@ -470,7 +470,7 @@ func TestBoxReadBudget(t *testing.T) {
 			} else {
 				txn.Boxes = txn.Boxes[2:]
 			}
-			TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep, "box read budget (100) exceeded")
+			TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep, "read budget (100) exceeded")
 
 			// But not with a second empty ref
 			if access {
