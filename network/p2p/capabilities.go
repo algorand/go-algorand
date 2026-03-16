@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	randv1 "math/rand"
 	"sync"
 	"time"
@@ -133,12 +134,12 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 			case <-c.dht.Context().Done():
 				return
 			case <-nextExecution:
-				advertisementInterval, anyErr := c.advertiseCaps(capabilities)
+				advertisementInterval, err := c.advertiseCaps(capabilities)
 				if c.dht.Context().Err() != nil {
 					return
 				}
 				// If any capability failed to advertise, retry according to exp jitter delays
-				if anyErr != nil {
+				if err != nil {
 					nextExecution = time.After(eb.Delay())
 				} else {
 					// Otherwise, ensure we're at the correct interval
@@ -166,14 +167,12 @@ func (c *CapabilitiesDiscovery) advertiseCaps(capabilities []Capability) (time.D
 		}(capa)
 	}
 
-	var anyErr error
+	var aggErr error
 	advertisementInterval := maxAdvertisementInterval
 	for range capabilities {
 		r := <-results
 		if r.err != nil {
-			if anyErr == nil {
-				anyErr = r.err
-			}
+			aggErr = errors.Join(aggErr, r.err)
 			loggerFn := c.log.Warnf
 			if r.err == kbucket.ErrLookupFailure {
 				// No peers in a routing table, it is typical for startup and not an error
@@ -187,7 +186,7 @@ func (c *CapabilitiesDiscovery) advertiseCaps(capabilities []Capability) (time.D
 		}
 		c.log.Infof("advertised capability %s", r.capa)
 	}
-	return advertisementInterval, anyErr
+	return advertisementInterval, aggErr
 }
 
 // Sizer exposes the Size method
