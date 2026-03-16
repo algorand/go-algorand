@@ -25,9 +25,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/websocket"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 const (

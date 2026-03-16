@@ -24,8 +24,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 // getConstValues uses the AST to get a list of the values of declared const

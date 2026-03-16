@@ -23,16 +23,17 @@ import (
 	"testing"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/limitcaller"
 	p2piface "github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/stretchr/testify/require"
 )
 
 // mockP2PService implements p2p.Service and counts DialPeersUntilTargetCount invocations.
@@ -46,6 +47,7 @@ func (m *mockP2PService) IDSigner() *p2piface.PeerIDChallengeSigner { return nil
 func (m *mockP2PService) AddrInfo() peer.AddrInfo                   { return peer.AddrInfo{} }
 func (m *mockP2PService) NetworkNotify(network.Notifiee)            {}
 func (m *mockP2PService) NetworkStopNotify(network.Notifiee)        {}
+func (m *mockP2PService) UnprotectPeer(peer.ID)                     {}
 func (m *mockP2PService) DialPeersUntilTargetCount(int) bool        { m.dialCount.Add(1); return true }
 func (m *mockP2PService) ClosePeer(peer.ID) error                   { return nil }
 func (m *mockP2PService) Conns() []network.Conn                     { return nil }

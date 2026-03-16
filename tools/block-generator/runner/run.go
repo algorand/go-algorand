@@ -19,18 +19,16 @@ package runner
 import (
 	"bytes"
 	"context"
+	_ "embed" // embed conduit template config file
 	"encoding/json"
-	"io"
-	"sort"
-
-	// embed conduit template config file
-	_ "embed"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"

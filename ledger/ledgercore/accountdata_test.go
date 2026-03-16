@@ -19,10 +19,11 @@ package ledgercore
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // TestBasicsAccountDataRoundtripConversion ensures that basics.AccountData can be converted to

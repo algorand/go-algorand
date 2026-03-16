@@ -291,7 +291,10 @@ func TestAssetConfig(t *testing.T) {
 	for _, asset := range *info.CreatedAssets {
 		idx := asset.Index
 		cp := asset.Params
-		assets = append(assets, assetIDParams{idx, cp})
+		if cp == nil {
+			continue
+		}
+		assets = append(assets, assetIDParams{idx, *cp})
 		a.Equal(derefString(cp.UnitName), fmt.Sprintf("test%d", cp.Total-1))
 		a.Equal(derefString(cp.Name), fmt.Sprintf("testname%d", cp.Total-1))
 		a.Equal(derefString(cp.Manager), manager)
@@ -978,7 +981,9 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	var asset model.AssetParams
 	var assetIndex basics.AssetIndex
 	for _, cp := range *info.CreatedAssets {
-		asset = cp.Params
+		if cp.Params != nil {
+			asset = *cp.Params
+		}
 		assetIndex = cp.Index
 	}
 
@@ -1000,7 +1005,9 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
 	for _, cp := range *info.CreatedAssets {
-		asset = cp.Params
+		if cp.Params != nil {
+			asset = *cp.Params
+		}
 		assetIndex = cp.Index
 	}
 	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
@@ -1079,7 +1086,9 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	var asset model.AssetParams
 	var assetIndex basics.AssetIndex
 	for _, cp := range *info.CreatedAssets {
-		asset = cp.Params
+		if cp.Params != nil {
+			asset = *cp.Params
+		}
 		assetIndex = cp.Index
 	}
 
@@ -1103,7 +1112,9 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	a.NotNil(info.CreatedAssets)
 	a.Equal(len(*info.CreatedAssets), 1)
 	for _, cp := range *info.CreatedAssets {
-		asset = cp.Params
+		if cp.Params != nil {
+			asset = *cp.Params
+		}
 		assetIndex = cp.Index
 	}
 	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,

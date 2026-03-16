@@ -20,8 +20,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/network"
 )
 
 // classBasedPeerSelector is a rankPooledPeerSelector that tracks and ranks classes of peers based on their response behavior.

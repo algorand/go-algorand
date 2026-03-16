@@ -21,10 +21,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 // if the scheme has a dedup name, attach to headers. otherwise, don't
@@ -88,7 +89,8 @@ func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
 	require.Empty(t, key)
-	require.Error(t, err)
+	var corruptInputErr base64.CorruptInputError
+	require.ErrorAs(t, err, &corruptInputErr)
 
 	// happy path: response should be attached here
 	h = http.Header{}
@@ -198,7 +200,7 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `identity challenge incorrectly signed`)
 }
 
 // TestIdentityChallengeSchemeBadPayload tests that the  scheme will
@@ -216,7 +218,8 @@ func TestIdentityChallengeSchemeBadPayload(t *testing.T) {
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, respChal)
 	require.Empty(t, key)
-	require.Error(t, err)
+	var corruptInputErr base64.CorruptInputError
+	require.ErrorAs(t, err, &corruptInputErr)
 }
 
 // TestIdentityChallengeSchemeBadResponseSignature tests that the  scheme will
@@ -247,7 +250,7 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	key2, verificationMsg, err := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `challenge response incorrectly signed`)
 }
 
 // TestIdentityChallengeSchemeBadResponsePayload tests that the  scheme will
@@ -269,7 +272,8 @@ func TestIdentityChallengeSchemeBadResponsePayload(t *testing.T) {
 	key2, verificationMsg, err := i.VerifyResponse(r, origChal)
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
-	require.Error(t, err)
+	var corruptInputErr base64.CorruptInputError
+	require.ErrorAs(t, err, &corruptInputErr)
 }
 
 // TestIdentityChallengeSchemeWrongChallenge the scheme will
@@ -295,7 +299,7 @@ func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
 	key2, verificationMsg, err := i.VerifyResponse(r, newIdentityChallengeValue())
 	require.Empty(t, key2)
 	require.Empty(t, verificationMsg)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `challenge response did not contain originally issued challenge value`)
 }
 
 func TestNewIdentityTracker(t *testing.T) {
