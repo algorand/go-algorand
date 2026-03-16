@@ -2261,6 +2261,100 @@ int 1
 	}
 }
 
+// TestFrameSlotTypeWidenedAtLabel verifies that frame_dig after a label
+// inside a subroutine accepts any type, even when the fall-through path
+// stored a different type into the same slot via frame_bury.  Without the
+// fix to ProgramKnowledge.label(), the assembler rejects the disassembly
+// with "wanted type uint64 got address".
+//
+// The bytecode is constructed directly because this assembler rejects
+// the source form (the type conflict is caught during initial assembly).
+// The scenario arises when disassembling bytecode produced by other
+// compilers or hand-crafted bytecode.
+func TestFrameSlotTypeWidenedAtLabel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Bytecode for a subroutine that conditionally overwrites a uint64 frame
+	// slot with an address via frame_bury, then reads the slot with frame_dig
+	// and adds 1. The fall-through path narrows the slot to address, so
+	// without type widening at the label, + rejects the frame_dig result.
+	//
+	// Equivalent source (rejected by this assembler's type checker):
+	//   #pragma version 8
+	//   pushint 1; callsub label1; return
+	//   label1: proto 1 1; pushint 0; frame_dig -1
+	//   bz label2; global ZeroAddress; frame_bury 0
+	//   label2: frame_dig 0; pushint 1; +; retsub
+	program := []byte{
+		0x08,                   // #pragma version 8
+		0x81, 0x01,             // pushint 1
+		0x88, 0x00, 0x01,       // callsub +1 → proto
+		0x43,                   // return
+		0x8a, 0x01, 0x01,       // proto 1 1
+		0x81, 0x00,             // pushint 0
+		0x8b, 0xff,             // frame_dig -1
+		0x41, 0x00, 0x04,       // bz +4 → frame_dig 0
+		0x32, 0x03,             // global ZeroAddress
+		0x8c, 0x00,             // frame_bury 0
+		0x8b, 0x00,             // frame_dig 0
+		0x81, 0x01,             // pushint 1
+		0x08,                   // +
+		0x89,                   // retsub
+	}
+
+	dis, err := Disassemble(program)
+	require.NoError(t, err)
+
+	ops, err := AssembleStringWithVersion(dis, 8)
+	require.NoError(t, err,
+		"disassembly with mixed frame slot types could not be reassembled:\n%s", dis)
+	require.Equal(t, program, ops.Program)
+}
+
+// TestScratchTypeWidenedAtLabel verifies that load after a label accepts any
+// type, even when the fall-through path stored a different type into the same
+// scratch slot via store.  This is the scratch-space analogue of
+// TestFrameSlotTypeWidenedAtLabel.
+//
+// Like that test, bytecode is constructed directly because this assembler's
+// type checker rejects the source form at initial assembly.
+func TestScratchTypeWidenedAtLabel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Bytecode for a program that conditionally stores bytes into scratch 0,
+	// then after the label loads scratch 0 and uses it with + (requires
+	// uint64). The fall-through narrows scratch 0 to []byte, so without type
+	// widening at the label, + rejects the load result.
+	//
+	// Equivalent source (rejected by this assembler's type checker):
+	//   #pragma version 8
+	//   pushint 0; bz label1
+	//   pushbytes "hi"; store 0
+	//   label1: load 0; pushint 1; +; pop; pushint 1
+	program := []byte{
+		0x08,                   // #pragma version 8
+		0x81, 0x00,             // pushint 0
+		0x41, 0x00, 0x06,       // bz +6 → load 0
+		0x80, 0x02, 0x68, 0x69, // pushbytes "hi"
+		0x35, 0x00,             // store 0
+		0x34, 0x00,             // load 0
+		0x81, 0x01,             // pushint 1
+		0x08,                   // +
+		0x48,                   // pop
+		0x81, 0x01,             // pushint 1
+	}
+
+	dis, err := Disassemble(program)
+	require.NoError(t, err)
+
+	ops, err := AssembleStringWithVersion(dis, 8)
+	require.NoError(t, err,
+		"disassembly with mixed scratch types could not be reassembled:\n%s", dis)
+	require.Equal(t, program, ops.Program)
+}
+
 // TestDisassembleBytecblock asserts correct disassembly for
 // uses of bytecblock and intcblock, from examples in #6154
 func TestDisassembleBytecblock(t *testing.T) {

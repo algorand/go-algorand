@@ -349,6 +349,17 @@ func (pgm *ProgramKnowledge) deaden() {
 func (pgm *ProgramKnowledge) label() {
 	if pgm.deadcode {
 		pgm.reset()
+		return
+	}
+	// Branches may converge here with different types in frame slots (via
+	// frame_bury) or scratch space (via store/stores) on other paths. Widen
+	// all stack positions and scratch slots to StackAny so that subsequent
+	// frame_dig / load operations don't report spurious type mismatches.
+	for i := range pgm.stack {
+		pgm.stack[i] = StackAny
+	}
+	for i := range pgm.scratchSpace {
+		pgm.scratchSpace[i] = StackAny
 	}
 }
 
