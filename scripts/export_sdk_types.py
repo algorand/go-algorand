@@ -230,6 +230,7 @@ if __name__ == "__main__":
     export_type("StateDelta", "data/basics/teal.go", "block")
     export_type("ValueDelta", "data/basics/teal.go", "block")
     export_type("DeltaAction", "data/basics/teal.go", "block")
+    export_type("Micros", "data/basics/units.go", "block")
 
     # StateDelta.  Eventually need to deal with all types from ledgercore.StateDelta down
     export_type("AppParams", "data/basics/userBalance.go", "statedelta")
