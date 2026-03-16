@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -97,12 +98,12 @@ func TestBigAppCall(t *testing.T) {
 		// proto := config.Consensus[cv]
 
 		// createApp takes care of figuring out and setting the fee and extra pages
-		appID := dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 1400))
+		bigID := dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 1400))
 
 		call := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appID,
+			ApplicationID: bigID,
 		}
 		dl.txn(&call, "read budget exceeded (210 > 0)")
 
@@ -118,12 +119,12 @@ func TestBigAppCall(t *testing.T) {
 		// Even bigger, this will take two box refs
 
 		// createApp takes care of figuring out and setting the fee and extra pages
-		appID = dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 2000))
+		biggerID := dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 2000))
 
 		call = txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[0],
-			ApplicationID: appID,
+			ApplicationID: biggerID,
 		}
 		dl.txn(&call, "read budget exceeded (3810 > 0)")
 
@@ -136,6 +137,36 @@ func TestBigAppCall(t *testing.T) {
 		// You can also get read budget from a real box ref, especially since
 		// this box doesn't exist.
 		call.Boxes = []transactions.BoxRef{{}, {Index: 0, Name: []byte("nothing")}}
+		dl.txn(&call)
+
+		// We also need to charge the read budget for including an app ref to a
+		// large program. We don't wait to see if it's executed, just as we
+		// don't wait to see if a box is actually referenced. In both cases,
+		// we're going to prefetch the thing, so we ought to charge for it.
+		call = txntest.Txn{
+			ApplicationID: bigID, // above, we showed bigID required ONE extra ref
+			Type:          "appl",
+			Sender:        addrs[0],
+			Boxes:         []transactions.BoxRef{{}},
+			ForeignApps:   []basics.AppIndex{biggerID}, // referencing biggerID needs more
+		}
+		dl.txn(&call, "read budget exceeded (4020 > 2048)") // Note, 4020 is 210+3810
+		call.Boxes = []transactions.BoxRef{{}, {}}          // two will cover it
+		dl.txn(&call)
+
+		// Check that Access works the same way.
+		call = txntest.Txn{
+			ApplicationID: bigID, // above, we showed bigID required ONE extra ref
+			Type:          "appl",
+			Sender:        addrs[0],
+			Access:        []transactions.ResourceRef{{App: biggerID}},
+		}
+		dl.txn(&call, "read budget exceeded (4020 > 0)") // 4020 is 210+3810
+		call.Access = append(call.Access,
+			transactions.ResourceRef{Box: transactions.BoxRef{Index: 1, Name: []byte("nonsense")}})
+		dl.txn(&call, "read budget exceeded (4020 > 2048)") // 4020 is 210+3810
+		call.Access = append(call.Access, transactions.ResourceRef{})
+		// Works now that we have two box refs (one nonsense, one empty) in there.
 		dl.txn(&call)
 	})
 }

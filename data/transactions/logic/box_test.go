@@ -459,9 +459,9 @@ func TestBoxReadBudget(t *testing.T) {
 			ledger.NewBox(appID, "third", make([]byte, 101), appAddr)
 
 			// Budget exceeded
-			TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep, "read budget (300) exceeded")
+			TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep, "read budget exceeded (301 > 300)")
 			// Still exceeded if we don't touch the boxes
-			TestApp(t, `int 1`, ep, "read budget (300) exceeded")
+			TestApp(t, `int 1`, ep, "read budget exceeded (301 > 300)")
 
 			// Still exceeded with one box ref (remove the original box refs)
 			if access {
@@ -470,7 +470,7 @@ func TestBoxReadBudget(t *testing.T) {
 			} else {
 				txn.Boxes = txn.Boxes[2:]
 			}
-			TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep, "read budget (100) exceeded")
+			TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep, "read budget exceeded (101 > 100)")
 
 			// But not with a second empty ref
 			if access {
@@ -534,7 +534,7 @@ func TestBoxWriteBudget(t *testing.T) {
 	TestApp(t, `byte "other"; int 101; box_create`, ep)
 	TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
-                      int 1`, ep, "read budget (200) exceeded")
+                      int 1`, ep, "read budget exceeded (202 > 200)")
 	ledger.DelBoxes(888, "other")
 
 	TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
@@ -629,7 +629,7 @@ func TestIOBudgetGrow(t *testing.T) {
 
 			TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
-                      int 1`, ep, "read budget (200) exceeded")
+                      int 1`, ep, "read budget exceeded (202 > 200)")
 
 			if access {
 				txn.Access = append(txn.Access, transactions.ResourceRef{})
