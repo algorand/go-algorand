@@ -65,7 +65,7 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 	fundingAccount := fixtureWallets[0].Address
 
 	txidsToAccountsWaveOne := make(map[string]string)
-	const transactionFee = uint64(1)
+	const transactionFee = 1000
 	const fundingTimeoutRound basics.Round = 400
 	// cascade-create and fund 1000 accounts
 	amountToSend := uint64(560000) // ends up leaving each acct with ~4300 algos, which is more than absolutely necessary to go online

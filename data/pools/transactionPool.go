@@ -467,12 +467,6 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 	return nil
 }
 
-// RememberOne stores the provided transaction.
-// Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
-	return pool.Remember([]transactions.SignedTxn{t})
-}
-
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
@@ -708,7 +702,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
-		roundStartedEvaluating: prev.Round + basics.Round(1),
+		roundStartedEvaluating: prev.Round + 1,
 	}
 	pool.assemblyMu.Unlock()
 
@@ -776,10 +770,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
 				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
-			case *transactions.MinFeeError:
-				asmStats.MinFeeErrorCount++
-				stats.RemovedInvalidCount++
-				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case logic.EvalError:
 				asmStats.LogicErrorCount++
 				stats.RemovedInvalidCount++
@@ -832,7 +822,7 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 		TxnSize:        encodedLen,
 	}
 
-	lastSPRound := basics.Round(txib.Txn.StateProofTxnFields.Message.LastAttestedRound)
+	lastSPRound := txib.Txn.StateProofTxnFields.Message.LastAttestedRound
 	verificationCtx, err := pool.ledger.GetStateProofVerificationContext(lastSPRound)
 	if err != nil {
 		return stateProofStats

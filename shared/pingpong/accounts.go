@@ -423,46 +423,48 @@ func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
 		}
 		newAssetAddrs[addr] = acct
 	}
-	// wait for new assets to be created, fetch account data for them
+	// wait for asset creation transactions to be confirmed
+	creatorAddrs := make([]string, 0, len(newAssetAddrs))
+	for addr := range newAssetAddrs {
+		creatorAddrs = append(creatorAddrs, addr)
+	}
+	err = waitPendingTransactions(creatorAddrs, client)
+	if err != nil {
+		return fmt.Errorf("waiting for asset creation txns: %w", err)
+	}
+
+	// fetch account data for newly created assets
 	newAssets := make(map[basics.AssetIndex]model.AssetParams, assetsToCreate)
-	timeout := time.Now().Add(10 * time.Second)
-	for len(newAssets) < assetsToCreate {
-		for addr, acct := range newAssetAddrs {
-			ai, err := client.AccountInformation(addr, true)
-			if err != nil {
-				fmt.Printf("Warning: cannot lookup source account after assets creation")
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			if ai.CreatedAssets != nil {
-				for _, ap := range *ai.CreatedAssets {
-					assetID := ap.Index
-					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
-					_, has := pps.cinfo.AssetParams[assetID]
-					if !has {
-						if ap.Params != nil {
-							newAssets[assetID] = *ap.Params
-						}
+	for addr, acct := range newAssetAddrs {
+		ai, err := client.AccountInformation(addr, true)
+		if err != nil {
+			return fmt.Errorf("cannot lookup account %s after asset creation: %w", addr, err)
+		}
+		if ai.CreatedAssets != nil {
+			for _, ap := range *ai.CreatedAssets {
+				assetID := ap.Index
+				pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+				_, has := pps.cinfo.AssetParams[assetID]
+				if !has {
+					if ap.Params != nil {
+						newAssets[assetID] = *ap.Params
 					}
 				}
 			}
-			if ai.Assets != nil {
-				for _, holding := range *ai.Assets {
-					assetID := holding.AssetID
-					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
-					if acct.holdings == nil {
-						acct.holdings = make(map[basics.AssetIndex]uint64)
-					}
-					acct.holdings[assetID] = holding.Amount
+		}
+		if ai.Assets != nil {
+			for _, holding := range *ai.Assets {
+				assetID := holding.AssetID
+				pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+				if acct.holdings == nil {
+					acct.holdings = make(map[basics.AssetIndex]uint64)
 				}
+				acct.holdings[assetID] = holding.Amount
 			}
 		}
-		if time.Now().After(timeout) {
-			// complain, but try to keep running on what assets we have
-			log.Printf("WARNING took too long to create new assets")
-			// TODO: error?
-			break
-		}
+	}
+	if len(newAssets) < assetsToCreate {
+		log.Printf("WARNING only found %d of %d expected new assets after confirmation", len(newAssets), assetsToCreate)
 	}
 	maps.Copy(pps.cinfo.AssetParams, newAssets)
 	return nil
