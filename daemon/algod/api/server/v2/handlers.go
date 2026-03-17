@@ -1906,7 +1906,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID basics.A
 	}
 
 	limit := nilToZero(params.Limit)
-	includeValues := nilToZero(params.Values)
+	includeValues := params.Include != nil && slices.Contains(*params.Include, model.GetApplicationBoxesParamsIncludeValues)
 
 	// When no pagination-related params are provided, preserve current behavior.
 	if limit == 0 && params.Next == nil && !includeValues && (params.Prefix == nil || *params.Prefix == "") && params.Round == nil {

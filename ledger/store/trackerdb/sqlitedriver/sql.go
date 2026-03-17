@@ -125,12 +125,13 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKeysByRangeCursorStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key")
+	lookupKeysByRangeTemplate := "SELECT acctrounds.rnd, kvstore.key %s FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key"
+	qs.lookupKeysByRangeCursorStmt, err = q.Prepare(fmt.Sprintf(lookupKeysByRangeTemplate, ""))
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupKeysByRangeCursorWithValueStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key, kvstore.value FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key")
+	qs.lookupKeysByRangeCursorWithValueStmt, err = q.Prepare(fmt.Sprintf(lookupKeysByRangeTemplate, ", kvstore.value"))
 	if err != nil {
 		return nil, err
 	}

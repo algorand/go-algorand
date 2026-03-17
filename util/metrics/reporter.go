@@ -26,9 +26,10 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	// logging imports metrics so that we can have metrics about logging, which is more important than the four Debug lines we had here logging about metrics. TODO: find a more clever cycle resolution
-	// "github.com/algorand/go-algorand/logging"
 )
+
+// logging imports metrics so that we can have metrics about logging, which is more important than the four Debug lines we had here logging about metrics. TODO: find a more clever cycle resolution
+// "github.com/algorand/go-algorand/logging"
 
 const (
 	nodeExporterMetricsPath    = "/metrics"

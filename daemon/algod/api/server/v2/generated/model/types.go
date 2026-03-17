@@ -88,6 +88,11 @@ const (
 	GetPendingTransactionsByAddressParamsFormatMsgpack GetPendingTransactionsByAddressParamsFormat = "msgpack"
 )
 
+// Defines values for GetApplicationBoxesParamsInclude.
+const (
+	GetApplicationBoxesParamsIncludeValues GetApplicationBoxesParamsInclude = "values"
+)
+
 // Defines values for GetBlockParamsFormat.
 const (
 	GetBlockParamsFormatJson    GetBlockParamsFormat = "json"
@@ -1581,12 +1586,15 @@ type GetApplicationBoxesParams struct {
 	// Prefix A box name prefix, in the goal app call arg form 'encoding:value', to filter results by. Only boxes whose names start with this prefix will be returned.
 	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
 
-	// Values If true, include box values in the response.
-	Values *bool `form:"values,omitempty" json:"values,omitempty"`
+	// Include Include additional items in the response. Use `values` to include box values. Multiple values can be comma-separated.
+	Include *[]GetApplicationBoxesParamsInclude `form:"include,omitempty" json:"include,omitempty"`
 
 	// Round Return box data from the given round. The round must be within the node's available range.
 	Round *basics.Round `form:"round,omitempty" json:"round,omitempty"`
 }
+
+// GetApplicationBoxesParamsInclude defines parameters for GetApplicationBoxes.
+type GetApplicationBoxesParamsInclude string
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {

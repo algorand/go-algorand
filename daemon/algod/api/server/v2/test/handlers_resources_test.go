@@ -1023,10 +1023,10 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 	t.Run("PaginatedWithValues", func(t *testing.T) {
 		ctx, rec := newReq(t)
 		limit := uint64(2)
-		values := true
+		include := []model.GetApplicationBoxesParamsInclude{model.GetApplicationBoxesParamsIncludeValues}
 		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
-			Limit:  &limit,
-			Values: &values,
+			Limit:   &limit,
+			Include: &include,
 		})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -1125,11 +1125,11 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 	})
 
 	t.Run("ValuesWithoutLimit", func(t *testing.T) {
-		// values=true without limit should use paginated path and return all results with values.
+		// include=values without limit should use paginated path and return all results with values.
 		ctx, rec := newReq(t)
-		values := true
+		include := []model.GetApplicationBoxesParamsInclude{model.GetApplicationBoxesParamsIncludeValues}
 		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
-			Values: &values,
+			Include: &include,
 		})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -1141,6 +1141,28 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		assert.Nil(t, resp.NextToken, "no next-token when limit=0 (return all)")
 		for _, box := range resp.Boxes {
 			require.NotNil(t, box.Value, "values should be included")
+		}
+	})
+
+	t.Run("UnknownIncludeValueIgnored", func(t *testing.T) {
+		// An unrecognized include value should be silently ignored:
+		// box values are not returned despite include being set.
+		ctx, rec := newReq(t)
+		limit := uint64(10)
+		include := []model.GetApplicationBoxesParamsInclude{"bogus"}
+		err := handlers.GetApplicationBoxes(ctx, appID, model.GetApplicationBoxesParams{
+			Limit:   &limit,
+			Include: &include,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 200, rec.Code)
+
+		var resp model.BoxesResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp.Boxes, 5)
+		for _, box := range resp.Boxes {
+			assert.Nil(t, box.Value, "values should not be included for unknown include value")
 		}
 	})
 
@@ -1221,7 +1243,7 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 	})
 
 	t.Run("InternalByteCapTruncatesLargeResponse", func(t *testing.T) {
-		// Two 600KB boxes with values=true. Together they exceed the 1MB
+		// Two 600KB boxes with include=values. Together they exceed the 1MB
 		// server cap (MaxBoxFetchBytes), so only the first box fits.
 		// The default cap is applied when maxBytes is not specified.
 		bigAppID := basics.AppIndex(100)
@@ -1231,9 +1253,9 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		})
 
 		ctx, rec := newReq(t)
-		values := true
+		include := []model.GetApplicationBoxesParamsInclude{model.GetApplicationBoxesParamsIncludeValues}
 		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
-			Values: &values,
+			Include: &include,
 		})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -1257,9 +1279,9 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 		})
 
 		ctx, rec := newReq(t)
-		values := true
+		include := []model.GetApplicationBoxesParamsInclude{model.GetApplicationBoxesParamsIncludeValues}
 		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
-			Values: &values,
+			Include: &include,
 		})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
@@ -1277,7 +1299,7 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 	t.Run("DefaultMaxBytesAppliedOnPaginatedPath", func(t *testing.T) {
 		// When only limit is set (no maxBytes), the server applies the default
 		// MaxBoxFetchBytes (1MB) cap. With two 600KB-value boxes and
-		// values=true, the default cap means only the first box fits.
+		// include=values, the default cap means only the first box fits.
 		bigAppID := basics.AppIndex(104)
 		bigHandlers := setupLargeBoxTestHandlers(t, bigAppID, map[string][]byte{
 			"big1": make([]byte, 600_000),
@@ -1286,10 +1308,10 @@ func TestGetApplicationBoxesPagination(t *testing.T) {
 
 		ctx, rec := newReq(t)
 		limit := uint64(100)
-		values := true
+		include := []model.GetApplicationBoxesParamsInclude{model.GetApplicationBoxesParamsIncludeValues}
 		err := bigHandlers.GetApplicationBoxes(ctx, bigAppID, model.GetApplicationBoxesParams{
-			Limit:  &limit,
-			Values: &values,
+			Limit:   &limit,
+			Include: &include,
 		})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)

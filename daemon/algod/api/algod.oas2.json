@@ -1798,7 +1798,7 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, return all box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all box names.\n\nPagination mode is enabled when any of the following parameters are provided: limit, next, prefix, values, or round. In pagination mode box values can be requested and results are returned in sorted order.\n\nTo paginate: use the next-token from a previous response as the next parameter in the following request. Pin the round parameter to the round value from the first page's response to ensure consistent results across pages. The server enforces a per-response byte limit, so fewer results than limit may be returned even when more exist; the presence of next-token is the only reliable signal that more data is available.",
+        "description": "Given an application ID, return all box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all box names.\n\nPagination mode is enabled when any of the following parameters are provided: limit, next, prefix, include, or round. In pagination mode box values can be requested and results are returned in sorted order.\n\nTo paginate: use the next-token from a previous response as the next parameter in the following request. Pin the round parameter to the round value from the first page's response to ensure consistent results across pages. The server enforces a per-response byte limit, so fewer results than limit may be returned even when more exist; the presence of next-token is the only reliable signal that more data is available.",
         "tags": ["public", "nonparticipating"],
         "produces": ["application/json"],
         "schemes": ["http"],
@@ -1835,9 +1835,14 @@
             "in": "query"
           },
           {
-            "type": "boolean",
-            "description": "If true, include box values in the response.",
-            "name": "values",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["values"]
+            },
+            "collectionFormat": "csv",
+            "description": "Include additional items in the response. Use `values` to include box values. Multiple values can be comma-separated.",
+            "name": "include",
             "in": "query"
           },
           {
