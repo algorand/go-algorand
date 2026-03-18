@@ -9,34 +9,61 @@ import subprocess
 # go-algorand-sdk repo that it expects to find as a sibling of the
 # current repo.
 
-def extract_between(filename, start_pattern, stop_pattern=None):
-    """
-    Extracts and returns the portion of a file between the first occurrence of
-    start_pattern and the first subsequent occurrence of stop_pattern.
+def _find_line(content, s):
+    """Returns the line from content that contains s, or "" if not found."""
+    start_idx = content.find(s)
+    if start_idx == -1:
+        return ""
+    stop_idx = content.find("\n", start_idx)
+    if stop_idx == -1:
+        stop_idx = len(content)
+    return content[start_idx:stop_idx]
 
-    Args:
-        filename (str): Path to the input file.
-        start_pattern (str): The start delimiter.
-        stop_pattern (str): The stop delimiter.
+def _extract_comment(content, start_pattern):
+    """Walk backward from start_pattern collecting consecutive // comment lines.
+    Returns them as a string with trailing newline, or "" if none found.
+    Blank lines or non-comment lines terminate the walk."""
+    idx = content.find(start_pattern)
+    if idx == -1:
+        return ""
+    before = content[:idx]
+    if before.endswith("\n"):
+        before = before[:-1]
+    lines = before.split("\n")
 
-    Returns:
-        str: Extracted content between the two patterns. Empty string if not found.
-    """
-    with open(filename, 'r', encoding='utf-8') as f:
-        content = f.read()
+    comment_lines = []
+    for line in reversed(lines):
+        stripped = line.strip()
+        if stripped.startswith("//"):
+            comment_lines.append(line)
+        else:
+            break
 
+    if not comment_lines:
+        return ""
+    comment_lines.reverse()
+    return "\n".join(comment_lines) + "\n"
+
+def _extract_body(content, start_pattern, stop_pattern=None):
+    """Extract text between start_pattern and stop_pattern in content."""
     start_idx = content.find(start_pattern)
     if start_idx == -1:
         return ""
-
     start_idx += len(start_pattern)
     stop_idx = len(content)
     if stop_pattern:
         stop_idx = content.find(stop_pattern, start_idx)
     if stop_idx == -1:
-        raise ValueError("Stop pattern not found in "+filename)
-
+        raise ValueError("Stop pattern not found")
     return content[start_idx:stop_idx]
+
+def extract_between(filename, start_pattern, stop_pattern=None):
+    """Reads file once and returns (body, doc_comment) tuple."""
+    with open(filename, 'r', encoding='utf-8') as f:
+        content = f.read()
+    body = _extract_body(content, start_pattern, stop_pattern)
+    comment = _extract_comment(content, start_pattern)
+    return body, comment
 
 def replace_between(filename, content, start_pattern, stop_pattern=None):
     """
@@ -66,23 +93,6 @@ def replace_between(filename, content, start_pattern, stop_pattern=None):
 
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(updated)
-
-def find_line(filename, s):
-    """
-    Returns the line from `filename` that contains `s`
-    Args:
-        filename (str): Path to the file to modify.
-        s (str): Name of the substring to look for
-    """
-    with open(filename, 'r', encoding='utf-8') as f:
-        original = f.read()
-
-    start_idx = original.find(s)
-    if start_idx == -1:
-        return ""
-    stop_idx = original.find("\n", start_idx)
-
-    return original[start_idx:stop_idx]
 
 SDK="../go-algorand-sdk/"
 
@@ -123,41 +133,83 @@ def sdkize(input):
     return input
 
 def export(src, dst, start, stop=None):
-    x = extract_between(src, start, stop)
+    x, _ = extract_between(src, start, stop)
     x = sdkize(x)
     replace_between(SDK+dst, x, start, stop)
     subprocess.run(["gofmt", "-w", SDK+dst])
 
-def export_type(name, src, dst):
-    export_thing("type {thing} ", name, src, dst)
+def export_type(name, src, dst, comment=True):
+    export_thing("type {thing} ", name, src, dst, comment=comment)
 
-def export_var(name, src, dst):
-    export_thing("var {thing} ", name, src, dst)
+def export_var(name, src, dst, comment=True):
+    export_thing("var {thing} ", name, src, dst, comment=comment)
 
-def export_func(name, src, dst):
-    export_thing("func {thing}(", name, src, dst)
+def export_func(name, src, dst, comment=True):
+    export_thing("func {thing}(", name, src, dst, comment=comment)
 
-def export_thing(pattern, name, src, dst):
+def export_thing(pattern, name, src, dst, comment=True):
     start = pattern.format(thing=name)
-    line = find_line(src, start)
+
+    with open(src, 'r', encoding='utf-8') as f:
+        src_content = f.read()
+
+    line = _find_line(src_content, start)
     if line == "":
         raise ValueError(f"Unable to find {name} in {src}")
     src_stop = "\n}\n" if line.endswith("{") else "\n"
-    x = extract_between(src, start, src_stop)
-    x = sdkize(x)
+    x = sdkize(_extract_body(src_content, start, src_stop))
+    if comment:
+        # Only strip //msgp: directives from comments, not fully sdkize
+        # because of renaming like ApplicationCallTxnFields -> ApplicationFields
+        new_comment = re.sub("^\\s*//msgp:(allocbound|sort|ignore).*\n", '',
+                             _extract_comment(src_content, start), flags=re.MULTILINE)
+    else:
+        new_comment = None  # sentinel: keep existing destination comment
+
     if dst.endswith(".go"):     # explicit dst
         dst = f"{SDK}{dst}"
     else:
         dst = f"{SDK}types/{dst}.go"
 
-    line = find_line(dst, start)
+    with open(dst, 'r', encoding='utf-8') as f:
+        original = f.read()
+
+    line = _find_line(original, start)
     if line == "":
-        raise ValueError(f"Unable to find {name} in {dst}  If it's new, add a dummy version to place it.")
-    dst_stop = "\n}\n" if line.endswith("{") else "\n"
-    # Allow a struct to replace a one-line type def by adding } to extracted text
-    if "}" in src_stop and "}" not in dst_stop:
-        x += "\n}"
-    replace_between(dst, x, start, dst_stop)
+        # New type: append to end of destination file
+        if new_comment is None:
+            new_comment = ""
+        closing = "\n}\n" if src_stop == "\n}\n" else "\n"
+        updated = original.rstrip("\n") + "\n\n" + new_comment + start + x + closing
+    else:
+        dst_stop = "\n}\n" if line.endswith("{") else "\n"
+        # Allow a struct to replace a one-line type def by adding } to extracted text
+        if "}" in src_stop and "}" not in dst_stop:
+            x += "\n}"
+
+        old_comment = _extract_comment(original, start)
+
+        # When comment=False, preserve the existing destination comment
+        if new_comment is None:
+            new_comment = old_comment
+
+        old_start_idx = original.find(start)
+        old_body_end = original.find(dst_stop, old_start_idx + len(start))
+        if old_body_end == -1:
+            raise ValueError("Stop pattern not found in " + dst)
+        old_body_end += len(dst_stop)
+
+        # Include old comment in the region to replace
+        if old_comment:
+            comment_start = original.find(old_comment, old_start_idx - len(old_comment) - 1)
+            if comment_start != -1 and comment_start < old_start_idx:
+                old_start_idx = comment_start
+
+        updated = original[:old_start_idx] + new_comment + start + x + dst_stop + original[old_body_end:]
+
+    # Write destination once
+    with open(dst, 'w', encoding='utf-8') as f:
+        f.write(updated)
 
     subprocess.run(["gofmt", "-w", dst])
 
@@ -191,7 +243,7 @@ if __name__ == "__main__":
     # Common transaction types
     export_type("Header", "data/transactions/transaction.go", "transaction")
     export_type("Transaction", "data/transactions/transaction.go", "transaction")
-    export_type("SignedTxn", "data/transactions/signedtxn.go", "transaction")
+    export_type("SignedTxn", "data/transactions/signedtxn.go", "transaction", comment=False)
 
     # The transaction types themselves
     #  payment
