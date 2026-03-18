@@ -467,7 +467,7 @@
             "schema": {
               "properties": {
                 "hash": {
-                  "description": "base32 SHA512_256 of program bytes (Address style)",
+                  "description": "base32 LogicSig address digest (Address style): SHA512_256 hash for TEAL v1-v12, curve-point-free digest for TEAL v13+",
                   "type": "string"
                 },
                 "result": {
@@ -7023,7 +7023,7 @@
     },
     "/v2/teal/compile": {
       "post": {
-        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and a base32 address-style digest of the program. For TEAL v1-v12, this is the SHA512_256 hash of program bytes (Address style). For TEAL v13+, this digest may iterate with a counter suffix to ensure the LogicSig address is not an Ed25519 curve point. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
         "operationId": "TealCompile",
         "parameters": [
           {
@@ -7054,7 +7054,7 @@
                 "schema": {
                   "properties": {
                     "hash": {
-                      "description": "base32 SHA512_256 of program bytes (Address style)",
+                      "description": "base32 LogicSig address digest (Address style): SHA512_256 hash for TEAL v1-v12, curve-point-free digest for TEAL v13+",
                       "type": "string"
                     },
                     "result": {
@@ -7116,7 +7116,7 @@
             "description": "Unknown Error"
           }
         },
-        "summary": "Compile TEAL source code to binary, produce its hash",
+        "summary": "Compile TEAL source code to binary, produce its address digest",
         "tags": [
           "public",
           "nonparticipating"

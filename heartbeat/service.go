@@ -166,7 +166,7 @@ var acceptingByteCode = logic.MustAssemble(`
 #pragma version 11
 txn RekeyTo; global ZeroAddress; ==
 `)
-var acceptingSender = basics.Address(logic.HashProgram(acceptingByteCode))
+var acceptingSender = basics.Address(logic.SigDigest(acceptingByteCode))
 
 // hbLifetime is somewhat short. It seems better to try several times during the
 // grace period than to try a single time with a longer lifetime.
