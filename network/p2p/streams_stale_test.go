@@ -153,8 +153,8 @@ func (c *mockConn) ID() string                                        { return "
 func (c *mockConn) NewStream(context.Context) (network.Stream, error) { panic("unused") }
 func (c *mockConn) GetStreams() []network.Stream                      { return nil }
 func (c *mockConn) IsClosed() bool                                    { return false }
-func (c *mockConn) CloseWithError(network.ConnErrorCode) error         { return nil }
-func (c *mockConn) As(any) bool                                        { return false }
+func (c *mockConn) CloseWithError(network.ConnErrorCode) error        { return nil }
+func (c *mockConn) As(any) bool                                       { return false }
 
 var _ network.Conn = (*mockConn)(nil)
 
