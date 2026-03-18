@@ -14,22 +14,32 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package transactions
+package main
 
 import (
-	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// MinFeeError defines an error type which could be returned from the method WellFormed
-//
-//msgp:ignore MinFeeError
-type MinFeeError string
+func TestParseRekey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-func (err *MinFeeError) Error() string {
-	return string(*err)
-}
+	// Test empty address
+	require.Equal(t, basics.Address{}, parseRekey(""))
 
-func makeMinFeeErrorf(format string, args ...interface{}) *MinFeeError {
-	err := MinFeeError(fmt.Sprintf(format, args...))
-	return &err
+	// Test valid address
+	validAddrStr := "5ZHAMU2BLPLFEE2VFFBVWMKRIZKUBSPUUWT3YIOWSP7VWFRJIT4XF3VYNI"
+	validAddr, err := basics.UnmarshalChecksumAddress(validAddrStr)
+	require.NoError(t, err)
+	require.Equal(t, validAddr, parseRekey(validAddrStr))
+
+	// Test invalid address (should panic because reportErrorf calls exit(1) which panics in tests)
+	require.Panics(t, func() {
+		parseRekey("INVALID_ADDRESS")
+	})
 }

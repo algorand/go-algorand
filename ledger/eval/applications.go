@@ -351,6 +351,21 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 		err = apply.ApplicationCall(txn.Txn.ApplicationCallTxnFields, txn.Txn.Header, cs, &txn.ApplyData,
 			gi, ep, cs.Counter())
 
+	// protocol.HeartbeatTx is not allowed as an inner.  There's probably no
+	// reason it can't be, but before it can be allowed, the following potential
+	// bug must be addressed. While building inner heartbeats in a group, it
+	// would be allowed to be free, because the group ID is not set until after
+	// WellFormed is called.  But then at apply time, since it would have a
+	// group ID, it is not further scrutinized to see if it should be allowed to
+	// be free.
+
+	// Additionally, but less dangerously: Inner transactions are often "free"
+	// in the sense of a low or missing fee because of fee pooling from the
+	// caller "FeeSurplus". A straightforward application of the WellFormed
+	// check would disallow such an inner heartbeat because it looks like it's
+	// not paying, but really we should just demand that some of FeeSurplus is
+	// spent on it.
+
 	default:
 		err = fmt.Errorf("%s tx in AVM", txn.Txn.Type)
 	}
