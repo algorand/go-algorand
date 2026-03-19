@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
-	yamux "github.com/libp2p/go-yamux/v4"
+	yamux "github.com/libp2p/go-yamux/v5"
 	mnet "github.com/multiformats/go-multiaddr/net"
 
 	"github.com/algorand/websocket"

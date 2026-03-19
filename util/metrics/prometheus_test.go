@@ -147,3 +147,66 @@ func TestPrometheusMetrics(t *testing.T) {
 	require.Contains(t, buf.String(), metricNamespace+"_identify_total")
 	require.Contains(t, buf.String(), metricNamespace+"_counter_total")
 }
+
+func TestPrometheusHistogramMetrics(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const metricNamespace = "test_hist_metric"
+	const familyName = metricNamespace + "_latency"
+
+	hist := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: metricNamespace,
+			Name:      "latency",
+			Help:      "Latency histogram",
+			Buckets:   []float64{1, 5, 10},
+		},
+		[]string{"dir"},
+	)
+
+	prometheus.DefaultRegisterer.MustRegister(hist)
+	defer prometheus.DefaultRegisterer.Unregister(hist)
+
+	hist.WithLabelValues("inbound").Observe(1)
+	hist.WithLabelValues("inbound").Observe(7)
+
+	require.Eventually(t, func() bool {
+		return len(collectPrometheusMetrics([]string{familyName})) == 3
+	}, 5*time.Second, 100*time.Millisecond)
+
+	metrics := collectPrometheusMetrics([]string{familyName})
+	require.Len(t, metrics, 3)
+
+	var sawBucket, sawCount, sawSum bool
+	for _, m := range metrics {
+		var buf strings.Builder
+		m.WriteMetric(&buf, "")
+		promValue := buf.String()
+
+		if strings.Contains(promValue, familyName+"_bucket") {
+			sawBucket = true
+			require.Contains(t, promValue, familyName+"_bucket counter\n")
+			require.Contains(t, promValue, `dir="inbound"`)
+			require.Contains(t, promValue, `le="1"`)
+			require.Contains(t, promValue, `le="5"`)
+			require.Contains(t, promValue, `le="10"`)
+			require.Contains(t, promValue, `le="+Inf"`)
+		} else if strings.Contains(promValue, familyName+"_count") {
+			sawCount = true
+			require.Contains(t, promValue, familyName+"_count counter\n")
+			require.Contains(t, promValue, `dir="inbound"`)
+			require.Contains(t, promValue, "} 2\n")
+		} else if strings.Contains(promValue, familyName+"_sum") {
+			sawSum = true
+			require.Contains(t, promValue, familyName+"_sum gauge\n")
+			require.Contains(t, promValue, `dir="inbound"`)
+			require.Contains(t, promValue, "} 8\n")
+		} else {
+			require.Fail(t, "not expected metric", promValue)
+		}
+	}
+
+	require.True(t, sawBucket)
+	require.True(t, sawCount)
+	require.True(t, sawSum)
+}
