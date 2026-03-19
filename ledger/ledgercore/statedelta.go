@@ -172,6 +172,14 @@ type AssetResourceRecord struct {
 	Holding AssetHoldingDelta
 }
 
+func (ad AssetResourceRecord) AffectsParams() bool {
+	return ad.Params.Deleted || ad.Params.Params != nil
+}
+
+func (ad AssetResourceRecord) AffectsHolding() bool {
+	return ad.Holding.Deleted || ad.Holding.Holding != nil
+}
+
 // AccountDeltas stores ordered accounts and allows fast lookup by address
 // One key design aspect here was to ensure that we're able to access the written
 // deltas in a deterministic order, while maintaining O(1) lookup. In order to

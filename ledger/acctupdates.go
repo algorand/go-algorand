@@ -1238,21 +1238,33 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 		currentDeltaLen := len(au.deltas)
 
 		// Walk deltas backwards; the first entry found for a given asset is the most recent.
-		deltaResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
+		deltaHoldingResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
+		deltaParamsResults := make(map[basics.AssetIndex]ledgercore.AssetParamsDelta)
+		deltaCreatorResults := make(map[basics.AssetIndex]basics.Address)
 		numDeltaDeleted := 0
 
 		for i := currentDeltaLen; i > 0; {
 			i--
 			for _, rec := range au.deltas[i].Accts.AssetResources {
-				if rec.Addr != addr || rec.Aidx <= assetIDGT {
+				if rec.Aidx <= assetIDGT {
 					continue
 				}
-				if _, ok := deltaResults[rec.Aidx]; ok {
+				if rec.AffectsParams() {
+					if _, ok := deltaParamsResults[rec.Aidx]; !ok {
+						deltaParamsResults[rec.Aidx] = rec.Params
+						deltaCreatorResults[rec.Aidx] = rec.Addr
+					}
+				}
+				if rec.Addr != addr {
 					continue
 				}
-				deltaResults[rec.Aidx] = rec
-				if rec.Holding.Deleted || rec.Params.Deleted {
-					numDeltaDeleted++
+				if rec.AffectsHolding() {
+					if _, ok := deltaHoldingResults[rec.Aidx]; !ok {
+						deltaHoldingResults[rec.Aidx] = rec
+						if rec.Holding.Deleted {
+							numDeltaDeleted++
+						}
+					}
 				}
 			}
 		}
@@ -1289,24 +1301,25 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 				assetID := basics.AssetIndex(pd.Aidx)
 				seenInDB[assetID] = true
 
-				d, inDelta := deltaResults[assetID]
+				deltaHolding, holdingInDelta := deltaHoldingResults[assetID]
+				deltaParams, paramsInDelta := deltaParamsResults[assetID]
 
 				arwi := ledgercore.AssetResourceWithIDs{AssetID: assetID}
 
-				if inDelta && d.Holding.Deleted {
+				if holdingInDelta && deltaHolding.Holding.Deleted {
 					// Holding removed by delta — leave AssetHolding nil.
-				} else if inDelta && d.Holding.Holding != nil {
-					arwi.AssetHolding = d.Holding.Holding
+				} else if holdingInDelta && deltaHolding.Holding.Holding != nil {
+					arwi.AssetHolding = deltaHolding.Holding.Holding
 				} else if pd.Data.IsHolding() {
 					ah := pd.Data.GetAssetHolding()
 					arwi.AssetHolding = &ah
 				}
 
-				if inDelta && d.Params.Deleted {
+				if paramsInDelta && deltaParams.Deleted {
 					// Delta deleted params — omit creator and params.
-				} else if inDelta && d.Params.Params != nil {
-					arwi.Creator = pd.Creator
-					arwi.AssetParams = d.Params.Params
+				} else if paramsInDelta && deltaParams.Params != nil {
+					arwi.Creator = deltaCreatorResults[assetID]
+					arwi.AssetParams = deltaParams.Params
 				} else if !pd.Creator.IsZero() {
 					arwi.Creator = pd.Creator
 					ap := pd.Data.GetAssetParams()
@@ -1321,7 +1334,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 			// Add assets that exist only in deltas (new creations not yet in DB).
 			// Only include delta entries within the DB page range to avoid setting
 			// a next-token that would skip items still in the database.
-			for assetID, d := range deltaResults {
+			for assetID, d := range deltaHoldingResults {
 				if seenInDB[assetID] {
 					continue
 				}
@@ -1332,9 +1345,28 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 				if !d.Holding.Deleted && d.Holding.Holding != nil {
 					arwi.AssetHolding = d.Holding.Holding
 				}
-				if !d.Params.Deleted && d.Params.Params != nil {
-					arwi.Creator = addr
-					arwi.AssetParams = d.Params.Params
+				// Patch in the params info if we have it in the deltas
+				if deltaParams, paramsInDelta := deltaParamsResults[assetID]; paramsInDelta {
+					if !deltaParams.Deleted {
+						arwi.Creator = deltaCreatorResults[assetID]
+						arwi.AssetParams = deltaParams.Params
+					}
+				} else {
+					// explicitly lookup the params in the db. Use
+					// currentDBRound to not bother examining the deltas
+					cid := basics.CreatableIndex(assetID)
+					creator, ok, err := au.getCreatorForRound(currentDBRound, cid, basics.AssetCreatable, false)
+					if err != nil {
+						return nil, 0, err
+					}
+					if ok {
+						arwi.Creator = creator
+						resource, _, err := au.lookupResource(currentDBRound, creator, cid, basics.AssetCreatable, false)
+						if err != nil {
+							return nil, 0, err
+						}
+						arwi.AssetParams = resource.AssetParams
+					}
 				}
 				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
 					result = append(result, arwi)

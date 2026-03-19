@@ -41,12 +41,6 @@ ${gcmd} asset optin --account ${ACCOUNTB} --assetid ${ASSET_D_ID} --signer ${ACC
 # displays held assets
 ${gcmd} account info -a ${ACCOUNTB}
 
-# wait a few rounds for the asset optins to get into the db, since the account asset info endpoint
-# does not look at in memory deltas
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-
 # query account assets w/ details, (1)
 RES=$(${gcmd} account assetdetails -a ${ACCOUNTB})
 if [[ ${RES} != *"Account: ${ACCOUNTB}"* ]]; then
@@ -95,11 +89,6 @@ fi
 
 # delete one of the asset
 ${gcmd} asset destroy --assetid ${ASSET_B_ID} --creator ${ACCOUNTA} --signer ${ACCOUNTA}
-
-# wait a few rounds for the deletion to get into the db
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
 
 # query account assets w/ details after deletion, (3)
 RES=$(${gcmd} account assetdetails -a ${ACCOUNTB})
