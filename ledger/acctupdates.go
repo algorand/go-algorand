@@ -1416,21 +1416,36 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 		currentDeltaLen := len(au.deltas)
 
 		// Walk deltas backwards; the first entry found for a given app is the most recent.
-		deltaResults := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
+		deltaLocalsResults := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
+		deltaParamsResults := make(map[basics.AppIndex]ledgercore.AppParamsDelta)
+		deltaCreatorResults := make(map[basics.AppIndex]basics.Address)
 		numDeltaDeleted := 0
 
 		for i := currentDeltaLen; i > 0; {
 			i--
 			for _, rec := range au.deltas[i].Accts.AppResources {
-				if rec.Addr != addr || rec.Aidx <= appIDGT {
+				if rec.Aidx <= appIDGT {
 					continue
 				}
-				if _, ok := deltaResults[rec.Aidx]; ok {
+				if rec.AffectsParams() {
+					if _, ok := deltaParamsResults[rec.Aidx]; !ok {
+						deltaParamsResults[rec.Aidx] = rec.Params
+						deltaCreatorResults[rec.Aidx] = rec.Addr
+					}
+				}
+				if rec.Addr != addr {
 					continue
 				}
-				deltaResults[rec.Aidx] = rec
-				if rec.State.Deleted || rec.Params.Deleted {
+				// DB will return records that match for either params OR
+				// locals, so we may need an extra record if either is deleted
+				// in deltas.
+				if rec.Params.Deleted || rec.State.Deleted {
 					numDeltaDeleted++
+				}
+				if rec.AffectsLocals() {
+					if _, ok := deltaLocalsResults[rec.Aidx]; !ok {
+						deltaLocalsResults[rec.Aidx] = rec
+					}
 				}
 			}
 		}
@@ -1467,25 +1482,26 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				appID := basics.AppIndex(pd.Aidx)
 				seenInDB[appID] = true
 
-				d, inDelta := deltaResults[appID]
+				deltaLocals, localsInDelta := deltaLocalsResults[appID]
+				deltaParams, paramsInDelta := deltaParamsResults[appID]
 
 				arwi := ledgercore.AppResourceWithIDs{AppID: appID}
 
-				if inDelta && d.State.Deleted {
+				if localsInDelta && deltaLocals.State.Deleted {
 					// Local state removed by delta — leave AppLocalState nil.
-				} else if inDelta && d.State.LocalState != nil {
-					arwi.AppLocalState = d.State.LocalState
+				} else if localsInDelta && deltaLocals.State.LocalState != nil {
+					arwi.AppLocalState = deltaLocals.State.LocalState
 				} else if pd.Data.IsHolding() {
 					als := pd.Data.GetAppLocalState()
 					arwi.AppLocalState = &als
 				}
 
-				if inDelta && d.Params.Deleted {
+				if paramsInDelta && deltaParams.Deleted {
 					// Delta deleted params — omit creator and params.
-				} else if inDelta && d.Params.Params != nil {
+				} else if paramsInDelta && deltaParams.Params != nil {
 					arwi.Creator = pd.Creator
 					if includeParams {
-						arwi.AppResource.AppParams = d.Params.Params
+						arwi.AppResource.AppParams = deltaParams.Params
 					}
 				} else if !pd.Creator.IsZero() {
 					arwi.Creator = pd.Creator
@@ -1500,10 +1516,10 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				}
 			}
 
-			// Add apps that exist only in deltas (new opt-ins not yet in DB).
-			// Only include delta entries within the DB page range to avoid setting
-			// a next-token that would skip items still in the database.
-			for appID, d := range deltaResults {
+			// Add apps with locals that exist only in deltas (new opt-ins not
+			// yet in DB).  Only include delta entries within the DB page range
+			// to avoid setting a next-token beyond the database page.
+			for appID, d := range deltaLocalsResults {
 				if seenInDB[appID] {
 					continue
 				}
@@ -1515,12 +1531,68 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 					arwi.AppLocalState = d.State.LocalState
 				}
 				if !d.Params.Deleted && d.Params.Params != nil {
-					arwi.Creator = addr
 					if includeParams {
+						arwi.Creator = addr
 						arwi.AppResource.AppParams = d.Params.Params
 					}
 				}
+				// Patch in the params info if we have it in the deltas
+				if includeParams {
+					if deltaParams, paramsInDelta := deltaParamsResults[appID]; paramsInDelta {
+						if !deltaParams.Deleted {
+							arwi.Creator = deltaCreatorResults[appID]
+							arwi.AppParams = deltaParams.Params
+						}
+					} else {
+						// explicitly lookup the params in the db. Use
+						// currentDBRound to not bother examining the deltas
+						cid := basics.CreatableIndex(appID)
+						creator, ok, err := au.getCreatorForRound(currentDBRound, cid, basics.AppCreatable, false)
+						if err != nil {
+							return nil, 0, err
+						}
+						if ok {
+							arwi.Creator = creator
+							resource, _, err := au.lookupResource(currentDBRound, creator, cid, basics.AppCreatable, false)
+							if err != nil {
+								return nil, 0, err
+							}
+							arwi.AppParams = resource.AppParams
+						}
+					}
+				}
 				if arwi.AppLocalState != nil || arwi.AppParams != nil {
+					result = append(result, arwi)
+				}
+			}
+
+			// Add apps created by the account, where that creation is only in
+			// the deltas, not yet the DB.  As above, only include delta entries
+			// within the DB page range.
+			if includeParams {
+				for appID, deltaParams := range deltaParamsResults {
+					if seenInDB[appID] {
+						continue
+					}
+					if dbHasMore && appID > dbMaxID {
+						continue
+					}
+					if deltaParams.Deleted {
+						continue
+					}
+					// We only care about creations by the query addr
+					if deltaCreatorResults[appID] != addr {
+						continue
+					}
+					// Don't add if the scan through deltaLocals would have already done so.
+					if _, ok := deltaLocalsResults[appID]; ok {
+						continue
+					}
+					arwi := ledgercore.AppResourceWithIDs{
+						AppID:       appID,
+						Creator:     deltaCreatorResults[appID],
+						AppResource: ledgercore.AppResource{AppParams: deltaParams.Params},
+					}
 					result = append(result, arwi)
 				}
 			}

@@ -73,8 +73,9 @@ var (
 	onlyShowAssetIDs   bool
 	partKeyIDToDelete  string
 
-	next  string
-	limit uint64
+	next             string
+	limit            uint64
+	includeAppParams bool
 )
 
 func init() {
@@ -84,6 +85,7 @@ func init() {
 	accountCmd.AddCommand(renameCmd)
 	accountCmd.AddCommand(infoCmd)
 	accountCmd.AddCommand(assetDetailsCmd)
+	accountCmd.AddCommand(applicationDetailsCmd)
 	accountCmd.AddCommand(balanceCmd)
 	accountCmd.AddCommand(rewardsCmd)
 	accountCmd.AddCommand(changeOnlineCmd)
@@ -146,6 +148,13 @@ func init() {
 	assetDetailsCmd.MarkFlagRequired("address")
 	assetDetailsCmd.Flags().StringVarP(&next, "next", "n", "", "The next asset index to use for pagination")
 	assetDetailsCmd.Flags().Uint64VarP(&limit, "limit", "l", 0, "The maximum number of assets to return")
+
+	// Application details flags
+	applicationDetailsCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
+	applicationDetailsCmd.MarkFlagRequired("address")
+	applicationDetailsCmd.Flags().StringVarP(&next, "next", "n", "", "The next application index to use for pagination")
+	applicationDetailsCmd.Flags().Uint64VarP(&limit, "limit", "l", 0, "The maximum number of applications to return")
+	applicationDetailsCmd.Flags().BoolVar(&includeAppParams, "include-params", false, "Include application parameters (creator, global state schema, etc.) for applications created by this account")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -570,7 +579,32 @@ var assetDetailsCmd = &cobra.Command{
 		}
 
 		printAccountAssetsInformation(accountAddress, response)
+	},
+}
+var applicationDetailsCmd = &cobra.Command{
+	Use:   "applicationdetails",
+	Short: "Retrieve information about the applications created or opted-into by the specified account, possibly including application metadata",
+	Long:  `Retrieve information about the applications created or opted-into by the specified account, possibly including application metadata`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := datadir.EnsureSingleDataDir()
+		client := ensureAlgodClient(dataDir)
 
+		var nextPtr *string
+		var limitPtr *uint64
+		if next != "" {
+			nextPtr = &next
+		}
+		if limit != 0 {
+			limitPtr = &limit
+		}
+		response, err := client.AccountApplicationsInformation(accountAddress, nextPtr, limitPtr, includeAppParams)
+
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		printAccountApplicationsInformation(accountAddress, response)
 	},
 }
 var infoCmd = &cobra.Command{
@@ -808,6 +842,63 @@ func printAccountAssetsInformation(address string, response model.AccountAssetsI
 		} else {
 			fmt.Printf("    Amount (without formatting): %d\n", asset.AssetHolding.Amount)
 			fmt.Printf("    IsFrozen: %t\n", asset.AssetHolding.IsFrozen)
+		}
+	}
+}
+
+func printAccountApplicationsInformation(address string, response model.AccountApplicationsInformationResponse) {
+	fmt.Printf("Account: %s\n", address)
+	fmt.Printf("Round: %d\n", response.Round)
+	if response.NextToken != nil {
+		fmt.Printf("NextToken (to retrieve more account applications): %s\n", *response.NextToken)
+	}
+	fmt.Printf("Applications:\n")
+	for _, app := range *response.ApplicationResources {
+		fmt.Printf("  Application ID: %d\n", app.Id)
+
+		if app.Params != nil {
+			fmt.Printf("  Application Params:\n")
+			fmt.Printf("    Creator: %s\n", app.Params.Creator)
+
+			allocatedInts := uint64(0)
+			allocatedBytes := uint64(0)
+			if app.Params.GlobalStateSchema != nil {
+				allocatedInts = app.Params.GlobalStateSchema.NumUint
+				allocatedBytes = app.Params.GlobalStateSchema.NumByteSlice
+			}
+			usedInts := uint64(0)
+			usedBytes := uint64(0)
+			if app.Params.GlobalState != nil {
+				for _, kv := range *app.Params.GlobalState {
+					if basics.TealType(kv.Value.Type) == basics.TealUintType {
+						usedInts++
+					} else {
+						usedBytes++
+					}
+				}
+			}
+			fmt.Printf("    Global State: %d/%d uints, %d/%d byte slices\n", usedInts, allocatedInts, usedBytes, allocatedBytes)
+
+			if app.Params.ExtraProgramPages != nil && *app.Params.ExtraProgramPages != 0 {
+				fmt.Printf("    Extra Program Pages: %d\n", *app.Params.ExtraProgramPages)
+			}
+		}
+
+		if app.AppLocalState != nil {
+			allocatedInts := app.AppLocalState.Schema.NumUint
+			allocatedBytes := app.AppLocalState.Schema.NumByteSlice
+			usedInts := uint64(0)
+			usedBytes := uint64(0)
+			if app.AppLocalState.KeyValue != nil {
+				for _, kv := range *app.AppLocalState.KeyValue {
+					if basics.TealType(kv.Value.Type) == basics.TealUintType {
+						usedInts++
+					} else {
+						usedBytes++
+					}
+				}
+			}
+			fmt.Printf("    Local State: %d/%d uints, %d/%d byte slices\n", usedInts, allocatedInts, usedBytes, allocatedBytes)
 		}
 	}
 }

@@ -438,9 +438,15 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
-type pageParams struct {
+type accountAssetsParams struct {
 	Next  *string `url:"next,omitempty"`
 	Limit *uint64 `url:"limit,omitempty"`
+}
+
+type accountApplicationsParams struct {
+	Next    *string `url:"next,omitempty"`
+	Limit   *uint64 `url:"limit,omitempty"`
+	Include string  `url:"include,omitempty"`
 }
 
 type catchupParams struct {
@@ -560,6 +566,16 @@ func (client RestClient) RawAccountApplicationInformation(accountAddress string,
 	return
 }
 
+// AccountApplicationsInformation gets account information about a particular account's applications, subject to pagination.
+func (client RestClient) AccountApplicationsInformation(accountAddress string, next *string, limit *uint64, includeParams bool) (response model.AccountApplicationsInformationResponse, err error) {
+	var include string
+	if includeParams {
+		include = "params"
+	}
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications", accountAddress), accountApplicationsParams{next, limit, include})
+	return
+}
+
 // AccountAssetInformation gets account information about a given app.
 func (client RestClient) AccountAssetInformation(accountAddress string, assetID basics.AssetIndex) (response model.AccountAssetResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), nil)
@@ -568,14 +584,14 @@ func (client RestClient) AccountAssetInformation(accountAddress string, assetID 
 
 // AccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
 func (client RestClient) AccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response model.AccountAssetsInformationResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), accountAssetsParams{next, limit})
 	return
 }
 
 // RawAccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
 func (client RestClient) RawAccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response []byte, err error) {
 	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), accountAssetsParams{next, limit})
 	response = blob
 	return
 }
