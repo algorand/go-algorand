@@ -4200,6 +4200,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	netA.wg.Add(1)
 	netA.tryConnect(addrC, gossipC)
 	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
+	require.Eventually(t, func() bool { return netC.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	topics := Topics{
