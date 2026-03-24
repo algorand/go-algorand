@@ -1346,3 +1346,11 @@ func (c *Client) BlockLogs(round basics.Round) (resp model.BlockLogsResponse, er
 	}
 	return
 }
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
+}

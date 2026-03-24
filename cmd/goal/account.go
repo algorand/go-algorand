@@ -825,20 +825,25 @@ func printAccountAssetsInformation(address string, response model.AccountAssetsI
 			if asset.AssetParams.Name != nil {
 				_, name = unicodePrintable(*asset.AssetParams.Name)
 			}
-			fmt.Printf("    Name: %s\n", name)
+			fmt.Printf("    Asset name: %s\n", name)
 
 			units := "units"
 			if asset.AssetParams.UnitName != nil {
 				_, units = unicodePrintable(*asset.AssetParams.UnitName)
 			}
-			fmt.Printf("    Units: %s\n", units)
+			fmt.Printf("    Unit name: %s\n", units)
 			fmt.Printf("    Total: %d\n", asset.AssetParams.Total)
 			fmt.Printf("    Decimals: %d\n", asset.AssetParams.Decimals)
+			fmt.Printf("    Default frozen:   %t\n", nilToZero(asset.AssetParams.DefaultFrozen))
 			safeURL := ""
 			if asset.AssetParams.Url != nil {
 				_, safeURL = unicodePrintable(*asset.AssetParams.Url)
 			}
 			fmt.Printf("    URL: %s\n", safeURL)
+			fmt.Printf("    Manager address:  %s\n", nilToZero(asset.AssetParams.Manager))
+			fmt.Printf("    Reserve address:  %s\n", nilToZero(asset.AssetParams.Reserve))
+			fmt.Printf("    Freeze address:   %s\n", nilToZero(asset.AssetParams.Freeze))
+			fmt.Printf("    Clawback address: %s\n", nilToZero(asset.AssetParams.Clawback))
 		} else {
 			fmt.Printf("    Amount (without formatting): %d\n", asset.AssetHolding.Amount)
 			fmt.Printf("    IsFrozen: %t\n", asset.AssetHolding.IsFrozen)
