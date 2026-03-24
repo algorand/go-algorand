@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -30,6 +31,18 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 )
+
+// StreamHandlerLoggedError is an error with an associated log level.
+// Stream handlers return this to indicate the severity of the error
+// so that callers can log at the appropriate level instead of always
+// logging at Error level.
+type StreamHandlerLoggedError struct {
+	Err   error
+	Level logging.Level
+}
+
+func (e *StreamHandlerLoggedError) Error() string { return e.Err.Error() }
+func (e *StreamHandlerLoggedError) Unwrap() error { return e.Err }
 
 // streamManager implements network.Notifiee to create and manage streams for use with non-gossipsub protocols.
 type streamManager struct {
@@ -113,7 +126,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	// the replacement fails dispatch.
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
 	if err := n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
-		n.log.Errorln(err.Error())
+		n.logDispatchError(err)
 		_ = stream.Reset()
 		return
 	}
@@ -137,6 +150,27 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	}
 }
 
+// logDispatchError logs an error returned by dispatch at the appropriate level.
+// StreamHandlerLoggedError errors are logged at their specified level;
+// unwrapped errors are logged at Error level.
+func (n *streamManager) logDispatchError(err error) {
+	var le *StreamHandlerLoggedError
+	if errors.As(err, &le) {
+		switch le.Level {
+		case logging.Debug:
+			n.log.Debugln(le.Error())
+		case logging.Info:
+			n.log.Infoln(le.Error())
+		case logging.Warn:
+			n.log.Warnln(le.Error())
+		default:
+			n.log.Errorln(le.Error())
+		}
+		return
+	}
+	n.log.Errorln(err.Error())
+}
+
 // dispatch the stream to the appropriate handler
 func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream network.Stream, incoming bool) error {
 	for _, pair := range n.handlers {
@@ -144,7 +178,6 @@ func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream
 			return pair.Handler(ctx, remotePeer, stream, incoming)
 		}
 	}
-	n.log.Errorf("No handler for protocol %s, peer %s", stream.Protocol(), remotePeer)
 	return fmt.Errorf("%s: no handler for protocol %s, peer %s", n.host.ID().String(), stream.Protocol(), remotePeer)
 }
 
@@ -210,7 +243,7 @@ func (n *streamManager) handleConnected(conn network.Conn) {
 
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
 	if err = n.dispatch(n.ctx, remotePeer, stream, incoming); err != nil {
-		n.log.Errorln(err.Error())
+		n.logDispatchError(err)
 		_ = stream.Reset()
 		return
 	}
