@@ -410,7 +410,8 @@ func TestFalconVerify(t *testing.T) {
 
 	for v := uint64(12); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			yes.Program[0] = byte(v)
+			yes.Program = setProgramVersion(t, yes.Program, v)
+			no.Program = setProgramVersion(t, no.Program, v)
 			sig, err := fs.SignBytes(data)
 			require.NoError(t, err)
 
