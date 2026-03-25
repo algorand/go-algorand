@@ -673,6 +673,15 @@ func (c *Client) AccountAssetsInformation(account string, next *string, limit *u
 	return
 }
 
+// AccountApplicationsInformation returns the apps opted-into by an account, potentially including app params for non-deleted apps.
+func (c *Client) AccountApplicationsInformation(account string, next *string, limit *uint64, includeParams bool) (resp model.AccountApplicationsInformationResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountApplicationsInformation(account, next, limit, includeParams)
+	}
+	return
+}
+
 // AccountApplicationInformation gets account information about a given app.
 func (c *Client) AccountApplicationInformation(accountAddress string, applicationID basics.AppIndex) (resp model.AccountApplicationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -1345,4 +1354,12 @@ func (c *Client) BlockLogs(round basics.Round) (resp model.BlockLogsResponse, er
 		return algod.BlockLogs(round)
 	}
 	return
+}
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
 }

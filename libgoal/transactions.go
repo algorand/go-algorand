@@ -861,28 +861,28 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index basics.AssetInd
 	tx.Type = protocol.AssetConfigTx
 	tx.ConfigAsset = index
 
-	if *newManager != "" {
+	if nilToZero(newManager) != "" {
 		tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
 		if err != nil {
 			return tx, err
 		}
 	}
 
-	if *newReserve != "" {
+	if nilToZero(newReserve) != "" {
 		tx.AssetParams.Reserve, err = basics.UnmarshalChecksumAddress(*newReserve)
 		if err != nil {
 			return tx, err
 		}
 	}
 
-	if *newFreeze != "" {
+	if nilToZero(newFreeze) != "" {
 		tx.AssetParams.Freeze, err = basics.UnmarshalChecksumAddress(*newFreeze)
 		if err != nil {
 			return tx, err
 		}
 	}
 
-	if *newClawback != "" {
+	if nilToZero(newClawback) != "" {
 		tx.AssetParams.Clawback, err = basics.UnmarshalChecksumAddress(*newClawback)
 		if err != nil {
 			return tx, err
