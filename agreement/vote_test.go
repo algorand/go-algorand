@@ -228,7 +228,6 @@ func TestVoteMakeVote(t *testing.T) {
 	require.NotNil(t, unauthenticatedVote)
 
 	addressIndex++
-	address = addresses[addressIndex]
 
 	// TODO, fail membership and one time signature
 	rv = rawVote{Sender: basics.Address{}, Round: round, Period: period, Step: step(addressIndex), Proposal: proposal}
@@ -237,7 +236,6 @@ func TestVoteMakeVote(t *testing.T) {
 
 	//  creating a vote in cert and bottom mode results in panic.
 	addressIndex++
-	address = addresses[addressIndex]
 	rv = rawVote{Sender: address, Round: round, Period: period, Step: cert, Proposal: bottom}
 	makeVotePanicWrapper(t, "makeVote: votes from step 2 cannot validate bottom", rv, otSecrets[addressIndex], vrfSecrets[addressIndex], ledger)
 
