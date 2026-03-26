@@ -490,6 +490,7 @@ func TestWellFormedErrors(t *testing.T) {
 	cv28 := protocol.ConsensusV28
 	cv32 := protocol.ConsensusV32
 	cv36 := protocol.ConsensusV36
+	cv41 := protocol.ConsensusV41
 
 	v5 := []byte{0x05}
 	cases := []struct {
@@ -532,7 +533,7 @@ func TestWellFormedErrors(t *testing.T) {
 				ExtraProgramPages: 1,
 			},
 			cv:            cv27,
-			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 0",
+			expectedError: "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 0",
 		},
 		{
 			ac: ApplicationCallTxnFields{
@@ -630,7 +631,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 				ExtraProgramPages: 4,
 			},
-			expectedError: "tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = 3",
+			expectedError: "tx.ExtraProgramPages exceeds MaxAbsoluteExtraProgramPages = 3",
 			cv:            cv28,
 		},
 		{
@@ -668,6 +669,20 @@ func TestWellFormedErrors(t *testing.T) {
 				ApplicationArgs: [][]byte{make([]byte, 1501), make([]byte, 548)},
 			},
 			expectedError: "tx.ApplicationArgs total length is too long. 2049 > 2048",
+			cv:            cv41,
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: [][]byte{make([]byte, 1501), make([]byte, 548)},
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: [][]byte{make([]byte, 16000), make([]byte, 385)},
+			},
+			expectedError: "tx.ApplicationArgs total length is too long. 16385 > 16384",
 		},
 		{
 			ac: ApplicationCallTxnFields{
