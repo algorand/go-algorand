@@ -1479,6 +1479,14 @@
             "format": "uint64",
             "type": "integer"
           },
+          "family-box-access": {
+            "description": "\\[fba\\] if true, apps with the same creator may read and write this app's boxes",
+            "type": "boolean"
+          },
+          "foreign-box-reads": {
+            "description": "\\[fbr\\] if true, any app may read this app's boxes",
+            "type": "boolean"
+          },
           "global-state": {
             "$ref": "#/components/schemas/TealKeyValueStore"
           },
