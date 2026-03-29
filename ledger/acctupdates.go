@@ -1352,19 +1352,29 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 						arwi.AssetParams = deltaParams.Params
 					}
 				} else {
-					// explicitly lookup the params in the db. Use
-					// currentDBRound to not bother examining the deltas
+					// The params are not in the deltas; query the DB directly.
+					// If the DB has committed since our snapshot, update
+					// resourceDbRound and break so the check below retries.
 					cid := basics.CreatableIndex(assetID)
-					creator, ok, err := au.getCreatorForRound(currentDBRound, cid, basics.AssetCreatable, false)
+					creator, ok, creatorDBRound, err := au.accountsq.LookupCreator(cid, basics.AssetCreatable)
 					if err != nil {
 						return nil, 0, err
 					}
+					if creatorDBRound != currentDBRound {
+						resourceDbRound = creatorDBRound
+						goto retryWait
+					}
 					if ok {
 						arwi.Creator = creator
-						resource, _, err := au.lookupResource(currentDBRound, creator, cid, basics.AssetCreatable, false)
+						persistedResource, err := au.accountsq.LookupResources(creator, cid, basics.AssetCreatable)
 						if err != nil {
 							return nil, 0, err
 						}
+						if persistedResource.Round != currentDBRound {
+							resourceDbRound = persistedResource.Round
+							goto retryWait
+						}
+						resource := persistedResource.AccountResource()
 						arwi.AssetParams = resource.AssetParams
 					}
 				}
@@ -1383,6 +1393,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 			return result, retRound, nil
 		}
 
+	retryWait:
 		if resourceDbRound < currentDBRound {
 			au.log.Errorf("accountUpdates.lookupAssetResources: database round %d is behind in-memory round %d", resourceDbRound, currentDBRound)
 			return nil, 0, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
@@ -1544,19 +1555,29 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 							arwi.AppParams = deltaParams.Params
 						}
 					} else {
-						// explicitly lookup the params in the db. Use
-						// currentDBRound to not bother examining the deltas
+						// The params are not in the deltas; query the DB directly.
+						// If the DB has committed since our snapshot, update
+						// resourceDbRound and break so the check below retries.
 						cid := basics.CreatableIndex(appID)
-						creator, ok, err := au.getCreatorForRound(currentDBRound, cid, basics.AppCreatable, false)
+						creator, ok, creatorDBRound, err := au.accountsq.LookupCreator(cid, basics.AppCreatable)
 						if err != nil {
 							return nil, 0, err
 						}
+						if creatorDBRound != currentDBRound {
+							resourceDbRound = creatorDBRound
+							goto retryWait
+						}
 						if ok {
 							arwi.Creator = creator
-							resource, _, err := au.lookupResource(currentDBRound, creator, cid, basics.AppCreatable, false)
+							persistedResource, err := au.accountsq.LookupResources(creator, cid, basics.AppCreatable)
 							if err != nil {
 								return nil, 0, err
 							}
+							if persistedResource.Round != currentDBRound {
+								resourceDbRound = persistedResource.Round
+								goto retryWait
+							}
+							resource := persistedResource.AccountResource()
 							arwi.AppParams = resource.AppParams
 						}
 					}
@@ -1607,6 +1628,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 			return result, retRound, nil
 		}
 
+	retryWait:
 		if resourceDbRound < currentDBRound {
 			au.log.Errorf("accountUpdates.lookupApplicationResources: database round %d is behind in-memory round %d", resourceDbRound, currentDBRound)
 			return nil, 0, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
