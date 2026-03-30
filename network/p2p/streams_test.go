@@ -19,6 +19,7 @@ package p2p
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +60,47 @@ func (sb *syncBuffer) Reset() {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 	sb.buf.Reset()
+}
+
+func TestLogDispatchErrorDebugLevel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	logBuffer := &syncBuffer{}
+	logger := logging.NewLogger()
+	logger.SetOutput(logBuffer)
+	logger.SetLevel(logging.Debug)
+
+	sm := &streamManager{log: logger}
+
+	err := &StreamHandlerLoggedError{Err: fmt.Errorf("some debug error"), Level: logging.Debug}
+	sm.logDispatchError(err)
+
+	output := logBuffer.String()
+	require.Contains(t, output, "some debug error")
+	require.Contains(t, output, "level=debug")
+	require.NotContains(t, output, "level=error")
+	require.NotContains(t, output, "level=warning")
+}
+
+func TestLogDispatchErrorErrorLevel(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	logBuffer := &syncBuffer{}
+	logger := logging.NewLogger()
+	logger.SetOutput(logBuffer)
+	logger.SetLevel(logging.Debug)
+
+	sm := &streamManager{log: logger}
+
+	// A plain error (not StreamHandlerLoggedError) should be logged at Error level.
+	err := fmt.Errorf("some plain error")
+	sm.logDispatchError(err)
+
+	output := logBuffer.String()
+	require.Contains(t, output, "some plain error")
+	require.Contains(t, output, "level=error")
 }
 
 // TestConnectedLogsNonDialedOutgoingConnection tests that the Connected function

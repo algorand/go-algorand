@@ -591,6 +591,126 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 	}
 }
 
+// LookupKvPairsByPrefix returns a page of key-value pairs matching the prefix,
+// starting after cursor. It merges in-memory deltas with database results to
+// provide current data. The limit and maxBytes are best-effort.
+// The returned bool indicates whether more qualifying results exist beyond what was returned.
+func (au *accountUpdates) LookupKvPairsByPrefix(round basics.Round, keyPrefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool) ([]ledgercore.KvPairResult, basics.Round, bool, error) {
+	needUnlock := true
+	au.accountsMu.RLock()
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
+
+	if limit == 0 {
+		return nil, au.cachedDBRound + basics.Round(len(au.deltas)), false, nil
+	}
+
+	for {
+		currentDBRound := au.cachedDBRound
+		currentDeltaLen := len(au.deltas)
+		offset, rndErr := au.roundOffset(round)
+		if rndErr != nil {
+			return nil, 0, false, rndErr
+		}
+
+		// Walk deltas backwards to collect modifications.
+		// deltaResults maps each key to its value; nil value means deleted.
+		deltaResults := make(map[string][]byte)
+		for i := offset; i > 0; {
+			i--
+			for keyInRound, mv := range au.deltas[i].KvMods {
+				if !strings.HasPrefix(keyInRound, keyPrefix) {
+					continue
+				}
+				if keyInRound <= cursor {
+					continue
+				}
+				if _, ok := deltaResults[keyInRound]; ok {
+					continue // already seen from a more recent round
+				}
+				deltaResults[keyInRound] = mv.Data
+			}
+		}
+
+		retRound := currentDBRound + basics.Round(offset)
+
+		au.accountsMu.RUnlock()
+		needUnlock = false
+
+		dbRound, dbResults, dbMoreData, dbErr := au.accountsq.LookupKeysByPrefixCursor(keyPrefix, cursor, limit, maxBytes, includeValues, deltaResults)
+		if dbErr != nil {
+			return nil, 0, false, dbErr
+		}
+
+		if dbRound == currentDBRound {
+			// When the DB indicated more data exists, delta keys beyond the last
+			// DB key would only be sorted in and trimmed away. Skip them.
+			var cutoff string
+			if dbMoreData && len(dbResults) > 0 {
+				cutoff = dbResults[len(dbResults)-1].Key
+			}
+
+			// Merge DB results with non-deleted delta results into allResults
+			allResults := dbResults
+			for key, val := range deltaResults {
+				if val == nil {
+					continue
+				}
+				if cutoff != "" && key > cutoff {
+					continue
+				}
+				if !includeValues {
+					val = nil
+				}
+				allResults = append(allResults, ledgercore.KvPairResult{Key: key, Value: val})
+			}
+
+			// Sort by key.
+			slices.SortFunc(allResults, func(a, b ledgercore.KvPairResult) int {
+				return strings.Compare(a.Key, b.Key)
+			})
+
+			// Trim to limit and/or maxBytes.
+			moreData := dbMoreData
+			var bytesAccum uint64
+			trimAt := len(allResults)
+			for i, kv := range allResults {
+				itemBytes := kv.ByteSize()
+				// We always allow at least one result, regardless of byte cap
+				if bytesAccum+itemBytes > maxBytes && i > 0 {
+					trimAt = i
+					break
+				}
+				bytesAccum += itemBytes
+				if uint64(i+1) >= limit {
+					trimAt = i + 1
+					break
+				}
+			}
+			if trimAt < len(allResults) {
+				moreData = true
+				allResults = allResults[:trimAt]
+			}
+
+			return allResults, retRound, moreData, nil
+		}
+
+		// DB round mismatch — retry.
+		if dbRound < currentDBRound {
+			au.log.Errorf("accountUpdates.LookupKvPairsByPrefix: database round %d is behind in-memory round %d", dbRound, currentDBRound)
+			return nil, 0, false, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDBRound}
+		}
+		au.accountsMu.RLock()
+		needUnlock = true
+		for currentDBRound >= au.cachedDBRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
+		}
+	}
+}
+
 // LookupWithoutRewards returns the account data for a given address at a given round.
 func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, err error) {
 	data, validThrough, _, _, err = au.lookupWithoutRewards(rnd, addr, true /* take lock*/)

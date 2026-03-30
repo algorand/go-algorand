@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -266,6 +267,82 @@ func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, res
 	}
 
 	return
+}
+
+func (r *accountsReader) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, bool, error) {
+	round, err := r.AccountsRound()
+	if err != nil {
+		return 0, nil, false, err
+	}
+
+	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
+
+	// Use cursor as start position if it's past the prefix start
+	iterStart := start
+	if cursor != "" && cursor >= string(start) {
+		iterStart = []byte(cursor)
+	}
+
+	iter := r.kvr.NewIter(iterStart, end, false)
+	defer iter.Close()
+
+	var results []ledgercore.KvPairResult
+	if limit > 0 {
+		// cap to prevent excess early allocations for large limits
+		results = make([]ledgercore.KvPairResult, 0, min(limit, 10000))
+	}
+
+	var collected uint64
+	var bytesAccum uint64
+	for iter.Next() {
+		key := string(iter.Key())
+		// Skip the cursor key itself (cursor is exclusive)
+		if key <= cursor {
+			continue
+		}
+		// Skip keys handled by deltas
+		if _, excluded := exclude[key]; excluded {
+			continue
+		}
+
+		var value []byte
+		if includeValues {
+			value, err = iter.Value()
+			if err != nil {
+				return 0, nil, false, err
+			}
+		}
+
+		kv := ledgercore.KvPairResult{Key: key, Value: value}
+		itemBytes := kv.ByteSize()
+		if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && collected > 0 {
+			// This item would exceed the byte limit; stop before adding it.
+			// We know there's at least one more qualifying row.
+			return round, results, true, nil
+		}
+
+		results = append(results, kv)
+		bytesAccum += itemBytes
+		collected++
+
+		if limit > 0 && collected >= limit {
+			break
+		}
+	}
+
+	// Peek for one more qualifying row to determine moreData.
+	for iter.Next() {
+		key := string(iter.Key())
+		if key <= cursor {
+			continue
+		}
+		if _, excluded := exclude[key]; excluded {
+			continue
+		}
+		return round, results, true, nil
+	}
+
+	return round, results, false, nil
 }
 
 func (r *accountsReader) LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {

@@ -860,8 +860,10 @@ func testCatchpointFlushRound(l *Ledger) (basics.Round, basics.Round) {
 	l.trackers.mu.Unlock()
 
 	r, _ := l.LatestCommitted()
+	l.trackerMu.Lock()
 	l.trackers.committedUpTo(r)
 	l.trackers.waitAccountsWriting()
+	l.trackerMu.Unlock()
 	return r, l.LatestTrackerCommitted()
 }
 
