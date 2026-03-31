@@ -149,13 +149,13 @@ Use --values to include box values in the output.`,
 				}
 			}
 
-			if boxesRes.NextToken == nil || *boxesRes.NextToken == "" {
+			next = nilToZero(boxesRes.NextToken)
+			if next == "" {
 				break
 			}
-			next = *boxesRes.NextToken
 			if boxLimit > 0 || boxNext != "" {
 				// Stop after a page if a limit or next-token was explicitly specified
-				reportInfof("next-token: %s", next)
+				reportInfof("NextToken: %s", next)
 				break
 			}
 		}

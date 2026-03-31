@@ -564,21 +564,27 @@ var assetDetailsCmd = &cobra.Command{
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
 
-		var nextPtr *string
-		var limitPtr *uint64
-		if next != "" {
-			nextPtr = &next
-		}
-		if limit != 0 {
-			limitPtr = &limit
-		}
-		response, err := client.AccountAssetsInformation(accountAddress, nextPtr, limitPtr)
+		token := next
+		fmt.Printf("Account: %s\n", accountAddress)
+		fmt.Printf("Assets:\n")
+		for {
+			response, err := client.AccountAssetsInformation(accountAddress, token, limit)
 
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
 
-		printAccountAssetsInformation(accountAddress, response)
+			printAccountAssetsInformation(accountAddress, response)
+			token = nilToZero(response.NextToken)
+			if token == "" {
+				break
+			}
+			if limit > 0 || next != "" {
+				// Stop after a page if a limit or next-token was explicitly specified
+				reportInfof("NextToken: %s", token)
+				break
+			}
+		}
 	},
 }
 var applicationDetailsCmd = &cobra.Command{
@@ -590,21 +596,27 @@ var applicationDetailsCmd = &cobra.Command{
 		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
 
-		var nextPtr *string
-		var limitPtr *uint64
-		if next != "" {
-			nextPtr = &next
-		}
-		if limit != 0 {
-			limitPtr = &limit
-		}
-		response, err := client.AccountApplicationsInformation(accountAddress, nextPtr, limitPtr, includeAppParams)
+		token := next
+		fmt.Printf("Account: %s\n", accountAddress)
+		fmt.Printf("Applications:\n")
+		for {
+			response, err := client.AccountApplicationsInformation(accountAddress, token, limit, includeAppParams)
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
 
-		if err != nil {
-			reportErrorf(errorRequestFail, err)
-		}
+			printAccountApplicationsInformation(accountAddress, response)
 
-		printAccountApplicationsInformation(accountAddress, response)
+			token = nilToZero(response.NextToken)
+			if token == "" {
+				break
+			}
+			if limit > 0 || next != "" {
+				// Stop after a page if a limit or next-token was explicitly specified
+				reportInfof("NextToken: %s", token)
+				break
+			}
+		}
 	},
 }
 var infoCmd = &cobra.Command{
@@ -805,12 +817,6 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIDs bo
 }
 
 func printAccountAssetsInformation(address string, response model.AccountAssetsInformationResponse) {
-	fmt.Printf("Account: %s\n", address)
-	fmt.Printf("Round: %d\n", response.Round)
-	if response.NextToken != nil {
-		fmt.Printf("NextToken (to retrieve more account assets): %s\n", *response.NextToken)
-	}
-	fmt.Printf("Assets:\n")
 	for _, asset := range *response.AssetHoldings {
 		fmt.Printf("  Asset ID: %d\n", asset.AssetHolding.AssetID)
 
@@ -852,12 +858,6 @@ func printAccountAssetsInformation(address string, response model.AccountAssetsI
 }
 
 func printAccountApplicationsInformation(address string, response model.AccountApplicationsInformationResponse) {
-	fmt.Printf("Account: %s\n", address)
-	fmt.Printf("Round: %d\n", response.Round)
-	if response.NextToken != nil {
-		fmt.Printf("NextToken (to retrieve more account applications): %s\n", *response.NextToken)
-	}
-	fmt.Printf("Applications:\n")
 	for _, app := range *response.ApplicationResources {
 		fmt.Printf("  Application ID: %d\n", app.Id)
 

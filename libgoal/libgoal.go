@@ -665,7 +665,7 @@ func (c *Client) AccountInformation(account string, includeCreatables bool) (res
 }
 
 // AccountAssetsInformation returns the assets held by an account, including asset params for non-deleted assets.
-func (c *Client) AccountAssetsInformation(account string, next *string, limit *uint64) (resp model.AccountAssetsInformationResponse, err error) {
+func (c *Client) AccountAssetsInformation(account string, next string, limit uint64) (resp model.AccountAssetsInformationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountAssetsInformation(account, next, limit)
@@ -674,7 +674,7 @@ func (c *Client) AccountAssetsInformation(account string, next *string, limit *u
 }
 
 // AccountApplicationsInformation returns the apps opted-into by an account, potentially including app params for non-deleted apps.
-func (c *Client) AccountApplicationsInformation(account string, next *string, limit *uint64, includeParams bool) (resp model.AccountApplicationsInformationResponse, err error) {
+func (c *Client) AccountApplicationsInformation(account string, next string, limit uint64, includeParams bool) (resp model.AccountApplicationsInformationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountApplicationsInformation(account, next, limit, includeParams)
