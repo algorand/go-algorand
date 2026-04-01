@@ -3266,8 +3266,8 @@ func TestShortSimple(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `int 8; store 7`, v)
 			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
-				"program ends short of immediate values",
-				"program ends short of immediate values")
+				"program ends without immediate value(s)",
+				"program ends without immediate value(s)")
 		})
 	}
 }
@@ -3285,7 +3285,7 @@ int 1
 `, v)
 			// cut two last bytes - intc_1 and last byte of bnz
 			testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil,
-				"bnz program ends short", "bnz program ends short")
+				"program ends without", "program ends without")
 		})
 	}
 }
@@ -3496,17 +3496,35 @@ bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
 int 1`, v)
 			//t.Log(hex.EncodeToString(program))
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				offsetHex = "a200"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
+
+			if v >= varintBranchVersion {
+				// For varint encoding, set both offset bytes to produce target 11
+				// (middle of bytecblock): offset=3, zigzag(3)=6, forced 2-byte varint = 86 00
+				ops.Program[6] = 0x86
+				ops.Program[7] = 0x00
+			} else {
+				ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
+			}
 			// Since Eval() doesn't know the jump is bad, we reject "by luck"
 			testLogicBytes(t, ops.Program, nil, "aligned", "REJECT")
 
 			// back branches are checked differently, so test misaligned back branch
-			ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
-			ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+			if v >= varintBranchVersion {
+				// offset=-1 → target=7 (inside bnz instruction): zigzag(-1)=1, forced 2-byte = 81 00
+				ops.Program[6] = 0x81
+				ops.Program[7] = 0x00
+			} else {
+				ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
+				ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+			}
 			if v < backBranchEnabledVersion {
 				testLogicBytes(t, ops.Program, nil, "negative branch", "negative branch")
 			} else {
@@ -3529,7 +3547,11 @@ bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
 int 1`, v)
 			//t.Log(hex.EncodeToString(ops.Program))
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				offsetHex = "a200"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
@@ -3551,8 +3573,13 @@ bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
 int 1`, v)
 			//t.Log(hex.EncodeToString(ops.Program))
-			// (br)anch byte, (hi)gh byte of offset,  (lo)w byte:     brhilo
-			canonicalProgramString := mutateProgVersion(v, "01200101224000112603040123457604ababcdcd04f000baad22")
+			// (br)anch byte, offset bytes (big-endian int16 pre-v13, varint v13+)
+			// offset +17 as big-endian: 00 11; as 2-byte varint: a2 00 (zigzag(17)=34, forced 2-byte)
+			offsetHex := "0011"
+			if v >= varintBranchVersion {
+				offsetHex = "a200"
+			}
+			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
