@@ -40,7 +40,7 @@ jobs:
       #     path: $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
       - name: Slack Notification
         env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           curl -X POST --data-urlencode "payload={\"text\": \"Build windows failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
         if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}

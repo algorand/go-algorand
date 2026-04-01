@@ -18,7 +18,7 @@ runs:
       if: env.SLACK_WEBHOOK != ''
       uses: slackapi/slack-github-action@v2.1.0
       with:
-        webhook: ${{ env.SLACK_WEBHOOK }}
+        webhook: ${{ env.SLACK_WEBHOOK_URL }}
         webhook-type: webhook-trigger
         payload: |
           {

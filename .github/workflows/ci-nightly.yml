@@ -18,7 +18,7 @@ env:
   KMD_NOUSB: True
   BUILD_TYPE: integration
   ALGOTEST: 1
-  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
   SKIP_GO_INSTALLATION: True
 
 concurrency:
