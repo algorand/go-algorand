@@ -57,6 +57,11 @@ type labelReference struct {
 
 	// ending position of the opcode containing the label reference.
 	offsetPosition int
+
+	// varint indicates that the offset should be encoded as binary.Varint
+	// (zigzag+ULEB128).  Branch labels are encoded varint in recent versions,
+	// but switch/match targets remain 2-bytes.
+	varint bool
 }
 
 type constReference interface {
@@ -379,9 +384,14 @@ func (ops *OpStream) recordSourceLocation(line, column int) {
 	ops.OffsetToSource[ops.pending.Len()] = SourceLocation{line - 1, column}
 }
 
-// referToLabel records an opcode label reference to resolve later
-func (ops *OpStream) referToLabel(pc int, label token, offsetPosition int) {
-	ops.labelReferences = append(ops.labelReferences, labelReference{pc, label, offsetPosition})
+// referToLabel2B records an opcode label reference to resolve later, using big-endian int16 encoding.
+func (ops *OpStream) referToLabel2B(pc int, label token, offsetPosition int) {
+	ops.labelReferences = append(ops.labelReferences, labelReference{pc, label, offsetPosition, false})
+}
+
+// referToBranchLabel records an opcode label reference to resolve later, using varint encoding.
+func (ops *OpStream) referToBranchLabel(pc int, label token, offsetPosition int) {
+	ops.labelReferences = append(ops.labelReferences, labelReference{pc, label, offsetPosition, true})
 }
 
 type refineFunc func(pgm *ProgramKnowledge, immediates []token) (StackTypes, StackTypes, error)
@@ -986,14 +996,29 @@ func asmArg(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceEr
 	return asmDefault(ops, &altSpec, mnemonic, args)
 }
 
-func asmBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+func asmOldBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
 		return err
 	}
 
-	ops.referToLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+spec.Size)
+	ops.referToLabel2B(ops.pending.Len()+1, args[0], ops.pending.Len()+spec.Size)
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
+	ops.pending.WriteByte(0)
+	ops.pending.WriteByte(0)
+	return nil
+}
+
+// asmBranchVarint assembles branch opcodes that encode their offset as binary.Varint.
+// It always reserves 2 bytes for the placeholder, independent of spec.Size (which is 0).
+func asmBranchVarint(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
+		return err
+	}
+
+	ops.referToBranchLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+3)
+	ops.pending.WriteByte(spec.Opcode)
+	// zero bytes will get replaced with varint-encoded offset in resolveLabels()
 	ops.pending.WriteByte(0)
 	ops.pending.WriteByte(0)
 	return nil
@@ -1009,7 +1034,7 @@ func asmSwitch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourc
 	ops.pending.WriteByte(byte(numOffsets))
 	opEndPos := ops.pending.Len() + 2*numOffsets
 	for _, arg := range args {
-		ops.referToLabel(ops.pending.Len(), arg, opEndPos)
+		ops.referToLabel2B(ops.pending.Len(), arg, opEndPos)
 		// zero bytes will get replaced with actual offset in resolveLabels()
 		ops.pending.WriteByte(0)
 		ops.pending.WriteByte(0)
@@ -2359,19 +2384,33 @@ func (ops *OpStream) resolveLabels() {
 			}
 		}
 
-		// All branch targets are encoded as 2 offset bytes. The destination is relative to the end of the
-		// instruction they appear in, which is available in lr.offsetPostion
+		// The destination is relative to the end of the instruction they appear
+		// in, which is available in lr.offsetPostion
 		if ops.Version < backBranchEnabledVersion && dest < lr.offsetPosition {
 			ops.record(lr.label.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label.str))
 			continue
 		}
 		jump := dest - lr.offsetPosition
-		if jump > 0x7fff {
-			ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
-			continue
+		if lr.varint {
+			// 2-byte zigzag varint holds 14 bits of signed value: [-8192, 8191]
+			if jump > 8191 || jump < -8192 {
+				ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
+				continue
+			}
+			// binary.PutVarint cannot be used here: it emits 1 byte for small
+			// values, but asmBranchVarint always reserves exactly 2 bytes for the
+			// placeholder.
+			ux := uint64(int64(jump)<<1) ^ uint64(int64(jump)>>63)
+			raw[lr.position] = byte(ux&0x7f) | 0x80
+			raw[lr.position+1] = byte(ux >> 7)
+		} else {
+			if jump > math.MaxInt16 || jump < math.MinInt16 {
+				ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
+				continue
+			}
+			raw[lr.position] = uint8(jump >> 8)
+			raw[lr.position+1] = uint8(jump & 0x0ff)
 		}
-		raw[lr.position] = uint8(jump >> 8)
-		raw[lr.position+1] = uint8(jump & 0x0ff)
 	}
 	ops.pending = *bytes.NewBuffer(raw)
 }
@@ -2835,12 +2874,24 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 
 			pc++
 		case immLabel:
-			// decodeBranchOffset assumes it has two bytes to work with
-			if pc+2 > len(dis.program) {
-				return "", fmt.Errorf("program end while reading label for %s", spec.Name)
+			var offset int
+			var offsetLen int
+			if spec.Version >= varintBranchVersion {
+				v, bytesRead := binary.Varint(dis.program[pc:])
+				if bytesRead <= 0 {
+					return "", fmt.Errorf("could not decode label for %s", spec.Name)
+				}
+				offset = int(v)
+				offsetLen = bytesRead
+			} else {
+				// decodeBranchOffset assumes it has two bytes to work with
+				if pc+2 > len(dis.program) {
+					return "", fmt.Errorf("program end while reading label for %s", spec.Name)
+				}
+				offset = decodeBranchOffset(dis.program, pc)
+				offsetLen = 2
 			}
-			offset := decodeBranchOffset(dis.program, pc)
-			target := offset + pc + 2
+			target := offset + pc + offsetLen
 			var label string
 			if dis.numericTargets {
 				label = fmt.Sprintf("%d", target)
@@ -2854,7 +2905,7 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				}
 			}
 			out += label
-			pc += 2
+			pc += offsetLen
 		case immInt:
 			val, bytesUsed := binary.Uvarint(dis.program[pc:])
 			if bytesUsed <= 0 {
