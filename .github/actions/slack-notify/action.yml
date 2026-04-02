@@ -15,7 +15,7 @@ runs:
   using: 'composite'
   steps:
     - name: Send Slack notification
-      if: env.SLACK_WEBHOOK != ''
+      if: env.SLACK_WEBHOOK_URL != ''
       uses: slackapi/slack-github-action@v2.1.0
       with:
         webhook: ${{ env.SLACK_WEBHOOK_URL }}
