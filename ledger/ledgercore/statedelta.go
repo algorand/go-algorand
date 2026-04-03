@@ -164,12 +164,32 @@ type AppResourceRecord struct {
 	State  AppLocalStateDelta
 }
 
+// AffectsParams returns true if this record has changes to app params
+func (ad AppResourceRecord) AffectsParams() bool {
+	return ad.Params.Deleted || ad.Params.Params != nil
+}
+
+// AffectsLocals returns true if this record has changes to app local state
+func (ad AppResourceRecord) AffectsLocals() bool {
+	return ad.State.Deleted || ad.State.LocalState != nil
+}
+
 // AssetResourceRecord represents AssetParams and AssetHolding in deltas
 type AssetResourceRecord struct {
 	Aidx    basics.AssetIndex
 	Addr    basics.Address
 	Params  AssetParamsDelta
 	Holding AssetHoldingDelta
+}
+
+// AffectsParams returns true if this record has changes to asset params
+func (ad AssetResourceRecord) AffectsParams() bool {
+	return ad.Params.Deleted || ad.Params.Params != nil
+}
+
+// AffectsHolding returns true if this record has changes to a holding
+func (ad AssetResourceRecord) AffectsHolding() bool {
+	return ad.Holding.Deleted || ad.Holding.Holding != nil
 }
 
 // AccountDeltas stores ordered accounts and allows fast lookup by address

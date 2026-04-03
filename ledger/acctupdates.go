@@ -1358,21 +1358,33 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 		currentDeltaLen := len(au.deltas)
 
 		// Walk deltas backwards; the first entry found for a given asset is the most recent.
-		deltaResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
+		deltaHoldingResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
+		deltaParamsResults := make(map[basics.AssetIndex]ledgercore.AssetParamsDelta)
+		deltaCreatorResults := make(map[basics.AssetIndex]basics.Address)
 		numDeltaDeleted := 0
 
 		for i := currentDeltaLen; i > 0; {
 			i--
 			for _, rec := range au.deltas[i].Accts.AssetResources {
-				if rec.Addr != addr || rec.Aidx <= assetIDGT {
+				if rec.Aidx <= assetIDGT {
 					continue
 				}
-				if _, ok := deltaResults[rec.Aidx]; ok {
+				if rec.AffectsParams() {
+					if _, ok := deltaParamsResults[rec.Aidx]; !ok {
+						deltaParamsResults[rec.Aidx] = rec.Params
+						deltaCreatorResults[rec.Aidx] = rec.Addr
+					}
+				}
+				if rec.Addr != addr {
 					continue
 				}
-				deltaResults[rec.Aidx] = rec
-				if rec.Holding.Deleted || rec.Params.Deleted {
-					numDeltaDeleted++
+				if rec.AffectsHolding() {
+					if _, ok := deltaHoldingResults[rec.Aidx]; !ok {
+						deltaHoldingResults[rec.Aidx] = rec
+						if rec.Holding.Deleted {
+							numDeltaDeleted++
+						}
+					}
 				}
 			}
 		}
@@ -1409,24 +1421,25 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 				assetID := basics.AssetIndex(pd.Aidx)
 				seenInDB[assetID] = true
 
-				d, inDelta := deltaResults[assetID]
+				deltaHolding, holdingInDelta := deltaHoldingResults[assetID]
+				deltaParams, paramsInDelta := deltaParamsResults[assetID]
 
 				arwi := ledgercore.AssetResourceWithIDs{AssetID: assetID}
 
-				if inDelta && d.Holding.Deleted {
+				if holdingInDelta && deltaHolding.Holding.Deleted {
 					// Holding removed by delta — leave AssetHolding nil.
-				} else if inDelta && d.Holding.Holding != nil {
-					arwi.AssetHolding = d.Holding.Holding
+				} else if holdingInDelta && deltaHolding.Holding.Holding != nil {
+					arwi.AssetHolding = deltaHolding.Holding.Holding
 				} else if pd.Data.IsHolding() {
 					ah := pd.Data.GetAssetHolding()
 					arwi.AssetHolding = &ah
 				}
 
-				if inDelta && d.Params.Deleted {
+				if paramsInDelta && deltaParams.Deleted {
 					// Delta deleted params — omit creator and params.
-				} else if inDelta && d.Params.Params != nil {
-					arwi.Creator = pd.Creator
-					arwi.AssetParams = d.Params.Params
+				} else if paramsInDelta && deltaParams.Params != nil {
+					arwi.Creator = deltaCreatorResults[assetID]
+					arwi.AssetParams = deltaParams.Params
 				} else if !pd.Creator.IsZero() {
 					arwi.Creator = pd.Creator
 					ap := pd.Data.GetAssetParams()
@@ -1441,7 +1454,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 			// Add assets that exist only in deltas (new creations not yet in DB).
 			// Only include delta entries within the DB page range to avoid setting
 			// a next-token that would skip items still in the database.
-			for assetID, d := range deltaResults {
+			for assetID, d := range deltaHoldingResults {
 				if seenInDB[assetID] {
 					continue
 				}
@@ -1452,9 +1465,38 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 				if !d.Holding.Deleted && d.Holding.Holding != nil {
 					arwi.AssetHolding = d.Holding.Holding
 				}
-				if !d.Params.Deleted && d.Params.Params != nil {
-					arwi.Creator = addr
-					arwi.AssetParams = d.Params.Params
+				// Patch in the params info if we have it in the deltas
+				if deltaParams, paramsInDelta := deltaParamsResults[assetID]; paramsInDelta {
+					if !deltaParams.Deleted {
+						arwi.Creator = deltaCreatorResults[assetID]
+						arwi.AssetParams = deltaParams.Params
+					}
+				} else {
+					// The params are not in the deltas; query the DB directly.
+					// If the DB has committed since our snapshot, update
+					// resourceDbRound and break so the check below retries.
+					cid := basics.CreatableIndex(assetID)
+					creator, ok, creatorDBRound, err := au.accountsq.LookupCreator(cid, basics.AssetCreatable)
+					if err != nil {
+						return nil, 0, err
+					}
+					if creatorDBRound != currentDBRound {
+						resourceDbRound = creatorDBRound
+						goto retryWait
+					}
+					if ok {
+						arwi.Creator = creator
+						persistedResource, err := au.accountsq.LookupResources(creator, cid, basics.AssetCreatable)
+						if err != nil {
+							return nil, 0, err
+						}
+						if persistedResource.Round != currentDBRound {
+							resourceDbRound = persistedResource.Round
+							goto retryWait
+						}
+						resource := persistedResource.AccountResource()
+						arwi.AssetParams = resource.AssetParams
+					}
 				}
 				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
 					result = append(result, arwi)
@@ -1471,6 +1513,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 			return result, retRound, nil
 		}
 
+	retryWait:
 		if resourceDbRound < currentDBRound {
 			au.log.Errorf("accountUpdates.lookupAssetResources: database round %d is behind in-memory round %d", resourceDbRound, currentDBRound)
 			return nil, 0, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
@@ -1504,21 +1547,36 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 		currentDeltaLen := len(au.deltas)
 
 		// Walk deltas backwards; the first entry found for a given app is the most recent.
-		deltaResults := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
+		deltaLocalsResults := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
+		deltaParamsResults := make(map[basics.AppIndex]ledgercore.AppParamsDelta)
+		deltaCreatorResults := make(map[basics.AppIndex]basics.Address)
 		numDeltaDeleted := 0
 
 		for i := currentDeltaLen; i > 0; {
 			i--
 			for _, rec := range au.deltas[i].Accts.AppResources {
-				if rec.Addr != addr || rec.Aidx <= appIDGT {
+				if rec.Aidx <= appIDGT {
 					continue
 				}
-				if _, ok := deltaResults[rec.Aidx]; ok {
+				if rec.AffectsParams() {
+					if _, ok := deltaParamsResults[rec.Aidx]; !ok {
+						deltaParamsResults[rec.Aidx] = rec.Params
+						deltaCreatorResults[rec.Aidx] = rec.Addr
+					}
+				}
+				if rec.Addr != addr {
 					continue
 				}
-				deltaResults[rec.Aidx] = rec
-				if rec.State.Deleted || rec.Params.Deleted {
+				// DB will return records that match for either params OR
+				// locals, so we may need an extra record if either is deleted
+				// in deltas.
+				if rec.Params.Deleted || rec.State.Deleted {
 					numDeltaDeleted++
+				}
+				if rec.AffectsLocals() {
+					if _, ok := deltaLocalsResults[rec.Aidx]; !ok {
+						deltaLocalsResults[rec.Aidx] = rec
+					}
 				}
 			}
 		}
@@ -1555,25 +1613,26 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				appID := basics.AppIndex(pd.Aidx)
 				seenInDB[appID] = true
 
-				d, inDelta := deltaResults[appID]
+				deltaLocals, localsInDelta := deltaLocalsResults[appID]
+				deltaParams, paramsInDelta := deltaParamsResults[appID]
 
 				arwi := ledgercore.AppResourceWithIDs{AppID: appID}
 
-				if inDelta && d.State.Deleted {
+				if localsInDelta && deltaLocals.State.Deleted {
 					// Local state removed by delta — leave AppLocalState nil.
-				} else if inDelta && d.State.LocalState != nil {
-					arwi.AppLocalState = d.State.LocalState
+				} else if localsInDelta && deltaLocals.State.LocalState != nil {
+					arwi.AppLocalState = deltaLocals.State.LocalState
 				} else if pd.Data.IsHolding() {
 					als := pd.Data.GetAppLocalState()
 					arwi.AppLocalState = &als
 				}
 
-				if inDelta && d.Params.Deleted {
+				if paramsInDelta && deltaParams.Deleted {
 					// Delta deleted params — omit creator and params.
-				} else if inDelta && d.Params.Params != nil {
+				} else if paramsInDelta && deltaParams.Params != nil {
 					arwi.Creator = pd.Creator
 					if includeParams {
-						arwi.AppResource.AppParams = d.Params.Params
+						arwi.AppResource.AppParams = deltaParams.Params
 					}
 				} else if !pd.Creator.IsZero() {
 					arwi.Creator = pd.Creator
@@ -1588,10 +1647,10 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				}
 			}
 
-			// Add apps that exist only in deltas (new opt-ins not yet in DB).
-			// Only include delta entries within the DB page range to avoid setting
-			// a next-token that would skip items still in the database.
-			for appID, d := range deltaResults {
+			// Add apps with locals that exist only in deltas (new opt-ins not
+			// yet in DB).  Only include delta entries within the DB page range
+			// to avoid setting a next-token beyond the database page.
+			for appID, d := range deltaLocalsResults {
 				if seenInDB[appID] {
 					continue
 				}
@@ -1603,12 +1662,78 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 					arwi.AppLocalState = d.State.LocalState
 				}
 				if !d.Params.Deleted && d.Params.Params != nil {
-					arwi.Creator = addr
 					if includeParams {
+						arwi.Creator = addr
 						arwi.AppResource.AppParams = d.Params.Params
 					}
 				}
+				// Patch in the params info if we have it in the deltas
+				if includeParams {
+					if deltaParams, paramsInDelta := deltaParamsResults[appID]; paramsInDelta {
+						if !deltaParams.Deleted {
+							arwi.Creator = deltaCreatorResults[appID]
+							arwi.AppParams = deltaParams.Params
+						}
+					} else {
+						// The params are not in the deltas; query the DB directly.
+						// If the DB has committed since our snapshot, update
+						// resourceDbRound and break so the check below retries.
+						cid := basics.CreatableIndex(appID)
+						creator, ok, creatorDBRound, err := au.accountsq.LookupCreator(cid, basics.AppCreatable)
+						if err != nil {
+							return nil, 0, err
+						}
+						if creatorDBRound != currentDBRound {
+							resourceDbRound = creatorDBRound
+							goto retryWait
+						}
+						if ok {
+							arwi.Creator = creator
+							persistedResource, err := au.accountsq.LookupResources(creator, cid, basics.AppCreatable)
+							if err != nil {
+								return nil, 0, err
+							}
+							if persistedResource.Round != currentDBRound {
+								resourceDbRound = persistedResource.Round
+								goto retryWait
+							}
+							resource := persistedResource.AccountResource()
+							arwi.AppParams = resource.AppParams
+						}
+					}
+				}
 				if arwi.AppLocalState != nil || arwi.AppParams != nil {
+					result = append(result, arwi)
+				}
+			}
+
+			// Add apps created by the account, where that creation is only in
+			// the deltas, not yet the DB.  As above, only include delta entries
+			// within the DB page range.
+			if includeParams {
+				for appID, deltaParams := range deltaParamsResults {
+					if seenInDB[appID] {
+						continue
+					}
+					if dbHasMore && appID > dbMaxID {
+						continue
+					}
+					if deltaParams.Deleted {
+						continue
+					}
+					// We only care about creations by the query addr
+					if deltaCreatorResults[appID] != addr {
+						continue
+					}
+					// Don't add if the scan through deltaLocals would have already done so.
+					if _, ok := deltaLocalsResults[appID]; ok {
+						continue
+					}
+					arwi := ledgercore.AppResourceWithIDs{
+						AppID:       appID,
+						Creator:     deltaCreatorResults[appID],
+						AppResource: ledgercore.AppResource{AppParams: deltaParams.Params},
+					}
 					result = append(result, arwi)
 				}
 			}
@@ -1623,6 +1748,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 			return result, retRound, nil
 		}
 
+	retryWait:
 		if resourceDbRound < currentDBRound {
 			au.log.Errorf("accountUpdates.lookupApplicationResources: database round %d is behind in-memory round %d", resourceDbRound, currentDBRound)
 			return nil, 0, &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDBRound}
