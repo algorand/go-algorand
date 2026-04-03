@@ -292,15 +292,15 @@ func (l logger) WithFields(fields Fields) Logger {
 }
 
 func (l logger) GetLevel() (lvl Level) {
-	return Level(l.entry.Logger.Level)
+	return Level(l.entry.Logger.GetLevel())
 }
 
 func (l logger) SetLevel(lvl Level) {
-	l.entry.Logger.Level = logrus.Level(lvl)
+	l.entry.Logger.SetLevel(logrus.Level(lvl))
 }
 
 func (l logger) IsLevelEnabled(level Level) bool {
-	return l.entry.Logger.Level >= logrus.Level(level)
+	return l.entry.Logger.IsLevelEnabled(logrus.Level(level))
 }
 
 func (l logger) SetOutput(w io.Writer) {
