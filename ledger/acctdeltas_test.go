@@ -4055,9 +4055,17 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 		updates.Upsert(optinAddr, ledgercore.AccountData{
 			AccountBaseData: ledgercore.AccountBaseData{
 				MicroAlgos:  basics.MicroAlgos{Raw: 1_000_000},
-				TotalAssets: 1,
+				TotalAssets: 5,
 			},
 		})
+		// optinAddr opts into 1000, 1002, 1003, 1004 so we can verify that
+		// when the creator modifies params in deltas, the holder sees the
+		// updated params.
+		for _, idx := range []uint64{1000, 1002, 1003, 1004} {
+			updates.UpsertAssetResource(optinAddr, basics.AssetIndex(idx),
+				ledgercore.AssetParamsDelta{},
+				ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: idx}})
+		}
 		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1007),
 			ledgercore.AssetParamsDelta{},
 			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
@@ -4206,19 +4214,45 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.NotNil(t, assetMap[basics.AssetIndex(1006)].AssetParams)
 	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetParams.Total)
 
-	// optinAddr opted in to asset 1007 with a zero balance before it was destroyed. The protocol
-	// does not track all opt-outs when an asset is deleted (only the creator's holding is
-	// enforced), so optinAddr's holding persists in the DB even after the asset params are gone.
-	// The lookup must return a non-nil holding with zero amount and no params or creator.
+	// optinAddr holds assets 1000, 1002, 1003, 1004, 1007.  The creator's
+	// delta changes to params must be visible when querying the holder.
 	optinAddrResources, optinAddrRnd, err := au.LookupAssetResources(optinAddr, 0, 100)
 	require.NoError(t, err)
 	require.Equal(t, deltaRound2, optinAddrRnd)
-	require.Len(t, optinAddrResources, 1)
-	require.Equal(t, basics.AssetIndex(1007), optinAddrResources[0].AssetID)
-	require.NotNil(t, optinAddrResources[0].AssetHolding)
-	require.Equal(t, basics.AssetHolding{}, *optinAddrResources[0].AssetHolding)
-	require.Nil(t, optinAddrResources[0].AssetParams)
-	require.True(t, optinAddrResources[0].Creator.IsZero())
+	require.Len(t, optinAddrResources, 5)
+
+	optinMap := make(map[basics.AssetIndex]ledgercore.AssetResourceWithIDs)
+	for _, res := range optinAddrResources {
+		optinMap[res.AssetID] = res
+	}
+
+	// 1000: holder's holding from DB, params unchanged (creator only modified own holding)
+	require.Equal(t, uint64(1000), optinMap[basics.AssetIndex(1000)].AssetHolding.Amount)
+	require.NotNil(t, optinMap[basics.AssetIndex(1000)].AssetParams)
+	require.Equal(t, uint64(1_000_000), optinMap[basics.AssetIndex(1000)].AssetParams.Total)
+
+	// 1002: control -- completely unchanged from DB
+	require.Equal(t, uint64(1002), optinMap[basics.AssetIndex(1002)].AssetHolding.Amount)
+	require.NotNil(t, optinMap[basics.AssetIndex(1002)].AssetParams)
+	require.Equal(t, uint64(1_002_000), optinMap[basics.AssetIndex(1002)].AssetParams.Total)
+
+	// 1003: holder's holding from DB, params updated by creator's delta
+	require.Equal(t, uint64(1003), optinMap[basics.AssetIndex(1003)].AssetHolding.Amount)
+	require.NotNil(t, optinMap[basics.AssetIndex(1003)].AssetParams)
+	require.Equal(t, uint64(7777), optinMap[basics.AssetIndex(1003)].AssetParams.Total)
+	require.Equal(t, "A1003new", optinMap[basics.AssetIndex(1003)].AssetParams.UnitName)
+	require.Equal(t, creatorAddr, optinMap[basics.AssetIndex(1003)].Creator)
+
+	// 1004: holder's holding from DB, params deleted by creator's delta
+	require.Equal(t, uint64(1004), optinMap[basics.AssetIndex(1004)].AssetHolding.Amount)
+	require.Nil(t, optinMap[basics.AssetIndex(1004)].AssetParams)
+	require.True(t, optinMap[basics.AssetIndex(1004)].Creator.IsZero())
+
+	// 1007: holding survives after asset destruction, no params or creator
+	require.NotNil(t, optinMap[basics.AssetIndex(1007)].AssetHolding)
+	require.Equal(t, basics.AssetHolding{}, *optinMap[basics.AssetIndex(1007)].AssetHolding)
+	require.Nil(t, optinMap[basics.AssetIndex(1007)].AssetParams)
+	require.True(t, optinMap[basics.AssetIndex(1007)].Creator.IsZero())
 }
 
 // TestLookupApplicationResourcesWithDeltas verifies that lookupApplicationResources properly
@@ -4235,11 +4269,15 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 
 	accts := setupAccts(5)
 
-	var testAddr basics.Address
+	var testAddr, holderAddr basics.Address
 	for addr := range accts[0] {
 		if addr != testSinkAddr && addr != testPoolAddr {
-			testAddr = addr
-			break
+			if testAddr.IsZero() {
+				testAddr = addr
+			} else {
+				holderAddr = addr
+				break
+			}
 		}
 	}
 
@@ -4262,6 +4300,8 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	//   2003: will have params-only modification in delta
 	//   2004: will have params deleted in delta (local state remains)
 	//   2005: will have both local state and params deleted in delta
+	// holderAddr opts into 2000, 2002, 2003, 2004 so we can verify that the
+	// creator's delta changes to params are visible when querying the holder.
 	{
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(testAddr, ledgercore.AccountData{
@@ -4282,6 +4322,21 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 				ledgercore.AppLocalStateDelta{
 					LocalState: &basics.AppLocalState{
 						Schema: basics.StateSchema{NumUint: appIdx - 2000},
+					},
+				})
+		}
+		updates.Upsert(holderAddr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
+				TotalAppLocalStates: 4,
+			},
+		})
+		for _, appIdx := range []uint64{2000, 2002, 2003, 2004} {
+			updates.UpsertAppResource(holderAddr, basics.AppIndex(appIdx),
+				ledgercore.AppParamsDelta{},
+				ledgercore.AppLocalStateDelta{
+					LocalState: &basics.AppLocalState{
+						Schema: basics.StateSchema{NumUint: appIdx - 2000 + 10},
 					},
 				})
 		}
@@ -4430,6 +4485,53 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	require.Len(t, resourcesNoParams, 5)
 
 	for _, res := range resourcesNoParams {
+		require.Nil(t, res.AppParams, "AppParams should be nil when includeParams=false")
+	}
+
+	// holderAddr opted into 2000, 2002, 2003, 2004.  The creator's delta
+	// changes to params must be visible when querying the holder.
+	holderResources, holderRnd, err := au.LookupApplicationResources(holderAddr, 0, 100, true)
+	require.NoError(t, err)
+	require.Equal(t, deltaRound2, holderRnd)
+	require.Len(t, holderResources, 4)
+
+	holderMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs)
+	for _, res := range holderResources {
+		holderMap[res.AppID] = res
+	}
+
+	// LookupLimitedResources merges the creator's resource row with the
+	// holder's, but only patches asset-specific fields (Amount, Frozen).
+	// App local state values come from the creator's row, so we only
+	// check that AppLocalState is non-nil here and focus assertions on
+	// params -- the cross-address delta merging being exercised.
+
+	// 2000: local state present, params from DB (creator only modified own local state)
+	require.NotNil(t, holderMap[basics.AppIndex(2000)].AppLocalState)
+	require.NotNil(t, holderMap[basics.AppIndex(2000)].AppParams)
+	require.Equal(t, []byte{0x06, 0x81, 0x01}, holderMap[basics.AppIndex(2000)].AppParams.ApprovalProgram)
+
+	// 2002: control -- completely unchanged from DB
+	require.NotNil(t, holderMap[basics.AppIndex(2002)].AppLocalState)
+	require.NotNil(t, holderMap[basics.AppIndex(2002)].AppParams)
+
+	// 2003: local state present, params updated by creator's delta
+	require.NotNil(t, holderMap[basics.AppIndex(2003)].AppLocalState)
+	require.NotNil(t, holderMap[basics.AppIndex(2003)].AppParams)
+	require.Equal(t, []byte{0x06, 0x81, 0x02}, holderMap[basics.AppIndex(2003)].AppParams.ApprovalProgram)
+	require.Equal(t, []byte{0x06, 0x81, 0x01}, holderMap[basics.AppIndex(2003)].AppParams.ClearStateProgram)
+	require.Equal(t, testAddr, holderMap[basics.AppIndex(2003)].Creator)
+
+	// 2004: local state present, params deleted by creator's delta
+	require.NotNil(t, holderMap[basics.AppIndex(2004)].AppLocalState)
+	require.Nil(t, holderMap[basics.AppIndex(2004)].AppParams)
+	require.True(t, holderMap[basics.AppIndex(2004)].Creator.IsZero())
+
+	// holderAddr with includeParams=false
+	holderNoParams, _, err := au.LookupApplicationResources(holderAddr, 0, 100, false)
+	require.NoError(t, err)
+	require.Len(t, holderNoParams, 4)
+	for _, res := range holderNoParams {
 		require.Nil(t, res.AppParams, "AppParams should be nil when includeParams=false")
 	}
 }
