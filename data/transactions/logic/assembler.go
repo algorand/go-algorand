@@ -1010,18 +1010,23 @@ func asmOldBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *so
 	return nil
 }
 
+// varintBranchInitialSize is the number of placeholder bytes reserved for a
+// varint branch offset at assembly time. findBranchSizes shrinks these down to
+// the minimum needed size. 3 bytes covers offsets up to ~1 MB.
+const varintBranchInitialSize = 3
+
 // asmBranchVarint assembles branch opcodes that encode their offset as binary.Varint.
-// It always reserves 2 bytes for the placeholder, independent of spec.Size (which is 0).
 func asmBranchVarint(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
 		return err
 	}
 
-	ops.referToBranchLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+3)
+	ops.referToBranchLabel(ops.pending.Len()+1, args[0], ops.pending.Len()+1+varintBranchInitialSize)
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with varint-encoded offset in resolveLabels()
-	ops.pending.WriteByte(0)
-	ops.pending.WriteByte(0)
+	for range varintBranchInitialSize {
+		ops.pending.WriteByte(0)
+	}
 	return nil
 }
 
@@ -2167,6 +2172,7 @@ func (ops *OpStream) assemble(text string) error {
 		ops.optimizeBytecBlock()
 	}
 
+	ops.findBranchSizes()
 	ops.resolveLabels()
 	program := ops.prependCBlocks()
 	if ops.Errors != nil {
@@ -2365,6 +2371,102 @@ func pragma(ops *OpStream, tokens []token) *sourceError {
 	}
 }
 
+// findBranchSizes shrinks varint branch placeholders to their minimum size after
+// optimizeConstants has finalized all instruction sizes. The offset bytes remain
+// zeros throughout — resolveLabels writes the actual encoded values afterward.
+func (ops *OpStream) findBranchSizes() {
+	var scratch [binary.MaxVarintLen64]byte
+	type sizeChange struct {
+		position int // first byte of the offset slot (one past the opcode)
+		oldLen   int // current placeholder byte count
+		newLen   int // smaller placeholder byte count
+	}
+
+	raw := ops.pending.Bytes()
+	for {
+		// Collect varint branch instructions whose placeholder can shrink.
+		var changes []sizeChange
+		for i := range ops.labelReferences {
+			lr := &ops.labelReferences[i]
+			if !lr.varint {
+				continue
+			}
+			dest, ok := ops.labels[lr.label.str]
+			if !ok {
+				continue // undefined labels are reported by resolveLabels
+			}
+			opcodePos := lr.position - 1
+			if dest == opcodePos {
+				continue // will be rejected by resolveLabels
+			}
+			jump := dest - lr.offsetPosition
+			if dest < opcodePos {
+				// Back-jump from instruction start: no instrSize dependency.
+				jump = dest - opcodePos
+			}
+			needed := binary.PutVarint(scratch[:], int64(jump))
+			if needed < lr.offsetPosition-lr.position {
+				changes = append(changes, sizeChange{lr.position, lr.offsetPosition - lr.position, needed})
+			}
+		}
+		if len(changes) == 0 {
+			break
+		}
+
+		slices.SortFunc(changes, func(a, b sizeChange) int {
+			return a.position - b.position
+		})
+
+		// Build newRaw and cumDelta in one left-to-right scan, identical in
+		// structure to optimizeConstants. Shrunken slots are zeroed here;
+		// resolveLabels encodes the actual jump values later.
+		totalDelta := 0
+		for _, c := range changes {
+			totalDelta += c.newLen - c.oldLen
+		}
+		newRaw := make([]byte, 0, len(raw)+totalDelta)
+		cumDelta := make([]int, len(raw)+1)
+		runningDelta := 0
+		prev := 0
+		for _, c := range changes {
+			for p := prev; p < c.position+c.oldLen; p++ {
+				cumDelta[p] = runningDelta
+			}
+			newRaw = append(newRaw, raw[prev:c.position]...)
+			newRaw = append(newRaw, make([]byte, c.newLen)...)
+			runningDelta += c.newLen - c.oldLen
+			prev = c.position + c.oldLen
+		}
+		for p := prev; p <= len(raw); p++ {
+			cumDelta[p] = runningDelta
+		}
+		newRaw = append(newRaw, raw[prev:]...)
+
+		// Adjust every stored position that indexes into ops.pending.
+		for i := range ops.intcRefs {
+			ops.intcRefs[i].position += cumDelta[ops.intcRefs[i].position]
+		}
+		for i := range ops.bytecRefs {
+			ops.bytecRefs[i].position += cumDelta[ops.bytecRefs[i].position]
+		}
+		for label := range ops.labels {
+			ops.labels[label] += cumDelta[ops.labels[label]]
+		}
+		for i := range ops.labelReferences {
+			ops.labelReferences[i].position += cumDelta[ops.labelReferences[i].position]
+			ops.labelReferences[i].offsetPosition += cumDelta[ops.labelReferences[i].offsetPosition]
+		}
+		fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+		for pos, loc := range ops.OffsetToSource {
+			fixedOffsetsToSource[pos+cumDelta[pos]] = loc
+		}
+		ops.OffsetToSource = fixedOffsetsToSource
+
+		raw = newRaw
+	}
+	ops.pending = *bytes.NewBuffer(raw)
+}
+
 func (ops *OpStream) resolveLabels() {
 	raw := ops.pending.Bytes()
 	reported := make(map[string]bool)
@@ -2385,25 +2487,33 @@ func (ops *OpStream) resolveLabels() {
 			}
 		}
 
-		// The destination is relative to the end of the instruction they appear
-		// in, which is available in lr.offsetPostion
 		if ops.Version < backBranchEnabledVersion && dest < lr.offsetPosition {
 			ops.record(lr.label.errorf("label %#v is a back reference, back jump support was introduced in v4", lr.label.str))
 			continue
 		}
 		jump := dest - lr.offsetPosition
 		if lr.varint {
-			// 2-byte zigzag varint holds 14 bits of signed value: [-8192, 8191]
-			if jump > 8191 || jump < -8192 {
+			opcodePos := lr.position - 1
+			if dest == opcodePos {
+				// Jumping to the start of the same instruction creates an
+				// infinite loop. Disallow this to keep the sign-based
+				// back/forward dispatch unambiguous (V=0 means forward).
+				ops.record(lr.label.errorf("branch to start of same instruction: %#v ", lr.label.str))
+				continue
+			}
+			// Back-jumps use the start of the instruction as the reference
+			// point, which avoids any dependency on instruction size.
+			if dest < opcodePos {
+				jump = dest - opcodePos
+			}
+			// An N-byte varint encodes the range [-2^(7N-1), 2^(7N-1)-1].
+			placeholderSize := lr.offsetPosition - lr.position
+			limit := int64(1) << (7*placeholderSize - 1)
+			if int64(jump) < -limit || int64(jump) >= limit {
 				ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
 				continue
 			}
-			// binary.PutVarint cannot be used here: it emits 1 byte for small
-			// values, but asmBranchVarint always reserves exactly 2 bytes for the
-			// placeholder.
-			ux := uint64(int64(jump)<<1) ^ uint64(int64(jump)>>63)
-			raw[lr.position] = byte(ux&0x7f) | 0x80
-			raw[lr.position+1] = byte(ux >> 7)
+			binary.PutVarint(raw[lr.position:], int64(jump))
 		} else {
 			if jump > math.MaxInt16 || jump < math.MinInt16 {
 				ops.record(lr.label.errorf("label %#v is too far away", lr.label.str))
@@ -2425,29 +2535,6 @@ const AssemblerDefaultVersion = 1
 // AssemblerMaxVersion is a maximum supported assembler version
 const AssemblerMaxVersion = LogicVersion
 const assemblerNoVersion = (^uint64(0))
-
-// replaceBytes returns a slice that is the same as s, except the range starting
-// at index with length originalLen is replaced by newBytes. The returned slice
-// may be the same as s, or it may be a new slice
-func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
-	prefix := s[:index]
-	suffix := s[index+originalLen:]
-
-	// if we can fit the new bytes into the existing slice, no need to create a
-	// new one
-	if len(newBytes) <= originalLen {
-		copy(s[index:], newBytes)
-		copy(s[index+len(newBytes):], suffix)
-		return s[:len(s)+len(newBytes)-originalLen]
-	}
-
-	replaced := make([]byte, len(prefix)+len(newBytes)+len(suffix))
-	copy(replaced, prefix)
-	copy(replaced[index:], newBytes)
-	copy(replaced[index+len(newBytes):], suffix)
-
-	return replaced
-}
 
 // optimizeIntcBlock rewrites the existing intcblock and the ops that reference
 // it to reduce code size. This is achieved by ordering the intcblock from most
@@ -2899,6 +2986,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 				offsetLen = 2
 			}
 			target := offset + pc + offsetLen
+			if spec.Version >= varintBranchVersion && offset < 0 {
+				target = pc - 1 + offset // back-jump from instruction start
+			}
 			var label string
 			if dis.numericTargets {
 				label = fmt.Sprintf("%d", target)

@@ -3498,7 +3498,8 @@ int 1`, v)
 			//t.Log(hex.EncodeToString(program))
 			offsetHex := "0011"
 			if v >= varintBranchVersion {
-				offsetHex = "a200"
+				// offset +17 as 1-byte varint: zigzag(17)=34=0x22
+				offsetHex = "22"
 			}
 			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
@@ -3506,10 +3507,8 @@ int 1`, v)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
 
 			if v >= varintBranchVersion {
-				// For varint encoding, set both offset bytes to produce target 11
-				// (middle of bytecblock): offset=3, zigzag(3)=6, forced 2-byte varint = 86 00
-				ops.Program[6] = 0x86
-				ops.Program[7] = 0x00
+				// offset=3 as 1-byte varint: zigzag(3)=6=0x06; target lands in middle of bytecblock
+				ops.Program[6] = 0x06
 			} else {
 				ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
 			}
@@ -3518,9 +3517,9 @@ int 1`, v)
 
 			// back branches are checked differently, so test misaligned back branch
 			if v >= varintBranchVersion {
-				// offset=-1 → target=7 (inside bnz instruction): zigzag(-1)=1, forced 2-byte = 81 00
-				ops.Program[6] = 0x81
-				ops.Program[7] = 0x00
+				// offset=-2 as 1-byte varint: zigzag(-2)=3=0x03; target is bnz.pc-2,
+				// the value byte inside intcblock (not an instruction start)
+				ops.Program[6] = 0x03
 			} else {
 				ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
 				ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
@@ -3549,13 +3548,19 @@ int 1`, v)
 			//t.Log(hex.EncodeToString(ops.Program))
 			offsetHex := "0011"
 			if v >= varintBranchVersion {
-				offsetHex = "a200"
+				// offset +17 as 1-byte varint: zigzag(17)=34=0x22
+				offsetHex = "22"
 			}
 			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
+			if v >= varintBranchVersion {
+				// 0x7e = 1-byte varint encoding jump +63, outside the program
+				ops.Program[6] = 0x7e
+			} else {
+				ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
+			}
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
 	}
@@ -3574,10 +3579,10 @@ done:
 int 1`, v)
 			//t.Log(hex.EncodeToString(ops.Program))
 			// (br)anch byte, offset bytes (big-endian int16 pre-v13, varint v13+)
-			// offset +17 as big-endian: 00 11; as 2-byte varint: a2 00 (zigzag(17)=34, forced 2-byte)
+			// offset +17 as big-endian: 00 11; as 1-byte varint: 22 (zigzag(17)=34=0x22)
 			offsetHex := "0011"
 			if v >= varintBranchVersion {
-				offsetHex = "a200"
+				offsetHex = "22"
 			}
 			canonicalProgramString := mutateProgVersion(v, "012001012240"+offsetHex+"2603040123457604ababcdcd04f000baad22")
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
@@ -3603,8 +3608,8 @@ intc_1
 			source := fmt.Sprintf(template, line)
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
-			ops.Program[7] = 0xf0 // clobber the branch offset - highly negative
-			ops.Program[8] = 0xff // clobber the branch offset
+			// 0x7f encodes jump -64 as a 1-byte varint (zigzag(-64)=127=0x7f), outside program
+			ops.Program[7] = 0x7f
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
 	}
@@ -5032,7 +5037,9 @@ main:
 
 	testPanics(t, "int 1; retsub", 4)
 
-	testPanics(t, "int 1; recur: callsub recur; int 1", 4)
+	// recur: labels the dup instruction so callsub recur is a back-jump to a
+	// different instruction (not jump-to-self, which is disallowed in v13+).
+	testPanics(t, "int 1; callsub recur; int 1; recur: dup; pop; callsub recur", 4)
 }
 
 func TestShifts(t *testing.T) {
@@ -5280,7 +5287,7 @@ func TestPcDetails(t *testing.T) {
 		{"int 1; int 2; -", 5, "pushint 1; pushint 2; -"},
 		{"int 1; err", 3, "pushint 1; err"},
 		{"int 1; dup; int 2; -; +", 6, "dup; pushint 2; -"},
-		{"b end; end:", 4, ""},
+		{"b end; end:", 3, ""},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {

@@ -259,8 +259,16 @@ func (d *DebugState) parseCallstack(callstack []frame) []CallFrame {
 	callFrames := make([]CallFrame, 0)
 	lines := strings.Split(d.Disassembly, "\n")
 	for _, fr := range callstack {
-		// The callsub is pc - 3 from the callstack pc
-		callsubLineNum := d.PCToLine(fr.retpc - 3)
+		// Find the callsub PC: the largest PC in PCOffset strictly less than
+		// fr.retpc. This works for any callsub instruction size (old 3-byte or
+		// new 2-byte varint), since every instruction has a PCOffset entry.
+		callsubPC := 0
+		for _, pco := range d.PCOffset {
+			if pco.PC < fr.retpc {
+				callsubPC = pco.PC
+			}
+		}
+		callsubLineNum := d.PCToLine(callsubPC)
 		callSubLine := strings.Fields(lines[callsubLineNum])
 		label := ""
 		if callSubLine[0] == "callsub" {

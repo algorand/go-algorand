@@ -2698,7 +2698,13 @@ func branchTargetVarint(cx *EvalContext) (target int, instrSize int, err error) 
 		return 0, 0, fmt.Errorf("branch offset varint overflows int64")
 	}
 	instrSize = 1 + bytesRead
-	target = cx.pc + instrSize + int(offset)
+	// Negative offsets are back-jumps measured from the start of the
+	// instruction; non-negative offsets are forward-jumps from the end.
+	if offset < 0 {
+		target = cx.pc + int(offset)
+	} else {
+		target = cx.pc + instrSize + int(offset)
+	}
 	if target > len(cx.program) || target < 0 {
 		return 0, 0, fmt.Errorf("branch target %d outside of program", target)
 	}
@@ -2710,7 +2716,7 @@ func checkBranchVarint(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	if target < cx.pc+instrSize {
+	if target < cx.pc {
 		if ok := cx.instructionStarts[target]; !ok {
 			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
 		}
