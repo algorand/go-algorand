@@ -19,9 +19,9 @@ APP_INDEX_PATTERN='Created app with app index [[:digit:]]+'
 # fund account B enough for opt-ins
 ${gcmd} clerk send -a 10000000 -f ${ACCOUNTA} -t ${ACCOUNTB}
 
-# approval program that always approves; clear program does the same
-printf '#pragma version 2\nint 1' > "${TEMPDIR}/approval.teal"
-printf '#pragma version 2\nint 1' > "${TEMPDIR}/clear.teal"
+# approval program mostly approves; also sets a local int if called with any args
+printf '#pragma version 5\ntxn NumAppArgs; bz done; txn Sender; byte "X"; int 7; app_local_put; done: int 1' > "${TEMPDIR}/approval.teal"
+printf '#pragma version 5\nint 1' > "${TEMPDIR}/clear.teal"
 
 # create all apps from account A, with varying global int needs so the schema is visible
 RES=$(${gcmd} app create --creator ${ACCOUNTA} --approval-prog "${TEMPDIR}/approval.teal" --clear-prog "${TEMPDIR}/clear.teal" --global-ints 1 --global-byteslices 0 --local-ints 1 --local-byteslices 0)
@@ -69,10 +69,10 @@ if [[ ${RES} != *"NextToken"* ]]; then
     false
 fi
 
-# opt account B into all apps
-${gcmd} app optin --app-id ${APP_A_ID} --from ${ACCOUNTB}
+# opt account B into all apps, set locals on some so we can check them
+${gcmd} app optin --app-id ${APP_A_ID} --from ${ACCOUNTB} --app-arg=int:1
 ${gcmd} app optin --app-id ${APP_B_ID} --from ${ACCOUNTB}
-${gcmd} app optin --app-id ${APP_C_ID} --from ${ACCOUNTB}
+${gcmd} app optin --app-id ${APP_C_ID} --from ${ACCOUNTB} --app-arg=int:1
 ${gcmd} app optin --app-id ${APP_D_ID} --from ${ACCOUNTB}
 
 # displays opted-in apps
@@ -88,16 +88,32 @@ if [[ ${RES} != *"Application ID: ${APP_A_ID}"* ]]; then
     date '+goal-account-app-test applicationdetails (2) should contain app A %Y%m%d_%H%M%S'
     false
 fi
+if [[ ${RES} != *"Local State: 1/1 uints"* ]]; then
+    date '+goal-account-app-test applicationdetails (2) app A should have 1/1 locals set %Y%m%d_%H%M%S'
+    false
+fi
 if [[ ${RES} != *"Application ID: ${APP_B_ID}"* ]]; then
     date '+goal-account-app-test applicationdetails (2) should contain app B %Y%m%d_%H%M%S'
+    false
+fi
+if [[ ${RES} != *"Local State: 0/2 uints"* ]]; then
+    date '+goal-account-app-test applicationdetails (2) app B should have 0/2 locals set %Y%m%d_%H%M%S'
     false
 fi
 if [[ ${RES} != *"Application ID: ${APP_C_ID}"* ]]; then
     date '+goal-account-app-test applicationdetails (2) should contain app C %Y%m%d_%H%M%S'
     false
 fi
+if [[ ${RES} != *"Local State: 1/3 uints"* ]]; then
+    date '+goal-account-app-test applicationdetails (2) app C should have 1/3 locals set %Y%m%d_%H%M%S'
+    false
+fi
 if [[ ${RES} != *"Application ID: ${APP_D_ID}"* ]]; then
     date '+goal-account-app-test applicationdetails (2) should contain app D %Y%m%d_%H%M%S'
+    false
+fi
+if [[ ${RES} != *"Local State: 0/4 uints"* ]]; then
+    date '+goal-account-app-test applicationdetails (2) app D should have 0/4 locals set %Y%m%d_%H%M%S'
     false
 fi
 # All four applications should have ACCOUNTA as creator listed

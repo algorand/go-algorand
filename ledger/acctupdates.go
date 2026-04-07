@@ -1661,12 +1661,6 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				if !d.State.Deleted && d.State.LocalState != nil {
 					arwi.AppLocalState = d.State.LocalState
 				}
-				if !d.Params.Deleted && d.Params.Params != nil {
-					if includeParams {
-						arwi.Creator = addr
-						arwi.AppResource.AppParams = d.Params.Params
-					}
-				}
 				// Patch in the params info if we have it in the deltas
 				if includeParams {
 					if deltaParams, paramsInDelta := deltaParamsResults[appID]; paramsInDelta {
