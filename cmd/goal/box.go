@@ -105,7 +105,7 @@ For printable strings, the box name is formatted as 'str:hello'
 For everything else, the box name is formatted as 'b64:A=='.
 
 Use --limit to fetch a single page of results.
-When there are more results, next-token is printed.
+When there are more results, NextToken is printed.
 Use --next and --round to resume from a limited request.
 Use --prefix to filter boxes by name prefix.
 Use --values to include box values in the output.`,

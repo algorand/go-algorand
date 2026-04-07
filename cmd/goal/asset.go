@@ -792,9 +792,9 @@ var infoAssetCmd = &cobra.Command{
 			_, units = unicodePrintable(*asset.Params.UnitName)
 		}
 		reportInfof("Unit name:        %s", units)
-		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(asset.Params.Total, asset.Params.Decimals), nilToZero(asset.Params.UnitName))
-		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, asset.Params.Decimals), nilToZero(asset.Params.UnitName))
-		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), nilToZero(asset.Params.UnitName))
+		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(asset.Params.Total, asset.Params.Decimals), units)
+		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, asset.Params.Decimals), units)
+		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), units)
 		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
 		fmt.Printf("Default frozen:   %t\n", nilToZero(asset.Params.DefaultFrozen))
 		safeURL := ""

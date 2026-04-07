@@ -55,7 +55,7 @@ if [[ ${RES} != *"Creator: ${ACCOUNTA}"* ]]; then
     date '+goal-account-app-test applicationdetails (1) should show creator for app A %Y%m%d_%H%M%S'
     false
 fi
-# C and D should not appear becasue of limit
+# C and D should not appear because of limit
 if [[ ${RES} == *"Application ID: ${APP_C_ID}"* ]]; then
     date '+goal-account-app-test applicationdetails (1) should not contain app C %Y%m%d_%H%M%S'
     false

@@ -154,7 +154,7 @@ func init() {
 	applicationDetailsCmd.MarkFlagRequired("address")
 	applicationDetailsCmd.Flags().StringVarP(&next, "next", "n", "", "The next application index to use for pagination")
 	applicationDetailsCmd.Flags().Uint64VarP(&limit, "limit", "l", 0, "The maximum number of applications to return")
-	applicationDetailsCmd.Flags().BoolVar(&includeAppParams, "include-params", false, "Include application parameters (creator, global state schema, etc.) for applications created by this account")
+	applicationDetailsCmd.Flags().BoolVar(&includeAppParams, "include-params", false, "Include application parameters (creator, global state schema, etc.)")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
