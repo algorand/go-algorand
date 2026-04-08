@@ -1361,7 +1361,7 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 		deltaHoldingResults := make(map[basics.AssetIndex]ledgercore.AssetResourceRecord)
 		deltaParamsResults := make(map[basics.AssetIndex]ledgercore.AssetParamsDelta)
 		deltaCreatorResults := make(map[basics.AssetIndex]basics.Address)
-		numDeltaDeleted := 0
+		numDeltaDeleted := 0 // Ask for more db records to account for possible delta deletions
 
 		for i := currentDeltaLen; i > 0; {
 			i--
@@ -1373,6 +1373,9 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 					if _, ok := deltaParamsResults[rec.Aidx]; !ok {
 						deltaParamsResults[rec.Aidx] = rec.Params
 						deltaCreatorResults[rec.Aidx] = rec.Addr
+						if rec.Params.Deleted {
+							numDeltaDeleted++
+						}
 					}
 				}
 				if rec.Addr != addr {
@@ -1382,6 +1385,8 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 					if _, ok := deltaHoldingResults[rec.Aidx]; !ok {
 						deltaHoldingResults[rec.Aidx] = rec
 						if rec.Holding.Deleted {
+							// A deletion of Params AND Holding for given `addr`
+							// is a doublecount, but that's fine.
 							numDeltaDeleted++
 						}
 					}
@@ -1550,7 +1555,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 		deltaLocalsResults := make(map[basics.AppIndex]ledgercore.AppResourceRecord)
 		deltaParamsResults := make(map[basics.AppIndex]ledgercore.AppParamsDelta)
 		deltaCreatorResults := make(map[basics.AppIndex]basics.Address)
-		numDeltaDeleted := 0
+		numDeltaDeleted := 0 // Ask for more db records to account for possible delta deletions
 
 		for i := currentDeltaLen; i > 0; {
 			i--
@@ -1562,20 +1567,22 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 					if _, ok := deltaParamsResults[rec.Aidx]; !ok {
 						deltaParamsResults[rec.Aidx] = rec.Params
 						deltaCreatorResults[rec.Aidx] = rec.Addr
+						if rec.Params.Deleted {
+							numDeltaDeleted++
+						}
 					}
 				}
 				if rec.Addr != addr {
 					continue
 				}
-				// DB will return records that match for either params OR
-				// locals, so we may need an extra record if either is deleted
-				// in deltas.
-				if rec.Params.Deleted || rec.State.Deleted {
-					numDeltaDeleted++
-				}
 				if rec.AffectsLocals() {
 					if _, ok := deltaLocalsResults[rec.Aidx]; !ok {
 						deltaLocalsResults[rec.Aidx] = rec
+						if rec.State.Deleted {
+							// A deletion of Params AND State for given `addr`
+							// is a doublecount, but that's fine.
+							numDeltaDeleted++
+						}
 					}
 				}
 			}
@@ -1630,7 +1637,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				if paramsInDelta && deltaParams.Deleted {
 					// Delta deleted params — omit creator and params.
 				} else if paramsInDelta && deltaParams.Params != nil {
-					arwi.Creator = pd.Creator
+					arwi.Creator = deltaCreatorResults[appID]
 					if includeParams {
 						arwi.AppResource.AppParams = deltaParams.Params
 					}
