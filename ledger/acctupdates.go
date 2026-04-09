@@ -1459,13 +1459,31 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 			// Add assets that exist only in deltas (new creations not yet in DB).
 			// Only include delta entries within the DB page range to avoid setting
 			// a next-token that would skip items still in the database.
-			for assetID, d := range deltaHoldingResults {
-				if seenInDB[assetID] {
+			//
+			// DB results are returned sorted, so the last DB entry holds the current
+			// maximum ID in result. Tracking this allows early exit once result is full
+			// and all remaining delta-only IDs are larger — they cannot displace any
+			// existing entry after the final sort+truncate.
+			var resultMaxID basics.AssetIndex
+			if len(result) > 0 {
+				resultMaxID = result[len(result)-1].AssetID
+			}
+			sortedDeltaOnlyIDs := make([]basics.AssetIndex, 0, len(deltaHoldingResults))
+			for assetID := range deltaHoldingResults {
+				if seenInDB[assetID] || (dbHasMore && assetID > dbMaxID) {
 					continue
 				}
-				if dbHasMore && assetID > dbMaxID {
-					continue
+				sortedDeltaOnlyIDs = append(sortedDeltaOnlyIDs, assetID)
+			}
+			slices.Sort(sortedDeltaOnlyIDs)
+			for _, assetID := range sortedDeltaOnlyIDs {
+				// All remaining IDs are >= assetID. If result is already full and this
+				// ID exceeds the current maximum, no remaining entry can displace an
+				// existing one after the final sort+truncate.
+				if uint64(len(result)) >= limit && assetID > resultMaxID {
+					break
 				}
+				d := deltaHoldingResults[assetID]
 				arwi := ledgercore.AssetResourceWithIDs{AssetID: assetID}
 				if !d.Holding.Deleted && d.Holding.Holding != nil {
 					arwi.AssetHolding = d.Holding.Holding
@@ -1505,6 +1523,9 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 				}
 				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
 					result = append(result, arwi)
+					if assetID > resultMaxID {
+						resultMaxID = assetID
+					}
 				}
 			}
 
@@ -1657,13 +1678,30 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 			// Add apps with locals that exist only in deltas (new opt-ins not
 			// yet in DB).  Only include delta entries within the DB page range
 			// to avoid setting a next-token beyond the database page.
-			for appID, d := range deltaLocalsResults {
-				if seenInDB[appID] {
+			//
+			// DB results are returned sorted, so the last DB entry holds the current
+			// maximum ID in result. resultMaxID enables early exit once result is full
+			// and remaining delta-only IDs are larger — shared across both delta loops.
+			var resultMaxID basics.AppIndex
+			if len(result) > 0 {
+				resultMaxID = result[len(result)-1].AppID
+			}
+			sortedDeltaOnlyIDs := make([]basics.AppIndex, 0, len(deltaLocalsResults))
+			for appID := range deltaLocalsResults {
+				if seenInDB[appID] || (dbHasMore && appID > dbMaxID) {
 					continue
 				}
-				if dbHasMore && appID > dbMaxID {
-					continue
+				sortedDeltaOnlyIDs = append(sortedDeltaOnlyIDs, appID)
+			}
+			slices.Sort(sortedDeltaOnlyIDs)
+			for _, appID := range sortedDeltaOnlyIDs {
+				// All remaining IDs are >= appID. If result is already full and this
+				// ID exceeds the current maximum, no remaining entry can displace an
+				// existing one after the final sort+truncate.
+				if uint64(len(result)) >= limit && appID > resultMaxID {
+					break
 				}
+				d := deltaLocalsResults[appID]
 				arwi := ledgercore.AppResourceWithIDs{AppID: appID}
 				if !d.State.Deleted && d.State.LocalState != nil {
 					arwi.AppLocalState = d.State.LocalState
@@ -1705,6 +1743,9 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				}
 				if arwi.AppLocalState != nil || arwi.AppParams != nil {
 					result = append(result, arwi)
+					if appID > resultMaxID {
+						resultMaxID = appID
+					}
 				}
 			}
 
@@ -1712,30 +1753,35 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 			// the deltas, not yet the DB.  As above, only include delta entries
 			// within the DB page range.
 			if includeParams {
+				var sortedCreatorOnlyIDs []basics.AppIndex
 				for appID, deltaParams := range deltaParamsResults {
-					if seenInDB[appID] {
+					if seenInDB[appID] || (dbHasMore && appID > dbMaxID) {
 						continue
 					}
-					if dbHasMore && appID > dbMaxID {
+					if deltaParams.Deleted || deltaCreatorResults[appID] != addr {
 						continue
 					}
-					if deltaParams.Deleted {
-						continue
-					}
-					// We only care about creations by the query addr
-					if deltaCreatorResults[appID] != addr {
-						continue
-					}
-					// Don't add if the scan through deltaLocals would have already done so.
+					// Don't add if the locals loop already covered this app.
 					if _, ok := deltaLocalsResults[appID]; ok {
 						continue
 					}
+					sortedCreatorOnlyIDs = append(sortedCreatorOnlyIDs, appID)
+				}
+				slices.Sort(sortedCreatorOnlyIDs)
+				for _, appID := range sortedCreatorOnlyIDs {
+					if uint64(len(result)) >= limit && appID > resultMaxID {
+						break
+					}
+					deltaParams := deltaParamsResults[appID]
 					arwi := ledgercore.AppResourceWithIDs{
 						AppID:       appID,
 						Creator:     deltaCreatorResults[appID],
 						AppResource: ledgercore.AppResource{AppParams: deltaParams.Params},
 					}
 					result = append(result, arwi)
+					if appID > resultMaxID {
+						resultMaxID = appID
+					}
 				}
 			}
 
