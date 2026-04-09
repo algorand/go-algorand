@@ -18,7 +18,7 @@ env:
   KMD_NOUSB: True
   BUILD_TYPE: integration
   ALGOTEST: 1
-  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   SKIP_GO_INSTALLATION: True
 
 concurrency:
@@ -94,7 +94,7 @@ jobs:
           retention-days: 7
       - name: Upload coverage
         # Only upload coverage from ubuntu-24.04 platform
-        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
+        if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
