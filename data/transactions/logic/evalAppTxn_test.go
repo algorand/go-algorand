@@ -1003,7 +1003,8 @@ func TestFieldSetting(t *testing.T) {
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	ledger.NewAccount(appAddr(888), 10*MakeTestProto().MinTxnFee)
 	TestApp(t, "itxn_begin; int 500; bzero; itxn_field Note; int 1", ep)
-	TestApp(t, "itxn_begin; int 501; bzero; itxn_field Note; int 1", ep,
+	TestApp(t, "itxn_begin; int 540; bzero; itxn_field Note; int 1", ep) // above basic, under absolute
+	TestApp(t, "itxn_begin; int 551; bzero; itxn_field Note; int 1", ep,
 		"Note may not exceed")
 
 	TestApp(t, "itxn_begin; int 32; bzero; itxn_field VotePK; int 1", ep)
@@ -1045,11 +1046,12 @@ func TestInnerGroup(t *testing.T) {
 	t.Parallel()
 
 	ep, tx, ledger := MakeSampleEnv()
-	// default sample env starts at 401 (1337+1066-2*1001)
+	// default sample env starts with 401 fee credit (1337+1066-2*1001)
 
 	ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
 	// Need both fees and both payments, 999<1000
-	ledger.NewAccount(appAddr(888), 999+2*MakeTestProto().MinTxnFee-401) // 401 is fee credit
+	minFee := MakeTestProto().MinTxnFee
+	ledger.NewAccount(appAddr(888), 999+2*minFee-401) // 401 is fee credit
 	pay := `
 int pay;    itxn_field TypeEnum;
 int 500;    itxn_field Amount;
@@ -1059,9 +1061,31 @@ txn Sender; itxn_field Receiver;
 		"insufficient balance")
 
 	// NewAccount overwrites the existing balance
-	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee-401)
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401)
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep)
-	ledger.NewAccount(appAddr(888), 1000+2*MakeTestProto().MinTxnFee-401) // replenish
+
+	// Show that inner notes can cause increased fees (values are from the test proto!)
+	//   Note size 500 works fine, no increased fee
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+"int 500; bzero; itxn_field Note; itxn_submit; int 1", ep)
+	// Note size 540 increases fee by 1.040_000 factor. But the first problem is
+	// that the default fee population mechanism can't know about the big Note,
+	// so it tries to populate for 2 basic transactions, which is 2002-401=1601.
+	// The "need" is 1.641 because one of the transacvtion's cost goes from 1001
+	// to 1001*1.040 = 1041
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; itxn_submit; int 1", ep,
+		"group fee 1.601mA too small (needs 1.641mA more)")
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; int 1041; itxn_field Fee; itxn_submit; int 1", ep,
+		"insufficient balance") // the fee was big enough, but now the balance is too small
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401+40) // replenish
+	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
+		"int 540; bzero; itxn_field Note; int 1041; itxn_field Fee; itxn_submit; int 1", ep)
+
+	// Show some failures
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
 	TestApp(t, "itxn_begin; itxn_begin"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
 		"itxn_begin without itxn_submit")
 	TestApp(t, "itxn_next"+pay+"itxn_next"+pay+"itxn_submit; int 1", ep,
@@ -1165,10 +1189,12 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+"int DeleteApplication; itxn_field OnCompletion"+s, ep)
 
 	TestApp(t, p+"int 800; bzero; itxn_field ApplicationArgs"+s, ep)
-	TestApp(t, p+"int 801; bzero; itxn_field ApplicationArgs", ep,
+	// 2000 is now ok because of MaxAbsoluteAppTotalArgLen
+	TestApp(t, p+"int 2000; bzero; itxn_field ApplicationArgs"+s, ep)
+	TestApp(t, p+"int 2001; bzero; itxn_field ApplicationArgs"+s, ep,
 		"length too long")
-	TestApp(t, p+"int 401; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs", ep,
-		"length too long")
+	TestApp(t, p+"int 401; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs"+s, ep)
+	TestApp(t, p+"int 1001; bzero; dup; itxn_field ApplicationArgs; itxn_field ApplicationArgs"+s, ep, "length too long")
 
 	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 12)+s, ep)
 	TestApp(t, p+strings.Repeat("byte 0x11; itxn_field ApplicationArgs;", 13)+s, ep,
@@ -1197,12 +1223,15 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+strings.Repeat("int 621; itxn_field Assets;", 7)+s, ep,
 		"too many foreign assets")
 
-	TestApp(t, p+"int 2700; bzero; itxn_field ApprovalProgram"+s, ep)
-	TestApp(t, p+"int 2701; bzero; itxn_field ApprovalProgram"+s, ep,
-		"may not exceed 2700")
-	TestApp(t, p+"int 2700; bzero; itxn_field ClearStateProgram"+s, ep)
-	TestApp(t, p+"int 2701; bzero; itxn_field ClearStateProgram"+s, ep,
-		"may not exceed 2700")
+	TestApp(t, p+"int 2400; bzero; itxn_field ApprovalProgram"+s, ep)
+	// ok now, b/c of MaxAbsoluteExtraProgramPages
+	TestApp(t, p+"int 2401; bzero; itxn_field ApprovalProgram"+s, ep)
+	TestApp(t, p+"int 4001; bzero; itxn_field ApprovalProgram"+s, ep,
+		"may not exceed 4000")
+	TestApp(t, p+"int 2400; bzero; itxn_field ClearStateProgram"+s, ep)
+	TestApp(t, p+"int 2401; bzero; itxn_field ClearStateProgram"+s, ep)
+	TestApp(t, p+"int 4001; bzero; itxn_field ClearStateProgram"+s, ep,
+		"may not exceed 4000")
 
 	TestApp(t, p+"int 30; itxn_field GlobalNumUint"+s, ep)
 	TestApp(t, p+"int 31; itxn_field GlobalNumUint"+s, ep, "31 is larger than max=30")
@@ -1241,13 +1270,13 @@ func TestBigApplCreation(t *testing.T) {
 			basic := "itxn_field " + pgm + "Program"
 			pages := "itxn_field " + pgm + "ProgramPages"
 			TestApp(t, p+`int 1000; bzero; `+pages+`
-                  int 1000; bzero; `+pages+`
-                  int 700; bzero; `+pages+`
+                  int 2000; bzero; `+pages+`
+                  int 200; bzero; `+pages+`
                  `+s, ep)
 			TestApp(t, p+`int 1000; bzero; `+pages+`
-                  int 1000; bzero; `+pages+`
-                  int 701; bzero; `+pages+`
-                 `+s, ep, "may not exceed 2700")
+                  int 2000; bzero; `+pages+`
+                  int 2001; bzero; `+pages+`
+                 `+s, ep, "may not exceed 4000")
 
 			// Test the basic ApprovalProgram field resets
 			TestApp(t, p+`int 1000; bzero; `+pages+`
@@ -1260,14 +1289,16 @@ func TestBigApplCreation(t *testing.T) {
                   int 100; bzero; `+basic+`
                   int 1000; bzero; `+pages+`
                   int 1000; bzero; `+pages+`
-                  int 600; bzero; `+pages+`
+                  int 1000; bzero; `+pages+`
+                  int 900; bzero; `+pages+`
                  `+s, ep)
 			TestApp(t, p+`int 1000; bzero; `+pages+`
                   int 100; bzero; `+basic+`
                   int 1000; bzero; `+pages+`
                   int 1000; bzero; `+pages+`
-                  int 601; bzero; `+pages+`
-                 `+s, ep, "may not exceed 2700")
+                  int 1000; bzero; `+pages+`
+                  int 901; bzero; `+pages+`
+                 `+s, ep, "may not exceed 4000")
 		})
 	}
 }

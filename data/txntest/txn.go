@@ -156,9 +156,6 @@ func (tx Txn) Args(strings ...string) *Txn {
 // FillDefaults populates some obvious defaults from config params,
 // unless they have already been set.
 func (tx *Txn) FillDefaults(params config.ConsensusParams) {
-	if tx.Fee == nil {
-		tx.Fee = params.MinTxnFee
-	}
 	if tx.LastValid == 0 {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
@@ -200,6 +197,11 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
 			tx.ExtraProgramPages = uint32(totalPages - 1)
 		}
+	}
+	// Do the fee last, so the FeeFactor is accurate.
+	if tx.Fee == nil {
+		f := tx.Txn().FeeFactor(params)
+		tx.Fee, _ = params.MinFee().MulMicros(f)
 	}
 }
 
