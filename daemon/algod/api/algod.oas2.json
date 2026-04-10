@@ -3249,6 +3249,14 @@
           "description": "\\[ss\\] the account responsible for extra pages and global state MBR",
           "type": "string",
           "x-algorand-format": "Address"
+        },
+        "foreign-box-reads": {
+          "description": "\\[fbr\\] if true, any app may read this app's boxes",
+          "type": "boolean"
+        },
+        "family-box-access": {
+          "description": "\\[fba\\] if true, apps with the same creator may read and write this app's boxes",
+          "type": "boolean"
         }
       }
     },
