@@ -18,6 +18,7 @@ package logic
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -530,7 +531,7 @@ var compiled = map[uint64]string{
 	10: "0a" + v10Compiled,
 	11: "0b" + v11Compiled,
 	12: "0c" + v12Compiled,
-	13: "0d" + v13Compiled,
+	13: "0d02" + v13Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -659,6 +660,105 @@ func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
 	return &ops, err
 }
 
+// assembleProgramWithSalt parses source and returns the exact bytecode for the
+// requested version and salt, without running automatic salt selection.
+func assembleProgramWithSalt(t testing.TB, source string, ver uint64, salt []byte) []byte {
+	t.Helper()
+
+	ops := newOpStream(ver)
+	err := ops.parseText(source)
+	require.NoError(t, err)
+	require.Empty(t, ops.Errors)
+
+	ops.salt = salt
+
+	program, _ := ops.prependSaltAndCBlocks()
+	require.NotNil(t, program)
+	return program
+}
+
+// buildProgramWithVersionAndSalt constructs program bytes by prepending the
+// version varint and, for v13+, the given salt to the given program
+// body (i.e., the program without the version and salt).
+func buildProgramWithVersionAndSalt(version uint64, salt []byte, body []byte) []byte {
+	var scratch [binary.MaxVarintLen64]byte
+
+	out := make([]byte, 0, binary.MaxVarintLen64+1+len(body))
+	vlen := binary.PutUvarint(scratch[:], version)
+	out = append(out, scratch[:vlen]...)
+	if version >= saltPragmaVersion {
+		saltByte := byte(0)
+		if len(salt) > 0 {
+			saltByte = salt[0]
+		}
+		out = append(out, saltByte)
+	}
+	out = append(out, body...)
+	return out
+}
+
+// buildProgramWithVersion constructs program bytes by prepending the
+// version varint and, for v13+, automatic salt to the given program
+// body (i.e., the program without the version and salt).
+func buildProgramWithVersion(version uint64, body []byte) []byte {
+	if version < saltPragmaVersion {
+		return buildProgramWithVersionAndSalt(version, nil, body)
+	}
+	for saltValue := uint64(0); saltValue <= 255; saltValue++ {
+		salt := saltBytes(saltValue)
+		program := buildProgramWithVersionAndSalt(version, salt, body)
+		if !programHashIsEdwardsPoint(program) {
+			return program
+		}
+	}
+	panic(fmt.Sprintf("unable to find off-curve salt for version %d", version))
+}
+
+func programPrefixLen(t testing.TB, program []byte) int {
+	t.Helper()
+
+	_, pc, _, err := parseProgramPrefix(program)
+	require.NoError(t, err)
+	return pc
+}
+
+// setProgramVersion returns a new program with the given version
+// (adjusting salt, if applicable) and the same program body.
+func setProgramVersion(t testing.TB, program []byte, version uint64) []byte {
+	t.Helper()
+
+	_, pc, salt, err := parseProgramPrefix(program)
+	require.NoError(t, err)
+	return buildProgramWithVersionAndSalt(version, salt, program[pc:])
+}
+
+// programShiftFromVersionOnlyPrefix returns the number of bytes added before
+// the historical one-byte version-only prefix baseline used by older tests.
+func programShiftFromVersionOnlyPrefix(t testing.TB, program []byte) int {
+	t.Helper()
+	return programPrefixLen(t, program) - 1
+}
+
+// insertSaltPragma adds an explicit #pragma salt line after #pragma version
+// using the salt parsed from the assembled program. The source must not
+// already contain #pragma salt.
+func insertSaltPragma(t testing.TB, source string, program []byte) string {
+	t.Helper()
+	require.NotContains(t, source, "\n#pragma salt ")
+
+	_, _, salt, err := parseProgramPrefix(program)
+	require.NoError(t, err)
+	if salt == nil {
+		return source
+	}
+
+	lines := strings.SplitN(source, "\n", 2)
+	if len(lines) != 2 {
+		return source
+	}
+	return fmt.Sprintf("%s\n#pragma salt 0x%x\n%s", lines[0], salt, lines[1])
+}
+
 func summarize(trace *strings.Builder) string {
 	all := trace.String()
 	if strings.Count(all, "\n") < 50 {
@@ -743,6 +843,76 @@ func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpSt
 		require.Nil(t, ops.Program)
 	}
 	return ops
+}
+
+func TestPragmaSaltVersionRules(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testProg(t, `#pragma salt 0x00
+#pragma version 13
+int 1`, assemblerNoVersion, exp(1, "#pragma salt requires #pragma version first"))
+
+	testProg(t, `#pragma version 12
+#pragma salt 0x00
+int 1`, assemblerNoVersion, exp(2, "#pragma salt is only supported in v13+"))
+
+	testProg(t, `#pragma version 13
+#pragma salt 0x00
+#pragma salt 0x01
+int 1`, assemblerNoVersion, exp(3, "duplicate #pragma salt"))
+
+	testProg(t, `#pragma version 13
+#pragma salt 0x0001
+int 1`, assemblerNoVersion, exp(2, "#pragma salt must be exactly 1 byte"))
+}
+
+// TestPragmaSaltExplicitAndAutomatic checks that:
+// 1. automatic salt selection chooses the smallest salt that gives a program off the curve
+// 2. explicit salt selection with the smallest possible valid salt compiles to the same program as automatic salt selection
+// 3. explicit salt selection fails if the program hashes on the curve
+func TestPragmaSaltExplicitAndAutomatic(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// this program hashes on the curve with salt 0x00 and 0x01, but not with 0x02
+	sourcePragma := fmt.Sprintf("#pragma version %d\n", saltPragmaVersion)
+	sourceBody := "pushint 12"
+	source := sourcePragma + sourceBody
+	rejectingSalts := []byte{0x00, 0x01}
+	acceptingSalt := []byte{0x02}
+	for _, salt := range rejectingSalts {
+		require.True(t, programHashIsEdwardsPoint(assembleProgramWithSalt(t, source, assemblerNoVersion, []byte{salt})))
+	}
+	require.False(t, programHashIsEdwardsPoint(assembleProgramWithSalt(t, source, assemblerNoVersion, acceptingSalt)))
+
+	// 1. automatic salt selection chooses the smallest salt that gives a program off the curve
+	autoOps := testProg(t, source, assemblerNoVersion)
+	ver, pc, salt, err := parseProgramPrefix(autoOps.Program)
+	require.NoError(t, err)
+	require.EqualValues(t, saltPragmaVersion, ver)
+	require.Equal(t, acceptingSalt, salt)
+	require.Equal(t, 2, pc)
+
+	// 2. explicit salt selection with the smallest possible valid salt compiles to the same program as automatic salt selection
+	acceptSource := sourcePragma +
+		fmt.Sprintf("#pragma salt 0x%02x\n", acceptingSalt) +
+		sourceBody
+	acceptExplicitOps := testProg(t, acceptSource, assemblerNoVersion)
+	require.Equal(t, acceptExplicitOps.Program, autoOps.Program)
+	ver, pc, salt, err = parseProgramPrefix(acceptExplicitOps.Program)
+	require.NoError(t, err)
+	require.EqualValues(t, saltPragmaVersion, ver)
+	require.Equal(t, acceptingSalt, salt)
+	require.Equal(t, 2, pc)
+
+	// 3. explicit salt selection fails if the program hashes on the curve
+	for _, salt := range rejectingSalts {
+		rejectSource := sourcePragma +
+			fmt.Sprintf("#pragma salt 0x%02x\n", salt) +
+			sourceBody
+		_, err := assembleWithTrace(rejectSource, assemblerNoVersion)
+		require.ErrorContains(t, err, "still yields an on-curve LogicSig address")
+	}
 }
 
 func testLine(t *testing.T, line string, ver uint64, expected string, col ...int) {
@@ -857,7 +1027,19 @@ int 1
 
 // mutateProgVersion replaces version (first two symbols) in hex-encoded program
 func mutateProgVersion(version uint64, prog string) string {
-	return fmt.Sprintf("%02x%s", version, prog[2:])
+	body, err := hex.DecodeString(prog[2:])
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(buildProgramWithVersion(version, body))
+}
+
+func rawProgramVersion(version uint64, prog string) string {
+	body, err := hex.DecodeString(prog[2:])
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(buildProgramWithVersionAndSalt(version, nil, body))
 }
 
 func TestOpUint(t *testing.T) {
@@ -868,10 +1050,10 @@ func TestOpUint(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := newOpStream(v)
 			ops.intLiteral(0xcafef00d)
-			prog := ops.prependCBlocks()
+			prog, _ := ops.prependSaltAndCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
-			expected := mutateProgVersion(v, "xx20018de0fbd70c22")
+			expected := rawProgramVersion(v, "xx20018de0fbd70c22")
 			require.Equal(t, expected, s)
 		})
 	}
@@ -885,10 +1067,10 @@ func TestOpUint64(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := newOpStream(v)
 			ops.intLiteral(0xcafef00dcafef00d)
-			prog := ops.prependCBlocks()
+			prog, _ := ops.prependSaltAndCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
-			require.Equal(t, mutateProgVersion(v, "xx20018de0fbd7dc81bcffca0122"), s)
+			require.Equal(t, rawProgramVersion(v, "xx20018de0fbd7dc81bcffca0122"), s)
 		})
 	}
 }
@@ -901,10 +1083,10 @@ func TestOpBytes(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := newOpStream(v)
 			ops.byteLiteral([]byte("abcdef"))
-			prog := ops.prependCBlocks()
+			prog, _ := ops.prependSaltAndCBlocks()
 			require.NotNil(t, prog)
 			s := hex.EncodeToString(prog)
-			require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
+			require.Equal(t, rawProgramVersion(v, "0126010661626364656628"), s)
 			testProg(t, "byte 0x7; len", v, exp(1, "...odd length hex string", 5))
 		})
 	}
@@ -1043,7 +1225,8 @@ func TestManualCBlocks(t *testing.T) {
 
 	// Despite appearing twice, 500s are pushints because of manual intcblock
 	ops := testProg(t, "intcblock 1; int 500; int 500; ==", AssemblerMaxVersion)
-	require.Equal(t, ops.Program[4], OpsByName[ops.Version]["pushint"].Opcode)
+	prefixLen := programPrefixLen(t, ops.Program)
+	require.Equal(t, ops.Program[prefixLen+3], OpsByName[ops.Version]["pushint"].Opcode)
 
 	ops = testProg(t, "intcblock 2 3; intcblock 4 10; int 5", AssemblerMaxVersion)
 	text, err := Disassemble(ops.Program)
@@ -1095,20 +1278,24 @@ func TestManualCBlocks(t *testing.T) {
 	// Ignore manually added cblocks in deadcode, so they can be added easily to
 	// existing programs. There are proposals to put metadata there.
 	ops = testProg(t, "int 4; int 4; +; int 8; ==; return; intcblock 10", AssemblerMaxVersion)
-	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["intcblock"].Opcode)
-	require.EqualValues(t, ops.Program[3], 4) // <intcblock> 1 4 <intc_0>
-	require.Equal(t, ops.Program[4], OpsByName[ops.Version]["intc_0"].Opcode)
+	prefixLen = programPrefixLen(t, ops.Program)
+	require.Equal(t, ops.Program[prefixLen], OpsByName[ops.Version]["intcblock"].Opcode)
+	require.EqualValues(t, ops.Program[prefixLen+2], 4) // <intcblock> 1 4 <intc_0>
+	require.Equal(t, ops.Program[prefixLen+3], OpsByName[ops.Version]["intc_0"].Opcode)
 	ops = testProg(t, "b skip; intcblock 10; skip: int 4; int 4; +; int 8; ==;", AssemblerMaxVersion)
-	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["intcblock"].Opcode)
-	require.EqualValues(t, ops.Program[3], 4)
+	prefixLen = programPrefixLen(t, ops.Program)
+	require.Equal(t, ops.Program[prefixLen], OpsByName[ops.Version]["intcblock"].Opcode)
+	require.EqualValues(t, ops.Program[prefixLen+2], 4)
 
 	ops = testProg(t, "byte 0x44; byte 0x44; concat; len; return; bytecblock 0x11", AssemblerMaxVersion)
-	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["bytecblock"].Opcode)
-	require.EqualValues(t, ops.Program[4], 0x44) // <bytecblock> 1 1 0x44 <bytec_0>
-	require.Equal(t, ops.Program[5], OpsByName[ops.Version]["bytec_0"].Opcode)
+	prefixLen = programPrefixLen(t, ops.Program)
+	require.Equal(t, ops.Program[prefixLen], OpsByName[ops.Version]["bytecblock"].Opcode)
+	require.EqualValues(t, ops.Program[prefixLen+3], 0x44) // <bytecblock> 1 1 0x44 <bytec_0>
+	require.Equal(t, ops.Program[prefixLen+4], OpsByName[ops.Version]["bytec_0"].Opcode)
 	ops = testProg(t, "b skip; bytecblock 0x11; skip: byte 0x44; byte 0x44; concat; len; int 4; ==", AssemblerMaxVersion)
-	require.Equal(t, ops.Program[1], OpsByName[ops.Version]["bytecblock"].Opcode)
-	require.EqualValues(t, ops.Program[4], 0x44)
+	prefixLen = programPrefixLen(t, ops.Program)
+	require.Equal(t, ops.Program[prefixLen], OpsByName[ops.Version]["bytecblock"].Opcode)
+	require.EqualValues(t, ops.Program[prefixLen+3], 0x44)
 }
 
 func TestManualCBlocksPreBackBranch(t *testing.T) {
@@ -1579,9 +1766,9 @@ intc 0
 bnz done
 done:`
 	ops := testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 9, len(ops.Program))
-	expectedProgBytes := []byte("\x01\x20\x01\x01\x22\x22\x40\x00\x00")
-	expectedProgBytes[0] = byte(AssemblerMaxVersion)
+	expectedProgBytes, err := hex.DecodeString(mutateProgVersion(AssemblerMaxVersion, "012001012222400000"))
+	require.NoError(t, err)
+	require.Equal(t, len(expectedProgBytes), len(ops.Program))
 	require.Equal(t, expectedProgBytes, ops.Program)
 }
 
@@ -1765,7 +1952,7 @@ block BlkSha256TxnCommitment
 	}
 	ops := testProg(t, text, AssemblerMaxVersion)
 	t2, err := Disassemble(ops.Program)
-	require.Equal(t, text, t2)
+	require.Equal(t, insertSaltPragma(t, text, ops.Program), t2)
 	require.NoError(t, err)
 }
 
@@ -2082,10 +2269,10 @@ func TestDisassembleSingleOp(t *testing.T) {
 		sample := fmt.Sprintf("#pragma version %d\narg_0\n", v)
 		ops, err := AssembleStringWithVersion(sample, v)
 		require.NoError(t, err)
-		require.Equal(t, 2, len(ops.Program))
+		require.Equal(t, programPrefixLen(t, ops.Program)+1, len(ops.Program))
 		disassembled, err := Disassemble(ops.Program)
 		require.NoError(t, err)
-		require.Equal(t, sample, disassembled)
+		require.Equal(t, insertSaltPragma(t, sample, ops.Program), disassembled)
 	}
 }
 
@@ -2119,20 +2306,20 @@ func TestDisassembleTxna(t *testing.T) {
 		ops := testProg(t, txnSample, v)
 		disassembled, err := Disassemble(ops.Program)
 		require.NoError(t, err)
-		require.Equal(t, txnSample, disassembled)
+		require.Equal(t, insertSaltPragma(t, txnSample, ops.Program), disassembled)
 
 		txnaSample := fmt.Sprintf("#pragma version %d\ntxna Accounts 0\n", v)
 		ops = testProg(t, txnaSample, v)
 		disassembled, err = Disassemble(ops.Program)
 		require.NoError(t, err)
-		require.Equal(t, txnaSample, disassembled)
+		require.Equal(t, insertSaltPragma(t, txnaSample, ops.Program), disassembled)
 
 		txnSample2 := fmt.Sprintf("#pragma version %d\ntxn Accounts 0\n", v)
 		ops = testProg(t, txnSample2, v)
 		disassembled, err = Disassemble(ops.Program)
 		require.NoError(t, err)
 		// compare with txnaSample, not txnSample2
-		require.Equal(t, txnaSample, disassembled)
+		require.Equal(t, insertSaltPragma(t, txnaSample, ops.Program), disassembled)
 	}
 }
 
@@ -2148,20 +2335,20 @@ func TestDisassembleGtxna(t *testing.T) {
 		ops := testProg(t, gtxnSample, v)
 		disassembled, err := Disassemble(ops.Program)
 		require.NoError(t, err)
-		require.Equal(t, gtxnSample, disassembled)
+		require.Equal(t, insertSaltPragma(t, gtxnSample, ops.Program), disassembled)
 
 		gtxnaSample := fmt.Sprintf("#pragma version %d\ngtxna 0 Accounts 0\n", v)
 		ops = testProg(t, gtxnaSample, v)
 		disassembled, err = Disassemble(ops.Program)
 		require.NoError(t, err)
-		require.Equal(t, gtxnaSample, disassembled)
+		require.Equal(t, insertSaltPragma(t, gtxnaSample, ops.Program), disassembled)
 
 		gtxnSample2 := fmt.Sprintf("#pragma version %d\ngtxn 0 Accounts 0\n", v)
 		ops = testProg(t, gtxnSample2, v)
 		disassembled, err = Disassemble(ops.Program)
 		require.NoError(t, err)
 		// compare with gtxnaSample, not gtxnSample2
-		require.Equal(t, gtxnaSample, disassembled)
+		require.Equal(t, insertSaltPragma(t, gtxnaSample, ops.Program), disassembled)
 	}
 }
 
@@ -2176,7 +2363,7 @@ func TestDisassemblePushConst(t *testing.T) {
 	require.NoError(t, err)
 	disassembled, err := Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Equal(t, expectedIntSample, disassembled)
+	require.Equal(t, insertSaltPragma(t, expectedIntSample, ops.Program), disassembled)
 
 	hexBytesSample := fmt.Sprintf("#pragma version %d\npushbytes 0x01\n", AssemblerMaxVersion)
 	expectedHexBytesSample := fmt.Sprintf("#pragma version %d\npushbytes 0x01 // 0x01\n", AssemblerMaxVersion)
@@ -2184,7 +2371,7 @@ func TestDisassemblePushConst(t *testing.T) {
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Equal(t, expectedHexBytesSample, disassembled)
+	require.Equal(t, insertSaltPragma(t, expectedHexBytesSample, ops.Program), disassembled)
 
 	stringBytesSample := fmt.Sprintf("#pragma version %d\npushbytes \"a\"\n", AssemblerMaxVersion)
 	expectedStringBytesSample := fmt.Sprintf("#pragma version %d\npushbytes 0x61 // \"a\"\n", AssemblerMaxVersion)
@@ -2192,7 +2379,7 @@ func TestDisassemblePushConst(t *testing.T) {
 	require.NoError(t, err)
 	disassembled, err = Disassemble(ops.Program)
 	require.NoError(t, err)
-	require.Equal(t, expectedStringBytesSample, disassembled)
+	require.Equal(t, insertSaltPragma(t, expectedStringBytesSample, ops.Program), disassembled)
 }
 
 func TestDisassembleLastLabel(t *testing.T) {
@@ -2211,7 +2398,7 @@ label1:
 			ops := testProg(t, source, v)
 			dis, err := Disassemble(ops.Program)
 			require.NoError(t, err)
-			require.Equal(t, source, dis)
+			require.Equal(t, insertSaltPragma(t, source, ops.Program), dis)
 		})
 	}
 }
@@ -2258,7 +2445,7 @@ bytec 4 // "last"
 		require.NoError(t, err)
 		dis, err := Disassemble(ops.Program)
 		require.NoError(t, err, dis)
-		require.Equal(t, source, dis)
+		require.Equal(t, insertSaltPragma(t, source, ops.Program), dis)
 	}
 }
 
@@ -2266,16 +2453,25 @@ func TestAssembleOffsets(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	checkNoPrefixOffsets := func(program []byte, offsets map[int]SourceLocation) int {
+		t.Helper()
+
+		prefixLen := programPrefixLen(t, program)
+		for i := 0; i < prefixLen; i++ {
+			location, ok := offsets[i]
+			require.False(t, ok)
+			require.Equal(t, SourceLocation{}, location)
+		}
+		return prefixLen
+	}
+
 	source := "err"
 	ops := testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 2, len(ops.Program))
+	prefixLen := checkNoPrefixOffsets(ops.Program, ops.OffsetToSource)
+	require.Equal(t, prefixLen+1, len(ops.Program))
 	require.Equal(t, 1, len(ops.OffsetToSource))
-	// vlen
-	location, ok := ops.OffsetToSource[0]
-	require.False(t, ok)
-	require.Equal(t, SourceLocation{}, location)
 	// err
-	location, ok = ops.OffsetToSource[1]
+	location, ok := ops.OffsetToSource[prefixLen]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{}, location)
 
@@ -2284,22 +2480,19 @@ func TestAssembleOffsets(t *testing.T) {
 err; err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 4, len(ops.Program))
+	prefixLen = checkNoPrefixOffsets(ops.Program, ops.OffsetToSource)
+	require.Equal(t, prefixLen+3, len(ops.Program))
 	require.Equal(t, 3, len(ops.OffsetToSource))
-	// vlen
-	location, ok = ops.OffsetToSource[0]
-	require.False(t, ok)
-	require.Equal(t, SourceLocation{}, location)
 	// err 1
-	location, ok = ops.OffsetToSource[1]
+	location, ok = ops.OffsetToSource[prefixLen]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{}, location)
 	// err 2
-	location, ok = ops.OffsetToSource[2]
+	location, ok = ops.OffsetToSource[prefixLen+1]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 2}, location)
 	// err 3
-	location, ok = ops.OffsetToSource[3]
+	location, ok = ops.OffsetToSource[prefixLen+2]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 2, Column: 5}, location)
 
@@ -2310,34 +2503,31 @@ label1:
   err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 7, len(ops.Program))
+	prefixLen = checkNoPrefixOffsets(ops.Program, ops.OffsetToSource)
+	require.Equal(t, prefixLen+6, len(ops.Program))
 	require.Equal(t, 4, len(ops.OffsetToSource))
-	// vlen
-	location, ok = ops.OffsetToSource[0]
-	require.False(t, ok)
-	require.Equal(t, SourceLocation{}, location)
 	// err 1
-	location, ok = ops.OffsetToSource[1]
+	location, ok = ops.OffsetToSource[prefixLen]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{}, location)
 	// b
-	location, ok = ops.OffsetToSource[2]
+	location, ok = ops.OffsetToSource[prefixLen+1]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 1}, location)
 	// b byte 1
-	location, ok = ops.OffsetToSource[3]
+	location, ok = ops.OffsetToSource[prefixLen+2]
 	require.False(t, ok)
 	require.Equal(t, SourceLocation{}, location)
 	// b byte 2
-	location, ok = ops.OffsetToSource[4]
+	location, ok = ops.OffsetToSource[prefixLen+3]
 	require.False(t, ok)
 	require.Equal(t, SourceLocation{}, location)
 	// err 2
-	location, ok = ops.OffsetToSource[5]
+	location, ok = ops.OffsetToSource[prefixLen+4]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 2}, location)
 	// err 3
-	location, ok = ops.OffsetToSource[6]
+	location, ok = ops.OffsetToSource[prefixLen+5]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 4, Column: 2}, location)
 
@@ -2346,22 +2536,19 @@ label1:
 !
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 4, len(ops.Program))
+	prefixLen = checkNoPrefixOffsets(ops.Program, ops.OffsetToSource)
+	require.Equal(t, prefixLen+3, len(ops.Program))
 	require.Equal(t, 2, len(ops.OffsetToSource))
-	// vlen
-	location, ok = ops.OffsetToSource[0]
-	require.False(t, ok)
-	require.Equal(t, SourceLocation{}, location)
 	// pushint
-	location, ok = ops.OffsetToSource[1]
+	location, ok = ops.OffsetToSource[prefixLen]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{}, location)
 	// pushint byte 1
-	location, ok = ops.OffsetToSource[2]
+	location, ok = ops.OffsetToSource[prefixLen+1]
 	require.False(t, ok)
 	require.Equal(t, SourceLocation{}, location)
 	// !
-	location, ok = ops.OffsetToSource[3]
+	location, ok = ops.OffsetToSource[prefixLen+2]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 2}, location)
 }
@@ -3206,7 +3393,7 @@ int 1
 	label2:
 	`
 	ops := testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 9) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*2)
+	require.Len(t, ops.Program, programPrefixLen(t, ops.Program)+8) // prefix + pushint (2) + opcode (1) + length (1) + labels (2*2)
 
 	var labels []string
 	for i := 0; i < 255; i++ {
@@ -3220,7 +3407,7 @@ int 1
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 515) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*255)
+	require.Len(t, ops.Program, programPrefixLen(t, ops.Program)+514) // prefix + pushint (2) + opcode (1) + length (1) + labels (2*255)
 
 	// 256 is too many
 	source = fmt.Sprintf(`
@@ -3620,7 +3807,7 @@ int 1
 	label2:
 	`
 	ops := testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 12) // ver (1) + pushints (5) + opcode (1) + length (1) + labels (2*2)
+	require.Len(t, ops.Program, programPrefixLen(t, ops.Program)+11) // prefix + pushints (5) + opcode (1) + length (1) + labels (2*2)
 
 	// confirm byte array args are assembled successfully
 	source = `
@@ -3643,7 +3830,7 @@ int 1
 	%s
 	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 515) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*255)
+	require.Len(t, ops.Program, programPrefixLen(t, ops.Program)+514) // prefix + pushint (2) + opcode (1) + length (1) + labels (2*255)
 
 	// 256 is too many
 	source = fmt.Sprintf(`
@@ -3677,10 +3864,10 @@ func TestAssemblePushConsts(t *testing.T) {
 	// basic test
 	source = `pushints 1 2 3`
 	ops := testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 6) // ver (1) + pushints (5)
+	require.Len(t, ops.Program, programPrefixLen(t, ops.Program)+5) // prefix + pushints (5)
 	source = `pushbytess "1" "2" "33"`
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 10) // ver (1) + pushbytess (9)
+	require.Len(t, ops.Program, programPrefixLen(t, ops.Program)+9) // prefix + pushbytess (9)
 
 	// 256 increases size of encoded length to two bytes
 	valsStr := make([]string, 256)
@@ -3689,14 +3876,14 @@ func TestAssemblePushConsts(t *testing.T) {
 	}
 	source = fmt.Sprintf(`pushints %s`, strings.Join(valsStr, " "))
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 260) // ver (1) + opcode (1) + len (2) + ints (256)
+	require.Len(t, ops.Program, programPrefixLen(t, ops.Program)+259) // prefix + opcode (1) + len (2) + ints (256)
 
 	for i := range valsStr {
 		valsStr[i] = fmt.Sprintf("\"%d\"", 1)
 	}
 	source = fmt.Sprintf(`pushbytess %s`, strings.Join(valsStr, " "))
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 516) // ver (1) + opcode (1) + len (2) + bytess (512)
+	require.Len(t, ops.Program, programPrefixLen(t, ops.Program)+515) // prefix + opcode (1) + len (2) + bytess (512)
 
 	// enforce correct types
 	source = `pushints "1" "2" "3"`
