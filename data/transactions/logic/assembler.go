@@ -349,6 +349,17 @@ func (pgm *ProgramKnowledge) deaden() {
 func (pgm *ProgramKnowledge) label() {
 	if pgm.deadcode {
 		pgm.reset()
+		return
+	}
+	// Branches may converge here with different types in frame slots (via
+	// frame_bury) or scratch space (via store/stores) on other paths. Widen
+	// all stack positions and scratch slots to StackAny so that subsequent
+	// frame_dig / load operations don't report spurious type mismatches.
+	for i := range pgm.stack {
+		pgm.stack[i] = StackAny
+	}
+	for i := range pgm.scratchSpace {
+		pgm.scratchSpace[i] = StackAny
 	}
 }
 
@@ -3120,6 +3131,19 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			text = out.String()
 			err = errors.New(msg)
 			return
+		}
+
+		// proto marks a subroutine entry point and must always have a label so
+		// that the disassembly can be validly reassembled. If we encounter a
+		// proto without a pending label (e.g. a subroutine that is never
+		// targeted by a callsub), create one now and trigger a rerun so the
+		// label appears before the opcode in the output.
+		if op.Name == "proto" {
+			if _, hasLabel := dis.pendingLabels[dis.pc]; !hasLabel {
+				dis.labelCount++
+				label := fmt.Sprintf("label%d", dis.labelCount)
+				dis.putLabel(label, dis.pc) // sets rerun=true since target <= pc
+			}
 		}
 
 		// ds.pcOffset tracks where in the output each opcode maps to assembly
