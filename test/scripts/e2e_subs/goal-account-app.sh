@@ -36,6 +36,15 @@ APP_C_ID=$(echo ${RES} | grep -Eo "${APP_INDEX_PATTERN}" | grep -Eo '[[:digit:]]
 RES=$(${gcmd} app create --creator ${ACCOUNTA} --approval-prog "${TEMPDIR}/approval.teal" --clear-prog "${TEMPDIR}/clear.teal" --global-ints 1 --global-byteslices 0 --local-ints 4 --local-byteslices 0)
 APP_D_ID=$(echo ${RES} | grep -Eo "${APP_INDEX_PATTERN}" | grep -Eo '[[:digit:]]+')
 
+# query account A's apps without --include-params; although A is not
+# opted-in, A is the creator so we want the apps returned (though
+# without complete params)
+RES=$(${gcmd} account applicationdetails -a ${ACCOUNTA})
+if [[ ${RES} != *"Application ID: ${APP_A_ID}"* ]]; then
+    date '+goal-account-app-test applicationdetails w/o include-params (1) should contain app A %Y%m%d_%H%M%S'
+    false
+fi
+
 # query account A's apps with --include-params; although A is not
 # opted-in, A is the creator so params are returned, (1)
 RES=$(${gcmd} account applicationdetails -a ${ACCOUNTA} -l 2 --include-params)
@@ -74,6 +83,18 @@ ${gcmd} app optin --app-id ${APP_A_ID} --from ${ACCOUNTB} --app-arg=int:1
 ${gcmd} app optin --app-id ${APP_B_ID} --from ${ACCOUNTB}
 ${gcmd} app optin --app-id ${APP_C_ID} --from ${ACCOUNTB} --app-arg=int:1
 ${gcmd} app optin --app-id ${APP_D_ID} --from ${ACCOUNTB}
+
+
+# Recheck our very first test now that several rounds have passed (b/c
+# of the optins). This ensures the answer is the same whether it came
+# from deltas or db.
+RES=$(${gcmd} account applicationdetails -a ${ACCOUNTA})
+if [[ ${RES} != *"Application ID: ${APP_A_ID}"* ]]; then
+    date '+goal-account-app-test applicationdetails w/o include-params (1) should contain app A %Y%m%d_%H%M%S'
+    false
+fi
+
+# Now get back to testing account B
 
 # displays opted-in apps
 ${gcmd} account info -a ${ACCOUNTB}

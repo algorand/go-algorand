@@ -1670,7 +1670,9 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 					}
 				}
 
-				if arwi.AppLocalState != nil || arwi.AppParams != nil {
+				// unlike assets, we might have !includeParams, which means we
+				// must also check for !Creator.IsZero to see if we should include.
+				if arwi.AppLocalState != nil || arwi.AppParams != nil || !arwi.Creator.IsZero() {
 					result = append(result, arwi)
 				}
 			}
@@ -1707,27 +1709,29 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 					arwi.AppLocalState = d.State.LocalState
 				}
 				// Patch in the params info if we have it in the deltas
-				if includeParams {
-					if deltaParams, paramsInDelta := deltaParamsResults[appID]; paramsInDelta {
-						if !deltaParams.Deleted {
-							arwi.Creator = deltaCreatorResults[appID]
+				if deltaParams, paramsInDelta := deltaParamsResults[appID]; paramsInDelta {
+					if !deltaParams.Deleted {
+						arwi.Creator = deltaCreatorResults[appID]
+						if includeParams {
 							arwi.AppParams = deltaParams.Params
 						}
-					} else {
-						// The params are not in the deltas; query the DB directly.
-						// If the DB has committed since our snapshot, update
-						// resourceDbRound and break so the check below retries.
-						cid := basics.CreatableIndex(appID)
-						creator, ok, creatorDBRound, err := au.accountsq.LookupCreator(cid, basics.AppCreatable)
-						if err != nil {
-							return nil, 0, err
-						}
-						if creatorDBRound != currentDBRound {
-							resourceDbRound = creatorDBRound
-							goto retryWait
-						}
-						if ok {
-							arwi.Creator = creator
+					}
+				} else {
+					// The params are not in the deltas; query the DB directly.
+					// If the DB has committed since our snapshot, update
+					// resourceDbRound and break so the check below retries.
+					cid := basics.CreatableIndex(appID)
+					creator, ok, creatorDBRound, err := au.accountsq.LookupCreator(cid, basics.AppCreatable)
+					if err != nil {
+						return nil, 0, err
+					}
+					if creatorDBRound != currentDBRound {
+						resourceDbRound = creatorDBRound
+						goto retryWait
+					}
+					if ok {
+						arwi.Creator = creator
+						if includeParams {
 							persistedResource, err := au.accountsq.LookupResources(creator, cid, basics.AppCreatable)
 							if err != nil {
 								return nil, 0, err
@@ -1741,7 +1745,8 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 						}
 					}
 				}
-				if arwi.AppLocalState != nil || arwi.AppParams != nil {
+				// again, we must check for the creator, since that might be the only info here
+				if arwi.AppLocalState != nil || arwi.AppParams != nil || !arwi.Creator.IsZero() {
 					result = append(result, arwi)
 					if appID > resultMaxID {
 						resultMaxID = appID
@@ -1751,37 +1756,39 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 
 			// Add apps created by the account, where that creation is only in
 			// the deltas, not yet the DB.  As above, only include delta entries
-			// within the DB page range.
-			if includeParams {
-				var sortedCreatorOnlyIDs []basics.AppIndex
-				for appID, deltaParams := range deltaParamsResults {
-					if seenInDB[appID] || (dbHasMore && appID > dbMaxID) {
-						continue
-					}
-					if deltaParams.Deleted || deltaCreatorResults[appID] != addr {
-						continue
-					}
-					// Don't add if the locals loop already covered this app.
-					if _, ok := deltaLocalsResults[appID]; ok {
-						continue
-					}
-					sortedCreatorOnlyIDs = append(sortedCreatorOnlyIDs, appID)
+			// within the DB page range.  This loop is not required for the
+			// asset case, because every such creation will also appear in the
+			// locals - the creator is always opted into their own asset.
+
+			var sortedCreatorOnlyIDs []basics.AppIndex
+			for appID, deltaParams := range deltaParamsResults {
+				if seenInDB[appID] || (dbHasMore && appID > dbMaxID) {
+					continue
 				}
-				slices.Sort(sortedCreatorOnlyIDs)
-				for _, appID := range sortedCreatorOnlyIDs {
-					if uint64(len(result)) >= limit && appID > resultMaxID {
-						break
-					}
-					deltaParams := deltaParamsResults[appID]
-					arwi := ledgercore.AppResourceWithIDs{
-						AppID:       appID,
-						Creator:     deltaCreatorResults[appID],
-						AppResource: ledgercore.AppResource{AppParams: deltaParams.Params},
-					}
-					result = append(result, arwi)
-					if appID > resultMaxID {
-						resultMaxID = appID
-					}
+				if deltaParams.Deleted || deltaCreatorResults[appID] != addr {
+					continue
+				}
+				// Don't add if the locals loop already covered this app.
+				if _, ok := deltaLocalsResults[appID]; ok {
+					continue
+				}
+				sortedCreatorOnlyIDs = append(sortedCreatorOnlyIDs, appID)
+			}
+			slices.Sort(sortedCreatorOnlyIDs)
+			for _, appID := range sortedCreatorOnlyIDs {
+				if uint64(len(result)) >= limit && appID > resultMaxID {
+					break
+				}
+				arwi := ledgercore.AppResourceWithIDs{
+					AppID:   appID,
+					Creator: deltaCreatorResults[appID],
+				}
+				if includeParams {
+					arwi.AppResource = ledgercore.AppResource{AppParams: deltaParamsResults[appID].Params}
+				}
+				result = append(result, arwi)
+				if appID > resultMaxID {
+					resultMaxID = appID
 				}
 			}
 
