@@ -1552,7 +1552,7 @@ func (cx *EvalContext) step() error {
 
 	deets := &spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
+		return fmt.Errorf("program ends without immediate value(s)")
 	}
 
 	// It's something like a 5-10% overhead on our simplest instructions to make
@@ -1685,7 +1685,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	}
 	deets := spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
+		return 0, fmt.Errorf("program ends without immediate value(s)")
 	}
 	opcost := deets.Cost(cx.program, cx.pc, blankStack)
 	if opcost <= 0 {
@@ -2689,7 +2689,101 @@ func checkSwitch(cx *EvalContext) error {
 	return nil
 }
 
+func branchTargetVarint(cx *EvalContext) (target int, instrSize int, err error) {
+	offset, bytesRead := binary.Varint(cx.program[cx.pc+1:])
+	if bytesRead <= 0 {
+		if bytesRead == 0 {
+			return 0, 0, fmt.Errorf("program ends without branch target")
+		}
+		return 0, 0, fmt.Errorf("branch offset varint overflows int64")
+	}
+	instrSize = 1 + bytesRead
+	// Negative offsets are back-jumps measured from the start of the
+	// instruction; non-negative offsets are forward-jumps from the end.
+	if offset < 0 {
+		target = cx.pc + int(offset)
+	} else {
+		target = cx.pc + instrSize + int(offset)
+	}
+	if target > len(cx.program) || target < 0 {
+		return 0, 0, fmt.Errorf("branch target %d outside of program", target)
+	}
+	return target, instrSize, nil
+}
+
+func checkBranchVarint(cx *EvalContext) error {
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if target < cx.pc {
+		if ok := cx.instructionStarts[target]; !ok {
+			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
+		}
+	}
+	cx.branchTargets[target] = true
+	cx.nextpc = cx.pc + instrSize
+	return nil
+}
+
 func opBnz(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	isNonZero := cx.Stack[last].Uint != 0
+	cx.Stack = cx.Stack[:last]
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if isNonZero {
+		cx.nextpc = target
+	} else {
+		cx.nextpc = cx.pc + instrSize
+	}
+	return nil
+}
+
+func opBz(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	isZero := cx.Stack[last].Uint == 0
+	cx.Stack = cx.Stack[:last]
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if isZero {
+		cx.nextpc = target
+	} else {
+		cx.nextpc = cx.pc + instrSize
+	}
+	return nil
+}
+
+func opB(cx *EvalContext) error {
+	target, _, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
+func opCallSubVarint(cx *EvalContext) error {
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	cx.callstack = append(cx.callstack, frame{
+		retpc:  cx.pc + instrSize,
+		height: len(cx.Stack),
+	})
+	cx.nextpc = target
+	if cx.nextpc < len(cx.program) && cx.program[cx.nextpc] == protoByte {
+		cx.fromCallsub = true
+	}
+	return nil
+}
+
+func opBnzOld(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isNonZero := cx.Stack[last].Uint != 0
@@ -2704,7 +2798,7 @@ func opBnz(cx *EvalContext) error {
 	return nil
 }
 
-func opBz(cx *EvalContext) error {
+func opBzOld(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isZero := cx.Stack[last].Uint == 0
@@ -2719,7 +2813,7 @@ func opBz(cx *EvalContext) error {
 	return nil
 }
 
-func opB(cx *EvalContext) error {
+func opBOld(cx *EvalContext) error {
 	target, err := branchTarget(cx)
 	if err != nil {
 		return err
@@ -2789,7 +2883,7 @@ func opCallSub(cx *EvalContext) error {
 		retpc:  cx.pc + 3, // retpc is pc _after_ the callsub
 		height: len(cx.Stack),
 	})
-	err := opB(cx)
+	err := opBOld(cx)
 
 	/* We only set fromCallSub if we know we're jumping to a proto. In opProto,
 	   we confirm we came directly from callsub by checking (and resetting) the
