@@ -172,6 +172,9 @@ func (c *CapabilitiesDiscovery) advertiseCaps(capabilities []Capability) (time.D
 	for range capabilities {
 		r := <-results
 		if r.err != nil {
+			if c.dht.Context().Err() != nil {
+				continue
+			}
 			aggErr = errors.Join(aggErr, r.err)
 			loggerFn := c.log.Warnf
 			if r.err == kbucket.ErrLookupFailure {
