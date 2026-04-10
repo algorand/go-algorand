@@ -673,7 +673,8 @@ func (c *Client) AccountAssetsInformation(account string, next string, limit uin
 	return
 }
 
-// AccountApplicationsInformation returns the apps opted-into by an account, potentially including app params for non-deleted apps.
+// AccountApplicationsInformation returns the apps created by or opted-into by an account.
+// If includeParams is true, the response also includes app params for non-deleted apps.
 func (c *Client) AccountApplicationsInformation(account string, next string, limit uint64, includeParams bool) (resp model.AccountApplicationsInformationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
