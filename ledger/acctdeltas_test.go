@@ -4010,8 +4010,8 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	// Round 1: create assets 1000-1005 with params and holdings
 	//   1000: will have holding modified, then overridden in a second delta round
-	//   1001: will have holding deleted in delta (params remain since account is creator)
-	//   1002: will remain unchanged
+	//   1001: will remain unchanged in deltas (exercises plain DB read-through)
+	//   1002: will remain unchanged for creatorAddr; optinAddr opts in and then opts out in a delta
 	//   1003: will have params-only modification in delta
 	//   1004: will have params deleted in delta (holding remains)
 	//   1005: will have both holding and params deleted in delta
@@ -4055,12 +4055,17 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 		updates.Upsert(optinAddr, ledgercore.AccountData{
 			AccountBaseData: ledgercore.AccountBaseData{
 				MicroAlgos:  basics.MicroAlgos{Raw: 1_000_000},
-				TotalAssets: 1,
+				TotalAssets: 2,
 			},
 		})
 		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1007),
 			ledgercore.AssetParamsDelta{},
 			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+		// optinAddr also opts into 1002; this holding will be deleted in a delta to
+		// test that a non-creator opt-out does not appear in the results.
+		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1002),
+			ledgercore.AssetParamsDelta{},
+			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 50}})
 
 		base := accts[0]
 		newAccts := applyPartialDeltas(base, updates)
@@ -4117,8 +4122,8 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 			ledgercore.AssetHoldingDelta{
 				Holding: &basics.AssetHolding{Amount: 6000},
 			})
-		// 1001: delete holding
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1001),
+		// optinAddr opts out of 1002; it is not the creator so nothing should appear.
+		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1002),
 			ledgercore.AssetParamsDelta{},
 			ledgercore.AssetHoldingDelta{Deleted: true})
 		// 1000: modify holding (will be overridden by delta round 2)
@@ -4164,6 +4169,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	// Expected: 1000, 1001, 1002, 1003, 1004, 1006.
 	// 1005 fully deleted (both holding and params) — should not appear.
+	// 1001 has no delta, so it appears as committed.
 	require.Len(t, resources, 6)
 
 	assetMap := make(map[basics.AssetIndex]ledgercore.AssetResourceWithIDs)
@@ -4177,9 +4183,8 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(1_000_000), assetMap[basics.AssetIndex(1000)].AssetParams.Total)
 	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1000)].Creator)
 
-	// 1001: holding deleted but params remain (account is still creator)
-	require.Contains(t, assetMap, basics.AssetIndex(1001))
-	require.Nil(t, assetMap[basics.AssetIndex(1001)].AssetHolding)
+	// 1001: no delta — holding and params come straight from DB
+	require.Equal(t, uint64(1001*100), assetMap[basics.AssetIndex(1001)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1001)].AssetParams)
 	require.Equal(t, uint64(1_001_000), assetMap[basics.AssetIndex(1001)].AssetParams.Total)
 	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1001)].Creator)
@@ -4211,10 +4216,10 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetParams.Total)
 	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1006)].Creator)
 
-	// optinAddr opted in to asset 1007 with a zero balance before it was destroyed. The protocol
-	// does not track all opt-outs when an asset is deleted (only the creator's holding is
-	// enforced), so optinAddr's holding persists in the DB even after the asset params are gone.
-	// The lookup must return a non-nil holding with zero amount and no params or creator.
+	// optinAddr holds two assets in the DB (1002 and 1007) but opts out of 1002 in the delta.
+	// Since optinAddr is not the creator of 1002, the opt-out leaves nothing to return for it.
+	// Asset 1007 persists: its params were destroyed in a committed round but the protocol
+	// does not enforce cleanup of non-creator holdings, so the zero-balance holding survives.
 	optinAddrResources, optinAddrRnd, err := au.LookupAssetResources(optinAddr, 0, 100)
 	require.NoError(t, err)
 	require.Equal(t, deltaRound2, optinAddrRnd)
