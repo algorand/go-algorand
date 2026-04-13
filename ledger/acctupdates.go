@@ -1451,7 +1451,10 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 					arwi.AssetParams = &ap
 				}
 
-				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
+				// Don't check AssetParams, that could just fool us into
+				// including an asset created by someone else, that this addr
+				// opted-out of. Unlike apps, a creator _must_ have a holding.
+				if arwi.AssetHolding != nil {
 					result = append(result, arwi)
 				}
 			}
@@ -1521,7 +1524,8 @@ func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT ba
 						arwi.AssetParams = resource.AssetParams
 					}
 				}
-				if arwi.AssetHolding != nil || arwi.AssetParams != nil {
+				// Unlike apps, don't check params, see above.
+				if arwi.AssetHolding != nil {
 					result = append(result, arwi)
 					if assetID > resultMaxID {
 						resultMaxID = assetID
@@ -1671,8 +1675,8 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 				}
 
 				// unlike assets, we might have !includeParams, which means we
-				// must also check for !Creator.IsZero to see if we should include.
-				if arwi.AppLocalState != nil || arwi.AppParams != nil || !arwi.Creator.IsZero() {
+				// must also check for addr == creator (if addr != creator, we don't care about it)
+				if arwi.AppLocalState != nil || arwi.AppParams != nil || arwi.Creator == addr {
 					result = append(result, arwi)
 				}
 			}
@@ -1746,7 +1750,7 @@ func (au *accountUpdates) lookupApplicationResources(addr basics.Address, appIDG
 					}
 				}
 				// again, we must check for the creator, since that might be the only info here
-				if arwi.AppLocalState != nil || arwi.AppParams != nil || !arwi.Creator.IsZero() {
+				if arwi.AppLocalState != nil || arwi.AppParams != nil || arwi.Creator == addr {
 					result = append(result, arwi)
 					if appID > resultMaxID {
 						resultMaxID = appID
