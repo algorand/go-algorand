@@ -161,7 +161,7 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 func (cs *CatchpointCatchupService) Start(ctx context.Context) error {
 	// Only check catchpoint ledger validity if we're starting new
 	if cs.stage == ledger.CatchpointCatchupStateInactive {
-		err := cs.checkLedgerDownload()
+		err := cs.checkLedgerDownload(ctx)
 		if err != nil {
 			return fmt.Errorf("aborting catchup Start(): %s", err)
 		}
@@ -810,7 +810,7 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 // checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
 // before actually starting the catchup process.
 // The error returned is either from an unsuccessful request or a successful request that did not return a 200.
-func (cs *CatchpointCatchupService) checkLedgerDownload() error {
+func (cs *CatchpointCatchupService) checkLedgerDownload(ctx context.Context) error {
 	round, _, err := ledgercore.ParseCatchpointLabel(cs.stats.CatchpointLabel)
 	if err != nil {
 		return fmt.Errorf("failed to parse catchpoint label : %v", err)
@@ -822,7 +822,7 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 			cs.log.Debugf("checkLedgerDownload: error on getNextPeer: %s", peerError.Error())
 			return peerError
 		}
-		err = ledgerFetcher.headLedger(context.Background(), psp.Peer, round)
+		err = ledgerFetcher.headLedger(ctx, psp.Peer, round)
 		if err == nil {
 			return nil
 		}

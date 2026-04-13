@@ -413,8 +413,12 @@ func (node *AlgorandFullNode) Start() error {
 	}
 
 	if node.catchpointCatchupService != nil {
-		startNetwork()
-		node.catchpointCatchupService.Start(node.ctx)
+		if err := startNetwork(); err != nil {
+			return err
+		}
+		if err := node.catchpointCatchupService.Start(node.ctx); err != nil {
+			return err
+		}
 	} else {
 		node.catchupService.Start()
 		node.agreementService.Start()
@@ -424,8 +428,7 @@ func (node *AlgorandFullNode) Start() error {
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
 		node.heartbeatService.Start()
-		err := startNetwork()
-		if err != nil {
+		if err := startNetwork(); err != nil {
 			return err
 		}
 
