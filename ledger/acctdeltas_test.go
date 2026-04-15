@@ -4042,7 +4042,11 @@ type lookupAppScenario struct {
 
 	wantWithParams lookupAppExpected
 	wantNoParams   lookupAppExpected
-	id             basics.AppIndex
+	// Non-creator scenarios should also assert the creator's view of the app:
+	// creator has params but no local state for these cases.
+	wantCreatorWithParams *lookupAppExpected
+	wantCreatorNoParams   *lookupAppExpected
+	id                    basics.AppIndex
 }
 
 func lookupTestAssetParams(total uint64, unitName string) *basics.AssetParams {
@@ -4172,12 +4176,18 @@ func validateLookupAppScenario(t *testing.T, s lookupAppScenario) {
 		if s.creatorParams == nil && (s.localsDelta1 == nil || s.localsDelta1.deleted) {
 			t.Fatalf("%s: delta-only creator app creation must include local state", s.name)
 		}
+		if s.wantCreatorWithParams != nil || s.wantCreatorNoParams != nil {
+			t.Fatalf("%s: creator scenarios should not set creator-view expectations", s.name)
+		}
 	case lookupHolderGroup:
 		if s.creatorParams == nil {
 			t.Fatalf("%s: holder scenario must carry committed creator params", s.name)
 		}
 		if s.initLocalState == nil {
 			t.Fatalf("%s: holder scenario must have committed local state", s.name)
+		}
+		if s.wantCreatorWithParams == nil || s.wantCreatorNoParams == nil {
+			t.Fatalf("%s: holder scenario must set creator-view expectations", s.name)
 		}
 	case lookupDeltaOnlyGroup:
 		if s.creatorParams == nil {
@@ -4186,8 +4196,17 @@ func validateLookupAppScenario(t *testing.T, s lookupAppScenario) {
 		if s.initLocalState != nil {
 			t.Fatalf("%s: delta-only scenario must not have committed local state", s.name)
 		}
+		if s.wantCreatorWithParams == nil || s.wantCreatorNoParams == nil {
+			t.Fatalf("%s: delta-only scenario must set creator-view expectations", s.name)
+		}
 	default:
 		t.Fatalf("%s: unknown app scenario group %q", s.name, s.group)
+	}
+	if s.wantCreatorWithParams != nil && s.wantCreatorWithParams.localState != nil {
+		t.Fatalf("%s: creator-view expectations should not include local state", s.name)
+	}
+	if s.wantCreatorNoParams != nil && s.wantCreatorNoParams.localState != nil {
+		t.Fatalf("%s: creator-view expectations should not include local state", s.name)
 	}
 }
 
@@ -4254,6 +4273,31 @@ func assertLookupAppScenario(t *testing.T, scenario lookupAppScenario, includePa
 	require.Equal(t, expected.localState, got.AppLocalState, "%s (%s): unexpected local state", scenario.name, mode)
 	require.Equal(t, expected.params, got.AppParams, "%s (%s): unexpected params", scenario.name, mode)
 	require.Equal(t, expected.creator, got.Creator, "%s (%s): unexpected creator", scenario.name, mode)
+}
+
+func assertLookupAppCreatorView(t *testing.T, scenario lookupAppScenario, includeParams bool, results map[basics.AppIndex]ledgercore.AppResourceWithIDs) {
+	t.Helper()
+
+	var expected *lookupAppExpected
+	mode := "includeParams=false"
+	if includeParams {
+		expected = scenario.wantCreatorWithParams
+		mode = "includeParams=true"
+	} else {
+		expected = scenario.wantCreatorNoParams
+	}
+	require.NotNil(t, expected, "%s (%s): missing creator-view expectation", scenario.name, mode)
+
+	got, ok := results[scenario.id]
+	if expected.excluded {
+		require.False(t, ok, "%s (creator view, %s): expected app to be excluded", scenario.name, mode)
+		return
+	}
+
+	require.True(t, ok, "%s (creator view, %s): expected app in result map", scenario.name, mode)
+	require.Equal(t, expected.localState, got.AppLocalState, "%s (creator view, %s): unexpected local state", scenario.name, mode)
+	require.Equal(t, expected.params, got.AppParams, "%s (creator view, %s): unexpected params", scenario.name, mode)
+	require.Equal(t, expected.creator, got.Creator, "%s (creator view, %s): unexpected creator", scenario.name, mode)
 }
 
 func runLookupAssetScenarioGroupTest(t *testing.T, group lookupResourceGroup, scenarios []lookupAssetScenario) {
@@ -4488,13 +4532,18 @@ func runLookupAppScenarioGroupTest(t *testing.T, group lookupResourceGroup, scen
 	creatorAddr, holderAddr, deltaOnlyAddr := selectLookupTestAddresses(accts[0])
 	queryAddr := lookupGroupQueryAddr(group, creatorAddr, holderAddr, deltaOnlyAddr)
 
+	fillExpectedCreator := func(expected *lookupAppExpected, paramsDeleted bool) {
+		if expected == nil || expected.excluded || paramsDeleted {
+			return
+		}
+		expected.creator = creatorAddr
+	}
 	for i := range scenarios {
-		if !scenarios[i].wantWithParams.excluded && (scenarios[i].creatorParamsDelta1 == nil || !scenarios[i].creatorParamsDelta1.deleted) {
-			scenarios[i].wantWithParams.creator = creatorAddr
-		}
-		if !scenarios[i].wantNoParams.excluded && (scenarios[i].creatorParamsDelta1 == nil || !scenarios[i].creatorParamsDelta1.deleted) {
-			scenarios[i].wantNoParams.creator = creatorAddr
-		}
+		paramsDeleted := scenarios[i].creatorParamsDelta1 != nil && scenarios[i].creatorParamsDelta1.deleted
+		fillExpectedCreator(&scenarios[i].wantWithParams, paramsDeleted)
+		fillExpectedCreator(&scenarios[i].wantNoParams, paramsDeleted)
+		fillExpectedCreator(scenarios[i].wantCreatorWithParams, paramsDeleted)
+		fillExpectedCreator(scenarios[i].wantCreatorNoParams, paramsDeleted)
 	}
 
 	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
@@ -4665,6 +4714,36 @@ func runLookupAppScenarioGroupTest(t *testing.T, group lookupResourceGroup, scen
 		}
 		for _, scenario := range scenarios {
 			assertLookupAppScenario(t, scenario, includeParams, resultMap)
+		}
+	}
+
+	if group == lookupCreatorGroup {
+		return
+	}
+
+	for _, includeParams := range []bool{true, false} {
+		resources, rnd, err := au.LookupApplicationResources(creatorAddr, 0, 100, includeParams)
+		require.NoError(t, err)
+		require.Equal(t, expectedRound, rnd)
+
+		expectedCount := 0
+		for _, scenario := range scenarios {
+			expected := scenario.wantCreatorNoParams
+			if includeParams {
+				expected = scenario.wantCreatorWithParams
+			}
+			if expected != nil && !expected.excluded {
+				expectedCount++
+			}
+		}
+		require.Len(t, resources, expectedCount, "creatorView includeParams=%v", includeParams)
+
+		resultMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs, len(resources))
+		for _, resource := range resources {
+			resultMap[resource.AppID] = resource
+		}
+		for _, scenario := range scenarios {
+			assertLookupAppCreatorView(t, scenario, includeParams, resultMap)
 		}
 	}
 }
@@ -4927,6 +5006,10 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 				wantNoParams: lookupAppExpected{
 					excluded: true,
 				},
+				wantCreatorWithParams: &lookupAppExpected{
+					params: lookupTestAppParams(0x01, 0x11),
+				},
+				wantCreatorNoParams: &lookupAppExpected{},
 			},
 			{
 				name:                "cross-params-modified",
@@ -4941,6 +5024,10 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 				wantNoParams: lookupAppExpected{
 					localState: lookupTestAppLocalState(99),
 				},
+				wantCreatorWithParams: &lookupAppExpected{
+					params: lookupTestAppParams(0x02, 0x12),
+				},
+				wantCreatorNoParams: &lookupAppExpected{},
 			},
 			{
 				name:                "cross-params-deleted",
@@ -4953,6 +5040,12 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 				},
 				wantNoParams: lookupAppExpected{
 					localState: lookupTestAppLocalState(99),
+				},
+				wantCreatorWithParams: &lookupAppExpected{
+					excluded: true,
+				},
+				wantCreatorNoParams: &lookupAppExpected{
+					excluded: true,
 				},
 			},
 		})
@@ -4972,6 +5065,10 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 				wantNoParams: lookupAppExpected{
 					excluded: true,
 				},
+				wantCreatorWithParams: &lookupAppExpected{
+					params: lookupTestAppParams(0x01, 0x11),
+				},
+				wantCreatorNoParams: &lookupAppExpected{},
 			},
 		})
 	})
