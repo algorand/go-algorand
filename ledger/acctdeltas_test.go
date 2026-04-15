@@ -4236,11 +4236,21 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 
 	accts := setupAccts(5)
 
-	var testAddr basics.Address
+	// testAddr creates all apps and is both creator and opted-in.
+	// optinAddr is a separate account that opts into an app created by
+	// testAddr, then closes out after the opt-in is committed.
+	// deltaOnlyOptinAddr opts in and closes out across uncommitted deltas.
+	var testAddr, optinAddr, deltaOnlyOptinAddr basics.Address
 	for addr := range accts[0] {
 		if addr != testSinkAddr && addr != testPoolAddr {
-			testAddr = addr
-			break
+			if testAddr.IsZero() {
+				testAddr = addr
+			} else if optinAddr.IsZero() {
+				optinAddr = addr
+			} else {
+				deltaOnlyOptinAddr = addr
+				break
+			}
 		}
 	}
 
@@ -4259,7 +4269,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	// Round 1: create apps 2000-2005 with params and local state
 	//   2000: will have local state modified, then overridden in a second delta round
 	//   2001: will have local state deleted in delta (params remain since account is creator)
-	//   2002: will remain unchanged
+	//   2002: will remain unchanged for testAddr; optinAddr opts in and then closes out in a delta
 	//   2003: will have params-only modification in delta
 	//   2004: will have params deleted in delta (local state remains)
 	//   2005: will have both local state and params deleted in delta
@@ -4286,6 +4296,21 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 					},
 				})
 		}
+		updates.Upsert(optinAddr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
+				TotalAppLocalStates: 1,
+			},
+		})
+		// optinAddr opts into 2002; this local state will be deleted in a delta to
+		// test that a non-creator close-out does not appear in results.
+		updates.UpsertAppResource(optinAddr, basics.AppIndex(2002),
+			ledgercore.AppParamsDelta{},
+			ledgercore.AppLocalStateDelta{
+				LocalState: &basics.AppLocalState{
+					Schema: basics.StateSchema{NumUint: 99},
+				},
+			})
 
 		base := accts[0]
 		newAccts := applyPartialDeltas(base, updates)
@@ -4355,6 +4380,19 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 		updates.UpsertAppResource(testAddr, basics.AppIndex(2004),
 			ledgercore.AppParamsDelta{Deleted: true},
 			ledgercore.AppLocalStateDelta{})
+		// optinAddr closes out of 2002
+		updates.UpsertAppResource(optinAddr, basics.AppIndex(2002),
+			ledgercore.AppParamsDelta{},
+			ledgercore.AppLocalStateDelta{Deleted: true})
+		// deltaOnlyOptinAddr opts into 2002 only in uncommitted deltas; round 2
+		// will close it out before anything commits to test the delta-only path.
+		updates.UpsertAppResource(deltaOnlyOptinAddr, basics.AppIndex(2002),
+			ledgercore.AppParamsDelta{},
+			ledgercore.AppLocalStateDelta{
+				LocalState: &basics.AppLocalState{
+					Schema: basics.StateSchema{NumUint: 77},
+				},
+			})
 
 		base := accts[deltaRound1-1]
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
@@ -4372,6 +4410,9 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 					Schema: basics.StateSchema{NumUint: 42},
 				},
 			})
+		updates.UpsertAppResource(deltaOnlyOptinAddr, basics.AppIndex(2002),
+			ledgercore.AppParamsDelta{},
+			ledgercore.AppLocalStateDelta{Deleted: true})
 
 		base := accts[deltaRound1-1]
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
@@ -4463,6 +4504,25 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 		"delta-only app should have non-zero Creator even when includeParams=false")
 	// 2004 had its params deleted -- Creator should be zero.
 	require.True(t, noParamsMap[basics.AppIndex(2004)].Creator.IsZero())
+
+	// optinAddr closed out of 2002 in deltas. A non-creator who closed out
+	// should not see the app, even with includeParams=true (the DB join
+	// provides params from the creator, but the account has no relationship).
+	optinWithParams, _, err := au.LookupApplicationResources(optinAddr, 0, 100, true)
+	require.NoError(t, err)
+	require.Len(t, optinWithParams, 0, "non-creator close-out should not appear even with includeParams=true")
+
+	optinNoParams, _, err := au.LookupApplicationResources(optinAddr, 0, 100, false)
+	require.NoError(t, err)
+	require.Len(t, optinNoParams, 0, "non-creator close-out should not appear with includeParams=false")
+
+	deltaOnlyWithParams, _, err := au.LookupApplicationResources(deltaOnlyOptinAddr, 0, 100, true)
+	require.NoError(t, err)
+	require.Len(t, deltaOnlyWithParams, 0, "delta-only non-creator close-out should not appear even with includeParams=true")
+
+	deltaOnlyNoParams, _, err := au.LookupApplicationResources(deltaOnlyOptinAddr, 0, 100, false)
+	require.NoError(t, err)
+	require.Len(t, deltaOnlyNoParams, 0, "delta-only non-creator close-out should not appear with includeParams=false")
 }
 
 // TestLookupAppResourcesParamsOnlyDeletion exercises the scenario where an app
