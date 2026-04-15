@@ -205,10 +205,10 @@ func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDeta
 	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
 }
 
-// detOldBranch describes a branch that always has a two-byte branch offset
-func detOldBranch() OpDetails {
+// detBranch2B describes a branch that always has a two-byte branch offset
+func detBranch2B() OpDetails {
 	d := detDefault()
-	d.asm = asmOldBranch
+	d.asm = asmBranch2B
 	d.check = checkBranch
 	d.Size = 3
 	d.Immediates = []immediate{imm("target", immLabel)}
@@ -596,9 +596,9 @@ var OpSpecs = []OpSpec{
 	{0x3e, "loads", opLoads, proto("i:a"), 5, typed(typeLoads)},
 	{0x3f, "stores", opStores, proto("ia:"), 5, typed(typeStores)},
 
-	{0x40, "bnz", opBnzOld, proto("i:"), 1, detOldBranch()},
-	{0x41, "bz", opBzOld, proto("i:"), 2, detOldBranch()},
-	{0x42, "b", opBOld, proto(":"), 2, detOldBranch()},
+	{0x40, "bnz", opBnz2B, proto("i:"), 1, detBranch2B()},
+	{0x41, "bz", opBz2B, proto("i:"), 2, detBranch2B()},
+	{0x42, "b", opB2B, proto(":"), 2, detBranch2B()},
 	// varint-encoded branch offsets (binary.Varint / zigzag+ULEB128), introduced in v13
 	{0x40, "bnz", opBnz, proto("i:"), varintBranchVersion, detBranchVarint()},
 	{0x41, "bz", opBz, proto("i:"), varintBranchVersion, detBranchVarint()},
@@ -674,8 +674,8 @@ var OpSpecs = []OpSpec{
 	{0x87, "sha512", opSHA512, proto("b:b{64}"), 13, costByLength(15, 32, 2, 0)},
 
 	// "Function oriented"
-	{0x88, "callsub", opCallSub, proto(":"), 4, detOldBranch()},
-	{0x88, "callsub", opCallSubVarint, proto(":"), varintBranchVersion, detBranchVarint()}, // varint target
+	{0x88, "callsub", opCallSub2B, proto(":"), 4, detBranch2B()},
+	{0x88, "callsub", opCallSub, proto(":"), varintBranchVersion, detBranchVarint()},
 	{0x89, "retsub", opRetSub, proto(":").stackExplain(opRetSubStackChange), 4, detDefault().trust()},
 	// protoByte is a named constant because opCallSub needs to know it.
 	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},

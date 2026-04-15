@@ -2767,7 +2767,7 @@ func opB(cx *EvalContext) error {
 	return nil
 }
 
-func opCallSubVarint(cx *EvalContext) error {
+func opCallSub(cx *EvalContext) error {
 	target, instrSize, err := branchTargetVarint(cx)
 	if err != nil {
 		return err
@@ -2783,7 +2783,7 @@ func opCallSubVarint(cx *EvalContext) error {
 	return nil
 }
 
-func opBnzOld(cx *EvalContext) error {
+func opBnz2B(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isNonZero := cx.Stack[last].Uint != 0
@@ -2798,7 +2798,7 @@ func opBnzOld(cx *EvalContext) error {
 	return nil
 }
 
-func opBzOld(cx *EvalContext) error {
+func opBz2B(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isZero := cx.Stack[last].Uint == 0
@@ -2813,7 +2813,7 @@ func opBzOld(cx *EvalContext) error {
 	return nil
 }
 
-func opBOld(cx *EvalContext) error {
+func opB2B(cx *EvalContext) error {
 	target, err := branchTarget(cx)
 	if err != nil {
 		return err
@@ -2878,12 +2878,12 @@ func opMatch(cx *EvalContext) error {
 
 const protoByte = 0x8a
 
-func opCallSub(cx *EvalContext) error {
+func opCallSub2B(cx *EvalContext) error {
 	cx.callstack = append(cx.callstack, frame{
 		retpc:  cx.pc + 3, // retpc is pc _after_ the callsub
 		height: len(cx.Stack),
 	})
-	err := opBOld(cx)
+	err := opB2B(cx)
 
 	/* We only set fromCallSub if we know we're jumping to a proto. In opProto,
 	   we confirm we came directly from callsub by checking (and resetting) the

@@ -997,7 +997,7 @@ func asmArg(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceEr
 	return asmDefault(ops, &altSpec, mnemonic, args)
 }
 
-func asmOldBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
+func asmBranch2B(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	if err := ops.checkArgCount(spec.Name, mnemonic, args, 1); err != nil {
 		return err
 	}
@@ -2389,6 +2389,7 @@ func (ops *OpStream) findBranchSizes() {
 		for i := range ops.labelReferences {
 			lr := &ops.labelReferences[i]
 			if !lr.varint {
+				// `switch` and `match` references are still 2B
 				continue
 			}
 			dest, ok := ops.labels[lr.label.str]
