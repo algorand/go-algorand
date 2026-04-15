@@ -3969,6 +3969,706 @@ func TestOnlineAccountsSuspended(t *testing.T) {
 	require.Len(t, updated, 0)
 }
 
+type lookupResourceGroup string
+
+const (
+	lookupCreatorGroup   lookupResourceGroup = "creator"
+	lookupHolderGroup    lookupResourceGroup = "holder"
+	lookupDeltaOnlyGroup lookupResourceGroup = "deltaOnly"
+)
+
+type lookupAssetParamsDeltaSpec struct {
+	params  *basics.AssetParams
+	deleted bool
+}
+
+type lookupAssetHoldingDeltaSpec struct {
+	holding *basics.AssetHolding
+	deleted bool
+}
+
+type lookupAssetExpected struct {
+	excluded bool
+	holding  *basics.AssetHolding
+	params   *basics.AssetParams
+	creator  basics.Address
+}
+
+type lookupAssetScenario struct {
+	name string
+
+	group lookupResourceGroup
+
+	creatorParams           *basics.AssetParams
+	initHolding             *basics.AssetHolding
+	destroyInCommittedRound bool
+
+	creatorParamsDelta1 *lookupAssetParamsDeltaSpec
+	holdingDelta1       *lookupAssetHoldingDeltaSpec
+	holdingDelta2       *lookupAssetHoldingDeltaSpec
+
+	want lookupAssetExpected
+	id   basics.AssetIndex
+}
+
+type lookupAppParamsDeltaSpec struct {
+	params  *basics.AppParams
+	deleted bool
+}
+
+type lookupAppLocalsDeltaSpec struct {
+	localState *basics.AppLocalState
+	deleted    bool
+}
+
+type lookupAppExpected struct {
+	excluded   bool
+	localState *basics.AppLocalState
+	params     *basics.AppParams
+	creator    basics.Address
+}
+
+type lookupAppScenario struct {
+	name string
+
+	group lookupResourceGroup
+
+	creatorParams  *basics.AppParams
+	initLocalState *basics.AppLocalState
+
+	creatorParamsDelta1 *lookupAppParamsDeltaSpec
+	localsDelta1        *lookupAppLocalsDeltaSpec
+	localsDelta2        *lookupAppLocalsDeltaSpec
+
+	wantWithParams lookupAppExpected
+	wantNoParams   lookupAppExpected
+	id             basics.AppIndex
+}
+
+func lookupTestAssetParams(total uint64, unitName string) *basics.AssetParams {
+	return &basics.AssetParams{Total: total, UnitName: unitName}
+}
+
+func lookupTestAssetHolding(amount uint64) *basics.AssetHolding {
+	return &basics.AssetHolding{Amount: amount}
+}
+
+func lookupTestAssetParamsDelta(params *basics.AssetParams) *lookupAssetParamsDeltaSpec {
+	return &lookupAssetParamsDeltaSpec{params: params}
+}
+
+func lookupTestDeletedAssetParamsDelta() *lookupAssetParamsDeltaSpec {
+	return &lookupAssetParamsDeltaSpec{deleted: true}
+}
+
+func lookupTestAssetHoldingDelta(holding *basics.AssetHolding) *lookupAssetHoldingDeltaSpec {
+	return &lookupAssetHoldingDeltaSpec{holding: holding}
+}
+
+func lookupTestDeletedAssetHoldingDelta() *lookupAssetHoldingDeltaSpec {
+	return &lookupAssetHoldingDeltaSpec{deleted: true}
+}
+
+func lookupTestAppParams(approvalByte, clearByte byte) *basics.AppParams {
+	return &basics.AppParams{
+		ApprovalProgram:   []byte{0x06, 0x81, approvalByte},
+		ClearStateProgram: []byte{0x06, 0x81, clearByte},
+	}
+}
+
+func lookupTestAppLocalState(numUint uint64) *basics.AppLocalState {
+	return &basics.AppLocalState{Schema: basics.StateSchema{NumUint: numUint}}
+}
+
+func lookupTestAppParamsDelta(params *basics.AppParams) *lookupAppParamsDeltaSpec {
+	return &lookupAppParamsDeltaSpec{params: params}
+}
+
+func lookupTestDeletedAppParamsDelta() *lookupAppParamsDeltaSpec {
+	return &lookupAppParamsDeltaSpec{deleted: true}
+}
+
+func lookupTestAppLocalsDelta(localState *basics.AppLocalState) *lookupAppLocalsDeltaSpec {
+	return &lookupAppLocalsDeltaSpec{localState: localState}
+}
+
+func lookupTestDeletedAppLocalsDelta() *lookupAppLocalsDeltaSpec {
+	return &lookupAppLocalsDeltaSpec{deleted: true}
+}
+
+func selectLookupTestAddresses(accts map[basics.Address]basics.AccountData) (creatorAddr, holderAddr, deltaOnlyAddr basics.Address) {
+	for addr := range accts {
+		if addr == testSinkAddr || addr == testPoolAddr {
+			continue
+		}
+		if creatorAddr.IsZero() {
+			creatorAddr = addr
+			continue
+		}
+		if holderAddr.IsZero() {
+			holderAddr = addr
+			continue
+		}
+		deltaOnlyAddr = addr
+		break
+	}
+	return
+}
+
+func lookupGroupQueryAddr(group lookupResourceGroup, creatorAddr, holderAddr, deltaOnlyAddr basics.Address) basics.Address {
+	switch group {
+	case lookupCreatorGroup:
+		return creatorAddr
+	case lookupHolderGroup:
+		return holderAddr
+	case lookupDeltaOnlyGroup:
+		return deltaOnlyAddr
+	default:
+		return basics.Address{}
+	}
+}
+
+func validateLookupAssetScenario(t *testing.T, s lookupAssetScenario) {
+	t.Helper()
+
+	require.NotEmpty(t, s.name)
+	require.NotZero(t, s.group)
+
+	switch s.group {
+	case lookupCreatorGroup:
+		if s.creatorParams != nil && s.initHolding == nil {
+			t.Fatalf("%s: creator with committed params must have committed holding", s.name)
+		}
+		if s.creatorParams == nil {
+			if s.creatorParamsDelta1 == nil || s.creatorParamsDelta1.deleted || s.holdingDelta1 == nil || s.holdingDelta1.deleted {
+				t.Fatalf("%s: delta-only creator asset creation must include both params and holding", s.name)
+			}
+		}
+	case lookupHolderGroup:
+		if s.creatorParams == nil {
+			t.Fatalf("%s: holder scenario must carry committed creator params", s.name)
+		}
+		if s.initHolding == nil {
+			t.Fatalf("%s: holder scenario must have committed holding", s.name)
+		}
+	case lookupDeltaOnlyGroup:
+		t.Fatalf("%s: assets do not use the delta-only query group in this test", s.name)
+	default:
+		t.Fatalf("%s: unknown asset scenario group %q", s.name, s.group)
+	}
+}
+
+func validateLookupAppScenario(t *testing.T, s lookupAppScenario) {
+	t.Helper()
+
+	require.NotEmpty(t, s.name)
+	require.NotZero(t, s.group)
+
+	switch s.group {
+	case lookupCreatorGroup:
+		if s.creatorParams == nil && (s.creatorParamsDelta1 == nil || s.creatorParamsDelta1.deleted) {
+			t.Fatalf("%s: creator scenario must have committed params or a creation delta", s.name)
+		}
+		if s.creatorParams == nil && (s.localsDelta1 == nil || s.localsDelta1.deleted) {
+			t.Fatalf("%s: delta-only creator app creation must include local state", s.name)
+		}
+	case lookupHolderGroup:
+		if s.creatorParams == nil {
+			t.Fatalf("%s: holder scenario must carry committed creator params", s.name)
+		}
+		if s.initLocalState == nil {
+			t.Fatalf("%s: holder scenario must have committed local state", s.name)
+		}
+	case lookupDeltaOnlyGroup:
+		if s.creatorParams == nil {
+			t.Fatalf("%s: delta-only scenario must carry committed creator params", s.name)
+		}
+		if s.initLocalState != nil {
+			t.Fatalf("%s: delta-only scenario must not have committed local state", s.name)
+		}
+	default:
+		t.Fatalf("%s: unknown app scenario group %q", s.name, s.group)
+	}
+}
+
+func lookupAssetParamsDelta(spec *lookupAssetParamsDeltaSpec) ledgercore.AssetParamsDelta {
+	if spec == nil {
+		return ledgercore.AssetParamsDelta{}
+	}
+	return ledgercore.AssetParamsDelta{Params: spec.params, Deleted: spec.deleted}
+}
+
+func lookupAssetHoldingDelta(spec *lookupAssetHoldingDeltaSpec) ledgercore.AssetHoldingDelta {
+	if spec == nil {
+		return ledgercore.AssetHoldingDelta{}
+	}
+	return ledgercore.AssetHoldingDelta{Holding: spec.holding, Deleted: spec.deleted}
+}
+
+func lookupAppParamsDelta(spec *lookupAppParamsDeltaSpec) ledgercore.AppParamsDelta {
+	if spec == nil {
+		return ledgercore.AppParamsDelta{}
+	}
+	return ledgercore.AppParamsDelta{Params: spec.params, Deleted: spec.deleted}
+}
+
+func lookupAppLocalsDelta(spec *lookupAppLocalsDeltaSpec) ledgercore.AppLocalStateDelta {
+	if spec == nil {
+		return ledgercore.AppLocalStateDelta{}
+	}
+	return ledgercore.AppLocalStateDelta{LocalState: spec.localState, Deleted: spec.deleted}
+}
+
+func assertLookupAssetScenario(t *testing.T, scenario lookupAssetScenario, results map[basics.AssetIndex]ledgercore.AssetResourceWithIDs) {
+	t.Helper()
+
+	got, ok := results[scenario.id]
+	if scenario.want.excluded {
+		require.False(t, ok, "%s: expected asset to be excluded", scenario.name)
+		return
+	}
+
+	require.True(t, ok, "%s: expected asset in result map", scenario.name)
+	require.Equal(t, scenario.want.holding, got.AssetHolding, "%s: unexpected holding", scenario.name)
+	require.Equal(t, scenario.want.params, got.AssetParams, "%s: unexpected params", scenario.name)
+	require.Equal(t, scenario.want.creator, got.Creator, "%s: unexpected creator", scenario.name)
+}
+
+func assertLookupAppScenario(t *testing.T, scenario lookupAppScenario, includeParams bool, results map[basics.AppIndex]ledgercore.AppResourceWithIDs) {
+	t.Helper()
+
+	expected := scenario.wantNoParams
+	mode := "includeParams=false"
+	if includeParams {
+		expected = scenario.wantWithParams
+		mode = "includeParams=true"
+	}
+
+	got, ok := results[scenario.id]
+	if expected.excluded {
+		require.False(t, ok, "%s (%s): expected app to be excluded", scenario.name, mode)
+		return
+	}
+
+	require.True(t, ok, "%s (%s): expected app in result map", scenario.name, mode)
+	require.Equal(t, expected.localState, got.AppLocalState, "%s (%s): unexpected local state", scenario.name, mode)
+	require.Equal(t, expected.params, got.AppParams, "%s (%s): unexpected params", scenario.name, mode)
+	require.Equal(t, expected.creator, got.Creator, "%s (%s): unexpected creator", scenario.name, mode)
+}
+
+func runLookupAssetScenarioGroupTest(t *testing.T, group lookupResourceGroup, scenarios []lookupAssetScenario) {
+	t.Helper()
+
+	for i := range scenarios {
+		validateLookupAssetScenario(t, scenarios[i])
+		scenarios[i].id = basics.AssetIndex(1000 + i)
+	}
+
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
+	accts := setupAccts(5)
+	creatorAddr, holderAddr, deltaOnlyAddr := selectLookupTestAddresses(accts[0])
+	queryAddr := lookupGroupQueryAddr(group, creatorAddr, holderAddr, deltaOnlyAddr)
+
+	for i := range scenarios {
+		if scenarios[i].want.excluded {
+			continue
+		}
+		if scenarios[i].destroyInCommittedRound {
+			continue
+		}
+		if scenarios[i].creatorParamsDelta1 != nil && scenarios[i].creatorParamsDelta1.deleted {
+			continue
+		}
+		scenarios[i].want.creator = creatorAddr
+	}
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.MaxAcctLookback = 0
+	au, _ := newAcctUpdates(t, ml, conf)
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	creatorTotalAssets := uint64(0)
+	creatorTotalParams := uint64(0)
+	holderTotalAssets := uint64(0)
+	for _, scenario := range scenarios {
+		if scenario.creatorParams != nil {
+			creatorTotalAssets++
+			creatorTotalParams++
+		}
+		if group == lookupHolderGroup && scenario.initHolding != nil {
+			holderTotalAssets++
+		}
+	}
+
+	{
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(creatorAddr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos:       basics.MicroAlgos{Raw: 1_000_000},
+				TotalAssetParams: creatorTotalParams,
+				TotalAssets:      creatorTotalAssets,
+			},
+		})
+		if group == lookupHolderGroup {
+			updates.Upsert(holderAddr, ledgercore.AccountData{
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:  basics.MicroAlgos{Raw: 1_000_000},
+					TotalAssets: holderTotalAssets,
+				},
+			})
+		}
+
+		for _, scenario := range scenarios {
+			if scenario.creatorParams == nil {
+				continue
+			}
+			creatorHolding := scenario.initHolding
+			if group != lookupCreatorGroup {
+				creatorHolding = lookupTestAssetHolding(scenario.creatorParams.Total)
+			}
+			updates.UpsertAssetResource(creatorAddr, scenario.id,
+				ledgercore.AssetParamsDelta{Params: scenario.creatorParams},
+				ledgercore.AssetHoldingDelta{Holding: creatorHolding},
+			)
+			if group == lookupHolderGroup && scenario.initHolding != nil {
+				updates.UpsertAssetResource(holderAddr, scenario.id,
+					ledgercore.AssetParamsDelta{},
+					ledgercore.AssetHoldingDelta{Holding: scenario.initHolding},
+				)
+			}
+		}
+
+		base := accts[0]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, 1, au, base, opts, nil)
+		auCommitSync(t, 1, au, ml)
+
+		for _, scenario := range scenarios {
+			if scenario.creatorParams != nil {
+				knownCreatables[basics.CreatableIndex(scenario.id)] = true
+			}
+		}
+	}
+
+	destroyedCount := uint64(0)
+	for _, scenario := range scenarios {
+		if scenario.destroyInCommittedRound {
+			destroyedCount++
+		}
+	}
+
+	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
+		var updates ledgercore.AccountDeltas
+		if i == 2 && destroyedCount > 0 {
+			updates.Upsert(creatorAddr, ledgercore.AccountData{
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:       basics.MicroAlgos{Raw: 1_000_000},
+					TotalAssetParams: creatorTotalParams - destroyedCount,
+					TotalAssets:      creatorTotalAssets - destroyedCount,
+				},
+			})
+			for _, scenario := range scenarios {
+				if !scenario.destroyInCommittedRound {
+					continue
+				}
+				updates.UpsertAssetResource(creatorAddr, scenario.id,
+					ledgercore.AssetParamsDelta{Deleted: true},
+					ledgercore.AssetHoldingDelta{Deleted: true},
+				)
+			}
+		}
+
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts, nil)
+		auCommitSync(t, i, au, ml)
+	}
+
+	deltaRound1 := basics.Round(conf.MaxAcctLookback + 3)
+	{
+		var updates ledgercore.AccountDeltas
+		for _, scenario := range scenarios {
+			switch group {
+			case lookupCreatorGroup:
+				if scenario.creatorParamsDelta1 != nil || scenario.holdingDelta1 != nil {
+					updates.UpsertAssetResource(creatorAddr, scenario.id,
+						lookupAssetParamsDelta(scenario.creatorParamsDelta1),
+						lookupAssetHoldingDelta(scenario.holdingDelta1),
+					)
+				}
+			case lookupHolderGroup:
+				if scenario.creatorParamsDelta1 != nil {
+					updates.UpsertAssetResource(creatorAddr, scenario.id,
+						lookupAssetParamsDelta(scenario.creatorParamsDelta1),
+						ledgercore.AssetHoldingDelta{},
+					)
+				}
+				if scenario.holdingDelta1 != nil {
+					updates.UpsertAssetResource(holderAddr, scenario.id,
+						ledgercore.AssetParamsDelta{},
+						lookupAssetHoldingDelta(scenario.holdingDelta1),
+					)
+				}
+			}
+		}
+
+		base := accts[deltaRound1-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, deltaRound1, au, base, opts, nil)
+	}
+
+	expectedRound := deltaRound1
+	hasDelta2 := false
+	for _, scenario := range scenarios {
+		if scenario.holdingDelta2 != nil {
+			hasDelta2 = true
+			break
+		}
+	}
+	if hasDelta2 {
+		expectedRound = deltaRound1 + 1
+		var updates ledgercore.AccountDeltas
+		for _, scenario := range scenarios {
+			if scenario.holdingDelta2 == nil {
+				continue
+			}
+			updates.UpsertAssetResource(queryAddr, scenario.id,
+				ledgercore.AssetParamsDelta{},
+				lookupAssetHoldingDelta(scenario.holdingDelta2),
+			)
+		}
+
+		base := accts[deltaRound1-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, expectedRound, au, base, opts, nil)
+	}
+
+	resources, rnd, err := au.LookupAssetResources(queryAddr, 0, 100)
+	require.NoError(t, err)
+	require.Equal(t, expectedRound, rnd)
+
+	expectedCount := 0
+	for _, scenario := range scenarios {
+		if !scenario.want.excluded {
+			expectedCount++
+		}
+	}
+	require.Len(t, resources, expectedCount)
+
+	resultMap := make(map[basics.AssetIndex]ledgercore.AssetResourceWithIDs, len(resources))
+	for _, resource := range resources {
+		resultMap[resource.AssetID] = resource
+	}
+	for _, scenario := range scenarios {
+		assertLookupAssetScenario(t, scenario, resultMap)
+	}
+}
+
+func runLookupAppScenarioGroupTest(t *testing.T, group lookupResourceGroup, scenarios []lookupAppScenario) {
+	t.Helper()
+
+	for i := range scenarios {
+		validateLookupAppScenario(t, scenarios[i])
+		scenarios[i].id = basics.AppIndex(2000 + i)
+	}
+
+	testProtocolVersion := protocol.ConsensusCurrentVersion
+	protoParams := config.Consensus[testProtocolVersion]
+	accts := setupAccts(5)
+	creatorAddr, holderAddr, deltaOnlyAddr := selectLookupTestAddresses(accts[0])
+	queryAddr := lookupGroupQueryAddr(group, creatorAddr, holderAddr, deltaOnlyAddr)
+
+	for i := range scenarios {
+		if !scenarios[i].wantWithParams.excluded && (scenarios[i].creatorParamsDelta1 == nil || !scenarios[i].creatorParamsDelta1.deleted) {
+			scenarios[i].wantWithParams.creator = creatorAddr
+		}
+		if !scenarios[i].wantNoParams.excluded && (scenarios[i].creatorParamsDelta1 == nil || !scenarios[i].creatorParamsDelta1.deleted) {
+			scenarios[i].wantNoParams.creator = creatorAddr
+		}
+	}
+
+	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	conf.MaxAcctLookback = 0
+	au, _ := newAcctUpdates(t, ml, conf)
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+
+	creatorTotalParams := uint64(0)
+	creatorTotalLocals := uint64(0)
+	holderTotalLocals := uint64(0)
+	for _, scenario := range scenarios {
+		if scenario.creatorParams != nil {
+			creatorTotalParams++
+		}
+		if group == lookupCreatorGroup && scenario.initLocalState != nil {
+			creatorTotalLocals++
+		}
+		if group == lookupHolderGroup && scenario.initLocalState != nil {
+			holderTotalLocals++
+		}
+	}
+
+	{
+		var updates ledgercore.AccountDeltas
+		updates.Upsert(creatorAddr, ledgercore.AccountData{
+			AccountBaseData: ledgercore.AccountBaseData{
+				MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
+				TotalAppParams:      creatorTotalParams,
+				TotalAppLocalStates: creatorTotalLocals,
+			},
+		})
+		if group == lookupHolderGroup {
+			updates.Upsert(holderAddr, ledgercore.AccountData{
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
+					TotalAppLocalStates: holderTotalLocals,
+				},
+			})
+		}
+
+		for _, scenario := range scenarios {
+			if scenario.creatorParams != nil {
+				var creatorLocalState *basics.AppLocalState
+				if group == lookupCreatorGroup {
+					creatorLocalState = scenario.initLocalState
+				}
+				updates.UpsertAppResource(creatorAddr, scenario.id,
+					ledgercore.AppParamsDelta{Params: scenario.creatorParams},
+					ledgercore.AppLocalStateDelta{LocalState: creatorLocalState},
+				)
+			}
+			if group == lookupHolderGroup && scenario.initLocalState != nil {
+				updates.UpsertAppResource(holderAddr, scenario.id,
+					ledgercore.AppParamsDelta{},
+					ledgercore.AppLocalStateDelta{LocalState: scenario.initLocalState},
+				)
+			}
+		}
+
+		base := accts[0]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, 1, au, base, opts, nil)
+		auCommitSync(t, 1, au, ml)
+
+		for _, scenario := range scenarios {
+			if scenario.creatorParams != nil {
+				knownCreatables[basics.CreatableIndex(scenario.id)] = true
+			}
+		}
+	}
+
+	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
+		var updates ledgercore.AccountDeltas
+		base := accts[i-1]
+		newAccts := applyPartialDeltas(base, updates)
+		accts = append(accts, newAccts)
+
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, i, au, base, opts, nil)
+		auCommitSync(t, i, au, ml)
+	}
+
+	deltaRound1 := basics.Round(conf.MaxAcctLookback + 3)
+	{
+		var updates ledgercore.AccountDeltas
+		for _, scenario := range scenarios {
+			switch group {
+			case lookupCreatorGroup:
+				if scenario.creatorParamsDelta1 != nil || scenario.localsDelta1 != nil {
+					updates.UpsertAppResource(creatorAddr, scenario.id,
+						lookupAppParamsDelta(scenario.creatorParamsDelta1),
+						lookupAppLocalsDelta(scenario.localsDelta1),
+					)
+				}
+			case lookupHolderGroup, lookupDeltaOnlyGroup:
+				if scenario.creatorParamsDelta1 != nil {
+					updates.UpsertAppResource(creatorAddr, scenario.id,
+						lookupAppParamsDelta(scenario.creatorParamsDelta1),
+						ledgercore.AppLocalStateDelta{},
+					)
+				}
+				if scenario.localsDelta1 != nil {
+					updates.UpsertAppResource(queryAddr, scenario.id,
+						ledgercore.AppParamsDelta{},
+						lookupAppLocalsDelta(scenario.localsDelta1),
+					)
+				}
+			}
+		}
+
+		base := accts[deltaRound1-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, deltaRound1, au, base, opts, nil)
+	}
+
+	expectedRound := deltaRound1
+	hasDelta2 := false
+	for _, scenario := range scenarios {
+		if scenario.localsDelta2 != nil {
+			hasDelta2 = true
+			break
+		}
+	}
+	if hasDelta2 {
+		expectedRound = deltaRound1 + 1
+		var updates ledgercore.AccountDeltas
+		for _, scenario := range scenarios {
+			if scenario.localsDelta2 == nil {
+				continue
+			}
+			updates.UpsertAppResource(queryAddr, scenario.id,
+				ledgercore.AppParamsDelta{},
+				lookupAppLocalsDelta(scenario.localsDelta2),
+			)
+		}
+
+		base := accts[deltaRound1-1]
+		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
+		auNewBlock(t, expectedRound, au, base, opts, nil)
+	}
+
+	for _, includeParams := range []bool{true, false} {
+		resources, rnd, err := au.LookupApplicationResources(queryAddr, 0, 100, includeParams)
+		require.NoError(t, err)
+		require.Equal(t, expectedRound, rnd)
+
+		expectedCount := 0
+		for _, scenario := range scenarios {
+			expected := scenario.wantNoParams
+			if includeParams {
+				expected = scenario.wantWithParams
+			}
+			if !expected.excluded {
+				expectedCount++
+			}
+		}
+		require.Len(t, resources, expectedCount, "includeParams=%v", includeParams)
+
+		resultMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs, len(resources))
+		for _, resource := range resources {
+			resultMap[resource.AppID] = resource
+		}
+		for _, scenario := range scenarios {
+			assertLookupAppScenario(t, scenario, includeParams, resultMap)
+		}
+	}
+}
+
 // TestLookupAssetResourcesWithDeltas verifies that lookupAssetResources properly merges
 // in-memory deltas with database results to return current-round data.
 // It commits resources to DB, then adds uncommitted delta modifications across two rounds,
@@ -3979,247 +4679,122 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testProtocolVersion := protocol.ConsensusCurrentVersion
-	protoParams := config.Consensus[testProtocolVersion]
-
-	accts := setupAccts(5)
-
-	var creatorAddr, optinAddr basics.Address
-	for addr := range accts[0] {
-		if addr != testSinkAddr && addr != testPoolAddr {
-			if creatorAddr.IsZero() {
-				creatorAddr = addr
-			} else {
-				optinAddr = addr
-				break
-			}
-		}
-	}
-
-	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
-	defer ml.Close()
-
-	conf := config.GetDefaultLocal()
-	// Zero lookback so all committed rounds flush immediately, leaving deltas[0]
-	// as the first uncommitted round. This is critical for testing that the delta
-	// loop visits index 0.
-	conf.MaxAcctLookback = 0
-	au, _ := newAcctUpdates(t, ml, conf)
-
-	knownCreatables := make(map[basics.CreatableIndex]bool)
-
-	// Round 1: create assets 1000-1005 with params and holdings
-	//   1000: will have holding modified, then overridden in a second delta round
-	//   1001: will remain unchanged in deltas (exercises plain DB read-through)
-	//   1002: will remain unchanged for creatorAddr; optinAddr opts in and then opts out in a delta
-	//   1003: will have params-only modification in delta
-	//   1004: was a nonsense test. removed. so it just sits there unchanged.
-	//   1005: will have both holding and params deleted in delta
-	//   1007: will be fully deleted in a committed round; optinAddr opts in with zero balance
-	{
-		var updates ledgercore.AccountDeltas
-		updates.Upsert(creatorAddr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{
-				MicroAlgos:       basics.MicroAlgos{Raw: 1_000_000},
-				TotalAssetParams: 7,
-				TotalAssets:      7,
+	t.Run("creator-group", func(t *testing.T) {
+		runLookupAssetScenarioGroupTest(t, lookupCreatorGroup, []lookupAssetScenario{
+			{
+				name:          "holding-modified-twice",
+				group:         lookupCreatorGroup,
+				creatorParams: lookupTestAssetParams(1_000_000, "A1000"),
+				initHolding:   lookupTestAssetHolding(100),
+				holdingDelta1: lookupTestAssetHoldingDelta(lookupTestAssetHolding(9999)),
+				holdingDelta2: lookupTestAssetHoldingDelta(lookupTestAssetHolding(5555)),
+				want: lookupAssetExpected{
+					holding: lookupTestAssetHolding(5555),
+					params:  lookupTestAssetParams(1_000_000, "A1000"),
+				},
+			},
+			{
+				name:          "unchanged",
+				group:         lookupCreatorGroup,
+				creatorParams: lookupTestAssetParams(1_001_000, "A1001"),
+				initHolding:   lookupTestAssetHolding(100100),
+				want: lookupAssetExpected{
+					holding: lookupTestAssetHolding(100100),
+					params:  lookupTestAssetParams(1_001_000, "A1001"),
+				},
+			},
+			{
+				name:                "params-modified",
+				group:               lookupCreatorGroup,
+				creatorParams:       lookupTestAssetParams(1_003_000, "A"),
+				initHolding:         lookupTestAssetHolding(100300),
+				creatorParamsDelta1: lookupTestAssetParamsDelta(lookupTestAssetParams(7777, "Anew")),
+				want: lookupAssetExpected{
+					holding: lookupTestAssetHolding(100300),
+					params:  lookupTestAssetParams(7777, "Anew"),
+				},
+			},
+			{
+				name:                "both-deleted",
+				group:               lookupCreatorGroup,
+				creatorParams:       lookupTestAssetParams(1_005_000, "A1005"),
+				initHolding:         lookupTestAssetHolding(100500),
+				creatorParamsDelta1: lookupTestDeletedAssetParamsDelta(),
+				holdingDelta1:       lookupTestDeletedAssetHoldingDelta(),
+				want: lookupAssetExpected{
+					excluded: true,
+				},
+			},
+			{
+				name:                "new-creation",
+				group:               lookupCreatorGroup,
+				creatorParamsDelta1: lookupTestAssetParamsDelta(lookupTestAssetParams(6000, "A6000")),
+				holdingDelta1:       lookupTestAssetHoldingDelta(lookupTestAssetHolding(6000)),
+				want: lookupAssetExpected{
+					holding: lookupTestAssetHolding(6000),
+					params:  lookupTestAssetParams(6000, "A6000"),
+				},
 			},
 		})
-		for assetIdx := uint64(1000); assetIdx <= 1005; assetIdx++ {
-			updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(assetIdx),
-				ledgercore.AssetParamsDelta{
-					Params: &basics.AssetParams{
-						Total:     assetIdx * 1000,
-						UnitName:  fmt.Sprintf("A%d", assetIdx),
-						AssetName: fmt.Sprintf("Asset%d", assetIdx),
-					},
-				},
-				ledgercore.AssetHoldingDelta{
-					Holding: &basics.AssetHolding{Amount: assetIdx * 100},
-				})
-		}
+	})
 
-		// 1007: creatorAddr is creator; optinAddr opts in with zero balance and asset will be deleted
-		//       in a committed round to test that surviving holdings of deleted assets are returned.
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1007),
-			ledgercore.AssetParamsDelta{
-				Params: &basics.AssetParams{
-					Total:     7000,
-					UnitName:  "A1007",
-					AssetName: "Asset1007",
+	t.Run("holder-group", func(t *testing.T) {
+		runLookupAssetScenarioGroupTest(t, lookupHolderGroup, []lookupAssetScenario{
+			{
+				name:                "cross-params-modified",
+				group:               lookupHolderGroup,
+				creatorParams:       lookupTestAssetParams(1_002_000, "A1002"),
+				initHolding:         lookupTestAssetHolding(50),
+				creatorParamsDelta1: lookupTestAssetParamsDelta(lookupTestAssetParams(7777, "Anew")),
+				want: lookupAssetExpected{
+					holding: lookupTestAssetHolding(50),
+					params:  lookupTestAssetParams(7777, "Anew"),
 				},
 			},
-			ledgercore.AssetHoldingDelta{
-				Holding: &basics.AssetHolding{Amount: 7000},
-			})
-		updates.Upsert(optinAddr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{
-				MicroAlgos:  basics.MicroAlgos{Raw: 1_000_000},
-				TotalAssets: 2,
+			{
+				name:                "cross-params-deleted",
+				group:               lookupHolderGroup,
+				creatorParams:       lookupTestAssetParams(1_004_000, "A1004"),
+				initHolding:         lookupTestAssetHolding(50),
+				creatorParamsDelta1: lookupTestDeletedAssetParamsDelta(),
+				want: lookupAssetExpected{
+					holding: lookupTestAssetHolding(50),
+					creator: basics.Address{},
+				},
+			},
+			{
+				name:          "cross-unchanged",
+				group:         lookupHolderGroup,
+				creatorParams: lookupTestAssetParams(1_006_000, "A1006"),
+				initHolding:   lookupTestAssetHolding(50),
+				want: lookupAssetExpected{
+					holding: lookupTestAssetHolding(50),
+					params:  lookupTestAssetParams(1_006_000, "A1006"),
+				},
+			},
+			{
+				name:          "non-creator-close-out",
+				group:         lookupHolderGroup,
+				creatorParams: lookupTestAssetParams(1_007_000, "A1007"),
+				initHolding:   lookupTestAssetHolding(50),
+				holdingDelta1: lookupTestDeletedAssetHoldingDelta(),
+				want: lookupAssetExpected{
+					excluded: true,
+				},
+			},
+			{
+				name:                    "destroyed-surviving",
+				group:                   lookupHolderGroup,
+				creatorParams:           lookupTestAssetParams(7000, "A7000"),
+				initHolding:             lookupTestAssetHolding(0),
+				destroyInCommittedRound: true,
+				want: lookupAssetExpected{
+					holding: lookupTestAssetHolding(0),
+					creator: basics.Address{},
+				},
 			},
 		})
-		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1007),
-			ledgercore.AssetParamsDelta{},
-			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
-		// optinAddr also opts into 1002; this holding will be deleted in a delta to
-		// test that a non-creator opt-out does not appear in the results.
-		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1002),
-			ledgercore.AssetParamsDelta{},
-			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 50}})
-
-		base := accts[0]
-		newAccts := applyPartialDeltas(base, updates)
-		accts = append(accts, newAccts)
-
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, 1, au, base, opts, nil)
-		auCommitSync(t, 1, au, ml)
-
-		for assetIdx := uint64(1000); assetIdx <= 1005; assetIdx++ {
-			knownCreatables[basics.CreatableIndex(assetIdx)] = true
-		}
-		knownCreatables[basics.CreatableIndex(1007)] = true
-	}
-
-	// Round 2 destroys asset 1007; optinAddr's zero holding survives in DB.
-	// Additional empty rounds (if any) ensure earlier data flushes past MaxAcctLookback.
-	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
-		var updates ledgercore.AccountDeltas
-		if i == 2 {
-			updates.Upsert(creatorAddr, ledgercore.AccountData{
-				AccountBaseData: ledgercore.AccountBaseData{
-					MicroAlgos:       basics.MicroAlgos{Raw: 1_000_000},
-					TotalAssetParams: 6,
-					TotalAssets:      6,
-				},
-			})
-			updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1007),
-				ledgercore.AssetParamsDelta{Deleted: true},
-				ledgercore.AssetHoldingDelta{Deleted: true})
-		}
-		base := accts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
-		accts = append(accts, newAccts)
-
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts, nil)
-		auCommitSync(t, i, au, ml)
-	}
-
-	// Delta round 1 (uncommitted)
-	deltaRound1 := basics.Round(conf.MaxAcctLookback + 3)
-	{
-		var updates ledgercore.AccountDeltas
-		// 1005: delete both holding and params
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1005),
-			ledgercore.AssetParamsDelta{Deleted: true},
-			ledgercore.AssetHoldingDelta{Deleted: true})
-		// 1006: new creation (not in DB)
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1006),
-			ledgercore.AssetParamsDelta{
-				Params: &basics.AssetParams{Total: 6000, UnitName: "A1006"},
-			},
-			ledgercore.AssetHoldingDelta{
-				Holding: &basics.AssetHolding{Amount: 6000},
-			})
-		// optinAddr opts out of 1002; it is not the creator so nothing should appear.
-		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1002),
-			ledgercore.AssetParamsDelta{},
-			ledgercore.AssetHoldingDelta{Deleted: true})
-		// 1000: modify holding (will be overridden by delta round 2)
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1000),
-			ledgercore.AssetParamsDelta{},
-			ledgercore.AssetHoldingDelta{
-				Holding: &basics.AssetHolding{Amount: 9999},
-			})
-		// 1003: modify params only (holding unchanged)
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1003),
-			ledgercore.AssetParamsDelta{
-				Params: &basics.AssetParams{Total: 7777, UnitName: "A1003new"},
-			},
-			ledgercore.AssetHoldingDelta{})
-
-		base := accts[deltaRound1-1]
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, deltaRound1, au, base, opts, nil)
-	}
-
-	// Delta round 2 (uncommitted): override 1000's holding from round 1
-	deltaRound2 := deltaRound1 + 1
-	{
-		var updates ledgercore.AccountDeltas
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1000),
-			ledgercore.AssetParamsDelta{},
-			ledgercore.AssetHoldingDelta{
-				Holding: &basics.AssetHolding{Amount: 5555},
-			})
-
-		base := accts[deltaRound1-1]
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, deltaRound2, au, base, opts, nil)
-	}
-
-	resources, rnd, err := au.LookupAssetResources(creatorAddr, 0, 100)
-	require.NoError(t, err)
-	require.Equal(t, deltaRound2, rnd)
-
-	// Expected: 1000, 1001, 1002, 1003, 1004, 1006.
-	// 1005 fully deleted (both holding and params) — should not appear.
-	// 1001 has no delta, so it appears as committed.
-	require.Len(t, resources, 6)
-
-	assetMap := make(map[basics.AssetIndex]ledgercore.AssetResourceWithIDs)
-	for _, res := range resources {
-		assetMap[res.AssetID] = res
-	}
-
-	// 1000: holding from delta round 2 (most recent), params preserved from DB
-	require.Equal(t, uint64(5555), assetMap[basics.AssetIndex(1000)].AssetHolding.Amount)
-	require.NotNil(t, assetMap[basics.AssetIndex(1000)].AssetParams)
-	require.Equal(t, uint64(1_000_000), assetMap[basics.AssetIndex(1000)].AssetParams.Total)
-	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1000)].Creator)
-
-	// 1001: no delta — holding and params come straight from DB
-	require.Equal(t, uint64(1001*100), assetMap[basics.AssetIndex(1001)].AssetHolding.Amount)
-	require.NotNil(t, assetMap[basics.AssetIndex(1001)].AssetParams)
-	require.Equal(t, uint64(1_001_000), assetMap[basics.AssetIndex(1001)].AssetParams.Total)
-	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1001)].Creator)
-
-	// 1002: unchanged from DB
-	require.Equal(t, uint64(1002*100), assetMap[basics.AssetIndex(1002)].AssetHolding.Amount)
-	require.NotNil(t, assetMap[basics.AssetIndex(1002)].AssetParams)
-	require.Equal(t, uint64(1_002_000), assetMap[basics.AssetIndex(1002)].AssetParams.Total)
-	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1002)].Creator)
-
-	// 1003: params updated in delta, holding preserved from DB
-	require.Equal(t, uint64(1003*100), assetMap[basics.AssetIndex(1003)].AssetHolding.Amount)
-	require.NotNil(t, assetMap[basics.AssetIndex(1003)].AssetParams)
-	require.Equal(t, uint64(7777), assetMap[basics.AssetIndex(1003)].AssetParams.Total)
-	require.Equal(t, "A1003new", assetMap[basics.AssetIndex(1003)].AssetParams.UnitName)
-	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1003)].Creator)
-
-	// 1005: both holding and params deleted — should not appear
-	require.NotContains(t, assetMap, basics.AssetIndex(1005))
-
-	// 1006: new creation from delta
-	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetHolding.Amount)
-	require.NotNil(t, assetMap[basics.AssetIndex(1006)].AssetParams)
-	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetParams.Total)
-	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1006)].Creator)
-
-	// optinAddr holds two assets in the DB (1002 and 1007) but opts out of 1002 in the delta.
-	// Since optinAddr is not the creator of 1002, the opt-out leaves nothing to return for it.
-	// Asset 1007 persists: its params were destroyed in a committed round but the protocol
-	// does not enforce cleanup of non-creator holdings, so the zero-balance holding survives.
-	optinAddrResources, optinAddrRnd, err := au.LookupAssetResources(optinAddr, 0, 100)
-	require.NoError(t, err)
-	require.Equal(t, deltaRound2, optinAddrRnd)
-	require.Len(t, optinAddrResources, 1)
-	require.Equal(t, basics.AssetIndex(1007), optinAddrResources[0].AssetID)
-	require.NotNil(t, optinAddrResources[0].AssetHolding)
-	require.Equal(t, basics.AssetHolding{}, *optinAddrResources[0].AssetHolding)
-	require.Nil(t, optinAddrResources[0].AssetParams)
-	require.True(t, optinAddrResources[0].Creator.IsZero())
+	})
 }
 
 // TestLookupApplicationResourcesWithDeltas verifies that lookupApplicationResources properly
@@ -4231,298 +4806,175 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testProtocolVersion := protocol.ConsensusCurrentVersion
-	protoParams := config.Consensus[testProtocolVersion]
-
-	accts := setupAccts(5)
-
-	// testAddr creates all apps and is both creator and opted-in.
-	// optinAddr is a separate account that opts into an app created by
-	// testAddr, then closes out after the opt-in is committed.
-	// deltaOnlyOptinAddr opts in and closes out across uncommitted deltas.
-	var testAddr, optinAddr, deltaOnlyOptinAddr basics.Address
-	for addr := range accts[0] {
-		if addr != testSinkAddr && addr != testPoolAddr {
-			if testAddr.IsZero() {
-				testAddr = addr
-			} else if optinAddr.IsZero() {
-				optinAddr = addr
-			} else {
-				deltaOnlyOptinAddr = addr
-				break
-			}
-		}
-	}
-
-	ml := makeMockLedgerForTracker(t, true, 1, testProtocolVersion, accts)
-	defer ml.Close()
-
-	conf := config.GetDefaultLocal()
-	// Zero lookback so all committed rounds flush immediately, leaving deltas[0]
-	// as the first uncommitted round. This is critical for testing that the delta
-	// loop visits index 0.
-	conf.MaxAcctLookback = 0
-	au, _ := newAcctUpdates(t, ml, conf)
-
-	knownCreatables := make(map[basics.CreatableIndex]bool)
-
-	// Round 1: create apps 2000-2005 with params and local state
-	//   2000: will have local state modified, then overridden in a second delta round
-	//   2001: will have local state deleted in delta (params remain since account is creator)
-	//   2002: will remain unchanged for testAddr; optinAddr opts in and then closes out in a delta
-	//   2003: will have params-only modification in delta
-	//   2004: will have params deleted in delta (local state remains)
-	//   2005: will have both local state and params deleted in delta
-	{
-		var updates ledgercore.AccountDeltas
-		updates.Upsert(testAddr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{
-				MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
-				TotalAppParams:      6,
-				TotalAppLocalStates: 6,
+	t.Run("creator-group", func(t *testing.T) {
+		runLookupAppScenarioGroupTest(t, lookupCreatorGroup, []lookupAppScenario{
+			{
+				name:           "locals-modified-twice",
+				group:          lookupCreatorGroup,
+				creatorParams:  lookupTestAppParams(0x01, 0x11),
+				initLocalState: lookupTestAppLocalState(0),
+				localsDelta1:   lookupTestAppLocalsDelta(lookupTestAppLocalState(99)),
+				localsDelta2:   lookupTestAppLocalsDelta(lookupTestAppLocalState(42)),
+				wantWithParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(42),
+					params:     lookupTestAppParams(0x01, 0x11),
+				},
+				wantNoParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(42),
+				},
+			},
+			{
+				name:           "creator-locals-deleted",
+				group:          lookupCreatorGroup,
+				creatorParams:  lookupTestAppParams(0x01, 0x11),
+				initLocalState: lookupTestAppLocalState(1),
+				localsDelta1:   lookupTestDeletedAppLocalsDelta(),
+				wantWithParams: lookupAppExpected{
+					params: lookupTestAppParams(0x01, 0x11),
+				},
+				wantNoParams: lookupAppExpected{},
+			},
+			{
+				name:           "unchanged",
+				group:          lookupCreatorGroup,
+				creatorParams:  lookupTestAppParams(0x01, 0x11),
+				initLocalState: lookupTestAppLocalState(2),
+				wantWithParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(2),
+					params:     lookupTestAppParams(0x01, 0x11),
+				},
+				wantNoParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(2),
+				},
+			},
+			{
+				name:                "params-modified",
+				group:               lookupCreatorGroup,
+				creatorParams:       lookupTestAppParams(0x01, 0x11),
+				initLocalState:      lookupTestAppLocalState(3),
+				creatorParamsDelta1: lookupTestAppParamsDelta(lookupTestAppParams(0x02, 0x12)),
+				wantWithParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(3),
+					params:     lookupTestAppParams(0x02, 0x12),
+				},
+				wantNoParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(3),
+				},
+			},
+			{
+				name:                "params-deleted",
+				group:               lookupCreatorGroup,
+				creatorParams:       lookupTestAppParams(0x01, 0x11),
+				initLocalState:      lookupTestAppLocalState(4),
+				creatorParamsDelta1: lookupTestDeletedAppParamsDelta(),
+				wantWithParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(4),
+				},
+				wantNoParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(4),
+				},
+			},
+			{
+				name:                "both-deleted",
+				group:               lookupCreatorGroup,
+				creatorParams:       lookupTestAppParams(0x01, 0x11),
+				initLocalState:      lookupTestAppLocalState(5),
+				creatorParamsDelta1: lookupTestDeletedAppParamsDelta(),
+				localsDelta1:        lookupTestDeletedAppLocalsDelta(),
+				wantWithParams: lookupAppExpected{
+					excluded: true,
+				},
+				wantNoParams: lookupAppExpected{
+					excluded: true,
+				},
+			},
+			{
+				name:                "new-creation",
+				group:               lookupCreatorGroup,
+				creatorParamsDelta1: lookupTestAppParamsDelta(lookupTestAppParams(0x01, 0x11)),
+				localsDelta1:        lookupTestAppLocalsDelta(lookupTestAppLocalState(60)),
+				wantWithParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(60),
+					params:     lookupTestAppParams(0x01, 0x11),
+				},
+				wantNoParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(60),
+				},
+			},
+			{
+				name:          "creator-no-optin",
+				group:         lookupCreatorGroup,
+				creatorParams: lookupTestAppParams(0x01, 0x11),
+				wantWithParams: lookupAppExpected{
+					params: lookupTestAppParams(0x01, 0x11),
+				},
+				wantNoParams: lookupAppExpected{},
 			},
 		})
-		for appIdx := uint64(2000); appIdx <= 2005; appIdx++ {
-			updates.UpsertAppResource(testAddr, basics.AppIndex(appIdx),
-				ledgercore.AppParamsDelta{
-					Params: &basics.AppParams{
-						ApprovalProgram: []byte{0x06, 0x81, 0x01},
-						GlobalState:     basics.TealKeyValue{},
-					},
+	})
+
+	t.Run("holder-group", func(t *testing.T) {
+		runLookupAppScenarioGroupTest(t, lookupHolderGroup, []lookupAppScenario{
+			{
+				name:           "close-out",
+				group:          lookupHolderGroup,
+				creatorParams:  lookupTestAppParams(0x01, 0x11),
+				initLocalState: lookupTestAppLocalState(99),
+				localsDelta1:   lookupTestDeletedAppLocalsDelta(),
+				wantWithParams: lookupAppExpected{
+					excluded: true,
 				},
-				ledgercore.AppLocalStateDelta{
-					LocalState: &basics.AppLocalState{
-						Schema: basics.StateSchema{NumUint: appIdx - 2000},
-					},
-				})
-		}
-		updates.Upsert(optinAddr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{
-				MicroAlgos:          basics.MicroAlgos{Raw: 1_000_000},
-				TotalAppLocalStates: 1,
+				wantNoParams: lookupAppExpected{
+					excluded: true,
+				},
+			},
+			{
+				name:                "cross-params-modified",
+				group:               lookupHolderGroup,
+				creatorParams:       lookupTestAppParams(0x01, 0x11),
+				initLocalState:      lookupTestAppLocalState(99),
+				creatorParamsDelta1: lookupTestAppParamsDelta(lookupTestAppParams(0x02, 0x12)),
+				wantWithParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(99),
+					params:     lookupTestAppParams(0x02, 0x12),
+				},
+				wantNoParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(99),
+				},
+			},
+			{
+				name:                "cross-params-deleted",
+				group:               lookupHolderGroup,
+				creatorParams:       lookupTestAppParams(0x01, 0x11),
+				initLocalState:      lookupTestAppLocalState(99),
+				creatorParamsDelta1: lookupTestDeletedAppParamsDelta(),
+				wantWithParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(99),
+				},
+				wantNoParams: lookupAppExpected{
+					localState: lookupTestAppLocalState(99),
+				},
 			},
 		})
-		// optinAddr opts into 2002; this local state will be deleted in a delta to
-		// test that a non-creator close-out does not appear in results.
-		updates.UpsertAppResource(optinAddr, basics.AppIndex(2002),
-			ledgercore.AppParamsDelta{},
-			ledgercore.AppLocalStateDelta{
-				LocalState: &basics.AppLocalState{
-					Schema: basics.StateSchema{NumUint: 99},
+	})
+
+	t.Run("delta-only-group", func(t *testing.T) {
+		runLookupAppScenarioGroupTest(t, lookupDeltaOnlyGroup, []lookupAppScenario{
+			{
+				name:          "delta-only-close-out",
+				group:         lookupDeltaOnlyGroup,
+				creatorParams: lookupTestAppParams(0x01, 0x11),
+				localsDelta1:  lookupTestAppLocalsDelta(lookupTestAppLocalState(77)),
+				localsDelta2:  lookupTestDeletedAppLocalsDelta(),
+				wantWithParams: lookupAppExpected{
+					excluded: true,
 				},
-			})
-
-		base := accts[0]
-		newAccts := applyPartialDeltas(base, updates)
-		accts = append(accts, newAccts)
-
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, 1, au, base, opts, nil)
-		auCommitSync(t, 1, au, ml)
-
-		for appIdx := uint64(2000); appIdx <= 2005; appIdx++ {
-			knownCreatables[basics.CreatableIndex(appIdx)] = true
-		}
-	}
-
-	// Additional empty rounds (if any) ensure earlier data flushes past MaxAcctLookback into DB.
-	for i := basics.Round(2); i <= basics.Round(conf.MaxAcctLookback+2); i++ {
-		var updates ledgercore.AccountDeltas
-		base := accts[i-1]
-		newAccts := applyPartialDeltas(base, updates)
-		accts = append(accts, newAccts)
-
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, i, au, base, opts, nil)
-		auCommitSync(t, i, au, ml)
-	}
-
-	// Delta round 1 (uncommitted)
-	deltaRound1 := basics.Round(conf.MaxAcctLookback + 3)
-	{
-		var updates ledgercore.AccountDeltas
-		// 2005: delete both local state and params
-		updates.UpsertAppResource(testAddr, basics.AppIndex(2005),
-			ledgercore.AppParamsDelta{Deleted: true},
-			ledgercore.AppLocalStateDelta{Deleted: true})
-		// 2006: new creation (not in DB)
-		updates.UpsertAppResource(testAddr, basics.AppIndex(2006),
-			ledgercore.AppParamsDelta{
-				Params: &basics.AppParams{ApprovalProgram: []byte{0x06, 0x81, 0x01}},
-			},
-			ledgercore.AppLocalStateDelta{
-				LocalState: &basics.AppLocalState{
-					Schema: basics.StateSchema{NumUint: 60},
-				},
-			})
-		// 2001: delete local state
-		updates.UpsertAppResource(testAddr, basics.AppIndex(2001),
-			ledgercore.AppParamsDelta{},
-			ledgercore.AppLocalStateDelta{Deleted: true})
-		// 2000: modify local state (will be overridden by delta round 2)
-		updates.UpsertAppResource(testAddr, basics.AppIndex(2000),
-			ledgercore.AppParamsDelta{},
-			ledgercore.AppLocalStateDelta{
-				LocalState: &basics.AppLocalState{
-					Schema: basics.StateSchema{NumUint: 99},
-				},
-			})
-		// 2003: modify params only (local state unchanged)
-		updates.UpsertAppResource(testAddr, basics.AppIndex(2003),
-			ledgercore.AppParamsDelta{
-				Params: &basics.AppParams{
-					ApprovalProgram:   []byte{0x06, 0x81, 0x02},
-					ClearStateProgram: []byte{0x06, 0x81, 0x01},
+				wantNoParams: lookupAppExpected{
+					excluded: true,
 				},
 			},
-			ledgercore.AppLocalStateDelta{})
-		// 2004: delete params (local state remains)
-		updates.UpsertAppResource(testAddr, basics.AppIndex(2004),
-			ledgercore.AppParamsDelta{Deleted: true},
-			ledgercore.AppLocalStateDelta{})
-		// optinAddr closes out of 2002
-		updates.UpsertAppResource(optinAddr, basics.AppIndex(2002),
-			ledgercore.AppParamsDelta{},
-			ledgercore.AppLocalStateDelta{Deleted: true})
-		// deltaOnlyOptinAddr opts into 2002 only in uncommitted deltas; round 2
-		// will close it out before anything commits to test the delta-only path.
-		updates.UpsertAppResource(deltaOnlyOptinAddr, basics.AppIndex(2002),
-			ledgercore.AppParamsDelta{},
-			ledgercore.AppLocalStateDelta{
-				LocalState: &basics.AppLocalState{
-					Schema: basics.StateSchema{NumUint: 77},
-				},
-			})
-
-		base := accts[deltaRound1-1]
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, deltaRound1, au, base, opts, nil)
-	}
-
-	// Delta round 2 (uncommitted): override 2000's local state from round 1
-	deltaRound2 := deltaRound1 + 1
-	{
-		var updates ledgercore.AccountDeltas
-		updates.UpsertAppResource(testAddr, basics.AppIndex(2000),
-			ledgercore.AppParamsDelta{},
-			ledgercore.AppLocalStateDelta{
-				LocalState: &basics.AppLocalState{
-					Schema: basics.StateSchema{NumUint: 42},
-				},
-			})
-		updates.UpsertAppResource(deltaOnlyOptinAddr, basics.AppIndex(2002),
-			ledgercore.AppParamsDelta{},
-			ledgercore.AppLocalStateDelta{Deleted: true})
-
-		base := accts[deltaRound1-1]
-		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
-		auNewBlock(t, deltaRound2, au, base, opts, nil)
-	}
-
-	// includeParams=true
-	resources, rnd, err := au.LookupApplicationResources(testAddr, 0, 100, true)
-	require.NoError(t, err)
-	require.Equal(t, deltaRound2, rnd)
-
-	// Expected: 2000, 2001, 2002, 2003, 2004, 2006.
-	// 2005 fully deleted (both local state and params) — should not appear.
-	require.Len(t, resources, 6)
-
-	appMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs)
-	for _, res := range resources {
-		appMap[res.AppID] = res
-	}
-
-	// 2000: local state from delta round 2 (most recent), params preserved from DB
-	require.Equal(t, uint64(42), appMap[basics.AppIndex(2000)].AppLocalState.Schema.NumUint)
-	require.NotNil(t, appMap[basics.AppIndex(2000)].AppParams)
-	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2000)].AppParams.ApprovalProgram)
-	require.Equal(t, testAddr, appMap[basics.AppIndex(2000)].Creator)
-
-	// 2001: local state deleted but params remain (account is still creator)
-	require.Contains(t, appMap, basics.AppIndex(2001))
-	require.Nil(t, appMap[basics.AppIndex(2001)].AppLocalState)
-	require.NotNil(t, appMap[basics.AppIndex(2001)].AppParams)
-	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2001)].AppParams.ApprovalProgram)
-	require.Equal(t, testAddr, appMap[basics.AppIndex(2001)].Creator)
-
-	// 2002: unchanged from DB
-	require.Equal(t, uint64(2), appMap[basics.AppIndex(2002)].AppLocalState.Schema.NumUint)
-	require.NotNil(t, appMap[basics.AppIndex(2002)].AppParams)
-	require.Equal(t, testAddr, appMap[basics.AppIndex(2002)].Creator)
-
-	// 2003: params updated in delta, local state preserved from DB
-	require.Equal(t, uint64(3), appMap[basics.AppIndex(2003)].AppLocalState.Schema.NumUint)
-	require.NotNil(t, appMap[basics.AppIndex(2003)].AppParams)
-	require.Equal(t, []byte{0x06, 0x81, 0x02}, appMap[basics.AppIndex(2003)].AppParams.ApprovalProgram)
-	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2003)].AppParams.ClearStateProgram)
-	require.Equal(t, testAddr, appMap[basics.AppIndex(2003)].Creator)
-
-	// 2004: params deleted in delta, local state preserved from DB, no creator
-	require.Equal(t, uint64(4), appMap[basics.AppIndex(2004)].AppLocalState.Schema.NumUint)
-	require.Nil(t, appMap[basics.AppIndex(2004)].AppParams)
-	require.True(t, appMap[basics.AppIndex(2004)].Creator.IsZero())
-
-	// 2005: both local state and params deleted — should not appear
-	require.NotContains(t, appMap, basics.AppIndex(2005))
-
-	// 2006: new creation from delta
-	require.Equal(t, uint64(60), appMap[basics.AppIndex(2006)].AppLocalState.Schema.NumUint)
-	require.NotNil(t, appMap[basics.AppIndex(2006)].AppParams)
-	require.Equal(t, testAddr, appMap[basics.AppIndex(2006)].Creator)
-
-	// includeParams=false should omit AppParams but still populate Creator
-	// for non-deleted apps. A zero Creator is interpreted downstream as
-	// "app deleted", so delta-only entries must still resolve it.
-	//
-	// Expected: 2000, 2001, 2002, 2003, 2004, 2006
-	// 2005 excluded (fully deleted).
-
-	// includeParams=false should omit AppParams from all results
-	resourcesNoParams, _, err := au.LookupApplicationResources(testAddr, 0, 100, false)
-	require.NoError(t, err)
-	require.Len(t, resourcesNoParams, 6)
-
-	noParamsMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs)
-	for _, res := range resourcesNoParams {
-		require.Nil(t, res.AppParams, "AppParams should be nil when includeParams=false")
-		noParamsMap[res.AppID] = res
-	}
-
-	// Local state values must match the includeParams=true results.
-	require.Equal(t, uint64(42), noParamsMap[basics.AppIndex(2000)].AppLocalState.Schema.NumUint)
-	require.Equal(t, uint64(2), noParamsMap[basics.AppIndex(2002)].AppLocalState.Schema.NumUint)
-	require.Equal(t, uint64(3), noParamsMap[basics.AppIndex(2003)].AppLocalState.Schema.NumUint)
-	require.Equal(t, uint64(4), noParamsMap[basics.AppIndex(2004)].AppLocalState.Schema.NumUint)
-	require.Equal(t, uint64(60), noParamsMap[basics.AppIndex(2006)].AppLocalState.Schema.NumUint)
-
-	// Creator must be populated for non-deleted apps, even without includeParams.
-	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2000)].Creator)
-	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2002)].Creator)
-	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2003)].Creator)
-	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2006)].Creator,
-		"delta-only app should have non-zero Creator even when includeParams=false")
-	// 2004 had its params deleted -- Creator should be zero.
-	require.True(t, noParamsMap[basics.AppIndex(2004)].Creator.IsZero())
-
-	// optinAddr closed out of 2002 in deltas. A non-creator who closed out
-	// should not see the app, even with includeParams=true (the DB join
-	// provides params from the creator, but the account has no relationship).
-	optinWithParams, _, err := au.LookupApplicationResources(optinAddr, 0, 100, true)
-	require.NoError(t, err)
-	require.Len(t, optinWithParams, 0, "non-creator close-out should not appear even with includeParams=true")
-
-	optinNoParams, _, err := au.LookupApplicationResources(optinAddr, 0, 100, false)
-	require.NoError(t, err)
-	require.Len(t, optinNoParams, 0, "non-creator close-out should not appear with includeParams=false")
-
-	deltaOnlyWithParams, _, err := au.LookupApplicationResources(deltaOnlyOptinAddr, 0, 100, true)
-	require.NoError(t, err)
-	require.Len(t, deltaOnlyWithParams, 0, "delta-only non-creator close-out should not appear even with includeParams=true")
-
-	deltaOnlyNoParams, _, err := au.LookupApplicationResources(deltaOnlyOptinAddr, 0, 100, false)
-	require.NoError(t, err)
-	require.Len(t, deltaOnlyNoParams, 0, "delta-only non-creator close-out should not appear with includeParams=false")
+		})
+	})
 }
 
 // TestLookupAppResourcesParamsOnlyDeletion exercises the scenario where an app
