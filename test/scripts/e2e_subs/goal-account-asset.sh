@@ -13,14 +13,16 @@ gcmd="goal -w ${WALLET}"
 
 ACCOUNTA=$(${gcmd} account list|awk '{ print $3 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
+ACCOUNTC=$(${gcmd} account new|awk '{ print $6 }')
 
 ASSET_INDEX_PATTERN='Created asset with asset index [[:digit:]]+'
 
-# fund account B a bit
+# fund other accounts a bit
 ${gcmd} clerk send -a 100000000 -f ${ACCOUNTA} -t ${ACCOUNTB}
+${gcmd} clerk send -a 100000000 -f ${ACCOUNTA} -t ${ACCOUNTC}
 
 # create all assets
-RES=$(${gcmd} asset create --name "asset-a" --creator ${ACCOUNTA} --total 100 --no-clawback --no-freezer --manager ${ACCOUNTA} --no-reserve --signer ${ACCOUNTA})
+RES=$(${gcmd} asset create --name "asset-a" --creator ${ACCOUNTA} --total 100 --no-clawback --freezer ${ACCOUNTA} --manager ${ACCOUNTA} --no-reserve --signer ${ACCOUNTA})
 ASSET_A_ID=$(echo ${RES} | grep -Eo "${ASSET_INDEX_PATTERN}" | grep -Eo '[[:digit:]]+')
 
 RES=$(${gcmd} asset create --name "asset-b" --creator ${ACCOUNTA} --total 200 --no-clawback --no-freezer --manager ${ACCOUNTA} --no-reserve --signer ${ACCOUNTA})
@@ -41,12 +43,6 @@ ${gcmd} asset optin --account ${ACCOUNTB} --assetid ${ASSET_D_ID} --signer ${ACC
 # displays held assets
 ${gcmd} account info -a ${ACCOUNTB}
 
-# wait a few rounds for the asset optins to get into the db, since the account asset info endpoint
-# does not look at in memory deltas
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-
 # query account assets w/ details, (1)
 RES=$(${gcmd} account assetdetails -a ${ACCOUNTB})
 if [[ ${RES} != *"Account: ${ACCOUNTB}"* ]]; then
@@ -55,6 +51,14 @@ if [[ ${RES} != *"Account: ${ACCOUNTB}"* ]]; then
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_A_ID}"$'\n'"    Amount: 0"* ]]; then
     date '+goal-account-asset-test assetdetails (1) should contain asset A %Y%m%d_%H%M%S'
+    false
+fi
+if [[ ${RES} != *"Freeze address:   ${ACCOUNTA}"* ]]; then
+    date '+goal-account-asset-test assetdetails (1) should contain account A as a freezer %Y%m%d_%H%M%S'
+    false
+fi
+if [[ ${RES} == *"Freeze address:   ${ACCOUNTB}"* ]]; then
+    date '+goal-account-asset-test assetdetails (1) should not contain account B as a freezer %Y%m%d_%H%M%S'
     false
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_B_ID}"$'\n'"    Amount: 0"* ]]; then
@@ -67,6 +71,19 @@ if [[ ${RES} != *"Asset ID: ${ASSET_C_ID}"$'\n'"    Amount: 0"* ]]; then
 fi
 if [[ ${RES} != *"Asset ID: ${ASSET_D_ID}"$'\n'"    Amount: 0"* ]]; then
     date '+goal-account-asset-test assetdetails (1) should contain asset D %Y%m%d_%H%M%S'
+    false
+fi
+
+# modify the freeze addr and then query it quickly, while still in deltas
+${gcmd} asset config --assetid ${ASSET_A_ID} --new-freezer ${ACCOUNTC} --manager ${ACCOUNTA}
+RES=$(${gcmd} account assetdetails -a ${ACCOUNTB})
+
+if [[ ${RES} != *"Freeze address:   ${ACCOUNTC}"* ]]; then
+    date '+goal-account-asset-test assetdetails (1) should contain account C as a freezer %Y%m%d_%H%M%S'
+    false
+fi
+if [[ ${RES} == *"Freeze address:   ${ACCOUNTA}"* ]]; then
+    date '+goal-account-asset-test assetdetails (1) should not contain account A as a freezer %Y%m%d_%H%M%S'
     false
 fi
 
@@ -95,11 +112,6 @@ fi
 
 # delete one of the asset
 ${gcmd} asset destroy --assetid ${ASSET_B_ID} --creator ${ACCOUNTA} --signer ${ACCOUNTA}
-
-# wait a few rounds for the deletion to get into the db
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
-${gcmd} clerk send -a 0 -f ${ACCOUNTA} -t ${ACCOUNTB}
 
 # query account assets w/ details after deletion, (3)
 RES=$(${gcmd} account assetdetails -a ${ACCOUNTB})

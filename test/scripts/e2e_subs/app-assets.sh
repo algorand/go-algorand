@@ -124,7 +124,9 @@ APPACCT=$(python -c "import algosdk.encoding as e; print(e.encode_address(e.chec
 EXAMPLE_URL="http://example.com"
 function asset-create {
     amount=$1; shift
-    ${gcmd} asset create --creator "$SMALL" --total "$amount" --decimals 0 "$@" --asseturl "$EXAMPLE_URL"
+    # Using --no-reserve exercises a former buggy case where `asset
+    # config` with an unset special address would panic on a nil.
+    ${gcmd} asset create --creator "$SMALL" --total "$amount" --decimals 0 "$@" --asseturl "$EXAMPLE_URL" --no-reserve
 }
 
 function asset-deposit {
