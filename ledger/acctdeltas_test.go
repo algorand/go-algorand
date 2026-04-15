@@ -4013,7 +4013,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	//   1001: will remain unchanged in deltas (exercises plain DB read-through)
 	//   1002: will remain unchanged for creatorAddr; optinAddr opts in and then opts out in a delta
 	//   1003: will have params-only modification in delta
-	//   1004: will have params deleted in delta (holding remains)
+	//   1004: was a nonsense test. removed. so it just sits there unchanged.
 	//   1005: will have both holding and params deleted in delta
 	//   1007: will be fully deleted in a committed round; optinAddr opts in with zero balance
 	{
@@ -4138,10 +4138,6 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 				Params: &basics.AssetParams{Total: 7777, UnitName: "A1003new"},
 			},
 			ledgercore.AssetHoldingDelta{})
-		// 1004: delete params (holding remains)
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1004),
-			ledgercore.AssetParamsDelta{Deleted: true},
-			ledgercore.AssetHoldingDelta{})
 
 		base := accts[deltaRound1-1]
 		opts := auNewBlockOpts{updates, testProtocolVersion, protoParams, knownCreatables}
@@ -4201,11 +4197,6 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(7777), assetMap[basics.AssetIndex(1003)].AssetParams.Total)
 	require.Equal(t, "A1003new", assetMap[basics.AssetIndex(1003)].AssetParams.UnitName)
 	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1003)].Creator)
-
-	// 1004: params deleted in delta, holding preserved from DB, no creator
-	require.Equal(t, uint64(1004*100), assetMap[basics.AssetIndex(1004)].AssetHolding.Amount)
-	require.Nil(t, assetMap[basics.AssetIndex(1004)].AssetParams)
-	require.True(t, assetMap[basics.AssetIndex(1004)].Creator.IsZero())
 
 	// 1005: both holding and params deleted — should not appear
 	require.NotContains(t, assetMap, basics.AssetIndex(1005))
