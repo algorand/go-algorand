@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -57,7 +57,7 @@ type AssembleBlockStats struct {
 	MaxLength                 int
 	MinPriority               uint64
 	MaxPriority               uint64
-	CommittedCount            int // number of transaction blocks that are included in a block
+	CommittedCount            int // number of transactions removed b/c they were already included in a block
 	StopReason                string
 	TotalLength               uint64
 	EarlyCommittedCount       uint64 // number of transaction groups that were pending on the transaction pool but have been included in previous block

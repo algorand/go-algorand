@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -280,6 +280,7 @@ var createAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -359,6 +360,7 @@ var destroyAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -452,6 +454,7 @@ var configAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -537,6 +540,7 @@ var sendAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -608,6 +612,7 @@ var freezeAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -695,6 +700,7 @@ var optinAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -754,20 +760,6 @@ var infoAssetCmd = &cobra.Command{
 		accountList := makeAccountsList(dataDir)
 		creator := accountList.getAddressByName(assetCreator)
 
-		// Helper methods for dereferencing optional asset fields.
-		derefString := func(s *string) string {
-			if s == nil {
-				return ""
-			}
-			return *s
-		}
-		derefBool := func(b *bool) bool {
-			if b == nil {
-				return false
-			}
-			return *b
-		}
-
 		lookupAssetID(cmd, creator, client)
 
 		asset, err := client.AssetInformation(assetID)
@@ -776,7 +768,7 @@ var infoAssetCmd = &cobra.Command{
 		}
 
 		reserveEmpty := false
-		if derefString(asset.Params.Reserve) == "" {
+		if nilToZero(asset.Params.Reserve) == "" {
 			reserveEmpty = true
 			asset.Params.Reserve = &asset.Params.Creator
 		}
@@ -789,21 +781,34 @@ var infoAssetCmd = &cobra.Command{
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", asset.Params.Creator)
-		reportInfof("Asset name:       %s", derefString(asset.Params.Name))
-		reportInfof("Unit name:        %s", derefString(asset.Params.UnitName))
-		reportInfof("URL:              %s", derefString(asset.Params.Url))
-		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(asset.Params.Total, asset.Params.Decimals), derefString(asset.Params.UnitName))
-		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
-		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
-		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
-		fmt.Printf("Default frozen:   %v\n", derefBool(asset.Params.DefaultFrozen))
-		fmt.Printf("Manager address:  %s\n", derefString(asset.Params.Manager))
-		if reserveEmpty {
-			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", derefString(asset.Params.Reserve))
-		} else {
-			fmt.Printf("Reserve address:  %s\n", derefString(asset.Params.Reserve))
+		name := "<unnamed>"
+		if asset.Params.Name != nil {
+			_, name = unicodePrintable(*asset.Params.Name)
 		}
-		fmt.Printf("Freeze address:   %s\n", derefString(asset.Params.Freeze))
-		fmt.Printf("Clawback address: %s\n", derefString(asset.Params.Clawback))
+		fmt.Printf("Asset name: %s\n", name)
+
+		units := "units"
+		if asset.Params.UnitName != nil {
+			_, units = unicodePrintable(*asset.Params.UnitName)
+		}
+		reportInfof("Unit name:        %s", units)
+		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(asset.Params.Total, asset.Params.Decimals), units)
+		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, asset.Params.Decimals), units)
+		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), units)
+		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
+		fmt.Printf("Default frozen:   %t\n", nilToZero(asset.Params.DefaultFrozen))
+		safeURL := ""
+		if asset.Params.Url != nil {
+			_, safeURL = unicodePrintable(*asset.Params.Url)
+		}
+		fmt.Printf("URL: %s\n", safeURL)
+		fmt.Printf("Manager address:  %s\n", nilToZero(asset.Params.Manager))
+		if reserveEmpty {
+			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", nilToZero(asset.Params.Reserve))
+		} else {
+			fmt.Printf("Reserve address:  %s\n", nilToZero(asset.Params.Reserve))
+		}
+		fmt.Printf("Freeze address:   %s\n", nilToZero(asset.Params.Freeze))
+		fmt.Printf("Clawback address: %s\n", nilToZero(asset.Params.Clawback))
 	},
 }
