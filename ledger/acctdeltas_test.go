@@ -4010,10 +4010,10 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	// Round 1: create assets 1000-1005 with params and holdings
 	//   1000: will have holding modified, then overridden in a second delta round
-	//   1001: will have holding deleted in delta (params remain since account is creator)
-	//   1002: will remain unchanged
+	//   1001: will remain unchanged in deltas (exercises plain DB read-through)
+	//   1002: will remain unchanged for creatorAddr; optinAddr opts in and then opts out in a delta
 	//   1003: will have params-only modification in delta
-	//   1004: will have params deleted in delta (holding remains)
+	//   1004: was a nonsense test. removed. so it just sits there unchanged.
 	//   1005: will have both holding and params deleted in delta
 	//   1007: will be fully deleted in a committed round; optinAddr opts in with zero balance
 	{
@@ -4055,12 +4055,17 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 		updates.Upsert(optinAddr, ledgercore.AccountData{
 			AccountBaseData: ledgercore.AccountBaseData{
 				MicroAlgos:  basics.MicroAlgos{Raw: 1_000_000},
-				TotalAssets: 1,
+				TotalAssets: 2,
 			},
 		})
 		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1007),
 			ledgercore.AssetParamsDelta{},
 			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+		// optinAddr also opts into 1002; this holding will be deleted in a delta to
+		// test that a non-creator opt-out does not appear in the results.
+		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1002),
+			ledgercore.AssetParamsDelta{},
+			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 50}})
 
 		base := accts[0]
 		newAccts := applyPartialDeltas(base, updates)
@@ -4117,8 +4122,8 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 			ledgercore.AssetHoldingDelta{
 				Holding: &basics.AssetHolding{Amount: 6000},
 			})
-		// 1001: delete holding
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1001),
+		// optinAddr opts out of 1002; it is not the creator so nothing should appear.
+		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1002),
 			ledgercore.AssetParamsDelta{},
 			ledgercore.AssetHoldingDelta{Deleted: true})
 		// 1000: modify holding (will be overridden by delta round 2)
@@ -4132,10 +4137,6 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 			ledgercore.AssetParamsDelta{
 				Params: &basics.AssetParams{Total: 7777, UnitName: "A1003new"},
 			},
-			ledgercore.AssetHoldingDelta{})
-		// 1004: delete params (holding remains)
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1004),
-			ledgercore.AssetParamsDelta{Deleted: true},
 			ledgercore.AssetHoldingDelta{})
 
 		base := accts[deltaRound1-1]
@@ -4164,6 +4165,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	// Expected: 1000, 1001, 1002, 1003, 1004, 1006.
 	// 1005 fully deleted (both holding and params) — should not appear.
+	// 1001 has no delta, so it appears as committed.
 	require.Len(t, resources, 6)
 
 	assetMap := make(map[basics.AssetIndex]ledgercore.AssetResourceWithIDs)
@@ -4175,28 +4177,26 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(5555), assetMap[basics.AssetIndex(1000)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1000)].AssetParams)
 	require.Equal(t, uint64(1_000_000), assetMap[basics.AssetIndex(1000)].AssetParams.Total)
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1000)].Creator)
 
-	// 1001: holding deleted but params remain (account is still creator)
-	require.Contains(t, assetMap, basics.AssetIndex(1001))
-	require.Nil(t, assetMap[basics.AssetIndex(1001)].AssetHolding)
+	// 1001: no delta — holding and params come straight from DB
+	require.Equal(t, uint64(1001*100), assetMap[basics.AssetIndex(1001)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1001)].AssetParams)
 	require.Equal(t, uint64(1_001_000), assetMap[basics.AssetIndex(1001)].AssetParams.Total)
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1001)].Creator)
 
 	// 1002: unchanged from DB
 	require.Equal(t, uint64(1002*100), assetMap[basics.AssetIndex(1002)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1002)].AssetParams)
 	require.Equal(t, uint64(1_002_000), assetMap[basics.AssetIndex(1002)].AssetParams.Total)
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1002)].Creator)
 
 	// 1003: params updated in delta, holding preserved from DB
 	require.Equal(t, uint64(1003*100), assetMap[basics.AssetIndex(1003)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1003)].AssetParams)
 	require.Equal(t, uint64(7777), assetMap[basics.AssetIndex(1003)].AssetParams.Total)
 	require.Equal(t, "A1003new", assetMap[basics.AssetIndex(1003)].AssetParams.UnitName)
-
-	// 1004: params deleted in delta, holding preserved from DB, no creator
-	require.Equal(t, uint64(1004*100), assetMap[basics.AssetIndex(1004)].AssetHolding.Amount)
-	require.Nil(t, assetMap[basics.AssetIndex(1004)].AssetParams)
-	require.True(t, assetMap[basics.AssetIndex(1004)].Creator.IsZero())
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1003)].Creator)
 
 	// 1005: both holding and params deleted — should not appear
 	require.NotContains(t, assetMap, basics.AssetIndex(1005))
@@ -4205,11 +4205,12 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1006)].AssetParams)
 	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetParams.Total)
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1006)].Creator)
 
-	// optinAddr opted in to asset 1007 with a zero balance before it was destroyed. The protocol
-	// does not track all opt-outs when an asset is deleted (only the creator's holding is
-	// enforced), so optinAddr's holding persists in the DB even after the asset params are gone.
-	// The lookup must return a non-nil holding with zero amount and no params or creator.
+	// optinAddr holds two assets in the DB (1002 and 1007) but opts out of 1002 in the delta.
+	// Since optinAddr is not the creator of 1002, the opt-out leaves nothing to return for it.
+	// Asset 1007 persists: its params were destroyed in a committed round but the protocol
+	// does not enforce cleanup of non-creator holdings, so the zero-balance holding survives.
 	optinAddrResources, optinAddrRnd, err := au.LookupAssetResources(optinAddr, 0, 100)
 	require.NoError(t, err)
 	require.Equal(t, deltaRound2, optinAddrRnd)
@@ -4395,22 +4396,26 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(42), appMap[basics.AppIndex(2000)].AppLocalState.Schema.NumUint)
 	require.NotNil(t, appMap[basics.AppIndex(2000)].AppParams)
 	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2000)].AppParams.ApprovalProgram)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2000)].Creator)
 
 	// 2001: local state deleted but params remain (account is still creator)
 	require.Contains(t, appMap, basics.AppIndex(2001))
 	require.Nil(t, appMap[basics.AppIndex(2001)].AppLocalState)
 	require.NotNil(t, appMap[basics.AppIndex(2001)].AppParams)
 	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2001)].AppParams.ApprovalProgram)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2001)].Creator)
 
 	// 2002: unchanged from DB
 	require.Equal(t, uint64(2), appMap[basics.AppIndex(2002)].AppLocalState.Schema.NumUint)
 	require.NotNil(t, appMap[basics.AppIndex(2002)].AppParams)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2002)].Creator)
 
 	// 2003: params updated in delta, local state preserved from DB
 	require.Equal(t, uint64(3), appMap[basics.AppIndex(2003)].AppLocalState.Schema.NumUint)
 	require.NotNil(t, appMap[basics.AppIndex(2003)].AppParams)
 	require.Equal(t, []byte{0x06, 0x81, 0x02}, appMap[basics.AppIndex(2003)].AppParams.ApprovalProgram)
 	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2003)].AppParams.ClearStateProgram)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2003)].Creator)
 
 	// 2004: params deleted in delta, local state preserved from DB, no creator
 	require.Equal(t, uint64(4), appMap[basics.AppIndex(2004)].AppLocalState.Schema.NumUint)
@@ -4423,15 +4428,41 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	// 2006: new creation from delta
 	require.Equal(t, uint64(60), appMap[basics.AppIndex(2006)].AppLocalState.Schema.NumUint)
 	require.NotNil(t, appMap[basics.AppIndex(2006)].AppParams)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2006)].Creator)
+
+	// includeParams=false should omit AppParams but still populate Creator
+	// for non-deleted apps. A zero Creator is interpreted downstream as
+	// "app deleted", so delta-only entries must still resolve it.
+	//
+	// Expected: 2000, 2001, 2002, 2003, 2004, 2006
+	// 2005 excluded (fully deleted).
 
 	// includeParams=false should omit AppParams from all results
 	resourcesNoParams, _, err := au.LookupApplicationResources(testAddr, 0, 100, false)
 	require.NoError(t, err)
-	require.Len(t, resourcesNoParams, 5)
+	require.Len(t, resourcesNoParams, 6)
 
+	noParamsMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs)
 	for _, res := range resourcesNoParams {
 		require.Nil(t, res.AppParams, "AppParams should be nil when includeParams=false")
+		noParamsMap[res.AppID] = res
 	}
+
+	// Local state values must match the includeParams=true results.
+	require.Equal(t, uint64(42), noParamsMap[basics.AppIndex(2000)].AppLocalState.Schema.NumUint)
+	require.Equal(t, uint64(2), noParamsMap[basics.AppIndex(2002)].AppLocalState.Schema.NumUint)
+	require.Equal(t, uint64(3), noParamsMap[basics.AppIndex(2003)].AppLocalState.Schema.NumUint)
+	require.Equal(t, uint64(4), noParamsMap[basics.AppIndex(2004)].AppLocalState.Schema.NumUint)
+	require.Equal(t, uint64(60), noParamsMap[basics.AppIndex(2006)].AppLocalState.Schema.NumUint)
+
+	// Creator must be populated for non-deleted apps, even without includeParams.
+	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2000)].Creator)
+	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2002)].Creator)
+	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2003)].Creator)
+	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2006)].Creator,
+		"delta-only app should have non-zero Creator even when includeParams=false")
+	// 2004 had its params deleted -- Creator should be zero.
+	require.True(t, noParamsMap[basics.AppIndex(2004)].Creator.IsZero())
 }
 
 // TestLookupAppResourcesParamsOnlyDeletion exercises the scenario where an app
