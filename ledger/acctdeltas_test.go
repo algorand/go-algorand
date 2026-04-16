@@ -4760,6 +4760,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	t.Run("creator-group", func(t *testing.T) {
 		runLookupAssetScenarioGroupTest(t, lookupCreatorGroup, []lookupAssetScenario{
+			// Creator updates the same holding twice; the most recent delta should win.
 			{
 				name:          "holding-modified-twice",
 				group:         lookupCreatorGroup,
@@ -4772,6 +4773,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 					params:  lookupTestAssetParams(1_000_000, "A1000"),
 				},
 			},
+			// No deltas touch this asset, so the result should read straight through from DB.
 			{
 				name:          "unchanged",
 				group:         lookupCreatorGroup,
@@ -4782,6 +4784,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 					params:  lookupTestAssetParams(1_001_000, "A1001"),
 				},
 			},
+			// Params change without touching the holding; the DB holding should be preserved.
 			{
 				name:                "params-modified",
 				group:               lookupCreatorGroup,
@@ -4793,6 +4796,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 					params:  lookupTestAssetParams(7777, "Anew"),
 				},
 			},
+			// Deleting both params and holding should remove the asset entirely.
 			{
 				name:                "both-deleted",
 				group:               lookupCreatorGroup,
@@ -4804,6 +4808,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 					excluded: true,
 				},
 			},
+			// Delta-only creator creation should appear even though nothing exists in DB yet.
 			{
 				name:                "new-creation",
 				group:               lookupCreatorGroup,
@@ -4819,6 +4824,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	t.Run("holder-group", func(t *testing.T) {
 		runLookupAssetScenarioGroupTest(t, lookupHolderGroup, []lookupAssetScenario{
+			// Holder keeps the same opt-in while the creator updates params in deltas.
 			{
 				name:                "cross-params-modified",
 				group:               lookupHolderGroup,
@@ -4830,6 +4836,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 					params:  lookupTestAssetParams(7777, "Anew"),
 				},
 			},
+			// Holder survives a creator-side params deletion and should see only the holding.
 			{
 				name:                "cross-params-deleted",
 				group:               lookupHolderGroup,
@@ -4841,6 +4848,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 					creator: basics.Address{},
 				},
 			},
+			// Cross-address DB merge should show creator params beside the holder's opt-in.
 			{
 				name:          "cross-unchanged",
 				group:         lookupHolderGroup,
@@ -4851,6 +4859,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 					params:  lookupTestAssetParams(1_006_000, "A1006"),
 				},
 			},
+			// A non-creator close-out should remove the asset entirely from the holder's results.
 			{
 				name:          "non-creator-close-out",
 				group:         lookupHolderGroup,
@@ -4861,6 +4870,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 					excluded: true,
 				},
 			},
+			// After committed destruction, a surviving zero-balance holder should still be returned.
 			{
 				name:                    "destroyed-surviving",
 				group:                   lookupHolderGroup,
@@ -4887,6 +4897,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 
 	t.Run("creator-group", func(t *testing.T) {
 		runLookupAppScenarioGroupTest(t, lookupCreatorGroup, []lookupAppScenario{
+			// Creator local state changes twice; the later delta should override the earlier one.
 			{
 				name:           "locals-modified-twice",
 				group:          lookupCreatorGroup,
@@ -4902,6 +4913,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 					localState: lookupTestAppLocalState(42),
 				},
 			},
+			// Creator deletes local state but remains the app creator, so params-only should survive.
 			{
 				name:           "creator-locals-deleted",
 				group:          lookupCreatorGroup,
@@ -4913,6 +4925,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 				},
 				wantNoParams: lookupAppExpected{},
 			},
+			// Plain DB read-through for a creator-owned app with no deltas.
 			{
 				name:           "unchanged",
 				group:          lookupCreatorGroup,
@@ -4926,6 +4939,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 					localState: lookupTestAppLocalState(2),
 				},
 			},
+			// Params mutate while local state stays committed.
 			{
 				name:                "params-modified",
 				group:               lookupCreatorGroup,
@@ -4940,6 +4954,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 					localState: lookupTestAppLocalState(3),
 				},
 			},
+			// Params are deleted but creator local state remains, so only locals should survive.
 			{
 				name:                "params-deleted",
 				group:               lookupCreatorGroup,
@@ -4953,6 +4968,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 					localState: lookupTestAppLocalState(4),
 				},
 			},
+			// Deleting both params and locals should fully remove the app from results.
 			{
 				name:                "both-deleted",
 				group:               lookupCreatorGroup,
@@ -4967,6 +4983,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 					excluded: true,
 				},
 			},
+			// Delta-only creator creation should appear in both includeParams modes.
 			{
 				name:                "new-creation",
 				group:               lookupCreatorGroup,
@@ -4980,6 +4997,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 					localState: lookupTestAppLocalState(60),
 				},
 			},
+			// Creator-only app with no opt-in covers the params-only creator path.
 			{
 				name:          "creator-no-optin",
 				group:         lookupCreatorGroup,
@@ -4994,6 +5012,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 
 	t.Run("holder-group", func(t *testing.T) {
 		runLookupAppScenarioGroupTest(t, lookupHolderGroup, []lookupAppScenario{
+			// Holder closes out in deltas; holder should lose the app while creator still sees it.
 			{
 				name:           "close-out",
 				group:          lookupHolderGroup,
@@ -5011,6 +5030,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 				},
 				wantCreatorNoParams: &lookupAppExpected{},
 			},
+			// Holder keeps local state while the creator updates params in deltas.
 			{
 				name:                "cross-params-modified",
 				group:               lookupHolderGroup,
@@ -5029,6 +5049,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 				},
 				wantCreatorNoParams: &lookupAppExpected{},
 			},
+			// Creator deletes params; holder still has locals, but creator should no longer see the app.
 			{
 				name:                "cross-params-deleted",
 				group:               lookupHolderGroup,
@@ -5053,6 +5074,7 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 
 	t.Run("delta-only-group", func(t *testing.T) {
 		runLookupAppScenarioGroupTest(t, lookupDeltaOnlyGroup, []lookupAppScenario{
+			// Delta-only opt-in followed by delta-only close-out should disappear for the holder but not the creator.
 			{
 				name:          "delta-only-close-out",
 				group:         lookupDeltaOnlyGroup,
