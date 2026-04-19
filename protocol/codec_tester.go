@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -150,35 +149,77 @@ func printWarning(warnMsg string) {
 var testedDatatypesForAllocBound = map[string]bool{}
 var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
 
+// Walk upward from this source file until we find the module root.
+// (we look for the go.mod file declaring the go-algorand module)
+func repoRootFromGoMod() (string, error) {
+	const repositoryModulePath = "github.com/algorand/go-algorand"
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("runtime.Caller failed")
+	}
+
+	for dir := filepath.Dir(file); ; {
+		matches, err := goModDeclaresModule(filepath.Join(dir, "go.mod"),
+			repositoryModulePath)
+		if err != nil {
+			return "", err
+		}
+		if matches {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("could not find go-algorand module root from %s", file)
+		}
+		dir = parent
+	}
+}
+
+// Report whether goModPath declares the expected module.
+func goModDeclaresModule(goModPath, modulePath string) (bool, error) {
+	fileBytes, err := os.ReadFile(goModPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("reading %s: %w", goModPath, err)
+	}
+
+	for line := range strings.SplitSeq(string(fileBytes), "\n") {
+		line = strings.TrimSpace(line)
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "module" && fields[1] == modulePath {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
-	// does any of the go files in the package directory has the msgp:allocbound defined for that datatype ?
-	gopath := os.Getenv("GOPATH")
-	const repositoryRoot = "go-algorand/"
-	const thisFile = "protocol/codec_tester.go"
-	packageFilesPath := path.Join(gopath, "src", dataType.PkgPath())
+	return hasMsgpAllocBoundDirective(dataType.PkgPath(), dataType.Name())
+}
+
+// hasMsgpAllocBoundDirective checks whether any of the go files in the package directory
+// has the msgp:allocbound defined for the given datatype.
+func hasMsgpAllocBoundDirective(pkgPath, typeName string) bool {
+	const repositoryImportPath = "github.com/algorand/go-algorand/"
+	packageFilesPath := filepath.Join(os.Getenv("GOPATH"), "src", filepath.FromSlash(pkgPath))
 
 	if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
-		// no such directory. Try to assemble the path based on the current working directory.
-		cwd, err := os.Getwd()
+		// no such directory. Fall back to the source tree containing this module.
+		repoRoot, err := repoRootFromGoMod()
 		if err != nil {
 			return false
 		}
-		if cwdPaths := strings.SplitAfter(cwd, repositoryRoot); len(cwdPaths) == 2 {
-			cwd = cwdPaths[0]
-		} else {
-			// try to assemble the project directory based on the current stack frame
-			_, file, _, ok := runtime.Caller(0)
-			if !ok {
-				return false
-			}
-			cwd = strings.TrimSuffix(file, thisFile)
-		}
 
-		relPkdPath := strings.SplitAfter(dataType.PkgPath(), repositoryRoot)
-		if len(relPkdPath) != 2 {
+		relPkgPath, ok := strings.CutPrefix(pkgPath, repositoryImportPath)
+		if !ok {
 			return false
 		}
-		packageFilesPath = path.Join(cwd, relPkdPath[1])
+		packageFilesPath = filepath.Join(repoRoot, filepath.FromSlash(relPkgPath))
 		if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
 			return false
 		}
@@ -195,9 +236,13 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 		if err != nil {
 			continue
 		}
-		if strings.Contains(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", dataType.Name())) {
-			// message pack alloc bound definition was found.
-			return true
+		for line := range strings.SplitSeq(string(fileBytes), "\n") {
+			line = strings.TrimSpace(line)
+			fields := strings.Fields(line)
+			if len(fields) >= 2 && fields[0] == "//msgp:allocbound" && fields[1] == typeName {
+				// message pack alloc bound definition was found.
+				return true
+			}
 		}
 	}
 	return false
