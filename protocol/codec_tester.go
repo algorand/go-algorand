@@ -149,59 +149,35 @@ func printWarning(warnMsg string) {
 
 var testedDatatypesForAllocBound = map[string]bool{}
 var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
-var repoRootFromGoModCached = sync.OnceValues(findRepoRootFromGoMod)
+var moduleRootFromGoModCached = sync.OnceValues(findModuleRootFromGoMod)
 
-// Walk upward from this source file until we find the module root.
-// (we look for the go.mod file declaring the go-algorand module)
-func repoRootFromGoMod() (string, error) {
-	return repoRootFromGoModCached()
+// Walk upward from this source file until we find the containing module root.
+func moduleRootFromGoMod() (string, error) {
+	return moduleRootFromGoModCached()
 }
 
-func findRepoRootFromGoMod() (string, error) {
-	const repositoryModulePath = "github.com/algorand/go-algorand"
-
+func findModuleRootFromGoMod() (string, error) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		return "", fmt.Errorf("runtime.Caller failed")
 	}
 
 	for dir := filepath.Dir(file); ; {
-		matches, err := goModDeclaresModule(filepath.Join(dir, "go.mod"),
-			repositoryModulePath)
-		if err != nil {
-			return "", err
-		}
-		if matches {
+		goModPath := filepath.Join(dir, "go.mod")
+		_, err := os.Stat(goModPath)
+		if err == nil {
 			return dir, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("stat %s: %w", goModPath, err)
 		}
 
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("could not find go-algorand module root from %s", file)
+			return "", fmt.Errorf("could not find module root from %s", file)
 		}
 		dir = parent
 	}
-}
-
-// Report whether goModPath declares the expected module.
-func goModDeclaresModule(goModPath, modulePath string) (bool, error) {
-	fileBytes, err := os.ReadFile(goModPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("reading %s: %w", goModPath, err)
-	}
-
-	for line := range strings.SplitSeq(string(fileBytes), "\n") {
-		line = strings.TrimSpace(line)
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == "module" && fields[1] == modulePath {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
@@ -213,7 +189,7 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 func hasMsgpAllocBoundDirective(pkgPath, typeName string) bool {
 	const repositoryModulePath = "github.com/algorand/go-algorand"
 
-	repoRoot, err := repoRootFromGoMod()
+	moduleRoot, err := moduleRootFromGoMod()
 	if err != nil {
 		return false
 	}
@@ -223,7 +199,7 @@ func hasMsgpAllocBoundDirective(pkgPath, typeName string) bool {
 		return false
 	}
 
-	packageFilesPath := filepath.Join(repoRoot, filepath.FromSlash(relPkgPath))
+	packageFilesPath := filepath.Join(moduleRoot, filepath.FromSlash(relPkgPath))
 	if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
 		return false
 	}
