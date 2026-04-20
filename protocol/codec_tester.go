@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -148,10 +149,15 @@ func printWarning(warnMsg string) {
 
 var testedDatatypesForAllocBound = map[string]bool{}
 var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
+var repoRootFromGoModCached = sync.OnceValues(findRepoRootFromGoMod)
 
 // Walk upward from this source file until we find the module root.
 // (we look for the go.mod file declaring the go-algorand module)
 func repoRootFromGoMod() (string, error) {
+	return repoRootFromGoModCached()
+}
+
+func findRepoRootFromGoMod() (string, error) {
 	const repositoryModulePath = "github.com/algorand/go-algorand"
 
 	_, file, _, ok := runtime.Caller(0)
@@ -203,26 +209,23 @@ func checkMsgpAllocBoundDirective(dataType reflect.Type) bool {
 }
 
 // hasMsgpAllocBoundDirective checks whether any of the go files in the package directory
-// has the msgp:allocbound defined for the given datatype.
+// have the msgp:allocbound defined for the given datatype.
 func hasMsgpAllocBoundDirective(pkgPath, typeName string) bool {
-	const repositoryImportPath = "github.com/algorand/go-algorand/"
-	packageFilesPath := filepath.Join(os.Getenv("GOPATH"), "src", filepath.FromSlash(pkgPath))
+	const repositoryModulePath = "github.com/algorand/go-algorand"
 
+	repoRoot, err := repoRootFromGoMod()
+	if err != nil {
+		return false
+	}
+
+	relPkgPath, ok := strings.CutPrefix(pkgPath, repositoryModulePath+"/")
+	if !ok {
+		return false
+	}
+
+	packageFilesPath := filepath.Join(repoRoot, filepath.FromSlash(relPkgPath))
 	if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
-		// no such directory. Fall back to the source tree containing this module.
-		repoRoot, err := repoRootFromGoMod()
-		if err != nil {
-			return false
-		}
-
-		relPkgPath, ok := strings.CutPrefix(pkgPath, repositoryImportPath)
-		if !ok {
-			return false
-		}
-		packageFilesPath = filepath.Join(repoRoot, filepath.FromSlash(relPkgPath))
-		if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
-			return false
-		}
+		return false
 	}
 	packageFiles := []string{}
 	filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
