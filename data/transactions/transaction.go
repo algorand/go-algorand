@@ -213,11 +213,9 @@ func (tx Transaction) FeeFactor(proto config.ConsensusParams) basics.Micros {
 // increased due to contents of the header.
 func (header Header) FeeContribution(proto config.ConsensusParams) basics.Micros {
 	var cost basics.Micros
-	// Add extra cost for Note bytes beyond standard size
-	if len(header.Note) > proto.MaxTxnNoteBytes {
-		extraBytes := len(header.Note) - proto.MaxTxnNoteBytes
-		cost += basics.Micros(extraBytes) * 1000
-	}
+	// Add extra cost for Note bytes beyond standard size.
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(len(header.Note) - proto.MaxTxnNoteBytes)
+	cost += surcharge
 	return cost
 }
 

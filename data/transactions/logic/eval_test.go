@@ -139,6 +139,8 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 
 		EnableAppVersioning: true,
 		AppSizeUpdates:      true,
+
+		PerByteTxnSurcharge: 1000,
 	}
 	for _, opt := range opts {
 		if opt != nil { // so some callsites can take one arg and pass it in

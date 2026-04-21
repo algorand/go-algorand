@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -65,7 +65,7 @@ func TestBigAppCreate(t *testing.T) {
 		}, "txgroup with 1mA fees is less than")
 
 		stib := dl.txn(&txntest.Txn{
-			Fee:             1_500, // ~200 bytes over limit, so about 1.2mA needed
+			Fee:             1_050, // ~200 bytes over limit, so about 1.02mA needed
 			Type:            "appl",
 			Sender:          addrs[0],
 			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
@@ -80,7 +80,7 @@ func TestBigAppCreate(t *testing.T) {
 			Sender:          addrs[0],
 			ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
 		})
-		require.EqualValues(t, 1210, vb.Block().Payset[0].Txn.Fee.Raw)
+		require.EqualValues(t, 1_021, vb.Block().Payset[0].Txn.Fee.Raw)
 	})
 }
 

@@ -595,6 +595,12 @@ type ConsensusParams struct {
 	// LoadTracking enables header values that track Load that grows/shrinks
 	// when blocks are more/less than half full.
 	LoadTracking bool
+
+	// PerByteTxnSurcharge specifies the fee surcharge per byte for transactions
+	// with large notes, app args, programs, or other fields that can beyond the
+	// basic Max sizes (they use up to "Absolute" Maxes. It is expressed in
+	// fraction of a basic min fee.
+	PerByteTxnSurcharge basics.Micros
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1491,6 +1497,7 @@ func initConsensusProtocols() {
 	vFuture.MaxAbsoluteTxnNoteBytes = 4096   // same as largest AVM value
 	vFuture.MaxAbsoluteExtraProgramPages = 7 // Allow larger programs with extra fees
 	vFuture.MaxAbsoluteTotalArgLen = 16384   // We _could_ make this as high as 16*4k
+	vFuture.PerByteTxnSurcharge = 100        // This is 1.000100 times minfee
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

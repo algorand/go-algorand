@@ -593,16 +593,25 @@ func (ac ApplicationCallTxnFields) WellSizedPrograms(extraPages uint32, proto co
 }
 
 // feeContribution returns the amount an app call's basic fee factor should be
-// increased due to large programs beyond the standard limit.
+// increased due to oversized app call data beyond standard limits.
 func (ac ApplicationCallTxnFields) feeContribution(proto config.ConsensusParams) basics.Micros {
+	var cost basics.Micros
+
+	// Add extra cost for program bytes beyond standard size.
 	totalProgramBytes := len(ac.ApprovalProgram) + len(ac.ClearStateProgram)
 	standardLimit := (1 + proto.MaxExtraAppProgramPages) * proto.MaxAppTotalProgramLen
+	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(totalProgramBytes - standardLimit)
+	cost += surcharge
 
-	if totalProgramBytes > standardLimit {
-		extraBytes := totalProgramBytes - standardLimit
-		return basics.Micros(extraBytes) * 1000
+	// Add extra cost for app args bytes beyond standard size.
+	var totalArgBytes int
+	for _, arg := range ac.ApplicationArgs {
+		totalArgBytes += len(arg)
 	}
-	return 0
+	surcharge, _ = proto.PerByteTxnSurcharge.MulInt(totalArgBytes - proto.MaxAppTotalArgLen)
+	cost += surcharge
+
+	return cost
 }
 
 // AddressByIndex converts an integer index into an address associated with the

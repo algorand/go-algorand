@@ -29,6 +29,7 @@ import (
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 )
 
 func TestTransaction_EstimateEncodedSize(t *testing.T) {
@@ -288,25 +289,25 @@ func TestFeeFactor_BigNotes(t *testing.T) {
 			name:           "vFuture: 1 extra byte (1025 bytes)",
 			proto:          vFuture,
 			noteSize:       1025,
-			expectedFactor: 1e6 + 1000,
+			expectedFactor: 1e6 + 100,
 		},
 		{
 			name:           "vFuture: 100 extra bytes (1124 bytes)",
 			proto:          vFuture,
 			noteSize:       1124,
-			expectedFactor: 1e6 + 100000,
+			expectedFactor: 1e6 + 10000,
 		},
 		{
 			name:           "vFuture: 1024 extra bytes (2048 bytes)",
 			proto:          vFuture,
 			noteSize:       2048,
-			expectedFactor: 1e6 + 1024000,
+			expectedFactor: 1e6 + 102400,
 		},
 		{
 			name:           "vFuture: maximum allowed (4096 bytes)",
 			proto:          vFuture,
 			noteSize:       4096,
-			expectedFactor: 1e6 + (4096-1024)*1000,
+			expectedFactor: 1e6 + (4096-1024)*100,
 		},
 	}
 
@@ -396,7 +397,7 @@ func TestFeeFactor_StateProofAndHeartbeat(t *testing.T) {
 			Group:      crypto.Digest{1}, // Has a group
 		},
 	}
-	assert.Equal(t, basics.Micros(1_100_000), groupedHeartbeatBigNote.FeeFactor(vFuture), "Grouped heartbeat should have extra fee")
+	assert.Equal(t, basics.Micros(1_010_000), groupedHeartbeatBigNote.FeeFactor(vFuture), "Grouped heartbeat should have extra fee")
 }
 
 // TestWellFormed_BigNotes tests Note size validation with MaxAbsoluteTxnNoteBytes
@@ -536,8 +537,8 @@ func TestSummarizeFees_BigNotes(t *testing.T) {
 
 		usage, paid := SummarizeFees([]SignedTxnWithAD{stxnAD}, vFuture)
 
-		// Expected: 1e6 + (2048-1024)*1000 = 1e6 + 1024000 = 2024000
-		assert.Equal(t, basics.Micros(2024000), usage, "Usage calculation incorrect")
+		// Expected: 1e6 + (2048-1024)*100 = 1e6 + 102400 = 1102400
+		assert.Equal(t, basics.Micros(1102400), usage, "Usage calculation incorrect")
 		assert.Equal(t, basics.MicroAlgos{Raw: 10000}, paid, "Paid amount incorrect")
 	})
 
@@ -584,8 +585,8 @@ func TestSummarizeFees_BigNotes(t *testing.T) {
 
 		usage, paid := SummarizeFees(group, vFuture)
 
-		// Expected usage: 1e6 + (1e6 + 1024000) = 3024000
-		assert.Equal(t, basics.Micros(3024000), usage, "Group usage calculation incorrect")
+		// Expected usage: 1e6 + (1e6 + 102400) = 2102400
+		assert.Equal(t, basics.Micros(2102400), usage, "Group usage calculation incorrect")
 		assert.Equal(t, basics.MicroAlgos{Raw: 3024}, paid, "Group paid amount incorrect")
 	})
 
@@ -639,6 +640,7 @@ func TestFeeFactor_BigPrograms(t *testing.T) {
 		proto          config.ConsensusParams
 		approvalSize   int
 		clearSize      int
+		appArgSizes    []int
 		expectedFactor basics.Micros
 	}{
 		{
@@ -660,28 +662,42 @@ func TestFeeFactor_BigPrograms(t *testing.T) {
 			proto:          vFuture,
 			approvalSize:   4096,
 			clearSize:      4097,
-			expectedFactor: 1e6 + 1000,
+			expectedFactor: 1e6 + 100,
 		},
 		{
 			name:           "vFuture: 100 extra bytes (8292 total)",
 			proto:          vFuture,
 			approvalSize:   4096,
 			clearSize:      4196,
-			expectedFactor: 1e6 + 100000,
+			expectedFactor: 1e6 + 10000,
 		},
 		{
 			name:           "vFuture: 1024 extra bytes (9216 total)",
 			proto:          vFuture,
 			approvalSize:   4096,
 			clearSize:      5120,
-			expectedFactor: 1e6 + 1024000,
+			expectedFactor: 1e6 + 102400,
 		},
 		{
 			name:           "vFuture: maximum allowed (16KB total with 7 extra pages)",
 			proto:          vFuture,
 			approvalSize:   8192,
 			clearSize:      8192,
-			expectedFactor: 1e6 + (16384-8192)*1000,
+			expectedFactor: 1e6 + (16384-8192)*100,
+		},
+		{
+			name:           "vFuture: oversized app args",
+			proto:          vFuture,
+			appArgSizes:    []int{12000, 3000}, // 15000 total; 12952 bytes over 2048 standard
+			expectedFactor: 1e6 + (15000-2048)*100,
+		},
+		{
+			name:           "vFuture: oversized programs and app args both contribute",
+			proto:          vFuture,
+			approvalSize:   5000,
+			clearSize:      5000,              // 1808 over 8192 standard
+			appArgSizes:    []int{8000, 2000}, // 7952 over 2048 standard
+			expectedFactor: 1e6 + (1808+7952)*100,
 		},
 	}
 
@@ -701,6 +717,9 @@ func TestFeeFactor_BigPrograms(t *testing.T) {
 					ClearStateProgram: make([]byte, tt.clearSize),
 				},
 			}
+			tx.ApplicationCallTxnFields.ApplicationArgs = util.Map(tt.appArgSizes, func(size int) []byte {
+				return make([]byte, size)
+			})
 
 			factor := tx.FeeFactor(tt.proto)
 			assert.Equal(t, tt.expectedFactor, factor, "FeeFactor mismatch for approval=%d, clear=%d", tt.approvalSize, tt.clearSize)
@@ -856,8 +875,8 @@ func TestSummarizeFees_BigPrograms(t *testing.T) {
 
 		usage, paid := SummarizeFees([]SignedTxnWithAD{stxnAD}, vFuture)
 
-		// Expected: 1e6 + 1024*1000 = 2024000
-		assert.Equal(t, basics.Micros(2024000), usage, "Usage calculation incorrect")
+		// Expected: 1e6 + 1024*100 = 1102400
+		assert.Equal(t, basics.Micros(1102400), usage, "Usage calculation incorrect")
 		assert.Equal(t, basics.MicroAlgos{Raw: 10000}, paid, "Paid amount incorrect")
 	})
 
@@ -904,8 +923,8 @@ func TestSummarizeFees_BigPrograms(t *testing.T) {
 
 		usage, paid := SummarizeFees(group, vFuture)
 
-		// Expected usage: (1e6 + 1024*1000) + (1e6 + 1024*1000) = 4048000
-		assert.Equal(t, basics.Micros(4048000), usage, "Group usage calculation incorrect")
+		// Expected usage: (1e6 + 1024*100) + (1e6 + 1024*100) = 2204800
+		assert.Equal(t, basics.Micros(2204800), usage, "Group usage calculation incorrect")
 		assert.Equal(t, basics.MicroAlgos{Raw: 4048}, paid, "Group paid amount incorrect")
 	})
 }
