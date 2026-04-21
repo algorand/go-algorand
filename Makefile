@@ -184,6 +184,7 @@ libsodium: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
+	rm -rf crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
