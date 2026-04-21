@@ -8146,6 +8146,78 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 	}
 }
 
+func TestUnnamedResourcesBigProgramReadBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	sender := env.Accounts[0]
+	appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
+	})
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+	}).Txn().Sign(sender.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+
+	// Referencing a second large app should also contribute to read budget, even if it isn't called.
+	biggerID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		ApprovalProgram: strings.Repeat("pushint 1; return;\n", 2000),
+	})
+	txn = env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+		Boxes:         []transactions.BoxRef{{}},
+		ForeignApps:   []basics.AppIndex{biggerID},
+	}).Txn().Sign(sender.Sk)
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+
+	// If exactly one reference slot remains, simulation should still be able to
+	// suggest exactly one extra box ref.
+	txn = env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+		ForeignAssets: make([]basics.AssetIndex, proto.MaxAppTotalTxnReferences-1),
+	}).Txn().Sign(sender.Sk)
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+}
+
 const resourceLimitsTestProgramBase = `#pragma version %d
 txn ApplicationID
 bz end // Do nothing during create
