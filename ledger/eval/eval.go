@@ -980,7 +980,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // associated with inner transactions.  Those costs are monitored during app
 // calls in the logic package.
 func CheckGroupFees(feesPaid basics.MicroAlgos, usage basics.Micros, minFee basics.MicroAlgos) error {
-	feeNeeded, overflow := minFee.MulMicros(usage)
+	feeNeeded, overflow := minFee.MulMicrosCeil(usage)
 	if overflow {
 		return &ledgercore.TxGroupMalformedError{
 			Msg:    "txgroup required fee overflow",

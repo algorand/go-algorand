@@ -513,7 +513,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 // to required fees. feeCredit should not be used on inner groups.
 func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) basics.MicroAlgos {
 	usage, feesPaid := transactions.SummarizeFees(txgroup, proto)
-	feeNeeded, _ := proto.MinFee().MulMicros(usage)
+	feeNeeded, _ := proto.MinFee().MulMicrosCeil(usage)
 	return feesPaid.SubSaturate(feeNeeded) // If MulMicros saturates, this is 0
 }
 
@@ -5191,7 +5191,7 @@ func addInnerTxn(cx *EvalContext) error {
 	// Check fees in the existing group first. Allows fee pooling in inner groups.
 	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
 	usage = basics.AddSaturate(usage, 1e6) // +1e6 because we're adding a txn
-	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
+	groupFee, o := cx.Proto.MinFee().Mul2MicrosCeil(usage, cx.EvalParams.CostMultiplier)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
@@ -5606,7 +5606,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 
 	// Check fees across the group first. Allows fee pooling in inner groups.
 	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
-	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
+	groupFee, o := cx.Proto.MinFee().Mul2MicrosCeil(usage, cx.EvalParams.CostMultiplier)
 	if o {
 		return errors.New("inner group fee saturation")
 	}

@@ -309,7 +309,7 @@ func TestMul2div(t *testing.T) {
 
 	test := func(a, b, c, d uint64, result uint64) {
 		t.Helper()
-		r, o := Mul2div(a, b, c, d)
+		r, _, o := Mul2div(a, b, c, d)
 		assert.False(t, o)
 		assert.Equal(t, r, result, "%d != %d", r, result)
 	}
@@ -361,7 +361,7 @@ func TestMul2divOverflow(t *testing.T) {
 
 	testOverflowMaxUint64 := func(a, b, c, d uint64) {
 		t.Helper()
-		r, o := Mul2div(a, b, c, d)
+		r, _, o := Mul2div(a, b, c, d)
 		assert.True(t, o, "expected overflow for %d*%d*%d/%d", a, b, c, d)
 		assert.Equal(t, uint64(math.MaxUint64), r, "overflow should saturate to MaxUint64")
 	}
@@ -379,4 +379,30 @@ func TestMul2divOverflow(t *testing.T) {
 	// With c = 2^63+2: M = 2^63+2, and Y*c produces J = 2^63+1
 	// M + J = 2^64 + 3, which overflows without AddSaturate
 	testOverflowMaxUint64(2, math.MaxUint64, (1<<63)+2, 4)
+}
+
+func TestMulMicrosCeil(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	r, o := MicroAlgos{Raw: 1000}.MulMicrosCeil(Micros(1e6 + 1000))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 1001}, r) // 1000.001 rounds up
+
+	r, o = MicroAlgos{Raw: 1000}.MulMicrosCeil(Micros(2e6))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 2000}, r) // already integral
+}
+
+func TestMul2MicrosCeil(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	r, o := MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1000), Micros(1e6))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 1001}, r) // 1000.001 rounds up
+
+	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(2e6), Micros(3e6))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 6000}, r) // already integral
 }

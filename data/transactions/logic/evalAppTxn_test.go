@@ -1071,18 +1071,18 @@ txn Sender; itxn_field Receiver;
 	// Note size 540 increases fee by 1.040_000 factor. But the first problem is
 	// that the default fee population mechanism can't know about the big Note,
 	// so it tries to populate for 2 basic transactions, which is 2002-401=1601.
-	// The "need" is 1.641 because one of the transacvtion's cost goes from 1001
-	// to 1001*1.040 = 1041
+	// The "need" is 1.642 because one of the transaction's costs goes from 1001
+	// to ceil(1001*1.040) = 1042.
 	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
 		"int 540; bzero; itxn_field Note; itxn_submit; int 1", ep,
-		"group fee 1.601mA too small (needs 1.641mA more)")
+		"group fee 1.601mA too small (needs 1.642mA more)")
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
 		"int 540; bzero; itxn_field Note; int 1041; itxn_field Fee; itxn_submit; int 1", ep,
-		"insufficient balance") // the fee was big enough, but now the balance is too small
-	ledger.NewAccount(appAddr(888), 1000+2*minFee-401+40) // replenish
+		"group fee 1.641mA too small (needs 1.642mA more)")
+	ledger.NewAccount(appAddr(888), 1000+2*minFee-401+41) // replenish
 	TestApp(t, "itxn_begin"+pay+"itxn_next"+pay+
-		"int 540; bzero; itxn_field Note; int 1041; itxn_field Fee; itxn_submit; int 1", ep)
+		"int 540; bzero; itxn_field Note; int 1042; itxn_field Fee; itxn_submit; int 1", ep)
 
 	// Show some failures
 	ledger.NewAccount(appAddr(888), 1000+2*minFee-401) // replenish
