@@ -149,13 +149,9 @@ func printWarning(warnMsg string) {
 
 var testedDatatypesForAllocBound = map[string]bool{}
 var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
-var moduleRootFromGoModCached = sync.OnceValues(findModuleRootFromGoMod)
+var moduleRootFromGoMod = sync.OnceValues(findModuleRootFromGoMod)
 
 // Walk upward from this source file until we find the containing module root.
-func moduleRootFromGoMod() (string, error) {
-	return moduleRootFromGoModCached()
-}
-
 func findModuleRootFromGoMod() (string, error) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -200,17 +196,18 @@ func hasMsgpAllocBoundDirective(pkgPath, typeName string) bool {
 	}
 
 	packageFilesPath := filepath.Join(moduleRoot, filepath.FromSlash(relPkgPath))
-	if _, err := os.Stat(packageFilesPath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(packageFilesPath); os.IsNotExist(statErr) {
 		return false
 	}
-	packageFiles := []string{}
-	filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
-		if filepath.Ext(path) == ".go" {
-			packageFiles = append(packageFiles, path)
+	packageEntries, err := os.ReadDir(packageFilesPath)
+	if err != nil {
+		return false
+	}
+	for _, entry := range packageEntries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".go" {
+			continue
 		}
-		return nil
-	})
-	for _, packageFile := range packageFiles {
+		packageFile := filepath.Join(packageFilesPath, entry.Name())
 		fileBytes, err := os.ReadFile(packageFile)
 		if err != nil {
 			continue
