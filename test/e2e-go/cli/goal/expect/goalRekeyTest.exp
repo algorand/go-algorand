@@ -1,0 +1,149 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set timeout 60
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+
+    exec cp $TEST_DATA_DIR/../../installer/genesis/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account (Account A - will be rekeyed)
+    set ACCOUNT_A [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME $TEST_PRIMARY_NODE_DIR]
+    puts "Account A (sender): $ACCOUNT_A"
+
+    # Create Account B in the default wallet (will become A's new signing authority)
+    set ACCOUNT_B [::AlgorandGoal::CreateAccountForWallet $PRIMARY_WALLET_NAME "" $TEST_PRIMARY_NODE_DIR]
+    puts "Account B (new signer): $ACCOUNT_B"
+
+    # Fund Account B with enough for min balance and fees
+    set MIN_BALANCE 1000000
+    set FEE_AMOUNT [::AlgorandGoal::GetSuggestedFee $PRIMARY_WALLET_NAME $ACCOUNT_A $TEST_PRIMARY_NODE_DIR]
+    puts "Network suggested fee: $FEE_AMOUNT"
+
+    ::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $ACCOUNT_A $MIN_BALANCE $ACCOUNT_B $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""
+
+    # -------------------------------------------------------------------------
+    # Part 1: Rekey Account A to Account B via goal clerk send --rekey-to
+    # -------------------------------------------------------------------------
+    puts "=== Part 1: Rekey A -> B via clerk send ==="
+
+    spawn goal clerk send --wallet $PRIMARY_WALLET_NAME --from $ACCOUNT_A --to $ACCOUNT_A --amount 0 --rekey-to $ACCOUNT_B -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Timed out rekeying account A to B" }
+        -re {Transaction ([A-Z0-9]{52})} { set REKEY_TXN_ID $expect_out(1,string); exp_continue }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "rekey txn failed: error code [lindex $result 3]" } }
+    }
+    puts "Rekey txn: $REKEY_TXN_ID"
+
+    # Verify Account A's auth-addr is now Account B via account dump
+    set ACCOUNT_A_DUMP [exec goal account dump -a $ACCOUNT_A -d $TEST_PRIMARY_NODE_DIR]
+    puts "Account A dump: $ACCOUNT_A_DUMP"
+    if { ! [string match "*\"spend\"*" $ACCOUNT_A_DUMP] } {
+        ::AlgorandGoal::Abort "Account A does not show 'spend' (auth-addr) after rekeying to B"
+    }
+    if { ! [string match "*$ACCOUNT_B*" $ACCOUNT_A_DUMP] } {
+        ::AlgorandGoal::Abort "Account A 'spend' field does not contain Account B's address"
+    }
+    puts "Account A successfully rekeyed to Account B (spend field verified)"
+
+    # Send from A, signed by B - should succeed
+    spawn goal clerk send --wallet $PRIMARY_WALLET_NAME --from $ACCOUNT_A --to $ACCOUNT_B --amount 100000 --signer $ACCOUNT_B -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Timed out sending from A signed by B" }
+        -re {Transaction ([A-Z0-9]{52})} { set SEND_TXN_ID $expect_out(1,string); exp_continue }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "send from A signed by B failed: error code [lindex $result 3]" } }
+    }
+    puts "Send from A signed by B succeeded: $SEND_TXN_ID"
+
+    # -------------------------------------------------------------------------
+    # Part 2: Rekey Account A back to itself (clear auth-addr), then rekey via
+    #         goal app call --rekey-to
+    # -------------------------------------------------------------------------
+    puts "=== Part 2: Clear rekey (A->A) via clerk send, then rekey A->B via app call ==="
+
+    # Clear the rekey: send RekeyTo=A, signed by B (current auth)
+    spawn goal clerk send --wallet $PRIMARY_WALLET_NAME --from $ACCOUNT_A --to $ACCOUNT_A --amount 0 --rekey-to $ACCOUNT_A --signer $ACCOUNT_B -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Timed out clearing rekey on A" }
+        -re {Transaction ([A-Z0-9]{52})} { set CLEAR_REKEY_TXN_ID $expect_out(1,string); exp_continue }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "clear rekey txn failed: error code [lindex $result 3]" } }
+    }
+    puts "Clear rekey txn: $CLEAR_REKEY_TXN_ID"
+
+    # Verify auth-addr is cleared (no "spend" field, or it points to A itself)
+    set ACCOUNT_A_DUMP [exec goal account dump -a $ACCOUNT_A -d $TEST_PRIMARY_NODE_DIR]
+    if { [string match "*\"spend\"*" $ACCOUNT_A_DUMP] } {
+        ::AlgorandGoal::Abort "Account A still shows 'spend' after clearing rekey"
+    }
+    puts "Account A rekey cleared (no 'spend' field)"
+
+    # Create a simple approve-all app
+    set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $ACCOUNT_A ${TEAL_PROGS_DIR}/approve-all.teal 0 0 ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
+    puts "Created app with ID: $APP_ID"
+
+    # Rekey A -> B via app call
+    spawn goal app call --app-id $APP_ID --from $ACCOUNT_A --rekey-to $ACCOUNT_B --wallet $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Timed out rekeying A to B via app call" }
+        "*committed in round*" { puts "App call with rekey-to committed"; close }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "app call --rekey-to failed: error code [lindex $result 3]" } }
+    }
+    ::AlgorandGoal::CheckProcessReturnedCode 1
+
+    # Verify Account A's auth-addr is Account B again
+    set ACCOUNT_A_DUMP [exec goal account dump -a $ACCOUNT_A -d $TEST_PRIMARY_NODE_DIR]
+    puts "Account A dump after app call rekey: $ACCOUNT_A_DUMP"
+    if { ! [string match "*\"spend\"*" $ACCOUNT_A_DUMP] } {
+        ::AlgorandGoal::Abort "Account A does not show 'spend' after rekeying to B via app call"
+    }
+    if { ! [string match "*$ACCOUNT_B*" $ACCOUNT_A_DUMP] } {
+        ::AlgorandGoal::Abort "Account A 'spend' field does not contain Account B after app call rekey"
+    }
+    puts "Account A successfully rekeyed to Account B via app call (spend field verified)"
+
+    # Confirm subsequent send from A signed by B still works
+    spawn goal clerk send --wallet $PRIMARY_WALLET_NAME --from $ACCOUNT_A --to $ACCOUNT_B --amount 100000 --signer $ACCOUNT_B -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Timed out on post-appcall-rekey send from A signed by B" }
+        -re {Transaction ([A-Z0-9]{52})} { set FINAL_TXN_ID $expect_out(1,string); exp_continue }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "post-appcall-rekey send from A signed by B failed: error code [lindex $result 3]" } }
+    }
+    puts "Post-appcall-rekey send from A signed by B succeeded: $FINAL_TXN_ID"
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
+
+    puts "Goal Rekey Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in goalRekeyTest: $EXCEPTION"
+}

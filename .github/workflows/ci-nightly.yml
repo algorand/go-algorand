@@ -18,8 +18,13 @@ env:
   KMD_NOUSB: True
   BUILD_TYPE: integration
   ALGOTEST: 1
-  SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   SKIP_GO_INSTALLATION: True
+  # Force Xcode SDK on macOS 14 to work around a MacOSX14.sdk bug in CLT 16.x
+  # where IOHIDLibObsolete.h fails to include CFPlugInCOM.h, leaving
+  # IUNKNOWN_C_GUTS undefined and breaking karalabe/hid CGo builds.
+  # See: https://github.com/libusb/hidapi/issues/735
+  DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
 
 concurrency:
   group: nightly-${{ github.ref }}

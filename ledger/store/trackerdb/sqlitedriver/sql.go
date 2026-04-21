@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,9 +34,13 @@ type accountsDbQueries struct {
 	lookupResourcesStmt        *sql.Stmt
 	lookupAllResourcesStmt     *sql.Stmt
 	lookupLimitedResourcesStmt *sql.Stmt
-	lookupKvPairStmt           *sql.Stmt
-	lookupKeysByRangeStmt      *sql.Stmt
-	lookupCreatorStmt          *sql.Stmt
+
+	lookupKvPairStmt                     *sql.Stmt
+	lookupKeysByRangeStmt                *sql.Stmt
+	lookupKeysByRangeCursorStmt          *sql.Stmt
+	lookupKeysByRangeCursorWithValueStmt *sql.Stmt
+
+	lookupCreatorStmt *sql.Stmt
 }
 
 type onlineAccountsDbQueries struct {
@@ -117,6 +121,17 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	}
 
 	qs.lookupKeysByRangeStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
+	lookupKeysByRangeTemplate := "SELECT acctrounds.rnd, kvstore.key %s FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase' ORDER BY kvstore.key"
+	qs.lookupKeysByRangeCursorStmt, err = q.Prepare(fmt.Sprintf(lookupKeysByRangeTemplate, ""))
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupKeysByRangeCursorWithValueStmt, err = q.Prepare(fmt.Sprintf(lookupKeysByRangeTemplate, ", kvstore.value"))
 	if err != nil {
 		return nil, err
 	}
@@ -310,6 +325,135 @@ func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64,
 	return
 }
 
+// LookupKeysByPrefixCursor returns a page of key-value pairs matching the prefix, starting after cursor.
+// Keys present in exclude are skipped (they are handled by in-memory deltas).
+// Only key membership is checked; the map values are ignored. The type is
+// map[string][]byte so the caller can pass the delta map directly without
+// allocating a separate key set.
+func (qs *accountsDbQueries) LookupKeysByPrefixCursor(prefix string, cursor string, limit uint64, maxBytes uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, bool, error) {
+	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
+	if end == nil {
+		return 0, nil, false, fmt.Errorf("lookup by strange prefix %#v", prefix)
+	}
+
+	// The cursor is exclusive: we want keys strictly greater than cursor.
+	queryStart := start
+	if cursor != "" && cursor >= string(start) {
+		queryStart = []byte(cursor)
+	}
+
+	stmt := qs.lookupKeysByRangeCursorStmt
+	if includeValues {
+		stmt = qs.lookupKeysByRangeCursorWithValueStmt
+	}
+
+	var round basics.Round
+	var results []ledgercore.KvPairResult
+	var moreData bool
+
+	err := db.Retry(func() error {
+		rows, err := stmt.Query(queryStart, end)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		rnd, res, more, err := qs.processKvRows(rows, cursor, limit, maxBytes, includeValues, exclude)
+		if err != nil {
+			return err
+		}
+		round = rnd
+		results = res
+		moreData = more
+		return nil
+	})
+	return round, results, moreData, err
+}
+
+// maxPreallocLimit caps the slice pre-allocation to avoid excessive memory use
+// when callers pass very large limit values.
+const maxPreallocLimit = 10000
+
+func (qs *accountsDbQueries) processKvRows(rows *sql.Rows, cursor string, limit uint64, maxBytes uint64, includeValues bool, exclude map[string][]byte) (basics.Round, []ledgercore.KvPairResult, bool, error) {
+	var round basics.Round
+	var results []ledgercore.KvPairResult
+	if limit > 0 {
+		// add extra capacity for the keys in the delta whose non-deleted values will be added to our results
+		results = make([]ledgercore.KvPairResult, 0, min(limit+uint64(len(exclude)), maxPreallocLimit))
+	}
+	var collected uint64
+	var bytesAccum uint64
+	var err error
+
+	qualifies := func(rowKey sql.NullString) bool {
+		if !rowKey.Valid {
+			return false
+		}
+
+		key := rowKey.String
+		if key <= cursor {
+			return false
+		}
+
+		if _, excluded := exclude[key]; excluded {
+			return false
+		}
+		return true
+	}
+
+	for rows.Next() {
+		var rowKey sql.NullString
+		var val []byte
+
+		if includeValues {
+			err = rows.Scan(&round, &rowKey, &val)
+		} else {
+			err = rows.Scan(&round, &rowKey)
+		}
+		if err != nil {
+			return 0, nil, false, err
+		}
+		if !qualifies(rowKey) {
+			continue
+		}
+
+		kv := ledgercore.KvPairResult{Key: rowKey.String, Value: val}
+		itemBytes := kv.ByteSize()
+		if maxBytes > 0 && bytesAccum+itemBytes > maxBytes && collected > 0 {
+			// This item is qualifying but exceeds the byte budget.
+			return round, results, true, nil
+		}
+
+		results = append(results, kv)
+		bytesAccum += itemBytes
+		collected++
+
+		if limit > 0 && collected >= limit {
+			break
+		}
+	}
+
+	// Peek for one more qualifying row to determine moreData.
+	for rows.Next() {
+		var rowKey sql.NullString
+		var val []byte
+		if includeValues {
+			err = rows.Scan(&round, &rowKey, &val)
+		} else {
+			err = rows.Scan(&round, &rowKey)
+		}
+		if err != nil {
+			return 0, nil, false, err
+		}
+		if !qualifies(rowKey) {
+			continue
+		}
+		return round, results, true, nil
+	}
+
+	return round, results, false, nil
+}
+
 // keyPrefixIntervalPreprocessing is implemented to generate an interval for DB queries that look up keys by prefix.
 // Such DB query was designed this way, to trigger the binary search optimization in SQLITE3.
 // The DB comparison for blob typed primary key is lexicographic, i.e., byte by byte.
@@ -456,11 +600,11 @@ func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx 
 		var addrid, aidx sql.NullInt64
 		var dbRound basics.Round
 		data = nil
-		var actAssetBuf []byte
-		var crtAssetBuf []byte
+		var actResourceBuf []byte
+		var crtResourceBuf []byte
 		var creatorAddrBuf []byte
 		for rows.Next() {
-			err = rows.Scan(&addrid, &dbRound, &aidx, &creatorAddrBuf, &actAssetBuf, &crtAssetBuf)
+			err = rows.Scan(&addrid, &dbRound, &aidx, &creatorAddrBuf, &actResourceBuf, &crtResourceBuf)
 			if err != nil {
 				return err
 			}
@@ -475,25 +619,30 @@ func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx 
 			}
 			var actResData trackerdb.ResourcesData
 			var crtResData trackerdb.ResourcesData
-			err = protocol.Decode(actAssetBuf, &actResData)
+			err = protocol.Decode(actResourceBuf, &actResData)
 			if err != nil {
 				return err
 			}
 
 			var prdwc trackerdb.PersistedResourcesDataWithCreator
-			if len(crtAssetBuf) > 0 {
-				err = protocol.Decode(crtAssetBuf, &crtResData)
+			if len(crtResourceBuf) > 0 {
+				err = protocol.Decode(crtResourceBuf, &crtResData)
 				if err != nil {
 					return err
 				}
 
-				// Since there is a creator, we want to return all of the asset params along with the asset holdings.
-				// The most simple way to do this is to set the necessary asset holding data on the creator resource data
-				// retrieved from the database. Note that this is unique way of setting resource flags, making this structure
-				// not suitable for use in other contexts (where the params would only be present colocated with the asset holding
-				// of the creator).
-				crtResData.Amount = actResData.Amount
-				crtResData.Frozen = actResData.Frozen
+				// The creator's resource has the params; merge the account's
+				// holding fields into it so the caller sees both in one record.
+				// ResourceFlags are taken from the account so IsHolding() reflects
+				// whether this account is opted in.
+				if ctype == basics.AssetCreatable {
+					crtResData.Amount = actResData.Amount
+					crtResData.Frozen = actResData.Frozen
+				} else {
+					crtResData.SchemaNumUint = actResData.SchemaNumUint
+					crtResData.SchemaNumByteSlice = actResData.SchemaNumByteSlice
+					crtResData.KeyValue = actResData.KeyValue
+				}
 				crtResData.ResourceFlags = actResData.ResourceFlags
 
 				creatorAddr := basics.Address{}
@@ -508,7 +657,7 @@ func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx 
 					},
 					Creator: creatorAddr,
 				}
-			} else { // no creator found, asset was likely deleted, will not have asset params
+			} else { // no creator found, creatable was likely deleted, will not have params
 				prdwc = trackerdb.PersistedResourcesDataWithCreator{
 					PersistedResourcesData: trackerdb.PersistedResourcesData{
 						AcctRef: sqlRowRef{addrid.Int64},
@@ -651,6 +800,8 @@ func (qs *accountsDbQueries) Close() {
 		&qs.lookupLimitedResourcesStmt,
 		&qs.lookupKvPairStmt,
 		&qs.lookupKeysByRangeStmt,
+		&qs.lookupKeysByRangeCursorStmt,
+		&qs.lookupKeysByRangeCursorWithValueStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {

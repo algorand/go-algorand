@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -955,6 +955,299 @@ func TestLookupKeysByPrefix(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLookupKeysByPrefixCursor(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	dbs, _ := sqlitedriver.OpenForTesting(t, false)
+	defer dbs.Close()
+
+	err := dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		_ = benchmarkInitBalances(t, 1, tx, protocol.ConsensusCurrentVersion)
+		return nil
+	})
+	require.NoError(t, err)
+
+	qs, err := dbs.MakeAccountsOptimizedReader()
+	require.NoError(t, err)
+	defer qs.Close()
+
+	// Insert test data with a common prefix
+	kvPairs := []struct {
+		key   string
+		value string
+	}{
+		{"DingHo-A", "valA"},
+		{"DingHo-B", "valB"},
+		{"DingHo-C", "valC"},
+		{"DingHo-D", "valD"},
+		{"DingHo-E", "valE"},
+		{"DingHo-F", "valF"},
+		{"Other-Key", "valOther"},
+	}
+
+	err = dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		writer, err := tx.MakeAccountsOptimizedWriter(true, true, true, true)
+		if err != nil {
+			return
+		}
+		for _, kv := range kvPairs {
+			err = writer.UpsertKvPair(kv.key, []byte(kv.value))
+			require.NoError(t, err)
+		}
+		writer.Close()
+		return nil
+	})
+	require.NoError(t, err)
+
+	t.Run("BasicPagination", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 3, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, "DingHo-B", results[1].Key)
+		require.Equal(t, "DingHo-C", results[2].Key)
+		require.True(t, moreData, "should indicate more data exists")
+		// Values should be nil when includeValues=false
+		require.Nil(t, results[0].Value)
+	})
+
+	t.Run("WithCursor", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-C", 3, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		require.Equal(t, "DingHo-D", results[0].Key)
+		require.Equal(t, "DingHo-E", results[1].Key)
+		require.Equal(t, "DingHo-F", results[2].Key)
+		require.False(t, moreData, "no more data after last key")
+	})
+
+	t.Run("WithValues", func(t *testing.T) {
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, 0, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, []byte("valA"), results[0].Value)
+		require.Equal(t, "DingHo-B", results[1].Key)
+		require.Equal(t, []byte("valB"), results[1].Value)
+	})
+
+	t.Run("WithExclude", func(t *testing.T) {
+		exclude := map[string][]byte{"DingHo-B": nil, "DingHo-D": nil}
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, 0, false, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 4) // A, C, E, F (B and D excluded)
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, "DingHo-C", results[1].Key)
+		require.Equal(t, "DingHo-E", results[2].Key)
+		require.Equal(t, "DingHo-F", results[3].Key)
+	})
+
+	t.Run("PrefixFiltersOtherKeys", func(t *testing.T) {
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 100, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6) // Only DingHo- keys, not Other-Key
+	})
+
+	t.Run("NoResultsPastEnd", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-F", 10, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 0)
+		require.False(t, moreData)
+	})
+
+	t.Run("ZeroLimitReturnsAll", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.False(t, moreData)
+	})
+
+	t.Run("NullKeyFromLeftJoin", func(t *testing.T) {
+		// Prefix that matches no kvstore rows; LEFT JOIN produces a NULL key row
+		_, results, _, err := qs.LookupKeysByPrefixCursor("NonExistent-", "", 10, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 0)
+	})
+
+	t.Run("CursorPlusExclude", func(t *testing.T) {
+		exclude := map[string][]byte{"DingHo-D": nil}
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-B", 10, 0, false, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 3) // C, E, F (cursor skips A+B, exclude skips D)
+		require.Equal(t, "DingHo-C", results[0].Key)
+		require.Equal(t, "DingHo-E", results[1].Key)
+		require.Equal(t, "DingHo-F", results[2].Key)
+	})
+
+	t.Run("ValuesWithCursor", func(t *testing.T) {
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-D", 10, 0, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "DingHo-E", results[0].Key)
+		require.Equal(t, []byte("valE"), results[0].Value)
+		require.Equal(t, "DingHo-F", results[1].Key)
+		require.Equal(t, []byte("valF"), results[1].Value)
+	})
+
+	t.Run("ValuesWithExclude", func(t *testing.T) {
+		exclude := map[string][]byte{"DingHo-A": nil}
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, 0, true, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "DingHo-B", results[0].Key)
+		require.Equal(t, []byte("valB"), results[0].Value)
+		require.Equal(t, "DingHo-C", results[1].Key)
+		require.Equal(t, []byte("valC"), results[1].Value)
+	})
+
+	t.Run("ExcludeAllKeys", func(t *testing.T) {
+		exclude := map[string][]byte{
+			"DingHo-A": nil, "DingHo-B": nil, "DingHo-C": nil,
+			"DingHo-D": nil, "DingHo-E": nil, "DingHo-F": nil,
+		}
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 10, 0, false, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 0)
+	})
+
+	t.Run("LimitExactlyMatchesAvailable", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 6, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, "DingHo-F", results[5].Key)
+		require.False(t, moreData, "no more data when all keys fit")
+	})
+
+	t.Run("CursorBetweenKeys", func(t *testing.T) {
+		// Cursor value doesn't match any existing key
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-B5", 10, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 4) // C, D, E, F
+		require.Equal(t, "DingHo-C", results[0].Key)
+		require.Equal(t, "DingHo-F", results[3].Key)
+	})
+
+	t.Run("RoundIsReturned", func(t *testing.T) {
+		round, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 1, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		// Round comes from acctrounds table; verify it matches across calls
+		round2, _, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 1, 0, true, nil)
+		require.NoError(t, err)
+		require.Equal(t, round, round2)
+	})
+
+	t.Run("ValuesWithCursorAndExclude", func(t *testing.T) {
+		exclude := map[string][]byte{"DingHo-C": nil}
+		_, results, _, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-A", 10, 0, true, exclude)
+		require.NoError(t, err)
+		require.Len(t, results, 4) // B, D, E, F (cursor skips A, exclude skips C)
+		require.Equal(t, "DingHo-B", results[0].Key)
+		require.Equal(t, []byte("valB"), results[0].Value)
+		require.Equal(t, "DingHo-D", results[1].Key)
+		require.Equal(t, []byte("valD"), results[1].Value)
+		require.Equal(t, "DingHo-E", results[2].Key)
+		require.Equal(t, []byte("valE"), results[2].Value)
+		require.Equal(t, "DingHo-F", results[3].Key)
+		require.Equal(t, []byte("valF"), results[3].Value)
+	})
+
+	t.Run("MaxBytesLimitsResults", func(t *testing.T) {
+		// Each key is "DingHo-X" (8 bytes), value is "valX" (4 bytes) = 12 bytes per pair.
+		// With includeValues=true and maxBytes=25, should fit 2 pairs (24 bytes) but not 3 (36).
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 25, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.True(t, moreData, "more data should exist")
+		require.Equal(t, "DingHo-A", results[0].Key)
+		require.Equal(t, "DingHo-B", results[1].Key)
+	})
+
+	t.Run("MaxBytesGuaranteesOneResult", func(t *testing.T) {
+		// Even with maxBytes=1, should return at least one result for progress.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 1, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		require.True(t, moreData)
+		require.Equal(t, "DingHo-A", results[0].Key)
+	})
+
+	t.Run("MaxBytesZeroIsUnlimited", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 0, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.False(t, moreData)
+	})
+
+	t.Run("MaxBytesWithLimit", func(t *testing.T) {
+		// limit=2 should stop before maxBytes is hit.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 2, 1000, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.True(t, moreData, "more data with limit=2 and 6 keys")
+	})
+
+	t.Run("MaxBytesKeysOnly", func(t *testing.T) {
+		// Without values, only count key bytes. Each key is 8 bytes.
+		// maxBytes=20 should fit 2 keys (16 bytes) but not 3 (24).
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 20, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.True(t, moreData)
+	})
+
+	t.Run("MoreDataFalseWhenAllFit", func(t *testing.T) {
+		// maxBytes large enough to fit all results.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 10000, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.False(t, moreData)
+	})
+
+	t.Run("MoreDataTrueWithLimit", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 3, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		require.True(t, moreData)
+	})
+
+	t.Run("MoreDataFalseWhenExact", func(t *testing.T) {
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 6, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 6)
+		require.False(t, moreData)
+	})
+
+	t.Run("MoreDataTrueWhenOneRemains", func(t *testing.T) {
+		// Regression: limit=5 with 6 qualifying rows. The 6th row is the only
+		// one past the page — moreData must be true.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 5, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 5)
+		require.True(t, moreData, "exactly one row remains; moreData must be true")
+	})
+
+	t.Run("MoreDataTrueWhenOneRemainsWithCursor", func(t *testing.T) {
+		// Cursor past D leaves E, F. Limit=1 → return E, F remains.
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "DingHo-D", 1, 0, false, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		require.Equal(t, "DingHo-E", results[0].Key)
+		require.True(t, moreData, "F remains; moreData must be true")
+	})
+
+	t.Run("MaxBytesMoreDataWhenOneRemains", func(t *testing.T) {
+		// Each key is 8 bytes, value is 4 bytes = 12 bytes per pair.
+		// maxBytes=60 fits 5 pairs (60 bytes) but not 6 (72).
+		_, results, moreData, err := qs.LookupKeysByPrefixCursor("DingHo-", "", 0, 60, true, nil)
+		require.NoError(t, err)
+		require.Len(t, results, 5)
+		require.True(t, moreData, "one row remains; moreData must be true")
+	})
 }
 
 func BenchmarkLookupKeyByPrefix(b *testing.B) {
@@ -3717,10 +4010,10 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	// Round 1: create assets 1000-1005 with params and holdings
 	//   1000: will have holding modified, then overridden in a second delta round
-	//   1001: will have holding deleted in delta (params remain since account is creator)
-	//   1002: will remain unchanged
+	//   1001: will remain unchanged in deltas (exercises plain DB read-through)
+	//   1002: will remain unchanged for creatorAddr; optinAddr opts in and then opts out in a delta
 	//   1003: will have params-only modification in delta
-	//   1004: will have params deleted in delta (holding remains)
+	//   1004: was a nonsense test. removed. so it just sits there unchanged.
 	//   1005: will have both holding and params deleted in delta
 	//   1007: will be fully deleted in a committed round; optinAddr opts in with zero balance
 	{
@@ -3762,12 +4055,17 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 		updates.Upsert(optinAddr, ledgercore.AccountData{
 			AccountBaseData: ledgercore.AccountBaseData{
 				MicroAlgos:  basics.MicroAlgos{Raw: 1_000_000},
-				TotalAssets: 1,
+				TotalAssets: 2,
 			},
 		})
 		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1007),
 			ledgercore.AssetParamsDelta{},
 			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 0}})
+		// optinAddr also opts into 1002; this holding will be deleted in a delta to
+		// test that a non-creator opt-out does not appear in the results.
+		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1002),
+			ledgercore.AssetParamsDelta{},
+			ledgercore.AssetHoldingDelta{Holding: &basics.AssetHolding{Amount: 50}})
 
 		base := accts[0]
 		newAccts := applyPartialDeltas(base, updates)
@@ -3824,8 +4122,8 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 			ledgercore.AssetHoldingDelta{
 				Holding: &basics.AssetHolding{Amount: 6000},
 			})
-		// 1001: delete holding
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1001),
+		// optinAddr opts out of 1002; it is not the creator so nothing should appear.
+		updates.UpsertAssetResource(optinAddr, basics.AssetIndex(1002),
 			ledgercore.AssetParamsDelta{},
 			ledgercore.AssetHoldingDelta{Deleted: true})
 		// 1000: modify holding (will be overridden by delta round 2)
@@ -3839,10 +4137,6 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 			ledgercore.AssetParamsDelta{
 				Params: &basics.AssetParams{Total: 7777, UnitName: "A1003new"},
 			},
-			ledgercore.AssetHoldingDelta{})
-		// 1004: delete params (holding remains)
-		updates.UpsertAssetResource(creatorAddr, basics.AssetIndex(1004),
-			ledgercore.AssetParamsDelta{Deleted: true},
 			ledgercore.AssetHoldingDelta{})
 
 		base := accts[deltaRound1-1]
@@ -3871,6 +4165,7 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 
 	// Expected: 1000, 1001, 1002, 1003, 1004, 1006.
 	// 1005 fully deleted (both holding and params) — should not appear.
+	// 1001 has no delta, so it appears as committed.
 	require.Len(t, resources, 6)
 
 	assetMap := make(map[basics.AssetIndex]ledgercore.AssetResourceWithIDs)
@@ -3882,28 +4177,26 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(5555), assetMap[basics.AssetIndex(1000)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1000)].AssetParams)
 	require.Equal(t, uint64(1_000_000), assetMap[basics.AssetIndex(1000)].AssetParams.Total)
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1000)].Creator)
 
-	// 1001: holding deleted but params remain (account is still creator)
-	require.Contains(t, assetMap, basics.AssetIndex(1001))
-	require.Nil(t, assetMap[basics.AssetIndex(1001)].AssetHolding)
+	// 1001: no delta — holding and params come straight from DB
+	require.Equal(t, uint64(1001*100), assetMap[basics.AssetIndex(1001)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1001)].AssetParams)
 	require.Equal(t, uint64(1_001_000), assetMap[basics.AssetIndex(1001)].AssetParams.Total)
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1001)].Creator)
 
 	// 1002: unchanged from DB
 	require.Equal(t, uint64(1002*100), assetMap[basics.AssetIndex(1002)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1002)].AssetParams)
 	require.Equal(t, uint64(1_002_000), assetMap[basics.AssetIndex(1002)].AssetParams.Total)
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1002)].Creator)
 
 	// 1003: params updated in delta, holding preserved from DB
 	require.Equal(t, uint64(1003*100), assetMap[basics.AssetIndex(1003)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1003)].AssetParams)
 	require.Equal(t, uint64(7777), assetMap[basics.AssetIndex(1003)].AssetParams.Total)
 	require.Equal(t, "A1003new", assetMap[basics.AssetIndex(1003)].AssetParams.UnitName)
-
-	// 1004: params deleted in delta, holding preserved from DB, no creator
-	require.Equal(t, uint64(1004*100), assetMap[basics.AssetIndex(1004)].AssetHolding.Amount)
-	require.Nil(t, assetMap[basics.AssetIndex(1004)].AssetParams)
-	require.True(t, assetMap[basics.AssetIndex(1004)].Creator.IsZero())
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1003)].Creator)
 
 	// 1005: both holding and params deleted — should not appear
 	require.NotContains(t, assetMap, basics.AssetIndex(1005))
@@ -3912,11 +4205,12 @@ func TestLookupAssetResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetHolding.Amount)
 	require.NotNil(t, assetMap[basics.AssetIndex(1006)].AssetParams)
 	require.Equal(t, uint64(6000), assetMap[basics.AssetIndex(1006)].AssetParams.Total)
+	require.Equal(t, creatorAddr, assetMap[basics.AssetIndex(1006)].Creator)
 
-	// optinAddr opted in to asset 1007 with a zero balance before it was destroyed. The protocol
-	// does not track all opt-outs when an asset is deleted (only the creator's holding is
-	// enforced), so optinAddr's holding persists in the DB even after the asset params are gone.
-	// The lookup must return a non-nil holding with zero amount and no params or creator.
+	// optinAddr holds two assets in the DB (1002 and 1007) but opts out of 1002 in the delta.
+	// Since optinAddr is not the creator of 1002, the opt-out leaves nothing to return for it.
+	// Asset 1007 persists: its params were destroyed in a committed round but the protocol
+	// does not enforce cleanup of non-creator holdings, so the zero-balance holding survives.
 	optinAddrResources, optinAddrRnd, err := au.LookupAssetResources(optinAddr, 0, 100)
 	require.NoError(t, err)
 	require.Equal(t, deltaRound2, optinAddrRnd)
@@ -4102,22 +4396,26 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	require.Equal(t, uint64(42), appMap[basics.AppIndex(2000)].AppLocalState.Schema.NumUint)
 	require.NotNil(t, appMap[basics.AppIndex(2000)].AppParams)
 	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2000)].AppParams.ApprovalProgram)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2000)].Creator)
 
 	// 2001: local state deleted but params remain (account is still creator)
 	require.Contains(t, appMap, basics.AppIndex(2001))
 	require.Nil(t, appMap[basics.AppIndex(2001)].AppLocalState)
 	require.NotNil(t, appMap[basics.AppIndex(2001)].AppParams)
 	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2001)].AppParams.ApprovalProgram)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2001)].Creator)
 
 	// 2002: unchanged from DB
 	require.Equal(t, uint64(2), appMap[basics.AppIndex(2002)].AppLocalState.Schema.NumUint)
 	require.NotNil(t, appMap[basics.AppIndex(2002)].AppParams)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2002)].Creator)
 
 	// 2003: params updated in delta, local state preserved from DB
 	require.Equal(t, uint64(3), appMap[basics.AppIndex(2003)].AppLocalState.Schema.NumUint)
 	require.NotNil(t, appMap[basics.AppIndex(2003)].AppParams)
 	require.Equal(t, []byte{0x06, 0x81, 0x02}, appMap[basics.AppIndex(2003)].AppParams.ApprovalProgram)
 	require.Equal(t, []byte{0x06, 0x81, 0x01}, appMap[basics.AppIndex(2003)].AppParams.ClearStateProgram)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2003)].Creator)
 
 	// 2004: params deleted in delta, local state preserved from DB, no creator
 	require.Equal(t, uint64(4), appMap[basics.AppIndex(2004)].AppLocalState.Schema.NumUint)
@@ -4130,15 +4428,41 @@ func TestLookupApplicationResourcesWithDeltas(t *testing.T) {
 	// 2006: new creation from delta
 	require.Equal(t, uint64(60), appMap[basics.AppIndex(2006)].AppLocalState.Schema.NumUint)
 	require.NotNil(t, appMap[basics.AppIndex(2006)].AppParams)
+	require.Equal(t, testAddr, appMap[basics.AppIndex(2006)].Creator)
+
+	// includeParams=false should omit AppParams but still populate Creator
+	// for non-deleted apps. A zero Creator is interpreted downstream as
+	// "app deleted", so delta-only entries must still resolve it.
+	//
+	// Expected: 2000, 2001, 2002, 2003, 2004, 2006
+	// 2005 excluded (fully deleted).
 
 	// includeParams=false should omit AppParams from all results
 	resourcesNoParams, _, err := au.LookupApplicationResources(testAddr, 0, 100, false)
 	require.NoError(t, err)
-	require.Len(t, resourcesNoParams, 5)
+	require.Len(t, resourcesNoParams, 6)
 
+	noParamsMap := make(map[basics.AppIndex]ledgercore.AppResourceWithIDs)
 	for _, res := range resourcesNoParams {
 		require.Nil(t, res.AppParams, "AppParams should be nil when includeParams=false")
+		noParamsMap[res.AppID] = res
 	}
+
+	// Local state values must match the includeParams=true results.
+	require.Equal(t, uint64(42), noParamsMap[basics.AppIndex(2000)].AppLocalState.Schema.NumUint)
+	require.Equal(t, uint64(2), noParamsMap[basics.AppIndex(2002)].AppLocalState.Schema.NumUint)
+	require.Equal(t, uint64(3), noParamsMap[basics.AppIndex(2003)].AppLocalState.Schema.NumUint)
+	require.Equal(t, uint64(4), noParamsMap[basics.AppIndex(2004)].AppLocalState.Schema.NumUint)
+	require.Equal(t, uint64(60), noParamsMap[basics.AppIndex(2006)].AppLocalState.Schema.NumUint)
+
+	// Creator must be populated for non-deleted apps, even without includeParams.
+	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2000)].Creator)
+	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2002)].Creator)
+	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2003)].Creator)
+	require.Equal(t, testAddr, noParamsMap[basics.AppIndex(2006)].Creator,
+		"delta-only app should have non-zero Creator even when includeParams=false")
+	// 2004 had its params deleted -- Creator should be zero.
+	require.True(t, noParamsMap[basics.AppIndex(2004)].Creator.IsZero())
 }
 
 // TestLookupAppResourcesParamsOnlyDeletion exercises the scenario where an app

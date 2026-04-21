@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,5 +48,6 @@ var (
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
 	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"
+	errRoundTooOld                             = "given round is no longer available; use a more recent round"
 	errFailedRetrievingTracer                  = "failed retrieving the expected tracer from ledger"
 )
