@@ -69,6 +69,10 @@ type ResourceTracker struct {
 	// size of the boxes named. It can be negative!
 	initialReadSurplus int64
 
+	// appReadBudget tracks read budget consumed by large apps discovered by
+	// unnamed-resource simulation after the initial read-budget check.
+	appReadBudget map[basics.AppIndex]uint64
+
 	// MaxTotalRefs is the largest number of new refs of any kind that could
 	// possibly be added tp the thing being tracked (txn or group) beyond what
 	// it began with.
@@ -281,43 +285,19 @@ func (a ResourceTracker) hasBox(app basics.AppIndex, name string) bool {
 }
 
 func (a *ResourceTracker) addBox(app basics.AppIndex, name string, newApp bool, readSize uint64, bytesPerBoxRef uint64) bool {
-	usedReadBudget := basics.AddSaturate(a.usedBoxReadBudget(), readSize)
-	// Adding bytesPerBoxRef to account for the new IO budget from adding an additional box ref
-	ioBudget := a.boxIOBudget(bytesPerBoxRef) + bytesPerBoxRef
-	if a.initialReadSurplus > 0 {
-		ioBudget += uint64(a.initialReadSurplus)
-	} else {
-		ioBudget -= uint64(-a.initialReadSurplus)
-	}
-
-	var emptyRefs int
-	if usedReadBudget > ioBudget {
-		// We need to allocate more empty box refs to increase the read budget
-		neededBudget := usedReadBudget - ioBudget
-		emptyRefsU64 := basics.DivCeil(neededBudget, bytesPerBoxRef)
-		if emptyRefsU64 > math.MaxInt {
-			// This should never happen, but if we overflow an int with the number of extra pages
-			// needed, we can't support this request.
-			return false
-		}
-		emptyRefs = int(emptyRefsU64)
-	} else if a.NumEmptyBoxRefs > 0 { // If there are empties added for quota, we may not need as many.
-		surplusReadBudget := basics.SubSaturate(ioBudget, usedReadBudget)
-		surplusWriteBudget := basics.SubSaturate(ioBudget, a.maxWriteBudget)
-		if surplusReadBudget >= bytesPerBoxRef && surplusWriteBudget >= bytesPerBoxRef {
-			// By adding this box, we may no longer need an empty ref we previously added for quota.
-			emptyRefs = -1
-		}
-	}
-
-	if emptyRefs >= a.MaxBoxes-a.boxCount() || emptyRefs >= a.MaxTotalRefs-a.refCount() {
-		return false
-	}
+	boxRef := basics.BoxRef{App: app, Name: name}
 	if a.Boxes == nil {
 		a.Boxes = make(map[basics.BoxRef]BoxStat)
 	}
-	a.Boxes[basics.BoxRef{App: app, Name: name}] = BoxStat{readSize, newApp}
-	a.NumEmptyBoxRefs += emptyRefs
+	a.Boxes[boxRef] = BoxStat{readSize, newApp}
+
+	if !a.reconcileReadBudget(bytesPerBoxRef, true) {
+		delete(a.Boxes, boxRef)
+		if len(a.Boxes) == 0 {
+			a.Boxes = nil
+		}
+		return false
+	}
 	return true
 }
 
@@ -371,12 +351,61 @@ func (a ResourceTracker) boxIOBudget(bytesPerBoxRef uint64) uint64 {
 	return uint64(a.boxCount()) * bytesPerBoxRef
 }
 
-func (a *ResourceTracker) usedBoxReadBudget() uint64 {
+func (a ResourceTracker) readBudget(bytesPerBoxRef uint64) uint64 {
+	ioBudget := a.boxIOBudget(bytesPerBoxRef)
+	if a.initialReadSurplus > 0 {
+		ioBudget = basics.AddSaturate(ioBudget, uint64(a.initialReadSurplus))
+	} else {
+		ioBudget = basics.SubSaturate(ioBudget, uint64(-a.initialReadSurplus))
+	}
+	return ioBudget
+}
+
+func (a *ResourceTracker) usedReadBudget() uint64 {
 	var budget uint64
 	for _, bs := range a.Boxes {
-		budget += bs.ReadSize
+		budget = basics.AddSaturate(budget, bs.ReadSize)
+	}
+	for _, readBytes := range a.appReadBudget {
+		budget = basics.AddSaturate(budget, readBytes)
 	}
 	return budget
+}
+
+func (a *ResourceTracker) reconcileReadBudget(bytesPerBoxRef uint64, canRemoveEmptyRef bool) bool {
+	usedReadBudget := a.usedReadBudget()
+	ioBudget := a.readBudget(bytesPerBoxRef)
+
+	if canRemoveEmptyRef && a.NumEmptyBoxRefs > 0 {
+		surplusReadBudget := basics.SubSaturate(ioBudget, usedReadBudget)
+		surplusWriteBudget := basics.SubSaturate(ioBudget, a.maxWriteBudget)
+		if surplusReadBudget >= bytesPerBoxRef && surplusWriteBudget >= bytesPerBoxRef {
+			// By adding a named box, we may no longer need an empty ref previously added for quota.
+			a.NumEmptyBoxRefs--
+			ioBudget = basics.SubSaturate(ioBudget, bytesPerBoxRef)
+		}
+	}
+
+	if a.boxCount() > a.MaxBoxes || a.refCount() > a.MaxTotalRefs {
+		return false
+	}
+
+	if usedReadBudget > ioBudget {
+		neededBudget := usedReadBudget - ioBudget
+		emptyRefsU64 := basics.DivCeil(neededBudget, bytesPerBoxRef)
+		if emptyRefsU64 > math.MaxInt {
+			// This should never happen, but if we overflow an int with the number of extra pages
+			// needed, we can't support this request.
+			return false
+		}
+		emptyRefs := int(emptyRefsU64)
+		if emptyRefs > a.MaxBoxes-a.boxCount() || emptyRefs > a.MaxTotalRefs-a.refCount() {
+			return false
+		}
+		a.NumEmptyBoxRefs += emptyRefs
+		return true
+	}
+	return true
 }
 
 func (a *ResourceTracker) maxPossibleUnnamedBoxes() int {
@@ -555,10 +584,20 @@ func (a *groupResourceTracker) hasApp(aid basics.AppIndex, globalSharing bool, g
 }
 
 func (a *groupResourceTracker) addApp(aid basics.AppIndex, ep *logic.EvalParams, programVersion uint64, globalSharing bool, gi int) bool {
+	rollbackAppReadBudget, ok := a.addAppReadBudget(aid, ep)
+	if !ok {
+		return false
+	}
+
 	if globalSharing {
-		return a.globalResources.addApp(aid, ep, programVersion)
+		if a.globalResources.addApp(aid, ep, programVersion) {
+			return true
+		}
+		rollbackAppReadBudget()
+		return false
 	}
 	if !a.localTxnResources[gi].addApp(aid, ep, programVersion) {
+		rollbackAppReadBudget()
 		return false
 	}
 	if a.globalResources.hasApp(aid) {
@@ -575,7 +614,54 @@ func (a *groupResourceTracker) addApp(aid basics.AppIndex, ep *logic.EvalParams,
 	}
 	// Undo the local assignment if global is full.
 	delete(a.localTxnResources[gi].Apps, aid)
+	rollbackAppReadBudget()
 	return false
+}
+
+func (a *groupResourceTracker) addAppReadBudget(aid basics.AppIndex, ep *logic.EvalParams) (func(), bool) {
+	if ep == nil || ep.Ledger == nil {
+		return func() {}, true
+	}
+	if _, ok := a.globalResources.appReadBudget[aid]; ok {
+		return func() {}, true
+	}
+
+	params, _, err := ep.Ledger.AppParams(aid)
+	if err != nil {
+		return func() {}, true
+	}
+	readBytes := largeAppReadBudget(ep.Proto, params)
+	if readBytes == 0 {
+		return func() {}, true
+	}
+
+	oldEmptyRefs := a.globalResources.NumEmptyBoxRefs
+	if a.globalResources.appReadBudget == nil {
+		a.globalResources.appReadBudget = make(map[basics.AppIndex]uint64)
+	}
+	a.globalResources.appReadBudget[aid] = readBytes
+	rollback := func() {
+		delete(a.globalResources.appReadBudget, aid)
+		if len(a.globalResources.appReadBudget) == 0 {
+			a.globalResources.appReadBudget = nil
+		}
+		a.globalResources.NumEmptyBoxRefs = oldEmptyRefs
+	}
+
+	if !a.globalResources.reconcileReadBudget(ep.Proto.BytesPerBoxReference, false) {
+		rollback()
+		return func() {}, false
+	}
+	return rollback, true
+}
+
+func largeAppReadBudget(proto *config.ConsensusParams, params basics.AppParams) uint64 {
+	basicAppProgramLimit := proto.MaxAppProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	programSize := len(params.ApprovalProgram) + len(params.ClearStateProgram)
+	if programSize <= basicAppProgramLimit {
+		return 0
+	}
+	return uint64(programSize - basicAppProgramLimit)
 }
 
 func (a *groupResourceTracker) hasBox(app basics.AppIndex, name string) bool {
@@ -593,14 +679,14 @@ func (a *groupResourceTracker) ioSurplus(readSize int64, bytesPerBoxRef uint64) 
 	return a.globalResources.ioSurplus(readSize, bytesPerBoxRef)
 }
 
-func (a *groupResourceTracker) reconcileBoxWriteBudget(used uint64, bytesPerBoxRef uint64) error {
+func (a *groupResourceTracker) reconcileWriteBudget(used uint64, bytesPerBoxRef uint64) error {
 	if !a.globalResources.addEmptyBoxRefsForWriteBudget(used, uint64(a.startingBoxes)*bytesPerBoxRef, bytesPerBoxRef) {
 		return fmt.Errorf("cannot add extra box refs to satisfy write budget of %d bytes", used)
 	}
 	return nil
 }
 
-func (a *groupResourceTracker) maxPossibleBoxIOBudget(bytesPerBoxRef uint64) uint64 {
+func (a *groupResourceTracker) maxPossibleIOBudget(bytesPerBoxRef uint64) uint64 {
 	return basics.MulSaturate(
 		uint64(a.startingBoxes+a.globalResources.maxPossibleUnnamedBoxes()),
 		bytesPerBoxRef,

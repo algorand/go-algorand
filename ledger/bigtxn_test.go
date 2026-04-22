@@ -97,7 +97,7 @@ func TestBigAppCall(t *testing.T) {
 
 		// proto := config.Consensus[cv]
 
-		// createApp takes care of figuring out and setting the fee and extra pages
+		// createApp takes care of figuring out and setting the fee, extra pages, and write budget
 		bigID := dl.createApp(addrs[0], strings.Repeat("pushint 1; return;\n", 1400))
 
 		call := txntest.Txn{

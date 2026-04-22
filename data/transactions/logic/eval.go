@@ -410,8 +410,8 @@ func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
 	ep.ioBudget = ioBudget
 }
 
-// BoxDirtyBytes returns the number of bytes that have been written to boxes
-func (ep *EvalParams) BoxDirtyBytes() uint64 {
+// DirtyByteCount returns the number of bytes that count against write budget.
+func (ep *EvalParams) DirtyByteCount() uint64 {
 	return ep.available.dirtyBytes
 }
 
@@ -502,11 +502,47 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
 		boxes:          make(map[basics.BoxRef]bool),
+		updateBytes:    make(map[basics.AppIndex]uint64),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
 	}
 	return available
+}
+
+func largeProgramExtraBytes(proto *config.ConsensusParams, approval, clear []byte) uint64 {
+	basicAppProgramLimit := proto.MaxAppProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	programSize := len(approval) + len(clear)
+	if programSize <= basicAppProgramLimit {
+		return 0
+	}
+	return uint64(programSize - basicAppProgramLimit)
+}
+
+func (cx *EvalContext) considerBudgetProgramWrites() error {
+	creating := cx.txn.Txn.ApplicationID == 0
+	updating := cx.txn.Txn.OnCompletion == transactions.UpdateApplicationOC
+	deleting := cx.txn.Txn.OnCompletion == transactions.DeleteApplicationOC
+	if !creating && !updating && !deleting { // No program size change
+		return nil
+	}
+	if creating && deleting { // Program never gets written
+		return nil
+	}
+
+	// The "sizes" below are actually the size above the old maximum size.
+	oldSize := cx.available.updateBytes[cx.appID]
+	cx.available.dirtyBytes = basics.SubSaturate(cx.available.dirtyBytes, oldSize)
+
+	newSize := largeProgramExtraBytes(cx.Proto, cx.txn.Txn.ApprovalProgram, cx.txn.Txn.ClearStateProgram)
+	cx.available.dirtyBytes = basics.AddSaturate(cx.available.dirtyBytes, newSize)
+	cx.available.updateBytes[cx.appID] = newSize
+
+	if cx.available.dirtyBytes > cx.ioBudget {
+		return fmt.Errorf("write budget (%d) exceeded %d while changing app %d",
+			cx.ioBudget, cx.available.dirtyBytes, cx.appID)
+	}
+	return nil
 }
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
@@ -1175,16 +1211,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		used := uint64(0)
 
 		// First count the extra reading required for any large programs that are available.
-		basicAppProgramLimit := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
 		for appID := range cx.available.sharedApps {
 			params, _, err := cx.Ledger.AppParams(appID)
 			if err != nil {
 				continue // There may be an app reference that doesn't exist
 			}
-			appSize := len(params.ApprovalProgram) + len(params.ClearStateProgram)
-			if appSize > basicAppProgramLimit {
-				used = basics.AddSaturate(used, uint64(appSize-basicAppProgramLimit))
-			}
+			used = basics.AddSaturate(used, largeProgramExtraBytes(cx.Proto, params.ApprovalProgram, params.ClearStateProgram))
 		}
 
 		// Then count the total size of available boxes
@@ -1237,6 +1269,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	pass, err := eval(program, &cx)
 	if err != nil {
 		err = cx.evalError(err)
+	}
+	if err == nil && pass {
+		err = cx.considerBudgetProgramWrites()
+		if err != nil {
+			pass = false
+		}
 	}
 
 	if cx.Trace != nil && cx.caller != nil {

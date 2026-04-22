@@ -249,6 +249,13 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
+	if evalError == nil && tracer.unnamedResourcePolicy != nil {
+		if err := tracer.unnamedResourcePolicy.tracker.reconcileWriteBudget(ep.DirtyByteCount(), ep.Proto.BytesPerBoxReference); err != nil {
+			// This should never happen, since simulation sets the IO budget to the maximum
+			// achievable budget before large program writes are checked.
+			panic(err.Error())
+		}
+	}
 	tracer.saveApplyData(ad, evalError != nil)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
@@ -420,14 +427,14 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 			tracer.handleError(evalError)
 		}
 		if evalError == nil && tracer.unnamedResourcePolicy != nil {
-			if err := tracer.unnamedResourcePolicy.tracker.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
-				// This should never happen, since we limit the IO budget to tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget
-				// (as shown below), so we should never have to reconcile an unachievable budget.
+			if err := tracer.unnamedResourcePolicy.tracker.reconcileWriteBudget(cx.DirtyByteCount(), cx.Proto.BytesPerBoxReference); err != nil {
+				// This should never happen, since simulation sets the IO budget to the maximum
+				// achievable budget before dirty bytes are checked.
 				panic(err.Error())
 			}
 
-			// Update box budget. It will decrease if an additional non-box resource has been accessed.
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			// Update budget. It will decrease if an additional non-box resource has been accessed.
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }
@@ -482,7 +489,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 				s := cx.SurplusReadBudget
 				tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
 			}
-			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleIOBudget(cx.Proto.BytesPerBoxReference))
 		}
 	}
 }

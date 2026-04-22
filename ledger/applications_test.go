@@ -1765,6 +1765,215 @@ func TestExtraPagesUpdate(t *testing.T) {
 	})
 }
 
+func assembleLargePassingProgram(t testing.TB, version uint64, size int) []byte {
+	t.Helper()
+
+	const overhead = 6 // version byte + "b end" + "end: int 1"
+	require.GreaterOrEqual(t, size, overhead)
+
+	var source strings.Builder
+	fmt.Fprintf(&source, "#pragma version %d\n", version)
+	source.WriteString("b end\n")
+	source.WriteString(strings.Repeat("err\n", size-overhead))
+	source.WriteString("end: int 1")
+
+	ops, err := logic.AssembleString(source.String())
+	require.NoError(t, err)
+	require.Len(t, ops.Program, size)
+	return ops.Program
+}
+
+// TestLargeProgramCreateWriteBudget ensures that large app creation consumes
+// write budget unless sufficient empty box refs are provided.
+func TestLargeProgramCreateWriteBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	cfg := config.GetDefaultLocal()
+	proto := config.Consensus[protocol.ConsensusFuture]
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+	defer dl.Close()
+
+	version := uint64(proto.LogicSigVersion)
+	create := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApprovalProgram:   assembleLargePassingProgram(t, version, 5000),
+		ClearStateProgram: assembleLargePassingProgram(t, version, 4200),
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+		// Having _some_ Access list prevents txntest from conveniently adding a
+		// boxref for the big program
+		Access: []transactions.ResourceRef{{
+			Address: basics.Address{0x01},
+		}},
+	}
+
+	dl.txn(&create, "write budget (0) exceeded")
+	create.Access = nil
+	create.Boxes = []transactions.BoxRef{{}}
+	dl.txn(&create)
+}
+
+// TestLargeProgramCreateOptInWriteBudget ensures that large app creation
+// consumes write budget even when the creation also opts in.
+func TestLargeProgramCreateOptInWriteBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	cfg := config.GetDefaultLocal()
+	proto := config.Consensus[protocol.ConsensusFuture]
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+	defer dl.Close()
+
+	version := uint64(proto.LogicSigVersion)
+	create := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		OnCompletion:      transactions.OptInOC,
+		ApprovalProgram:   assembleLargePassingProgram(t, version, 5000),
+		ClearStateProgram: assembleLargePassingProgram(t, version, 4200),
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+		LocalStateSchema:  basics.StateSchema{NumUint: 1},
+		// Having _some_ Access list prevents txntest from conveniently adding a
+		// boxref for the big program
+		Access: []transactions.ResourceRef{{
+			Address: basics.Address{0x01},
+		}},
+	}
+
+	dl.txn(&create, "write budget (0) exceeded")
+	create.Access = nil
+	create.Boxes = []transactions.BoxRef{{}}
+	dl.txn(&create)
+}
+
+// TestLargeProgramCreateDeleteWriteBudget ensures that large app creation does
+// not consume write budget when the same transaction deletes it.
+func TestLargeProgramCreateDeleteWriteBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	cfg := config.GetDefaultLocal()
+	proto := config.Consensus[protocol.ConsensusFuture]
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+	defer dl.Close()
+
+	version := uint64(proto.LogicSigVersion)
+	create := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		OnCompletion:      transactions.DeleteApplicationOC,
+		ApprovalProgram:   assembleLargePassingProgram(t, version, 5000),
+		ClearStateProgram: assembleLargePassingProgram(t, version, 4200),
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+		// Having _some_ Access list prevents txntest from conveniently adding a
+		// boxref for the big program
+		Access: []transactions.ResourceRef{{
+			Address: basics.Address{0x01},
+		}},
+	}
+
+	dl.txn(&create)
+}
+
+// TestLargeProgramUpdateWriteBudget ensures that large app updates consume
+// write budget unless sufficient empty box refs are provided.
+func TestLargeProgramUpdateWriteBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	cfg := config.GetDefaultLocal()
+	proto := config.Consensus[protocol.ConsensusFuture]
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+	defer dl.Close()
+
+	version := uint64(proto.LogicSigVersion)
+	smallProgram := logic.MustAssemble(fmt.Sprintf("#pragma version %d\nint 1", version))
+	largeApproval := assembleLargePassingProgram(t, version, 5000)
+	largeClear := assembleLargePassingProgram(t, version, 4200)
+
+	create := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApprovalProgram:   smallProgram,
+		ClearStateProgram: smallProgram,
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+	}
+	vb := dl.fullBlock(&create)
+	appID := basics.AppIndex(vb.Block().BlockHeader.TxnCounter)
+
+	update := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApplicationID:     appID,
+		OnCompletion:      transactions.UpdateApplicationOC,
+		ApprovalProgram:   largeApproval,
+		ClearStateProgram: largeClear,
+	}
+
+	dl.txn(&update, "write budget (0) exceeded")
+
+	update.Boxes = []transactions.BoxRef{{}}
+	dl.txn(&update)
+}
+
+// TestRepeatedLargeProgramUpdateWriteBudget ensures that repeated large app
+// updates charge only the final oversized program bytes for the app.
+func TestRepeatedLargeProgramUpdateWriteBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	cfg := config.GetDefaultLocal()
+	proto := config.Consensus[protocol.ConsensusFuture]
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+	defer dl.Close()
+
+	version := uint64(proto.LogicSigVersion)
+	smallProgram := logic.MustAssemble(fmt.Sprintf("#pragma version %d\nint 1", version))
+	initialApproval := assembleLargePassingProgram(t, version, 5000)
+	initialClear := assembleLargePassingProgram(t, version, 5000)
+	finalApproval := assembleLargePassingProgram(t, version, 4300)
+	finalClear := assembleLargePassingProgram(t, version, 4300)
+
+	create := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApprovalProgram:   smallProgram,
+		ClearStateProgram: smallProgram,
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+	}
+	vb := dl.fullBlock(&create)
+	appID := basics.AppIndex(vb.Block().BlockHeader.TxnCounter)
+
+	firstUpdate := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApplicationID:     appID,
+		OnCompletion:      transactions.UpdateApplicationOC,
+		ApprovalProgram:   initialApproval,
+		ClearStateProgram: initialClear,
+	}
+	secondUpdate := txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            addrs[0],
+		ApplicationID:     appID,
+		OnCompletion:      transactions.UpdateApplicationOC,
+		ApprovalProgram:   finalApproval,
+		ClearStateProgram: finalClear,
+		Boxes:             []transactions.BoxRef{{}},
+	}
+
+	// One empty box ref gives 2048 bytes of write budget. The first update is
+	// 1808 oversized bytes and the second is 408, so accumulating both would
+	// exceed the budget. Replacing the dirty size for appID succeeds.
+	dl.txgroup("", &firstUpdate, &secondUpdate)
+}
+
 // TestInnerUpdateResizing shows that apps can be grown (programs and globals) with inner transactions
 func TestInnerUpdateResizing(t *testing.T) {
 	partitiontest.PartitionTest(t)

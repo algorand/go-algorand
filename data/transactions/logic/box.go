@@ -127,7 +127,8 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	cx.available.boxes[basics.BoxRef{App: cx.appID, Name: name}] = dirty
 
 	if cx.available.dirtyBytes > cx.ioBudget {
-		return nil, false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
+		return nil, false, fmt.Errorf("write budget (%d) exceeded %d while changing box %#x",
+			cx.ioBudget, cx.available.dirtyBytes, name)
 	}
 	return content, exists, nil
 }
