@@ -97,17 +97,20 @@
     {
       "Opcode": 0,
       "Name": "err",
+      "Cost": "1",
       "Size": 1,
       "DocCost": "1",
       "Doc": "Fail immediately.",
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 1,
       "Name": "sha256",
+      "Cost": "35",
       "Args": [
         "[]byte"
       ],
@@ -120,11 +123,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 2,
       "Name": "keccak256",
+      "Cost": "130",
       "Args": [
         "[]byte"
       ],
@@ -137,11 +142,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 3,
       "Name": "sha512_256",
+      "Cost": "45",
       "Args": [
         "[]byte"
       ],
@@ -154,11 +161,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 4,
       "Name": "ed25519verify",
+      "Cost": "1900",
       "Args": [
         "[]byte",
         "[64]byte",
@@ -174,11 +183,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 5,
       "Name": "ecdsa_verify",
+      "Cost": "Secp256k1=1700; Secp256r1=2500",
       "Args": [
         "[32]byte",
         "[32]byte",
@@ -193,6 +204,22 @@
       "ArgEnum": [
         "Secp256k1",
         "Secp256r1"
+      ],
+      "ArgEnumDoc": [
+        "secp256k1 curve, used in Bitcoin",
+        "secp256r1 curve, NIST standard"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1
+      ],
+      "ArgModes": [
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        5,
+        7
       ],
       "DocCost": "Secp256k1=1700; Secp256r1=2500",
       "Doc": "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey =\u003e {0 or 1}",
@@ -208,11 +235,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 6,
       "Name": "ecdsa_pk_decompress",
+      "Cost": "Secp256k1=650; Secp256r1=2400",
       "Args": [
         "[33]byte"
       ],
@@ -224,6 +253,22 @@
       "ArgEnum": [
         "Secp256k1",
         "Secp256r1"
+      ],
+      "ArgEnumDoc": [
+        "secp256k1 curve, used in Bitcoin",
+        "secp256r1 curve, NIST standard"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1
+      ],
+      "ArgModes": [
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        5,
+        7
       ],
       "DocCost": "Secp256k1=650; Secp256r1=2400",
       "Doc": "decompress pubkey A into components X, Y",
@@ -239,11 +284,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 7,
       "Name": "ecdsa_pk_recover",
+      "Cost": "2000",
       "Args": [
         "[32]byte",
         "uint64",
@@ -259,6 +306,22 @@
         "Secp256k1",
         "Secp256r1"
       ],
+      "ArgEnumDoc": [
+        "secp256k1 curve, used in Bitcoin",
+        "secp256r1 curve, NIST standard"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1
+      ],
+      "ArgModes": [
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        5,
+        7
+      ],
       "DocCost": "2000",
       "Doc": "for (data A, recovery id B, signature C, D) recover a public key",
       "DocExtra": "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
@@ -273,11 +336,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 8,
       "Name": "+",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -292,11 +357,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 9,
       "Name": "-",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -310,11 +377,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 10,
       "Name": "/",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -329,11 +398,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 11,
       "Name": "*",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -348,11 +419,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 12,
       "Name": "\u003c",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -366,11 +439,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 13,
       "Name": "\u003e",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -384,11 +459,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 14,
       "Name": "\u003c=",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -402,11 +479,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 15,
       "Name": "\u003e=",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -420,11 +499,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 16,
       "Name": "\u0026\u0026",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -438,11 +519,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 17,
       "Name": "||",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -456,11 +539,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 18,
       "Name": "==",
+      "Cost": "1",
       "Args": [
         "any",
         "any"
@@ -474,11 +559,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 19,
       "Name": "!=",
+      "Cost": "1",
       "Args": [
         "any",
         "any"
@@ -492,11 +579,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 20,
       "Name": "!",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -509,11 +598,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 21,
       "Name": "len",
+      "Cost": "1",
       "Args": [
         "[]byte"
       ],
@@ -526,11 +617,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 22,
       "Name": "itob",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -543,11 +636,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 23,
       "Name": "btoi",
+      "Cost": "1",
       "Args": [
         "[]byte"
       ],
@@ -561,11 +656,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 24,
       "Name": "%",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -579,11 +676,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 25,
       "Name": "|",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -597,11 +696,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 26,
       "Name": "\u0026",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -615,11 +716,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 27,
       "Name": "^",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -633,11 +736,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 28,
       "Name": "~",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -650,11 +755,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 29,
       "Name": "mulw",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -669,11 +776,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 30,
       "Name": "addw",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -688,11 +797,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 31,
       "Name": "divmodw",
+      "Cost": "20",
       "Args": [
         "uint64",
         "uint64",
@@ -712,11 +823,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 32,
       "Name": "intcblock",
+      "Cost": "1",
       "Size": 0,
       "DocCost": "1",
       "Doc": "prepare block of uint64 constants for use by intc",
@@ -731,11 +844,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 33,
       "Name": "intc",
+      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -752,11 +867,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 34,
       "Name": "intc_0",
+      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -766,11 +883,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 35,
       "Name": "intc_1",
+      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -780,11 +899,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 36,
       "Name": "intc_2",
+      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -794,11 +915,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 37,
       "Name": "intc_3",
+      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -808,11 +931,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 38,
       "Name": "bytecblock",
+      "Cost": "1",
       "Size": 0,
       "DocCost": "1",
       "Doc": "prepare block of byte-array constants for use by bytec",
@@ -827,11 +952,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 39,
       "Name": "bytec",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -848,11 +975,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 40,
       "Name": "bytec_0",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -862,11 +991,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 41,
       "Name": "bytec_1",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -876,11 +1007,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 42,
       "Name": "bytec_2",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -890,11 +1023,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 43,
       "Name": "bytec_3",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -904,11 +1039,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 44,
       "Name": "arg",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -925,11 +1062,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 45,
       "Name": "arg_0",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -939,11 +1078,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 46,
       "Name": "arg_1",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -953,11 +1094,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 47,
       "Name": "arg_2",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -967,11 +1110,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 48,
       "Name": "arg_3",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -981,11 +1126,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 49,
       "Name": "txn",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1060,6 +1207,76 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "32 byte address",
+        "microalgos",
+        "round number",
+        "UNIX timestamp of block before txn.FirstValid. Fails if negative",
+        "round number",
+        "Any data up to 1024 bytes",
+        "32 byte lease value",
+        "32 byte address",
+        "microalgos",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "The first round that the participation key is valid.",
+        "The last round that the participation key is valid.",
+        "Dilution for the 2-level participation key",
+        "Transaction type as bytes",
+        "Transaction type as integer",
+        "Asset ID",
+        "value in Asset's units",
+        "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+        "32 byte address",
+        "32 byte address",
+        "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+        "The computed ID for this transaction. 32 bytes.",
+        "ApplicationID from ApplicationCall transaction",
+        "ApplicationCall transaction on completion action",
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Number of ApplicationArgs",
+        "Accounts listed in the ApplicationCall transaction",
+        "Number of Accounts",
+        "Approval program",
+        "Clear state program",
+        "32 byte Sender's new AuthAddr",
+        "Asset ID in asset config transaction",
+        "Total number of units of this asset created",
+        "Number of digits to display after the decimal place when displaying the asset",
+        "Whether the asset's slots are frozen by default or not, 0 or 1",
+        "Unit name of the asset",
+        "The asset name",
+        "URL",
+        "32 byte commitment to unspecified asset metadata",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "Asset ID being frozen or un-frozen",
+        "32 byte address of the account whose asset slot is being frozen or un-frozen",
+        "The new frozen value, 0 or 1",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Number of Assets",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Number of Applications",
+        "Number of global state integers in ApplicationCall",
+        "Number of global state byteslices in ApplicationCall",
+        "Number of local state integers in ApplicationCall",
+        "Number of local state byteslices in ApplicationCall",
+        "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+        "Marks an account nonparticipating for rewards",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Number of Logs (only with `itxn` in v5). Application mode only",
+        "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+        "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+        "The last message emitted. Empty bytes if none were emitted. Application mode only",
+        "State proof public key",
+        "Approval Program as an array of pages",
+        "Number of Approval Program pages",
+        "ClearState Program as an array of pages",
+        "Number of ClearState Program pages"
+      ],
       "ArgEnumTypes": [
         "address",
         "uint64",
@@ -1130,6 +1347,216 @@
         "[]byte",
         "uint64"
       ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        0,
+        0,
+        0,
+        7,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        4,
+        5,
+        5,
+        5,
+        5,
+        5,
+        6,
+        6,
+        7,
+        7,
+        7,
+        7
+      ],
       "DocCost": "1",
       "Doc": "field F of current transaction",
       "ImmediateNote": [
@@ -1143,11 +1570,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 50,
       "Name": "global",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1172,6 +1601,26 @@
         "AssetOptInMinBalance",
         "GenesisHash"
       ],
+      "ArgEnumDoc": [
+        "microalgos",
+        "microalgos",
+        "rounds",
+        "32 byte address of all zero bytes",
+        "Number of transactions in this atomic transaction group. At least 1",
+        "Maximum supported version",
+        "Current round number. Application mode only.",
+        "Last confirmed block UNIX timestamp. Fails if negative. Application mode only.",
+        "ID of current application executing. Application mode only.",
+        "Address of the creator of the current application. Application mode only.",
+        "Address that the current application controls. Application mode only.",
+        "ID of the transaction group. 32 zero bytes if the transaction is not part of a group.",
+        "The remaining cost that can be spent by opcodes in this program.",
+        "The application ID of the application that called this application. 0 if this application is at the top-level. Application mode only.",
+        "The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only.",
+        "The additional minimum balance required to create (and opt-in to) an asset.",
+        "The additional minimum balance required to opt-in to an asset.",
+        "The Genesis Hash for the network."
+      ],
       "ArgEnumTypes": [
         "uint64",
         "uint64",
@@ -1192,6 +1641,66 @@
         "uint64",
         "[32]byte"
       ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        2,
+        2,
+        3,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        3,
+        5,
+        5,
+        6,
+        6,
+        6,
+        10,
+        10,
+        10
+      ],
       "DocCost": "1",
       "Doc": "global field F",
       "ImmediateNote": [
@@ -1205,11 +1714,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 51,
       "Name": "gtxn",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1284,6 +1795,76 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "32 byte address",
+        "microalgos",
+        "round number",
+        "UNIX timestamp of block before txn.FirstValid. Fails if negative",
+        "round number",
+        "Any data up to 1024 bytes",
+        "32 byte lease value",
+        "32 byte address",
+        "microalgos",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "The first round that the participation key is valid.",
+        "The last round that the participation key is valid.",
+        "Dilution for the 2-level participation key",
+        "Transaction type as bytes",
+        "Transaction type as integer",
+        "Asset ID",
+        "value in Asset's units",
+        "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+        "32 byte address",
+        "32 byte address",
+        "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+        "The computed ID for this transaction. 32 bytes.",
+        "ApplicationID from ApplicationCall transaction",
+        "ApplicationCall transaction on completion action",
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Number of ApplicationArgs",
+        "Accounts listed in the ApplicationCall transaction",
+        "Number of Accounts",
+        "Approval program",
+        "Clear state program",
+        "32 byte Sender's new AuthAddr",
+        "Asset ID in asset config transaction",
+        "Total number of units of this asset created",
+        "Number of digits to display after the decimal place when displaying the asset",
+        "Whether the asset's slots are frozen by default or not, 0 or 1",
+        "Unit name of the asset",
+        "The asset name",
+        "URL",
+        "32 byte commitment to unspecified asset metadata",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "Asset ID being frozen or un-frozen",
+        "32 byte address of the account whose asset slot is being frozen or un-frozen",
+        "The new frozen value, 0 or 1",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Number of Assets",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Number of Applications",
+        "Number of global state integers in ApplicationCall",
+        "Number of global state byteslices in ApplicationCall",
+        "Number of local state integers in ApplicationCall",
+        "Number of local state byteslices in ApplicationCall",
+        "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+        "Marks an account nonparticipating for rewards",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Number of Logs (only with `itxn` in v5). Application mode only",
+        "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+        "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+        "The last message emitted. Empty bytes if none were emitted. Application mode only",
+        "State proof public key",
+        "Approval Program as an array of pages",
+        "Number of Approval Program pages",
+        "ClearState Program as an array of pages",
+        "Number of ClearState Program pages"
+      ],
       "ArgEnumTypes": [
         "address",
         "uint64",
@@ -1354,6 +1935,216 @@
         "[]byte",
         "uint64"
       ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        0,
+        0,
+        0,
+        7,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        4,
+        5,
+        5,
+        5,
+        5,
+        5,
+        6,
+        6,
+        7,
+        7,
+        7,
+        7
+      ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
@@ -1373,11 +2164,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 52,
       "Name": "load",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1394,11 +2187,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 53,
       "Name": "store",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -1415,11 +2210,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 54,
       "Name": "txna",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1433,6 +2230,15 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "address",
@@ -1441,6 +2247,33 @@
         "[]byte",
         "[]byte",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        26,
+        28,
+        48,
+        50,
+        58,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        3,
+        3,
+        5,
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F of the current transaction",
@@ -1460,11 +2293,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 55,
       "Name": "gtxna",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1478,6 +2313,15 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "address",
@@ -1486,6 +2330,33 @@
         "[]byte",
         "[]byte",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        26,
+        28,
+        48,
+        50,
+        58,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        3,
+        3,
+        5,
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F from the Tth transaction in the current group",
@@ -1510,11 +2381,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 56,
       "Name": "gtxns",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1592,6 +2465,76 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "32 byte address",
+        "microalgos",
+        "round number",
+        "UNIX timestamp of block before txn.FirstValid. Fails if negative",
+        "round number",
+        "Any data up to 1024 bytes",
+        "32 byte lease value",
+        "32 byte address",
+        "microalgos",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "The first round that the participation key is valid.",
+        "The last round that the participation key is valid.",
+        "Dilution for the 2-level participation key",
+        "Transaction type as bytes",
+        "Transaction type as integer",
+        "Asset ID",
+        "value in Asset's units",
+        "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+        "32 byte address",
+        "32 byte address",
+        "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+        "The computed ID for this transaction. 32 bytes.",
+        "ApplicationID from ApplicationCall transaction",
+        "ApplicationCall transaction on completion action",
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Number of ApplicationArgs",
+        "Accounts listed in the ApplicationCall transaction",
+        "Number of Accounts",
+        "Approval program",
+        "Clear state program",
+        "32 byte Sender's new AuthAddr",
+        "Asset ID in asset config transaction",
+        "Total number of units of this asset created",
+        "Number of digits to display after the decimal place when displaying the asset",
+        "Whether the asset's slots are frozen by default or not, 0 or 1",
+        "Unit name of the asset",
+        "The asset name",
+        "URL",
+        "32 byte commitment to unspecified asset metadata",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "Asset ID being frozen or un-frozen",
+        "32 byte address of the account whose asset slot is being frozen or un-frozen",
+        "The new frozen value, 0 or 1",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Number of Assets",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Number of Applications",
+        "Number of global state integers in ApplicationCall",
+        "Number of global state byteslices in ApplicationCall",
+        "Number of local state integers in ApplicationCall",
+        "Number of local state byteslices in ApplicationCall",
+        "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+        "Marks an account nonparticipating for rewards",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Number of Logs (only with `itxn` in v5). Application mode only",
+        "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+        "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+        "The last message emitted. Empty bytes if none were emitted. Application mode only",
+        "State proof public key",
+        "Approval Program as an array of pages",
+        "Number of Approval Program pages",
+        "ClearState Program as an array of pages",
+        "Number of ClearState Program pages"
+      ],
       "ArgEnumTypes": [
         "address",
         "uint64",
@@ -1662,6 +2605,216 @@
         "[]byte",
         "uint64"
       ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        0,
+        0,
+        0,
+        7,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        4,
+        5,
+        5,
+        5,
+        5,
+        5,
+        6,
+        6,
+        7,
+        7,
+        7,
+        7
+      ],
       "DocCost": "1",
       "Doc": "field F of the Ath transaction in the current group",
       "DocExtra": "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
@@ -1676,11 +2829,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 57,
       "Name": "gtxnsa",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1697,6 +2852,15 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "address",
@@ -1705,6 +2869,33 @@
         "[]byte",
         "[]byte",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        26,
+        28,
+        48,
+        50,
+        58,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        3,
+        3,
+        5,
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F from the Ath transaction in the current group",
@@ -1724,11 +2915,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 58,
       "Name": "gload",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1751,11 +2944,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 59,
       "Name": "gloads",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1776,11 +2971,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 60,
       "Name": "gaid",
+      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -1798,11 +2995,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 61,
       "Name": "gaids",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1816,11 +3015,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 62,
       "Name": "loads",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1833,11 +3034,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 63,
       "Name": "stores",
+      "Cost": "1",
       "Args": [
         "uint64",
         "any"
@@ -1848,11 +3051,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 64,
       "Name": "bnz",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1870,11 +3075,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 65,
       "Name": "bz",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1892,11 +3099,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 66,
       "Name": "b",
+      "Cost": "1",
       "Size": 3,
       "DocCost": "1",
       "Doc": "branch unconditionally to TARGET",
@@ -1911,11 +3120,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 67,
       "Name": "return",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1925,11 +3136,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 68,
       "Name": "assert",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -1939,11 +3152,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 69,
       "Name": "bury",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -1960,11 +3175,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 70,
       "Name": "popn",
+      "Cost": "1",
       "Size": 2,
       "DocCost": "1",
       "Doc": "remove N values from the top of the stack",
@@ -1978,11 +3195,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 71,
       "Name": "dupn",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -1999,11 +3218,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 72,
       "Name": "pop",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2013,11 +3234,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 73,
       "Name": "dup",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2031,11 +3254,13 @@
       "IntroducedVersion": 1,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 74,
       "Name": "dup2",
+      "Cost": "1",
       "Args": [
         "any",
         "any"
@@ -2052,11 +3277,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 75,
       "Name": "dig",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2077,11 +3304,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 76,
       "Name": "swap",
+      "Cost": "1",
       "Args": [
         "any",
         "any"
@@ -2096,11 +3325,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 77,
       "Name": "select",
+      "Cost": "1",
       "Args": [
         "any",
         "any",
@@ -2115,11 +3346,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 78,
       "Name": "cover",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2139,11 +3372,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 79,
       "Name": "uncover",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2163,11 +3398,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 80,
       "Name": "concat",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "[]byte"
@@ -2182,11 +3419,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 81,
       "Name": "substring",
+      "Cost": "1",
       "Args": [
         "[]byte"
       ],
@@ -2211,11 +3450,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 82,
       "Name": "substring3",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64",
@@ -2230,11 +3471,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 83,
       "Name": "getbit",
+      "Cost": "1",
       "Args": [
         "any",
         "uint64"
@@ -2249,11 +3492,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 84,
       "Name": "setbit",
+      "Cost": "1",
       "Args": [
         "any",
         "uint64",
@@ -2269,11 +3514,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 85,
       "Name": "getbyte",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64"
@@ -2287,11 +3534,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 86,
       "Name": "setbyte",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64",
@@ -2306,11 +3555,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 87,
       "Name": "extract",
+      "Cost": "1",
       "Args": [
         "[]byte"
       ],
@@ -2335,11 +3586,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 88,
       "Name": "extract3",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64",
@@ -2354,11 +3607,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 89,
       "Name": "extract_uint16",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64"
@@ -2372,11 +3627,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 90,
       "Name": "extract_uint32",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64"
@@ -2390,11 +3647,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 91,
       "Name": "extract_uint64",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64"
@@ -2408,11 +3667,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 92,
       "Name": "replace2",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "[]byte"
@@ -2433,11 +3694,13 @@
       "IntroducedVersion": 7,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 93,
       "Name": "replace3",
+      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64",
@@ -2452,11 +3715,13 @@
       "IntroducedVersion": 7,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 94,
       "Name": "base64_decode",
+      "Cost": "1 + 1 per 16 bytes of A",
       "Args": [
         "[]byte"
       ],
@@ -2468,9 +3733,25 @@
         "URLEncoding",
         "StdEncoding"
       ],
+      "ArgEnumDoc": [
+        "",
+        ""
+      ],
       "ArgEnumTypes": [
         "any",
         "any"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1
+      ],
+      "ArgModes": [
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        6,
+        6
       ],
       "DocCost": "1 + 1 per 16 bytes of A",
       "Doc": "decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E",
@@ -2486,11 +3767,13 @@
       "IntroducedVersion": 7,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 95,
       "Name": "json_ref",
+      "Cost": "25 + 2 per 7 bytes of A",
       "Args": [
         "[]byte",
         "[]byte"
@@ -2504,10 +3787,30 @@
         "JSONUint64",
         "JSONObject"
       ],
+      "ArgEnumDoc": [
+        "",
+        "",
+        ""
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "uint64",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        7,
+        7,
+        7
       ],
       "DocCost": "25 + 2 per 7 bytes of A",
       "Doc": "key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A",
@@ -2523,11 +3826,13 @@
       "IntroducedVersion": 7,
       "Groups": [
         "Byte Array Manipulation"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 96,
       "Name": "balance",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2541,11 +3846,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Account Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 97,
       "Name": "app_opted_in",
+      "Cost": "1",
       "Args": [
         "any",
         "uint64"
@@ -2560,11 +3867,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 98,
       "Name": "app_local_get",
+      "Cost": "1",
       "Args": [
         "any",
         "stateKey"
@@ -2579,11 +3888,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 99,
       "Name": "app_local_get_ex",
+      "Cost": "1",
       "Args": [
         "any",
         "uint64",
@@ -2600,11 +3911,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 100,
       "Name": "app_global_get",
+      "Cost": "1",
       "Args": [
         "stateKey"
       ],
@@ -2618,11 +3931,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 101,
       "Name": "app_global_get_ex",
+      "Cost": "1",
       "Args": [
         "uint64",
         "stateKey"
@@ -2638,11 +3953,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 102,
       "Name": "app_local_put",
+      "Cost": "1",
       "Args": [
         "any",
         "stateKey",
@@ -2655,11 +3972,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 103,
       "Name": "app_global_put",
+      "Cost": "1",
       "Args": [
         "stateKey",
         "any"
@@ -2670,11 +3989,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 104,
       "Name": "app_local_del",
+      "Cost": "1",
       "Args": [
         "any",
         "stateKey"
@@ -2686,11 +4007,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 105,
       "Name": "app_global_del",
+      "Cost": "1",
       "Args": [
         "stateKey"
       ],
@@ -2701,11 +4024,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 112,
       "Name": "asset_holding_get",
+      "Cost": "1",
       "Args": [
         "any",
         "uint64"
@@ -2719,9 +4044,25 @@
         "AssetBalance",
         "AssetFrozen"
       ],
+      "ArgEnumDoc": [
+        "Amount of the asset unit held by this account",
+        "Is the asset frozen or not"
+      ],
       "ArgEnumTypes": [
         "uint64",
         "bool"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1
+      ],
+      "ArgModes": [
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        2,
+        2
       ],
       "DocCost": "1",
       "Doc": "X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0",
@@ -2737,11 +4078,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Asset Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 113,
       "Name": "asset_params_get",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -2764,6 +4107,20 @@
         "AssetClawback",
         "AssetCreator"
       ],
+      "ArgEnumDoc": [
+        "Total number of units of this asset",
+        "See AssetParams.Decimals",
+        "Frozen by default or not",
+        "Asset unit name",
+        "Asset name",
+        "URL with additional info about the asset",
+        "Arbitrary commitment",
+        "Manager address",
+        "Reserve address",
+        "Freeze address",
+        "Clawback address",
+        "Creator address"
+      ],
       "ArgEnumTypes": [
         "uint64",
         "uint64",
@@ -2777,6 +4134,48 @@
         "address",
         "address",
         "address"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        5
       ],
       "DocCost": "1",
       "Doc": "X is field F from asset A. Y is 1 if A exists, else 0",
@@ -2792,11 +4191,13 @@
       "IntroducedVersion": 2,
       "Groups": [
         "Asset Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 114,
       "Name": "app_params_get",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -2816,6 +4217,17 @@
         "AppCreator",
         "AppAddress"
       ],
+      "ArgEnumDoc": [
+        "Bytecode of Approval Program",
+        "Bytecode of Clear State Program",
+        "Number of uint64 values allowed in Global State",
+        "Number of byte array values allowed in Global State",
+        "Number of uint64 values allowed in Local State",
+        "Number of byte array values allowed in Local State",
+        "Number of Extra Program Pages of code space",
+        "Creator address",
+        "Address for which this application has authority"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "[]byte",
@@ -2826,6 +4238,39 @@
         "uint64",
         "address",
         "address"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5
       ],
       "DocCost": "1",
       "Doc": "X is field F from app A. Y is 1 if A exists, else 0",
@@ -2841,11 +4286,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Application Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 115,
       "Name": "acct_params_get",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2868,6 +4315,20 @@
         "AcctTotalBoxes",
         "AcctTotalBoxBytes"
       ],
+      "ArgEnumDoc": [
+        "Account balance in microalgos",
+        "Minimum required balance for account, in microalgos",
+        "Address the account is rekeyed to.",
+        "The total number of uint64 values allocated by this account in Global and Local States.",
+        "The total number of byte array values allocated by this account in Global and Local States.",
+        "The number of extra app code pages used by this account.",
+        "The number of existing apps created by this account.",
+        "The number of apps this account is opted into.",
+        "The number of existing ASAs created by this account.",
+        "The numbers of ASAs held by this account (including ASAs this account created).",
+        "The number of existing boxes created by this account's app.",
+        "The total number of bytes used by this account's app's box keys and values."
+      ],
       "ArgEnumTypes": [
         "uint64",
         "uint64",
@@ -2882,6 +4343,48 @@
         "uint64",
         "uint64"
       ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        6,
+        6,
+        6,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8
+      ],
       "DocCost": "1",
       "Doc": "X is field F from account A. Y is 1 if A owns positive algos, else 0",
       "ImmediateNote": [
@@ -2895,11 +4398,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Account Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 120,
       "Name": "min_balance",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2913,11 +4418,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Account Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 128,
       "Name": "pushbytes",
+      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -2935,11 +4442,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 129,
       "Name": "pushint",
+      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -2957,11 +4466,13 @@
       "IntroducedVersion": 3,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 130,
       "Name": "pushbytess",
+      "Cost": "1",
       "Size": 0,
       "DocCost": "1",
       "Doc": "push sequences of immediate byte arrays to stack (first byte array being deepest)",
@@ -2976,11 +4487,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 131,
       "Name": "pushints",
+      "Cost": "1",
       "Size": 0,
       "DocCost": "1",
       "Doc": "push sequence of immediate uints to stack in the order they appear (first uint being deepest)",
@@ -2995,11 +4508,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 132,
       "Name": "ed25519verify_bare",
+      "Cost": "1900",
       "Args": [
         "[]byte",
         "[64]byte",
@@ -3014,11 +4529,13 @@
       "IntroducedVersion": 7,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 136,
       "Name": "callsub",
+      "Cost": "1",
       "Size": 3,
       "DocCost": "1",
       "Doc": "branch unconditionally to TARGET, saving the next instruction on the call stack",
@@ -3033,11 +4550,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 137,
       "Name": "retsub",
+      "Cost": "1",
       "Size": 1,
       "DocCost": "1",
       "Doc": "pop the top instruction from the call stack and branch to it",
@@ -3045,11 +4564,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 138,
       "Name": "proto",
+      "Cost": "1",
       "Size": 3,
       "DocCost": "1",
       "Doc": "Prepare top call frame for a retsub that will assume A args and R return values.",
@@ -3069,11 +4590,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 139,
       "Name": "frame_dig",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -3090,11 +4613,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 140,
       "Name": "frame_bury",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -3111,11 +4636,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 141,
       "Name": "switch",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3132,11 +4659,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 142,
       "Name": "match",
+      "Cost": "1",
       "Size": 0,
       "DocCost": "1",
       "Doc": "given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.",
@@ -3151,11 +4680,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Flow Control"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 144,
       "Name": "shl",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -3169,11 +4700,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 145,
       "Name": "shr",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -3187,11 +4720,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 146,
       "Name": "sqrt",
+      "Cost": "4",
       "Args": [
         "uint64"
       ],
@@ -3204,11 +4739,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 147,
       "Name": "bitlen",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -3222,11 +4759,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 148,
       "Name": "exp",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -3240,11 +4779,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 149,
       "Name": "expw",
+      "Cost": "10",
       "Args": [
         "uint64",
         "uint64"
@@ -3259,11 +4800,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 150,
       "Name": "bsqrt",
+      "Cost": "40",
       "Args": [
         "bigint"
       ],
@@ -3276,11 +4819,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 151,
       "Name": "divw",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64",
@@ -3296,11 +4841,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 152,
       "Name": "sha3_256",
+      "Cost": "130",
       "Args": [
         "[]byte"
       ],
@@ -3313,11 +4860,13 @@
       "IntroducedVersion": 7,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 160,
       "Name": "b+",
+      "Cost": "10",
       "Args": [
         "bigint",
         "bigint"
@@ -3331,11 +4880,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 161,
       "Name": "b-",
+      "Cost": "10",
       "Args": [
         "bigint",
         "bigint"
@@ -3349,11 +4900,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 162,
       "Name": "b/",
+      "Cost": "20",
       "Args": [
         "bigint",
         "bigint"
@@ -3367,11 +4920,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 163,
       "Name": "b*",
+      "Cost": "20",
       "Args": [
         "bigint",
         "bigint"
@@ -3385,11 +4940,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 164,
       "Name": "b\u003c",
+      "Cost": "1",
       "Args": [
         "bigint",
         "bigint"
@@ -3403,11 +4960,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 165,
       "Name": "b\u003e",
+      "Cost": "1",
       "Args": [
         "bigint",
         "bigint"
@@ -3421,11 +4980,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 166,
       "Name": "b\u003c=",
+      "Cost": "1",
       "Args": [
         "bigint",
         "bigint"
@@ -3439,11 +5000,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 167,
       "Name": "b\u003e=",
+      "Cost": "1",
       "Args": [
         "bigint",
         "bigint"
@@ -3457,11 +5020,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 168,
       "Name": "b==",
+      "Cost": "1",
       "Args": [
         "bigint",
         "bigint"
@@ -3475,11 +5040,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 169,
       "Name": "b!=",
+      "Cost": "1",
       "Args": [
         "bigint",
         "bigint"
@@ -3493,11 +5060,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 170,
       "Name": "b%",
+      "Cost": "20",
       "Args": [
         "bigint",
         "bigint"
@@ -3511,11 +5080,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Arithmetic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 171,
       "Name": "b|",
+      "Cost": "6",
       "Args": [
         "[]byte",
         "[]byte"
@@ -3529,11 +5100,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 172,
       "Name": "b\u0026",
+      "Cost": "6",
       "Args": [
         "[]byte",
         "[]byte"
@@ -3547,11 +5120,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 173,
       "Name": "b^",
+      "Cost": "6",
       "Args": [
         "[]byte",
         "[]byte"
@@ -3565,11 +5140,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 174,
       "Name": "b~",
+      "Cost": "4",
       "Args": [
         "[]byte"
       ],
@@ -3582,11 +5159,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Byte Array Logic"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 175,
       "Name": "bzero",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3599,11 +5178,13 @@
       "IntroducedVersion": 4,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 176,
       "Name": "log",
+      "Cost": "1",
       "Args": [
         "[]byte"
       ],
@@ -3614,11 +5195,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Block Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 177,
       "Name": "itxn_begin",
+      "Cost": "1",
       "Size": 1,
       "DocCost": "1",
       "Doc": "begin preparation of a new inner transaction in a new transaction group",
@@ -3626,11 +5209,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 178,
       "Name": "itxn_field",
+      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -3688,6 +5273,59 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "32 byte address",
+        "microalgos",
+        "Any data up to 1024 bytes",
+        "32 byte address",
+        "microalgos",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "The first round that the participation key is valid.",
+        "The last round that the participation key is valid.",
+        "Dilution for the 2-level participation key",
+        "Transaction type as bytes",
+        "Transaction type as integer",
+        "Asset ID",
+        "value in Asset's units",
+        "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+        "32 byte address",
+        "32 byte address",
+        "ApplicationID from ApplicationCall transaction",
+        "ApplicationCall transaction on completion action",
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Approval program",
+        "Clear state program",
+        "32 byte Sender's new AuthAddr",
+        "Asset ID in asset config transaction",
+        "Total number of units of this asset created",
+        "Number of digits to display after the decimal place when displaying the asset",
+        "Whether the asset's slots are frozen by default or not, 0 or 1",
+        "Unit name of the asset",
+        "The asset name",
+        "URL",
+        "32 byte commitment to unspecified asset metadata",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "Asset ID being frozen or un-frozen",
+        "32 byte address of the account whose asset slot is being frozen or un-frozen",
+        "The new frozen value, 0 or 1",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Number of global state integers in ApplicationCall",
+        "Number of global state byteslices in ApplicationCall",
+        "Number of local state integers in ApplicationCall",
+        "Number of local state byteslices in ApplicationCall",
+        "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+        "Marks an account nonparticipating for rewards",
+        "State proof public key",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "address",
         "uint64",
@@ -3741,6 +5379,165 @@
         "[]byte",
         "[]byte"
       ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        5,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        24,
+        25,
+        26,
+        28,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        50,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        63,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        4,
+        5,
+        6,
+        7,
+        7
+      ],
       "DocCost": "1",
       "Doc": "set field F of the current inner transaction to A",
       "DocExtra": "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
@@ -3755,11 +5552,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 179,
       "Name": "itxn_submit",
+      "Cost": "1",
       "Size": 1,
       "DocCost": "1",
       "Doc": "execute the current inner transaction group. Fail if executing this group would exceed the inner transaction limit, or if any transaction in the group fails.",
@@ -3767,11 +5566,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 180,
       "Name": "itxn",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -3846,6 +5647,76 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "32 byte address",
+        "microalgos",
+        "round number",
+        "UNIX timestamp of block before txn.FirstValid. Fails if negative",
+        "round number",
+        "Any data up to 1024 bytes",
+        "32 byte lease value",
+        "32 byte address",
+        "microalgos",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "The first round that the participation key is valid.",
+        "The last round that the participation key is valid.",
+        "Dilution for the 2-level participation key",
+        "Transaction type as bytes",
+        "Transaction type as integer",
+        "Asset ID",
+        "value in Asset's units",
+        "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+        "32 byte address",
+        "32 byte address",
+        "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+        "The computed ID for this transaction. 32 bytes.",
+        "ApplicationID from ApplicationCall transaction",
+        "ApplicationCall transaction on completion action",
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Number of ApplicationArgs",
+        "Accounts listed in the ApplicationCall transaction",
+        "Number of Accounts",
+        "Approval program",
+        "Clear state program",
+        "32 byte Sender's new AuthAddr",
+        "Asset ID in asset config transaction",
+        "Total number of units of this asset created",
+        "Number of digits to display after the decimal place when displaying the asset",
+        "Whether the asset's slots are frozen by default or not, 0 or 1",
+        "Unit name of the asset",
+        "The asset name",
+        "URL",
+        "32 byte commitment to unspecified asset metadata",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "Asset ID being frozen or un-frozen",
+        "32 byte address of the account whose asset slot is being frozen or un-frozen",
+        "The new frozen value, 0 or 1",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Number of Assets",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Number of Applications",
+        "Number of global state integers in ApplicationCall",
+        "Number of global state byteslices in ApplicationCall",
+        "Number of local state integers in ApplicationCall",
+        "Number of local state byteslices in ApplicationCall",
+        "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+        "Marks an account nonparticipating for rewards",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Number of Logs (only with `itxn` in v5). Application mode only",
+        "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+        "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+        "The last message emitted. Empty bytes if none were emitted. Application mode only",
+        "State proof public key",
+        "Approval Program as an array of pages",
+        "Number of Approval Program pages",
+        "ClearState Program as an array of pages",
+        "Number of ClearState Program pages"
+      ],
       "ArgEnumTypes": [
         "address",
         "uint64",
@@ -3916,6 +5787,216 @@
         "[]byte",
         "uint64"
       ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        0,
+        0,
+        0,
+        7,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        4,
+        5,
+        5,
+        5,
+        5,
+        5,
+        6,
+        6,
+        7,
+        7,
+        7,
+        7
+      ],
       "DocCost": "1",
       "Doc": "field F of the last inner transaction",
       "ImmediateNote": [
@@ -3929,11 +6010,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 181,
       "Name": "itxna",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -3947,6 +6030,15 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "address",
@@ -3955,6 +6047,33 @@
         "[]byte",
         "[]byte",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        26,
+        28,
+        48,
+        50,
+        58,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        3,
+        3,
+        5,
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F of the last inner transaction",
@@ -3974,11 +6093,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 182,
       "Name": "itxn_next",
+      "Cost": "1",
       "Size": 1,
       "DocCost": "1",
       "Doc": "begin preparation of a new inner transaction in the same transaction group",
@@ -3986,11 +6107,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 183,
       "Name": "gitxn",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -4065,6 +6188,76 @@
         "ClearStateProgramPages",
         "NumClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "32 byte address",
+        "microalgos",
+        "round number",
+        "UNIX timestamp of block before txn.FirstValid. Fails if negative",
+        "round number",
+        "Any data up to 1024 bytes",
+        "32 byte lease value",
+        "32 byte address",
+        "microalgos",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "The first round that the participation key is valid.",
+        "The last round that the participation key is valid.",
+        "Dilution for the 2-level participation key",
+        "Transaction type as bytes",
+        "Transaction type as integer",
+        "Asset ID",
+        "value in Asset's units",
+        "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+        "32 byte address",
+        "32 byte address",
+        "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+        "The computed ID for this transaction. 32 bytes.",
+        "ApplicationID from ApplicationCall transaction",
+        "ApplicationCall transaction on completion action",
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Number of ApplicationArgs",
+        "Accounts listed in the ApplicationCall transaction",
+        "Number of Accounts",
+        "Approval program",
+        "Clear state program",
+        "32 byte Sender's new AuthAddr",
+        "Asset ID in asset config transaction",
+        "Total number of units of this asset created",
+        "Number of digits to display after the decimal place when displaying the asset",
+        "Whether the asset's slots are frozen by default or not, 0 or 1",
+        "Unit name of the asset",
+        "The asset name",
+        "URL",
+        "32 byte commitment to unspecified asset metadata",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "32 byte address",
+        "Asset ID being frozen or un-frozen",
+        "32 byte address of the account whose asset slot is being frozen or un-frozen",
+        "The new frozen value, 0 or 1",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Number of Assets",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Number of Applications",
+        "Number of global state integers in ApplicationCall",
+        "Number of global state byteslices in ApplicationCall",
+        "Number of local state integers in ApplicationCall",
+        "Number of local state byteslices in ApplicationCall",
+        "Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program.",
+        "Marks an account nonparticipating for rewards",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Number of Logs (only with `itxn` in v5). Application mode only",
+        "Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only",
+        "ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only",
+        "The last message emitted. Empty bytes if none were emitted. Application mode only",
+        "State proof public key",
+        "Approval Program as an array of pages",
+        "Number of Approval Program pages",
+        "ClearState Program as an array of pages",
+        "Number of ClearState Program pages"
+      ],
       "ArgEnumTypes": [
         "address",
         "uint64",
@@ -4135,6 +6328,216 @@
         "[]byte",
         "uint64"
       ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        0,
+        0,
+        0,
+        7,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        4,
+        5,
+        5,
+        5,
+        5,
+        5,
+        6,
+        6,
+        7,
+        7,
+        7,
+        7
+      ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the last inner group submitted",
       "ImmediateNote": [
@@ -4153,11 +6556,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 184,
       "Name": "gitxna",
+      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -4171,6 +6576,15 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "address",
@@ -4179,6 +6593,33 @@
         "[]byte",
         "[]byte",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        26,
+        28,
+        48,
+        50,
+        58,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        3,
+        3,
+        5,
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "Ith value of the array field F from the Tth transaction in the last inner group submitted",
@@ -4203,11 +6644,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 185,
       "Name": "box_create",
+      "Cost": "1",
       "Args": [
         "boxName",
         "uint64"
@@ -4222,11 +6665,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 186,
       "Name": "box_extract",
+      "Cost": "1",
       "Args": [
         "boxName",
         "uint64",
@@ -4241,11 +6686,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 187,
       "Name": "box_replace",
+      "Cost": "1",
       "Args": [
         "boxName",
         "uint64",
@@ -4257,11 +6704,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 188,
       "Name": "box_del",
+      "Cost": "1",
       "Args": [
         "boxName"
       ],
@@ -4274,11 +6723,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 189,
       "Name": "box_len",
+      "Cost": "1",
       "Args": [
         "boxName"
       ],
@@ -4292,11 +6743,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 190,
       "Name": "box_get",
+      "Cost": "1",
       "Args": [
         "boxName"
       ],
@@ -4311,11 +6764,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 191,
       "Name": "box_put",
+      "Cost": "1",
       "Args": [
         "boxName",
         "[]byte"
@@ -4327,11 +6782,13 @@
       "IntroducedVersion": 8,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 192,
       "Name": "txnas",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -4348,6 +6805,15 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "address",
@@ -4356,6 +6822,33 @@
         "[]byte",
         "[]byte",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        26,
+        28,
+        48,
+        50,
+        58,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        3,
+        3,
+        5,
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "Ath value of the array field F of the current transaction",
@@ -4370,11 +6863,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 193,
       "Name": "gtxnas",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -4391,6 +6886,15 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "address",
@@ -4399,6 +6903,33 @@
         "[]byte",
         "[]byte",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        26,
+        28,
+        48,
+        50,
+        58,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        3,
+        3,
+        5,
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "Ath value of the array field F from the Tth transaction in the current group",
@@ -4418,11 +6949,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 194,
       "Name": "gtxnsas",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -4440,6 +6973,15 @@
         "ApprovalProgramPages",
         "ClearStateProgramPages"
       ],
+      "ArgEnumDoc": [
+        "Arguments passed to the application in the ApplicationCall transaction",
+        "Accounts listed in the ApplicationCall transaction",
+        "Foreign Assets listed in the ApplicationCall transaction",
+        "Foreign Apps listed in the ApplicationCall transaction",
+        "Log messages emitted by an application call (only with `itxn` in v5). Application mode only",
+        "Approval Program as an array of pages",
+        "ClearState Program as an array of pages"
+      ],
       "ArgEnumTypes": [
         "[]byte",
         "address",
@@ -4448,6 +6990,33 @@
         "[]byte",
         "[]byte",
         "[]byte"
+      ],
+      "ArgEnumBytes": [
+        26,
+        28,
+        48,
+        50,
+        58,
+        64,
+        66
+      ],
+      "ArgModes": [
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        3
+      ],
+      "ArgEnumVersion": [
+        2,
+        2,
+        3,
+        3,
+        5,
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "Bth value of the array field F from the Ath transaction in the current group",
@@ -4462,11 +7031,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 195,
       "Name": "args",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -4479,11 +7050,13 @@
       "IntroducedVersion": 5,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 1
     },
     {
       "Opcode": 196,
       "Name": "gloadss",
+      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -4497,11 +7070,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Loading Values"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 197,
       "Name": "itxnas",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -4522,11 +7097,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 198,
       "Name": "gitxnas",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -4552,11 +7129,13 @@
       "IntroducedVersion": 6,
       "Groups": [
         "Inner Transactions"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 208,
       "Name": "vrf_verify",
+      "Cost": "5700",
       "Args": [
         "[]byte",
         "[80]byte",
@@ -4569,6 +7148,18 @@
       "Size": 2,
       "ArgEnum": [
         "VrfAlgorand"
+      ],
+      "ArgEnumDoc": [
+        ""
+      ],
+      "ArgEnumBytes": [
+        0
+      ],
+      "ArgModes": [
+        0
+      ],
+      "ArgEnumVersion": [
+        7
       ],
       "DocCost": "5700",
       "Doc": "Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.",
@@ -4584,11 +7175,13 @@
       "IntroducedVersion": 7,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 209,
       "Name": "block",
+      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -4600,9 +7193,25 @@
         "BlkSeed",
         "BlkTimestamp"
       ],
+      "ArgEnumDoc": [
+        "",
+        ""
+      ],
       "ArgEnumTypes": [
         "[32]byte",
         "uint64"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1
+      ],
+      "ArgModes": [
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        7,
+        7
       ],
       "DocCost": "1",
       "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
@@ -4617,11 +7226,13 @@
       "IntroducedVersion": 7,
       "Groups": [
         "Block Access"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 210,
       "Name": "box_splice",
+      "Cost": "1",
       "Args": [
         "boxName",
         "uint64",
@@ -4635,11 +7246,13 @@
       "IntroducedVersion": 10,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 211,
       "Name": "box_resize",
+      "Cost": "1",
       "Args": [
         "boxName",
         "uint64"
@@ -4650,11 +7263,13 @@
       "IntroducedVersion": 10,
       "Groups": [
         "Box Access"
-      ]
+      ],
+      "Modes": 2
     },
     {
       "Opcode": 224,
       "Name": "ec_add",
+      "Cost": "BN254g1=125; BN254g2=170; BLS12_381g1=205; BLS12_381g2=290",
       "Args": [
         "[]byte",
         "[]byte"
@@ -4663,6 +7278,36 @@
         "[]byte"
       ],
       "Size": 2,
+      "ArgEnum": [
+        "BN254g1",
+        "BN254g2",
+        "BLS12_381g1",
+        "BLS12_381g2"
+      ],
+      "ArgEnumDoc": [
+        "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
+        "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
+        "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
+        "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        10,
+        10,
+        10,
+        10
+      ],
       "DocCost": "BN254g1=125; BN254g2=170; BLS12_381g1=205; BLS12_381g2=290",
       "Doc": "for curve points A and B, return the curve point A + B",
       "DocExtra": "A and B are curve points in affine representation: field element X concatenated with field element Y. Field element `Z` is encoded as follows.\nFor the base field elements (Fp), `Z` is encoded as a big-endian number and must be lower than the field modulus.\nFor the quadratic field extension (Fp2), `Z` is encoded as the concatenation of the individual encoding of the coefficients. For an Fp2 element of the form `Z = Z0 + Z1 i`, where `i` is a formal quadratic non-residue, the encoding of Z is the concatenation of the encoding of `Z0` and `Z1` in this order. (`Z0` and `Z1` must be less than the field modulus).\n\nThe point at infinity is encoded as `(X,Y) = (0,0)`.\nGroups G1 and G2 are denoted additively.\n\nFails if A or B is not in G.\nA and/or B are allowed to be the point at infinity.\nDoes _not_ check if A and B are in the main prime-order subgroup.",
@@ -4677,11 +7322,13 @@
       "IntroducedVersion": 10,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 225,
       "Name": "ec_scalar_mul",
+      "Cost": "BN254g1=1810; BN254g2=3430; BLS12_381g1=2950; BLS12_381g2=6530",
       "Args": [
         "[]byte",
         "[]byte"
@@ -4690,6 +7337,36 @@
         "[]byte"
       ],
       "Size": 2,
+      "ArgEnum": [
+        "BN254g1",
+        "BN254g2",
+        "BLS12_381g1",
+        "BLS12_381g2"
+      ],
+      "ArgEnumDoc": [
+        "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
+        "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
+        "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
+        "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        10,
+        10,
+        10,
+        10
+      ],
       "DocCost": "BN254g1=1810; BN254g2=3430; BLS12_381g1=2950; BLS12_381g2=6530",
       "Doc": "for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.",
       "DocExtra": "A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.",
@@ -4704,11 +7381,13 @@
       "IntroducedVersion": 10,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 226,
       "Name": "ec_pairing_check",
+      "Cost": "BN254g1=8000 + 7400 per 64 bytes of B; BN254g2=8000 + 7400 per 128 bytes of B; BLS12_381g1=13000 + 10000 per 96 bytes of B; BLS12_381g2=13000 + 10000 per 192 bytes of B",
       "Args": [
         "[]byte",
         "[]byte"
@@ -4717,6 +7396,36 @@
         "bool"
       ],
       "Size": 2,
+      "ArgEnum": [
+        "BN254g1",
+        "BN254g2",
+        "BLS12_381g1",
+        "BLS12_381g2"
+      ],
+      "ArgEnumDoc": [
+        "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
+        "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
+        "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
+        "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        10,
+        10,
+        10,
+        10
+      ],
       "DocCost": "BN254g1=8000 + 7400 per 64 bytes of B; BN254g2=8000 + 7400 per 128 bytes of B; BLS12_381g1=13000 + 10000 per 96 bytes of B; BLS12_381g2=13000 + 10000 per 192 bytes of B",
       "Doc": "1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
       "DocExtra": "A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.",
@@ -4731,11 +7440,13 @@
       "IntroducedVersion": 10,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 227,
       "Name": "ec_multi_scalar_mul",
+      "Cost": "BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B",
       "Args": [
         "[]byte",
         "[]byte"
@@ -4744,6 +7455,36 @@
         "[]byte"
       ],
       "Size": 2,
+      "ArgEnum": [
+        "BN254g1",
+        "BN254g2",
+        "BLS12_381g1",
+        "BLS12_381g2"
+      ],
+      "ArgEnumDoc": [
+        "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
+        "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
+        "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
+        "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        10,
+        10,
+        10,
+        10
+      ],
       "DocCost": "BN254g1=3600 + 90 per 32 bytes of B; BN254g2=7200 + 270 per 32 bytes of B; BLS12_381g1=6500 + 95 per 32 bytes of B; BLS12_381g2=14850 + 485 per 32 bytes of B",
       "Doc": "for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
       "DocExtra": "A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
@@ -4758,11 +7499,13 @@
       "IntroducedVersion": 10,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 228,
       "Name": "ec_subgroup_check",
+      "Cost": "BN254g1=20; BN254g2=3100; BLS12_381g1=1850; BLS12_381g2=2340",
       "Args": [
         "[]byte"
       ],
@@ -4770,6 +7513,36 @@
         "bool"
       ],
       "Size": 2,
+      "ArgEnum": [
+        "BN254g1",
+        "BN254g2",
+        "BLS12_381g1",
+        "BLS12_381g2"
+      ],
+      "ArgEnumDoc": [
+        "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
+        "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
+        "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
+        "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        10,
+        10,
+        10,
+        10
+      ],
       "DocCost": "BN254g1=20; BN254g2=3100; BLS12_381g1=1850; BLS12_381g2=2340",
       "Doc": "1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.",
       "ImmediateNote": [
@@ -4783,11 +7556,13 @@
       "IntroducedVersion": 10,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     },
     {
       "Opcode": 229,
       "Name": "ec_map_to",
+      "Cost": "BN254g1=630; BN254g2=3300; BLS12_381g1=1950; BLS12_381g2=8150",
       "Args": [
         "[]byte"
       ],
@@ -4795,6 +7570,36 @@
         "[]byte"
       ],
       "Size": 2,
+      "ArgEnum": [
+        "BN254g1",
+        "BN254g2",
+        "BLS12_381g1",
+        "BLS12_381g2"
+      ],
+      "ArgEnumDoc": [
+        "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
+        "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
+        "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
+        "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"
+      ],
+      "ArgEnumBytes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "ArgModes": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "ArgEnumVersion": [
+        10,
+        10,
+        10,
+        10
+      ],
       "DocCost": "BN254g1=630; BN254g2=3300; BLS12_381g1=1950; BLS12_381g2=8150",
       "Doc": "maps field element A to group G",
       "DocExtra": "BN254 points are mapped by the SVDW map. BLS12-381 points are mapped by the SSWU map.\nG1 element inputs are base field elements and G2 element inputs are quadratic field elements, with nearly the same encoding rules (for field elements) as defined in `ec_add`. There is one difference of encoding rule: G1 element inputs do not need to be 0-padded if they fit in less than 32 bytes for BN254 and less than 48 bytes for BLS12-381. (As usual, the empty byte array represents 0.) G2 elements inputs need to be always have the required size.",
@@ -4809,7 +7614,8 @@
       "IntroducedVersion": 10,
       "Groups": [
         "Cryptography"
-      ]
+      ],
+      "Modes": 3
     }
   ]
 }
