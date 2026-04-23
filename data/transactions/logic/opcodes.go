@@ -176,6 +176,7 @@ func (d *OpDetails) docCost(argLen int, version uint64) string {
 	return cost
 }
 
+// DocCost returns the cost of the opcode in human-readable form.
 func (d *OpDetails) DocCost(argLen int, version uint64) string {
 	return d.docCost(argLen, version)
 }
