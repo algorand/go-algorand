@@ -8099,7 +8099,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "X"}: 0,
 				},
-				FailureMessage: fmt.Sprintf("logic eval error: write budget (%d) exceeded %d", proto.BytesPerBoxReference, proto.BytesPerBoxReference+1),
+				FailureMessage: fmt.Sprintf("logic eval error: write budget exceeded (%d > %d)", proto.BytesPerBoxReference+1, proto.BytesPerBoxReference),
 				FailingIndex:   0,
 			})
 
@@ -8341,7 +8341,7 @@ func TestUnnamedResourcesLargeProgramCreateWriteBudget(t *testing.T) {
 		TxnGroups: [][]transactions.SignedTxn{{txn}},
 	})
 	require.NoError(t, err)
-	require.Contains(t, result.TxnGroups[0].FailureMessage, "write budget (0) exceeded")
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "write budget exceeded (1024 > 0)")
 
 	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
 		TxnGroups:             [][]transactions.SignedTxn{{txn}},

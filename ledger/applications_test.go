@@ -1809,7 +1809,7 @@ func TestLargeProgramCreateWriteBudget(t *testing.T) {
 		}},
 	}
 
-	dl.txn(&create, "write budget (0) exceeded")
+	dl.txn(&create, "write budget exceeded (1008 > 0)")
 	create.Access = nil
 	create.Boxes = []transactions.BoxRef{{}}
 	dl.txn(&create)
@@ -1843,7 +1843,7 @@ func TestLargeProgramCreateOptInWriteBudget(t *testing.T) {
 		}},
 	}
 
-	dl.txn(&create, "write budget (0) exceeded")
+	dl.txn(&create, "write budget exceeded (1008 > 0)")
 	create.Access = nil
 	create.Boxes = []transactions.BoxRef{{}}
 	dl.txn(&create)
@@ -1877,6 +1877,60 @@ func TestLargeProgramCreateDeleteWriteBudget(t *testing.T) {
 	}
 
 	dl.txn(&create)
+}
+
+// TestInnerCreateCanUseAbsoluteExtraProgramPages ensures inner app creation can
+// use the absolute extra program page limit when setting large program pages.
+func TestInnerCreateCanUseAbsoluteExtraProgramPages(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	cfg := config.GetDefaultLocal()
+	proto := config.Consensus[protocol.ConsensusFuture]
+	require.GreaterOrEqual(t, proto.MaxAbsoluteExtraProgramPages, proto.MaxExtraAppProgramPages)
+
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+	defer dl.Close()
+
+	version := uint64(proto.LogicSigVersion)
+	factoryID := dl.fundedApp(addrs[0], 1_000_000, main(fmt.Sprintf(`
+itxn_begin
+int appl; itxn_field TypeEnum
+txn ApplicationArgs 0; itxn_field ApprovalProgramPages
+txn ApplicationArgs 1; itxn_field ApprovalProgramPages
+txn ApplicationArgs 2; itxn_field ClearStateProgramPages
+txn ApplicationArgs 3; itxn_field ClearStateProgramPages
+int %d; itxn_field ExtraProgramPages
+itxn_submit
+`, proto.MaxAbsoluteExtraProgramPages)))
+
+	programSize := proto.MaxAppTotalProgramLen * (1 + proto.MaxAbsoluteExtraProgramPages) / 2
+	approval := assembleLargePassingProgram(t, version, programSize)
+	clear := assembleLargePassingProgram(t, version, programSize)
+	require.Len(t, approval, 2*transactions.MaxLogicSigArgSize)
+	require.Len(t, clear, 2*transactions.MaxLogicSigArgSize)
+
+	stib := dl.txn(&txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        addrs[0],
+		Fee:           20 * proto.MinTxnFee,
+		ApplicationID: factoryID,
+		ApplicationArgs: [][]byte{
+			approval[:config.MaxAVMBytesSize],
+			approval[config.MaxAVMBytesSize:],
+			clear[:config.MaxAVMBytesSize],
+			clear[config.MaxAVMBytesSize:],
+		},
+		Boxes: []transactions.BoxRef{{}, {}, {}, {}}, // 2*8k exceeeds "normal" 8k limit by 4 2k pages
+	})
+
+	require.Len(t, stib.EvalDelta.InnerTxns, 1)
+	inner := stib.EvalDelta.InnerTxns[0]
+	require.NotZero(t, inner.ApplicationID)
+	require.Equal(t, uint32(proto.MaxAbsoluteExtraProgramPages), inner.Txn.ExtraProgramPages)
+	require.Len(t, inner.Txn.ApprovalProgram, programSize)
+	require.Len(t, inner.Txn.ClearStateProgram, programSize)
 }
 
 // TestLargeProgramUpdateWriteBudget ensures that large app updates consume
@@ -1915,7 +1969,7 @@ func TestLargeProgramUpdateWriteBudget(t *testing.T) {
 		ClearStateProgram: largeClear,
 	}
 
-	dl.txn(&update, "write budget (0) exceeded")
+	dl.txn(&update, "write budget exceeded (1008 > 0)")
 
 	update.Boxes = []transactions.BoxRef{{}}
 	dl.txn(&update)

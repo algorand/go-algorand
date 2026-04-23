@@ -499,7 +499,7 @@ func TestBoxWriteBudget(t *testing.T) {
 	TestApp(t, `byte "self"; box_del; assert
                       byte "self"; int 200; box_create`, ep)
 	TestApp(t, `byte "self"; box_del; assert
-                      byte "self"; int 201; box_create`, ep, "write budget (200) exceeded")
+                      byte "self"; int 201; box_create`, ep, "write budget exceeded (201 > 200)")
 
 	// Test interplay of two different boxes being created
 	TestApp(t, `byte "self"; int 4; box_create; assert
@@ -512,13 +512,13 @@ func TestBoxWriteBudget(t *testing.T) {
 	TestApp(t, `byte "self"; box_del; assert; byte "other"; box_del; assert
                       byte "self"; int 6; box_create; assert
                       byte "other"; int 196; box_create`, ep,
-		"write budget (200) exceeded")
+		"write budget exceeded (202 > 200)")
 	ledger.DelBoxes(888, "other")
 
 	TestApp(t, `byte "self"; box_del; assert
                       byte "self"; int 6; box_create; assert
                       byte "other"; int 196; box_create; assert // fails to create
-                      byte "self"; box_del;`, ep, "write budget (200) exceeded")
+                      byte "self"; box_del;`, ep, "write budget exceeded (202 > 200)")
 
 	TestApp(t, `byte "other"; int 196; box_create`, ep)
 	TestApp(t, `byte "self"; box_del`, ep, "read budget") // 6 + 196 > 200
@@ -529,7 +529,7 @@ func TestBoxWriteBudget(t *testing.T) {
 	// Create two boxes, that sum to over budget, then test trying to use them together
 	TestApp(t, `byte "self"; int 101; box_create`, ep)
 	TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
-                      byte "other"; int 101; box_create`, ep, "write budget (200) exceeded")
+                      byte "other"; int 101; box_create`, ep, "write budget exceeded (202 > 200)")
 
 	TestApp(t, `byte "other"; int 101; box_create`, ep)
 	TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;

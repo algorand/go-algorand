@@ -48,7 +48,7 @@ import (
 // gating them by version. Old programs need to retain their old behavior.
 
 // maxStringSize is the limit of byte string length in an AVM value
-const maxStringSize = 4096
+const maxStringSize = config.MaxAVMBytesSize
 
 // maxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const maxByteMathSize = 64
@@ -539,8 +539,12 @@ func (cx *EvalContext) considerBudgetProgramWrites() error {
 	cx.available.updateBytes[cx.appID] = newSize
 
 	if cx.available.dirtyBytes > cx.ioBudget {
-		return fmt.Errorf("write budget (%d) exceeded %d while changing app %d",
-			cx.ioBudget, cx.available.dirtyBytes, cx.appID)
+		verb := "creating"
+		if updating {
+			verb = "updating"
+		}
+		return fmt.Errorf("write budget exceeded (%d > %d) while %s app %d",
+			cx.available.dirtyBytes, cx.ioBudget, verb, cx.appID)
 	}
 	return nil
 }
@@ -5602,7 +5606,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 	case ExtraProgramPages:
 		var epp uint64
 		epp, err =
-			sv.uintMaxed(uint64(cx.Proto.MaxExtraAppProgramPages))
+			sv.uintMaxed(uint64(cx.Proto.MaxAbsoluteExtraProgramPages))
 		if err != nil {
 			return err
 		}

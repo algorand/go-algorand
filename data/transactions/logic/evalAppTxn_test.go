@@ -134,10 +134,12 @@ func TestFieldLimits(t *testing.T) {
 	ep, _, _ := MakeSampleEnv()
 
 	intProgram := "itxn_begin; int %v; itxn_field %s; int 1"
-	goodInt := func(field string, value interface{}) {
+	goodInt := func(field string, value any) {
+		t.Helper()
 		TestApp(t, fmt.Sprintf(intProgram, value, field), ep)
 	}
-	badInt := func(field string, value interface{}) {
+	badInt := func(field string, value any) {
+		t.Helper()
 		// error messages are different for different fields, just use a space
 		// to indicate there should be an error, it will surely match any error.
 		TestApp(t, NoTrack(fmt.Sprintf(intProgram, value, field)), ep, " ")
@@ -192,7 +194,7 @@ func TestFieldLimits(t *testing.T) {
 	testInt("LocalNumByteSlice", int(ep.Proto.MaxLocalSchemaEntries))
 	testInt("GlobalNumUint", int(ep.Proto.MaxGlobalSchemaEntries))
 	testInt("GlobalNumByteSlice", int(ep.Proto.MaxGlobalSchemaEntries))
-	testInt("ExtraProgramPages", int(ep.Proto.MaxExtraAppProgramPages))
+	testInt("ExtraProgramPages", int(ep.Proto.MaxAbsoluteExtraProgramPages))
 }
 
 func appAddr(id int) basics.Address {
@@ -1245,7 +1247,9 @@ func TestApplCreation(t *testing.T) {
 	TestApp(t, p+"int 14; itxn_field LocalNumByteSlice"+s, ep, "14 is larger than max=13")
 
 	TestApp(t, p+"int 2; itxn_field ExtraProgramPages"+s, ep)
-	TestApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep, "3 is larger than max=2")
+	// ok now, b/c of MaxAbsoluteExtraProgramPages
+	TestApp(t, p+"int 3; itxn_field ExtraProgramPages"+s, ep)
+	TestApp(t, p+"int 5; itxn_field ExtraProgramPages"+s, ep, "5 is larger than max=4")
 }
 
 // TestBigApplCreation focues on testing the new fields that allow constructing big programs.

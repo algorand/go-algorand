@@ -492,8 +492,13 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 
 	// Sum up argument lengths
 	var argSum uint64
-	for _, arg := range ac.ApplicationArgs {
-		argSum = basics.AddSaturate(argSum, uint64(len(arg)))
+	for i, arg := range ac.ApplicationArgs {
+		l := len(arg)
+		if l > config.MaxAVMBytesSize {
+			return fmt.Errorf("tx.ApplicationArgs[%d] length is too long. %d > %d",
+				i, l, config.MaxAVMBytesSize)
+		}
+		argSum = basics.AddSaturate(argSum, uint64(l))
 	}
 
 	// Limit total length of all arguments

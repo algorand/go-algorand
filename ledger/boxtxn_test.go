@@ -548,21 +548,21 @@ func TestBoxIOBudgets(t *testing.T) {
 		}
 		if ver < boxQuotaBumpVersion {
 			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-				"write budget (1024) exceeded")
+				"write budget exceeded (4096 > 1024)")
 			call.Boxes = append(call.Boxes, transactions.BoxRef{})
 		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (2048) exceeded")
+			"write budget exceeded (4096 > 2048)")
 		call.Boxes = append(call.Boxes, transactions.BoxRef{})
 		if ver < boxQuotaBumpVersion {
 			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-				"write budget (3072) exceeded")
+				"write budget exceeded (4096 > 3072)")
 			call.Boxes = append(call.Boxes, transactions.BoxRef{})
 		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are enough box refs
 			"below min") // big box would need more balance
 		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
-			"write budget (4096) exceeded")
+			"write budget exceeded (4097 > 4096)")
 
 		// Create 4,096 byte box
 		proto := config.Consensus[cv]
@@ -658,13 +658,13 @@ func TestBoxInners(t *testing.T) {
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
 		if ver < boxQuotaBumpVersion {
 			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-				"write budget (1024) exceeded")
+				"write budget exceeded (4096 > 1024)")
 			dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
 			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
 			dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
 		} else {
 			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-				"write budget (2048) exceeded")
+				"write budget exceeded (4096 > 2048)")
 			dl.txn(call.Args("create", "x", "\x08\x00")) // 2048
 			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
 			dl.txn(call.Args("create", "y", "\x10\x00")) // 4096

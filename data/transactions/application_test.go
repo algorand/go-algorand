@@ -680,9 +680,16 @@ func TestWellFormedErrors(t *testing.T) {
 		{
 			ac: ApplicationCallTxnFields{
 				ApplicationID:   1,
-				ApplicationArgs: [][]byte{make([]byte, 16000), make([]byte, 385)},
+				ApplicationArgs: [][]byte{make([]byte, 4097), make([]byte, 385)},
 			},
-			expectedError: "tx.ApplicationArgs total length is too long. 16385 > 16384",
+			expectedError: "tx.ApplicationArgs[0] length is too long. 4097 > 4096",
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID:   1,
+				ApplicationArgs: slices.Repeat([][]byte{make([]byte, 4000)}, 5),
+			},
+			expectedError: "tx.ApplicationArgs total length is too long. 20000 > 16384",
 		},
 		{
 			ac: ApplicationCallTxnFields{

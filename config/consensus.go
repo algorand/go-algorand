@@ -1546,6 +1546,13 @@ var Protocol = Global{
 	BigLambda:   15000 * time.Millisecond,
 }
 
+// MaxAVMBytesSize is the longest allowable AVM byteslice value It is not
+// consensus values because it has never been changed (and would be very, very
+// hard to change!).  No point in carrying it around in ConsensusParams.  But it
+// does appear in various places around the system now, we put it here for
+// accessibility.
+const MaxAVMBytesSize = 4096 // Just to match largest AVM size
+
 func init() {
 	Consensus = make(ConsensusProtocols)
 
