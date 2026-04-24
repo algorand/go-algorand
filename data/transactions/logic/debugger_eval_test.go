@@ -278,11 +278,11 @@ func TestCallStackUpdate(t *testing.T) {
 
 	expectedCallFrames := []CallFrame{
 		{
-			FrameLine: 3,
+			FrameLine: 2,
 			LabelName: "label1",
 		},
 		{
-			FrameLine: 6,
+			FrameLine: 5,
 			LabelName: "label2",
 		},
 	}
@@ -296,5 +296,5 @@ func TestCallStackUpdate(t *testing.T) {
 	require.Equal(t, 1, testDbg.complete)
 	require.Greater(t, testDbg.update, 1)
 	require.Len(t, testDbg.state.Stack, 1)
-	require.Equal(t, expectedCallFrames, testDbg.state.CallStack)
+	require.Equal(t, testDbg.state.CallStack, expectedCallFrames)
 }
