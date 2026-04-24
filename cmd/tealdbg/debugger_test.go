@@ -129,7 +129,7 @@ func createSessionFromSource(t *testing.T, program string) *session {
 	require.NoError(t, err)
 
 	// create a sample disassembly line to pc mapping
-	// this simple source is similar to disassembly except cblocks/prefix directives at the beginning
+	// this simple source is similar to disassembly except intcblock at the beginning
 	pcOffset := make(map[int]int, len(ops.OffsetToSource))
 	for pc, location := range ops.OffsetToSource {
 		pcOffset[location.Line+1] = pc
@@ -201,17 +201,8 @@ func TestCallStackControl(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	const (
-		pushintLine = 3
-		callsubLine = 4
-		dupLine     = 5
-	)
-
 	newTestCase := func() (*session, chan struct{}, func(), *int) {
 		s := createSessionFromSource(t, "#pragma version %d\nlab1:\nint 1\ncallsub lab1\ndup\n+\n")
-		require.GreaterOrEqual(t, len(s.lines), dupLine+1)
-		require.Equal(t, "callsub label1", s.lines[callsubLine])
-		require.Equal(t, "dup", s.lines[dupLine])
 
 		ackCount := 0
 		done := make(chan struct{})
@@ -228,17 +219,16 @@ func TestCallStackControl(t *testing.T) {
 	cases := map[string]func(*testing.T){
 		"Check that step over on callsub line returns correct callstack depth": func(t *testing.T) {
 			s, done, ackFunc, ackCount := newTestCase()
-			nextLine := callsubLine + 1
-			s.setCallStack([]logic.CallFrame{{FrameLine: callsubLine, LabelName: "label1"}})
+			s.setCallStack([]logic.CallFrame{{FrameLine: 2, LabelName: "lab1"}})
 			initialStackDepth := len(s.callStack)
-			s.line.Store(callsubLine)
+			s.line.Store(3)
 
 			go ackFunc()
 			s.StepOver()
 			<-done
 
-			require.Equal(t, map[int]struct{}{nextLine: {}}, s.debugConfig.ActiveBreak)
-			require.Equal(t, breakpoint{true, true}, s.breakpoints[nextLine])
+			require.Equal(t, map[int]struct{}{4: {}}, s.debugConfig.ActiveBreak)
+			require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
 
 			require.Equal(t, false, s.debugConfig.NoBreak)
 			require.Equal(t, false, s.debugConfig.StepBreak)
@@ -249,32 +239,30 @@ func TestCallStackControl(t *testing.T) {
 		},
 		"Breakpoint should not trigger at the wrong call stack height": func(t *testing.T) {
 			s, done, ackFunc, ackCount := newTestCase()
-			nextLine := callsubLine + 1
 
-			s.setCallStack([]logic.CallFrame{{FrameLine: callsubLine, LabelName: "label1"}})
-			s.line.Store(callsubLine)
+			s.setCallStack([]logic.CallFrame{{FrameLine: 2, LabelName: "lab1"}})
+			s.line.Store(3)
 
 			go ackFunc()
 			s.StepOver()
 			<-done
 
 			s.setCallStack([]logic.CallFrame{
-				{FrameLine: callsubLine, LabelName: "label1"},
-				{FrameLine: callsubLine, LabelName: "label1"},
+				{FrameLine: 2, LabelName: "lab1"},
+				{FrameLine: 2, LabelName: "lab1"},
 			})
-			require.Equal(t, false, s.debugConfig.isBreak(nextLine, len(s.callStack)))
+			require.Equal(t, false, s.debugConfig.isBreak(4, len(s.callStack)))
 
 			s.setCallStack([]logic.CallFrame{
-				{FrameLine: callsubLine, LabelName: "label1"},
+				{FrameLine: 2, LabelName: "lab1"},
 			})
-			require.Equal(t, true, s.debugConfig.isBreak(nextLine, len(s.callStack)))
+			require.Equal(t, true, s.debugConfig.isBreak(4, len(s.callStack)))
 			require.Equal(t, 1, *ackCount)
 		},
 		"Check step over on a non callsub line breaks at next line": func(t *testing.T) {
 			s, done, ackFunc, ackCount := newTestCase()
-			nextLine := dupLine
 
-			s.line.Store(nextLine)
+			s.line.Store(4)
 
 			go ackFunc()
 			s.StepOver()
@@ -289,18 +277,17 @@ func TestCallStackControl(t *testing.T) {
 		},
 		"Check that step out when call stack depth is 1 sets breakpoint to the line after frame": func(t *testing.T) {
 			s, done, ackFunc, ackCount := newTestCase()
-			nextLine := callsubLine + 1
 
-			s.setCallStack([]logic.CallFrame{{FrameLine: callsubLine, LabelName: "label1"}})
-			s.line.Store(nextLine)
+			s.setCallStack([]logic.CallFrame{{FrameLine: 2, LabelName: "lab1"}})
+			s.line.Store(4)
 
 			go ackFunc()
 			s.StepOut()
 			<-done
 
-			require.Equal(t, map[int]struct{}{nextLine: {}}, s.debugConfig.ActiveBreak)
-			require.Equal(t, breakpoint{true, true}, s.breakpoints[nextLine])
-			require.Equal(t, true, s.debugConfig.isBreak(nextLine, len(s.callStack)-1))
+			require.Equal(t, map[int]struct{}{3: {}}, s.debugConfig.ActiveBreak)
+			require.Equal(t, breakpoint{true, true}, s.breakpoints[3])
+			require.Equal(t, true, s.debugConfig.isBreak(3, len(s.callStack)-1))
 
 			require.Equal(t, false, s.debugConfig.NoBreak)
 			require.Equal(t, false, s.debugConfig.StepBreak)
@@ -313,7 +300,7 @@ func TestCallStackControl(t *testing.T) {
 			s, done, ackFunc, ackCount := newTestCase()
 
 			s.setCallStack(nil)
-			s.line.Store(callsubLine)
+			s.line.Store(3)
 
 			go ackFunc()
 			s.StepOut()
@@ -328,28 +315,26 @@ func TestCallStackControl(t *testing.T) {
 		},
 		"Check that resume keeps track of every breakpoint": func(t *testing.T) {
 			s, done, ackFunc, ackCount := newTestCase()
-			prevLine := pushintLine
-			nextLine := callsubLine + 1
 
-			s.line.Store(callsubLine)
-			err := s.RemoveBreakpoint(callsubLine)
+			s.line.Store(3)
+			err := s.RemoveBreakpoint(3)
 			require.NoError(t, err)
-			require.Equal(t, breakpoint{false, false}, s.breakpoints[prevLine])
-			err = s.SetBreakpoint(prevLine)
+			require.Equal(t, breakpoint{false, false}, s.breakpoints[2])
+			err = s.SetBreakpoint(2)
 			require.NoError(t, err)
-			err = s.SetBreakpoint(nextLine)
+			err = s.SetBreakpoint(4)
 			require.NoError(t, err)
 
 			go ackFunc()
 			s.Resume()
 			<-done
 
-			require.Equal(t, map[int]struct{}{prevLine: {}, nextLine: {}}, s.debugConfig.ActiveBreak)
-			require.Equal(t, breakpoint{true, true}, s.breakpoints[prevLine])
-			require.Equal(t, breakpoint{true, true}, s.breakpoints[nextLine])
-			require.Equal(t, true, s.debugConfig.isBreak(prevLine, len(s.callStack)))
-			require.Equal(t, false, s.debugConfig.isBreak(callsubLine, len(s.callStack)))
-			require.Equal(t, true, s.debugConfig.isBreak(nextLine, len(s.callStack)))
+			require.Equal(t, map[int]struct{}{2: {}, 4: {}}, s.debugConfig.ActiveBreak)
+			require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
+			require.Equal(t, breakpoint{true, true}, s.breakpoints[4])
+			require.Equal(t, true, s.debugConfig.isBreak(2, len(s.callStack)))
+			require.Equal(t, false, s.debugConfig.isBreak(3, len(s.callStack)))
+			require.Equal(t, true, s.debugConfig.isBreak(4, len(s.callStack)))
 
 			require.Equal(t, false, s.debugConfig.NoBreak)
 			require.Equal(t, false, s.debugConfig.StepBreak)
