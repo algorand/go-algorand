@@ -176,6 +176,11 @@ func (d *OpDetails) docCost(argLen int, version uint64) string {
 	return cost
 }
 
+// DocCost returns the cost of the opcode in human-readable form.
+func (d *OpDetails) DocCost(argLen int, version uint64) string {
+	return d.docCost(argLen, version)
+}
+
 // Cost computes the cost of the opcode, given details about how it is used,
 // both static (the program, which can be used to find the immediate values
 // supplied), and dynamic (the stack, which can be used to find the run-time

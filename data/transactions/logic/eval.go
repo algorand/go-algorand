@@ -577,6 +577,9 @@ const (
 
 	// local constant, run in any mode
 	modeAny = ModeSig | ModeApp
+
+	// ModeDunno is a temporary FIXME for that instruction
+	ModeDunno = 0
 )
 
 // Any checks if this mode bitset represents any evaluation mode

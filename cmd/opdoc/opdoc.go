@@ -293,12 +293,17 @@ Opcodes have a cost of 1 unless otherwise specified.
 type OpRecord struct {
 	Opcode  byte
 	Name    string
+	Cost    string
 	Args    []string `json:",omitempty"`
 	Returns []string `json:",omitempty"`
 	Size    int
 
-	ArgEnum      []string `json:",omitempty"`
-	ArgEnumTypes []string `json:",omitempty"`
+	ArgEnum        []string        `json:",omitempty"`
+	ArgEnumDoc     []string        `json:",omitempty"`
+	ArgEnumTypes   []string        `json:",omitempty"`
+	ArgEnumBytes   []int           `json:",omitempty"`
+	ArgModes       []logic.RunMode `json:",omitempty"`
+	ArgEnumVersion []uint64        `json:",omitempty"`
 
 	DocCost string
 
@@ -307,6 +312,7 @@ type OpRecord struct {
 	ImmediateNote     []logic.OpImmediateDetails `json:",omitempty"`
 	IntroducedVersion uint64
 	Groups            []string
+	Modes             logic.RunMode
 }
 
 type namedType struct {
@@ -374,20 +380,28 @@ func typeStrings(types logic.StackTypes) []string {
 	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string) {
+func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string, []string, []logic.RunMode, []int, []uint64) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
+	docs := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
+	modes := make([]logic.RunMode, 0, len(group.Names))
+	bytes := make([]int, 0, len(group.Names))
+	versions := make([]uint64, 0, len(group.Names))
 	for _, name := range group.Names {
 		if spec, ok := group.SpecByName(name); ok && spec.Version() <= version {
 			fields = append(fields, name)
 			types = append(types, spec.Type())
+			docs = append(docs, spec.Note())
+			modes = append(modes, spec.Modes())
+			bytes = append(bytes, int(spec.Field()))
+			versions = append(versions, spec.Version())
 		}
 	}
-	return fields, typeStrings(types)
+	return fields, typeStrings(types), docs, modes, bytes, versions
 }
 
-func argEnums(name string, version uint64) ([]string, []string) {
+func argEnums(name string, version uint64) ([]string, []string, []string, []logic.RunMode, []int, []uint64) {
 	// reminder: this needs to be manually updated every time
 	// a new opcode is added with an associated FieldGroup
 	// it'd be nice to have this auto-update
@@ -420,8 +434,14 @@ func argEnums(name string, version uint64) ([]string, []string) {
 		return fieldsAndTypes(logic.VrfStandards, version)
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
 		return fieldsAndTypes(logic.EcdsaCurves, version)
+	case "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to":
+		return fieldsAndTypes(logic.EcGroups, version)
+	case "voter_params_get":
+		return fieldsAndTypes(logic.VoterParamsFields, version)
+	case "mimc":
+		return fieldsAndTypes(logic.MimcConfigs, version)
 	default:
-		return nil, nil
+		return nil, nil, nil, nil, nil, nil
 	}
 }
 
@@ -431,17 +451,22 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
+		argLen := len(spec.Arg.Types)
+		records[i].Cost = spec.OpDetails.DocCost(argLen, version)
 		records[i].Args = typeStrings(spec.Arg.Types)
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].DocCost = spec.DocCost(version)
-		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name, version)
+		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgEnumDoc, records[i].ArgModes, records[i].ArgEnumBytes, records[i].ArgEnumVersion = argEnums(spec.Name, version)
 		desc := logic.OpDescOf(spec.Name)
+		//FIXME
+		//records[i].Doc = strings.ReplaceAll(desc.Short, "<br />", "\n")
 		records[i].Doc = desc.Short
 		records[i].DocExtra = desc.Extra
 		records[i].ImmediateNote = logic.OpImmediateDetailsFromSpec(spec)
 		records[i].Groups = opGroups[spec.Name]
 		records[i].IntroducedVersion = spec.Version
+		records[i].Modes = spec.Modes
 	}
 
 	return &LanguageSpec{
