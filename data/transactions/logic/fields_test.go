@@ -90,12 +90,10 @@ func TestGlobalVersionsAndTypes(t *testing.T) {
 			"greater than protocol supported version")
 
 		// check opcodes failures
-		ops.Program[0] = byte(preVersion) // set version
-		testLogicBytes(t, ops.Program, ep, "invalid global field")
+		testLogicBytes(t, setProgramVersion(t, ops.Program, preVersion), ep, "invalid global field")
 
 		// check opcodes failures on 0 version
-		ops.Program[0] = 0 // set version to 0
-		testLogicBytes(t, ops.Program, ep, "invalid global field")
+		testLogicBytes(t, setProgramVersion(t, ops.Program, 0), ep, "invalid global field")
 	}
 }
 
@@ -185,24 +183,22 @@ func TestTxnFieldVersions(t *testing.T) {
 				"greater than protocol supported version", "greater than protocol supported version")
 
 			// check opcodes failures
-			ops.Program[0] = byte(preVersion) // set version
 			checkErr := ""
 			evalErr := "invalid txn field"
 			if txnaMode && preVersion < txnaVersion {
 				checkErr = "illegal opcode"
 				evalErr = "illegal opcode"
 			}
-			testLogicBytes(t, ops.Program, ep, checkErr, evalErr)
+			testLogicBytes(t, setProgramVersion(t, ops.Program, preVersion), ep, checkErr, evalErr)
 
 			// check opcodes failures on 0 version
-			ops.Program[0] = 0 // set version to 0
 			checkErr = ""
 			evalErr = "invalid txn field"
 			if txnaMode {
 				checkErr = "illegal opcode"
 				evalErr = "illegal opcode"
 			}
-			testLogicBytes(t, ops.Program, ep, checkErr, evalErr)
+			testLogicBytes(t, setProgramVersion(t, ops.Program, 0), ep, checkErr, evalErr)
 		}
 	}
 }
@@ -278,14 +274,13 @@ func TestITxnFieldVersions(t *testing.T) {
 
 			// we change the program version so can run, but itxn_field opcode
 			// still won't.
-			ops.Program[0] = byte(preVersion) // set version
 			checkErr := ""
 			evalErr := "invalid itxn_field " + field
 			if preVersion < 5 { // when inners and `itxn_field` were introduced
 				checkErr = "illegal opcode"
 				evalErr = "illegal opcode"
 			}
-			testAppBytes(t, ops.Program, ep, checkErr, evalErr)
+			testAppBytes(t, setProgramVersion(t, ops.Program, preVersion), ep, checkErr, evalErr)
 		})
 	}
 }
@@ -355,8 +350,7 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 			if field.version > v {
 				testProg(t, text, v, exp(1, "...was introduced in..."))
 				ops := testProg(t, text, field.version) // assemble in the future
-				ops.Program[0] = byte(v)
-				testAppBytes(t, ops.Program, ep, "invalid asset_params_get field")
+				testAppBytes(t, setProgramVersion(t, ops.Program, v), ep, "invalid asset_params_get field")
 			} else {
 				testProg(t, text, v)
 				testApp(t, text, ep)
@@ -409,11 +403,11 @@ func TestAppParamsFieldsVersions(t *testing.T) {
 				// check assembler fails if version before introduction
 				testProg(t, text, v, exp(1, "...was introduced in..."))
 				ops := testProg(t, text, field.version) // assemble in the future
-				ops.Program[0] = byte(v)                // but set version back to before intro
+				backversioned := setProgramVersion(t, ops.Program, v)
 				if v < 5 {
-					testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+					testAppBytes(t, backversioned, ep, "illegal opcode", "illegal opcode")
 				} else {
-					testAppBytes(t, ops.Program, ep, "invalid app_params_get field")
+					testAppBytes(t, backversioned, ep, "invalid app_params_get field")
 				}
 			} else {
 				testProg(t, text, v)
@@ -442,11 +436,11 @@ func TestAcctParamsFieldsVersions(t *testing.T) {
 				// check assembler fails if version before introduction
 				testProg(t, text, v, exp(1, "...was introduced in..."))
 				ops := testProg(t, text, field.version) // assemble in the future
-				ops.Program[0] = byte(v)                // but set version back to before intro
+				backversioned := setProgramVersion(t, ops.Program, v)
 				if v < 6 {
-					testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+					testAppBytes(t, backversioned, ep, "illegal opcode", "illegal opcode")
 				} else {
-					testAppBytes(t, ops.Program, ep, "invalid acct_params_get field")
+					testAppBytes(t, backversioned, ep, "invalid acct_params_get field")
 				}
 			} else {
 				testProg(t, text, v)
@@ -475,11 +469,11 @@ func TestBlockFieldsVersions(t *testing.T) {
 				// check assembler fails if version before introduction
 				testProg(t, text, v, exp(1, "...was introduced in..."))
 				ops := testProg(t, text, field.version) // assemble in the future
-				ops.Program[0] = byte(v)                // but set version back to before intro
+				backversioned := setProgramVersion(t, ops.Program, v)
 				if v < randomnessVersion {
-					testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+					testAppBytes(t, backversioned, ep, "illegal opcode", "illegal opcode")
 				} else {
-					testAppBytes(t, ops.Program, ep, "invalid block field")
+					testAppBytes(t, backversioned, ep, "invalid block field")
 				}
 			} else {
 				testProg(t, text, v)

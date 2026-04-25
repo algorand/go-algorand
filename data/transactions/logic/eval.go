@@ -1503,15 +1503,15 @@ func check(program []byte, gi int, params *EvalParams, mode RunMode) (err error)
 func (cx *EvalContext) begin(program []byte) error {
 	cx.program = program
 
-	version, vlen, err := transactions.ProgramVersion(program)
-	if err != nil {
-		return err
-	}
+	version, pc, _, err := parseProgramPrefix(program)
 	if version > LogicVersion {
 		return fmt.Errorf("program version %d greater than max supported version %d", version, LogicVersion)
 	}
 	if version > cx.Proto.LogicSigVersion {
 		return fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.Proto.LogicSigVersion)
+	}
+	if err != nil {
+		return err
 	}
 	// We disallow pre-sharedResources programs with tx.Access for the same
 	// reason that we don't allow resource sharing to happen for low version
@@ -1525,7 +1525,7 @@ func (cx *EvalContext) begin(program []byte) error {
 	}
 
 	cx.version = version
-	cx.pc = vlen
+	cx.pc = pc
 
 	if cx.version < cx.EvalParams.minAvmVersion {
 		return fmt.Errorf("program version must be >= %d for this transaction group, but have version %d",

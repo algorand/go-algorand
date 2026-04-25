@@ -1108,8 +1108,9 @@ func TestTxnBadField(t *testing.T) {
 	for _, field := range fields {
 		source := fmt.Sprintf("txn %s 0", field.String())
 		ops := testProg(t, source, AssemblerMaxVersion)
-		require.Equal(t, txnaOpcode, ops.Program[1])
-		ops.Program[1] = txnOpcode
+		prefixLen := programPrefixLen(t, ops.Program)
+		require.Equal(t, txnaOpcode, ops.Program[prefixLen])
+		ops.Program[prefixLen] = txnOpcode
 		testLogicBytes(t, ops.Program, nil, fmt.Sprintf("invalid txn field %s", field))
 	}
 }
@@ -1138,8 +1139,9 @@ func TestGtxnBadField(t *testing.T) {
 	for _, field := range fields {
 		source := fmt.Sprintf("txn %s 0", field.String())
 		ops := testProg(t, source, AssemblerMaxVersion)
-		require.Equal(t, txnaOpcode, ops.Program[1])
-		ops.Program[1] = txnOpcode
+		prefixLen := programPrefixLen(t, ops.Program)
+		require.Equal(t, txnaOpcode, ops.Program[prefixLen])
+		ops.Program[prefixLen] = txnOpcode
 		testLogicBytes(t, ops.Program, nil, fmt.Sprintf("invalid txn field %s", field))
 	}
 }
@@ -2328,26 +2330,27 @@ txna ApplicationArgs 0
 	testLogicBytes(t, ops.Program, ep)
 
 	// modify txn field
-	saved := ops.Program[2]
-	ops.Program[2] = 0x01
+	prefixLen := programPrefixLen(t, ops.Program)
+	saved := ops.Program[prefixLen+1]
+	ops.Program[prefixLen+1] = 0x01
 	testLogicBytes(t, ops.Program, ep, "unsupported array field")
 
 	// modify txn field to unknown one
-	ops.Program[2] = 99
+	ops.Program[prefixLen+1] = 99
 	testLogicBytes(t, ops.Program, ep, "invalid txn field TxnField(99)")
 
 	// modify txn array index
-	ops.Program[2] = saved
-	saved = ops.Program[3]
-	ops.Program[3] = 0x02
+	ops.Program[prefixLen+1] = saved
+	saved = ops.Program[prefixLen+2]
+	ops.Program[prefixLen+2] = 0x02
 	testLogicBytes(t, ops.Program, ep, "invalid Accounts index")
 
 	// modify txn array index in the second opcode
-	ops.Program[3] = saved
-	saved = ops.Program[6]
-	ops.Program[6] = 0x01
+	ops.Program[prefixLen+2] = saved
+	saved = ops.Program[prefixLen+5]
+	ops.Program[prefixLen+5] = 0x01
 	testLogicBytes(t, ops.Program, ep, "invalid ApplicationArgs index")
-	ops.Program[6] = saved
+	ops.Program[prefixLen+5] = saved
 
 	// check special case: Account 0 == Sender
 	// even without any additional context
@@ -2368,26 +2371,27 @@ txna ApplicationArgs 0
 	testLogicBytes(t, ops.Program, ep)
 
 	// modify gtxn index
-	saved = ops.Program[2]
-	ops.Program[2] = 0x01
+	prefixLen = programPrefixLen(t, ops.Program)
+	saved = ops.Program[prefixLen+1]
+	ops.Program[prefixLen+1] = 0x01
 	testLogicBytes(t, ops.Program, ep, "txn index 1, len(group) is 1")
 
 	// modify gtxn field
-	ops.Program[2] = saved
-	saved = ops.Program[3]
-	ops.Program[3] = 0x01
+	ops.Program[prefixLen+1] = saved
+	saved = ops.Program[prefixLen+2]
+	ops.Program[prefixLen+2] = 0x01
 	testLogicBytes(t, ops.Program, ep, "unsupported array field")
 
 	// modify gtxn field to unknown one
-	ops.Program[3] = 99
+	ops.Program[prefixLen+2] = 99
 	testLogicBytes(t, ops.Program, ep, "invalid txn field TxnField(99)")
 
 	// modify gtxn array index
-	ops.Program[3] = saved
-	saved = ops.Program[4]
-	ops.Program[4] = 0x02
+	ops.Program[prefixLen+2] = saved
+	saved = ops.Program[prefixLen+3]
+	ops.Program[prefixLen+3] = 0x02
 	testLogicBytes(t, ops.Program, ep, "invalid Accounts index")
-	ops.Program[4] = saved
+	ops.Program[prefixLen+3] = saved
 
 	// check special case: Account 0 == Sender
 	// even without any additional context
@@ -2829,6 +2833,8 @@ byte 0x01020300; store 15		// store a bytes
 
 int 100; byte 0x0201; == // types mismatch so this will fail
 `)
+	badProgram := testProg(t, badsource, LogicVersion)
+	badPC := 19 + programShiftFromVersionOnlyPrefix(t, badProgram.Program)
 	err := testPanics(t, badsource, 1, "cannot compare")
 	attrs := basics.Attributes(err)
 	zeros := [256]int{}
@@ -2836,7 +2842,7 @@ int 100; byte 0x0201; == // types mismatch so this will fail
 	scratch[10] = uint64(5)
 	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
 	require.Equal(t, map[string]any{
-		"pc":          19,
+		"pc":          badPC,
 		"group-index": 0,
 		"eval-states": []evalState{
 			{
@@ -2858,7 +2864,7 @@ int 1
 	err = testLogics(t, []string{goodsource, badsource}, nil, nil, exp(1, "cannot compare"))
 	attrs = basics.Attributes(err)
 	require.Equal(t, map[string]any{
-		"pc":          19,
+		"pc":          badPC,
 		"group-index": 1,
 		"eval-states": []evalState{
 			{
@@ -3315,8 +3321,9 @@ func TestShortBytecblock(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			fullops, err := AssembleStringWithVersion(`bytecblock 0x123456 0xababcdcd "test"`, v)
 			require.NoError(t, err)
-			fullops.Program[2] = 50 // fake 50 elements
-			for i := 2; i < len(fullops.Program); i++ {
+			prefixLen := programPrefixLen(t, fullops.Program)
+			fullops.Program[prefixLen+1] = 50 // fake 50 elements
+			for i := prefixLen + 1; i < len(fullops.Program); i++ {
 				program := fullops.Program[:i]
 				t.Run(hex.EncodeToString(program), func(t *testing.T) {
 					testLogicBytes(t, program, nil, "bytes list", "bytes list")
@@ -3495,11 +3502,12 @@ func TestMisalignedBranch(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
 			//t.Log(hex.EncodeToString(program))
 			offsetHex := "0011"
 			if v >= varintBranchVersion {
@@ -3510,12 +3518,13 @@ int 1`, v)
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
+			shift := programShiftFromVersionOnlyPrefix(t, ops.Program)
 
 			if v >= varintBranchVersion {
 				// offset=3 as 1-byte varint: zigzag(3)=6=0x06; target lands in middle of bytecblock
-				ops.Program[6] = 0x06
+				ops.Program[6+shift] = 0x06
 			} else {
-				ops.Program[7] = 3 // clobber the branch offset to be in the middle of the bytecblock
+				ops.Program[7+shift] = 3 // clobber the branch offset to be in the middle of the bytecblock
 			}
 			// Since Eval() doesn't know the jump is bad, we reject "by luck"
 			testLogicBytes(t, ops.Program, nil, "aligned", "REJECT")
@@ -3524,10 +3533,10 @@ int 1`, v)
 			if v >= varintBranchVersion {
 				// offset=-2 as 1-byte varint: zigzag(-2)=3=0x03; target is bnz.pc-2,
 				// the value byte inside intcblock (not an instruction start)
-				ops.Program[6] = 0x03
+				ops.Program[6+shift] = 0x03
 			} else {
-				ops.Program[6] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
-				ops.Program[7] = 0xff // That jumps into the offset itself (pc + 3 -1)
+				ops.Program[6+shift] = 0xff // Clobber the two bytes of offset with 0xff 0xff = -1
+				ops.Program[7+shift] = 0xff // That jumps into the offset itself (pc + 3 -1)
 			}
 			if v < backBranchEnabledVersion {
 				testLogicBytes(t, ops.Program, nil, "negative branch", "negative branch")
@@ -3545,11 +3554,12 @@ func TestBranchTooFar(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
 			//t.Log(hex.EncodeToString(ops.Program))
 			offsetHex := "0011"
 			if v >= varintBranchVersion {
@@ -3560,11 +3570,12 @@ int 1`, v)
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
+			shift := programShiftFromVersionOnlyPrefix(t, ops.Program)
 			if v >= varintBranchVersion {
 				// 0x7e = 1-byte varint encoding jump +63, outside the program
-				ops.Program[6] = 0x7e
+				ops.Program[6+shift] = 0x7e
 			} else {
-				ops.Program[7] = 200 // clobber the branch offset to be beyond the end of the program
+				ops.Program[7+shift] = 200 // clobber the branch offset to be beyond the end of the program
 			}
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
@@ -3577,11 +3588,12 @@ func TestBranchTooLarge(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, `int 1
+			source := `int 1
 bnz done
 bytecblock 0x01234576 0xababcdcd 0xf000baad
 done:
-int 1`, v)
+int 1`
+			ops := testProg(t, source, v)
 			//t.Log(hex.EncodeToString(ops.Program))
 			// (br)anch byte, offset bytes (big-endian int16 pre-v13, varint v13+)
 			// offset +17 as big-endian: 00 11; as 1-byte varint: 22 (zigzag(17)=34=0x22)
@@ -3593,7 +3605,8 @@ int 1`, v)
 			canonicalProgramBytes, err := hex.DecodeString(canonicalProgramString)
 			require.NoError(t, err)
 			require.Equal(t, ops.Program, canonicalProgramBytes)
-			ops.Program[6] = 0x70 // clobber hi byte of branch offset
+			shift := programShiftFromVersionOnlyPrefix(t, ops.Program)
+			ops.Program[6+shift] = 0x70 // clobber hi byte of branch offset
 			testLogicBytes(t, ops.Program, nil, "outside", "outside")
 		})
 	}
@@ -3613,8 +3626,9 @@ intc_1
 			source := fmt.Sprintf(template, line)
 			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
+			shift := programShiftFromVersionOnlyPrefix(t, ops.Program)
 			// 0x7f encodes jump -64 as a 1-byte varint (zigzag(-64)=127=0x7f), outside program
-			ops.Program[7] = 0x7f
+			ops.Program[7+shift] = 0x7f
 			testLogicBytes(t, ops.Program, nil, "outside of program", "outside of program")
 		})
 	}
@@ -4341,8 +4355,8 @@ pop
 		"greater than protocol supported version 1", "greater than protocol supported version 1")
 
 	// hack the version and fail on illegal opcode
-	ops.Program[0] = 0x1
-	testLogicBytes(t, ops.Program, defaultSigParamsWithVersion(1, txn),
+	v1Program := setProgramVersion(t, ops.Program, 1)
+	testLogicBytes(t, v1Program, defaultSigParamsWithVersion(1, txn),
 		"illegal opcode 0x36", "illegal opcode 0x36") // txna
 }
 
@@ -4568,12 +4582,12 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			}
 
 			for v := byte(0); v <= 1; v++ {
-				ops.Program[0] = v
-				testLogicBytes(t, ops.Program, sep, "illegal opcode", "illegal opcode")
+				program := setProgramVersion(t, ops.Program, uint64(v))
+				testLogicBytes(t, program, sep, "illegal opcode", "illegal opcode")
 				// let the program run even though minAvmVersion would ban it,
 				// so we can have this sanity check
 				aep.minAvmVersion = uint64(v)
-				testAppBytes(t, ops.Program, aep, "illegal opcode", "illegal opcode")
+				testAppBytes(t, program, aep, "illegal opcode", "illegal opcode")
 			}
 			cnt++
 		}
@@ -4616,12 +4630,12 @@ func TestAllowedOpcodesV3(t *testing.T) {
 			testAppBytes(t, ops.Program, aep, "REJECT")
 
 			for v := byte(0); v <= 2; v++ {
-				ops.Program[0] = v
-				testLogicBytes(t, ops.Program, sep, "illegal opcode", "illegal opcode")
+				program := setProgramVersion(t, ops.Program, uint64(v))
+				testLogicBytes(t, program, sep, "illegal opcode", "illegal opcode")
 				// let the program run even though minAvmVersion would ban it,
 				// so we can have this sanity check
 				aep.minAvmVersion = uint64(v)
-				testAppBytes(t, ops.Program, aep, "illegal opcode", "illegal opcode")
+				testAppBytes(t, program, aep, "illegal opcode", "illegal opcode")
 			}
 			cnt++
 		}
@@ -5306,10 +5320,11 @@ func TestPcDetails(t *testing.T) {
 			require.False(t, pass)
 			require.NotNil(t, cx) // cx comes back nil if we couldn't even run
 
-			assert.Equal(t, test.pc, cx.pc, ep.Trace.String())
+			expectedPC := test.pc + programShiftFromVersionOnlyPrefix(t, ops.Program)
+			assert.Equal(t, expectedPC, cx.pc, ep.Trace.String())
 
 			pc, det := cx.pcDetails()
-			assert.Equal(t, test.pc, pc)
+			assert.Equal(t, expectedPC, pc)
 			assert.Equal(t, test.det, det)
 		})
 	}
