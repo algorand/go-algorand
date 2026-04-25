@@ -34,6 +34,8 @@ import (
 	"strings"
 	"unicode"
 
+	"filippo.io/edwards25519"
+
 	"github.com/algorand/avm-abi/abi"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -268,6 +270,10 @@ type OpStream struct {
 	versionedPseudoOps map[string]map[int]OpSpec
 
 	macros map[string][]token
+
+	salt         []byte
+	saltExplicit bool
+	saltToken    token
 }
 
 // newOpStream constructs OpStream instances ready to invoke assemble. A new
@@ -2033,8 +2039,35 @@ type directiveFunc func(*OpStream, []token) *sourceError
 
 var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
 
-// assemble reads text from an input and accumulates the program
+// assemble reads text from an input and accumulates the program.
 func (ops *OpStream) assemble(text string) error {
+	if err := ops.parseText(text); err != nil {
+		return err
+	}
+	var program []byte
+	var prefixLen int
+	if len(ops.Errors) == 0 {
+		var err *sourceError
+		program, prefixLen, err = ops.finalizeProgramPrefix()
+		if err != nil {
+			ops.record(err)
+		}
+	}
+	if len(ops.Errors) == 1 {
+		return fmt.Errorf("1 error: %w", ops.Errors[0])
+	}
+	if len(ops.Errors) > 1 {
+		return fmt.Errorf("%d errors", len(ops.Errors))
+	}
+
+	ops.adjustOffsetToSource(prefixLen)
+	ops.Program = program
+
+	return nil
+}
+
+// parseText reads text from an input and accumulates the pending program state.
+func (ops *OpStream) parseText(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		err := fmt.Errorf("Can not assemble version %d", ops.Version)
 		ops.record(&sourceError{0, 0, err})
@@ -2138,21 +2171,85 @@ func (ops *OpStream) assemble(text string) error {
 	}
 
 	if ops.Version >= optimizeConstantsEnabledVersion {
-		ops.optimizeIntcBlock()
-		ops.optimizeBytecBlock()
+		if err := ops.optimizeIntcBlock(); err != nil {
+			var se *sourceError
+			if errors.As(err, &se) {
+				ops.record(&sourceError{
+					Line:   se.Line,
+					Column: se.Column,
+					Err:    fmt.Errorf("failed to optimize intcblock: %w", se.Err),
+				})
+			} else {
+				return err
+			}
+			return nil
+		}
+
+		if err := ops.optimizeBytecBlock(); err != nil {
+			var se *sourceError
+			if errors.As(err, &se) {
+				ops.record(&sourceError{
+					Line:   se.Line,
+					Column: se.Column,
+					Err:    fmt.Errorf("failed to optimize bytecblock: %w", se.Err),
+				})
+			} else {
+				return err
+			}
+			return nil
+		}
 	}
 
 	ops.resolveLabels()
-	program := ops.prependCBlocks()
-	if ops.Errors != nil {
-		l := len(ops.Errors)
-		if l == 1 {
-			return fmt.Errorf("1 error: %w", ops.Errors[0])
-		}
-		return fmt.Errorf("%d errors", l)
-	}
-	ops.Program = program
 	return nil
+}
+
+// adjustOffsetToSource shifts recorded bytecode offsets by the final prefix
+// length so source locations still line up after salt/cblocks are prepended.
+func (ops *OpStream) adjustOffsetToSource(prefixLen int) {
+	newOffsetToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+	for o, l := range ops.OffsetToSource {
+		newOffsetToSource[o+prefixLen] = l
+	}
+	ops.OffsetToSource = newOffsetToSource
+}
+
+func saltBytes(counter uint64) []byte {
+	return []byte{byte(counter)}
+}
+
+func programHashIsEdwardsPoint(program []byte) bool {
+	hash := HashProgram(program)
+	_, err := new(edwards25519.Point).SetBytes(hash[:])
+	return err == nil
+}
+
+// finalizeProgramPrefix prefixes the program with salt and cblocks as needed
+// (salt is used to ensure the program hash is off-curve).
+// It returns the new program and the length of the added prefix.
+func (ops *OpStream) finalizeProgramPrefix() ([]byte, int, *sourceError) {
+	if ops.Version < saltPragmaVersion {
+		program, prefixLen := ops.prependSaltAndCBlocks()
+		return program, prefixLen, nil
+	}
+
+	if ops.saltExplicit {
+		program, prefixLen := ops.prependSaltAndCBlocks()
+		if !programHashIsEdwardsPoint(program) {
+			return program, prefixLen, nil
+		}
+		return nil, 0, ops.saltToken.errorf("provided #pragma salt 0x%s still yields an on-curve LogicSig address; choose a different salt or remove the pragma for automatic salt selection", hex.EncodeToString(ops.salt))
+	}
+
+	for saltValue := uint64(0); saltValue <= 255; saltValue++ {
+		ops.salt = saltBytes(saltValue)
+		program, prefixLen := ops.prependSaltAndCBlocks()
+		if !programHashIsEdwardsPoint(program) {
+			return program, prefixLen, nil
+		}
+	}
+	ops.salt = nil
+	return nil, 0, &sourceError{ops.sourceLine, 0, errors.New("could not find an automatic #pragma salt that yields an off-curve LogicSig address")}
 }
 
 // cycle return a slice of strings that constitute a cycle, if one is
@@ -2315,6 +2412,38 @@ func pragma(ops *OpStream, tokens []token) *sourceError {
 			return tokens[2].errorf("version mismatch: assembling v%d with v%d assembler", ver, ops.Version)
 		}
 		// ops.Version is already correct, or needed to be upped.
+		return nil
+	case "salt":
+		if ops.pending.Len() > 0 {
+			return tokens[0].errorf("#pragma salt is only allowed before instructions")
+		}
+		if ops.saltExplicit {
+			return tokens[1].errorf("duplicate #pragma salt")
+		}
+		if len(tokens) < 3 {
+			return tokens[1].errorf("no salt value")
+		}
+		if ops.Version == assemblerNoVersion {
+			return tokens[1].errorf("#pragma salt requires #pragma version first")
+		}
+		if ops.Version < saltPragmaVersion {
+			return tokens[2].errorf("#pragma salt is only supported in v%d+", saltPragmaVersion)
+		}
+
+		salt, consumed, err := parseBinaryArgs(tokens[2:])
+		if err != nil {
+			return tokens[2+consumed].errorf("#pragma salt %w", err)
+		}
+		if len(tokens) != 2+consumed {
+			return tokens[2+consumed].errorf("unexpected extra tokens:%s", reJoin("", tokens[2+consumed:]))
+		}
+		if len(salt) != 1 {
+			return tokens[2].errorf("#pragma salt must be exactly 1 byte")
+		}
+
+		ops.salt = salt
+		ops.saltExplicit = true
+		ops.saltToken = tokens[2]
 		return nil
 	case "typetrack":
 		if len(tokens) < 3 {
@@ -2639,12 +2768,19 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 	return
 }
 
-// prependCBlocks completes the assembly by inserting cblocks if needed.
-func (ops *OpStream) prependCBlocks() []byte {
+// prependSaltAndCBlocks completes the assembly by inserting cblocks if needed.
+func (ops *OpStream) prependSaltAndCBlocks() ([]byte, int) {
 	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
 	vlen := binary.PutUvarint(scratch[:], ops.Version)
 	prebytes.Write(scratch[:vlen])
+	if ops.Version >= saltPragmaVersion {
+		saltByte := byte(0)
+		if len(ops.salt) > 0 {
+			saltByte = ops.salt[0]
+		}
+		prebytes.WriteByte(saltByte)
+	}
 	if len(ops.intc) > 0 && ops.cntIntcBlock == 0 {
 		prebytes.WriteByte(OpsByName[ops.Version]["intcblock"].Opcode)
 		vlen := binary.PutUvarint(scratch[:], uint64(len(ops.intc)))
@@ -2668,25 +2804,9 @@ func (ops *OpStream) prependCBlocks() []byte {
 	pbl := prebytes.Len()
 	outl := ops.pending.Len()
 	out := make([]byte, pbl+outl)
-	pl, err := prebytes.Read(out)
-	if pl != pbl || err != nil {
-		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d prebytes, %d to buffer? %w", pbl, pl, err)})
-		return nil
-	}
-	ol, err := ops.pending.Read(out[pl:])
-	if ol != outl || err != nil {
-		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d program bytes but %d to buffer. %w", outl, ol, err)})
-		return nil
-	}
-
-	// fixup offset to line mapping
-	newOffsetToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
-	for o, l := range ops.OffsetToSource {
-		newOffsetToSource[o+pbl] = l
-	}
-	ops.OffsetToSource = newOffsetToSource
-
-	return out
+	copy(out, prebytes.Bytes())
+	copy(out[pbl:], ops.pending.Bytes())
+	return out, pbl
 }
 
 // record puts an error onto a list for reporting later. The hope is that the
@@ -3097,9 +3217,17 @@ type disInfo struct {
 func disassembleInstrumented(program []byte, labels map[int]string) (text string, ds disInfo, err error) {
 	out := strings.Builder{}
 	dis := disassembleState{program: program, out: &out, pendingLabels: labels}
-	version, vlen := binary.Uvarint(program)
-	if vlen <= 0 {
-		fmt.Fprintf(dis.out, "// invalid version\n")
+	version, pc, salt, err := parseProgramPrefix(program)
+	if err != nil {
+		if err.Error() == "invalid version" || err.Error() == "invalid program (empty)" {
+			fmt.Fprintf(dis.out, "// invalid version\n")
+			err = nil
+		} else if version > LogicVersion {
+			// we prefer reporting unsupported version vs. other errors since future versions
+			// might change prefix rules
+			fmt.Fprintf(dis.out, "// unsupported version %d\n", version)
+			err = nil
+		}
 		text = out.String()
 		return
 	}
@@ -3109,7 +3237,10 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 		return
 	}
 	fmt.Fprintf(dis.out, "#pragma version %d\n", version)
-	dis.pc = vlen
+	if salt != nil {
+		fmt.Fprintf(dis.out, "#pragma salt 0x%x\n", salt)
+	}
+	dis.pc = pc
 	for dis.pc < len(program) {
 		err = dis.outputLabelIfNeeded()
 		if err != nil {

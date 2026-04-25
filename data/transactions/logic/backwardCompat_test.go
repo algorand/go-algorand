@@ -315,7 +315,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	testLogicBytes(t, opsV2.Program, optSigParams(maxCost(2308), stxn))
 
 	// ensure v0 program runs well on latest evaluator
-	program[0] = 0
+	program = setProgramVersion(t, program, 0)
 	sig = c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
 		Data:        data[:],
@@ -329,7 +329,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 
 	// But in v4, cost is now dynamic and exactly 1 less than v2/v3,
 	// because bnz skips "err". It's caught during Eval
-	program[0] = 4
+	program = setProgramVersion(t, program, 4)
 	testLogicBytes(t, program, optSigParams(maxCost(2306), stxn), "dynamic cost")
 	testLogicBytes(t, program, optSigParams(maxCost(2307), stxn))
 }
@@ -366,12 +366,12 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		require.ErrorContains(t, err, "greater than protocol supported version")
 
 		// check opcodes failures
-		ep.TxnGroup[0].Lsig.Logic[0] = 1 // set version to 1
+		ep.TxnGroup[0].Lsig.Logic = setProgramVersion(t, ep.TxnGroup[0].Lsig.Logic, 1)
 		_, err = EvalSignature(0, ep)
 		require.ErrorContains(t, err, "invalid global field")
 
 		// check opcodes failures
-		ep.TxnGroup[0].Lsig.Logic[0] = 0 // set version to 0
+		ep.TxnGroup[0].Lsig.Logic = setProgramVersion(t, ep.TxnGroup[0].Lsig.Logic, 0)
 		_, err = EvalSignature(0, ep)
 		require.ErrorContains(t, err, "invalid global field")
 	}
@@ -428,12 +428,12 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			require.ErrorContains(t, err, "greater than protocol supported version")
 
 			// check opcodes failures
-			ops.Program[0] = 1 // set version to 1
+			ep.TxnGroup[0].Lsig.Logic = setProgramVersion(t, ops.Program, 1)
 			_, err = EvalSignature(0, ep)
 			require.ErrorContains(t, err, "invalid txn field")
 
 			// check opcodes failures
-			ops.Program[0] = 0 // set version to 0
+			ep.TxnGroup[0].Lsig.Logic = setProgramVersion(t, ep.TxnGroup[0].Lsig.Logic, 0)
 			_, err = EvalSignature(0, ep)
 			require.ErrorContains(t, err, "invalid txn field")
 		}

@@ -935,6 +935,8 @@ byte 0x01020300; store 15		// store a bytes
 
 int 100; byte 0x0201; == // types mismatch so this will fail
 `)
+	badProgram := testProg(t, badsource, LogicVersion)
+	badPC := 26 + programShiftFromVersionOnlyPrefix(t, badProgram.Program)
 	_, err := testApp(t, badsource, nil, "cannot compare")
 	attrs := basics.Attributes(err)
 	zeros := [256]int{}
@@ -942,7 +944,7 @@ int 100; byte 0x0201; == // types mismatch so this will fail
 	scratch[10] = uint64(5)
 	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
 	require.Equal(t, map[string]any{
-		"pc":          26,
+		"pc":          badPC,
 		"group-index": 0,
 		"app-index":   basics.AppIndex(888),
 		"eval-states": []evalState{
@@ -969,7 +971,7 @@ int 1
 	_, err = testApps(t, []string{goodsource, badsource}, nil, nil, nil, exp(1, "cannot compare"))
 	attrs = basics.Attributes(err)
 	require.Equal(t, map[string]any{
-		"pc":          26,
+		"pc":          badPC,
 		"group-index": 1,
 		"app-index":   basics.AppIndex(888),
 		"eval-states": []evalState{
@@ -1003,10 +1005,12 @@ itxn_field ClearStateProgram
 
 itxn_submit
 `
+	innerFailProgram := testProg(t, innerFailSource, LogicVersion)
+	innerFailPC := 45 + programShiftFromVersionOnlyPrefix(t, innerFailProgram.Program)
 	_, err = testApps(t, []string{goodsource, innerFailSource}, nil, nil, ledger, exp(1, "inner tx 0 failed"))
 	attrs = basics.Attributes(err)
 	require.Equal(t, map[string]any{
-		"pc":          45,
+		"pc":          innerFailPC,
 		"group-index": 1,
 		"app-index":   basics.AppIndex(888),
 		"eval-states": []evalState{
@@ -1367,8 +1371,9 @@ intc_0 // 0
 		}
 		// check asset_holding_get with invalid field number
 		ops := testProg(t, source, version)
-		require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
-		ops.Program[9] = 0x02
+		prefixLen := programPrefixLen(t, ops.Program)
+		require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[prefixLen+7])
+		ops.Program[prefixLen+8] = 0x02
 		_, err := EvalApp(ops.Program, 0, 888, now)
 		require.ErrorContains(t, err, "invalid asset_holding_get field 2")
 
@@ -1384,8 +1389,9 @@ intc_1
 		testApp(t, source, now)
 		// check asset_params_get with invalid field number
 		ops = testProg(t, source, version)
-		require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
-		ops.Program[7] = 0x20
+		prefixLen = programPrefixLen(t, ops.Program)
+		require.Equal(t, OpsByName[now.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[prefixLen+5])
+		ops.Program[prefixLen+6] = 0x20
 		_, err = EvalApp(ops.Program, 0, 888, now)
 		require.ErrorContains(t, err, "invalid asset_params_get field 32")
 
@@ -3622,7 +3628,7 @@ func TestLog(t *testing.T) {
 		{
 			source:         `load 0; log`,
 			errContains:    "log arg 0 wanted []byte but got uint64",
-			assembledBytes: []byte{byte(ep.Proto.LogicSigVersion), 0x34, 0x00, 0xb0},
+			assembledBytes: buildProgramWithVersionAndSalt(ep.Proto.LogicSigVersion, nil, []byte{0x34, 0x00, 0xb0}),
 		},
 	}
 
@@ -3780,7 +3786,7 @@ func TestPooledAppCallsVerifyOp(t *testing.T) {
 	call := transactions.SignedTxn{Txn: transactions.Transaction{Type: protocol.ApplicationCallTx}}
 	// Simulate test with 2 grouped txn
 	testApps(t, []string{source, ""}, []transactions.SignedTxn{call, call}, nil, ledger,
-		exp(0, "pc=107 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
+		exp(0, "pc=108 dynamic cost budget exceeded, executing ed25519verify: local program cost was 5"))
 
 	// Simulate test with 3 grouped txn
 	testApps(t, []string{source, "", ""}, []transactions.SignedTxn{call, call, call}, nil, ledger)
