@@ -269,3 +269,10 @@ func TestRandomizeObjectWithPtrField(t *testing.T) {
 	require.True(t, sawNonZeroU16, "RandomizeObject made all zeroes for testObjB.U16")
 	require.True(t, sawNonZeroU64, "RandomizeObject made all zeroes for testObjA.U64")
 }
+
+func TestCheckMsgpAllocBoundDirectiveCrossPackage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.True(t, hasMsgpAllocBoundDirective("github.com/algorand/go-algorand/protocol/test", "testSlice"))
+}
