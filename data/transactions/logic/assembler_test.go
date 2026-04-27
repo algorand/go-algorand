@@ -3632,7 +3632,7 @@ int 1
 	testProg(t, source, AssemblerMaxVersion)
 
 	var labels []string
-	for i := 0; i < 255; i++ {
+	for i := range 255 {
 		labels = append(labels, fmt.Sprintf("label%d", i))
 	}
 
@@ -3666,6 +3666,25 @@ int 1
 	label1:
 	`
 	testProg(t, source, AssemblerMaxVersion)
+
+	// allow empty match
+	source = `
+	pushints 1
+	match
+	`
+	testProg(t, source, AssemblerMaxVersion)
+
+	// allow empty match (ensure types track properly though)
+	source = `
+	pushbytess 0xaa 0xbb
+	pushint 1
+	match
+	concat
+	`
+	testProg(t, source, AssemblerMaxVersion)
+
+	// even an empty match consumes top of stack
+	testProg(t, "match", AssemblerMaxVersion, exp(1, "match expects 1 stack argument..."))
 }
 
 func TestAssemblePushConsts(t *testing.T) {

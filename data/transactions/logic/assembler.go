@@ -1617,17 +1617,9 @@ func typeByte(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, erro
 }
 
 func typeMatch(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
-	targetCount := len(args)
-	if targetCount == 0 {
-		return nil, nil, nil
-	}
-	top := len(pgm.stack) - 1
-	if top < 0 {
-		return nil, nil, nil
-	}
 	// I'd sort of like to use `sameTypes` with the top type, but it is legal to
 	// mix types.
-	return anyTypes(targetCount + 1), nil, nil
+	return anyTypes(len(args) + 1), nil, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
