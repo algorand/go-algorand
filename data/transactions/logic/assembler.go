@@ -1234,12 +1234,16 @@ func getImm(args []token, argIndex int, signed bool) (int, bool) {
 	return int(n), true
 }
 
-func anyTypes(n int) StackTypes {
+func sameTypes(n int, t StackType) StackTypes {
 	as := make(StackTypes, n)
 	for i := range as {
-		as[i] = StackAny
+		as[i] = t
 	}
 	return as
+}
+
+func anyTypes(n int) StackTypes {
+	return sameTypes(n, StackAny)
 }
 
 func typeSwap(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
@@ -1610,6 +1614,12 @@ func typeByte(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, erro
 	val, _, _ := parseBinaryArgs(args)
 	l := uint64(len(val))
 	return nil, StackTypes{NewStackType(avmBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
+}
+
+func typeMatch(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	// I'd sort of like to use `sameTypes` with the top type, but it is legal to
+	// mix types.
+	return anyTypes(len(args) + 1), nil, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
