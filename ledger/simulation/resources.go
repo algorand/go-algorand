@@ -656,7 +656,7 @@ func (a *groupResourceTracker) addAppReadBudget(aid basics.AppIndex, ep *logic.E
 }
 
 func largeAppReadBudget(proto *config.ConsensusParams, params basics.AppParams) uint64 {
-	basicAppProgramLimit := proto.MaxAppProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	basicAppProgramLimit := proto.MaxAppTotalProgramLen * (1 + proto.MaxExtraAppProgramPages)
 	programSize := len(params.ApprovalProgram) + len(params.ClearStateProgram)
 	if programSize <= basicAppProgramLimit {
 		return 0

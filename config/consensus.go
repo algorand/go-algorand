@@ -769,7 +769,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
 	checkSetMax(p.MaxAppKeyLen, &bounds.MaxBytesKeyValueLen)
 	checkSetMax(p.MaxAppBytesValueLen, &bounds.MaxBytesKeyValueLen)
-	checkSetMax(p.MaxExtraAppProgramPages, &bounds.MaxExtraAppProgramLen)
+	checkSetMax(p.MaxAbsoluteExtraProgramPages, &bounds.MaxExtraAppProgramLen)
 	// MaxAvailableAppProgramLen is the max of supported app program size
 	bounds.MaxAvailableAppProgramLen = bounds.MaxAppProgramLen * (1 + bounds.MaxExtraAppProgramLen)
 	// There is no consensus parameter for MaxLogCalls and MaxAppProgramLen as an approximation

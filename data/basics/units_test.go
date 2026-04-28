@@ -387,11 +387,23 @@ func TestMulMicrosCeil(t *testing.T) {
 
 	r, o := MicroAlgos{Raw: 1000}.MulMicrosCeil(Micros(1e6 + 1000))
 	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 1001}, r) // 1000.001 rounds up
+	require.Equal(t, MicroAlgos{Raw: 1001}, r) // 1000 * 1.001 is _exactly_ 1001 microalgos
 
-	r, o = MicroAlgos{Raw: 1000}.MulMicrosCeil(Micros(2e6))
+	r, o = MicroAlgos{Raw: 1000}.MulMicrosCeil(Micros(1e6 + 1001))
 	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 2000}, r) // already integral
+	require.Equal(t, MicroAlgos{Raw: 1002}, r) // 1000 * 1.001001 rounds up to 1002 microalgos
+
+	r, o = MicroAlgos{Raw: 0}.MulMicrosCeil(Micros(1e6 + 1001))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 0}, r)
+
+	r, o = MicroAlgos{Raw: 1e6}.MulMicrosCeil(0)
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 0}, r)
+
+	r, o = MicroAlgos{Raw: math.MaxUint64 - 10}.MulMicrosCeil(1e6 + 15)
+	require.True(t, o)
+	require.Equal(t, MicroAlgos{Raw: math.MaxUint64}, r)
 }
 
 func TestMul2MicrosCeil(t *testing.T) {
@@ -400,9 +412,48 @@ func TestMul2MicrosCeil(t *testing.T) {
 
 	r, o := MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1000), Micros(1e6))
 	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 1001}, r) // 1000.001 rounds up
+	require.Equal(t, MicroAlgos{Raw: 1001}, r) // 1001 exactly
 
-	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(2e6), Micros(3e6))
+	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1001), Micros(1e6))
 	require.False(t, o)
-	require.Equal(t, MicroAlgos{Raw: 6000}, r) // already integral
+	require.Equal(t, MicroAlgos{Raw: 1002}, r) // 1001.001 rounds up
+
+	// Double the last factor, but notice we don't get double the previous
+	// result because we carry out the two multiplies with enough precision to
+	// allow us to round up only once.
+	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1001), Micros(2e6))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 2003}, r) // 2002.002
+
+	// ZEROS
+	r, o = MicroAlgos{Raw: 0}.Mul2MicrosCeil(Micros(1e6+1001), Micros(1e6))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 0}, r)
+
+	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(0), Micros(1e6))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 0}, r)
+
+	r, o = MicroAlgos{Raw: 1000}.Mul2MicrosCeil(Micros(1e6+1001), Micros(0))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: 0}, r)
+
+	// Overflow - we end up dividing by 1e12 in Mul2MicrosCeil, if we multiply
+	// two MaxUint32s, we are _very_ close to MaxUint64, so a third multiplicand
+	// that's a bit over 1e12, will round up and overflow. Exactly 1e12 won't.
+	r, o = MicroAlgos{Raw: math.MaxUint32}.Mul2MicrosCeil(Micros(math.MaxUint32), Micros(1e12))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: math.MaxUint32 * math.MaxUint32}, r)
+
+	// same, rearranged
+	r, o = MicroAlgos{Raw: 1e12}.Mul2MicrosCeil(Micros(math.MaxUint32), Micros(math.MaxUint32))
+	require.False(t, o)
+	require.Equal(t, MicroAlgos{Raw: math.MaxUint32 * math.MaxUint32}, r)
+
+	// now overflow
+	r, o = MicroAlgos{Raw: math.MaxUint32}.Mul2MicrosCeil(Micros(math.MaxUint32), Micros(1.00000001e12))
+	require.True(t, o)
+	require.Equal(t, MicroAlgos{Raw: math.MaxUint64}, r)
+
+	t.Fail()
 }

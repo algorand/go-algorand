@@ -215,7 +215,7 @@ func (header Header) FeeContribution(proto config.ConsensusParams) basics.Micros
 	var cost basics.Micros
 	// Add extra cost for Note bytes beyond standard size.
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(len(header.Note) - proto.MaxTxnNoteBytes)
-	cost += surcharge
+	cost = basics.AddSaturate(cost, surcharge)
 	return cost
 }
 

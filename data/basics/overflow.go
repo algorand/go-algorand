@@ -202,13 +202,15 @@ func Mul2div[A ~uint64, B ~uint64, C ~uint64](a A, b B, c C, d uint64) (A, A, bo
 	X, Y := bits.Mul64(uint64(a), uint64(b))
 	J, K := bits.Mul64(Y, uint64(c))
 	L, M := bits.Mul64(X, uint64(c))
-	if L > 0 {
+	if L > 0 { // L is the third "digit", no divisor will get us down to one "digit"
 		return math.MaxUint64, 0, true
 	}
 
 	JplusM := AddSaturate(J, M) // "J" + "M"
+
 	// This test ensures the division won't overflow AND that there's no carry
-	// into the "L" part (since `JplusM` is MaxUint64 in that case)
+	// into the "L" part (since `JplusM` is MaxUint64 in that case). Dividing by
+	// d can't get us down to one "digit".
 	if d <= JplusM {
 		return math.MaxUint64, 0, true
 	}

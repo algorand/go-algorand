@@ -606,7 +606,7 @@ func (ac ApplicationCallTxnFields) feeContribution(proto config.ConsensusParams)
 	totalProgramBytes := len(ac.ApprovalProgram) + len(ac.ClearStateProgram)
 	standardLimit := (1 + proto.MaxExtraAppProgramPages) * proto.MaxAppTotalProgramLen
 	surcharge, _ := proto.PerByteTxnSurcharge.MulInt(totalProgramBytes - standardLimit)
-	cost += surcharge
+	cost = basics.AddSaturate(cost, surcharge)
 
 	// Add extra cost for app args bytes beyond standard size.
 	var totalArgBytes int
@@ -614,7 +614,7 @@ func (ac ApplicationCallTxnFields) feeContribution(proto config.ConsensusParams)
 		totalArgBytes += len(arg)
 	}
 	surcharge, _ = proto.PerByteTxnSurcharge.MulInt(totalArgBytes - proto.MaxAppTotalArgLen)
-	cost += surcharge
+	cost = basics.AddSaturate(cost, surcharge)
 
 	return cost
 }
