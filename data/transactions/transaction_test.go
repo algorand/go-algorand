@@ -443,7 +443,7 @@ func TestWellFormed_BigNotes(t *testing.T) {
 			shouldError: true,
 			errorMsg:    "transaction note too big: 2048 > 1024",
 		},
-		// vFuture: MaxAbsoluteTxnNoteBytes = 16384, allows larger notes
+		// vFuture: MaxAbsoluteTxnNoteBytes = 4096, allows larger notes
 		{
 			name:        "vFuture: note at standard limit (1024 bytes) - pass",
 			proto:       vFuture,

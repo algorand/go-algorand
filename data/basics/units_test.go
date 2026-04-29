@@ -454,6 +454,4 @@ func TestMul2MicrosCeil(t *testing.T) {
 	r, o = MicroAlgos{Raw: math.MaxUint32}.Mul2MicrosCeil(Micros(math.MaxUint32), Micros(1.00000001e12))
 	require.True(t, o)
 	require.Equal(t, MicroAlgos{Raw: math.MaxUint64}, r)
-
-	t.Fail()
 }

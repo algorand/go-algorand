@@ -61,7 +61,7 @@ type ConsensusParams struct {
 	// in a block must not exceed MaxTxnBytesPerBlock.
 	MaxTxnBytesPerBlock int
 
-	// MaxTxnBytesPerBlock is the maximum size of a transaction's Note field in
+	// MaxTxnNoteBytes is the maximum size of a transaction's Note field in
 	// a "basic transaction".  Larger notes require extra fees.
 	MaxTxnNoteBytes int
 

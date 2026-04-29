@@ -364,8 +364,11 @@ type EvalParams struct {
 	// availability across all txns in the group.
 	available *resources
 
-	// ioBudget is the number of bytes that the box ref'd boxes can sum to, and
-	// the number of bytes that created or written boxes may sum to.
+	// ioBudget is the number of bytes of "extra" read and write I/O the app may
+	// do.  All referenced boxes plus the size of referenced apps beyond 8k,
+	// must be less than ioBudget.  Further, all writes to boxes and the size of
+	// any written apps (beyond 8k) must stay under ioBudget throughout
+	// execution.
 	ioBudget uint64
 
 	// readBudgetChecked allows us to only check the read budget once
