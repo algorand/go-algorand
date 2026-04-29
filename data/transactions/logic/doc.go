@@ -45,12 +45,14 @@ var opDescByName = map[string]OpDesc{
 
 	"mimc": {"MiMC hash of scalars A, using curve and parameters specified by configuration C", "" +
 		"A is a list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.\n\n" +
-		"The MiMC hash function has known collisions since any input which is a multiple of the elliptic curve modulus will hash to the same value. " +
+		"MiMC hashes field elements, not arbitrary byte strings; reducing external inputs modulo the curve modulus makes congruent inputs hash identically. " +
 		"MiMC is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.",
 		[]string{"configuration index"}, "",
 	},
 	"poseidon2": {"Poseidon2 hash of scalars A, using curve and parameters specified by configuration C", "" +
-		"A is a list of concatenated 32 byte big-endian unsigned integer scalars. Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.",
+		"A is a list of concatenated 32 byte big-endian unsigned integer scalars. Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.\n\n" +
+		"Poseidon2 hashes field elements, not arbitrary byte strings; reducing external inputs modulo the curve modulus makes congruent inputs hash identically. " +
+		"Poseidon2 is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.",
 		[]string{"configuration index"}, "",
 	},
 
