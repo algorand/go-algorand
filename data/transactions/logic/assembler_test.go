@@ -2216,6 +2216,51 @@ label1:
 	}
 }
 
+// TestDisassembleDeadSubroutine checks that a subroutine never targeted by a
+// callsub (deadcode) is assigned a label during disassembly so the output can
+// be validly reassembled.  Without the fix, proto appears without a label and
+// typeProto rejects it when reassembling ("proto must be unreachable from
+// previous PC").
+//
+// The program uses `b` (not `callsub`) to jump over the dead subroutine. This
+// is important because `callsub` calls label() which sets bottom to StackAny,
+// masking the bug.  With `b`, bottom stays at its initial avmNone value, so
+// typeProto's "unreachable from previous PC" check correctly fires when the
+// dead proto lacks a label.
+func TestDisassembleDeadSubroutine(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for v := uint64(fpVersion); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			source := fmt.Sprintf(`#pragma version %d
+b main
+
+dead_sub:
+proto 2 1
+frame_dig -2
+frame_dig -1
++
+retsub
+
+main:
+int 1
+`, v)
+			ops, err := AssembleStringWithVersion(source, v)
+			require.NoError(t, err)
+
+			dis, err := Disassemble(ops.Program)
+			require.NoError(t, err)
+
+			// The disassembly must contain a label before the dead proto.
+			// Reassembling the disassembly must produce identical bytecode.
+			ops2, err := AssembleStringWithVersion(dis, v)
+			require.NoError(t, err, "disassembly of program with dead subroutine could not be reassembled:\n%s", dis)
+			require.Equal(t, ops.Program, ops2.Program)
+		})
+	}
+}
+
 // TestDisassembleBytecblock asserts correct disassembly for
 // uses of bytecblock and intcblock, from examples in #6154
 func TestDisassembleBytecblock(t *testing.T) {
@@ -3632,34 +3677,59 @@ int 1
 	testProg(t, source, AssemblerMaxVersion)
 
 	var labels []string
-	for i := 0; i < 255; i++ {
+	for i := range 255 {
 		labels = append(labels, fmt.Sprintf("label%d", i))
 	}
 
 	// test that 255 labels is ok
 	source = fmt.Sprintf(`
-	pushint 1
+	%s
 	match %s
 	%s
-	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	`,
+		strings.Repeat("pushint 1; ", 256), // 255 labels, and the match value
+		strings.Join(labels, " "),
+		strings.Join(labels, ":\n")+":\n")
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Len(t, ops.Program, 515) // ver (1) + pushint (2) + opcode (1) + length (1) + labels (2*255)
+	require.Len(t, ops.Program, 1025) // ver (1) + pushints (2*256) + opcode (1) + length (1) + labels (2*255)
 
 	// 256 is too many
 	source = fmt.Sprintf(`
-	pushint 1
+	%s
 	match %s extra
 	%s
-	`, strings.Join(labels, " "), strings.Join(labels, ":\n")+":\n")
+	`,
+		strings.Repeat("pushint 1; ", 257), // 256 labels, and the match value
+		strings.Join(labels, " "),
+		strings.Join(labels, ":\n")+":\n")
 	testProg(t, source, AssemblerMaxVersion, exp(3, "match cannot take more than 255 labels"))
 
 	// allow duplicate label reference
 	source = `
-	pushint 1
+	pushints 1 2 1
 	match label1 label1
 	label1:
 	`
 	testProg(t, source, AssemblerMaxVersion)
+
+	// allow empty match
+	source = `
+	pushints 1
+	match
+	`
+	testProg(t, source, AssemblerMaxVersion)
+
+	// allow empty match (ensure types track properly though)
+	source = `
+	pushbytess 0xaa 0xbb
+	pushint 1
+	match
+	concat
+	`
+	testProg(t, source, AssemblerMaxVersion)
+
+	// even an empty match consumes top of stack
+	testProg(t, "match", AssemblerMaxVersion, exp(1, "match expects 1 stack argument..."))
 }
 
 func TestAssemblePushConsts(t *testing.T) {
@@ -3895,4 +3965,22 @@ func TestDisassembleBadMatch(t *testing.T) {
 
 	dis, err = Disassemble(ops.Program[:len(ops.Program)-1])
 	require.ErrorContains(t, err, "could not decode labels for match", dis)
+}
+
+// TestMatchTyping ensures the stack types are tracked properly across `match`
+func TestMatchTyping(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+    pushint 0                   // I
+    pushbytes 0xb17ea35d        // I,B
+    txna ApplicationArgs 0      // I,B,B
+    match done					// I
+    dup               // I, I
+    !                 // I, I
+    return
+done:
+	`
+	testProg(t, source, AssemblerMaxVersion)
 }

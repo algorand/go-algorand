@@ -1234,12 +1234,16 @@ func getImm(args []token, argIndex int, signed bool) (int, bool) {
 	return int(n), true
 }
 
-func anyTypes(n int) StackTypes {
+func sameTypes(n int, t StackType) StackTypes {
 	as := make(StackTypes, n)
 	for i := range as {
-		as[i] = StackAny
+		as[i] = t
 	}
 	return as
+}
+
+func anyTypes(n int) StackTypes {
+	return sameTypes(n, StackAny)
 }
 
 func typeSwap(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
@@ -1610,6 +1614,12 @@ func typeByte(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, erro
 	val, _, _ := parseBinaryArgs(args)
 	l := uint64(len(val))
 	return nil, StackTypes{NewStackType(avmBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
+}
+
+func typeMatch(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	// I'd sort of like to use `sameTypes` with the top type, but it is legal to
+	// mix types.
+	return anyTypes(len(args) + 1), nil, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
@@ -3127,6 +3137,19 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			text = out.String()
 			err = errors.New(msg)
 			return
+		}
+
+		// proto marks a subroutine entry point and must always have a label so
+		// that the disassembly can be validly reassembled. If we encounter a
+		// proto without a pending label (e.g. a subroutine that is never
+		// targeted by a callsub), create one now and trigger a rerun so the
+		// label appears before the opcode in the output.
+		if op.Name == "proto" {
+			if _, hasLabel := dis.pendingLabels[dis.pc]; !hasLabel {
+				dis.labelCount++
+				label := fmt.Sprintf("label%d", dis.labelCount)
+				dis.putLabel(label, dis.pc) // sets rerun=true since target <= pc
+			}
 		}
 
 		// ds.pcOffset tracks where in the output each opcode maps to assembly
