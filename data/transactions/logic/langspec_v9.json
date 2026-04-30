@@ -3131,6 +3131,9 @@
     {
       "Opcode": 142,
       "Name": "match",
+      "Args": [
+        "any"
+      ],
       "Size": 0,
       "DocCost": "1",
       "Doc": "given match cases from A[1] to A[N], branch to the Ith label where A[I] = B. Continue to the following instruction if no matches are found.",
