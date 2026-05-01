@@ -78,6 +78,8 @@ const spliceVersion = 10  // box splicing/resizing
 const incentiveVersion = 11 // block fields, heartbeat
 const mimcVersion = 11
 
+const varintBranchVersion = 13 // branch offsets encoded as binary.Varint instead of big-endian int16
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
@@ -203,11 +205,21 @@ func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDeta
 	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
 }
 
-func detBranch() OpDetails {
+// detBranch2B describes a branch that always has a two-byte branch offset
+func detBranch2B() OpDetails {
 	d := detDefault()
-	d.asm = asmBranch
+	d.asm = asmBranch2B
 	d.check = checkBranch
 	d.Size = 3
+	d.Immediates = []immediate{imm("target", immLabel)}
+	return d
+}
+
+func detBranchVarint() OpDetails {
+	d := detDefault()
+	d.asm = asmBranchVarint
+	d.check = checkBranchVarint
+	d.Size = 0 // dynamic; op and check always set nextpc
 	d.Immediates = []immediate{imm("target", immLabel)}
 	return d
 }
@@ -584,9 +596,13 @@ var OpSpecs = []OpSpec{
 	{0x3e, "loads", opLoads, proto("i:a"), 5, typed(typeLoads)},
 	{0x3f, "stores", opStores, proto("ia:"), 5, typed(typeStores)},
 
-	{0x40, "bnz", opBnz, proto("i:"), 1, detBranch()},
-	{0x41, "bz", opBz, proto("i:"), 2, detBranch()},
-	{0x42, "b", opB, proto(":"), 2, detBranch()},
+	{0x40, "bnz", opBnz2B, proto("i:"), 1, detBranch2B()},
+	{0x41, "bz", opBz2B, proto("i:"), 2, detBranch2B()},
+	{0x42, "b", opB2B, proto(":"), 2, detBranch2B()},
+	// varint-encoded branch offsets (binary.Varint / zigzag+ULEB128), introduced in v13
+	{0x40, "bnz", opBnz, proto("i:"), varintBranchVersion, detBranchVarint()},
+	{0x41, "bz", opBz, proto("i:"), varintBranchVersion, detBranchVarint()},
+	{0x42, "b", opB, proto(":"), varintBranchVersion, detBranchVarint()},
 	{0x43, "return", opReturn, proto("i:x").stackExplain(opReturnStackChange), 2, detDefault()},
 	{0x44, "assert", opAssert, proto("i:"), 3, detDefault()},
 	{0x45, "bury", opBury, proto("a:").stackExplain(opBuryStackChange), fpVersion, immediates("n").typed(typeBury)},
@@ -658,7 +674,8 @@ var OpSpecs = []OpSpec{
 	{0x87, "sha512", opSHA512, proto("b:b{64}"), 13, costByLength(15, 32, 2, 0)},
 
 	// "Function oriented"
-	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
+	{0x88, "callsub", opCallSub2B, proto(":"), 4, detBranch2B()},
+	{0x88, "callsub", opCallSub, proto(":"), varintBranchVersion, detBranchVarint()},
 	{0x89, "retsub", opRetSub, proto(":").stackExplain(opRetSubStackChange), 4, detDefault().trust()},
 	// protoByte is a named constant because opCallSub needs to know it.
 	{protoByte, "proto", opProto, proto(":"), fpVersion, immediates("a", "r").typed(typeProto)},
