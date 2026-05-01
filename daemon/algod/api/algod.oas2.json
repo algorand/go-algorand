@@ -3771,6 +3771,16 @@
           "description": "Total budget consumed during execution of app calls in the transaction group.",
           "type": "integer"
         },
+        "group-fees-paid": {
+          "description": "Total fees paid by the transaction group and all of its descendant inner transaction groups.",
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
+        "group-usage": {
+          "description": "Total fee usage of the transaction group and all of its descendant inner transaction groups, in millionths of a basic transaction fee unit (Micros).",
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
         }
@@ -3788,9 +3798,19 @@
           "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
           "type": "integer"
         },
+        "fees-paid": {
+          "description": "Total fees paid by this transaction and all of its descendant inner transactions.",
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
         "logic-sig-budget-consumed": {
           "description": "Budget used during execution of a logic sig transaction.",
           "type": "integer"
+        },
+        "usage": {
+          "description": "Total fee usage of this transaction and all of its descendant inner transactions, in millionths of a basic transaction fee unit (Micros).",
+          "type": "integer",
+          "x-go-type": "uint64"
         },
         "exec-trace": {
           "$ref": "#/definitions/SimulationTransactionExecTrace"
@@ -4799,6 +4819,16 @@
             "type": "integer",
             "x-go-type": "basics.Round"
           },
+          "total-fees-paid": {
+            "description": "Total fees paid across all top-level transaction groups and their descendants.",
+            "type": "integer",
+            "x-go-type": "uint64"
+          },
+        "total-usage": {
+          "description": "Total fee usage across all top-level transaction groups and their descendants, in millionths of a basic transaction fee unit (Micros).",
+          "type": "integer",
+          "x-go-type": "uint64"
+        },
           "txn-groups": {
             "description": "A result object for each transaction group that was simulated.",
             "type": "array",

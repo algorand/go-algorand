@@ -479,6 +479,8 @@ func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResul
 		Txn:                      ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
+		Usage:                    omitEmpty(uint64(txnResult.Usage)),
+		FeesPaid:                 omitEmpty(txnResult.FeesPaid.Raw),
 		TransactionTrace:         convertTxnTrace(txnResult.Trace),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
 	}
@@ -575,6 +577,8 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		FailureMessage:           omitEmpty(txnGroupResult.FailureMessage),
 		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
 		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
+		GroupUsage:               omitEmpty(uint64(txnGroupResult.GroupUsage)),
+		GroupFeesPaid:            omitEmpty(txnGroupResult.GroupFeesPaid.Raw),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 
@@ -603,6 +607,8 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		Version:         result.Version,
 		LastRound:       result.LastRound,
 		TxnGroups:       util.Map(result.TxnGroups, convertTxnGroupResult),
+		TotalUsage:      omitEmpty(uint64(result.TotalUsage)),
+		TotalFeesPaid:   omitEmpty(result.TotalFeesPaid.Raw),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,
 		InitialStates:   convertSimulateInitialStates(result.InitialStates),

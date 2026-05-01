@@ -192,17 +192,28 @@ func TestSimulateTransaction(t *testing.T) {
 	a.LessOrEqual(result.LastRound, currentAfterAfterSimulate)
 
 	closingAmount := senderBalance - txn.Fee.Raw - txn.Amount.Raw
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.Txn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:   2,
-		LastRound: result.LastRound, // checked above
+		Version:       2,
+		LastRound:     result.LastRound, // checked above
+		TotalUsage:    &usage,
+		TotalFeesPaid: &feesPaid,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn:           stxn,
 							ClosingAmount: &closingAmount,
 						},
+						Usage:    &usage,
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -400,16 +411,27 @@ func TestSimulateWithOptionalSignatures(t *testing.T) {
 	a.NoError(err)
 
 	allowEmptySignatures := true
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(txn.FeeFactor(proto))
+	feesPaid := txn.Fee.Raw
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:   2,
-		LastRound: result.LastRound,
+		Version:       2,
+		LastRound:     result.LastRound,
+		TotalUsage:    &usage,
+		TotalFeesPaid: &feesPaid,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn: transactions.SignedTxn{Txn: txn},
 						},
+						Usage:    &usage,
+						FeesPaid: &feesPaid,
 					},
 				},
 			},
@@ -525,16 +547,25 @@ int 1`
 
 	budgetAdded, budgetUsed := 700, 40
 	maxLogSize, maxLogCalls := 65536, 2048
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(appCallTxnSigned.Txn.FeeFactor(proto))
+	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:   2,
-		LastRound: resp.LastRound,
+		Version:       2,
+		LastRound:     resp.LastRound,
+		TotalUsage:    &usage,
+		TotalFeesPaid: &feesPaid,
 		EvalOverrides: &model.SimulationEvalOverrides{
 			MaxLogSize:  &maxLogSize,
 			MaxLogCalls: &maxLogCalls,
 		},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
@@ -542,6 +573,8 @@ int 1`
 							Logs: &logs,
 						},
 						AppBudgetConsumed: &budgetUsed,
+						Usage:             &usage,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:    &budgetAdded,
@@ -646,17 +679,28 @@ int 1`
 	a.NoError(err)
 
 	budgetAdded, budgetUsed := 1404, 1404
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(appCallTxnSigned.Txn.FeeFactor(proto))
+	feesPaid := appCallTxnSigned.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
 		Version:       2,
 		LastRound:     resp.LastRound,
+		TotalUsage:    &usage,
+		TotalFeesPaid: &feesPaid,
 		EvalOverrides: &model.SimulationEvalOverrides{ExtraOpcodeBudget: &extraBudget},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: appCallTxnSigned},
 						AppBudgetConsumed: &budgetUsed,
+						Usage:             &usage,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:    &budgetAdded,
@@ -2669,19 +2713,30 @@ int 1
 
 	budgetAdded, budgetUsed := 700, 40
 	allowUnnamedResources := true
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	usage := uint64(stxn.Txn.FeeFactor(proto))
+	feesPaid := stxn.Txn.Fee.Raw
 
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:   2,
-		LastRound: resp.LastRound,
+		Version:       2,
+		LastRound:     resp.LastRound,
+		TotalUsage:    &usage,
+		TotalFeesPaid: &feesPaid,
 		EvalOverrides: &model.SimulationEvalOverrides{
 			AllowUnnamedResources: &allowUnnamedResources,
 		},
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &usage,
+				GroupFeesPaid: &feesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: stxn},
 						AppBudgetConsumed: &budgetUsed,
+						Usage:             &usage,
+						FeesPaid:          &feesPaid,
 					},
 				},
 				AppBudgetAdded:           &budgetAdded,
@@ -2748,22 +2803,39 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	allowEmptySignatures := true
 	fixSigners := true
 	authAddrStr := authAddr.String()
+	stat, err := testClient.Status()
+	a.NoError(err)
+	proto := config.Consensus[protocol.ConsensusVersion(stat.LastVersion)]
+	rekeyUsage := uint64(rekeyTxn.FeeFactor(proto))
+	rekeyFeesPaid := rekeyTxn.Fee.Raw
+	txnUsage := uint64(txn.FeeFactor(proto))
+	txnFeesPaid := txn.Fee.Raw
+	totalUsage := rekeyUsage + txnUsage
+	totalFeesPaid := rekeyFeesPaid + txnFeesPaid
 	expectedResult := v2.PreEncodedSimulateResponse{
-		Version:   2,
-		LastRound: result.LastRound,
+		Version:       2,
+		LastRound:     result.LastRound,
+		TotalUsage:    &totalUsage,
+		TotalFeesPaid: &totalFeesPaid,
 		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
 			{
+				GroupUsage:    &totalUsage,
+				GroupFeesPaid: &totalFeesPaid,
 				Txns: []v2.PreEncodedSimulateTxnResult{
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn: transactions.SignedTxn{Txn: rekeyTxn},
 						},
+						Usage:    &rekeyUsage,
+						FeesPaid: &rekeyFeesPaid,
 					},
 					{
 						Txn: v2.PreEncodedTxInfo{
 							Txn: transactions.SignedTxn{Txn: txn},
 						},
 						FixedSigner: &authAddrStr,
+						Usage:       &txnUsage,
+						FeesPaid:    &txnFeesPaid,
 					},
 				},
 			},
