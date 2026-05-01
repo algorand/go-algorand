@@ -3824,12 +3824,15 @@ assert
 global OpcodeBudget
 int %d
 ==
-`, budget-1, budget-5)
+return
+// Keep this fixture stateful to avoid automatic salting perturbing budget assertions
+app_global_get
+	`, budget-1, budget-5)
 	}
 	testApp(t, source(700), nil)
 
 	// with pooling a two app call starts with 1400
-	testApps(t, []string{source(1400), source(1393)}, nil, nil, nil)
+	testApps(t, []string{source(1400), source(1392)}, nil, nil, nil)
 
 	// without, they get base 700
 	testApps(t, []string{source(700), source(700)}, nil,

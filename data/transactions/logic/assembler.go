@@ -34,6 +34,8 @@ import (
 	"strings"
 	"unicode"
 
+	"filippo.io/edwards25519"
+
 	"github.com/algorand/avm-abi/abi"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -71,7 +73,7 @@ type constReference interface {
 	getPosition() int
 
 	// get the length of the op for this reference in ops.pending
-	length(ops *OpStream, assembled []byte) (int, error)
+	length(ops *OpStream, assembled []byte) (int, *sourceError)
 
 	// create the opcode bytes for a new reference of the same value
 	makeNewReference(ops *OpStream, singleton bool, newIndex int) []byte
@@ -96,7 +98,7 @@ func (ref intReference) getPosition() int {
 	return ref.position
 }
 
-func (ref intReference) length(ops *OpStream, assembled []byte) (int, error) {
+func (ref intReference) length(ops *OpStream, assembled []byte) (int, *sourceError) {
 	opIntc0 := OpsByName[ops.Version]["intc_0"].Opcode
 	opIntc1 := OpsByName[ops.Version]["intc_1"].Opcode
 	opIntc2 := OpsByName[ops.Version]["intc_2"].Opcode
@@ -165,7 +167,7 @@ func (ref byteReference) getPosition() int {
 	return ref.position
 }
 
-func (ref byteReference) length(ops *OpStream, assembled []byte) (int, error) {
+func (ref byteReference) length(ops *OpStream, assembled []byte) (int, *sourceError) {
 	opBytec0 := OpsByName[ops.Version]["bytec_0"].Opcode
 	opBytec1 := OpsByName[ops.Version]["bytec_1"].Opcode
 	opBytec2 := OpsByName[ops.Version]["bytec_2"].Opcode
@@ -2043,8 +2045,35 @@ type directiveFunc func(*OpStream, []token) *sourceError
 
 var directives = map[string]directiveFunc{"pragma": pragma, "define": define}
 
-// assemble reads text from an input and accumulates the program
+// assemble reads text from an input and accumulates the program.
 func (ops *OpStream) assemble(text string) error {
+	if err := ops.parseText(text); err != nil {
+		return err
+	}
+	var program []byte
+	var prefixLen int
+	if len(ops.Errors) == 0 {
+		var err *sourceError
+		program, prefixLen, err = ops.finalizeProgram()
+		if err != nil {
+			ops.record(err)
+		}
+	}
+	if len(ops.Errors) == 1 {
+		return fmt.Errorf("1 error: %w", ops.Errors[0])
+	}
+	if len(ops.Errors) > 1 {
+		return fmt.Errorf("%d errors", len(ops.Errors))
+	}
+
+	ops.adjustOffsetToSource(prefixLen)
+	ops.Program = program
+
+	return nil
+}
+
+// parseText reads text from an input and accumulates the pending program state.
+func (ops *OpStream) parseText(text string) error {
 	if ops.Version > LogicVersion && ops.Version != assemblerNoVersion {
 		err := fmt.Errorf("Can not assemble version %d", ops.Version)
 		ops.record(&sourceError{0, 0, err})
@@ -2148,21 +2177,79 @@ func (ops *OpStream) assemble(text string) error {
 	}
 
 	if ops.Version >= optimizeConstantsEnabledVersion {
-		ops.optimizeIntcBlock()
-		ops.optimizeBytecBlock()
+		if err := ops.optimizeIntcBlock(); err != nil {
+			ops.record(err)
+		}
+		if err := ops.optimizeBytecBlock(); err != nil {
+			ops.record(err)
+		}
 	}
 
 	ops.resolveLabels()
-	program := ops.prependCBlocks()
-	if ops.Errors != nil {
-		l := len(ops.Errors)
-		if l == 1 {
-			return fmt.Errorf("1 error: %w", ops.Errors[0])
-		}
-		return fmt.Errorf("%d errors", l)
-	}
-	ops.Program = program
 	return nil
+}
+
+// assemblerSaltVersion is the version at which we start adding salt to stateless programs
+// that would otherwise have an on-curve address.
+const assemblerSaltVersion = 13
+
+// assemblerSaltSearchLimit is the number of salt candidates we can try to fit in the one-byte varint range.
+// The chance of all candidates hashing on-curve is 2^-128 under the random-hash model.
+const assemblerSaltSearchLimit = 128
+
+func programHashIsEdwardsPoint(program []byte) bool {
+	hash := HashProgram(program)
+	_, err := new(edwards25519.Point).SetBytes(hash[:])
+	return err == nil
+}
+
+// finalizeProgram constructs final program bytes. For v13+ stateless programs
+// that would hash on-curve, it adds salt to make the hash off-curve. If the
+// program has an automatic intcblock, it appends the salt there; otherwise it
+// adds a trailing intcblock at the end of the program.
+func (ops *OpStream) finalizeProgram() ([]byte, int, *sourceError) {
+	program, prefixLen := ops.prependCBlocks()
+	if ops.Version < assemblerSaltVersion || ops.HasStatefulOps || !programHashIsEdwardsPoint(program) {
+		return program, prefixLen, nil
+	}
+
+	if len(ops.intc) > 0 && ops.cntIntcBlock == 0 {
+		return ops.finalizeProgramWithAutoIntcSalt()
+	}
+	return ops.finalizeProgramWithTrailingIntcSalt(program, prefixLen)
+}
+
+// TODO: should ops.intc reflect the salted intcblock that ends up
+// in ops.Program, or stay source-derived? Currently the latter.
+func (ops *OpStream) finalizeProgramWithAutoIntcSalt() ([]byte, int, *sourceError) {
+	originalLen := len(ops.intc)
+	defer func() {
+		ops.intc = ops.intc[:originalLen]
+	}()
+
+	ops.intc = append(ops.intc, 0)
+	for saltValue := range uint64(assemblerSaltSearchLimit) {
+		ops.intc[originalLen] = saltValue
+		program, prefixLen := ops.prependCBlocks()
+		if !programHashIsEdwardsPoint(program) {
+			return program, prefixLen, nil
+		}
+	}
+	return nil, 0, &sourceError{ops.sourceLine, 0, errors.New("could not find an automatic intcblock salt that yields an off-curve program")}
+}
+
+func (ops *OpStream) finalizeProgramWithTrailingIntcSalt(program []byte, prefixLen int) ([]byte, int, *sourceError) {
+	suffix := []byte{OpsByName[ops.Version]["intcblock"].Opcode, 1, 0}
+	candidate := slices.Concat(program, suffix)
+	saltOffset := len(candidate) - 1
+
+	for saltValue := range uint64(assemblerSaltSearchLimit) {
+		candidate[saltOffset] = byte(saltValue)
+		if !programHashIsEdwardsPoint(candidate) {
+			return candidate, prefixLen, nil
+		}
+	}
+	return nil, 0, &sourceError{ops.sourceLine, 0, errors.New("could not find a trailing intcblock salt that yields an off-curve program")}
 }
 
 // cycle return a slice of strings that constitute a cycle, if one is
@@ -2429,7 +2516,7 @@ func replaceBytes(s []byte, index, originalLen int, newBytes []byte) []byte {
 //
 // This function only optimizes constants introduces by the int pseudo-op, not
 // preexisting intcblocks in the code.
-func (ops *OpStream) optimizeIntcBlock() error {
+func (ops *OpStream) optimizeIntcBlock() *sourceError {
 	if ops.cntIntcBlock > 0 {
 		// don't optimize an existing intcblock, only int pseudo-ops
 		return nil
@@ -2472,7 +2559,7 @@ func (ops *OpStream) optimizeIntcBlock() error {
 //
 // This function only optimizes constants introduces by the byte or addr
 // pseudo-ops, not preexisting bytecblocks in the code.
-func (ops *OpStream) optimizeBytecBlock() error {
+func (ops *OpStream) optimizeBytecBlock() *sourceError {
 	if ops.cntBytecBlock > 0 {
 		// don't optimize an existing bytecblock, only byte/addr pseudo-ops
 		return nil
@@ -2512,7 +2599,7 @@ func (ops *OpStream) optimizeBytecBlock() error {
 // the first 4 constant can use a special opcode to save space. Additionally,
 // any constants with a reference of 1 are taken out of the constant block and
 // instead referenced with an immediate op.
-func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []interface{}) (optimizedConstBlock []interface{}, err error) {
+func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []interface{}) (optimizedConstBlock []interface{}, err *sourceError) {
 	type constFrequency struct {
 		value interface{}
 		freq  int
@@ -2578,9 +2665,9 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 
 		newBytes := ref.makeNewReference(ops, singleton, newIndex)
 		var currentBytesLen int
-		currentBytesLen, err = ref.length(ops, raw)
-		if err != nil {
-			return
+		currentBytesLen, lengthErr := ref.length(ops, raw)
+		if lengthErr != nil {
+			return nil, lengthErr
 		}
 		changes = append(changes, pendingChange{ref.getPosition(), currentBytesLen, newBytes})
 	}
@@ -2650,7 +2737,8 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 }
 
 // prependCBlocks completes the assembly by inserting cblocks if needed.
-func (ops *OpStream) prependCBlocks() []byte {
+// It returns the completed program and the length of the prefix (version and any cblocks).
+func (ops *OpStream) prependCBlocks() ([]byte, int) {
 	var scratch [binary.MaxVarintLen64]byte
 	prebytes := bytes.Buffer{}
 	vlen := binary.PutUvarint(scratch[:], ops.Version)
@@ -2678,25 +2766,19 @@ func (ops *OpStream) prependCBlocks() []byte {
 	pbl := prebytes.Len()
 	outl := ops.pending.Len()
 	out := make([]byte, pbl+outl)
-	pl, err := prebytes.Read(out)
-	if pl != pbl || err != nil {
-		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d prebytes, %d to buffer? %w", pbl, pl, err)})
-		return nil
-	}
-	ol, err := ops.pending.Read(out[pl:])
-	if ol != outl || err != nil {
-		ops.record(&sourceError{ops.sourceLine, 0, fmt.Errorf("%d program bytes but %d to buffer. %w", outl, ol, err)})
-		return nil
-	}
+	copy(out, prebytes.Bytes())
+	copy(out[pbl:], ops.pending.Bytes())
+	return out, pbl
+}
 
-	// fixup offset to line mapping
+// adjustOffsetToSource shifts recorded bytecode offsets by the final prefix
+// length so source locations still line up after cblocks are prepended.
+func (ops *OpStream) adjustOffsetToSource(prefixLen int) {
 	newOffsetToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
 	for o, l := range ops.OffsetToSource {
-		newOffsetToSource[o+pbl] = l
+		newOffsetToSource[o+prefixLen] = l
 	}
 	ops.OffsetToSource = newOffsetToSource
-
-	return out
 }
 
 // record puts an error onto a list for reporting later. The hope is that the
