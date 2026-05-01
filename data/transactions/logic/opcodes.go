@@ -83,6 +83,8 @@ const mimcVersion = 11
 // their version, and fixup TestAssemble() in assembler_test.go.
 const sumhashVersion = 13
 
+const foreignBoxVersion = 13 // app_params_set, foreign app box access
+
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 
@@ -147,6 +149,15 @@ type OpDetails struct {
 	Immediates []immediate // details of each immediate arg to opcode
 
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
+
+	// SubOpcode, when non-zero, indicates this OpSpec belongs to a multi-byte
+	// opcode family. Opcode is the prefix byte; SubOpcode is the second byte.
+	// Sub-opcodes begin at 0x01, reserving 0x00 as the "not a sub-opcode" sentinel.
+	SubOpcode byte
+
+	// SubOps, when non-nil, marks this as a prefix opcode. The slice is indexed
+	// by SubOpcode byte; index 0 is always a zero-value OpSpec sentinel.
+	SubOps []OpSpec
 }
 
 func (d *OpDetails) docCost(argLen int, version uint64) string {
@@ -196,11 +207,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false}
+	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false, 0, nil}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
+	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false, 0, nil}
 }
 
 func detBranch() OpDetails {
@@ -263,6 +274,17 @@ func immediates(names ...string) OpDetails {
 
 func (d OpDetails) trust() OpDetails {
 	d.trusted = true
+	return d
+}
+
+// subOp marks an OpSpec as belonging to a multi-byte opcode family. The
+// OpSpec.Opcode field is the prefix byte; n is the second byte. Size is set
+// to 2 (prefix + sub-opcode) with no further immediates; chain .immediates()
+// to add more.
+func subOp(n byte) OpDetails {
+	d := detDefault()
+	d.SubOpcode = n
+	d.Size = 2
 	return d
 }
 
@@ -642,6 +664,7 @@ var OpSpecs = []OpSpec{
 	{0x73, "acct_params_get", opAcctParamsGet, proto("a:aT"), 6, field("f", &AcctParamsFields).only(ModeApp)},
 	{0x74, "voter_params_get", opVoterParamsGet, proto("a:aT"), incentiveVersion, field("f", &VoterParamsFields).only(ModeApp)},
 	{0x75, "online_stake", opOnlineStake, proto(":i"), incentiveVersion, only(ModeApp)},
+	{0x76, "app_params_set", opAppParamsSet, proto("i:"), foreignBoxVersion, field("f", &AppParamsFields).only(ModeApp).assembler(asmAppParamsSet)},
 
 	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(ModeApp)},
 	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
@@ -733,6 +756,18 @@ var OpSpecs = []OpSpec{
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appStateExplain(opBoxSpliceStateChange), spliceVersion, only(ModeApp)},
 	{0xd3, "box_resize", opBoxResize, proto("Ni:").appStateExplain(opBoxResizeStateChange), spliceVersion, only(ModeApp)},
+
+	// foreign app box access: all share prefix 0xd4, sub-opcode selects the operation.
+	// Reads are allowed by ForeignBoxReads; writes require FamilyBoxAccess and the same creator.
+	{0xd4, "app_box_create", opAppBoxCreate, proto("Nii:T").appStateExplain(opAppBoxCreateStateChange), foreignBoxVersion, subOp(0x01).only(ModeApp)},
+	{0xd4, "app_box_extract", opAppBoxExtract, proto("Niii:b").appStateExplain(opAppBoxExtractStateChange), foreignBoxVersion, subOp(0x02).only(ModeApp)},
+	{0xd4, "app_box_replace", opAppBoxReplace, proto("Nibi:").appStateExplain(opAppBoxReplaceStateChange), foreignBoxVersion, subOp(0x03).only(ModeApp)},
+	{0xd4, "app_box_del", opAppBoxDel, proto("Ni:T").appStateExplain(opAppBoxDelStateChange), foreignBoxVersion, subOp(0x04).only(ModeApp)},
+	{0xd4, "app_box_len", opAppBoxLen, proto("Ni:iT").appStateExplain(opAppBoxGetStateChange), foreignBoxVersion, subOp(0x05).only(ModeApp)},
+	{0xd4, "app_box_get", opAppBoxGet, proto("Ni:bT").appStateExplain(opAppBoxGetStateChange), foreignBoxVersion, subOp(0x06).only(ModeApp)},
+	{0xd4, "app_box_put", opAppBoxPut, proto("Nbi:").appStateExplain(opAppBoxPutStateChange), foreignBoxVersion, subOp(0x07).only(ModeApp)},
+	{0xd4, "app_box_splice", opAppBoxSplice, proto("Niibi:").appStateExplain(opAppBoxSpliceStateChange), foreignBoxVersion, subOp(0x08).only(ModeApp)},
+	{0xd4, "app_box_resize", opAppBoxResize, proto("Nii:").appStateExplain(opAppBoxResizeStateChange), foreignBoxVersion, subOp(0x09).only(ModeApp)},
 
 	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
@@ -858,6 +893,18 @@ func OpcodesByVersion(version uint64) []OpSpec {
 // direct opcode bytes
 var opsByOpcode [LogicVersion + 1][256]OpSpec
 
+// addToSubOps registers oi as a sub-opcode of its prefix entry in table.
+// Callers must ensure the prefix entry's SubOps slice is not shared with
+// another version before calling (see the version-copy loop in init).
+func addToSubOps(table *[256]OpSpec, oi OpSpec) {
+	prefix := &table[oi.Opcode]
+	sub := int(oi.SubOpcode)
+	for sub >= len(prefix.SubOps) {
+		prefix.SubOps = append(prefix.SubOps, OpSpec{})
+	}
+	prefix.SubOps[sub] = oi
+}
+
 // OpsByName map for each version, mapping opcode name to OpSpec
 var OpsByName [LogicVersion + 1]map[string]OpSpec
 
@@ -879,10 +926,14 @@ func init() {
 		if oi.Version == 1 {
 			cp := oi
 			cp.Version = 0
-			opsByOpcode[0][oi.Opcode] = cp
+			if oi.SubOpcode != 0 {
+				addToSubOps(&opsByOpcode[0], cp)
+				addToSubOps(&opsByOpcode[1], oi)
+			} else {
+				opsByOpcode[0][oi.Opcode] = cp
+				opsByOpcode[1][oi.Opcode] = oi
+			}
 			OpsByName[0][oi.Name] = cp
-
-			opsByOpcode[1][oi.Opcode] = oi
 			OpsByName[1][oi.Name] = oi
 		}
 	}
@@ -893,11 +944,20 @@ func init() {
 		OpsByName[v] = maps.Clone(OpsByName[v-1])
 		// Copy array with direct assignment instead of a loop
 		opsByOpcode[v] = opsByOpcode[v-1]
+		// Clone all SubOps slices so this version owns them before any
+		// addToSubOps calls below modify them.
+		for i := range opsByOpcode[v] {
+			opsByOpcode[v][i].SubOps = slices.Clone(opsByOpcode[v][i].SubOps)
+		}
 
 		// Update tables with opcodes from the current version
 		for _, oi := range OpSpecs {
 			if oi.Version == v {
-				opsByOpcode[v][oi.Opcode] = oi
+				if oi.SubOpcode != 0 {
+					addToSubOps(&opsByOpcode[v], oi)
+				} else {
+					opsByOpcode[v][oi.Opcode] = oi
+				}
 				OpsByName[v][oi.Name] = oi
 			}
 		}

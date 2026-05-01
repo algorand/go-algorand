@@ -222,6 +222,62 @@ func opBoxResizeStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basi
 	return BoxState, AppStateWrite, cx.appID, basics.Address{}, string(cx.Stack[name].Bytes)
 }
 
+func opAppBoxGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // appID
+	prev := last - 1          // name
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	return BoxState, AppStateRead, appID, basics.Address{}, string(cx.Stack[prev].Bytes)
+}
+
+func opAppBoxExtractStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // appID
+	name := last - 3          // name
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	return BoxState, AppStateRead, appID, basics.Address{}, string(cx.Stack[name].Bytes)
+}
+
+func opAppBoxCreateStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // appID
+	pprev := last - 2         // name
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	return BoxState, AppStateWrite, appID, basics.Address{}, string(cx.Stack[pprev].Bytes)
+}
+
+func opAppBoxReplaceStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // appID
+	ppprev := last - 3        // name
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	return BoxState, AppStateWrite, appID, basics.Address{}, string(cx.Stack[ppprev].Bytes)
+}
+
+func opAppBoxDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // appID
+	prev := last - 1          // name
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	return BoxState, AppStateDelete, appID, basics.Address{}, string(cx.Stack[prev].Bytes)
+}
+
+func opAppBoxPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // appID
+	pprev := last - 2         // name
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	return BoxState, AppStateWrite, appID, basics.Address{}, string(cx.Stack[pprev].Bytes)
+}
+
+func opAppBoxSpliceStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // appID
+	name := last - 4          // name
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	return BoxState, AppStateWrite, appID, basics.Address{}, string(cx.Stack[name].Bytes)
+}
+
+func opAppBoxResizeStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	last := len(cx.Stack) - 1 // appID
+	pprev := last - 2         // name
+	appID := basics.AppIndex(cx.Stack[last].Uint)
+	return BoxState, AppStateWrite, appID, basics.Address{}, string(cx.Stack[pprev].Bytes)
+}
+
 func opAppLocalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
 	last := len(cx.Stack) - 1 // state key
 	prev := last - 1          // account

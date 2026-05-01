@@ -72,7 +72,7 @@
         },
         {
           "name": "keyword.other.unit.teal",
-          "match": "^(acct_params_get|balance|min_balance|voter_params_get|app_global_del|app_global_get|app_global_get_ex|app_global_put|app_local_del|app_local_get|app_local_get_ex|app_local_put|app_opted_in|app_params_get|asset_holding_get|asset_params_get|block|log|online_stake|box_create|box_del|box_extract|box_get|box_len|box_put|box_replace|box_resize|box_splice)\\b"
+          "match": "^(acct_params_get|balance|min_balance|voter_params_get|app_global_del|app_global_get|app_global_get_ex|app_global_put|app_local_del|app_local_get|app_local_get_ex|app_local_put|app_opted_in|app_params_get|app_params_set|asset_holding_get|asset_params_get|block|log|online_stake|app_box_create|app_box_del|app_box_extract|app_box_get|app_box_len|app_box_put|app_box_replace|app_box_resize|app_box_splice|box_create|box_del|box_extract|box_get|box_len|box_put|box_replace|box_resize|box_splice)\\b"
         },
         {
           "name": "keyword.operator.teal",

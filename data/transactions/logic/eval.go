@@ -274,6 +274,11 @@ type LedgerForLogic interface {
 
 	Perform(gi int, ep *EvalParams) error
 	Counter() uint64
+
+	// SetForeignBoxReads sets the ForeignBoxReads flag on the given app's params.
+	SetForeignBoxReads(appID basics.AppIndex, enable bool) error
+	// SetFamilyBoxAccess sets the FamilyBoxAccess flag on the given app's params.
+	SetFamilyBoxAccess(appID basics.AppIndex, enable bool) error
 }
 
 // UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
@@ -710,8 +715,17 @@ func (cx *EvalContext) ProgramVersion() uint64 {
 // PC returns the program counter of the current application being evaluated
 func (cx *EvalContext) PC() int { return cx.pc }
 
-// GetOpSpec queries for the OpSpec w.r.t. current program byte.
-func (cx *EvalContext) GetOpSpec() OpSpec { return opsByOpcode[cx.version][cx.program[cx.pc]] }
+// GetOpSpec queries for the OpSpec w.r.t. current program byte(s).
+func (cx *EvalContext) GetOpSpec() OpSpec {
+	spec := opsByOpcode[cx.version][cx.program[cx.pc]]
+	if spec.SubOps != nil && cx.pc+1 < len(cx.program) {
+		sub := cx.program[cx.pc+1]
+		if int(sub) < len(spec.SubOps) && spec.SubOps[sub].op != nil {
+			return spec.SubOps[sub]
+		}
+	}
+	return spec
+}
 
 // GetProgram queries for the current program
 func (cx *EvalContext) GetProgram() []byte { return cx.program }
@@ -1531,6 +1545,16 @@ func (cx *EvalContext) step() error {
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
 
+	if spec.SubOps != nil {
+		if cx.pc+1 >= len(cx.program) {
+			return fmt.Errorf("%3d prefix opcode 0x%02x missing sub-opcode", cx.pc, opcode)
+		}
+		sub := cx.program[cx.pc+1]
+		if int(sub) < len(spec.SubOps) {
+			spec = &spec.SubOps[sub]
+		}
+	}
+
 	// this check also ensures versioning: v2 opcodes are not in opsByOpcode[1] array
 	if spec.op == nil {
 		return fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
@@ -1677,6 +1701,17 @@ func (cx *EvalContext) checkStep() (int, error) {
 	cx.instructionStarts[cx.pc] = true
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
+
+	if spec.SubOps != nil {
+		if cx.pc+1 >= len(cx.program) {
+			return 0, fmt.Errorf("prefix opcode 0x%02x missing sub-opcode", opcode)
+		}
+		sub := cx.program[cx.pc+1]
+		if int(sub) < len(spec.SubOps) {
+			spec = &spec.SubOps[sub]
+		}
+	}
+
 	if spec.op == nil {
 		return 0, fmt.Errorf("illegal opcode 0x%02x", opcode)
 	}
@@ -2968,6 +3003,14 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = params.Version
 	case AppSizeSponsor:
 		sv.Bytes = params.SizeSponsor[:]
+	case AppForeignBoxReads:
+		if params.ForeignBoxReads {
+			sv.Uint = 1
+		}
+	case AppFamilyBoxAccess:
+		if params.FamilyBoxAccess {
+			sv.Uint = 1
+		}
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)
@@ -5008,6 +5051,31 @@ func opAppParamsGet(cx *EvalContext) error {
 	cx.Stack[last] = value
 	cx.Stack = append(cx.Stack, stackValue{Uint: exist})
 	return nil
+}
+
+func opAppParamsSet(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // value
+
+	paramField := AppParamsField(cx.program[cx.pc+1])
+	fs, ok := appParamsFieldSpecByField(paramField)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid app_params_set field %d", paramField)
+	}
+
+	arg, err := cx.Stack[last].uint()
+	if err != nil {
+		return err
+	}
+	cx.Stack = cx.Stack[:last]
+
+	switch fs.field {
+	case AppForeignBoxReads:
+		return cx.Ledger.SetForeignBoxReads(cx.appID, arg != 0)
+	case AppFamilyBoxAccess:
+		return cx.Ledger.SetFamilyBoxAccess(cx.appID, arg != 0)
+	default:
+		return fmt.Errorf("immutable app_params_set field %s", fs.field)
+	}
 }
 
 func opAcctParamsGet(cx *EvalContext) error {
