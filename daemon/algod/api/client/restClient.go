@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -438,9 +438,15 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
-type pageParams struct {
-	Next  *string `url:"next,omitempty"`
-	Limit *uint64 `url:"limit,omitempty"`
+type accountAssetsParams struct {
+	Next  string `url:"next,omitempty"`
+	Limit uint64 `url:"limit,omitempty"`
+}
+
+type accountApplicationsParams struct {
+	Next    string `url:"next,omitempty"`
+	Limit   uint64 `url:"limit,omitempty"`
+	Include string `url:"include,omitempty"`
 }
 
 type catchupParams struct {
@@ -475,12 +481,33 @@ func (client RestClient) ApplicationInformation(index basics.AppIndex) (response
 }
 
 type applicationBoxesParams struct {
-	Max uint64 `url:"max,omitempty"`
+	Max     uint64       `url:"max,omitempty"`
+	Limit   uint64       `url:"limit,omitempty"`
+	Next    string       `url:"next,omitempty"`
+	Prefix  string       `url:"prefix,omitempty"`
+	Include string       `url:"include,omitempty"`
+	Round   basics.Round `url:"round,omitempty"`
 }
 
 // ApplicationBoxes gets the BoxesResponse associated with the passed application ID
 func (client RestClient) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (response model.BoxesResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{maxBoxNum})
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{Max: maxBoxNum})
+	return
+}
+
+// ApplicationBoxesPage gets a page of boxes for the given application ID with pagination.
+func (client RestClient) ApplicationBoxesPage(appID basics.AppIndex, limit uint64, next string, prefix string, values bool, round basics.Round) (response model.BoxesResponse, err error) {
+	var include string
+	if values {
+		include = "values"
+	}
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{
+		Limit:   limit,
+		Next:    next,
+		Prefix:  prefix,
+		Include: include,
+		Round:   round,
+	})
 	return
 }
 
@@ -560,6 +587,16 @@ func (client RestClient) RawAccountApplicationInformation(accountAddress string,
 	return
 }
 
+// AccountApplicationsInformation gets account information about a particular account's applications, subject to pagination.
+func (client RestClient) AccountApplicationsInformation(accountAddress string, next string, limit uint64, includeParams bool) (response model.AccountApplicationsInformationResponse, err error) {
+	var include string
+	if includeParams {
+		include = "params"
+	}
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/applications", accountAddress), accountApplicationsParams{next, limit, include})
+	return
+}
+
 // AccountAssetInformation gets account information about a given app.
 func (client RestClient) AccountAssetInformation(accountAddress string, assetID basics.AssetIndex) (response model.AccountAssetResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), nil)
@@ -567,15 +604,15 @@ func (client RestClient) AccountAssetInformation(accountAddress string, assetID 
 }
 
 // AccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
-func (client RestClient) AccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response model.AccountAssetsInformationResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+func (client RestClient) AccountAssetsInformation(accountAddress string, next string, limit uint64) (response model.AccountAssetsInformationResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), accountAssetsParams{next, limit})
 	return
 }
 
 // RawAccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
-func (client RestClient) RawAccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response []byte, err error) {
+func (client RestClient) RawAccountAssetsInformation(accountAddress string, next string, limit uint64) (response []byte, err error) {
 	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), accountAssetsParams{next, limit})
 	response = blob
 	return
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ type resources struct {
 	sharedLocals   map[ledgercore.AccountApp]struct{}
 
 	// boxes are all of the top-level box refs from the txgroup. Most are added
-	// during NewEvalParams(). refs using 0 on an appl create are resolved and
+	// during NewAppEvalParams(). refs using 0 on an appl create are resolved and
 	// added when the appl executes. The boolean value indicates the "dirtiness"
 	// of the box - has it been modified in this txngroup? If yes, the size of
 	// the box counts against the group writeBudget. So delete is NOT a dirtying

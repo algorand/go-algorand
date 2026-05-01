@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,17 +64,15 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV39, // AVM v10, logicsig opcode budget pooling, elliptic curve ops, dynamic round times
 	protocol.ConsensusV40, // Consensus incentives, AVM v11, mimc
 	protocol.ConsensusV41, // AVM v12, txn access, Sha512BlockHash, AppVersioning
-	protocol.ConsensusFuture,
+
+	protocol.ConsensusFuture, // Likely: On chain congestion, AVM v13
 }
 
 func versionStringFromIndex(index int) string {
-	var version string
 	if index == len(consensusByNumber)-1 {
-		version = "vFuture"
-	} else {
-		version = fmt.Sprintf("v%d", index)
+		return "vFuture"
 	}
-	return version
+	return fmt.Sprintf("v%d", index)
 }
 
 // randBool samples randomness for TestConsensusRange,

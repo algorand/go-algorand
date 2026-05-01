@@ -516,7 +516,7 @@ def finish_test_results(jsonfile, jsonpath, junitpath):
     # block that opens the jsonfile, and registers this atexit. So we
     # assume jsonfile is open.
     jsonfile.close()
-    xrun(["go", "tool", "-modfile=tool.mod", "gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath])
+    xrun(["go", "tool", "-modfile=tool.mod", "gotestsum", "--junitfile", junitpath, "--raw-command", "cat", jsonpath], cwd=repodir)
 
 
 if __name__ == '__main__':

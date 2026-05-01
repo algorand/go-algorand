@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -133,8 +134,7 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	// Override the kmd session lifetime to 5 minutes to prevent kmd wallet handles from expiring
 	kmdConfOverride := netdeploy.OverrideKmdConfig(netdeploy.TemplateKMDConfig{SessionLifetimeSecs: 300})
 	// copy overrides to prevent caller's data from being modified
-	extraOverrides := append([]netdeploy.TemplateOverride(nil), overrides...)
-	extraOverrides = append(extraOverrides, kmdConfOverride)
+	extraOverrides := append(slices.Clone(overrides), kmdConfOverride)
 
 	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, extraOverrides...)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")

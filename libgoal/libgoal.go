@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -665,10 +665,19 @@ func (c *Client) AccountInformation(account string, includeCreatables bool) (res
 }
 
 // AccountAssetsInformation returns the assets held by an account, including asset params for non-deleted assets.
-func (c *Client) AccountAssetsInformation(account string, next *string, limit *uint64) (resp model.AccountAssetsInformationResponse, err error) {
+func (c *Client) AccountAssetsInformation(account string, next string, limit uint64) (resp model.AccountAssetsInformationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountAssetsInformation(account, next, limit)
+	}
+	return
+}
+
+// AccountApplicationsInformation returns the apps opted-into by an account, potentially including app params for non-deleted apps.
+func (c *Client) AccountApplicationsInformation(account string, next string, limit uint64, includeParams bool) (resp model.AccountApplicationsInformationResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountApplicationsInformation(account, next, limit, includeParams)
 	}
 	return
 }
@@ -765,6 +774,15 @@ func (c *Client) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (resp
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationBoxes(appID, maxBoxNum)
+	}
+	return
+}
+
+// ApplicationBoxesPage takes an app's index and returns a page of box names with optional values.
+func (c *Client) ApplicationBoxesPage(appID basics.AppIndex, limit uint64, next string, prefix string, values bool, round basics.Round) (resp model.BoxesResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.ApplicationBoxesPage(appID, limit, next, prefix, values, round)
 	}
 	return
 }
@@ -1336,4 +1354,12 @@ func (c *Client) BlockLogs(round basics.Round) (resp model.BlockLogsResponse, er
 		return algod.BlockLogs(round)
 	}
 	return
+}
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
 }

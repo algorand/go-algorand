@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,18 @@ package ledgercore
 import (
 	"github.com/algorand/go-algorand/data/basics"
 )
+
+// KvPairResult is used to return a key-value pair from the data tier,
+// optionally including the value.
+type KvPairResult struct {
+	Key   string
+	Value []byte // nil when values not requested
+}
+
+// ByteSize returns the total byte size of the key-value pair.
+func (kv KvPairResult) ByteSize() uint64 {
+	return uint64(len(kv.Key) + len(kv.Value))
+}
 
 // AccountResource used to retrieve a generic resource information from the data tier
 type AccountResource struct {
