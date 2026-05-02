@@ -183,7 +183,12 @@ ALWAYS:
 libsodium: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 
 crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
+	# ARCH and OS_TYPE feed the cleanup/copy paths below and can be overridden by callers.
+	# Validate them here so the recipe only operates on expected target paths.
+	@case "$(OS_TYPE)" in (darwin|linux|windows) ;; (*) echo "Invalid OS_TYPE: $(OS_TYPE)"; exit 1;; esac
+	@case "$(ARCH)" in (amd64|arm64|arm|riscv64) ;; (*) echo "Invalid ARCH: $(ARCH)"; exit 1;; esac
 	mkdir -p crypto/copies/$(OS_TYPE)/$(ARCH)
+	rm -rf crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
