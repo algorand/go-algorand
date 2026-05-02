@@ -48,7 +48,7 @@ import (
 // gating them by version. Old programs need to retain their old behavior.
 
 // maxStringSize is the limit of byte string length in an AVM value
-const maxStringSize = 4096
+const maxStringSize = config.MaxAVMBytesSize
 
 // maxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const maxByteMathSize = 64
@@ -364,8 +364,11 @@ type EvalParams struct {
 	// availability across all txns in the group.
 	available *resources
 
-	// ioBudget is the number of bytes that the box ref'd boxes can sum to, and
-	// the number of bytes that created or written boxes may sum to.
+	// ioBudget is the number of bytes of "extra" read and write I/O the app may
+	// do.  All referenced boxes plus the size of referenced apps beyond 8k,
+	// must be less than ioBudget.  Further, all writes to boxes and the size of
+	// any written apps (beyond 8k) must stay under ioBudget throughout
+	// execution.
 	ioBudget uint64
 
 	// readBudgetChecked allows us to only check the read budget once
@@ -410,8 +413,8 @@ func (ep *EvalParams) SetIOBudget(ioBudget uint64) {
 	ep.ioBudget = ioBudget
 }
 
-// BoxDirtyBytes returns the number of bytes that have been written to boxes
-func (ep *EvalParams) BoxDirtyBytes() uint64 {
+// DirtyByteCount returns the number of bytes that count against write budget.
+func (ep *EvalParams) DirtyByteCount() uint64 {
 	return ep.available.dirtyBytes
 }
 
@@ -466,7 +469,7 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 	var credit *basics.MicroAlgos
 	if apps > 0 { // none of these allocations needed if no apps
 		credit = new(basics.MicroAlgos)
-		*credit = feeCredit(txgroup, proto.MinFee())
+		*credit = feeCredit(txgroup, *proto)
 
 		if proto.EnableAppCostPooling {
 			pooledApplicationBudget = new(int)
@@ -502,6 +505,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
 		boxes:          make(map[basics.BoxRef]bool),
+		updateBytes:    make(map[basics.AppIndex]uint64),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
@@ -509,12 +513,50 @@ func (ep *EvalParams) computeAvailability() *resources {
 	return available
 }
 
+func largeProgramExtraBytes(proto *config.ConsensusParams, approval, clear []byte) uint64 {
+	basicAppProgramLimit := proto.MaxAppTotalProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	programSize := len(approval) + len(clear)
+	if programSize <= basicAppProgramLimit {
+		return 0
+	}
+	return uint64(programSize - basicAppProgramLimit)
+}
+
+func (cx *EvalContext) considerBudgetProgramWrites() error {
+	creating := cx.txn.Txn.ApplicationID == 0
+	updating := cx.txn.Txn.OnCompletion == transactions.UpdateApplicationOC
+	deleting := cx.txn.Txn.OnCompletion == transactions.DeleteApplicationOC
+	if !creating && !updating && !deleting { // No program size change
+		return nil
+	}
+	if creating && deleting { // Program never gets written
+		return nil
+	}
+
+	// The "sizes" below are actually the size above the old maximum size.
+	oldSize := cx.available.updateBytes[cx.appID]
+	cx.available.dirtyBytes = basics.SubSaturate(cx.available.dirtyBytes, oldSize)
+
+	newSize := largeProgramExtraBytes(cx.Proto, cx.txn.Txn.ApprovalProgram, cx.txn.Txn.ClearStateProgram)
+	cx.available.dirtyBytes = basics.AddSaturate(cx.available.dirtyBytes, newSize)
+	cx.available.updateBytes[cx.appID] = newSize
+
+	if cx.available.dirtyBytes > cx.ioBudget {
+		verb := "creating"
+		if updating {
+			verb = "updating"
+		}
+		return fmt.Errorf("write budget exceeded (%d > %d) while %s app %d",
+			cx.available.dirtyBytes, cx.ioBudget, verb, cx.appID)
+	}
+	return nil
+}
+
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
-// to required fees. feeCredit should not be used on inner groups, since it
-// expects the Tip to appear in the group. (For inners, Tip is inherited.)
-func feeCredit(txgroup []transactions.SignedTxnWithAD, baseFee basics.MicroAlgos) basics.MicroAlgos {
-	usage, feesPaid := transactions.SummarizeFees(txgroup)
-	feeNeeded, _ := baseFee.MulMicros(usage)
+// to required fees. feeCredit should not be used on inner groups.
+func feeCredit(txgroup []transactions.SignedTxnWithAD, proto config.ConsensusParams) basics.MicroAlgos {
+	usage, feesPaid := transactions.SummarizeFees(txgroup, proto)
+	feeNeeded, _ := proto.MinFee().MulMicrosCeil(usage)
 	return feesPaid.SubSaturate(feeNeeded) // If MulMicros saturates, this is 0
 }
 
@@ -840,12 +882,31 @@ func NewStackType(at avmType, bounds [2]uint64, stname ...string) StackType {
 
 	// It's static, set the name to show
 	// the static value
-	if bounds[0] == bounds[1] {
+	switch {
+	case bounds[0] == bounds[1]:
 		switch at {
 		case avmBytes:
 			name = fmt.Sprintf("[%d]byte", bounds[0])
 		case avmUint64:
 			name = fmt.Sprintf("%d", bounds[0])
+		}
+	case bounds[0] == 0 && bounds[1] != 0:
+		switch at {
+		case avmBytes:
+			if bounds[1] != maxStringSize {
+				name = fmt.Sprintf("[<=%d]byte", bounds[1])
+			}
+		case avmUint64:
+			if bounds[1] != math.MaxUint64 {
+				name += fmt.Sprintf(" (<= %d)", bounds[1])
+			}
+		}
+	case bounds[0] != 0 && bounds[1] != 0:
+		switch at {
+		case avmBytes:
+			name = fmt.Sprintf("[%d-%d]byte", bounds[0], bounds[1])
+		case avmUint64:
+			name += fmt.Sprintf(" (%d-%d)", bounds[0], bounds[1])
 		}
 	}
 
@@ -1155,8 +1216,17 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		cx.ioBudget = basics.MulSaturate(bumps, cx.Proto.BytesPerBoxReference)
 
 		used := uint64(0)
-		var surplus int64
-		var overflow bool
+
+		// First count the extra reading required for any large programs that are available.
+		for appID := range cx.available.sharedApps {
+			params, _, err := cx.Ledger.AppParams(appID)
+			if err != nil {
+				continue // There may be an app reference that doesn't exist
+			}
+			used = basics.AddSaturate(used, largeProgramExtraBytes(cx.Proto, params.ApprovalProgram, params.ClearStateProgram))
+		}
+
+		// Then count the total size of available boxes
 		for br := range cx.available.boxes {
 			if len(br.Name) == 0 {
 				// 0 length names are not allowed for actual created boxes, but
@@ -1174,26 +1244,26 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			cx.available.boxes[br] = false
 
 			used = basics.AddSaturate(used, size)
-			surplus, overflow = basics.ODiff(cx.ioBudget, used)
-			// we defer the check if we have cx.UnnamedResources, so we can ask for the entire surplus at the end.
-			if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
-				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
-				if !cx.Proto.EnableBareBudgetError {
-					// We return an EvalError here because we used to do
-					// that. It is wrong, and means that there could be a
-					// ClearState call in an old block that failed on read
-					// quota, but we allowed to execute anyway.  If testnet and
-					// mainnet have no such transactions, we can remove
-					// EnableBareBudgetError and this code.
-					err = EvalError{err, "", false}
-				}
-				return false, nil, err
+		}
+
+		surplus, overflow := basics.ODiff(cx.ioBudget, used)
+		if overflow || (surplus < 0 && cx.UnnamedResources == nil) {
+			err := fmt.Errorf("read budget exceeded (%d > %d)", used, cx.ioBudget)
+			if !cx.Proto.EnableBareBudgetError {
+				// We return an EvalError here because we used to do
+				// that. It is wrong, and means that there could be a
+				// ClearState call in an old block that failed on read
+				// quota, but we allowed to execute anyway.  If testnet and
+				// mainnet have no such transactions, we can remove
+				// EnableBareBudgetError and this code.
+				err = EvalError{err, "", false}
 			}
+			return false, nil, err
 		}
 
 		// Report the surplus/deficit to the policy, and find out if we should continue
 		if cx.UnnamedResources != nil && !cx.UnnamedResources.IOSurplus(surplus) {
-			return false, nil, fmt.Errorf("box read budget (%d) exceeded despite policy", cx.ioBudget)
+			return false, nil, fmt.Errorf("read budget exceeded despite policy (%d)", cx.ioBudget)
 		}
 
 		cx.readBudgetChecked = true
@@ -1206,6 +1276,12 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	pass, err := eval(program, &cx)
 	if err != nil {
 		err = cx.evalError(err)
+	}
+	if err == nil && pass {
+		err = cx.considerBudgetProgramWrites()
+		if err != nil {
+			pass = false
+		}
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
@@ -5158,9 +5234,9 @@ func addInnerTxn(cx *EvalContext) error {
 	}
 
 	// Check fees in the existing group first. Allows fee pooling in inner groups.
-	usage, groupPaid := transactions.SummarizeFees(cx.subtxns)
+	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
 	usage = basics.AddSaturate(usage, 1e6) // +1e6 because we're adding a txn
-	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
+	groupFee, o := cx.Proto.MinFee().Mul2MicrosCeil(usage, cx.EvalParams.CostMultiplier)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
@@ -5344,8 +5420,8 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 	// wants to inspect?)  If we set, make sure they are legal, both for current
 	// round, and separation by MaxLifetime (check lifetime in submit, not here)
 	case Note:
-		if len(sv.Bytes) > cx.Proto.MaxTxnNoteBytes {
-			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxTxnNoteBytes)
+		if len(sv.Bytes) > cx.Proto.MaxAbsoluteTxnNoteBytes {
+			return fmt.Errorf("%s may not exceed %d bytes", fs.field, cx.Proto.MaxAbsoluteTxnNoteBytes)
 		}
 		txn.Note = slices.Clone(sv.Bytes)
 	// GenesisID, GenesisHash unsettable: surely makes no sense
@@ -5457,7 +5533,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		for _, arg := range txn.ApplicationArgs {
 			total += len(arg)
 		}
-		if total > cx.Proto.MaxAppTotalArgLen {
+		if total > cx.Proto.MaxAbsoluteTotalArgLen {
 			return errors.New("total application args length too long")
 		}
 		if len(txn.ApplicationArgs) >= cx.Proto.MaxAppArgs {
@@ -5475,25 +5551,25 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 		}
 		txn.Accounts = append(txn.Accounts, new)
 	case ApprovalProgram:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 		txn.ApprovalProgram = slices.Clone(sv.Bytes)
 	case ClearStateProgram:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		if len(sv.Bytes) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 		txn.ClearStateProgram = slices.Clone(sv.Bytes)
 	case ApprovalProgramPages:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		txn.ApprovalProgram = append(txn.ApprovalProgram, sv.Bytes...)
 		if len(txn.ApprovalProgram) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
 		}
 	case ClearStateProgramPages:
-		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxExtraAppProgramPages)
+		maxPossible := cx.Proto.MaxAppProgramLen * (1 + cx.Proto.MaxAbsoluteExtraProgramPages)
 		txn.ClearStateProgram = append(txn.ClearStateProgram, sv.Bytes...)
 		if len(txn.ClearStateProgram) > maxPossible {
 			return fmt.Errorf("%s may not exceed %d bytes", fs.field, maxPossible)
@@ -5533,7 +5609,7 @@ func (cx *EvalContext) stackIntoTxnField(sv stackValue, fs *txnFieldSpec, txn *t
 	case ExtraProgramPages:
 		var epp uint64
 		epp, err =
-			sv.uintMaxed(uint64(cx.Proto.MaxExtraAppProgramPages))
+			sv.uintMaxed(uint64(cx.Proto.MaxAbsoluteExtraProgramPages))
 		if err != nil {
 			return err
 		}
@@ -5574,8 +5650,8 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 	}
 
 	// Check fees across the group first. Allows fee pooling in inner groups.
-	usage, groupPaid := transactions.SummarizeFees(cx.subtxns) // tip won't appear in inners
-	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
+	usage, groupPaid := transactions.SummarizeFees(cx.subtxns, *cx.Proto)
+	groupFee, o := cx.Proto.MinFee().Mul2MicrosCeil(usage, cx.EvalParams.CostMultiplier)
 	if o {
 		return errors.New("inner group fee saturation")
 	}
@@ -5583,7 +5659,10 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		// See if the FeeCredit is enough to cover the shortfall
 		shortfall := groupFee.SubSaturate(groupPaid)
 		if cx.FeeCredit == nil || cx.FeeCredit.LessThan(shortfall) {
-			return fmt.Errorf("group fee %s too small (need %s) %#v", groupPaid, groupFee, cx.subtxns)
+			if cx.FeeCredit != nil {
+				groupFee = groupFee.SubSaturate(*cx.FeeCredit)
+			}
+			return fmt.Errorf("group fee %s too small (needs %s more) %#v", groupPaid, groupFee, cx.subtxns)
 		}
 		*cx.FeeCredit = cx.FeeCredit.SubSaturate(shortfall)
 	} else {

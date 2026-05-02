@@ -156,9 +156,6 @@ func (tx Txn) Args(strings ...string) *Txn {
 // FillDefaults populates some obvious defaults from config params,
 // unless they have already been set.
 func (tx *Txn) FillDefaults(params config.ConsensusParams) {
-	if tx.Fee == nil {
-		tx.Fee = params.MinTxnFee
-	}
 	if tx.LastValid == 0 {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
@@ -195,11 +192,23 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 			case []byte:
 			}
 		}
-		if tx.ApplicationID == 0 && tx.ExtraProgramPages == 0 {
+		if tx.ApplicationID == 0 {
 			totalLength := len(assemble(tx.ApprovalProgram)) + len(assemble(tx.ClearStateProgram))
-			totalPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen)
-			tx.ExtraProgramPages = uint32(totalPages - 1)
+			extraPages := basics.DivCeil(totalLength, params.MaxAppTotalProgramLen) - 1
+			if tx.ExtraProgramPages == 0 {
+				tx.ExtraProgramPages = uint32(extraPages)
+			}
+			// If no boxes or access list is already set, set enough boxrefs to create a big program
+			if len(tx.Boxes) == 0 && len(tx.Access) == 0 && extraPages > params.MaxExtraAppProgramPages {
+				tx.Boxes = slices.Repeat([]transactions.BoxRef{{}}, extraPages-params.MaxExtraAppProgramPages)
+			}
 		}
+
+	}
+	// Do the fee last, so the FeeFactor is accurate.
+	if tx.Fee == nil {
+		f := tx.Txn().FeeFactor(params)
+		tx.Fee, _ = params.MinFee().MulMicrosCeil(f)
 	}
 }
 

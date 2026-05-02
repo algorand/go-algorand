@@ -86,8 +86,10 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 		}
 	}
 
+	verb := "accessing" // always changed by the actions that increase dirtyBytes
 	switch operation {
 	case BoxCreateOperation:
+		verb = "creating"
 		if exists {
 			if createSize != uint64(len(content)) {
 				return nil, false, fmt.Errorf("box size mismatch %d %d", uint64(len(content)), createSize)
@@ -101,6 +103,9 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 		}
 		fallthrough // If it doesn't exist, a create is like write
 	case BoxWriteOperation:
+		if operation != BoxCreateOperation {
+			verb = "writing"
+		}
 		writeSize := createSize
 		if exists {
 			writeSize = uint64(len(content))
@@ -110,6 +115,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 		}
 		dirty = true
 	case BoxResizeOperation:
+		verb = "resizing"
 		newSize := createSize
 		if dirty {
 			cx.available.dirtyBytes -= uint64(len(content))
@@ -127,7 +133,8 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	cx.available.boxes[basics.BoxRef{App: cx.appID, Name: name}] = dirty
 
 	if cx.available.dirtyBytes > cx.ioBudget {
-		return nil, false, fmt.Errorf("write budget (%d) exceeded %d", cx.ioBudget, cx.available.dirtyBytes)
+		return nil, false, fmt.Errorf("write budget exceeded (%d > %d) while %s box %#x",
+			cx.available.dirtyBytes, cx.ioBudget, verb, name)
 	}
 	return content, exists, nil
 }

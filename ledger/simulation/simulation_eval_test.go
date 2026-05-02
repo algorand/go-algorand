@@ -8099,7 +8099,7 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				Boxes: map[basics.BoxRef]uint64{
 					{App: appID, Name: "X"}: 0,
 				},
-				FailureMessage: fmt.Sprintf("logic eval error: write budget (%d) exceeded %d", proto.BytesPerBoxReference, proto.BytesPerBoxReference+1),
+				FailureMessage: fmt.Sprintf("logic eval error: write budget exceeded (%d > %d)", proto.BytesPerBoxReference+1, proto.BytesPerBoxReference),
 				FailingIndex:   0,
 			})
 
@@ -8144,6 +8144,214 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestUnnamedResourcesBigProgramReadBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	sender := env.Accounts[0]
+	appID := createAppWithBoxRefs(t, &env, sender, simulationtesting.AppParams{
+		ApprovalProgram: strings.Repeat("pushint 1; return;\n", 1400),
+	}, []transactions.BoxRef{{}})
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+	}).Txn().Sign(sender.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+
+	// Referencing a second large app should also contribute to read budget, even if it isn't called.
+	biggerID := createAppWithBoxRefs(t, &env, sender, simulationtesting.AppParams{
+		ApprovalProgram: strings.Repeat("pushint 1; return;\n", 2000),
+	}, []transactions.BoxRef{{}, {}})
+	txn = env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+		Boxes:         []transactions.BoxRef{{}},
+		ForeignApps:   []basics.AppIndex{biggerID},
+	}).Txn().Sign(sender.Sk)
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+
+	// If exactly one reference slot remains, simulation should still be able to
+	// suggest exactly one extra box ref.
+	txn = env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+		ForeignAssets: make([]basics.AssetIndex, proto.MaxAppTotalTxnReferences-1),
+	}).Txn().Sign(sender.Sk)
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+}
+
+// TestUnnamedResourcesLargeUnnamedAppReadBudget ensures that simulation suggests
+// empty box refs when a dynamically discovered unnamed app has a large program.
+func TestUnnamedResourcesLargeUnnamedAppReadBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	version := uint64(proto.LogicSigVersion)
+	sender := env.Accounts[0]
+	basicProgramLimit := proto.MaxAppProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	clearSize := 6
+	approvalSize := basicProgramLimit + int(proto.BytesPerBoxReference)/2 - clearSize
+	require.LessOrEqual(t, approvalSize, proto.MaxAppProgramLen*(1+proto.MaxAbsoluteExtraProgramPages))
+
+	largeID := createAppWithBoxRefs(t, &env, sender, simulationtesting.AppParams{
+		ApprovalProgram:   assembleSizedPassingProgram(t, version, approvalSize),
+		ClearStateProgram: assembleSizedPassingProgram(t, version, clearSize),
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+	}, []transactions.BoxRef{{}})
+
+	accessorID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		ApprovalProgram: fmt.Sprintf(`#pragma version %d
+txn ApplicationID
+bz end
+txna ApplicationArgs 0
+btoi
+app_params_get AppGlobalNumUint
+assert
+pop
+end:
+int 1`, version),
+	})
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.ApplicationCallTx,
+		Sender:          sender.Addr,
+		ApplicationID:   accessorID,
+		ApplicationArgs: [][]byte{uint64ToBytes(uint64(largeID))},
+	}).Txn().Sign(sender.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Contains(t, result.TxnGroups[0].UnnamedResourcesAccessed.Apps, largeID)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
+}
+
+func assembleSizedPassingProgram(t testing.TB, version uint64, size int) []byte {
+	t.Helper()
+
+	const overhead = 6 // version byte + "b end" + "end: int 1"
+	require.GreaterOrEqual(t, size, overhead)
+
+	var source strings.Builder
+	fmt.Fprintf(&source, "#pragma version %d\n", version)
+	source.WriteString("b end\n")
+	source.WriteString(strings.Repeat("err\n", size-overhead))
+	source.WriteString("end: int 1")
+
+	ops, err := logic.AssembleString(source.String())
+	require.NoError(t, err)
+	require.Len(t, ops.Program, size)
+	return ops.Program
+}
+
+func createAppWithBoxRefs(t testing.TB, env *simulationtesting.Environment, creator simulationtesting.Account, params simulationtesting.AppParams, boxes []transactions.BoxRef) basics.AppIndex {
+	t.Helper()
+
+	txn := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            creator.Addr,
+		ApprovalProgram:   params.ApprovalProgram,
+		ClearStateProgram: params.ClearStateProgram,
+		GlobalStateSchema: params.GlobalStateSchema,
+		LocalStateSchema:  params.LocalStateSchema,
+		ExtraProgramPages: params.ExtraProgramPages,
+		Boxes:             boxes,
+	})
+
+	ad := env.Txn(txn.SignedTxn())
+	require.NotZero(t, ad.ApplicationID)
+	return ad.ApplicationID
+}
+
+// TestUnnamedResourcesLargeProgramCreateWriteBudget ensures that simulation
+// suggests empty box refs for the write budget needed by large app creation.
+func TestUnnamedResourcesLargeProgramCreateWriteBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	version := uint64(proto.LogicSigVersion)
+	sender := env.Accounts[0]
+	basicProgramLimit := proto.MaxAppProgramLen * (1 + proto.MaxExtraAppProgramPages)
+	clearSize := 6
+	approvalSize := basicProgramLimit + int(proto.BytesPerBoxReference)/2 - clearSize
+	require.LessOrEqual(t, approvalSize, proto.MaxAppProgramLen*(1+proto.MaxAbsoluteExtraProgramPages))
+
+	create := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:              protocol.ApplicationCallTx,
+		Sender:            sender.Addr,
+		ApprovalProgram:   assembleSizedPassingProgram(t, version, approvalSize),
+		ClearStateProgram: assembleSizedPassingProgram(t, version, clearSize),
+		ExtraProgramPages: uint32(proto.MaxAbsoluteExtraProgramPages),
+	})
+	create.Boxes = nil // txntest adds empty refs for large creates; we want to show effect of not having any
+	txn := create.Txn().Sign(sender.Sk)
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups: [][]transactions.SignedTxn{{txn}},
+	})
+	require.NoError(t, err)
+	require.Contains(t, result.TxnGroups[0].FailureMessage, "write budget exceeded (1024 > 0)")
+
+	result, err = simulation.MakeSimulator(env.Ledger, false).Simulate(simulation.Request{
+		TxnGroups:             [][]transactions.SignedTxn{{txn}},
+		AllowUnnamedResources: true,
+	})
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+	require.NotNil(t, result.TxnGroups[0].UnnamedResourcesAccessed)
+	require.Equal(t, 1, result.TxnGroups[0].UnnamedResourcesAccessed.NumEmptyBoxRefs)
 }
 
 const resourceLimitsTestProgramBase = `#pragma version %d

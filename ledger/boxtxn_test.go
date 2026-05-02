@@ -548,21 +548,21 @@ func TestBoxIOBudgets(t *testing.T) {
 		}
 		if ver < boxQuotaBumpVersion {
 			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-				"write budget (1024) exceeded")
+				"write budget exceeded (4096 > 1024)")
 			call.Boxes = append(call.Boxes, transactions.BoxRef{})
 		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-			"write budget (2048) exceeded")
+			"write budget exceeded (4096 > 2048)")
 		call.Boxes = append(call.Boxes, transactions.BoxRef{})
 		if ver < boxQuotaBumpVersion {
 			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-				"write budget (3072) exceeded")
+				"write budget exceeded (4096 > 3072)")
 			call.Boxes = append(call.Boxes, transactions.BoxRef{})
 		}
 		dl.txn(call.Args("create", "x", "\x10\x00"), // now there are enough box refs
 			"below min") // big box would need more balance
 		dl.txn(call.Args("create", "x", "\x10\x01"), // 4097
-			"write budget (4096) exceeded")
+			"write budget exceeded (4097 > 4096)")
 
 		// Create 4,096 byte box
 		proto := config.Consensus[cv]
@@ -587,7 +587,7 @@ func TestBoxIOBudgets(t *testing.T) {
 		// It works at the start, because call still has enough brs.
 		dl.txn(call.Args("check", "x", "\x00"))
 		call.Boxes = call.Boxes[:len(call.Boxes)-1] // remove one ref
-		dl.txn(call.Args("check", "x", "\x00"), "box read budget")
+		dl.txn(call.Args("check", "x", "\x00"), "read budget")
 
 		// Give a budget over 32768, confirm failure anyway
 		// Use a transaction group with 5 txns, each with 8 box refs (except the last one)
@@ -658,13 +658,13 @@ func TestBoxInners(t *testing.T) {
 		call.Boxes = []transactions.BoxRef{{Index: 1, Name: []byte("x")}}
 		if ver < boxQuotaBumpVersion {
 			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-				"write budget (1024) exceeded")
+				"write budget exceeded (4096 > 1024)")
 			dl.txn(call.Args("create", "x", "\x04\x00")) // 1024
 			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
 			dl.txn(call.Args("create", "y", "\x08\x00")) // 2048
 		} else {
 			dl.txn(call.Args("create", "x", "\x10\x00"), // 4096
-				"write budget (2048) exceeded")
+				"write budget exceeded (4096 > 2048)")
 			dl.txn(call.Args("create", "x", "\x08\x00")) // 2048
 			call.Boxes = append(call.Boxes, transactions.BoxRef{Index: 1, Name: []byte("y")})
 			dl.txn(call.Args("create", "y", "\x10\x00")) // 4096
@@ -694,7 +694,7 @@ func TestBoxInners(t *testing.T) {
 		checkY := call.Args("check", "y", "B")
 		require.Len(t, checkY.Boxes, 2)
 		// can't see x and y because read budget is only 2*1024
-		dl.txgroup("box read budget", checkX, checkY)
+		dl.txgroup("read budget", checkX, checkY)
 		checkY.Boxes = append(checkY.Boxes, transactions.BoxRef{})
 		dl.txgroup("", checkX, checkY)
 

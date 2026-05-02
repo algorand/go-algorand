@@ -55,11 +55,16 @@ type resources struct {
 	// operation.
 	boxes map[basics.BoxRef]bool
 
+	// updateBytes tracks the extra program bytes that will be written for created
+	// or updated apps. The value is the currently charged size for the app's
+	// final program state in this transaction group.
+	updateBytes map[basics.AppIndex]uint64
+
 	// unnamedAccess is the number of times that a newly created app may access
 	// a box that was not named.  It is decremented for each box accessed this way.
 	unnamedAccess int
 
-	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
+	// dirtyBytes maintains a running count of bytes that count against write budget.
 	dirtyBytes uint64
 }
 

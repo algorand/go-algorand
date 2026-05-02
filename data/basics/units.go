@@ -215,3 +215,19 @@ func (m Micros) Mul(m2 Micros) (Micros, bool) {
 	}
 	return Micros(u64), o
 }
+
+// MulInt multiplies Micros by an integer. The integer is not treated as a
+// Micros value "in disguise" it's an actual integer, so we get our answer by
+// simple muliplication without the usual division by 1e6 required when both
+// operands are Micros. It saturates and reports overflow/underflow (for
+// negative ints)
+func (m Micros) MulInt(i int) (Micros, bool) {
+	if i < 0 {
+		return 0, true
+	}
+	u64, o := OMul(uint64(m), uint64(i))
+	if o {
+		u64 = math.MaxUint64
+	}
+	return Micros(u64), o
+}
