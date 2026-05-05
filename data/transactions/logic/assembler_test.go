@@ -500,9 +500,11 @@ const v12Compiled = v11Compiled + fvCompiled
 const sumhashCompiled = "8002012386"
 const sha512Compiled = "8002012387"
 
-// v13BaseCompiled cannot be derived from v12Compiled because v13 encodes all branch
-// offsets as binary.Varint (zigzag+ULEB128) instead of big-endian int16. Short jumps
-// use 1-byte varint; the assembler shrinks placeholders via findBranchSizes.
+// v13BaseCompiled is the v12 nonsense reassembled at version 13. It is not a
+// simple bytecode-level transform of v12Compiled because v13 encodes branch
+// offsets as binary.Varint (zigzag+ULEB128) instead of big-endian int16, and
+// the assembler shrinks short jumps via findBranchSizes. TestV13BaseFromV12
+// confirms that a disassemble/pragma-bump/reassemble roundtrip reproduces it.
 const v13BaseCompiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c281716154006290349483403350222231d4a484848482b50512a63222352410442004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f88044202892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a5e005f018120af060180070123456789abcd4949050198800301234549498481ffff03d101d000800243218001775c0280018881015d81018d02fff800008101438a01028bff240b8c0089810246014704450983030102018e02fff500008203013101320131b9babbbcbdbfbe800301234549e00049e10349e200e303e402e501d2d3757401802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe6018002abcd494985"
 const v13Compiled = v13BaseCompiled + sumhashCompiled + sha512Compiled
 
@@ -587,6 +589,36 @@ func TestAssemble(t *testing.T) {
 			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
 		})
 	}
+}
+
+// TestV13BaseFromV12 confirms that v13BaseCompiled is what you get by
+// disassembling v12Compiled, bumping the pragma to 13, and reassembling. The
+// branch encoding changed between v12 and v13 (int16 -> zigzag varint), so the
+// roundtrip exercises that the source-level program survives the version bump
+// even though the bytecode shape does not.
+func TestV13BaseFromV12(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	v12bytes, err := hex.DecodeString("0c" + v12Compiled)
+	require.NoError(t, err)
+
+	dis, err := Disassemble(v12bytes)
+	require.NoError(t, err)
+
+	bumped := strings.Replace(dis, "#pragma version 12", "#pragma version 13", 1)
+	require.Contains(t, bumped, "#pragma version 13")
+
+	// notrack disables type-checking, which the disassembled program would
+	// otherwise fail (it stitches together unrelated sequences for coverage).
+	ops, err := AssembleStringWithVersion(notrack(bumped), 13)
+	require.NoError(t, err)
+	require.Empty(t, ops.Errors)
+
+	// strip the leading version byte added by the assembler so we compare
+	// against v13BaseCompiled, which is also stored without it.
+	require.Equal(t, byte(13), ops.Program[0])
+	require.Equal(t, v13BaseCompiled, hex.EncodeToString(ops.Program[1:]))
 }
 
 var experiments = []uint64{sumhashVersion}
