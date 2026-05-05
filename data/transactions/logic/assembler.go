@@ -2371,21 +2371,76 @@ func pragma(ops *OpStream, tokens []token) *sourceError {
 	}
 }
 
+// pendingEdit describes a replacement of bytes in ops.pending: oldLen bytes
+// starting at position become newBytes. Edits passed to applyEdits must be
+// sorted by position and non-overlapping.
+type pendingEdit struct {
+	position int
+	oldLen   int
+	newBytes []byte
+}
+
+// applyEdits rewrites ops.pending by applying the given (sorted,
+// non-overlapping) edits, then shifts every stored position that indexes into
+// ops.pending by the cumulative size delta. cumDelta[p] is the total size
+// change from all edits whose replaced region ends at or before p, so applying
+// it to any original position p yields its position in the rewritten buffer
+// regardless of the order positions are visited later.
+func (ops *OpStream) applyEdits(edits []pendingEdit) {
+	raw := ops.pending.Bytes()
+
+	totalDelta := 0
+	for _, e := range edits {
+		totalDelta += len(e.newBytes) - e.oldLen
+	}
+	newRaw := make([]byte, 0, len(raw)+totalDelta)
+	cumDelta := make([]int, len(raw)+1)
+	runningDelta := 0
+	prev := 0
+	for _, e := range edits {
+		for p := prev; p < e.position+e.oldLen; p++ {
+			cumDelta[p] = runningDelta
+		}
+		newRaw = append(newRaw, raw[prev:e.position]...)
+		newRaw = append(newRaw, e.newBytes...)
+		runningDelta += len(e.newBytes) - e.oldLen
+		prev = e.position + e.oldLen
+	}
+	for p := prev; p <= len(raw); p++ {
+		cumDelta[p] = runningDelta
+	}
+	newRaw = append(newRaw, raw[prev:]...)
+
+	for i := range ops.intcRefs {
+		ops.intcRefs[i].position += cumDelta[ops.intcRefs[i].position]
+	}
+	for i := range ops.bytecRefs {
+		ops.bytecRefs[i].position += cumDelta[ops.bytecRefs[i].position]
+	}
+	for label := range ops.labels {
+		ops.labels[label] += cumDelta[ops.labels[label]]
+	}
+	for i := range ops.labelReferences {
+		ops.labelReferences[i].position += cumDelta[ops.labelReferences[i].position]
+		ops.labelReferences[i].offsetPosition += cumDelta[ops.labelReferences[i].offsetPosition]
+	}
+	fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+	for pos, loc := range ops.OffsetToSource {
+		fixedOffsetsToSource[pos+cumDelta[pos]] = loc
+	}
+	ops.OffsetToSource = fixedOffsetsToSource
+
+	ops.pending = *bytes.NewBuffer(newRaw)
+}
+
 // findBranchSizes shrinks varint branch placeholders to their minimum size after
 // optimizeConstants has finalized all instruction sizes. The offset bytes remain
 // zeros throughout — resolveLabels writes the actual encoded values afterward.
 func (ops *OpStream) findBranchSizes() {
 	var scratch [binary.MaxVarintLen64]byte
-	type sizeChange struct {
-		position int // first byte of the offset slot (one past the opcode)
-		oldLen   int // current placeholder byte count
-		newLen   int // smaller placeholder byte count
-	}
-
-	raw := ops.pending.Bytes()
 	for {
 		// Collect varint branch instructions whose placeholder can shrink.
-		var changes []sizeChange
+		var edits []pendingEdit
 		for i := range ops.labelReferences {
 			lr := &ops.labelReferences[i]
 			if !lr.varint {
@@ -2406,66 +2461,21 @@ func (ops *OpStream) findBranchSizes() {
 				jump = dest - opcodePos
 			}
 			needed := binary.PutVarint(scratch[:], int64(jump))
-			if needed < lr.offsetPosition-lr.position {
-				changes = append(changes, sizeChange{lr.position, lr.offsetPosition - lr.position, needed})
+			oldLen := lr.offsetPosition - lr.position
+			if needed < oldLen {
+				// Replacement is zero-filled; resolveLabels writes the encoded
+				// jump after every placeholder size has stabilized.
+				edits = append(edits, pendingEdit{lr.position, oldLen, make([]byte, needed)})
 			}
 		}
-		if len(changes) == 0 {
+		if len(edits) == 0 {
 			break
 		}
-
-		slices.SortFunc(changes, func(a, b sizeChange) int {
+		slices.SortFunc(edits, func(a, b pendingEdit) int {
 			return a.position - b.position
 		})
-
-		// Build newRaw and cumDelta in one left-to-right scan, identical in
-		// structure to optimizeConstants. Shrunken slots are zeroed here;
-		// resolveLabels encodes the actual jump values later.
-		totalDelta := 0
-		for _, c := range changes {
-			totalDelta += c.newLen - c.oldLen
-		}
-		newRaw := make([]byte, 0, len(raw)+totalDelta)
-		cumDelta := make([]int, len(raw)+1)
-		runningDelta := 0
-		prev := 0
-		for _, c := range changes {
-			for p := prev; p < c.position+c.oldLen; p++ {
-				cumDelta[p] = runningDelta
-			}
-			newRaw = append(newRaw, raw[prev:c.position]...)
-			newRaw = append(newRaw, make([]byte, c.newLen)...)
-			runningDelta += c.newLen - c.oldLen
-			prev = c.position + c.oldLen
-		}
-		for p := prev; p <= len(raw); p++ {
-			cumDelta[p] = runningDelta
-		}
-		newRaw = append(newRaw, raw[prev:]...)
-
-		// Adjust every stored position that indexes into ops.pending.
-		for i := range ops.intcRefs {
-			ops.intcRefs[i].position += cumDelta[ops.intcRefs[i].position]
-		}
-		for i := range ops.bytecRefs {
-			ops.bytecRefs[i].position += cumDelta[ops.bytecRefs[i].position]
-		}
-		for label := range ops.labels {
-			ops.labels[label] += cumDelta[ops.labels[label]]
-		}
-		for i := range ops.labelReferences {
-			ops.labelReferences[i].position += cumDelta[ops.labelReferences[i].position]
-			ops.labelReferences[i].offsetPosition += cumDelta[ops.labelReferences[i].offsetPosition]
-		}
-		fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
-		for pos, loc := range ops.OffsetToSource {
-			fixedOffsetsToSource[pos+cumDelta[pos]] = loc
-		}
-		ops.OffsetToSource = fixedOffsetsToSource
-
-		raw = newRaw
+		ops.applyEdits(edits)
 	}
-	ops.pending = *bytes.NewBuffer(raw)
 }
 
 func (ops *OpStream) resolveLabels() {
@@ -2670,15 +2680,9 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 		return b.freq - a.freq
 	})
 
-	type pendingChange struct {
-		position int
-		oldLen   int
-		newBytes []byte
-	}
-
 	// Determine the new encoding for every reference without mutating raw yet.
 	raw := ops.pending.Bytes()
-	changes := make([]pendingChange, 0, len(refs))
+	edits := make([]pendingEdit, 0, len(refs))
 	for _, ref := range refs {
 		singleton := false
 		newIndex := -1
@@ -2699,61 +2703,13 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 		if err != nil {
 			return
 		}
-		changes = append(changes, pendingChange{ref.getPosition(), currentBytesLen, newBytes})
+		edits = append(edits, pendingEdit{ref.getPosition(), currentBytesLen, newBytes})
 	}
 
-	// Sort changes first-to-last to enable a single left-to-right scan.
-	slices.SortFunc(changes, func(a, b pendingChange) int {
+	slices.SortFunc(edits, func(a, b pendingEdit) int {
 		return a.position - b.position
 	})
-
-	// Build newRaw (with all replacements applied) and cumDelta in one pass.
-	// cumDelta[p] is the total size change from all changes whose replaced region
-	// ends at or before p. Applying cumDelta[p] to any original position p gives
-	// its position in newRaw, regardless of what order positions are visited later.
-	totalDelta := 0
-	for _, c := range changes {
-		totalDelta += len(c.newBytes) - c.oldLen
-	}
-	newRaw := make([]byte, 0, len(raw)+totalDelta)
-	cumDelta := make([]int, len(raw)+1)
-	runningDelta := 0
-	prev := 0
-	for _, c := range changes {
-		for p := prev; p < c.position+c.oldLen; p++ {
-			cumDelta[p] = runningDelta
-		}
-		newRaw = append(newRaw, raw[prev:c.position]...)
-		newRaw = append(newRaw, c.newBytes...)
-		runningDelta += len(c.newBytes) - c.oldLen
-		prev = c.position + c.oldLen
-	}
-	for p := prev; p <= len(raw); p++ {
-		cumDelta[p] = runningDelta
-	}
-	newRaw = append(newRaw, raw[prev:]...)
-
-	// Adjust every stored position that indexes into ops.pending.
-	for i := range ops.intcRefs {
-		ops.intcRefs[i].position += cumDelta[ops.intcRefs[i].position]
-	}
-	for i := range ops.bytecRefs {
-		ops.bytecRefs[i].position += cumDelta[ops.bytecRefs[i].position]
-	}
-	for label := range ops.labels {
-		ops.labels[label] += cumDelta[ops.labels[label]]
-	}
-	for i := range ops.labelReferences {
-		ops.labelReferences[i].position += cumDelta[ops.labelReferences[i].position]
-		ops.labelReferences[i].offsetPosition += cumDelta[ops.labelReferences[i].offsetPosition]
-	}
-	fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
-	for pos, loc := range ops.OffsetToSource {
-		fixedOffsetsToSource[pos+cumDelta[pos]] = loc
-	}
-	ops.OffsetToSource = fixedOffsetsToSource
-
-	ops.pending = *bytes.NewBuffer(newRaw)
+	ops.applyEdits(edits)
 
 	optimizedConstBlock = make([]interface{}, 0)
 	for _, f := range freqs {
