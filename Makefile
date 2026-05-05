@@ -49,8 +49,10 @@ GOLINTCOMMAND := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 ifeq ($(OS_TYPE), darwin)
 # M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(ARCH), arm64)
+ifneq ($(shell command -v brew 2>/dev/null),)
 export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
+endif
 endif
 endif
 
