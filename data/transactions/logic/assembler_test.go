@@ -1509,6 +1509,38 @@ int 2`
 	}
 }
 
+// TestAssembleBranchTooFar exercises the bounds check in resolveLabels for
+// varint-encoded branches. The initial 3-byte placeholder covers offsets up to
+// 2^20 bytes; a forward jump that exceeds that range is rejected. We pad the
+// space between `b done` and the label with many `pushbytes` chunks so the jump
+// distance overflows what findBranchSizes can fit, leaving resolveLabels to
+// fail. Chunks stay under bufio.Scanner's 64 KB line limit.
+func TestAssembleBranchTooFar(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Each chunk: pushbytes opcode (1) + length varint (3) + 16 KB data (1<<14)
+	// + pop (1). 65 chunks gives ~1.04 MB between b and done, comfortably above
+	// the 2^20 limit on a 3-byte varint placeholder.
+	const chunkData = 1 << 14
+	const chunks = 65
+
+	var src strings.Builder
+	src.Grow(chunks * (2*chunkData + 32))
+	src.WriteString("b done\n")
+	for range chunks {
+		src.WriteString("pushbytes 0x")
+		for range chunkData {
+			src.WriteString("00")
+		}
+		src.WriteString("\npop\n")
+	}
+	src.WriteString("done:\nint 1\n")
+
+	testProg(t, src.String(), AssemblerMaxVersion,
+		exp(1, "label \"done\" is too far away"))
+}
+
 func TestAssembleBase64(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
