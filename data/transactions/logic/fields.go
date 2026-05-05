@@ -912,8 +912,8 @@ func (fs poseidon2ConfigSpec) Note() string {
 }
 
 var poseidon2ConfigSpecs = [...]poseidon2ConfigSpec{
-	{BN254t2, "poseidon2 Merkle-Damgard configuration for BN254 with width = 2, full rounds = 6, partial rounds = 50"},
-	{BLS12_381t2, "poseidon2 Merkle-Damgard configuration for BLS12-381 with width = 2, full rounds = 6, partial rounds = 50"},
+	{BN254t2, "Poseidon2 Merkle-Damgard configuration for BN254 with width = 2, full rounds = 6, partial rounds = 50"},
+	{BLS12_381t2, "Poseidon2 Merkle-Damgard configuration for BLS12-381 with width = 2, full rounds = 6, partial rounds = 50"},
 }
 
 func poseidon2ConfigSpecByField(c Poseidon2Config) (poseidon2ConfigSpec, bool) {
