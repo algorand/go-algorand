@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -667,7 +667,7 @@ var OpSpecs = []OpSpec{
 	{0x8b, "frame_dig", opFrameDig, proto(":a").stackExplain(opFrameDigStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameDig)},
 	{0x8c, "frame_bury", opFrameBury, proto("a:").stackExplain(opFrameBuryStackChange), fpVersion, immKinded(immInt8, "i").typed(typeFrameBury)},
 	{0x8d, "switch", opSwitch, proto("i:"), 8, detSwitch()},
-	{0x8e, "match", opMatch, proto("a:", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), 8, detSwitch().trust()},
+	{0x8e, "match", opMatch, proto("a:", "[A1, A2, ..., AN], B", "").stackExplain(opMatchStackChange), 8, detSwitch().typed(typeMatch).trust()},
 
 	// More math
 	{0x90, "shl", opShiftLeft, proto("ii:i"), 4, detDefault()},

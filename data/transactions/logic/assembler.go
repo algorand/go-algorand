@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1233,12 +1234,16 @@ func getImm(args []token, argIndex int, signed bool) (int, bool) {
 	return int(n), true
 }
 
-func anyTypes(n int) StackTypes {
+func sameTypes(n int, t StackType) StackTypes {
 	as := make(StackTypes, n)
 	for i := range as {
-		as[i] = StackAny
+		as[i] = t
 	}
 	return as
+}
+
+func anyTypes(n int) StackTypes {
+	return sameTypes(n, StackAny)
 }
 
 func typeSwap(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
@@ -1609,6 +1614,12 @@ func typeByte(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, erro
 	val, _, _ := parseBinaryArgs(args)
 	l := uint64(len(val))
 	return nil, StackTypes{NewStackType(avmBytes, static(l), fmt.Sprintf("[%d]byte", l))}, nil
+}
+
+func typeMatch(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, error) {
+	// I'd sort of like to use `sameTypes` with the top type, but it is legal to
+	// mix types.
+	return anyTypes(len(args) + 1), nil, nil
 }
 
 func joinIntsOnOr(singularTerminator string, list ...int) string {
@@ -2538,18 +2549,19 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 	// sort values by greatest to smallest frequency
 	// since we're using a stable sort, constants with the same frequency
 	// will retain their current ordering (i.e. first referenced, first in constant block)
-	sort.SliceStable(freqs, func(i, j int) bool {
-		return freqs[i].freq > freqs[j].freq
+	slices.SortStableFunc(freqs, func(a, b constFrequency) int {
+		return b.freq - a.freq
 	})
 
-	// sort refs from last to first
-	// this way when we iterate through them and potentially change the size of the assembled
-	// program, the later positions will not affect the indexes of the earlier positions
-	sort.Slice(refs, func(i, j int) bool {
-		return refs[i].getPosition() > refs[j].getPosition()
-	})
+	type pendingChange struct {
+		position int
+		oldLen   int
+		newBytes []byte
+	}
 
+	// Determine the new encoding for every reference without mutating raw yet.
 	raw := ops.pending.Bytes()
+	changes := make([]pendingChange, 0, len(refs))
 	for _, ref := range refs {
 		singleton := false
 		newIndex := -1
@@ -2570,56 +2582,61 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 		if err != nil {
 			return
 		}
-
-		positionDelta := len(newBytes) - currentBytesLen
-		position := ref.getPosition()
-		raw = replaceBytes(raw, position, currentBytesLen, newBytes)
-
-		// update all indexes into ops.pending that have been shifted by the above line
-
-		// This is a huge optimization for long repetitive programs. Takes
-		// BenchmarkUintMath from 160sec to 19s.
-		if positionDelta == 0 {
-			continue
-		}
-
-		for i := range ops.intcRefs {
-			if ops.intcRefs[i].position > position {
-				ops.intcRefs[i].position += positionDelta
-			}
-		}
-
-		for i := range ops.bytecRefs {
-			if ops.bytecRefs[i].position > position {
-				ops.bytecRefs[i].position += positionDelta
-			}
-		}
-
-		for label := range ops.labels {
-			if ops.labels[label] > position {
-				ops.labels[label] += positionDelta
-			}
-		}
-
-		for i := range ops.labelReferences {
-			if ops.labelReferences[i].position > position {
-				ops.labelReferences[i].position += positionDelta
-				ops.labelReferences[i].offsetPosition += positionDelta
-			}
-		}
-
-		fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
-		for pos, sourceLocation := range ops.OffsetToSource {
-			if pos > position {
-				fixedOffsetsToSource[pos+positionDelta] = sourceLocation
-			} else {
-				fixedOffsetsToSource[pos] = sourceLocation
-			}
-		}
-		ops.OffsetToSource = fixedOffsetsToSource
+		changes = append(changes, pendingChange{ref.getPosition(), currentBytesLen, newBytes})
 	}
 
-	ops.pending = *bytes.NewBuffer(raw)
+	// Sort changes first-to-last to enable a single left-to-right scan.
+	slices.SortFunc(changes, func(a, b pendingChange) int {
+		return a.position - b.position
+	})
+
+	// Build newRaw (with all replacements applied) and cumDelta in one pass.
+	// cumDelta[p] is the total size change from all changes whose replaced region
+	// ends at or before p. Applying cumDelta[p] to any original position p gives
+	// its position in newRaw, regardless of what order positions are visited later.
+	totalDelta := 0
+	for _, c := range changes {
+		totalDelta += len(c.newBytes) - c.oldLen
+	}
+	newRaw := make([]byte, 0, len(raw)+totalDelta)
+	cumDelta := make([]int, len(raw)+1)
+	runningDelta := 0
+	prev := 0
+	for _, c := range changes {
+		for p := prev; p < c.position+c.oldLen; p++ {
+			cumDelta[p] = runningDelta
+		}
+		newRaw = append(newRaw, raw[prev:c.position]...)
+		newRaw = append(newRaw, c.newBytes...)
+		runningDelta += len(c.newBytes) - c.oldLen
+		prev = c.position + c.oldLen
+	}
+	for p := prev; p <= len(raw); p++ {
+		cumDelta[p] = runningDelta
+	}
+	newRaw = append(newRaw, raw[prev:]...)
+
+	// Adjust every stored position that indexes into ops.pending.
+	for i := range ops.intcRefs {
+		ops.intcRefs[i].position += cumDelta[ops.intcRefs[i].position]
+	}
+	for i := range ops.bytecRefs {
+		ops.bytecRefs[i].position += cumDelta[ops.bytecRefs[i].position]
+	}
+	for label := range ops.labels {
+		ops.labels[label] += cumDelta[ops.labels[label]]
+	}
+	for i := range ops.labelReferences {
+		ops.labelReferences[i].position += cumDelta[ops.labelReferences[i].position]
+		ops.labelReferences[i].offsetPosition += cumDelta[ops.labelReferences[i].offsetPosition]
+	}
+	fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+	for pos, loc := range ops.OffsetToSource {
+		fixedOffsetsToSource[pos+cumDelta[pos]] = loc
+	}
+	ops.OffsetToSource = fixedOffsetsToSource
+
+	ops.pending = *bytes.NewBuffer(newRaw)
 
 	optimizedConstBlock = make([]interface{}, 0)
 	for _, f := range freqs {
@@ -3120,6 +3137,19 @@ func disassembleInstrumented(program []byte, labels map[int]string) (text string
 			text = out.String()
 			err = errors.New(msg)
 			return
+		}
+
+		// proto marks a subroutine entry point and must always have a label so
+		// that the disassembly can be validly reassembled. If we encounter a
+		// proto without a pending label (e.g. a subroutine that is never
+		// targeted by a callsub), create one now and trigger a rerun so the
+		// label appears before the opcode in the output.
+		if op.Name == "proto" {
+			if _, hasLabel := dis.pendingLabels[dis.pc]; !hasLabel {
+				dis.labelCount++
+				label := fmt.Sprintf("label%d", dis.labelCount)
+				dis.putLabel(label, dis.pc) // sets rerun=true since target <= pc
+			}
 		}
 
 		// ds.pcOffset tracks where in the output each opcode maps to assembly

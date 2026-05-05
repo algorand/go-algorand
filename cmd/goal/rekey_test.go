@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,30 +14,32 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package prefetcher
+package main
 
 import (
-	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// GroupTaskError indicates the group index of the unfulfilled resource
-type GroupTaskError struct {
-	err            error
-	GroupIdx       int64
-	Address        *basics.Address
-	CreatableIndex basics.CreatableIndex
-	CreatableType  basics.CreatableType
-}
+func TestParseRekey(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-// Error satisfies builtin interface `error`
-func (err *GroupTaskError) Error() string {
-	return fmt.Sprintf("prefetch failed for groupIdx %d, address: %s, creatableIndex %d, creatableType %d, cause: %v",
-		err.GroupIdx, err.Address, err.CreatableIndex, err.CreatableType, err.err)
-}
+	// Test empty address
+	require.Equal(t, basics.Address{}, parseRekey(""))
 
-// Unwrap provides access to the underlying error
-func (err *GroupTaskError) Unwrap() error {
-	return err.err
+	// Test valid address
+	validAddrStr := "5ZHAMU2BLPLFEE2VFFBVWMKRIZKUBSPUUWT3YIOWSP7VWFRJIT4XF3VYNI"
+	validAddr, err := basics.UnmarshalChecksumAddress(validAddrStr)
+	require.NoError(t, err)
+	require.Equal(t, validAddr, parseRekey(validAddrStr))
+
+	// Test invalid address (should panic because reportErrorf calls exit(1) which panics in tests)
+	require.Panics(t, func() {
+		parseRekey("INVALID_ADDRESS")
+	})
 }

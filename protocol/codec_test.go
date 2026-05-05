@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -268,4 +268,11 @@ func TestRandomizeObjectWithPtrField(t *testing.T) {
 	}
 	require.True(t, sawNonZeroU16, "RandomizeObject made all zeroes for testObjB.U16")
 	require.True(t, sawNonZeroU64, "RandomizeObject made all zeroes for testObjA.U64")
+}
+
+func TestCheckMsgpAllocBoundDirectiveCrossPackage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.True(t, hasMsgpAllocBoundDirective("github.com/algorand/go-algorand/protocol/test", "testSlice"))
 }

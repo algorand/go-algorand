@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1181,6 +1181,10 @@ func TestNodeSetCatchpointCatchupMode(t *testing.T) {
 			// "start" catchpoint catchup => close services
 			outCh := n.SetCatchpointCatchupMode(true)
 			<-outCh
+			// make sure SetCatchpointCatchupMode' goroutine has completely finished
+			// to prevent data race on stop/start services
+			n.waitMonitoringRoutines()
+
 			// "stop" catchpoint catchup => resume services
 			outCh = n.SetCatchpointCatchupMode(false)
 			<-outCh

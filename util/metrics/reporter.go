@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,9 @@ import (
 	"strings"
 	"time"
 )
+
+// logging imports metrics so that we can have metrics about logging, which is more important than the four Debug lines we had here logging about metrics. TODO: find a more clever cycle resolution
+// "github.com/algorand/go-algorand/logging"
 
 const (
 	nodeExporterMetricsPath    = "/metrics"
