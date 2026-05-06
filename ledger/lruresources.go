@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -186,7 +186,6 @@ func (m *lruResources) prune(newSize int) (removed int) {
 		removed++
 	}
 
-	// clear the notFound list
-	m.notFound = make(map[accountCreatable]struct{}, len(m.notFound))
+	clear(m.notFound)
 	return
 }

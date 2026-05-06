@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -121,7 +121,7 @@ func (kc *KMDController) StopKMD() (alreadyStopped bool, err error) {
 	kmdPID, err := kc.GetKMDPID()
 	if err == nil {
 		// Kill kmd by PID
-		killed, killErr := killPID(int(kmdPID))
+		killed, killErr := killPID(int(kmdPID), nil)
 		if killErr != nil {
 			return false, killErr
 		}

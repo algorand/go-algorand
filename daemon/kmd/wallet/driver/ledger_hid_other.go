@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,22 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package transactions
+//go:build !darwin
 
-import (
-	"fmt"
-)
+package driver
 
-// MinFeeError defines an error type which could be returned from the method WellFormed
+// maskSIGURG is a no-op on non-Darwin platforms.
 //
-//msgp:ignore MinFeeError
-type MinFeeError string
-
-func (err *MinFeeError) Error() string {
-	return string(*err)
-}
-
-func makeMinFeeErrorf(format string, args ...interface{}) *MinFeeError {
-	err := MinFeeError(fmt.Sprintf(format, args...))
-	return &err
+// On macOS, Go's SIGURG-based async preemption can interfere with IOKit HID
+// calls, but this is not an issue on other platforms. See ledger_hid_darwin.go
+// for the Darwin-specific implementation.
+func maskSIGURG() func() {
+	return func() {}
 }

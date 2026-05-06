@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -67,7 +67,9 @@ func (p *HTTPNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
 func (p *HTTPNode) Start() error {
 	go func() {
 		err := p.httpServer.Serve()
-		require.NoError(p.tb, err)
+		if err != nil {
+			require.ErrorIs(p.tb, err, http.ErrServerClosed)
+		}
 	}()
 	return nil
 }

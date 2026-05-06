@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -849,14 +849,21 @@ func TestFullCatchpointWriter(t *testing.T) {
 // another approach is to modify the test and craft round numbers,
 // and make the ledger to generate catchpoint itself when it is time
 func testCatchpointFlushRound(l *Ledger) (basics.Round, basics.Round) {
+	// Ensure all blocks are persisted to the block DB before flushing trackers.
+	// Without this, LatestCommitted() may return a stale round if the blockQueue
+	// syncer hasn't finished yet.
+	l.WaitForCommit(l.Latest())
+
 	// Clear the timer to ensure a flush
 	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
 	l.trackers.mu.Unlock()
 
 	r, _ := l.LatestCommitted()
+	l.trackerMu.Lock()
 	l.trackers.committedUpTo(r)
 	l.trackers.waitAccountsWriting()
+	l.trackerMu.Unlock()
 	return r, l.LatestTrackerCommitted()
 }
 
@@ -1036,6 +1043,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
+	testCatchpointFlushRound(dl.validator)
 	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
 	require.EqualValues(t, 3, cph.TotalChunks)
 
@@ -1052,6 +1060,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	dl.fullBlock(&newacctpay)
 
 	// Write and read back in, and ensure even the last effect exists.
+	testCatchpointFlushRound(dl.validator)
 	cph = testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
 	require.EqualValues(t, cph.TotalChunks, 3) // Still only 3 chunks, as last was in a recent block
 
@@ -1068,6 +1077,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
+	testCatchpointFlushRound(dl.validator)
 	cph = testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
 	require.EqualValues(t, cph.TotalChunks, 4)
 

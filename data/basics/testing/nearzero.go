@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,7 +88,7 @@ func collectPaths(typ reflect.Type, prefix []int, pathStack []reflect.Type) [][]
 			if !field.IsExported() {
 				continue
 			}
-			newPath := append(append([]int(nil), prefix...), i)
+			newPath := append(slices.Clone(prefix), i)
 			subPaths := collectPaths(field.Type, newPath, newStack)
 
 			// If recursion yielded deeper paths, use them

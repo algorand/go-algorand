@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -175,7 +175,7 @@ func (nc *NodeController) StopAlgod() (err error) {
 	algodPID, err := nc.GetAlgodPID()
 	if err == nil {
 		// Kill algod by PID
-		killed, killErr := killPID(int(algodPID))
+		killed, killErr := killPID(int(algodPID), nc.collectGoroutineStacks)
 		if killErr != nil {
 			return killErr
 		}
