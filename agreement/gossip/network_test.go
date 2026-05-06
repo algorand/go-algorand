@@ -25,9 +25,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -408,4 +410,170 @@ func TestNetworkImpl(t *testing.T) {
 	counter3.verify(t, 0, 0, 1)
 	domain.reconnectNetwork(net1, net2, net3)
 
+}
+
+// bridgeCall records the arguments of a single BridgeP2PToWS invocation.
+type bridgeCall struct {
+	tag    protocol.Tag
+	data   []byte
+	except network.Peer
+}
+
+// hybridGossipMock is a minimal GossipNode that also implements HybridRelayer,
+// recording BridgeP2PToWS calls made by the wrapping networkImpl.
+type hybridGossipMock struct {
+	network.GossipNode
+
+	mu    deadlock.Mutex
+	calls []bridgeCall
+}
+
+func (h *hybridGossipMock) BridgeP2PToWS(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.calls = append(h.calls, bridgeCall{tag: tag, data: data, except: except})
+	return nil
+}
+
+func (h *hybridGossipMock) snapshot() []bridgeCall {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]bridgeCall, len(h.calls))
+	copy(out, h.calls)
+	return out
+}
+
+func (h *hybridGossipMock) RegisterHandlers([]network.TaggedMessageHandler)                   {}
+func (h *hybridGossipMock) RegisterValidatorHandlers([]network.TaggedMessageValidatorHandler) {}
+func (h *hybridGossipMock) Broadcast(context.Context, protocol.Tag, []byte, bool, network.Peer) error {
+	return nil
+}
+func (h *hybridGossipMock) Relay(context.Context, protocol.Tag, []byte, bool, network.Peer) error {
+	return nil
+}
+func (h *hybridGossipMock) Disconnect(network.DisconnectablePeer) {}
+
+var _ HybridRelayer = (*hybridGossipMock)(nil)
+
+// TestNetworkImplBridgeP2PToWS verifies that processValidateMessage forwards the
+// incoming agreement message to the WS network via BridgeP2PToWS only when the
+// agreement-side action is Accept, and not when it is Disconnect or Ignore.
+func TestNetworkImplBridgeP2PToWS(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		respond      func(n *networkImpl, h agreement.MessageHandle)
+		expectAction network.ForwardingPolicy
+		expectBridge bool
+	}{
+		{
+			name: "Accept",
+			respond: func(n *networkImpl, h agreement.MessageHandle) {
+				err := n.Relay(h, protocol.AgreementVoteTag, []byte("ignored"))
+				require.NoError(t, err)
+			},
+			expectAction: network.Accept,
+			expectBridge: true,
+		},
+		{
+			name: "Disconnect",
+			respond: func(n *networkImpl, h agreement.MessageHandle) {
+				n.Disconnect(h)
+			},
+			expectAction: network.Disconnect,
+			expectBridge: false,
+		},
+		{
+			name: "Ignore",
+			respond: func(n *networkImpl, h agreement.MessageHandle) {
+				n.Ignore(h)
+			},
+			expectAction: network.Ignore,
+			expectBridge: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := &hybridGossipMock{}
+			netImpl := WrapNetwork(mock, logging.TestingLog(t), config.GetDefaultLocal()).(*networkImpl)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			netImpl.Start(ctx)
+
+			raw := network.IncomingMessage{
+				Tag:  protocol.AgreementVoteTag,
+				Data: []byte{1, 2, 3},
+			}
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				select {
+				case msg := <-netImpl.Messages(protocol.AgreementVoteTag):
+					tc.respond(netImpl, msg.MessageHandle)
+				case <-ctx.Done():
+				}
+			}()
+
+			out := netImpl.processValidateVoteMessage(raw)
+			<-done
+
+			assert.Equal(t, tc.expectAction, out.Action)
+			calls := mock.snapshot()
+			if tc.expectBridge {
+				require.Len(t, calls, 1)
+				assert.Equal(t, raw.Tag, calls[0].tag)
+				assert.Equal(t, raw.Data, calls[0].data)
+				assert.Equal(t, network.Peer(raw.Sender), calls[0].except)
+			} else {
+				assert.Empty(t, calls)
+			}
+		})
+	}
+}
+
+// TestNetworkImplBridgeP2PToWSNonHybrid verifies that wrapping a non-HybridRelayer
+// GossipNode does not panic and obviously does not invoke any bridge call when
+// the validation action is Accept.
+func TestNetworkImplBridgeP2PToWSNonHybrid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	domain := &whiteholeDomain{
+		messages: make([]sentMessage, 0),
+		peerIdx:  uint32(0),
+		log:      logging.TestingLog(t),
+	}
+	domain.messagesCond = sync.NewCond(&domain.messagesMu)
+	wnet := makewhiteholeNetwork(domain)
+	// confirm whiteholeNetwork does NOT implement HybridRelayer.
+	_, ok := interface{}(wnet).(HybridRelayer)
+	require.False(t, ok)
+
+	netImpl := WrapNetwork(wnet, logging.TestingLog(t), config.GetDefaultLocal()).(*networkImpl)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	netImpl.Start(ctx)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		select {
+		case msg := <-netImpl.Messages(protocol.AgreementVoteTag):
+			_ = netImpl.Relay(msg.MessageHandle, protocol.AgreementVoteTag, msg.Data)
+		case <-ctx.Done():
+		}
+	}()
+
+	out := netImpl.processValidateVoteMessage(network.IncomingMessage{
+		Tag:  protocol.AgreementVoteTag,
+		Data: []byte{1, 2, 3},
+	})
+	<-done
+
+	assert.Equal(t, network.Accept, out.Action)
 }

@@ -62,6 +62,11 @@ type networkImpl struct {
 	ctx context.Context
 }
 
+// HybridRelayer is an interface for relaying p2p transactions to WS network
+type HybridRelayer interface {
+	BridgeP2PToWS(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error
+}
+
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
 func WrapNetwork(net network.GossipNode, log logging.Logger, cfg config.Local) agreement.Network {
 	i := new(networkImpl)
@@ -177,6 +182,10 @@ func (i *networkImpl) processValidateMessage(raw network.IncomingMessage, submit
 		messagesDroppedTotal.Inc(nil)
 		messagesDroppedByType.Add(msgType, 1)
 		action = network.Ignore
+	}
+
+	if hybridNet, ok := i.net.(HybridRelayer); ok && action == network.Accept {
+		_ = hybridNet.BridgeP2PToWS(i.ctx, raw.Tag, raw.Data, false, metadata.raw.Sender)
 	}
 
 	// The action is returned synchronously via syncCh. Subsequent Relay, Broadcast, or Disconnect calls may occur asynchronously using the saved message handle from IncomingMessage.
