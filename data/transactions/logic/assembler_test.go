@@ -499,7 +499,14 @@ const v12Compiled = v11Compiled + fvCompiled
 
 const sumhashCompiled = "8002012386"
 const sha512Compiled = "8002012387"
-const v13Compiled = v12Compiled + sumhashCompiled + sha512Compiled
+
+// v13BaseCompiled is the v12 nonsense reassembled at version 13. It is not a
+// simple bytecode-level transform of v12Compiled because v13 encodes branch
+// offsets as binary.Varint (zigzag+ULEB128) instead of big-endian int16, and
+// the assembler shrinks short jumps via findBranchSizes. TestV13BaseFromV12
+// confirms that a disassemble/pragma-bump/reassemble roundtrip reproduces it.
+const v13BaseCompiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c281716154006290349483403350222231d4a484848482b50512a63222352410442004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f88044202892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a5e005f018120af060180070123456789abcd4949050198800301234549498481ffff03d101d000800243218001775c0280018881015d81018d02fff800008101438a01028bff240b8c0089810246014704450983030102018e02fff500008203013101320131b9babbbcbdbfbe800301234549e00049e10349e200e303e402e501d2d3757401802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe6018002abcd494985"
+const v13Compiled = v13BaseCompiled + sumhashCompiled + sha512Compiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,
@@ -582,6 +589,36 @@ func TestAssemble(t *testing.T) {
 			require.Equal(t, expectedBytes, ops.Program, hex.EncodeToString(ops.Program))
 		})
 	}
+}
+
+// TestV13BaseFromV12 confirms that v13BaseCompiled is what you get by
+// disassembling v12Compiled, bumping the pragma to 13, and reassembling. The
+// branch encoding changed between v12 and v13 (int16 -> zigzag varint), so the
+// roundtrip exercises that the source-level program survives the version bump
+// even though the bytecode shape does not.
+func TestV13BaseFromV12(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	v12bytes, err := hex.DecodeString("0c" + v12Compiled)
+	require.NoError(t, err)
+
+	dis, err := Disassemble(v12bytes)
+	require.NoError(t, err)
+
+	bumped := strings.Replace(dis, "#pragma version 12", "#pragma version 13", 1)
+	require.Contains(t, bumped, "#pragma version 13")
+
+	// notrack disables type-checking, which the disassembled program would
+	// otherwise fail (it stitches together unrelated sequences for coverage).
+	ops, err := AssembleStringWithVersion(notrack(bumped), 13)
+	require.NoError(t, err)
+	require.Empty(t, ops.Errors)
+
+	// strip the leading version byte added by the assembler so we compare
+	// against v13BaseCompiled, which is also stored without it.
+	require.Equal(t, byte(13), ops.Program[0])
+	require.Equal(t, v13BaseCompiled, hex.EncodeToString(ops.Program[1:]))
 }
 
 var experiments = []uint64{sumhashVersion}
@@ -1504,6 +1541,38 @@ int 2`
 	}
 }
 
+// TestAssembleBranchTooFar exercises the bounds check in resolveLabels for
+// varint-encoded branches. The initial 3-byte placeholder covers offsets up to
+// 2^20 bytes; a forward jump that exceeds that range is rejected. We pad the
+// space between `b done` and the label with many `pushbytes` chunks so the jump
+// distance overflows what findBranchSizes can fit, leaving resolveLabels to
+// fail. Chunks stay under bufio.Scanner's 64 KB line limit.
+func TestAssembleBranchTooFar(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Each chunk: pushbytes opcode (1) + length varint (3) + 16 KB data (1<<14)
+	// + pop (1). 65 chunks gives ~1.04 MB between b and done, comfortably above
+	// the 2^20 limit on a 3-byte varint placeholder.
+	const chunkData = 1 << 14
+	const chunks = 65
+
+	var src strings.Builder
+	src.Grow(chunks * (2*chunkData + 32))
+	src.WriteString("b done\n")
+	for range chunks {
+		src.WriteString("pushbytes 0x")
+		for range chunkData {
+			src.WriteString("00")
+		}
+		src.WriteString("\npop\n")
+	}
+	src.WriteString("done:\nint 1\n")
+
+	testProg(t, src.String(), AssemblerMaxVersion,
+		exp(1, "label \"done\" is too far away"))
+}
+
 func TestAssembleBase64(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1579,8 +1648,11 @@ intc 0
 bnz done
 done:`
 	ops := testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 9, len(ops.Program))
 	expectedProgBytes := []byte("\x01\x20\x01\x01\x22\x22\x40\x00\x00")
+	if AssemblerMaxVersion >= varintBranchVersion {
+		// offset 0 as 1-byte varint: zigzag(0)=0=0x00
+		expectedProgBytes = []byte("\x01\x20\x01\x01\x22\x22\x40\x00")
+	}
 	expectedProgBytes[0] = byte(AssemblerMaxVersion)
 	require.Equal(t, expectedProgBytes, ops.Program)
 }
@@ -2355,7 +2427,8 @@ label1:
   err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 7, len(ops.Program))
+	// jump=1 fits in 1-byte varint, so b is 2 bytes; total = 6
+	require.Equal(t, 6, len(ops.Program))
 	require.Equal(t, 4, len(ops.OffsetToSource))
 	// vlen
 	location, ok = ops.OffsetToSource[0]
@@ -2369,20 +2442,16 @@ label1:
 	location, ok = ops.OffsetToSource[2]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 1}, location)
-	// b byte 1
+	// b varint byte
 	location, ok = ops.OffsetToSource[3]
 	require.False(t, ok)
 	require.Equal(t, SourceLocation{}, location)
-	// b byte 2
-	location, ok = ops.OffsetToSource[4]
-	require.False(t, ok)
-	require.Equal(t, SourceLocation{}, location)
 	// err 2
-	location, ok = ops.OffsetToSource[5]
+	location, ok = ops.OffsetToSource[4]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 2}, location)
 	// err 3
-	location, ok = ops.OffsetToSource[6]
+	location, ok = ops.OffsetToSource[5]
 	require.True(t, ok)
 	require.Equal(t, SourceLocation{Line: 4, Column: 2}, location)
 
