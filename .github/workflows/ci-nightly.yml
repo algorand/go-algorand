@@ -283,6 +283,7 @@ jobs:
       CI_PLATFORM: ${{ matrix.platform }}
       CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
       S3_TESTDATA: ${{ secrets.S3_TESTDATA }}
+      AWS_ROLE: ${{ secrets.AWS_ROLE }}
     steps:
       - name: Set CI_E2E_FILENAME for e2e test data publishing
         run: |
@@ -305,6 +306,7 @@ jobs:
         with:
           cache-prefix: buildsrc
       - name: Configure AWS credentials
+        if: env.AWS_ROLE != ''
         uses: aws-actions/configure-aws-credentials@v4.2.1
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
