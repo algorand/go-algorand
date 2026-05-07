@@ -29,7 +29,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -464,35 +463,12 @@ func TestNetworkImplBridgeP2PToWS(t *testing.T) {
 
 	cases := []struct {
 		name         string
-		respond      func(n *networkImpl, h agreement.MessageHandle)
-		expectAction network.ForwardingPolicy
+		action       network.ForwardingPolicy
 		expectBridge bool
 	}{
-		{
-			name: "Accept",
-			respond: func(n *networkImpl, h agreement.MessageHandle) {
-				err := n.Relay(h, protocol.AgreementVoteTag, []byte("ignored"))
-				require.NoError(t, err)
-			},
-			expectAction: network.Accept,
-			expectBridge: true,
-		},
-		{
-			name: "Disconnect",
-			respond: func(n *networkImpl, h agreement.MessageHandle) {
-				n.Disconnect(h)
-			},
-			expectAction: network.Disconnect,
-			expectBridge: false,
-		},
-		{
-			name: "Ignore",
-			respond: func(n *networkImpl, h agreement.MessageHandle) {
-				n.Ignore(h)
-			},
-			expectAction: network.Ignore,
-			expectBridge: false,
-		},
+		{name: "Accept", action: network.Accept, expectBridge: true},
+		{name: "Disconnect", action: network.Disconnect, expectBridge: false},
+		{name: "Ignore", action: network.Ignore, expectBridge: false},
 	}
 
 	for _, tc := range cases {
@@ -500,8 +476,7 @@ func TestNetworkImplBridgeP2PToWS(t *testing.T) {
 			mock := &hybridGossipMock{}
 			netImpl := WrapNetwork(mock, logging.TestingLog(t), config.GetDefaultLocal()).(*networkImpl)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			netImpl.Start(ctx)
 
 			raw := network.IncomingMessage{
@@ -509,20 +484,23 @@ func TestNetworkImplBridgeP2PToWS(t *testing.T) {
 				Data: []byte{1, 2, 3},
 			}
 
-			done := make(chan struct{})
+			var wg sync.WaitGroup
+			wg.Add(1)
 			go func() {
-				defer close(done)
+				wg.Done()
 				select {
 				case msg := <-netImpl.Messages(protocol.AgreementVoteTag):
-					tc.respond(netImpl, msg.MessageHandle)
+					meta := messageMetadataFromHandle(msg.MessageHandle)
+					require.NotNil(t, meta)
+					meta.syncCh <- tc.action
 				case <-ctx.Done():
 				}
 			}()
 
 			out := netImpl.processValidateVoteMessage(raw)
-			<-done
+			wg.Wait()
 
-			assert.Equal(t, tc.expectAction, out.Action)
+			assert.Equal(t, tc.action, out.Action)
 			calls := mock.snapshot()
 			if tc.expectBridge {
 				require.Len(t, calls, 1)
@@ -555,16 +533,18 @@ func TestNetworkImplBridgeP2PToWSNonHybrid(t *testing.T) {
 	require.False(t, ok)
 
 	netImpl := WrapNetwork(wnet, logging.TestingLog(t), config.GetDefaultLocal()).(*networkImpl)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	netImpl.Start(ctx)
 
-	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		defer close(done)
+		defer wg.Done()
 		select {
 		case msg := <-netImpl.Messages(protocol.AgreementVoteTag):
-			_ = netImpl.Relay(msg.MessageHandle, protocol.AgreementVoteTag, msg.Data)
+			meta := messageMetadataFromHandle(msg.MessageHandle)
+			require.NotNil(t, meta)
+			meta.syncCh <- network.Accept
 		case <-ctx.Done():
 		}
 	}()
@@ -573,7 +553,7 @@ func TestNetworkImplBridgeP2PToWSNonHybrid(t *testing.T) {
 		Tag:  protocol.AgreementVoteTag,
 		Data: []byte{1, 2, 3},
 	})
-	<-done
+	wg.Wait()
 
 	assert.Equal(t, network.Accept, out.Action)
 }
