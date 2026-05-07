@@ -4,7 +4,6 @@ on:
     branches: 
       - master
       - 'rel/**'
-
   workflow_dispatch:
     inputs:
       branch:
