@@ -120,11 +120,6 @@ jobs:
         if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}
   reviewdog-shellcheck:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: write
-      issues: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
