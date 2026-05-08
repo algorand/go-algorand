@@ -56,6 +56,7 @@ function port_install_or_upgrade {
         PORT_FORCE="-f"
     fi
 
+    echo "===>  $pkg..."
     if port installed "$pkg" 2>/dev/null | grep -q "(active)"; then
         if ! "${port_cmd[@]}" upgrade ${PORT_FORCE} "$pkg"; then
             return 1
@@ -103,15 +104,6 @@ elif [ "${OS}" = "darwin" ]; then
     DARWIN_DEPS=(pkg-config libtool shellcheck jq autoconf automake python3 diffutils)
     DARWIN_DEPS_OPTIONAL=(lnav)
 
-    # MacPorts uses different names for a couple of packages.
-    port_name() {
-        case "$1" in
-            pkg-config) echo pkgconfig ;;
-            python3)    echo python312 ;;
-            *)          echo "$1" ;;
-        esac
-    }
-
     if which port >/dev/null 2>&1; then
         port_cmd=(port -N)
         if which sudo >/dev/null 2>&1; then
@@ -120,24 +112,41 @@ elif [ "${OS}" = "darwin" ]; then
 
         "${port_cmd[@]}" selfupdate
 
+        # Use the latest python3 port available from MacPorts.
+        latest_python3_port=$(port search python3 | grep -E '^python3[0-9]{1,2}\s+' | awk '{print $1}' | sort -V | tail -n 1)
+
+        have_python3=false
+        if which python3 >/dev/null 2>&1; then
+            have_python3=true
+        fi
+
+        # MacPorts uses different names for a couple of packages.
+        port_name() {
+            case "$1" in
+                pkg-config) echo pkgconfig ;;
+                python3)    echo "$latest_python3_port" ;;
+                *)          echo "$1" ;;
+            esac
+        }
+
         for pkg in "${DARWIN_DEPS[@]}"; do
+            if [ "$pkg" = "python3" ] && $have_python3; then
+                echo "Skipping python3 [$(python3 --version)] as already installed"
+                echo "Install with 'port install $latest_python3_port && port select --set python3 $latest_python3_port' to use the latest MacPorts version"
+                continue
+            fi
             port_install_or_upgrade "$(port_name "$pkg")"
         done
-        if [ "$CI" != "true" ] && [ "$CIRCLECI" != "true" ]; then
+        if [ "$CI" != "true" ] ; then
             for pkg in "${DARWIN_DEPS_OPTIONAL[@]}"; do
                 port_install_or_upgrade "$(port_name "$pkg")"
             done
             lnav -i "$SCRIPTPATH/algorand_node_log.json"
         fi
 
-        # port select --set python3 python312
-        for pkg in "${DARWIN_DEPS[@]}"; do
-            if [[ "$pkg" == *python3* ]]; then
-                port_pkg="$(port_name "$pkg")"
-                "${port_cmd[@]}" select --set python3 "$port_pkg"
-                break
-            fi
-        done
+        if ! $have_python3; then
+            "${port_cmd[@]}" select --set python3 "$latest_python3_port"
+        fi
 
         # all done, no need to fallback to homebrew
         exit 0
@@ -154,7 +163,7 @@ elif [ "${OS}" = "darwin" ]; then
     for pkg in "${DARWIN_DEPS[@]}"; do
         install_or_upgrade "$pkg"
     done
-    if [ "$CI" != "true" ] && [ "$CIRCLECI" != "true" ]; then
+    if [ "$CI" != "true" ] ; then
         for pkg in "${DARWIN_DEPS_OPTIONAL[@]}"; do
             install_or_upgrade "$pkg"
         done
