@@ -117,6 +117,10 @@ func OpenLedger[T string | DirsAndPrefix](
 	log logging.Logger, dbPathPrefix T, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
+	cfg.BlockDBCompressionWindow, err = cfg.GetValidatedBlockDBCompressionWindow()
+	if err != nil {
+		return nil, fmt.Errorf("OpenLedger: %w", err)
+	}
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
 	if verifiedCacheSize < cfg.TxPoolSize {
 		verifiedCacheSize = cfg.TxPoolSize
@@ -173,7 +177,7 @@ func OpenLedger[T string | DirsAndPrefix](
 	start := time.Now()
 	ledgerInitblocksdbCount.Inc(nil)
 	err = l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initBlocksDB(tx, l.log, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
+		return initBlocksDB(tx, l.log, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival, cfg.BlockDBCompressionWindow)
 	})
 	ledgerInitblocksdbMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -374,8 +378,10 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 // initBlocksDB performs DB initialization:
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it if not
-func initBlocksDB(tx *sql.Tx, log logging.Logger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
-	err = blockdb.BlockInit(tx, initBlocks)
+func initBlocksDB(tx *sql.Tx, log logging.Logger, initBlocks []bookkeeping.Block, isArchival bool, compressionWindow uint64) (err error) {
+	writer := blockdb.NewBlockWriter(compressionWindow)
+	defer writer.Close()
+	err = blockdb.BlockInit(tx, initBlocks, writer)
 	if err != nil {
 		err = fmt.Errorf("initBlocksDB.blockInit %v", err)
 		return err
@@ -398,7 +404,8 @@ func initBlocksDB(tx *sql.Tx, log logging.Logger, initBlocks []bookkeeping.Block
 				err = fmt.Errorf("initBlocksDB.blockResetDB %v", err)
 				return err
 			}
-			err = blockdb.BlockInit(tx, initBlocks)
+			writer.Reset()
+			err = blockdb.BlockInit(tx, initBlocks, writer)
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockInit 2 %v", err)
 				return err
@@ -480,6 +487,8 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 			minToSave = catchpointsMinToSave
 		}
 	}
+
+	minToSave = blockdb.RoundDownRetention(minToSave)
 
 	return minToSave
 }

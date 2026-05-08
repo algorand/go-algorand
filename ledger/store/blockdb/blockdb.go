@@ -45,7 +45,7 @@ var blockResetExprs = []string{
 }
 
 // BlockInit initializes blockdb
-func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
+func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, writer *BlockWriter) error {
 	for _, tableCreate := range blockSchema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
@@ -58,9 +58,12 @@ func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 		return err
 	}
 
+	if writer == nil {
+		writer = NewBlockWriter(0)
+	}
 	if next == 0 {
 		for _, blk := range initBlocks {
-			err = BlockPut(tx, blk, agreement.Certificate{})
+			err = BlockPut(tx, blk, agreement.Certificate{}, writer)
 			if err != nil {
 				serr, ok := err.(sqlite3.Error)
 				if ok && serr.Code == sqlite3.ErrConstraint {
@@ -87,16 +90,10 @@ func BlockResetDB(tx *sql.Tx) error {
 
 // BlockGet retrieves a block by a round number
 func BlockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
-	var buf []byte
-	err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
+	buf, _, err := blockGetEncoded(tx, rnd, true /*blkOnly*/)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ledgercore.ErrNoEntry{Round: rnd}
-		}
-
 		return
 	}
-
 	err = protocol.Decode(buf, &blk)
 	return
 }
@@ -119,15 +116,7 @@ func BlockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 
 // BlockGetEncodedCert retrieves raw block and cert by a round number
 func BlockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
-	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blk, &cert)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ledgercore.ErrNoEntry{Round: rnd}
-		}
-
-		return
-	}
-	return
+	return blockGetEncoded(tx, rnd, false)
 }
 
 // BlockGetCert retrieves block and cert by a round number
@@ -152,7 +141,7 @@ func BlockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 }
 
 // BlockPut stores block and certificate
-func BlockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
+func BlockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate, writer *BlockWriter) error {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
 	if err != nil {
@@ -171,12 +160,17 @@ func BlockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) err
 		}
 	}
 
+	blkChunk, certChunk, err := encodeBlockCertData(blk, cert, writer)
+	if err != nil {
+		return err
+	}
+
 	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
-		protocol.Encode(&blk),
-		protocol.Encode(&cert),
+		blkChunk,
+		certChunk,
 	)
 	return err
 }
@@ -241,8 +235,18 @@ func BlockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
 	return err
 }
 
+// RoundDownRetention aligns a candidate retention boundary to a round that
+// preserves every possible windowed-zstd anchor supported by the block DB.
+// Reads look back by MaxCompressionWindow, so retention must keep rows from
+// the same maximum-sized window even if the current node has compression
+// disabled or uses a smaller window than an earlier run.
+func RoundDownRetention(rnd basics.Round) basics.Round {
+	const n = uint64(MaxCompressionWindow)
+	return basics.Round(uint64(rnd) - uint64(rnd)%n)
+}
+
 // BlockStartCatchupStaging initializes catchup for catchpoint
-func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
+func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate, writer *BlockWriter) error {
 	// delete the old catchpointblocks table, if there is such.
 	for _, stmt := range blockResetExprs {
 		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
@@ -261,13 +265,24 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.
 		}
 	}
 
+	if writer == nil {
+		writer = NewBlockWriter(0)
+	}
+	writer.Reset()
+	defer writer.Reset()
+
+	blkChunk, certChunk, encErr := encodeBlockCertData(blk, cert, writer)
+	if encErr != nil {
+		return encErr
+	}
+
 	// insert the top entry to the blocks table.
 	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
-		protocol.Encode(&blk),
-		protocol.Encode(&cert),
+		blkChunk,
+		certChunk,
 	)
 	if err != nil {
 		return err
@@ -306,14 +321,25 @@ func BlockAbortCatchup(tx *sql.Tx) error {
 }
 
 // BlockPutStaging store a block into catchpoint staging table
-func BlockPutStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) (err error) {
+func BlockPutStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate, writer *BlockWriter) (err error) {
+	if writer == nil {
+		writer = NewBlockWriter(0)
+	}
+	writer.Reset()
+	defer writer.Reset()
+
+	blkChunk, certChunk, err := encodeBlockCertData(blk, cert, writer)
+	if err != nil {
+		return err
+	}
+
 	// insert the new entry
 	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
-		protocol.Encode(&blk),
-		protocol.Encode(&cert),
+		blkChunk,
+		certChunk,
 	)
 	if err != nil {
 		return err
@@ -343,8 +369,8 @@ func BlockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
 		return bookkeeping.Block{}, err
 	}
 
-	var buf []byte
-	err = tx.QueryRow("SELECT blkdata FROM catchpointblocks WHERE rnd=?", round).Scan(&buf)
+	var chunk []byte
+	err = tx.QueryRow("SELECT blkdata FROM catchpointblocks WHERE rnd=?", round).Scan(&chunk)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			err = ledgercore.ErrNoEntry{Round: round}
@@ -352,6 +378,15 @@ func BlockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
 		return
 	}
 
+	var buf []byte
+	if needsWindow(chunk) {
+		buf, err = DecodeWindow([][]byte{chunk})
+	} else {
+		buf, err = decodeStandaloneRow(chunk)
+	}
+	if err != nil {
+		return
+	}
 	err = protocol.Decode(buf, &blk)
 
 	return blk, err

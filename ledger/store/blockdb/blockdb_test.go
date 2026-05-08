@@ -110,67 +110,103 @@ func blockChainBlocks(be []testBlockEntry) []bookkeeping.Block {
 	return res
 }
 
+// blockDBTestWindows returns the compression windows every blockdb test case
+// should sweep across: the legacy disabled codec and a small windowed-zstd
+// codec. The latter exercises both anchor and continuation rows when a test
+// inserts more than N blocks.
+func blockDBTestWindows() []uint64 {
+	return []uint64{
+		1, // disabled: rows stored verbatim
+		4, // windowed: anchor every 4 rounds
+	}
+}
+
+func windowLabel(window uint64) string {
+	if window <= 1 {
+		return "disabled"
+	}
+	return "windowed"
+}
+
 func TestBlockDBEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
-	defer dbs.Close()
+	for _, window := range blockDBTestWindows() {
+		t.Run(windowLabel(window), func(t *testing.T) {
+			dbs, _ := storetesting.DbOpenTest(t, true)
+			storetesting.SetDbLogging(t, dbs)
+			defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
+			tx, err := dbs.Wdb.Handle.Begin()
+			require.NoError(t, err)
+			defer tx.Rollback()
 
-	err = BlockInit(tx, nil)
-	require.NoError(t, err)
-	checkBlockDB(t, tx, nil)
+			writer := NewBlockWriter(window)
+			defer writer.Close()
+			err = BlockInit(tx, nil, writer)
+			require.NoError(t, err)
+			checkBlockDB(t, tx, nil)
+		})
+	}
 }
 
 func TestBlockDBInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
-	defer dbs.Close()
+	for _, window := range blockDBTestWindows() {
+		t.Run(windowLabel(window), func(t *testing.T) {
+			dbs, _ := storetesting.DbOpenTest(t, true)
+			storetesting.SetDbLogging(t, dbs)
+			defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
+			tx, err := dbs.Wdb.Handle.Begin()
+			require.NoError(t, err)
+			defer tx.Rollback()
 
-	blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
+			blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	err = BlockInit(tx, blockChainBlocks(blocks))
-	require.NoError(t, err)
-	checkBlockDB(t, tx, blocks)
+			writer := NewBlockWriter(window)
+			defer writer.Close()
+			err = BlockInit(tx, blockChainBlocks(blocks), writer)
+			require.NoError(t, err)
+			checkBlockDB(t, tx, blocks)
 
-	err = BlockInit(tx, blockChainBlocks(blocks))
-	require.NoError(t, err)
-	checkBlockDB(t, tx, blocks)
+			err = BlockInit(tx, blockChainBlocks(blocks), writer)
+			require.NoError(t, err)
+			checkBlockDB(t, tx, blocks)
+		})
+	}
 }
 
 func TestBlockDBAppend(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	dbs, _ := storetesting.DbOpenTest(t, true)
-	storetesting.SetDbLogging(t, dbs)
-	defer dbs.Close()
+	for _, window := range blockDBTestWindows() {
+		t.Run(windowLabel(window), func(t *testing.T) {
+			dbs, _ := storetesting.DbOpenTest(t, true)
+			storetesting.SetDbLogging(t, dbs)
+			defer dbs.Close()
 
-	tx, err := dbs.Wdb.Handle.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
+			tx, err := dbs.Wdb.Handle.Begin()
+			require.NoError(t, err)
+			defer tx.Rollback()
 
-	blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
+			blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	err = BlockInit(tx, blockChainBlocks(blocks))
-	require.NoError(t, err)
-	checkBlockDB(t, tx, blocks)
+			writer := NewBlockWriter(window)
+			defer writer.Close()
+			err = BlockInit(tx, blockChainBlocks(blocks), writer)
+			require.NoError(t, err)
+			checkBlockDB(t, tx, blocks)
 
-	for i := 0; i < 10; i++ {
-		blkent := randomBlock(basics.Round(len(blocks)))
-		err = BlockPut(tx, blkent.block, blkent.cert)
-		require.NoError(t, err)
+			for i := 0; i < 10; i++ {
+				blkent := randomBlock(basics.Round(len(blocks)))
+				err = BlockPut(tx, blkent.block, blkent.cert, writer)
+				require.NoError(t, err)
 
-		blocks = append(blocks, blkent)
-		checkBlockDB(t, tx, blocks)
+				blocks = append(blocks, blkent)
+				checkBlockDB(t, tx, blocks)
+			}
+		})
 	}
 }

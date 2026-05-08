@@ -46,6 +46,8 @@ type blockQueue struct {
 	lastCommitted basics.Round
 	q             []blockEntry
 
+	writer *blockdb.BlockWriter
+
 	mu      deadlock.Mutex
 	cond    *sync.Cond
 	running bool
@@ -56,6 +58,7 @@ func newBlockQueue(l *Ledger) (*blockQueue, error) {
 	bq := &blockQueue{}
 	bq.cond = sync.NewCond(&bq.mu)
 	bq.l = l
+	bq.writer = blockdb.NewBlockWriter(l.cfg.BlockDBCompressionWindow)
 	return bq, nil
 }
 
@@ -121,6 +124,7 @@ func (bq *blockQueue) syncer() {
 		}
 
 		if !bq.running {
+			bq.writer.Close()
 			close(bq.closed)
 			bq.closed = nil
 			bq.mu.Unlock()
@@ -132,20 +136,25 @@ func (bq *blockQueue) syncer() {
 
 		start := time.Now()
 		ledgerSyncBlockputCount.Inc(nil)
-		err := bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			for _, e := range workQ {
-				err0 := blockdb.BlockPut(tx, e.block, e.cert)
-				if err0 != nil {
-					return err0
+		err := bq.l.blockDBs.Wdb.AtomicContext(context.Background(),
+			func(ctx context.Context, tx *sql.Tx) error {
+				for _, e := range workQ {
+					err0 := blockdb.BlockPut(tx, e.block, e.cert, bq.writer)
+					if err0 != nil {
+						return err0
+					}
 				}
-			}
-			return nil
-		})
+				return nil
+			},
+			// retryClearFn: clear writer (compression state)
+			func(context.Context) { bq.writer.Reset() },
+		)
 		ledgerSyncBlockputMicros.AddMicrosecondsSince(start, nil)
 
 		bq.mu.Lock()
 
 		if err != nil {
+			bq.writer.Reset()
 			bq.l.log.Warnf("blockQueue.syncer: could not flush: %v", err)
 		} else {
 			bq.lastCommitted += basics.Round(len(workQ))
@@ -179,6 +188,7 @@ func (bq *blockQueue) syncer() {
 				if basics.SubSaturate(minToSave, earliest) > maxDeletionBatchSize {
 					minToSave = basics.AddSaturate(earliest, maxDeletionBatchSize)
 				}
+				minToSave = blockdb.RoundDownRetention(minToSave)
 			}
 
 			bfstart := time.Now()

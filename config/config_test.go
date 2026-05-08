@@ -835,6 +835,36 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 	}
 }
 
+// TestLocal_ValidateBlockDBCompressionWindow exercises the divisor-of-32
+// constraint that lets retention round minToSave down by
+// MaxBlockDBCompressionWindow without ever stranding an anchor. The
+// invariant: because every supported N divides 32, every round at a
+// MaxBlockDBCompressionWindow boundary is also at an N boundary, so the
+// retention round-down lands on an actual anchor for any past or future
+// N value.
+func TestLocal_ValidateBlockDBCompressionWindow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, n := range []uint64{0, 1, 2, 4, 8, 16, 32} {
+		c := Local{BlockDBCompressionWindow: n}
+		got, err := c.GetValidatedBlockDBCompressionWindow()
+		require.NoError(t, err, "N=%d should be accepted", n)
+		if n == 0 {
+			require.Equal(t, uint64(1), got)
+		} else {
+			require.Equal(t, n, got)
+		}
+		require.NoError(t, c.ValidateBlockDBCompressionWindow())
+	}
+	for _, n := range []uint64{3, 7, 10, 17, 31, 33} {
+		c := Local{BlockDBCompressionWindow: n}
+		_, err := c.GetValidatedBlockDBCompressionWindow()
+		require.Error(t, err, "N=%d should be rejected", n)
+		require.Error(t, c.ValidateBlockDBCompressionWindow())
+	}
+}
+
 // Tests that ensureAbsGenesisDir resolves a path to an absolute path, appends the genesis directory, and creates any needed directories
 func TestEnsureAbsDir(t *testing.T) {
 	partitiontest.PartitionTest(t)
