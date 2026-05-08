@@ -39,7 +39,7 @@ jobs:
           reviewdog --version
       - name: Run golangci-lint with reviewdog
         env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.github_token }}
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
 
@@ -95,7 +95,7 @@ jobs:
           reviewdog --version
       - name: Run golangci-lint with reviewdog
         env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.github_token }}
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
 
@@ -120,12 +120,17 @@ jobs:
         if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}
   reviewdog-shellcheck:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
         uses: reviewdog/action-shellcheck@v1.28.0
         with:
-          github_token: ${{ secrets.github_token }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: "github-pr-check"
           shellcheck_flags: "-e SC2034,SC2046,SC2053,SC2207,SC2145 -S warning"
           fail_level: any
