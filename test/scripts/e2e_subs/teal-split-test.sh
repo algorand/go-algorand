@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+teal-split-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"
@@ -60,4 +62,4 @@ fi
 # close out split account
 ${gcmd} clerk send -F ${TEMPDIR}/split.teal -t AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ -a 0 -c ${ACCOUNTB}
 
-date '+teal-split-test OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"
