@@ -141,7 +141,7 @@ jobs:
           retention-days: 7
       - name: Upload coverage
         # Only upload coverage from ubuntu-24.04 platform
-        if: matrix.platform == 'ubuntu-24.04' && ${{ !cancelled() }}
+        if: ${{ matrix.platform == 'ubuntu-24.04' && !cancelled() }}
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
@@ -283,6 +283,7 @@ jobs:
       CI_PLATFORM: ${{ matrix.platform }}
       CI_KEEP_TEMP_PLATFORM: "ubuntu-24.04"
       S3_TESTDATA: ${{ secrets.S3_TESTDATA }}
+      AWS_ROLE: ${{ secrets.AWS_ROLE }}
     steps:
       - name: Set CI_E2E_FILENAME for e2e test data publishing
         run: |
@@ -305,6 +306,7 @@ jobs:
         with:
           cache-prefix: buildsrc
       - name: Configure AWS credentials
+        if: env.AWS_ROLE != ''
         uses: aws-actions/configure-aws-credentials@v4.2.1
         with:
           role-to-assume: ${{ secrets.AWS_ROLE }}
