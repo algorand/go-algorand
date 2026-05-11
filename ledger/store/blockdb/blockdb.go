@@ -32,18 +32,18 @@ import (
 
 // 2019-12-15: removed column 'auxdata blob' from 'CREATE TABLE' statement. It was not explicitly removed from databases and may continue to exist with empty entries in some old databases.
 //
-// window_start is the round of the zstd frame anchor for the row, or NULL
-// if the row is stored verbatim (legacy raw msgp, compression disabled, or
-// a staged catchup row). The read path uses this column to find the start of
-// the window that covers a target round in a single SQL statement.
+// blockSchema is the pre-compression canonical shape. When compression is
+// enabled BlockInit ALTERs the table to add the nullable window_start
+// column; a node that never enables compression leaves the table as-is.
+// Read callers thread a hasWindowStart bool through from the open-time
+// detection so the read path never has to introspect the schema per call.
 var blockSchema = []string{
 	`CREATE TABLE IF NOT EXISTS blocks (
 		rnd integer primary key,
 		proto text,
 		hdrdata blob,
 		blkdata blob,
-		certdata blob,
-		window_start integer)`,
+		certdata blob)`,
 }
 
 var blockResetExprs = []string{
@@ -58,6 +58,7 @@ var blockResetExprs = []string{
 // PRAGMA table_info. If the table does not exist (PRAGMA returns no rows)
 // the function is a no-op so callers can invoke it unconditionally.
 func addWindowStartColumn(tx *sql.Tx, table string) error {
+	// Determine column presence and table existence in one PRAGMA.
 	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
 		return fmt.Errorf("blockdb: list columns of %s: %w", table, err)
@@ -99,13 +100,18 @@ func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, window uint64) error 
 			return fmt.Errorf("blockdb blockInit could not create table %v", err)
 		}
 	}
-	if err := addWindowStartColumn(tx, "blocks"); err != nil {
-		return err
-	}
-	// catchpointblocks usually doesn't exist, but a partial catchup resumed across an upgrade
-	// might be missing the window_start column.
-	if err := addWindowStartColumn(tx, "catchpointblocks"); err != nil {
-		return err
+	// Migrate only when compression is enabled. A node that never sets
+	// BlockDBCompressionWindow > 0 leaves the schema bit-identical to
+	// what an earlier release produced. catchpointblocks usually doesn't
+	// exist (no-op); migrating it matters for catchups resumed across an
+	// upgrade where BlockStartCatchupStaging's DROP+CREATE is skipped.
+	if window > 0 {
+		if err := addWindowStartColumn(tx, "blocks"); err != nil {
+			return err
+		}
+		if err := addWindowStartColumn(tx, "catchpointblocks"); err != nil {
+			return err
+		}
 	}
 
 	next, err := BlockNext(tx)
@@ -142,9 +148,11 @@ func BlockResetDB(tx *sql.Tx) error {
 	return nil
 }
 
-// BlockGet retrieves a block by a round number
-func BlockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
-	buf, _, err := blockGetEncoded(tx, rnd, true /*blkOnly*/)
+// BlockGet retrieves a block by a round number. hasWindowStart selects the
+// read shape (see blockGetEncoded); callers should pass the result of
+// HasWindowStart evaluated once at open time.
+func BlockGet(tx *sql.Tx, rnd basics.Round, hasWindowStart bool) (blk bookkeeping.Block, err error) {
+	buf, _, err := blockGetEncoded(tx, rnd, true /*blkOnly*/, hasWindowStart)
 	if err != nil {
 		return
 	}
@@ -168,14 +176,16 @@ func BlockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 	return
 }
 
-// BlockGetEncodedCert retrieves raw block and cert by a round number
-func BlockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
-	return blockGetEncoded(tx, rnd, false)
+// BlockGetEncodedCert retrieves raw block and cert by a round number.
+// hasWindowStart selects the read shape; see BlockGet.
+func BlockGetEncodedCert(tx *sql.Tx, rnd basics.Round, hasWindowStart bool) (blk []byte, cert []byte, err error) {
+	return blockGetEncoded(tx, rnd, false, hasWindowStart)
 }
 
-// BlockGetCert retrieves block and cert by a round number
-func BlockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
-	blkbuf, certbuf, err := BlockGetEncodedCert(tx, rnd)
+// BlockGetCert retrieves block and cert by a round number. hasWindowStart
+// selects the read shape; see BlockGet.
+func BlockGetCert(tx *sql.Tx, rnd basics.Round, hasWindowStart bool) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
+	blkbuf, certbuf, err := BlockGetEncodedCert(tx, rnd, hasWindowStart)
 	if err != nil {
 		return
 	}
@@ -220,18 +230,26 @@ func BlockPut(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate, w
 		return err
 	}
 
-	var windowStart any
-	if !writer.Codec().Disabled() {
-		windowStart = uint64(anchorRound)
+	// When compression is disabled the row is byte-identical to the
+	// pre-compression on-disk layout, so we use the 5-column INSERT and
+	// never touch the window_start column (which may not even exist).
+	if writer.Codec().Disabled() {
+		_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
+			rnd,
+			blk.CurrentProtocol,
+			protocol.Encode(&blk.BlockHeader),
+			blkChunk,
+			certChunk,
+		)
+		return err
 	}
-
 	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata, window_start) VALUES (?, ?, ?, ?, ?, ?)",
 		rnd,
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
 		blkChunk,
 		certChunk,
-		windowStart,
+		uint64(anchorRound),
 	)
 	return err
 }
@@ -325,10 +343,23 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.
 			return err
 		}
 	}
+	// Mirror the blocks schema. If blocks already has window_start (i.e.
+	// compression is enabled for this DB), catchpointblocks needs it too;
+	// otherwise BlockCompleteCatchup's rename would produce a blocks table
+	// that the windowed BlockPut INSERT can no longer target.
+	hasWS, err := tableHasColumn(tx, "blocks", "window_start")
+	if err != nil {
+		return err
+	}
+	if hasWS {
+		if aerr := addWindowStartColumn(tx, "catchpointblocks"); aerr != nil {
+			return aerr
+		}
+	}
 
 	// insert the top entry to the blocks table.
-	// window_start defaults to NULL (raw msgp); catchpoint restore does not use compression.
-	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
+	// staging rows are always raw msgp; window_start stays NULL.
+	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),

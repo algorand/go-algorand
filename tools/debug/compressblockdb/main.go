@@ -38,6 +38,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -57,9 +58,10 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Reads <src.sqlite> (an existing ledger.block.sqlite) and writes a new")
 	fmt.Fprintln(os.Stderr, "copy to <dst.sqlite> whose rows are encoded with the windowed-zstd")
-	fmt.Fprintln(os.Stderr, "compression at window size <window>. Use window=1 to write an uncompressed")
-	fmt.Fprintln(os.Stderr, "copy. The source may itself be raw, windowed, or mixed; the lowest")
-	fmt.Fprintln(os.Stderr, "stored round does not have to be 0.")
+	fmt.Fprintln(os.Stderr, "compression at window size <window>. Use window=0 to write an uncompressed")
+	fmt.Fprintln(os.Stderr, "copy and window=1 for an independent zstd frame per row. The source")
+	fmt.Fprintln(os.Stderr, "may itself be raw, windowed, or mixed; the lowest stored round does")
+	fmt.Fprintln(os.Stderr, "not have to be 0.")
 	fmt.Fprintln(os.Stderr, "")
 	flag.PrintDefaults()
 	os.Exit(2)
@@ -82,9 +84,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "both filenames must end in .sqlite")
 		os.Exit(1)
 	}
-	if int(n) > blockdb.MaxCompressionWindow {
-		fmt.Fprintf(os.Stderr, "window %d exceeds blockdb.MaxCompressionWindow (%d)\n",
-			n, blockdb.MaxCompressionWindow)
+	if !slices.Contains([]uint64{0, 1, 2, 4, 8, 16, 32}, n) {
+		fmt.Fprintf(os.Stderr, "window %d is not a supported value (must be one of 0,1,2,4,8,16,32)\n", n)
 		os.Exit(1)
 	}
 	if _, err := os.Stat(dst); err == nil {
@@ -92,6 +93,11 @@ func main() {
 		os.Exit(1)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		fmt.Fprintf(os.Stderr, "stat %s: %v\n", dst, err)
+		os.Exit(1)
+	}
+
+	if *batchSize <= 0 {
+		fmt.Fprintf(os.Stderr, "batch must be positive, got %d\n", *batchSize)
 		os.Exit(1)
 	}
 
@@ -115,7 +121,12 @@ func run(srcPath, dstPath string, n uint64, batch int) error {
 	if err != nil {
 		return fmt.Errorf("open dest: %w", err)
 	}
-	defer dstDB.Close()
+	dstClosed := false
+	defer func() {
+		if !dstClosed {
+			_ = dstDB.Close()
+		}
+	}()
 
 	minR, maxR, err := sourceRange(srcDB)
 	if err != nil {
@@ -125,6 +136,13 @@ func run(srcPath, dstPath string, n uint64, batch int) error {
 	fmt.Printf("source %s: rounds %d..%d (%d rounds)\n", srcPath, minR, maxR, nrounds)
 	fmt.Printf("dest   %s: window N=%d\n", dstPath, n)
 
+	// Detect the source's compression schema once so reads can pick the
+	// right query without a per-read PRAGMA or failed-query fallback.
+	srcHasWindowStart, err := detectHasWindowStart(srcDB)
+	if err != nil {
+		return fmt.Errorf("detect source schema: %w", err)
+	}
+
 	if ierr := initDest(dstDB, n); ierr != nil {
 		return ierr
 	}
@@ -132,10 +150,10 @@ func run(srcPath, dstPath string, n uint64, batch int) error {
 	writer := blockdb.NewBlockWriter(n)
 	defer writer.Close()
 
-	if serr := stageFirst(srcDB, dstDB, minR); serr != nil {
+	if serr := stageFirst(srcDB, dstDB, minR, srcHasWindowStart); serr != nil {
 		return serr
 	}
-	c := &copier{writer: writer, written: 1}
+	c := &copier{writer: writer, written: 1, srcHasWindowStart: srcHasWindowStart}
 
 	start := time.Now()
 	for batchLo := minR + 1; batchLo <= maxR; batchLo += basics.Round(batch) {
@@ -150,20 +168,63 @@ func run(srcPath, dstPath string, n uint64, batch int) error {
 		)
 	}
 
-	srcInfo, err := os.Stat(srcPath)
+	// Truncate the WAL and close the destination connection before
+	// measuring file size so the dest file fully reflects committed pages
+	// (otherwise recent commits can still be sitting in dst.sqlite-wal and
+	// the reported ratio is misleadingly small).
+	if _, cerr := dstDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); cerr != nil {
+		return fmt.Errorf("checkpoint dest: %w", cerr)
+	}
+	if cerr := dstDB.Close(); cerr != nil {
+		return fmt.Errorf("close dest: %w", cerr)
+	}
+	dstClosed = true
+
+	srcSize, err := sqliteOnDiskSize(srcPath)
 	if err != nil {
 		return err
 	}
-	dstInfo, err := os.Stat(dstPath)
+	dstSize, err := sqliteOnDiskSize(dstPath)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("done: %d rounds in %s\n", c.written, time.Since(start).Round(time.Second))
-	fmt.Printf("  source file: %.2f MB\n", float64(srcInfo.Size())/(1<<20))
+	fmt.Printf("  source file: %.2f MB\n", float64(srcSize)/(1<<20))
 	fmt.Printf("  dest file:   %.2f MB (%.2f%% of source)\n",
-		float64(dstInfo.Size())/(1<<20),
-		float64(dstInfo.Size())*100/float64(srcInfo.Size()))
+		float64(dstSize)/(1<<20),
+		float64(dstSize)*100/float64(srcSize))
 	return nil
+}
+
+// detectHasWindowStart runs blockdb.HasWindowStart in a short read-only
+// transaction. The result is stable for the lifetime of this process; the
+// tool's read loop passes it down to every BlockGet/BlockGetCert.
+func detectHasWindowStart(db *sql.DB) (bool, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	return blockdb.HasWindowStart(tx)
+}
+
+// sqliteOnDiskSize sums the .sqlite file with any -wal / -shm sidecars so
+// the reported size reflects everything the DB occupies on disk. A pre-WAL
+// or already-checkpointed DB has the sidecars missing or empty; their
+// absence is not an error.
+func sqliteOnDiskSize(path string) (int64, error) {
+	var total int64
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		info, err := os.Stat(path + suffix)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return 0, err
+		}
+		total += info.Size()
+	}
+	return total, nil
 }
 
 func sourceRange(db *sql.DB) (basics.Round, basics.Round, error) {
@@ -197,12 +258,12 @@ func initDest(db *sql.DB, window uint64) error {
 //
 // Staging writes the row verbatim (window_start = NULL); cross-row
 // compression begins with the first BlockPut call.
-func stageFirst(srcDB, dstDB *sql.DB, firstRound basics.Round) error {
+func stageFirst(srcDB, dstDB *sql.DB, firstRound basics.Round, srcHasWindowStart bool) error {
 	srcTx, err := srcDB.Begin()
 	if err != nil {
 		return err
 	}
-	blk, cert, err := blockdb.BlockGetCert(srcTx, firstRound)
+	blk, cert, err := blockdb.BlockGetCert(srcTx, firstRound, srcHasWindowStart)
 	_ = srcTx.Rollback()
 	if err != nil {
 		return fmt.Errorf("read round %d: %w", firstRound, err)
@@ -227,8 +288,9 @@ func stageFirst(srcDB, dstDB *sql.DB, firstRound basics.Round) error {
 // dest preserves the writer's in-flight zstd frame across consecutive
 // successful Put calls, so the LZ77 window spans every round in [firstRound+1, hi].
 type copier struct {
-	writer  *blockdb.BlockWriter
-	written uint64
+	writer            *blockdb.BlockWriter
+	written           uint64
+	srcHasWindowStart bool
 }
 
 func (c *copier) copyBatch(srcDB, dstDB *sql.DB, lo, hi basics.Round) error {
@@ -248,7 +310,7 @@ func (c *copier) copyBatch(srcDB, dstDB *sql.DB, lo, hi basics.Round) error {
 			blk  bookkeeping.Block
 			cert agreement.Certificate
 		)
-		blk, cert, err = blockdb.BlockGetCert(srcTx, r)
+		blk, cert, err = blockdb.BlockGetCert(srcTx, r, c.srcHasWindowStart)
 		if err != nil {
 			_ = dstTx.Rollback()
 			c.writer.Reset()

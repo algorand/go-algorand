@@ -117,11 +117,34 @@ type BlockWriter struct {
 	encPair *EncoderPair
 }
 
-// NewBlockWriter constructs a writer for normal block-table appends.
+// NewBlockWriter constructs a writer for normal block-table appends. The
+// window must be one of the values in validWindows; any other value is
+// clamped down to the next smaller valid value (which retains the divisor
+// invariant RoundDownRetention relies on). Production callers should pass a
+// value already normalized through
+// config.Local.GetNormalizedBlockDBCompressionWindow; this clamp is
+// defense in depth so a stray test or tool can never produce a DB that
+// retention would prune incorrectly.
 func NewBlockWriter(window uint64) *BlockWriter {
-	n := min(max(int(window), 0), MaxCompressionWindow)
-	c := WindowCodec{N: n, Level: defaultCompressionLevel}
+	n := normalizeWindow(window)
+	c := WindowCodec{N: int(n), Level: defaultCompressionLevel}
 	return &BlockWriter{codec: c, encPair: NewEncoderPair(c)}
+}
+
+// validWindows enumerates the BlockDBCompressionWindow values the codec
+// honors. Every entry divides MaxCompressionWindow so retention's round-down
+// preserves every anchor regardless of which N a row was written under.
+var validWindows = []uint64{0, 1, 2, 4, 8, 16, 32}
+
+// normalizeWindow returns the largest valid window value not exceeding w.
+func normalizeWindow(w uint64) uint64 {
+	var picked uint64
+	for _, v := range validWindows {
+		if v <= w && v >= picked {
+			picked = v
+		}
+	}
+	return picked
 }
 
 // Codec returns the WindowCodec configured for this writer. The caller

@@ -172,6 +172,27 @@ func TestMaxWindowConstantsInSync(t *testing.T) {
 	require.Equal(t, uint64(MaxCompressionWindow), uint64(config.MaxBlockDBCompressionWindow))
 }
 
+// TestNewBlockWriterNormalizesWindow guards the retention invariant: every
+// codec N must divide MaxCompressionWindow so the round-down by 32 in
+// RoundDownRetention always lands on an anchor. NewBlockWriter clamps any
+// out-of-set input down to the next valid value so a stray caller (a test,
+// a misconfigured tool) cannot produce a DB with a stranded anchor.
+func TestNewBlockWriterNormalizesWindow(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	cases := []struct {
+		in   uint64
+		want int
+	}{
+		{0, 0}, {1, 1}, {2, 2}, {4, 4}, {8, 8}, {16, 16}, {32, 32},
+		{3, 2}, {7, 4}, {10, 8}, {17, 16}, {31, 16},
+		{33, 32}, {1 << 20, 32}, {^uint64(0), 32},
+	}
+	for _, tc := range cases {
+		w := NewBlockWriter(tc.in)
+		require.Equal(t, tc.want, w.Codec().N, "window %d", tc.in)
+	}
+}
+
 func TestRoundDownRetention(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

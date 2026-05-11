@@ -87,18 +87,21 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []testBlockEntry) {
 		require.Equal(t, earliest, blocks[0].block.BlockHeader.Round)
 	}
 
+	hasWindowStart, err := HasWindowStart(tx)
+	require.NoError(t, err)
+
 	for rnd := basics.Round(0); rnd < basics.Round(len(blocks)); rnd++ {
-		blk, err := BlockGet(tx, rnd)
+		blk, err := BlockGet(tx, rnd, hasWindowStart)
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 
-		blk, cert, err := BlockGetCert(tx, rnd)
+		blk, cert, err := BlockGetCert(tx, rnd, hasWindowStart)
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 		require.Equal(t, cert, blocks[rnd].cert)
 	}
 
-	_, err = BlockGet(tx, basics.Round(len(blocks)))
+	_, err = BlockGet(tx, basics.Round(len(blocks)), hasWindowStart)
 	require.Error(t, err)
 }
 

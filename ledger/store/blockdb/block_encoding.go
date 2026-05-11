@@ -27,6 +27,36 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// HasWindowStart reports whether the blocks table has the window_start
+// column. Callers should evaluate this once per process (typically right
+// after BlockInit) and thread the result through to every BlockGet /
+// BlockGetCert / BlockGetEncodedCert call so the read path doesn't have to
+// introspect the schema or recover from a failed query per read.
+func HasWindowStart(tx *sql.Tx) (bool, error) {
+	return tableHasColumn(tx, "blocks", "window_start")
+}
+
+func tableHasColumn(tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
 // encodeBlockCertData runs the block and certificate payloads through the
 // writer's per-column encoders. The returned anchorRound is the round that
 // opens the zstd frame containing this row; callers translate it into a
@@ -62,13 +92,31 @@ func isCompressedChunk(chunk []byte) bool {
 }
 
 // blockGetEncoded returns the raw blkdata (and certdata, unless blkOnly is
-// set) for round rnd, transparently undoing windowed-zstd compression. The
-// SQL statement does the structural work: an inner subquery looks up the
-// target row's window_start, and the outer range scan pulls every row in
-// [IFNULL(window_start, rnd), rnd] in one PK range read. A legacy/disabled
-// row or an anchor row collapses to a single row; a deep continuation
-// returns the anchor plus everything up through rnd.
-func blockGetEncoded(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, cert []byte, err error) {
+// set) for round rnd, transparently undoing windowed-zstd compression.
+//
+// hasWindowStart selects between two read shapes:
+//   - true: the windowed SELECT, which lets a single SQL statement find the
+//     row's frame anchor (inner subquery) and pull every row in [anchor,
+//     rnd] (outer range scan). A disabled/raw row or an anchor row
+//     collapses to one row; a deep continuation reads the anchor plus
+//     everything up through rnd.
+//   - false: a single-row PK lookup. This is the only shape valid on a DB
+//     whose schema has no window_start column, i.e. a DB written entirely
+//     by a release that predates the compression PR. All rows in such a DB
+//     are raw msgp, so the simple query is correct.
+//
+// Callers MUST pass the value returned by HasWindowStart at open time; the
+// read path does not introspect the schema on the hot path.
+func blockGetEncoded(tx *sql.Tx, rnd basics.Round, blkOnly, hasWindowStart bool) (blk []byte, cert []byte, err error) {
+	if !hasWindowStart {
+		return blockGetEncodedSimple(tx, rnd, blkOnly)
+	}
+	return blockGetEncodedWindowed(tx, rnd, blkOnly)
+}
+
+// blockGetEncodedWindowed runs the unified windowed SELECT and decodes the
+// result. It requires the blocks table to have the window_start column.
+func blockGetEncodedWindowed(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, cert []byte, err error) {
 	const queryBlk = `SELECT b.blkdata FROM blocks b,
 	  (SELECT window_start FROM blocks WHERE rnd = ?1) t
 	  WHERE b.rnd >= IFNULL(t.window_start, ?1) AND b.rnd <= ?1
@@ -131,6 +179,20 @@ func blockGetEncoded(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, ce
 			err = fmt.Errorf("blockdb: decode certdata at round %d: %w", rnd, err)
 			return
 		}
+	}
+	return
+}
+
+// blockGetEncodedSimple is the pre-compression read path: every row is its
+// own self-contained raw msgp blob, no window decode needed.
+func blockGetEncodedSimple(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, cert []byte, err error) {
+	if blkOnly {
+		err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", rnd).Scan(&blk)
+	} else {
+		err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blk, &cert)
+	}
+	if err == sql.ErrNoRows {
+		err = ledgercore.ErrNoEntry{Round: rnd}
 	}
 	return
 }

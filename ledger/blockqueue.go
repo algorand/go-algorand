@@ -47,6 +47,9 @@ type blockQueue struct {
 	q             []blockEntry
 
 	writer *blockdb.BlockWriter
+	// hasWindowStart is detected once at construction and threaded to every
+	// blockdb read so the hot path never has to introspect the schema.
+	hasWindowStart bool
 
 	mu      deadlock.Mutex
 	cond    *sync.Cond
@@ -59,6 +62,14 @@ func newBlockQueue(l *Ledger) (*blockQueue, error) {
 	bq.cond = sync.NewCond(&bq.mu)
 	bq.l = l
 	bq.writer = blockdb.NewBlockWriter(l.cfg.BlockDBCompressionWindow)
+	err := l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var derr error
+		bq.hasWindowStart, derr = blockdb.HasWindowStart(tx)
+		return derr
+	})
+	if err != nil {
+		return nil, err
+	}
 	return bq, nil
 }
 
@@ -309,7 +320,7 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 	ledgerGetblockCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, err0 = blockdb.BlockGet(tx, r)
+		blk, err0 = blockdb.BlockGet(tx, r, bq.hasWindowStart)
 		return err0
 	})
 	ledgerGetblockMicros.AddMicrosecondsSince(start, nil)
@@ -357,7 +368,7 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 	ledgerGeteblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, cert, err0 = blockdb.BlockGetEncodedCert(tx, r)
+		blk, cert, err0 = blockdb.BlockGetEncodedCert(tx, r, bq.hasWindowStart)
 		return err0
 	})
 	ledgerGeteblockcertMicros.AddMicrosecondsSince(start, nil)
@@ -379,7 +390,7 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 	ledgerGetblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, cert, err0 = blockdb.BlockGetCert(tx, r)
+		blk, cert, err0 = blockdb.BlockGetCert(tx, r, bq.hasWindowStart)
 		return err0
 	})
 	ledgerGetblockcertMicros.AddMicrosecondsSince(start, nil)
