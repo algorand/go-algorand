@@ -138,8 +138,8 @@ func (bq *blockQueue) syncer() {
 		ledgerSyncBlockputCount.Inc(nil)
 		err := bq.l.blockDBs.Wdb.AtomicContext(context.Background(),
 			func(ctx context.Context, tx *sql.Tx) error {
-				for _, e := range workQ {
-					err0 := blockdb.BlockPut(tx, e.block, e.cert, bq.writer)
+				for i := range workQ {
+					err0 := blockdb.BlockPut(tx, &workQ[i].block, &workQ[i].cert, bq.writer)
 					if err0 != nil {
 						return err0
 					}

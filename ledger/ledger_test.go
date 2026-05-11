@@ -3499,12 +3499,11 @@ func testLedgerMaxBlockHistoryLookback(t *testing.T, compressionWindow uint64) {
 	require.Empty(t, blk)
 }
 
-// TestLedgerOpenLedgerRejectsBadCompressionWindow guards against
-// embedded callers (tests, alternate binaries) bypassing the
-// cmd/algod startup validator and instantiating a ledger with a
-// non-divisor BlockDBCompressionWindow value, which would corrupt the
-// retention round-down's anchor-preservation invariant.
-func TestLedgerOpenLedgerRejectsBadCompressionWindow(t *testing.T) {
+// TestLedgerOpenLedgerClampsBadCompressionWindow guards the OpenLedger
+// normalization path: a non-divisor BlockDBCompressionWindow value must be
+// clamped down to the nearest supported value (with a warning) rather than
+// rejected, so a misconfigured node still opens its ledger.
+func TestLedgerOpenLedgerClampsBadCompressionWindow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	genBalances, _, _ := ledgertesting.NewTestGenesis()
@@ -3518,9 +3517,10 @@ func TestLedgerOpenLedgerRejectsBadCompressionWindow(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.BlockDBCompressionWindow = 10 // not a divisor of MaxCompressionWindow
 
-	_, err := OpenLedger(logging.Base(), t.Name(), true /*inMem*/, genesisInitState, cfg)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "BlockDBCompressionWindow")
+	l, err := OpenLedger(logging.Base(), t.Name(), true /*inMem*/, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+	require.Equal(t, uint64(8), l.cfg.BlockDBCompressionWindow)
 }
 
 func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {

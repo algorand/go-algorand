@@ -50,19 +50,16 @@ func makePayload(round int, size int) []byte {
 
 func TestWindowCodec_Disabled(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	// With BlockDBCompressionWindow=1 the codec is a no-op pass-through:
+	// With BlockDBCompressionWindow=0 the codec is a no-op pass-through:
 	// the chunk must be byte-identical to the payload so on-disk rows
 	// remain readable by older binaries and by tools that expect raw msgp.
-	enc := NewEncoder(WindowCodec{N: 1})
+	enc := NewEncoder(WindowCodec{N: 0})
 	for r := 100; r < 110; r++ {
 		p := makePayload(r, 200)
-		chunk, err := enc.EncodeRow(basics.Round(r), p)
+		chunk, anchor, err := enc.EncodeRow(basics.Round(r), p)
 		require.NoError(t, err)
 		require.Equal(t, p, chunk)
-		// DecodeRaw still strips a legacy formatRaw prefix if it ever
-		// shows up in old DBs, but for fresh disabled-codec rows the
-		// chunk has no prefix at all.
-		require.Equal(t, p, DecodeRaw(chunk))
+		require.Equal(t, basics.Round(0), anchor)
 	}
 }
 
@@ -80,15 +77,12 @@ func TestWindowCodec_Roundtrip(t *testing.T) {
 	for i := range total {
 		r := startRound + basics.Round(i)
 		payloads[i] = makePayload(int(r), size)
-		c, err := enc.EncodeRow(r, payloads[i])
+		c, anchor, err := enc.EncodeRow(r, payloads[i])
 		require.NoError(t, err)
-		// Every Nth row should be a fresh frame anchor; the rest are
+		// Every Nth row should open a fresh frame; the rest are
 		// continuations of the prior anchor.
-		expectedPrefix := formatWindowedContinuation
-		if i%N == 0 {
-			expectedPrefix = formatWindowedAnchor
-		}
-		require.Equal(t, expectedPrefix, c[0], "row %d", i)
+		expectedAnchor := basics.Round((int(r) / N) * N)
+		require.Equal(t, expectedAnchor, anchor, "row %d", i)
 		chunks[i] = c
 	}
 
@@ -96,15 +90,10 @@ func TestWindowCodec_Roundtrip(t *testing.T) {
 	// of chunks from its window's anchor through that row.
 	for i := range total {
 		windowStart := (i / N) * N
-		got, err := DecodeWindow(chunks[windowStart : i+1])
+		got, err := decodeWindow(chunks[windowStart : i+1])
 		require.NoError(t, err, "row %d", i)
 		require.Equal(t, payloads[i], got, "row %d", i)
 	}
-
-	// Anchors are exactly the rows at multiples of N within a window slice.
-	require.Equal(t, 0, FindAnchorOffset(chunks[0:1]))
-	require.Equal(t, 0, FindAnchorOffset(chunks[0:N]))
-	require.Equal(t, 0, FindAnchorOffset(chunks[N:2*N]))
 }
 
 func TestWindowCodec_RestartMidWindow(t *testing.T) {
@@ -120,50 +109,46 @@ func TestWindowCodec_RestartMidWindow(t *testing.T) {
 	// recover round 5 by treating 5 as its own anchor.
 	chunks := make([][]byte, 0, 10)
 	payloads := make([][]byte, 0, 10)
+	anchors := make([]basics.Round, 0, 10)
 	for r := 0; r < 5; r++ {
 		p := makePayload(r, size)
-		c, err := enc.EncodeRow(basics.Round(r), p)
+		c, anchor, err := enc.EncodeRow(basics.Round(r), p)
 		require.NoError(t, err)
 		chunks = append(chunks, c)
 		payloads = append(payloads, p)
+		anchors = append(anchors, anchor)
 	}
 
 	enc2 := NewEncoder(WindowCodec{N: N, Level: 11})
 	for r := 5; r < 10; r++ {
 		p := makePayload(r, size)
-		c, err := enc2.EncodeRow(basics.Round(r), p)
+		c, anchor, err := enc2.EncodeRow(basics.Round(r), p)
 		require.NoError(t, err)
 		chunks = append(chunks, c)
 		payloads = append(payloads, p)
-	}
-
-	// Helper that mimics what blockGetEncoded does at read time: slice the
-	// nominal window down to the latest anchor and feed the result to
-	// DecodeWindow.
-	decodeUpTo := func(r int) ([]byte, error) {
-		win := chunks[0 : r+1]
-		idx := FindAnchorOffset(win)
-		require.GreaterOrEqual(t, idx, 0)
-		return DecodeWindow(win[idx:])
+		anchors = append(anchors, anchor)
 	}
 
 	// Rows [0..4] form one window with anchor at 0.
-	for r := range 5 {
-		got, err := decodeUpTo(r)
+	for r := 0; r < 5; r++ {
+		require.Equal(t, basics.Round(0), anchors[r], "row %d", r)
+		got, err := decodeWindow(chunks[0 : r+1])
 		require.NoError(t, err, "row %d", r)
 		require.Equal(t, payloads[r], got, "row %d", r)
 	}
 
 	// Rows [5..7] form a window that started at 5 (a forced anchor due to
-	// the restart). FindAnchorOffset must pick 5, not 0.
+	// the restart). Each row's anchor must report 5, not 0.
 	for r := 5; r < 8; r++ {
-		got, err := decodeUpTo(r)
+		require.Equal(t, basics.Round(5), anchors[r], "row %d", r)
+		got, err := decodeWindow(chunks[5 : r+1])
 		require.NoError(t, err, "row %d", r)
 		require.Equal(t, payloads[r], got, "row %d", r)
 	}
 
 	// Round 8 starts a regular new window aligned at the configured boundary.
-	got, err := DecodeWindow(chunks[8:9])
+	require.Equal(t, basics.Round(8), anchors[8])
+	got, err := decodeWindow(chunks[8:9])
 	require.NoError(t, err)
 	require.Equal(t, payloads[8], got)
 }
@@ -171,47 +156,10 @@ func TestWindowCodec_RestartMidWindow(t *testing.T) {
 func TestWindowCodec_OutOfOrder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	enc := NewEncoder(WindowCodec{N: 8, Level: 1})
-	_, err := enc.EncodeRow(100, makePayload(100, 64))
+	_, _, err := enc.EncodeRow(100, makePayload(100, 64))
 	require.NoError(t, err)
-	_, err = enc.EncodeRow(102, makePayload(102, 64))
+	_, _, err = enc.EncodeRow(102, makePayload(102, 64))
 	require.Error(t, err)
-}
-
-func TestWindowCodec_LegacyDetection(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	require.True(t, IsLegacyRaw([]byte{0x83, 0xa3, 'a', 'b', 'c'})) // fixmap header
-	require.False(t, IsLegacyRaw([]byte{formatRaw, 0xff}))
-	require.False(t, IsLegacyRaw([]byte{formatWindowedAnchor, 0x28, 0xb5, 0x2f, 0xfd}))
-	require.False(t, IsLegacyRaw([]byte{formatWindowedContinuation, 0x00, 0x01}))
-	require.False(t, IsLegacyRaw(nil))
-}
-
-// TestWindowCodec_AnchorByPrefixNotMagic guards against the precise
-// review finding that motivated the formatWindowedAnchor /
-// formatWindowedContinuation split: a continuation chunk whose
-// compressed delta happens to begin with the zstd magic must NOT be
-// mistaken for an anchor. We construct the chunk by hand because real
-// zstd output rarely produces the magic mid-frame; the contract that
-// anchor detection is purely format-prefix-driven is what the test
-// pins down.
-func TestWindowCodec_AnchorByPrefixNotMagic(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// Synthetic continuation chunk whose payload starts with the zstd
-	// frame magic. Under the old "scan for magic" heuristic this would
-	// have been picked as an anchor; under the new format-prefix scheme
-	// it must be ignored.
-	bogusContinuation := append([]byte{formatWindowedContinuation}, zstdMagic...)
-	bogusContinuation = append(bogusContinuation, 0x00, 0x01, 0x02)
-
-	realAnchor := append([]byte{formatWindowedAnchor}, zstdMagic...)
-	realAnchor = append(realAnchor, 0xff, 0xff)
-
-	chunks := [][]byte{realAnchor, bogusContinuation, bogusContinuation}
-	require.Equal(t, 0, FindAnchorOffset(chunks))
-
-	chunks = [][]byte{bogusContinuation, bogusContinuation}
-	require.Equal(t, -1, FindAnchorOffset(chunks))
 }
 
 // TestMaxWindowConstantsInSync guards against the documented duplication
@@ -253,9 +201,9 @@ func TestEncoderPair_CloseLeavesReusable(t *testing.T) {
 
 	ep := NewEncoderPair(WindowCodec{N: 4, Level: 1})
 	for r := 0; r < 4; r++ {
-		_, err := ep.Blk.EncodeRow(basics.Round(r), makePayload(r, 256))
+		_, _, err := ep.Blk.EncodeRow(basics.Round(r), makePayload(r, 256))
 		require.NoError(t, err)
-		_, err = ep.Cert.EncodeRow(basics.Round(r), makePayload(r+100, 256))
+		_, _, err = ep.Cert.EncodeRow(basics.Round(r), makePayload(r+100, 256))
 		require.NoError(t, err)
 	}
 
@@ -265,39 +213,31 @@ func TestEncoderPair_CloseLeavesReusable(t *testing.T) {
 	// frame anchored at whatever round comes next, even one that is not a
 	// multiple of N. If Close left started=true / a stale writer ptr, the
 	// internal "skip writer init" branch would crash on the nil writer.
-	for i, r := range []basics.Round{4, 5} {
-		chunk, err := ep.Blk.EncodeRow(r, makePayload(int(r), 256))
+	// Both rounds belong to the post-Close frame, anchored at 4.
+	for _, r := range []basics.Round{4, 5} {
+		_, anchor, err := ep.Blk.EncodeRow(r, makePayload(int(r), 256))
 		require.NoError(t, err)
-		// The first post-Close write opens a new frame (anchor); the
-		// next continues it.
-		expected := formatWindowedContinuation
-		if i == 0 {
-			expected = formatWindowedAnchor
-		}
-		require.Equal(t, expected, chunk[0])
+		require.Equal(t, basics.Round(4), anchor)
 	}
 	ep.Close()
 }
 
 // TestWindowCodec_RejectsHugeUvarint ensures that a corrupt or tampered
-// row whose decoded uvarint length exceeds MaxDecodedPayloadBytes is
+// row whose decoded uvarint length exceeds maxDecodedPayloadBytes is
 // rejected with an error rather than triggering an out-of-memory panic.
 func TestWindowCodec_RejectsHugeUvarint(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Encode a single legitimate row with the codec, then craft a
-	// continuation chunk whose decompressed uvarint length is well above
-	// MaxDecodedPayloadBytes. We do this by manually constructing a zstd
-	// frame whose decompressed contents start with a >32 MiB uvarint.
+	// Construct a single-chunk window whose decompressed contents start
+	// with a uvarint length well above maxDecodedPayloadBytes.
 	var huge bytes.Buffer
 	w := zstd.NewWriterLevel(&huge, 1)
 	var lb [binary.MaxVarintLen64]byte
-	n := binary.PutUvarint(lb[:], MaxDecodedPayloadBytes+1)
+	n := binary.PutUvarint(lb[:], uint64(maxDecodedPayloadBytes()+1))
 	_, err := w.Write(lb[:n])
 	require.NoError(t, err)
 	require.NoError(t, w.Close())
 
-	chunk := append([]byte{formatWindowedAnchor}, huge.Bytes()...)
-	_, err = DecodeWindow([][]byte{chunk})
-	require.ErrorContains(t, err, "exceeds MaxDecodedPayloadBytes")
+	_, err = decodeWindow([][]byte{huge.Bytes()})
+	require.ErrorContains(t, err, "exceeds maxDecodedPayloadBytes")
 }

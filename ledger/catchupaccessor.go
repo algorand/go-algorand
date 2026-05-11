@@ -1177,9 +1177,7 @@ func (c *catchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk
 	start := time.Now()
 	ledgerStorefirstblockCount.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer := blockdb.NewBlockWriter(c.ledger.cfg.BlockDBCompressionWindow)
-		defer writer.Close()
-		return blockdb.BlockStartCatchupStaging(tx, *blk, *cert, writer)
+		return blockdb.BlockStartCatchupStaging(tx, blk, cert)
 	})
 	ledgerStorefirstblockMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -1194,9 +1192,7 @@ func (c *catchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *boo
 	start := time.Now()
 	ledgerCatchpointStoreblockCount.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		writer := blockdb.NewBlockWriter(c.ledger.cfg.BlockDBCompressionWindow)
-		defer writer.Close()
-		return blockdb.BlockPutStaging(tx, *blk, *cert, writer)
+		return blockdb.BlockPutStaging(tx, blk, cert)
 	})
 	ledgerCatchpointStoreblockMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {

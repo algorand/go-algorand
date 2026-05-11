@@ -117,10 +117,7 @@ func OpenLedger[T string | DirsAndPrefix](
 	log logging.Logger, dbPathPrefix T, dbMem bool, genesisInitState ledgercore.InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
-	cfg.BlockDBCompressionWindow, err = cfg.GetValidatedBlockDBCompressionWindow()
-	if err != nil {
-		return nil, fmt.Errorf("OpenLedger: %w", err)
-	}
+	cfg.BlockDBCompressionWindow = cfg.GetNormalizedBlockDBCompressionWindow(log)
 	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
 	if verifiedCacheSize < cfg.TxPoolSize {
 		verifiedCacheSize = cfg.TxPoolSize

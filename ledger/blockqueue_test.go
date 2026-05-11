@@ -180,10 +180,9 @@ func TestBlockQueueSyncerDeletion(t *testing.T) {
 			defer writer.Close()
 			err = blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				for i := 0; i < maxBlocks; i++ {
-					err0 := blockdb.BlockPut(tx,
-						bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(i)}},
-						agreement.Certificate{},
-						writer)
+					blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(i)}}
+					cert := agreement.Certificate{}
+					err0 := blockdb.BlockPut(tx, &blk, &cert, writer)
 					if err0 != nil {
 						return err0
 					}

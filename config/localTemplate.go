@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -572,9 +573,9 @@ type Local struct {
 	// blkdata and certdata columns of the block database. The streaming
 	// zstd encoder is reset every N rounds and each row stores its own
 	// chunk, so decoding round R may require loading at most N prior rows
-	// in the same window. A value of 0 or 1 disables compression. Allowed
-	// values: 0, 1, 2, 4, 8, 16, 32.
-	BlockDBCompressionWindow uint64 `version[39]:"1"`
+	// in the same window. A value of 0 disables compression; N=1 emits a
+	// fresh zstd frame per row. Allowed values: 0, 1, 2, 4, 8, 16, 32.
+	BlockDBCompressionWindow uint64 `version[39]:"0"`
 
 	// EnableUsageLog enables 10Hz log of CPU and RAM usage.
 	// Also adds 'algod_ram_usage` (number of bytes in use) to /metrics
@@ -840,27 +841,29 @@ const MaxBlockDBCompressionWindow = 32
 // MaxBlockDBCompressionWindow.
 var validBlockDBCompressionWindows = []uint64{0, 1, 2, 4, 8, 16, 32}
 
-// GetValidatedBlockDBCompressionWindow returns the supported compression
-// window for block DB writes. Values 0 and 1 both disable compression and are
-// normalized to 1.
-func (cfg Local) GetValidatedBlockDBCompressionWindow() (uint64, error) {
+// GetNormalizedBlockDBCompressionWindow returns the supported compression
+// window value nearest to (but not above) the configured
+// BlockDBCompressionWindow. Values that are not divisors of
+// MaxBlockDBCompressionWindow are silently clamped down to the next valid
+// value and a warning is logged so misconfiguration is visible at startup
+// without rejecting the ledger open. Mirrors the clamping pattern used for
+// VerifiedTranscationsCacheSize in OpenLedger.
+func (cfg Local) GetNormalizedBlockDBCompressionWindow(log logging.Logger) uint64 {
+	raw := cfg.BlockDBCompressionWindow
 	for _, v := range validBlockDBCompressionWindows {
-		if cfg.BlockDBCompressionWindow == v {
-			if v == 0 {
-				return 1, nil
-			}
-			return v, nil
+		if raw == v {
+			return v
 		}
 	}
-	return 0, fmt.Errorf("BlockDBCompressionWindow=%d is not supported; allowed values are %v",
-		cfg.BlockDBCompressionWindow, validBlockDBCompressionWindows)
-}
-
-// ValidateBlockDBCompressionWindow rejects unsupported values so codec write
-// paths never see settings they cannot honor.
-func (cfg Local) ValidateBlockDBCompressionWindow() error {
-	_, err := cfg.GetValidatedBlockDBCompressionWindow()
-	return err
+	var picked uint64
+	for _, v := range validBlockDBCompressionWindows {
+		if v <= raw && v >= picked {
+			picked = v
+		}
+	}
+	log.Warnf("BlockDBCompressionWindow was adjusted from %d to %d (allowed values: %v)",
+		raw, picked, validBlockDBCompressionWindows)
+	return picked
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there

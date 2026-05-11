@@ -111,21 +111,26 @@ func blockChainBlocks(be []testBlockEntry) []bookkeeping.Block {
 }
 
 // blockDBTestWindows returns the compression windows every blockdb test case
-// should sweep across: the legacy disabled codec and a small windowed-zstd
-// codec. The latter exercises both anchor and continuation rows when a test
-// inserts more than N blocks.
+// should sweep across: the disabled codec, per-row zstd, and a small windowed
+// zstd codec. The N=4 case exercises both anchor and continuation rows when
+// a test inserts more than N blocks.
 func blockDBTestWindows() []uint64 {
 	return []uint64{
-		1, // disabled: rows stored verbatim
+		0, // disabled: rows stored verbatim
+		1, // per-row zstd: each row is its own frame
 		4, // windowed: anchor every 4 rounds
 	}
 }
 
 func windowLabel(window uint64) string {
-	if window <= 1 {
+	switch window {
+	case 0:
 		return "disabled"
+	case 1:
+		return "perrow"
+	default:
+		return "windowed"
 	}
-	return "windowed"
 }
 
 func TestBlockDBEmpty(t *testing.T) {
@@ -201,7 +206,7 @@ func TestBlockDBAppend(t *testing.T) {
 
 			for i := 0; i < 10; i++ {
 				blkent := randomBlock(basics.Round(len(blocks)))
-				err = BlockPut(tx, blkent.block, blkent.cert, writer)
+				err = BlockPut(tx, &blkent.block, &blkent.cert, writer)
 				require.NoError(t, err)
 
 				blocks = append(blocks, blkent)
@@ -209,4 +214,74 @@ func TestBlockDBAppend(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBlockDBAddWindowStartMigration verifies BlockInit can bring a master
+// shaped table (no window_start column, rows stored as raw msgp) up to the
+// current schema. After the ALTER TABLE migration the rows must still be
+// readable through the unified read path, and BlockNext must report the
+// preexisting MAX(rnd)+1.
+func TestBlockDBAddWindowStartMigration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	// Create the pre-codec schema (no window_start column) and insert two
+	// rows of raw msgp, mirroring how a master-built DB would look.
+	_, err = tx.Exec(`CREATE TABLE blocks (
+		rnd integer primary key,
+		proto text,
+		hdrdata blob,
+		blkdata blob,
+		certdata blob)`)
+	require.NoError(t, err)
+
+	blocks := randomInitChain(protocol.ConsensusCurrentVersion, 2)
+	for i := range blocks {
+		blk := blocks[i].block
+		cert := blocks[i].cert
+		_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
+			blk.Round(),
+			blk.CurrentProtocol,
+			protocol.Encode(&blk.BlockHeader),
+			protocol.Encode(&blk),
+			protocol.Encode(&cert),
+		)
+		require.NoError(t, err)
+	}
+
+	// BlockInit should add window_start (NULL on the existing rows) and
+	// leave the table otherwise intact. Calling it twice must be a no-op.
+	writer := NewBlockWriter(4)
+	defer writer.Close()
+	require.NoError(t, BlockInit(tx, nil, writer))
+	require.NoError(t, BlockInit(tx, nil, writer))
+
+	var hasWindowStart bool
+	rows, err := tx.Query("PRAGMA table_info(blocks)")
+	require.NoError(t, err)
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull, pk int
+		var dflt sql.NullString
+		require.NoError(t, rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk))
+		if name == "window_start" {
+			hasWindowStart = true
+		}
+	}
+	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
+	require.True(t, hasWindowStart, "window_start column should have been added by migration")
+
+	// Existing rows must remain readable through the unified read path; the
+	// inner SELECT picks up NULL window_start and the outer scan collapses
+	// to a single-row legacy-raw lookup.
+	checkBlockDB(t, tx, blocks)
 }

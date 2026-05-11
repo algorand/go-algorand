@@ -29,7 +29,7 @@ var defaultLocal = Local{
 	AnnounceParticipationKey:                   true,
 	Archival:                                   false,
 	BaseLoggerDebugLevel:                       4,
-	BlockDBCompressionWindow:                   1,
+	BlockDBCompressionWindow:                   0,
 	BlockDBDir:                                 "",
 	BlockServiceCustomFallbackEndpoints:        "",
 	BlockServiceMemCap:                         500000000,
