@@ -1872,7 +1872,7 @@
       "Args": [
         "uint64"
       ],
-      "Size": 3,
+      "Size": 0,
       "DocCost": "1",
       "Doc": "branch to TARGET if value A is not zero",
       "DocExtra": "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
@@ -1894,7 +1894,7 @@
       "Args": [
         "uint64"
       ],
-      "Size": 3,
+      "Size": 0,
       "DocCost": "1",
       "Doc": "branch to TARGET if value A is zero",
       "DocExtra": "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
@@ -1913,7 +1913,7 @@
     {
       "Opcode": 66,
       "Name": "b",
-      "Size": 3,
+      "Size": 0,
       "DocCost": "1",
       "Doc": "branch unconditionally to TARGET",
       "DocExtra": "See `bnz` for details on how branches work. `b` always jumps to the offset.",
@@ -3138,7 +3138,7 @@
     {
       "Opcode": 136,
       "Name": "callsub",
-      "Size": 3,
+      "Size": 0,
       "DocCost": "1",
       "Doc": "branch unconditionally to TARGET, saving the next instruction on the call stack",
       "DocExtra": "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.",
