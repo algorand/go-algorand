@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -336,10 +336,17 @@ type EvalParams struct {
 	// Amount "overpaid" by the transactions of the group.  Often 0.  When
 	// positive, it can be spent by inner transactions.  Shared across a group's
 	// txns, so that it can be updated (including upward, by overpaying inner
-	// transactions). nil is treated as 0 (used before fee pooling is enabled).
-	FeeCredit *uint64
+	// transactions). nil turns off FeeCredit, including when inners pay too
+	// much. FeeCredit is never nil on chain, but we need to turn off credit
+	// tracking for some finicky backward compatibility tests.
+	FeeCredit *basics.MicroAlgos
 
 	Specials *transactions.SpecialAddresses
+
+	// CostMultiplier is applied to all inner costs. Only intended to be set for
+	// app evaluation, not LogicSig. It is currently always 1, but is plumbed
+	// through to allow charging multiples for inner work under congestion.
+	CostMultiplier basics.Micros
 
 	// Total pool of app call budget in a group transaction (nil before budget pooling enabled)
 	PooledApplicationBudget *int
@@ -456,11 +463,10 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 
 	var pooledApplicationBudget *int
 	var pooledAllowedInners *int
-	var credit *uint64
-
+	var credit *basics.MicroAlgos
 	if apps > 0 { // none of these allocations needed if no apps
-		credit = new(uint64)
-		*credit = feeCredit(txgroup, proto.MinTxnFee)
+		credit = new(basics.MicroAlgos)
+		*credit = feeCredit(txgroup, proto.MinFee())
 
 		if proto.EnableAppCostPooling {
 			pooledApplicationBudget = new(int)
@@ -473,19 +479,19 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		}
 	}
 
-	ep := &EvalParams{
+	return &EvalParams{
 		runMode:                 ModeApp,
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
 		Specials:                specials,
 		minAvmVersion:           computeMinAvmVersion(txgroup),
 		FeeCredit:               credit,
+		CostMultiplier:          1e6,
 		PooledApplicationBudget: pooledApplicationBudget,
 		pooledAllowedInners:     pooledAllowedInners,
 		appAddrCache:            make(map[basics.AppIndex]basics.Address),
 		EvalConstants:           RuntimeEvalConstants(),
 	}
-	return ep
 }
 
 func (ep *EvalParams) computeAvailability() *resources {
@@ -504,20 +510,12 @@ func (ep *EvalParams) computeAvailability() *resources {
 }
 
 // feeCredit returns the extra fee supplied in this top-level txgroup compared
-// to required minfee.  It can make assumptions about overflow because the group
-// is known OK according to txnGroupBatchPrep. (The group is "WellFormed")
-func feeCredit(txgroup []transactions.SignedTxnWithAD, minFee uint64) uint64 {
-	minFeeCount := uint64(0)
-	feesPaid := uint64(0)
-	for _, stxn := range txgroup {
-		if stxn.Txn.Type != protocol.StateProofTx {
-			minFeeCount++
-		}
-		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
-	}
-	// Overflow is impossible, because txnGroupBatchPrep checked.
-	feeNeeded := minFee * minFeeCount
-	return basics.SubSaturate(feesPaid, feeNeeded)
+// to required fees. feeCredit should not be used on inner groups, since it
+// expects the Tip to appear in the group. (For inners, Tip is inherited.)
+func feeCredit(txgroup []transactions.SignedTxnWithAD, baseFee basics.MicroAlgos) basics.MicroAlgos {
+	usage, feesPaid := transactions.SummarizeFees(txgroup)
+	feeNeeded, _ := baseFee.MulMicros(usage)
+	return feesPaid.SubSaturate(feeNeeded) // If MulMicros saturates, this is 0
 }
 
 // NewInnerEvalParams creates an EvalParams to be used while evaluating an inner group txgroup
@@ -527,7 +525,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 	// inner callable version is higher than any minimum imposed otherwise.  But is
 	// correct to inherit a stronger restriction from above, in case of future restriction.
 
-	// Unlike NewEvalParams, do not add fee credit here. opTxSubmit has already done so.
+	// Unlike NewAppEvalParams, do not add fee credit here. opTxSubmit has already done so.
 
 	if caller.Proto.EnableAppCostPooling {
 		for _, tx := range txg {
@@ -549,6 +547,7 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		minAvmVersion:           minAvmVersion,
 		FeeCredit:               caller.FeeCredit,
 		Specials:                caller.Specials,
+		CostMultiplier:          caller.CostMultiplier,
 		PooledApplicationBudget: caller.PooledApplicationBudget,
 		pooledAllowedInners:     caller.pooledAllowedInners,
 		available:               caller.available,
@@ -1553,7 +1552,7 @@ func (cx *EvalContext) step() error {
 
 	deets := &spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
+		return fmt.Errorf("program ends without immediate value(s)")
 	}
 
 	// It's something like a 5-10% overhead on our simplest instructions to make
@@ -1686,7 +1685,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	}
 	deets := spec.OpDetails
 	if deets.Size != 0 && (cx.pc+deets.Size > len(cx.program)) {
-		return 0, fmt.Errorf("%s program ends short of immediate values", spec.Name)
+		return 0, fmt.Errorf("program ends without immediate value(s)")
 	}
 	opcost := deets.Cost(cx.program, cx.pc, blankStack)
 	if opcost <= 0 {
@@ -2690,7 +2689,101 @@ func checkSwitch(cx *EvalContext) error {
 	return nil
 }
 
+func branchTargetVarint(cx *EvalContext) (target int, instrSize int, err error) {
+	offset, bytesRead := binary.Varint(cx.program[cx.pc+1:])
+	if bytesRead <= 0 {
+		if bytesRead == 0 {
+			return 0, 0, fmt.Errorf("program ends without branch target")
+		}
+		return 0, 0, fmt.Errorf("branch offset varint overflows int64")
+	}
+	instrSize = 1 + bytesRead
+	// Negative offsets are back-jumps measured from the start of the
+	// instruction; non-negative offsets are forward-jumps from the end.
+	if offset < 0 {
+		target = cx.pc + int(offset)
+	} else {
+		target = cx.pc + instrSize + int(offset)
+	}
+	if target > len(cx.program) || target < 0 {
+		return 0, 0, fmt.Errorf("branch target %d outside of program", target)
+	}
+	return target, instrSize, nil
+}
+
+func checkBranchVarint(cx *EvalContext) error {
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if target < cx.pc {
+		if ok := cx.instructionStarts[target]; !ok {
+			return fmt.Errorf("back branch target %d is not an aligned instruction", target)
+		}
+	}
+	cx.branchTargets[target] = true
+	cx.nextpc = cx.pc + instrSize
+	return nil
+}
+
 func opBnz(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	isNonZero := cx.Stack[last].Uint != 0
+	cx.Stack = cx.Stack[:last]
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if isNonZero {
+		cx.nextpc = target
+	} else {
+		cx.nextpc = cx.pc + instrSize
+	}
+	return nil
+}
+
+func opBz(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	isZero := cx.Stack[last].Uint == 0
+	cx.Stack = cx.Stack[:last]
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	if isZero {
+		cx.nextpc = target
+	} else {
+		cx.nextpc = cx.pc + instrSize
+	}
+	return nil
+}
+
+func opB(cx *EvalContext) error {
+	target, _, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	cx.nextpc = target
+	return nil
+}
+
+func opCallSub(cx *EvalContext) error {
+	target, instrSize, err := branchTargetVarint(cx)
+	if err != nil {
+		return err
+	}
+	cx.callstack = append(cx.callstack, frame{
+		retpc:  cx.pc + instrSize,
+		height: len(cx.Stack),
+	})
+	cx.nextpc = target
+	if cx.nextpc < len(cx.program) && cx.program[cx.nextpc] == protoByte {
+		cx.fromCallsub = true
+	}
+	return nil
+}
+
+func opBnz2B(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isNonZero := cx.Stack[last].Uint != 0
@@ -2705,7 +2798,7 @@ func opBnz(cx *EvalContext) error {
 	return nil
 }
 
-func opBz(cx *EvalContext) error {
+func opBz2B(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	cx.nextpc = cx.pc + 3
 	isZero := cx.Stack[last].Uint == 0
@@ -2720,7 +2813,7 @@ func opBz(cx *EvalContext) error {
 	return nil
 }
 
-func opB(cx *EvalContext) error {
+func opB2B(cx *EvalContext) error {
 	target, err := branchTarget(cx)
 	if err != nil {
 		return err
@@ -2785,12 +2878,12 @@ func opMatch(cx *EvalContext) error {
 
 const protoByte = 0x8a
 
-func opCallSub(cx *EvalContext) error {
+func opCallSub2B(cx *EvalContext) error {
 	cx.callstack = append(cx.callstack, frame{
 		retpc:  cx.pc + 3, // retpc is pc _after_ the callsub
 		height: len(cx.Stack),
 	})
-	err := opB(cx)
+	err := opB2B(cx)
 
 	/* We only set fromCallSub if we know we're jumping to a proto. In opProto,
 	   we confirm we came directly from callsub by checking (and resetting) the
@@ -4023,7 +4116,7 @@ func opSetBit(cx *EvalContext) error {
 		// being big endian. So this looks "reversed"
 		mask := byte(0x80) >> bitIdx
 		// Copy to avoid modifying shared slice
-		scratch := append([]byte(nil), target.Bytes...)
+		scratch := slices.Clone(target.Bytes)
 		if bit == uint64(1) {
 			scratch[byteIdx] |= mask
 		} else {
@@ -4062,7 +4155,7 @@ func opSetByte(cx *EvalContext) error {
 		return errors.New("setbyte index beyond array length")
 	}
 	// Copy to avoid modifying shared slice
-	cx.Stack[pprev].Bytes = append([]byte(nil), cx.Stack[pprev].Bytes...)
+	cx.Stack[pprev].Bytes = slices.Clone(cx.Stack[pprev].Bytes)
 	cx.Stack[pprev].Bytes[cx.Stack[prev].Uint] = byte(cx.Stack[last].Uint)
 	cx.Stack = cx.Stack[:prev]
 	return nil
@@ -5158,29 +5251,30 @@ func addInnerTxn(cx *EvalContext) error {
 		return fmt.Errorf("too many inner transactions %d with %d left", len(cx.subtxns), cx.remainingInners())
 	}
 
-	stxn := transactions.SignedTxnWithAD{}
-
-	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)+1))
-	groupPaid := uint64(0)
-	for _, ptxn := range cx.subtxns {
-		groupPaid = basics.AddSaturate(groupPaid, ptxn.Txn.Fee.Raw)
+	// Check fees in the existing group first. Allows fee pooling in inner groups.
+	usage, groupPaid := transactions.SummarizeFees(cx.subtxns)
+	usage = basics.AddSaturate(usage, 1e6) // +1e6 because we're adding a txn
+	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
+	if o {
+		return errors.New("inner group fee saturation")
 	}
 
-	fee := uint64(0)
-	if groupPaid < groupFee {
-		fee = groupFee - groupPaid
+	fee := basics.MicroAlgos{}
+	if groupPaid.LessThan(groupFee) {
+		fee = groupFee.SubSaturate(groupPaid)
 
 		if cx.FeeCredit != nil {
 			// Use credit to shrink the default populated fee, but don't change
-			// FeeCredit here, because they might never itxn_submit, or they
+			// cx.FeeCredit here, because they might never itxn_submit, or they
 			// might change the fee.  Do it in itxn_submit.
-			fee = basics.SubSaturate(fee, *cx.FeeCredit)
+			fee = fee.SubSaturate(*cx.FeeCredit)
 		}
 	}
 
+	stxn := transactions.SignedTxnWithAD{}
 	stxn.Txn.Header = transactions.Header{
 		Sender:     addr,
-		Fee:        basics.MicroAlgos{Raw: fee},
+		Fee:        fee,
 		FirstValid: cx.txn.Txn.FirstValid,
 		LastValid:  cx.txn.Txn.LastValid,
 	}
@@ -5574,24 +5668,23 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 	}
 
 	// Check fees across the group first. Allows fee pooling in inner groups.
-	groupFee := basics.MulSaturate(cx.Proto.MinTxnFee, uint64(len(cx.subtxns)))
-	groupPaid := uint64(0)
-	for _, ptxn := range cx.subtxns {
-		groupPaid = basics.AddSaturate(groupPaid, ptxn.Txn.Fee.Raw)
+	usage, groupPaid := transactions.SummarizeFees(cx.subtxns) // tip won't appear in inners
+	groupFee, o := cx.Proto.MinFee().Mul2Micros(usage, cx.EvalParams.CostMultiplier)
+	if o {
+		return errors.New("inner group fee saturation")
 	}
-	if groupPaid < groupFee {
+	if groupPaid.LessThan(groupFee) {
 		// See if the FeeCredit is enough to cover the shortfall
-		shortfall := groupFee - groupPaid
-		if cx.FeeCredit == nil || *cx.FeeCredit < shortfall {
-			return fmt.Errorf("fee too small %#v", cx.subtxns)
+		shortfall := groupFee.SubSaturate(groupPaid)
+		if cx.FeeCredit == nil || cx.FeeCredit.LessThan(shortfall) {
+			return fmt.Errorf("group fee %s too small (need %s) %#v", groupPaid, groupFee, cx.subtxns)
 		}
-		*cx.FeeCredit -= shortfall
+		*cx.FeeCredit = cx.FeeCredit.SubSaturate(shortfall)
 	} else {
-		overpay := groupPaid - groupFee
-		if cx.FeeCredit == nil {
-			cx.FeeCredit = new(uint64)
+		overpay := groupPaid.SubSaturate(groupFee)
+		if cx.FeeCredit != nil {
+			*cx.FeeCredit = cx.FeeCredit.AddSaturate(overpay)
 		}
-		*cx.FeeCredit = basics.AddSaturate(*cx.FeeCredit, overpay)
 	}
 
 	// All subtxns will have zero'd GroupID since GroupID can't be set in

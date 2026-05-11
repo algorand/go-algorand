@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -153,6 +153,8 @@ func (c *mockConn) ID() string                                        { return "
 func (c *mockConn) NewStream(context.Context) (network.Stream, error) { panic("unused") }
 func (c *mockConn) GetStreams() []network.Stream                      { return nil }
 func (c *mockConn) IsClosed() bool                                    { return false }
+func (c *mockConn) CloseWithError(network.ConnErrorCode) error        { return nil }
+func (c *mockConn) As(any) bool                                       { return false }
 
 var _ network.Conn = (*mockConn)(nil)
 
@@ -197,6 +199,10 @@ func (s *mockStream) Reset() error {
 	defer s.mu.Unlock()
 	s.resetCalled = true
 	return nil
+}
+
+func (s *mockStream) ResetWithError(network.StreamErrorCode) error {
+	return s.Reset()
 }
 
 func (s *mockStream) SetDeadline(time.Time) error      { return nil }

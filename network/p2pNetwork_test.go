@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,7 +108,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	)
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 5*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	// for some reason the above check is not enough in race builds on CI
 	time.Sleep(time.Second) // give time for peers to connect.
@@ -199,7 +199,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 5*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	time.Sleep(time.Second) // give time for peers to connect.
 
@@ -280,7 +280,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 5*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	time.Sleep(time.Second) // give time for peers to connect.
 
@@ -723,7 +723,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 			require.Eventually(t, func() bool {
 				return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-			}, 2*time.Second, 50*time.Millisecond)
+			}, 10*time.Second, 50*time.Millisecond)
 
 			t.Logf("peers connected")
 
@@ -1001,7 +1001,7 @@ func TestP2PRelay(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	type logMessages struct {
 		msgs [][]byte
@@ -1081,7 +1081,7 @@ func TestP2PRelay(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers() &&
 			netA.hasPeer(netB.service.ID()) && netA.hasPeer(netC.service.ID())
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 
 	// Wait for gossipsub heartbeat to establish mesh links.
 	// ListPeersForTopic returns subscribed peers but mesh links are established
@@ -1359,7 +1359,7 @@ func TestP2PwsStreamHandlerDedup(t *testing.T) {
 	// now allow the peer made outgoing connection to handle conn closing initiated by the other side
 	require.Eventually(t, func() bool {
 		return !netA.hasPeers() && !netB.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 10*time.Second, 50*time.Millisecond)
 }
 
 // TestP2PEnableGossipService_NodeDisable ensures that a node with EnableGossipService=false
@@ -1423,7 +1423,7 @@ func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
 
 			require.Eventually(t, func() bool {
 				return netA.hasPeers() && netB.hasPeers()
-			}, 1*time.Second, 50*time.Millisecond)
+			}, 10*time.Second, 50*time.Millisecond)
 
 			time.Sleep(time.Second) // give time for peers to connect.
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -344,9 +344,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid ba
 		return transactions.Transaction{}, err
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		goOnlineTransaction.GenesisHash = genHash
+		copy(goOnlineTransaction.GenesisHash[:], params.GenesisHash)
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -398,9 +396,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid b
 		},
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		goOfflineTransaction.GenesisHash = genHash
+		copy(goOfflineTransaction.GenesisHash[:], params.GenesisHash)
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -450,9 +446,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		},
 	}
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		becomeNonparticipatingTransaction.GenesisHash = genHash
+		copy(becomeNonparticipatingTransaction.GenesisHash[:], params.GenesisHash)
 	}
 	becomeNonparticipatingTransaction.KeyregTxnFields.Nonparticipation = true
 
@@ -499,9 +493,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid bas
 	tx.Header.LastValid = lastValid
 
 	if cparams.SupportGenesisHash {
-		var genHash crypto.Digest
-		copy(genHash[:], params.GenesisHash)
-		tx.GenesisHash = genHash
+		copy(tx.GenesisHash[:], params.GenesisHash)
 	}
 
 	// Default to the suggested fee, if the caller didn't supply it
@@ -869,28 +861,28 @@ func (c *Client) MakeUnsignedAssetConfigTx(creator string, index basics.AssetInd
 	tx.Type = protocol.AssetConfigTx
 	tx.ConfigAsset = index
 
-	if *newManager != "" {
+	if nilToZero(newManager) != "" {
 		tx.AssetParams.Manager, err = basics.UnmarshalChecksumAddress(*newManager)
 		if err != nil {
 			return tx, err
 		}
 	}
 
-	if *newReserve != "" {
+	if nilToZero(newReserve) != "" {
 		tx.AssetParams.Reserve, err = basics.UnmarshalChecksumAddress(*newReserve)
 		if err != nil {
 			return tx, err
 		}
 	}
 
-	if *newFreeze != "" {
+	if nilToZero(newFreeze) != "" {
 		tx.AssetParams.Freeze, err = basics.UnmarshalChecksumAddress(*newFreeze)
 		if err != nil {
 			return tx, err
 		}
 	}
 
-	if *newClawback != "" {
+	if nilToZero(newClawback) != "" {
 		tx.AssetParams.Clawback, err = basics.UnmarshalChecksumAddress(*newClawback)
 		if err != nil {
 			return tx, err
