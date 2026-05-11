@@ -833,11 +833,11 @@ func (e P2PHybridConfigError) Error() string {
 }
 
 // MaxBlockDBCompressionWindow is the largest BlockDBCompressionWindow value
-// the block database codec accepts.
+// the block database accepts.
 const MaxBlockDBCompressionWindow = 32
 
 // validBlockDBCompressionWindows enumerates the BlockDBCompressionWindow
-// values the codec supports. Allowed values are the divisors of
+// values the block database supports. Allowed values are the divisors of
 // MaxBlockDBCompressionWindow.
 var validBlockDBCompressionWindows = []uint64{0, 1, 2, 4, 8, 16, 32}
 

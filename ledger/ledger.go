@@ -376,9 +376,7 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it if not
 func initBlocksDB(tx *sql.Tx, log logging.Logger, initBlocks []bookkeeping.Block, isArchival bool, compressionWindow uint64) (err error) {
-	writer := blockdb.NewBlockWriter(compressionWindow)
-	defer writer.Close()
-	err = blockdb.BlockInit(tx, initBlocks, writer)
+	err = blockdb.BlockInit(tx, initBlocks, compressionWindow)
 	if err != nil {
 		err = fmt.Errorf("initBlocksDB.blockInit %v", err)
 		return err
@@ -401,8 +399,7 @@ func initBlocksDB(tx *sql.Tx, log logging.Logger, initBlocks []bookkeeping.Block
 				err = fmt.Errorf("initBlocksDB.blockResetDB %v", err)
 				return err
 			}
-			writer.Reset()
-			err = blockdb.BlockInit(tx, initBlocks, writer)
+			err = blockdb.BlockInit(tx, initBlocks, compressionWindow)
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockInit 2 %v", err)
 				return err

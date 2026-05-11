@@ -33,8 +33,8 @@ import (
 // 2019-12-15: removed column 'auxdata blob' from 'CREATE TABLE' statement. It was not explicitly removed from databases and may continue to exist with empty entries in some old databases.
 //
 // window_start is the round of the zstd frame anchor for the row, or NULL
-// if the row is stored verbatim (legacy raw msgp, or disabled-codec, or a
-// staged catchup row). The read path uses this column to find the start of
+// if the row is stored verbatim (legacy raw msgp, compression disabled, or
+// a staged catchup row). The read path uses this column to find the start of
 // the window that covers a target round in a single SQL statement.
 var blockSchema = []string{
 	`CREATE TABLE IF NOT EXISTS blocks (
@@ -51,24 +51,48 @@ var blockResetExprs = []string{
 }
 
 // addWindowStartColumn applies the ALTER TABLE migration that brings a
-// pre-window_start schema (master, or a node that was rebooted across the
-// codec PR's introduction) up to date. SQLite has no ADD COLUMN IF NOT
-// EXISTS; we try once and ignore the "duplicate column name" error.
+// pre-compression schema up to date on databases created by earlier
+// releases. SQLite has no ADD COLUMN IF NOT EXISTS, and a duplicate-column
+// ALTER is reported as the generic SQLITE_ERROR (its only distinguishing
+// signal is the message text), so we check the table's columns first via
+// PRAGMA table_info. If the table does not exist (PRAGMA returns no rows)
+// the function is a no-op so callers can invoke it unconditionally.
 func addWindowStartColumn(tx *sql.Tx, table string) error {
-	_, err := tx.Exec("ALTER TABLE " + table + " ADD COLUMN window_start integer")
-	if err == nil {
+	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return fmt.Errorf("blockdb: list columns of %s: %w", table, err)
+	}
+	defer rows.Close()
+	exists := false
+	for rows.Next() {
+		exists = true
+		var cid int
+		var name, typ string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return fmt.Errorf("blockdb: scan column row of %s: %w", table, err)
+		}
+		if name == "window_start" {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("blockdb: list columns of %s: %w", table, err)
+	}
+	if !exists {
 		return nil
 	}
-	if strings.Contains(err.Error(), "duplicate column name") {
-		return nil
+	if _, err := tx.Exec("ALTER TABLE " + table + " ADD COLUMN window_start integer"); err != nil {
+		return fmt.Errorf("blockdb: add window_start column to %s: %w", table, err)
 	}
-	return fmt.Errorf("blockdb: add window_start column to %s: %w", table, err)
+	return nil
 }
 
-// BlockInit initializes blockdb. writer must be non-nil; callers are
-// responsible for constructing a BlockWriter that honors the configured
-// compression window.
-func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, writer *BlockWriter) error {
+// BlockInit initializes blockdb
+// window is the BlockDBCompressionWindow to use for any initBlocks rows that get written;
+// it has no effect when initBlocks is empty, or when the blocks table is already populated.
+func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, window uint64) error {
 	for _, tableCreate := range blockSchema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
@@ -78,13 +102,20 @@ func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, writer *BlockWriter) 
 	if err := addWindowStartColumn(tx, "blocks"); err != nil {
 		return err
 	}
+	// catchpointblocks usually doesn't exist, but a partial catchup resumed across an upgrade
+	// might be missing the window_start column.
+	if err := addWindowStartColumn(tx, "catchpointblocks"); err != nil {
+		return err
+	}
 
 	next, err := BlockNext(tx)
 	if err != nil {
 		return err
 	}
 
-	if next == 0 {
+	if next == 0 && len(initBlocks) > 0 {
+		writer := NewBlockWriter(window)
+		defer writer.Close()
 		for i := range initBlocks {
 			err = BlockPut(tx, &initBlocks[i], &agreement.Certificate{}, writer)
 			if err != nil {
@@ -171,14 +202,16 @@ func BlockPut(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate, w
 		return err
 	}
 
-	r := blk.Round()
+	rnd := blk.Round()
 	if max.Valid {
-		if r != basics.Round(max.Int64+1) {
-			return fmt.Errorf("inserting block %d but expected %d", r, max.Int64+1)
+		if rnd != basics.Round(max.Int64+1) {
+			err = fmt.Errorf("inserting block %d but expected %d", rnd, max.Int64+1)
+			return err
 		}
 	} else {
-		if r != 0 {
-			return fmt.Errorf("inserting block %d but expected 0", r)
+		if rnd != 0 {
+			err = fmt.Errorf("inserting block %d but expected 0", rnd)
+			return err
 		}
 	}
 
@@ -193,7 +226,7 @@ func BlockPut(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate, w
 	}
 
 	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata, window_start) VALUES (?, ?, ?, ?, ?, ?)",
-		r,
+		rnd,
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
 		blkChunk,
@@ -273,12 +306,9 @@ func RoundDownRetention(rnd basics.Round) basics.Round {
 	return basics.Round(uint64(rnd) - uint64(rnd)%n)
 }
 
-// BlockStartCatchupStaging initializes catchup for catchpoint. The block is
-// stored verbatim (raw msgp, window_start = NULL) to keep staging decoupled
-// from the windowed-zstd encoder: BlockEnsureSingleBlock retains a single
-// row and decodes it standalone, so any cross-row encoder state in staging
-// would have to be discarded anyway.
-func BlockStartCatchupStaging(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate) error {
+// BlockStartCatchupStaging initializes catchup for catchpoint
+func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
+	// delete the old catchpointblocks table, if there is such.
 	for _, stmt := range blockResetExprs {
 		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
 		_, err := tx.Exec(stmt)
@@ -287,6 +317,7 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk *bookkeeping.Block, cert *agreemen
 		}
 	}
 
+	// create the catchpointblocks table
 	for _, stmt := range blockSchema {
 		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
 		_, err := tx.Exec(stmt)
@@ -295,7 +326,19 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk *bookkeeping.Block, cert *agreemen
 		}
 	}
 
-	return insertStagingRow(tx, blk, cert)
+	// insert the top entry to the blocks table.
+	// window_start defaults to NULL (raw msgp); catchpoint restore does not use compression.
+	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
+		blk.Round(),
+		blk.CurrentProtocol,
+		protocol.Encode(&blk.BlockHeader),
+		protocol.Encode(&blk),
+		protocol.Encode(&cert),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // BlockCompleteCatchup applies catchpoint caught up blocks
@@ -328,30 +371,26 @@ func BlockAbortCatchup(tx *sql.Tx) error {
 	return nil
 }
 
-// BlockPutStaging store a block into catchpoint staging table. The row is
-// stored verbatim (raw msgp, window_start = NULL); see BlockStartCatchupStaging.
-func BlockPutStaging(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate) error {
-	return insertStagingRow(tx, blk, cert)
-}
-
-// insertStagingRow inserts a raw-msgp row into catchpointblocks with
-// window_start = NULL. Staging rows are always standalone-decodable.
-func insertStagingRow(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate) error {
-	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata, window_start) VALUES (?, ?, ?, ?, ?, NULL)",
+// BlockPutStaging store a block into catchpoint staging table
+func BlockPutStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) (err error) {
+	// insert the new entry
+	// window_start defaults to NULL (raw msgp); catchpoint restore does not use compression.
+	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
-		protocol.Encode(blk),
-		protocol.Encode(cert),
+		protocol.Encode(&blk),
+		protocol.Encode(&cert),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-// BlockEnsureSingleBlock retains only one (highest) block in the catchpoint
-// staging table. Because BlockStartCatchupStaging / BlockPutStaging write
-// staging rows as raw msgp with window_start = NULL, the kept row is always
-// standalone-decodable; no zstd window decode is needed here.
+// BlockEnsureSingleBlock retains only one (highest) block in catchpoint staging table
 func BlockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
+	// delete all the blocks that aren't the latest one.
 	var max sql.NullInt64
 	err = tx.QueryRow("SELECT MAX(rnd) FROM catchpointblocks").Scan(&max)
 	if err != nil {
@@ -366,18 +405,21 @@ func BlockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
 	round := basics.Round(max.Int64)
 
 	_, err = tx.Exec("DELETE FROM catchpointblocks WHERE rnd<?", round)
+
 	if err != nil {
 		return bookkeeping.Block{}, err
 	}
 
-	var chunk []byte
-	err = tx.QueryRow("SELECT blkdata FROM catchpointblocks WHERE rnd=?", round).Scan(&chunk)
+	var buf []byte
+	err = tx.QueryRow("SELECT blkdata FROM catchpointblocks WHERE rnd=?", round).Scan(&buf)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			err = ledgercore.ErrNoEntry{Round: round}
 		}
 		return
 	}
-	err = protocol.Decode(chunk, &blk)
+
+	err = protocol.Decode(buf, &blk)
+
 	return blk, err
 }

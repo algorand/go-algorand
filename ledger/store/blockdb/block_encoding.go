@@ -30,7 +30,7 @@ import (
 // encodeBlockCertData runs the block and certificate payloads through the
 // writer's per-column encoders. The returned anchorRound is the round that
 // opens the zstd frame containing this row; callers translate it into a
-// window_start column value (NULL when the codec is disabled). Both
+// window_start column value (NULL when compression is disabled). Both
 // columns share an EncoderPair so they always advance their anchors
 // together; only one anchorRound is returned because the two are equal by
 // construction. The writer must be non-nil.
@@ -51,13 +51,13 @@ func encodeBlockCertData(blk *bookkeeping.Block, cert *agreement.Certificate, wr
 	return blkChunk, certChunk, anchorRound, nil
 }
 
-// isCodecChunk reports whether chunk is a windowed-zstd chunk (begins with
-// the zstd frame magic). Legacy raw, NULL-window rows are msgp and start
-// with a fixmap header byte (0x80-0xDF), so the two cannot collide on the
-// first byte. A continuation chunk inside an active frame is unambiguously
-// codec because the SQL range scan only returns more than one row when
-// window_start IS NOT NULL.
-func isCodecChunk(chunk []byte) bool {
+// isCompressedChunk reports whether chunk is a windowed-zstd chunk (begins
+// with the zstd frame magic). Legacy raw, NULL-window rows are msgp and
+// start with a fixmap header byte (0x80-0xDF), so the two cannot collide on
+// the first byte. A continuation chunk inside an active frame is
+// unambiguously compressed because the SQL range scan only returns more
+// than one row when window_start IS NOT NULL.
+func isCompressedChunk(chunk []byte) bool {
 	return len(chunk) >= 4 && chunk[0] == 0x28 && chunk[1] == 0xb5 && chunk[2] == 0x2f && chunk[3] == 0xfd
 }
 
@@ -66,7 +66,7 @@ func isCodecChunk(chunk []byte) bool {
 // SQL statement does the structural work: an inner subquery looks up the
 // target row's window_start, and the outer range scan pulls every row in
 // [IFNULL(window_start, rnd), rnd] in one PK range read. A legacy/disabled
-// row or a codec-anchor row collapses to a single row; a deep continuation
+// row or an anchor row collapses to a single row; a deep continuation
 // returns the anchor plus everything up through rnd.
 func blockGetEncoded(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, cert []byte, err error) {
 	const queryBlk = `SELECT b.blkdata FROM blocks b,
@@ -112,7 +112,7 @@ func blockGetEncoded(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, ce
 		return
 	}
 
-	if len(blkChunks) == 1 && !isCodecChunk(blkChunks[0]) {
+	if len(blkChunks) == 1 && !isCompressedChunk(blkChunks[0]) {
 		blk = blkChunks[0]
 		if !blkOnly {
 			cert = certChunks[0]

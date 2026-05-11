@@ -50,7 +50,7 @@ func makePayload(round int, size int) []byte {
 
 func TestWindowCodec_Disabled(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	// With BlockDBCompressionWindow=0 the codec is a no-op pass-through:
+	// With BlockDBCompressionWindow=0 the encoder is a no-op pass-through:
 	// the chunk must be byte-identical to the payload so on-disk rows
 	// remain readable by older binaries and by tools that expect raw msgp.
 	enc := NewEncoder(WindowCodec{N: 0})

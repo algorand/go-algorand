@@ -30,11 +30,11 @@ import (
 )
 
 // MaxCompressionWindow is the largest BlockDBCompressionWindow value the
-// codec will accept. The implementation is bounded by the maximum number of
-// prior rows a read may have to load to decode a single round. The mirror
-// constant in package config (config.MaxBlockDBCompressionWindow) MUST stay
-// in sync; the duplication exists so the startup config validator does not
-// have to import this package.
+// compression will accept. The implementation is bounded by the maximum
+// number of prior rows a read may have to load to decode a single round.
+// The mirror constant in package config (config.MaxBlockDBCompressionWindow)
+// MUST stay in sync; the duplication exists so the startup config validator
+// does not have to import this package.
 const MaxCompressionWindow = 32
 
 // defaultCompressionLevel is the zstd level used for blkdata/certdata
@@ -44,8 +44,8 @@ const MaxCompressionWindow = 32
 const defaultCompressionLevel = 11
 
 // WindowCodec holds the configuration for the per-column windowed-zstd
-// codec. A value of N == 0 means compression is disabled and EncodeRow
-// returns the payload verbatim, byte-identical to the pre-codec on-disk
+// compression. A value of N == 0 means compression is disabled and EncodeRow
+// returns the payload verbatim, byte-identical to the pre-compression on-disk
 // layout. When N >= 1, rows are stored as raw streaming-zstd chunks and the
 // encoder is reset every N rounds. N == 1 produces a fresh frame per row.
 type WindowCodec struct {
@@ -53,7 +53,7 @@ type WindowCodec struct {
 	Level int
 }
 
-// Disabled reports whether this codec writes uncompressed rows.
+// Disabled reports whether compression is off (rows stored uncompressed).
 func (c WindowCodec) Disabled() bool { return c.N == 0 }
 
 // Encoder is the per-column streaming encoder. Two Encoders are typically
@@ -82,7 +82,7 @@ type EncoderPair struct {
 }
 
 // NewEncoderPair constructs an EncoderPair where both columns use the same
-// codec settings.
+// compression settings.
 func NewEncoderPair(c WindowCodec) *EncoderPair {
 	return &EncoderPair{Blk: NewEncoder(c), Cert: NewEncoder(c)}
 }
@@ -178,11 +178,11 @@ func (e *Encoder) closeWriter() {
 }
 
 // EncodeRow encodes payload for round r and returns the per-row chunk plus
-// the round that opened the chunk's zstd frame (the anchor). When the codec
+// the round that opened the chunk's zstd frame (the anchor). When compression
 // is disabled the chunk is a fresh copy of payload, byte-identical to the
-// pre-codec on-disk layout, and the returned anchor is 0 (the caller will
-// bind window_start to NULL in that case). When the codec is active the
-// chunk holds the streaming-zstd delta for r; rows that begin a new frame
+// pre-compression on-disk layout, and the returned anchor is 0 (the caller
+// will bind window_start to NULL in that case). When compression is active
+// the chunk holds the streaming-zstd delta for r; rows that begin a new frame
 // (the first encode after construction or Reset, and every r where r%N==0)
 // return anchorRound = r, and subsequent continuation rows return the
 // anchor round of the frame they belong to.
@@ -230,7 +230,7 @@ func (e *Encoder) EncodeRow(r basics.Round, payload []byte) ([]byte, basics.Roun
 // block bytes (dominated by MaxTxnBytesPerBlock) and certificates (well
 // below the floor); MaxTxnBytesPerBlock is a process-level config var, so
 // fall back to an 8 MiB floor in the unusual case where it has not been
-// initialized yet (the standalone codec tests, for instance).
+// initialized yet (the standalone compression tests, for instance).
 func maxDecodedPayloadBytes() int {
 	n := max(bounds.MaxTxnBytesPerBlock+1<<20, 8<<20)
 	return n

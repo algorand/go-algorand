@@ -110,10 +110,10 @@ func blockChainBlocks(be []testBlockEntry) []bookkeeping.Block {
 	return res
 }
 
-// blockDBTestWindows returns the compression windows every blockdb test case
-// should sweep across: the disabled codec, per-row zstd, and a small windowed
-// zstd codec. The N=4 case exercises both anchor and continuation rows when
-// a test inserts more than N blocks.
+// blockDBTestWindows returns the compression windows every blockdb test
+// case should sweep across: disabled, per-row zstd, and a small windowed
+// zstd. The N=4 case exercises both anchor and continuation rows when a
+// test inserts more than N blocks.
 func blockDBTestWindows() []uint64 {
 	return []uint64{
 		0, // disabled: rows stored verbatim
@@ -146,9 +146,7 @@ func TestBlockDBEmpty(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback()
 
-			writer := NewBlockWriter(window)
-			defer writer.Close()
-			err = BlockInit(tx, nil, writer)
+			err = BlockInit(tx, nil, window)
 			require.NoError(t, err)
 			checkBlockDB(t, tx, nil)
 		})
@@ -170,13 +168,11 @@ func TestBlockDBInit(t *testing.T) {
 
 			blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-			writer := NewBlockWriter(window)
-			defer writer.Close()
-			err = BlockInit(tx, blockChainBlocks(blocks), writer)
+			err = BlockInit(tx, blockChainBlocks(blocks), window)
 			require.NoError(t, err)
 			checkBlockDB(t, tx, blocks)
 
-			err = BlockInit(tx, blockChainBlocks(blocks), writer)
+			err = BlockInit(tx, blockChainBlocks(blocks), window)
 			require.NoError(t, err)
 			checkBlockDB(t, tx, blocks)
 		})
@@ -198,11 +194,12 @@ func TestBlockDBAppend(t *testing.T) {
 
 			blocks := randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-			writer := NewBlockWriter(window)
-			defer writer.Close()
-			err = BlockInit(tx, blockChainBlocks(blocks), writer)
+			err = BlockInit(tx, blockChainBlocks(blocks), window)
 			require.NoError(t, err)
 			checkBlockDB(t, tx, blocks)
+
+			writer := NewBlockWriter(window)
+			defer writer.Close()
 
 			for i := 0; i < 10; i++ {
 				blkent := randomBlock(basics.Round(len(blocks)))
@@ -216,8 +213,8 @@ func TestBlockDBAppend(t *testing.T) {
 	}
 }
 
-// TestBlockDBAddWindowStartMigration verifies BlockInit can bring a master
-// shaped table (no window_start column, rows stored as raw msgp) up to the
+// TestBlockDBAddWindowStartMigration verifies BlockInit can bring a pre-compression
+// blocks table (no window_start column, rows stored as raw msgp) up to the
 // current schema. After the ALTER TABLE migration the rows must still be
 // readable through the unified read path, and BlockNext must report the
 // preexisting MAX(rnd)+1.
@@ -232,8 +229,8 @@ func TestBlockDBAddWindowStartMigration(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	// Create the pre-codec schema (no window_start column) and insert two
-	// rows of raw msgp, mirroring how a master-built DB would look.
+	// Create the pre-compression schema (no window_start column) and insert two
+	// rows of raw msgp, mirroring how an earlier-release DB would look.
 	_, err = tx.Exec(`CREATE TABLE blocks (
 		rnd integer primary key,
 		proto text,
@@ -258,10 +255,8 @@ func TestBlockDBAddWindowStartMigration(t *testing.T) {
 
 	// BlockInit should add window_start (NULL on the existing rows) and
 	// leave the table otherwise intact. Calling it twice must be a no-op.
-	writer := NewBlockWriter(4)
-	defer writer.Close()
-	require.NoError(t, BlockInit(tx, nil, writer))
-	require.NoError(t, BlockInit(tx, nil, writer))
+	require.NoError(t, BlockInit(tx, nil, 4))
+	require.NoError(t, BlockInit(tx, nil, 4))
 
 	var hasWindowStart bool
 	rows, err := tx.Query("PRAGMA table_info(blocks)")
@@ -284,4 +279,81 @@ func TestBlockDBAddWindowStartMigration(t *testing.T) {
 	// inner SELECT picks up NULL window_start and the outer scan collapses
 	// to a single-row legacy-raw lookup.
 	checkBlockDB(t, tx, blocks)
+}
+
+// TestBlockDBMigrateCatchpointBlocks verifies that a leftover catchpointblocks
+// table from a partial pre-compression catchpoint catchup is migrated to the new
+// schema on startup. Without this migration, a resume that skips
+// BlockStartCatchupStaging would carry a column-less catchpointblocks all
+// the way through BlockCompleteCatchup and break the post-rename blocks
+// table for subsequent BlockPut calls.
+func TestBlockDBMigrateCatchpointBlocks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	// Pre-compression catchpointblocks schema (no window_start), as a partial
+	// catchup started on an earlier release would have produced.
+	_, err = tx.Exec(`CREATE TABLE catchpointblocks (
+		rnd integer primary key,
+		proto text,
+		hdrdata blob,
+		blkdata blob,
+		certdata blob)`)
+	require.NoError(t, err)
+
+	// BlockInit must migrate both blocks and catchpointblocks. The blocks
+	// table is created fresh with the new schema, so this exercises the
+	// "ALTER if exists" branch of addWindowStartColumn against catchpointblocks.
+	require.NoError(t, BlockInit(tx, nil, 4))
+
+	cols := func(table string) map[string]bool {
+		out := map[string]bool{}
+		rows, err := tx.Query("PRAGMA table_info(" + table + ")")
+		require.NoError(t, err)
+		defer rows.Close()
+		for rows.Next() {
+			var cid int
+			var name, typ string
+			var notnull, pk int
+			var dflt sql.NullString
+			require.NoError(t, rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk))
+			out[name] = true
+		}
+		require.NoError(t, rows.Err())
+		return out
+	}
+	require.True(t, cols("catchpointblocks")["window_start"], "catchpointblocks must have window_start after migration")
+
+	// Re-running is a no-op (the column-present branch returns early).
+	require.NoError(t, BlockInit(tx, nil, 4))
+}
+
+// TestBlockDBMigrateCatchpointBlocksNotPresent verifies the migration is a
+// no-op when catchpointblocks does not exist, which is the common case (no
+// catchpoint catchup in progress).
+func TestBlockDBMigrateCatchpointBlocksNotPresent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	require.NoError(t, BlockInit(tx, nil, 0))
+
+	// catchpointblocks must not have been created as a side effect.
+	var n int
+	err = tx.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='catchpointblocks'`).Scan(&n)
+	require.NoError(t, err)
+	require.Equal(t, 0, n)
 }

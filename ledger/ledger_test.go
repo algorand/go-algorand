@@ -3546,8 +3546,8 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 		{false, false, 1, 0},   // should not modify min blocks retained based on catchpoint interval
 		{true, false, -1, 0},   // should use min formula, this is the keep all catchpoints setting
 		{true, false, 365, 0},  // should use min formula, this is the default setting for catchpoint file history length
-		{true, false, 365, 16}, // codec on: minToSave must use blockdb retention rounding
-		{true, false, 365, 32}, // codec on: same, with the largest supported window
+		{true, false, 365, 16}, // compression on: minToSave must use blockdb retention rounding
+		{true, false, 365, 32}, // compression on: same, with the largest supported window
 	}
 	for _, tc := range catchpointIntervalBlockRetentionTestCases {
 		func() {

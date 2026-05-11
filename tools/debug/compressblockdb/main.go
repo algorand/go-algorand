@@ -15,9 +15,10 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 // compressblockdb reads an existing ledger.block.sqlite and writes a new
-// copy whose blkdata/certdata columns are encoded with the windowed-zstd
-// codec at the given window size N. Useful for measuring the on-disk savings
-// the codec produces on a real DB without modifying the original file.
+// copy whose blkdata/certdata columns are encoded with windowed-zstd
+// compression at the given window size N. Useful for measuring the on-disk
+// savings the compression produces on a real DB without modifying the
+// original file.
 //
 // The source DB may itself be uncompressed, fully compressed, partially
 // compressed, or contain rows from multiple historical window sizes:
@@ -56,7 +57,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Reads <src.sqlite> (an existing ledger.block.sqlite) and writes a new")
 	fmt.Fprintln(os.Stderr, "copy to <dst.sqlite> whose rows are encoded with the windowed-zstd")
-	fmt.Fprintln(os.Stderr, "codec at window size <window>. Use window=1 to write an uncompressed")
+	fmt.Fprintln(os.Stderr, "compression at window size <window>. Use window=1 to write an uncompressed")
 	fmt.Fprintln(os.Stderr, "copy. The source may itself be raw, windowed, or mixed; the lowest")
 	fmt.Fprintln(os.Stderr, "stored round does not have to be 0.")
 	fmt.Fprintln(os.Stderr, "")
@@ -124,12 +125,12 @@ func run(srcPath, dstPath string, n uint64, batch int) error {
 	fmt.Printf("source %s: rounds %d..%d (%d rounds)\n", srcPath, minR, maxR, nrounds)
 	fmt.Printf("dest   %s: window N=%d\n", dstPath, n)
 
-	writer := blockdb.NewBlockWriter(n)
-	defer writer.Close()
-
-	if ierr := initDest(dstDB, writer); ierr != nil {
+	if ierr := initDest(dstDB, n); ierr != nil {
 		return ierr
 	}
+
+	writer := blockdb.NewBlockWriter(n)
+	defer writer.Close()
 
 	if serr := stageFirst(srcDB, dstDB, minR); serr != nil {
 		return serr
@@ -176,12 +177,12 @@ func sourceRange(db *sql.DB) (basics.Round, basics.Round, error) {
 	return basics.Round(minNull.Int64), basics.Round(maxNull.Int64), nil
 }
 
-func initDest(db *sql.DB, writer *blockdb.BlockWriter) error {
+func initDest(db *sql.DB, window uint64) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
-	if err := blockdb.BlockInit(tx, nil, writer); err != nil {
+	if err := blockdb.BlockInit(tx, nil, window); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("init dest schema: %w", err)
 	}
@@ -211,7 +212,7 @@ func stageFirst(srcDB, dstDB *sql.DB, firstRound basics.Round) error {
 	if err != nil {
 		return err
 	}
-	if err := blockdb.BlockStartCatchupStaging(dstTx, &blk, &cert); err != nil {
+	if err := blockdb.BlockStartCatchupStaging(dstTx, blk, cert); err != nil {
 		_ = dstTx.Rollback()
 		return fmt.Errorf("stage first round %d: %w", firstRound, err)
 	}
