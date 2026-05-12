@@ -107,10 +107,10 @@ var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", De
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
-var transactionMessagesP2PRejectMessage = metrics.NewTagCounter(metrics.TransactionMessagesP2PRejectMessage.Name, metrics.TransactionMessagesP2PRejectMessage.Description)
-var transactionMessagesP2PDuplicateMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDuplicateMessage)
-var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDeliverMessage)
-var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
+var networkP2PGossipSubRejectMessage = metrics.NewTagCounter(metrics.NetworkP2PGossipSubRejectMessage.Name, metrics.NetworkP2PGossipSubRejectMessage.Description)
+var networkP2PGossipSubDuplicateMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubDuplicateMessage)
+var networkP2PGossipSubDeliverMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubDeliverMessage)
+var networkP2PGossipSubUndeliverableMessage = metrics.MakeCounter(metrics.NetworkP2PGossipSubUndeliverableMessage)
 
 var networkP2PGossipSubSentBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_sent_bytes_total", Description: "Total number of bytes sent through gossipsub"})
 var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_received_bytes_total", Description: "Total number of bytes received through gossipsub"})
@@ -155,7 +155,7 @@ func (t pubsubMetricsTracer) ValidateMessage(msg *pubsub.Message) {
 
 // DeliverMessage is invoked when a message is delivered
 func (t pubsubMetricsTracer) DeliverMessage(msg *pubsub.Message) {
-	transactionMessagesP2PDeliverMessage.Inc(nil)
+	networkP2PGossipSubDeliverMessage.Inc(nil)
 }
 
 // RejectMessage is invoked when a message is Rejected or Ignored.
@@ -165,21 +165,21 @@ func (t pubsubMetricsTracer) RejectMessage(msg *pubsub.Message, reason string) {
 	// Since Go's strings are immutable, char replacement is a new allocation so that stick to string literals.
 	switch reason {
 	case pubsub.RejectValidationThrottled:
-		transactionMessagesP2PRejectMessage.Add("throttled", 1)
+		networkP2PGossipSubRejectMessage.Add("throttled", 1)
 	case pubsub.RejectValidationQueueFull:
-		transactionMessagesP2PRejectMessage.Add("full", 1)
+		networkP2PGossipSubRejectMessage.Add("full", 1)
 	case pubsub.RejectValidationFailed:
-		transactionMessagesP2PRejectMessage.Add("failed", 1)
+		networkP2PGossipSubRejectMessage.Add("failed", 1)
 	case pubsub.RejectValidationIgnored:
-		transactionMessagesP2PRejectMessage.Add("ignored", 1)
+		networkP2PGossipSubRejectMessage.Add("ignored", 1)
 	default:
-		transactionMessagesP2PRejectMessage.Add("other", 1)
+		networkP2PGossipSubRejectMessage.Add("other", 1)
 	}
 }
 
 // DuplicateMessage is invoked when a duplicate message is dropped.
 func (t pubsubMetricsTracer) DuplicateMessage(msg *pubsub.Message) {
-	transactionMessagesP2PDuplicateMessage.Inc(nil)
+	networkP2PGossipSubDuplicateMessage.Inc(nil)
 }
 
 // ThrottlePeer is invoked when a peer is throttled by the peer gater.
@@ -193,18 +193,22 @@ func (t pubsubMetricsTracer) RecvRPC(rpc *pubsub.RPC) {
 			case p2p.TXTopicName:
 				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
 				networkP2PReceivedBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedTotal.AddUint64(1, nil)
 				networkP2PMessageReceivedByTag.Add(string(protocol.TxnTag), 1)
 			case p2p.AVTopicName:
 				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
 				networkP2PReceivedBytesByTag.Add(string(protocol.AgreementVoteTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedTotal.AddUint64(1, nil)
 				networkP2PMessageReceivedByTag.Add(string(protocol.AgreementVoteTag), 1)
 			case p2p.PPTopicName:
 				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
 				networkP2PReceivedBytesByTag.Add(string(protocol.ProposalPayloadTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedTotal.AddUint64(1, nil)
 				networkP2PMessageReceivedByTag.Add(string(protocol.ProposalPayloadTag), 1)
 			case p2p.VBTopicName:
 				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
 				networkP2PReceivedBytesByTag.Add(string(protocol.VoteBundleTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedTotal.AddUint64(1, nil)
 				networkP2PMessageReceivedByTag.Add(string(protocol.VoteBundleTag), 1)
 			}
 		}
@@ -222,18 +226,22 @@ func (t pubsubMetricsTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 			case p2p.TXTopicName:
 				networkP2PSentBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
 				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentTotal.AddUint64(1, nil)
 				networkP2PMessageSentByTag.Add(string(protocol.TxnTag), 1)
 			case p2p.AVTopicName:
 				networkP2PSentBytesByTag.Add(string(protocol.AgreementVoteTag), uint64(len(rpc.Publish[i].Data)))
 				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentTotal.AddUint64(1, nil)
 				networkP2PMessageSentByTag.Add(string(protocol.AgreementVoteTag), 1)
 			case p2p.PPTopicName:
 				networkP2PSentBytesByTag.Add(string(protocol.ProposalPayloadTag), uint64(len(rpc.Publish[i].Data)))
 				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentTotal.AddUint64(1, nil)
 				networkP2PMessageSentByTag.Add(string(protocol.ProposalPayloadTag), 1)
 			case p2p.VBTopicName:
 				networkP2PSentBytesByTag.Add(string(protocol.VoteBundleTag), uint64(len(rpc.Publish[i].Data)))
 				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentTotal.AddUint64(1, nil)
 				networkP2PMessageSentByTag.Add(string(protocol.VoteBundleTag), 1)
 			}
 		}
@@ -248,5 +256,5 @@ func (t pubsubMetricsTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {
 // UndeliverableMessage is invoked when the consumer of Subscribe is not reading messages fast enough and
 // the pressure release mechanism trigger, dropping messages.
 func (t pubsubMetricsTracer) UndeliverableMessage(msg *pubsub.Message) {
-	transactionMessagesP2PUnderdeliverableMessage.Inc(nil)
+	networkP2PGossipSubUndeliverableMessage.Inc(nil)
 }
