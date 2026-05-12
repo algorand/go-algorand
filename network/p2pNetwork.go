@@ -464,6 +464,9 @@ func (n *P2PNetwork) Start() error {
 	n.wg.Add(1)
 	go n.agreementTopicHandleLoop()
 
+	n.wg.Add(1)
+	go n.pubsubMeshPeersSampler()
+
 	if n.wsPeersConnectivityCheckTicker != nil {
 		n.wsPeersConnectivityCheckTicker.Stop()
 	}
@@ -1251,6 +1254,28 @@ func (n *P2PNetwork) agreementTopicHandleLoop() {
 	wg.Wait()
 }
 
+// pubsubMeshPeersSampler periodically samples the count of pubsub peers
+// subscribed to each gossipsub topic, as a proxy for gossipsub mesh size.
+// A zero on a publisher topic at publish time explains why SendRPC does not
+// fire even though the local validator accepted the message.
+func (n *P2PNetwork) pubsubMeshPeersSampler() {
+	defer n.wg.Done()
+	const sampleInterval = time.Second
+	ticker := time.NewTicker(sampleInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		case <-ticker.C:
+			networkP2PPubsubMeshPeersTX.Set(uint64(len(n.service.ListPeersForTopic(p2p.TXTopicName))))
+			networkP2PPubsubMeshPeersAV.Set(uint64(len(n.service.ListPeersForTopic(p2p.AVTopicName))))
+			networkP2PPubsubMeshPeersPP.Set(uint64(len(n.service.ListPeersForTopic(p2p.PPTopicName))))
+			networkP2PPubsubMeshPeersVB.Set(uint64(len(n.service.ListPeersForTopic(p2p.VBTopicName))))
+		}
+	}
+}
+
 type gsPeer struct {
 	peerID peer.ID
 	net    *P2PNetwork
@@ -1265,7 +1290,20 @@ func (p *gsPeer) RoutingAddr() []byte {
 }
 
 // topicValidator calls txHandler to validate and process incoming transactions.
-func (n *P2PNetwork) topicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
+func (n *P2PNetwork) topicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) (result pubsub.ValidationResult) {
+	// Track in-flight topicValidator calls as a proxy for pubsub validate-queue occupancy.
+	// Compare against algod_network_p2p_pubsub_validate_queue_capacity for saturation.
+	if msg.Topic != nil {
+		networkP2PPubsubValidateEntryByTopic.Add(*msg.Topic, 1)
+	}
+	networkP2PPubsubValidateInflight.Set(uint64(pubsubValidateInflight.Add(1)))
+	defer func() {
+		if msg.Topic != nil {
+			networkP2PPubsubValidateExitByTopic.Add(*msg.Topic, 1)
+		}
+		networkP2PPubsubValidateInflight.Set(uint64(pubsubValidateInflight.Add(-1)))
+	}()
+
 	n.wsPeersLock.Lock()
 	var sender DisconnectableAddressablePeer
 	if wsp, ok := n.wsPeers[peerID]; ok {
@@ -1299,6 +1337,7 @@ func (n *P2PNetwork) topicValidator(ctx context.Context, peerID peer.ID, msg *pu
 
 	// if we sent the message, don't validate it
 	if msg.ReceivedFrom == n.service.ID() {
+		networkP2PPubsubSelfValidateByTopic.Add(*msg.Topic, 1)
 		return pubsub.ValidationAccept
 	}
 

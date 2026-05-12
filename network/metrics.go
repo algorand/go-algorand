@@ -17,6 +17,8 @@
 package network
 
 import (
+	"sync/atomic"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	p2proto "github.com/libp2p/go-libp2p/core/protocol"
@@ -115,8 +117,6 @@ var networkP2PGossipSubUndeliverableMessage = metrics.MakeCounter(metrics.Networ
 var networkP2PGossipSubSentBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_sent_bytes_total", Description: "Total number of bytes sent through gossipsub"})
 var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_received_bytes_total", Description: "Total number of bytes received through gossipsub"})
 
-// var networkP2PGossipSubSentMsgs = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_message_sent", Description: "Number of complete messages that were sent to the network through gossipsub"})
-
 var networkVoteBroadcastCompressedBytes = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vote_compressed_bytes_broadcast_total", Description: "Total AV message bytes broadcast after applying stateless compression"})
 var networkVoteBroadcastUncompressedBytes = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vote_uncompressed_bytes_broadcast_total", Description: "Total AV message bytes broadcast before applying stateless compression"})
 var networkVPCompressionErrors = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_compression_errors_total", Description: "Total number of stateful vote compression errors"})
@@ -125,6 +125,33 @@ var networkVPAbortMessagesSent = metrics.MakeCounter(metrics.MetricName{Name: "a
 var networkVPAbortMessagesReceived = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_abort_messages_received_total", Description: "Total number of vpack abort messages received from peers"})
 var networkVPCompressedBytesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_compressed_bytes_sent_total", Description: "Total VP message bytes sent, after compressing AV to VP messages"})
 var networkVPUncompressedBytesSent = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_vpack_uncompressed_bytes_sent_total", Description: "Total VP message bytes sent, before compressing AV to VP messages"})
+
+// pubsub validate-queue saturation metrics. Inflight is a proxy for queue
+// occupancy: we cannot inspect pubsub's internal validate queue directly, but
+// counting topicValidator entries minus returns is a close approximation.
+// Compare against the constant p2p.PubsubValidateQueueSize and pair with the
+// rejected-message counters (networkP2PGossipSubRejectMessage{full,throttled})
+// to confirm saturation.
+var networkP2PPubsubValidateInflight = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_validate_inflight", Description: "Current number of in-flight topicValidator calls across all topics"})
+var networkP2PPubsubValidateEntryByTopic = metrics.NewTagCounter("algod_network_p2p_pubsub_validate_entry_{TAG}", "Number of topicValidator entries by topic",
+	p2p.TXTopicName, p2p.AVTopicName, p2p.PPTopicName, p2p.VBTopicName)
+var networkP2PPubsubValidateExitByTopic = metrics.NewTagCounter("algod_network_p2p_pubsub_validate_exit_{TAG}", "Number of topicValidator returns by topic",
+	p2p.TXTopicName, p2p.AVTopicName, p2p.PPTopicName, p2p.VBTopicName)
+
+var pubsubValidateInflight atomic.Int64
+
+// pubsub topicValidator self-validate short-circuit (msg.ReceivedFrom == self).
+// Subtract this from validate_entry to recover the peer-received count.
+var networkP2PPubsubSelfValidateByTopic = metrics.NewTagCounter("algod_network_p2p_pubsub_self_validate_{TAG}", "Number of topicValidator invocations short-circuited because ReceivedFrom == self, by topic",
+	p2p.TXTopicName, p2p.AVTopicName, p2p.PPTopicName, p2p.VBTopicName)
+
+// pubsub gossipsub mesh size per topic, sampled periodically. A value of 0 at the
+// moment a publisher publishes explains a missing SendRPC: rt.Publish had nobody
+// to send to.
+var networkP2PPubsubMeshPeersTX = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_mesh_peers_TX", Description: "Pubsub peers subscribed to the TX topic (proxy for gossipsub mesh size)"})
+var networkP2PPubsubMeshPeersAV = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_mesh_peers_AV", Description: "Pubsub peers subscribed to the AV topic (proxy for gossipsub mesh size)"})
+var networkP2PPubsubMeshPeersPP = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_mesh_peers_PP", Description: "Pubsub peers subscribed to the PP topic (proxy for gossipsub mesh size)"})
+var networkP2PPubsubMeshPeersVB = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_p2p_pubsub_mesh_peers_VB", Description: "Pubsub peers subscribed to the VB topic (proxy for gossipsub mesh size)"})
 
 var _ = pubsub.RawTracer(pubsubMetricsTracer{})
 

@@ -90,6 +90,10 @@ const VBTopicName = "algovb01"
 // Number of goroutines used for both wsNetwork workers and pubsub topic handler loops (e.g., agreementTopicHandleLoop)
 const incomingThreads = 20
 
+// PubsubValidateQueueSize is the size of pubsub's per-subscription validate queue.
+// Exposed so it can be reported as a metric for saturation analysis.
+const PubsubValidateQueueSize = 256
+
 // deriveAlgorandGossipSubParams derives the gossip sub parameters from the cfg.GossipFanout value
 // by using the same proportions as pubsub defaults - see GossipSubD, GossipSubDlo, etc.
 func deriveAlgorandGossipSubParams(numOutgoingConns int) pubsub.GossipSubParams {
@@ -190,7 +194,7 @@ func makePubSub(ctx context.Context, host host.Host, numOutgoingConns int, pubsu
 		// pubsub.WithPeerGater(&pubsub.PeerGaterParams{}),
 		pubsub.WithSubscriptionFilter(pubsub.WrapLimitSubscriptionFilter(pubsub.NewAllowlistSubscriptionFilter(TXTopicName, AVTopicName, PPTopicName, VBTopicName), 100)),
 		// pubsub.WithEventTracer(jsonTracer),
-		pubsub.WithValidateQueueSize(256),
+		pubsub.WithValidateQueueSize(PubsubValidateQueueSize),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
 		pubsub.WithValidateWorkers(incomingThreads),
