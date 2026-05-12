@@ -569,11 +569,11 @@ func performTxTailTableMigration(ctx context.Context, e db.Executable, blockDb d
 		if firstRound == basics.Round(0) {
 			firstRound++
 		}
-		hasWindowStart, hwErr := blockdb.HasWindowStart(blockTx)
-		if hwErr != nil {
-			return hwErr
+		reader, rErr := blockdb.NewReader(blockTx)
+		if rErr != nil {
+			return rErr
 		}
-		if _, getErr := blockdb.BlockGet(blockTx, firstRound, hasWindowStart); getErr != nil {
+		if _, getErr := reader.BlockGet(blockTx, firstRound); getErr != nil {
 			// looks like not catchpoint but a regular migration, start from maxTxnLife + deeperBlockHistory back
 			firstRound = (latestBlockRound + 1).SubSaturate(maxTxnLife + deeperBlockHistory)
 			if firstRound == basics.Round(0) {
@@ -582,7 +582,7 @@ func performTxTailTableMigration(ctx context.Context, e db.Executable, blockDb d
 		}
 		tailRounds := make([][]byte, 0, maxTxnLife)
 		for rnd := firstRound; rnd <= dbRound; rnd++ {
-			blk, getErr := blockdb.BlockGet(blockTx, rnd, hasWindowStart)
+			blk, getErr := reader.BlockGet(blockTx, rnd)
 			if getErr != nil {
 				return fmt.Errorf("block for round %d ( %d - %d ) cannot be retrieved : %w", rnd, firstRound, dbRound, getErr)
 			}

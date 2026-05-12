@@ -46,10 +46,7 @@ type blockQueue struct {
 	lastCommitted basics.Round
 	q             []blockEntry
 
-	writer *blockdb.BlockWriter
-	// hasWindowStart is detected once at construction and threaded to every
-	// blockdb read so the hot path never has to introspect the schema.
-	hasWindowStart bool
+	store *blockdb.Store
 
 	mu      deadlock.Mutex
 	cond    *sync.Cond
@@ -61,11 +58,10 @@ func newBlockQueue(l *Ledger) (*blockQueue, error) {
 	bq := &blockQueue{}
 	bq.cond = sync.NewCond(&bq.mu)
 	bq.l = l
-	bq.writer = blockdb.NewBlockWriter(l.cfg.BlockDBCompressionWindow)
 	err := l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		var derr error
-		bq.hasWindowStart, derr = blockdb.HasWindowStart(tx)
-		return derr
+		var serr error
+		bq.store, serr = blockdb.NewStore(tx, l.cfg.BlockDBCompressionWindow)
+		return serr
 	})
 	if err != nil {
 		return nil, err
@@ -135,7 +131,7 @@ func (bq *blockQueue) syncer() {
 		}
 
 		if !bq.running {
-			bq.writer.Close()
+			bq.store.Close()
 			close(bq.closed)
 			bq.closed = nil
 			bq.mu.Unlock()
@@ -150,7 +146,7 @@ func (bq *blockQueue) syncer() {
 		err := bq.l.blockDBs.Wdb.AtomicContext(context.Background(),
 			func(ctx context.Context, tx *sql.Tx) error {
 				for i := range workQ {
-					err0 := blockdb.BlockPut(tx, &workQ[i].block, &workQ[i].cert, bq.writer)
+					err0 := bq.store.BlockPut(tx, &workQ[i].block, &workQ[i].cert)
 					if err0 != nil {
 						return err0
 					}
@@ -158,14 +154,14 @@ func (bq *blockQueue) syncer() {
 				return nil
 			},
 			// retryClearFn: clear writer (compression state)
-			func(context.Context) { bq.writer.Reset() },
+			func(context.Context) { bq.store.Reset() },
 		)
 		ledgerSyncBlockputMicros.AddMicrosecondsSince(start, nil)
 
 		bq.mu.Lock()
 
 		if err != nil {
-			bq.writer.Reset()
+			bq.store.Reset()
 			bq.l.log.Warnf("blockQueue.syncer: could not flush: %v", err)
 		} else {
 			bq.lastCommitted += basics.Round(len(workQ))
@@ -320,7 +316,7 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 	ledgerGetblockCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, err0 = blockdb.BlockGet(tx, r, bq.hasWindowStart)
+		blk, err0 = bq.store.BlockGet(tx, r)
 		return err0
 	})
 	ledgerGetblockMicros.AddMicrosecondsSince(start, nil)
@@ -368,7 +364,7 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 	ledgerGeteblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, cert, err0 = blockdb.BlockGetEncodedCert(tx, r, bq.hasWindowStart)
+		blk, cert, err0 = bq.store.BlockGetEncodedCert(tx, r)
 		return err0
 	})
 	ledgerGeteblockcertMicros.AddMicrosecondsSince(start, nil)
@@ -390,7 +386,7 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 	ledgerGetblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, cert, err0 = blockdb.BlockGetCert(tx, r, bq.hasWindowStart)
+		blk, cert, err0 = bq.store.BlockGetCert(tx, r)
 		return err0
 	})
 	ledgerGetblockcertMicros.AddMicrosecondsSince(start, nil)

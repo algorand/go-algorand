@@ -31,12 +31,6 @@ import (
 )
 
 // 2019-12-15: removed column 'auxdata blob' from 'CREATE TABLE' statement. It was not explicitly removed from databases and may continue to exist with empty entries in some old databases.
-//
-// blockSchema is the pre-compression canonical shape. When compression is
-// enabled BlockInit ALTERs the table to add the nullable window_start
-// column; a node that never enables compression leaves the table as-is.
-// Read callers thread a hasWindowStart bool through from the open-time
-// detection so the read path never has to introspect the schema per call.
 var blockSchema = []string{
 	`CREATE TABLE IF NOT EXISTS blocks (
 		rnd integer primary key,
@@ -120,10 +114,10 @@ func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, window uint64) error 
 	}
 
 	if next == 0 && len(initBlocks) > 0 {
-		writer := NewBlockWriter(window)
+		writer := newWriter(window)
 		defer writer.Close()
 		for i := range initBlocks {
-			err = BlockPut(tx, &initBlocks[i], &agreement.Certificate{}, writer)
+			err = writer.BlockPut(tx, &initBlocks[i], &agreement.Certificate{})
 			if err != nil {
 				serr, ok := err.(sqlite3.Error)
 				if ok && serr.Code == sqlite3.ErrConstraint {
@@ -137,6 +131,54 @@ func BlockInit(tx *sql.Tx, initBlocks []bookkeeping.Block, window uint64) error 
 	return nil
 }
 
+// Reader holds the schema-detection state shared by every read path:
+// hasWindowStart is captured once at NewReader time so the read query
+// never has to introspect the schema. Reader has no resources to release,
+// so there is no Close; the same Reader can serve any number of *sql.Tx
+// values over its lifetime.
+//
+// Following the convention in ledger/store/trackerdb (Reader / Writer /
+// ReaderWriter, SnapshotScope / BatchScope / TransactionScope), read-only
+// callers should construct a Reader rather than a Store so they neither
+// allocate writer state nor pass a meaningless compression window.
+type Reader struct {
+	hasWindowStart bool
+}
+
+// NewReader opens a Reader against a blocks table that BlockInit has
+// already created/migrated. The tx is used once to detect the schema and
+// is not retained.
+func NewReader(tx *sql.Tx) (*Reader, error) {
+	has, err := tableHasColumn(tx, "blocks", "window_start")
+	if err != nil {
+		return nil, err
+	}
+	return &Reader{hasWindowStart: has}, nil
+}
+
+// Store composes a Reader and a Writer. Reads and writes share a
+// hasWindowStart, and Writer owns BlockPut along with Close / Reset,
+// so Store inherits the full read+write surface by method promotion.
+type Store struct {
+	*Reader
+	*Writer
+}
+
+// NewStore opens a Store against a blocks table that BlockInit has already
+// created/migrated. window is the BlockDBCompressionWindow the writer
+// should encode at; 0 disables compression. The tx is used once to detect
+// the schema and is not retained.
+func NewStore(tx *sql.Tx, window uint64) (*Store, error) {
+	r, err := NewReader(tx)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{
+		Reader: r,
+		Writer: newWriter(window),
+	}, nil
+}
+
 // BlockResetDB resets blockdb
 func BlockResetDB(tx *sql.Tx) error {
 	for _, stmt := range blockResetExprs {
@@ -148,11 +190,11 @@ func BlockResetDB(tx *sql.Tx) error {
 	return nil
 }
 
-// BlockGet retrieves a block by a round number. hasWindowStart selects the
-// read shape (see blockGetEncoded); callers should pass the result of
-// HasWindowStart evaluated once at open time.
-func BlockGet(tx *sql.Tx, rnd basics.Round, hasWindowStart bool) (blk bookkeeping.Block, err error) {
-	buf, _, err := blockGetEncoded(tx, rnd, true /*blkOnly*/, hasWindowStart)
+// BlockGet retrieves a block by a round number. The Reader's hasWindowStart
+// flag (captured by NewReader at open time) selects the read shape so the
+// hot path never introspects the schema; see blockGetEncoded.
+func (r *Reader) BlockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
+	buf, _, err := r.blockGetEncoded(tx, rnd, true /*blkOnly*/)
 	if err != nil {
 		return
 	}
@@ -177,15 +219,15 @@ func BlockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 }
 
 // BlockGetEncodedCert retrieves raw block and cert by a round number.
-// hasWindowStart selects the read shape; see BlockGet.
-func BlockGetEncodedCert(tx *sql.Tx, rnd basics.Round, hasWindowStart bool) (blk []byte, cert []byte, err error) {
-	return blockGetEncoded(tx, rnd, false, hasWindowStart)
+// The Reader's hasWindowStart flag selects the read shape; see BlockGet.
+func (r *Reader) BlockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte, err error) {
+	return r.blockGetEncoded(tx, rnd, false)
 }
 
-// BlockGetCert retrieves block and cert by a round number. hasWindowStart
-// selects the read shape; see BlockGet.
-func BlockGetCert(tx *sql.Tx, rnd basics.Round, hasWindowStart bool) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
-	blkbuf, certbuf, err := BlockGetEncodedCert(tx, rnd, hasWindowStart)
+// BlockGetCert retrieves block and cert by a round number. The Reader's
+// hasWindowStart flag selects the read shape; see BlockGet.
+func (r *Reader) BlockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
+	blkbuf, certbuf, err := r.BlockGetEncodedCert(tx, rnd)
 	if err != nil {
 		return
 	}
@@ -204,8 +246,10 @@ func BlockGetCert(tx *sql.Tx, rnd basics.Round, hasWindowStart bool) (blk bookke
 	return
 }
 
-// BlockPut stores block and certificate. writer must be non-nil.
-func BlockPut(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate, writer *BlockWriter) error {
+// BlockPut stores block and certificate, using the receiver's streaming
+// encoder state to carry the zstd window forward across consecutive
+// successful calls.
+func (w *Writer) BlockPut(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate) error {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
 	if err != nil {
@@ -225,7 +269,7 @@ func BlockPut(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate, w
 		}
 	}
 
-	blkChunk, certChunk, anchorRound, err := encodeBlockCertData(blk, cert, writer)
+	blkChunk, certChunk, anchorRound, err := w.encodeBlockCertData(blk, cert)
 	if err != nil {
 		return err
 	}
@@ -233,7 +277,7 @@ func BlockPut(tx *sql.Tx, blk *bookkeeping.Block, cert *agreement.Certificate, w
 	// When compression is disabled the row is byte-identical to the
 	// pre-compression on-disk layout, so we use the 5-column INSERT and
 	// never touch the window_start column (which may not even exist).
-	if writer.Codec().Disabled() {
+	if w.Codec().Disabled() {
 		_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 			rnd,
 			blk.CurrentProtocol,

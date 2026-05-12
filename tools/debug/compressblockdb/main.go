@@ -136,24 +136,25 @@ func run(srcPath, dstPath string, n uint64, batch int) error {
 	fmt.Printf("source %s: rounds %d..%d (%d rounds)\n", srcPath, minR, maxR, nrounds)
 	fmt.Printf("dest   %s: window N=%d\n", dstPath, n)
 
-	// Detect the source's compression schema once so reads can pick the
-	// right query without a per-read PRAGMA or failed-query fallback.
-	srcHasWindowStart, err := detectHasWindowStart(srcDB)
-	if err != nil {
-		return fmt.Errorf("detect source schema: %w", err)
-	}
-
 	if ierr := initDest(dstDB, n); ierr != nil {
 		return ierr
 	}
 
-	writer := blockdb.NewBlockWriter(n)
-	defer writer.Close()
+	srcReader, err := openReader(srcDB)
+	if err != nil {
+		return fmt.Errorf("open src reader: %w", err)
+	}
 
-	if serr := stageFirst(srcDB, dstDB, minR, srcHasWindowStart); serr != nil {
+	dstStore, err := openStore(dstDB, n)
+	if err != nil {
+		return fmt.Errorf("open dst store: %w", err)
+	}
+	defer dstStore.Close()
+
+	if serr := stageFirst(srcDB, dstDB, minR, srcReader); serr != nil {
 		return serr
 	}
-	c := &copier{writer: writer, written: 1, srcHasWindowStart: srcHasWindowStart}
+	c := &copier{srcReader: srcReader, dstStore: dstStore, written: 1}
 
 	start := time.Now()
 	for batchLo := minR + 1; batchLo <= maxR; batchLo += basics.Round(batch) {
@@ -196,16 +197,30 @@ func run(srcPath, dstPath string, n uint64, batch int) error {
 	return nil
 }
 
-// detectHasWindowStart runs blockdb.HasWindowStart in a short read-only
-// transaction. The result is stable for the lifetime of this process; the
-// tool's read loop passes it down to every BlockGet/BlockGetCert.
-func detectHasWindowStart(db *sql.DB) (bool, error) {
+// openReader opens a Reader on a short read-only transaction; the Reader
+// survives the rollback because NewReader captures schema detection without
+// retaining the tx. The source side of the copy is read-only and never
+// allocates writer state.
+func openReader(db *sql.DB) (*blockdb.Reader, error) {
 	tx, err := db.Begin()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	return blockdb.HasWindowStart(tx)
+	return blockdb.NewReader(tx)
+}
+
+// openStore opens a Store on a short read-only transaction; the Store
+// survives the rollback because NewStore captures schema detection without
+// retaining the tx. window is the compression window the Store's writer
+// will encode at.
+func openStore(db *sql.DB, window uint64) (*blockdb.Store, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	return blockdb.NewStore(tx, window)
 }
 
 // sqliteOnDiskSize sums the .sqlite file with any -wal / -shm sidecars so
@@ -258,12 +273,12 @@ func initDest(db *sql.DB, window uint64) error {
 //
 // Staging writes the row verbatim (window_start = NULL); cross-row
 // compression begins with the first BlockPut call.
-func stageFirst(srcDB, dstDB *sql.DB, firstRound basics.Round, srcHasWindowStart bool) error {
+func stageFirst(srcDB, dstDB *sql.DB, firstRound basics.Round, srcReader *blockdb.Reader) error {
 	srcTx, err := srcDB.Begin()
 	if err != nil {
 		return err
 	}
-	blk, cert, err := blockdb.BlockGetCert(srcTx, firstRound, srcHasWindowStart)
+	blk, cert, err := srcReader.BlockGetCert(srcTx, firstRound)
 	_ = srcTx.Rollback()
 	if err != nil {
 		return fmt.Errorf("read round %d: %w", firstRound, err)
@@ -284,13 +299,13 @@ func stageFirst(srcDB, dstDB *sql.DB, firstRound basics.Round, srcHasWindowStart
 	return dstTx.Commit()
 }
 
-// copier carries cross-batch encoder state via writer. BlockPut on the
+// copier carries cross-batch encoder state via dstStore. BlockPut on the
 // dest preserves the writer's in-flight zstd frame across consecutive
 // successful Put calls, so the LZ77 window spans every round in [firstRound+1, hi].
 type copier struct {
-	writer            *blockdb.BlockWriter
-	written           uint64
-	srcHasWindowStart bool
+	srcReader *blockdb.Reader
+	dstStore  *blockdb.Store
+	written   uint64
 }
 
 func (c *copier) copyBatch(srcDB, dstDB *sql.DB, lo, hi basics.Round) error {
@@ -310,21 +325,21 @@ func (c *copier) copyBatch(srcDB, dstDB *sql.DB, lo, hi basics.Round) error {
 			blk  bookkeeping.Block
 			cert agreement.Certificate
 		)
-		blk, cert, err = blockdb.BlockGetCert(srcTx, r, c.srcHasWindowStart)
+		blk, cert, err = c.srcReader.BlockGetCert(srcTx, r)
 		if err != nil {
 			_ = dstTx.Rollback()
-			c.writer.Reset()
+			c.dstStore.Reset()
 			return fmt.Errorf("read round %d: %w", r, err)
 		}
-		if err = blockdb.BlockPut(dstTx, &blk, &cert, c.writer); err != nil {
+		if err = c.dstStore.BlockPut(dstTx, &blk, &cert); err != nil {
 			_ = dstTx.Rollback()
-			c.writer.Reset()
+			c.dstStore.Reset()
 			return fmt.Errorf("put round %d: %w", r, err)
 		}
 		c.written++
 	}
 	if err := dstTx.Commit(); err != nil {
-		c.writer.Reset()
+		c.dstStore.Reset()
 		return err
 	}
 	return nil

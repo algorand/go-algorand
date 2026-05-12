@@ -27,15 +27,10 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// HasWindowStart reports whether the blocks table has the window_start
-// column. Callers should evaluate this once per process (typically right
-// after BlockInit) and thread the result through to every BlockGet /
-// BlockGetCert / BlockGetEncodedCert call so the read path doesn't have to
-// introspect the schema or recover from a failed query per read.
-func HasWindowStart(tx *sql.Tx) (bool, error) {
-	return tableHasColumn(tx, "blocks", "window_start")
-}
-
+// tableHasColumn reports whether tx's table has a column named column. It
+// is used to detect the window_start schema bit (NewReader caches the
+// result on the Reader so the hot path never introspects per read) and to
+// mirror the blocks schema onto catchpointblocks in BlockStartCatchupStaging.
 func tableHasColumn(tx *sql.Tx, table, column string) (bool, error) {
 	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
@@ -58,23 +53,21 @@ func tableHasColumn(tx *sql.Tx, table, column string) (bool, error) {
 }
 
 // encodeBlockCertData runs the block and certificate payloads through the
-// writer's per-column encoders. The returned anchorRound is the round that
+// Writer's per-column encoders. The returned anchorRound is the round that
 // opens the zstd frame containing this row; callers translate it into a
 // window_start column value (NULL when compression is disabled). Both
 // columns share an EncoderPair so they always advance their anchors
 // together; only one anchorRound is returned because the two are equal by
-// construction. The writer must be non-nil.
-func encodeBlockCertData(blk *bookkeeping.Block, cert *agreement.Certificate, writer *BlockWriter) (blkChunk, certChunk []byte, anchorRound basics.Round, err error) {
-	pair := writer.pair()
+// construction.
+func (w *Writer) encodeBlockCertData(blk *bookkeeping.Block, cert *agreement.Certificate) (blkChunk, certChunk []byte, anchorRound basics.Round, err error) {
 	r := blk.Round()
-
 	blkBytes := protocol.Encode(blk)
 	certBytes := protocol.Encode(cert)
-	blkChunk, anchorRound, err = pair.Blk.EncodeRow(r, blkBytes)
+	blkChunk, anchorRound, err = w.blk.EncodeRow(r, blkBytes)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("blockdb: encode blkdata: %w", err)
 	}
-	certChunk, _, err = pair.Cert.EncodeRow(r, certBytes)
+	certChunk, _, err = w.cert.EncodeRow(r, certBytes)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("blockdb: encode certdata: %w", err)
 	}
@@ -92,9 +85,9 @@ func isCompressedChunk(chunk []byte) bool {
 }
 
 // blockGetEncoded returns the raw blkdata (and certdata, unless blkOnly is
-// set) for round rnd, transparently undoing windowed-zstd compression.
-//
-// hasWindowStart selects between two read shapes:
+// set) for round rnd, transparently undoing windowed-zstd compression. The
+// Reader's hasWindowStart flag (captured at NewReader time) selects between
+// two read shapes:
 //   - true: the windowed SELECT, which lets a single SQL statement find the
 //     row's frame anchor (inner subquery) and pull every row in [anchor,
 //     rnd] (outer range scan). A disabled/raw row or an anchor row
@@ -104,11 +97,8 @@ func isCompressedChunk(chunk []byte) bool {
 //     whose schema has no window_start column, i.e. a DB written entirely
 //     by a release that predates the compression PR. All rows in such a DB
 //     are raw msgp, so the simple query is correct.
-//
-// Callers MUST pass the value returned by HasWindowStart at open time; the
-// read path does not introspect the schema on the hot path.
-func blockGetEncoded(tx *sql.Tx, rnd basics.Round, blkOnly, hasWindowStart bool) (blk []byte, cert []byte, err error) {
-	if !hasWindowStart {
+func (r *Reader) blockGetEncoded(tx *sql.Tx, rnd basics.Round, blkOnly bool) (blk []byte, cert []byte, err error) {
+	if !r.hasWindowStart {
 		return blockGetEncodedSimple(tx, rnd, blkOnly)
 	}
 	return blockGetEncodedWindowed(tx, rnd, blkOnly)

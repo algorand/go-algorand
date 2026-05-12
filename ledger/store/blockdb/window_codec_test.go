@@ -172,27 +172,6 @@ func TestMaxWindowConstantsInSync(t *testing.T) {
 	require.Equal(t, uint64(MaxCompressionWindow), uint64(config.MaxBlockDBCompressionWindow))
 }
 
-// TestNewBlockWriterNormalizesWindow guards the retention invariant: every
-// codec N must divide MaxCompressionWindow so the round-down by 32 in
-// RoundDownRetention always lands on an anchor. NewBlockWriter clamps any
-// out-of-set input down to the next valid value so a stray caller (a test,
-// a misconfigured tool) cannot produce a DB with a stranded anchor.
-func TestNewBlockWriterNormalizesWindow(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	cases := []struct {
-		in   uint64
-		want int
-	}{
-		{0, 0}, {1, 1}, {2, 2}, {4, 4}, {8, 8}, {16, 16}, {32, 32},
-		{3, 2}, {7, 4}, {10, 8}, {17, 16}, {31, 16},
-		{33, 32}, {1 << 20, 32}, {^uint64(0), 32},
-	}
-	for _, tc := range cases {
-		w := NewBlockWriter(tc.in)
-		require.Equal(t, tc.want, w.Codec().N, "window %d", tc.in)
-	}
-}
-
 func TestRoundDownRetention(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -215,20 +194,22 @@ func TestRoundDownRetention(t *testing.T) {
 	}
 }
 
-// TestEncoderPair_CloseLeavesReusable ensures Close leaves the encoders in a
-// fresh state rather than just freeing the writer pointer.
-func TestEncoderPair_CloseLeavesReusable(t *testing.T) {
+// TestWriterCloseLeavesReusable ensures Writer.Close leaves the underlying
+// encoders in a fresh state rather than just freeing the zstd writer
+// pointer, matching the blockQueue stop/start cycle's expectation that the
+// same Writer survives a reload.
+func TestWriterCloseLeavesReusable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	ep := NewEncoderPair(WindowCodec{N: 4, Level: 1})
+	w := newWriter(4)
 	for r := 0; r < 4; r++ {
-		_, _, err := ep.Blk.EncodeRow(basics.Round(r), makePayload(r, 256))
+		_, _, err := w.blk.EncodeRow(basics.Round(r), makePayload(r, 256))
 		require.NoError(t, err)
-		_, _, err = ep.Cert.EncodeRow(basics.Round(r), makePayload(r+100, 256))
+		_, _, err = w.cert.EncodeRow(basics.Round(r), makePayload(r+100, 256))
 		require.NoError(t, err)
 	}
 
-	ep.Close()
+	w.Close()
 
 	// After Close the next EncodeRow should succeed and produce a fresh
 	// frame anchored at whatever round comes next, even one that is not a
@@ -236,11 +217,11 @@ func TestEncoderPair_CloseLeavesReusable(t *testing.T) {
 	// internal "skip writer init" branch would crash on the nil writer.
 	// Both rounds belong to the post-Close frame, anchored at 4.
 	for _, r := range []basics.Round{4, 5} {
-		_, anchor, err := ep.Blk.EncodeRow(r, makePayload(int(r), 256))
+		_, anchor, err := w.blk.EncodeRow(r, makePayload(int(r), 256))
 		require.NoError(t, err)
 		require.Equal(t, basics.Round(4), anchor)
 	}
-	ep.Close()
+	w.Close()
 }
 
 // TestWindowCodec_RejectsHugeUvarint ensures that a corrupt or tampered
@@ -254,7 +235,7 @@ func TestWindowCodec_RejectsHugeUvarint(t *testing.T) {
 	var huge bytes.Buffer
 	w := zstd.NewWriterLevel(&huge, 1)
 	var lb [binary.MaxVarintLen64]byte
-	n := binary.PutUvarint(lb[:], uint64(maxDecodedPayloadBytes()+1))
+	n := binary.PutUvarint(lb[:], uint64(maxDecodedPayloadBytes+1))
 	_, err := w.Write(lb[:n])
 	require.NoError(t, err)
 	require.NoError(t, w.Close())

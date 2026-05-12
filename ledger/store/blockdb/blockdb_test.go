@@ -18,6 +18,7 @@ package blockdb
 
 import (
 	"database/sql"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -87,21 +88,21 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []testBlockEntry) {
 		require.Equal(t, earliest, blocks[0].block.BlockHeader.Round)
 	}
 
-	hasWindowStart, err := HasWindowStart(tx)
+	reader, err := NewReader(tx)
 	require.NoError(t, err)
 
 	for rnd := basics.Round(0); rnd < basics.Round(len(blocks)); rnd++ {
-		blk, err := BlockGet(tx, rnd, hasWindowStart)
+		blk, err := reader.BlockGet(tx, rnd)
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 
-		blk, cert, err := BlockGetCert(tx, rnd, hasWindowStart)
+		blk, cert, err := reader.BlockGetCert(tx, rnd)
 		require.NoError(t, err)
 		require.Equal(t, blk, blocks[rnd].block)
 		require.Equal(t, cert, blocks[rnd].cert)
 	}
 
-	_, err = BlockGet(tx, basics.Round(len(blocks)), hasWindowStart)
+	_, err = reader.BlockGet(tx, basics.Round(len(blocks)))
 	require.Error(t, err)
 }
 
@@ -113,34 +114,17 @@ func blockChainBlocks(be []testBlockEntry) []bookkeeping.Block {
 	return res
 }
 
-// blockDBTestWindows returns the compression windows every blockdb test
-// case should sweep across: disabled, per-row zstd, and a small windowed
-// zstd. The N=4 case exercises both anchor and continuation rows when a
-// test inserts more than N blocks.
-func blockDBTestWindows() []uint64 {
-	return []uint64{
-		0, // disabled: rows stored verbatim
-		1, // per-row zstd: each row is its own frame
-		4, // windowed: anchor every 4 rounds
-	}
-}
-
-func windowLabel(window uint64) string {
-	switch window {
-	case 0:
-		return "disabled"
-	case 1:
-		return "perrow"
-	default:
-		return "windowed"
-	}
-}
+// blockDBTestWindows is the compression windows every blockdb test sweeps
+// across: disabled (0), per-row zstd (1), and a small windowed zstd (4).
+// N=4 exercises both anchor and continuation rows when a test inserts more
+// than N blocks.
+var blockDBTestWindows = []uint64{0, 1, 4}
 
 func TestBlockDBEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, window := range blockDBTestWindows() {
-		t.Run(windowLabel(window), func(t *testing.T) {
+	for _, window := range blockDBTestWindows {
+		t.Run(strconv.FormatUint(window, 10), func(t *testing.T) {
 			dbs, _ := storetesting.DbOpenTest(t, true)
 			storetesting.SetDbLogging(t, dbs)
 			defer dbs.Close()
@@ -159,8 +143,8 @@ func TestBlockDBEmpty(t *testing.T) {
 func TestBlockDBInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, window := range blockDBTestWindows() {
-		t.Run(windowLabel(window), func(t *testing.T) {
+	for _, window := range blockDBTestWindows {
+		t.Run(strconv.FormatUint(window, 10), func(t *testing.T) {
 			dbs, _ := storetesting.DbOpenTest(t, true)
 			storetesting.SetDbLogging(t, dbs)
 			defer dbs.Close()
@@ -185,8 +169,8 @@ func TestBlockDBInit(t *testing.T) {
 func TestBlockDBAppend(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for _, window := range blockDBTestWindows() {
-		t.Run(windowLabel(window), func(t *testing.T) {
+	for _, window := range blockDBTestWindows {
+		t.Run(strconv.FormatUint(window, 10), func(t *testing.T) {
 			dbs, _ := storetesting.DbOpenTest(t, true)
 			storetesting.SetDbLogging(t, dbs)
 			defer dbs.Close()
@@ -201,12 +185,13 @@ func TestBlockDBAppend(t *testing.T) {
 			require.NoError(t, err)
 			checkBlockDB(t, tx, blocks)
 
-			writer := NewBlockWriter(window)
-			defer writer.Close()
+			store, err := NewStore(tx, window)
+			require.NoError(t, err)
+			defer store.Close()
 
 			for i := 0; i < 10; i++ {
 				blkent := randomBlock(basics.Round(len(blocks)))
-				err = BlockPut(tx, &blkent.block, &blkent.cert, writer)
+				err = store.BlockPut(tx, &blkent.block, &blkent.cert)
 				require.NoError(t, err)
 
 				blocks = append(blocks, blkent)
@@ -261,22 +246,9 @@ func TestBlockDBAddWindowStartMigration(t *testing.T) {
 	require.NoError(t, BlockInit(tx, nil, 4))
 	require.NoError(t, BlockInit(tx, nil, 4))
 
-	var hasWindowStart bool
-	rows, err := tx.Query("PRAGMA table_info(blocks)")
+	hasCol, err := tableHasColumn(tx, "blocks", "window_start")
 	require.NoError(t, err)
-	for rows.Next() {
-		var cid int
-		var name, typ string
-		var notnull, pk int
-		var dflt sql.NullString
-		require.NoError(t, rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk))
-		if name == "window_start" {
-			hasWindowStart = true
-		}
-	}
-	require.NoError(t, rows.Err())
-	require.NoError(t, rows.Close())
-	require.True(t, hasWindowStart, "window_start column should have been added by migration")
+	require.True(t, hasCol, "window_start column should have been added by migration")
 
 	// Existing rows must remain readable through the unified read path; the
 	// inner SELECT picks up NULL window_start and the outer scan collapses
@@ -316,23 +288,9 @@ func TestBlockDBMigrateCatchpointBlocks(t *testing.T) {
 	// "ALTER if exists" branch of addWindowStartColumn against catchpointblocks.
 	require.NoError(t, BlockInit(tx, nil, 4))
 
-	cols := func(table string) map[string]bool {
-		out := map[string]bool{}
-		rows, err := tx.Query("PRAGMA table_info(" + table + ")")
-		require.NoError(t, err)
-		defer rows.Close()
-		for rows.Next() {
-			var cid int
-			var name, typ string
-			var notnull, pk int
-			var dflt sql.NullString
-			require.NoError(t, rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk))
-			out[name] = true
-		}
-		require.NoError(t, rows.Err())
-		return out
-	}
-	require.True(t, cols("catchpointblocks")["window_start"], "catchpointblocks must have window_start after migration")
+	hasCol, err := tableHasColumn(tx, "catchpointblocks", "window_start")
+	require.NoError(t, err)
+	require.True(t, hasCol, "catchpointblocks must have window_start after migration")
 
 	// Re-running is a no-op (the column-present branch returns early).
 	require.NoError(t, BlockInit(tx, nil, 4))

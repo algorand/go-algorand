@@ -25,7 +25,6 @@ import (
 
 	"github.com/DataDog/zstd"
 
-	"github.com/algorand/go-algorand/config/bounds"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -73,106 +72,49 @@ type Encoder struct {
 // NewEncoder returns an Encoder configured by c.
 func NewEncoder(c WindowCodec) *Encoder { return &Encoder{c: c} }
 
-// EncoderPair groups two parallel Encoders, one for blkdata and one for
-// certdata. Both columns share the same WindowCodec settings and reset at
-// the same round boundaries.
-type EncoderPair struct {
-	Blk  *Encoder
-	Cert *Encoder
+// Writer owns the streaming encoder state needed to append compressed
+// blkdata/certdata rows. blk and cert share a WindowCodec and advance
+// their anchor rounds in lockstep. The state must be preserved across
+// consecutive successful writes for good compression, and reset whenever
+// a transaction containing encoded rows is retried or abandoned.
+type Writer struct {
+	codec WindowCodec
+	blk   *Encoder
+	cert  *Encoder
 }
 
-// NewEncoderPair constructs an EncoderPair where both columns use the same
-// compression settings.
-func NewEncoderPair(c WindowCodec) *EncoderPair {
-	return &EncoderPair{Blk: NewEncoder(c), Cert: NewEncoder(c)}
-}
-
-// Reset clears in-flight window state on both columns.
-func (ep *EncoderPair) Reset() {
-	ep.Blk.Reset()
-	ep.Cert.Reset()
-}
-
-// Close releases the C-allocated zstd writer state held by both encoders
-// and leaves them in the same state as a fresh encoder, so the pair is
-// safe to reuse. Always call this when an EncoderPair is no longer needed;
-// DataDog/zstd's Writer has no finalizer, so a missed Close leaks native
-// memory. BlockWriter.Close relies on this to support blockQueue stop/start
-// cycles during ledger reload.
-func (ep *EncoderPair) Close() {
-	if ep == nil {
-		return
-	}
-	ep.Blk.Reset()
-	ep.Cert.Reset()
-}
-
-// BlockWriter owns the streaming encoder state needed to append compressed
-// blkdata/certdata rows. The state must be preserved across consecutive
-// successful writes for good compression, and reset whenever a transaction
-// containing encoded rows is retried or abandoned. NewBlockWriter constructs
-// a writer that honors the configured compression window.
-type BlockWriter struct {
-	codec   WindowCodec
-	encPair *EncoderPair
-}
-
-// NewBlockWriter constructs a writer for normal block-table appends. The
-// window must be one of the values in validWindows; any other value is
-// clamped down to the next smaller valid value (which retains the divisor
-// invariant RoundDownRetention relies on). Production callers should pass a
-// value already normalized through
-// config.Local.GetNormalizedBlockDBCompressionWindow; this clamp is
-// defense in depth so a stray test or tool can never produce a DB that
-// retention would prune incorrectly.
-func NewBlockWriter(window uint64) *BlockWriter {
-	n := normalizeWindow(window)
-	c := WindowCodec{N: int(n), Level: defaultCompressionLevel}
-	return &BlockWriter{codec: c, encPair: NewEncoderPair(c)}
-}
-
-// validWindows enumerates the BlockDBCompressionWindow values the codec
-// honors. Every entry divides MaxCompressionWindow so retention's round-down
-// preserves every anchor regardless of which N a row was written under.
-var validWindows = []uint64{0, 1, 2, 4, 8, 16, 32}
-
-// normalizeWindow returns the largest valid window value not exceeding w.
-func normalizeWindow(w uint64) uint64 {
-	var picked uint64
-	for _, v := range validWindows {
-		if v <= w && v >= picked {
-			picked = v
-		}
-	}
-	return picked
+// newWriter constructs a writer for normal block-table appends. window
+// must be 0 (disabled) or a divisor of MaxCompressionWindow; production
+// callers get this through config.Local.GetNormalizedBlockDBCompressionWindow,
+// which validates and warns on misconfiguration.
+func newWriter(window uint64) *Writer {
+	c := WindowCodec{N: int(window), Level: defaultCompressionLevel}
+	return &Writer{codec: c, blk: NewEncoder(c), cert: NewEncoder(c)}
 }
 
 // Codec returns the WindowCodec configured for this writer. The caller
 // only uses this to decide whether to bind a real window_start anchor
 // or NULL when inserting a row.
-func (w *BlockWriter) Codec() WindowCodec { return w.codec }
+func (w *Writer) Codec() WindowCodec { return w.codec }
 
-func (w *BlockWriter) pair() *EncoderPair { return w.encPair }
-
-// Reset drops any in-flight compression window. The next write will start a
-// fresh frame anchor at whatever round it receives.
-func (w *BlockWriter) Reset() {
-	if w == nil || w.encPair == nil {
+// Reset drops any in-flight compression window on both columns. The next
+// write will start a fresh frame anchor at whatever round it receives.
+// Encoder.Reset releases the underlying C-allocated zstd writer too, so
+// this also serves as the resource-cleanup path.
+func (w *Writer) Reset() {
+	if w == nil {
 		return
 	}
-	w.encPair.Reset()
+	w.blk.Reset()
+	w.cert.Reset()
 }
 
-// Close releases native zstd writer state held by this writer and leaves it
-// reusable in the same state as a fresh writer. The blockQueue syncer stops
-// and restarts the same writer across ledger reloads, so Close must not make
-// future BlockPut calls invalid.
-func (w *BlockWriter) Close() {
-	if w == nil || w.encPair == nil {
-		return
-	}
-	w.encPair.Close()
-}
+// Close releases native zstd writer state and leaves the Writer reusable
+// in the same state as a fresh one (DataDog/zstd's Writer has no
+// finalizer, so a missed Close leaks native memory). The blockQueue syncer
+// stops and restarts the same Writer across ledger reloads, so Close must
+// not make future BlockPut calls invalid.
+func (w *Writer) Close() { w.Reset() }
 
 // Reset drops any in-flight window state. The next EncodeRow call will
 // start a new zstd frame regardless of r % N. Use this on startup when the
@@ -246,18 +188,13 @@ func (e *Encoder) EncodeRow(r basics.Round, payload []byte) ([]byte, basics.Roun
 	return delta, e.anchorRound, nil
 }
 
-// maxDecodedPayloadBytes caps the per-row decompressed payload size that
-// decodeWindow will allocate for. A corrupt or tampered DB row could
-// otherwise encode a uvarint length close to 2^64 and cause an
-// out-of-memory panic before any error is returned. The bound covers both
-// block bytes (dominated by MaxTxnBytesPerBlock) and certificates (well
-// below the floor); MaxTxnBytesPerBlock is a process-level config var, so
-// fall back to an 8 MiB floor in the unusual case where it has not been
-// initialized yet (the standalone compression tests, for instance).
-func maxDecodedPayloadBytes() int {
-	n := max(bounds.MaxTxnBytesPerBlock+1<<20, 8<<20)
-	return n
-}
+// maxDecodedPayloadBytes bounds the per-row decompressed payload size
+// decodeWindow will allocate. Without it, a corrupt or tampered row could
+// encode a uvarint length close to 2^64 and OOM-panic before any error
+// surfaces. 10 MiB is comfortably above the largest protocol
+// MaxTxnBytesPerBlock (currently 5 MiB) plus certificate overhead; bump
+// it alongside any future MaxTxnBytesPerBlock increase.
+const maxDecodedPayloadBytes = 10 << 20
 
 // decodeWindow decodes the per-row chunks for an in-order range of rounds
 // in the same window (all sharing one zstd frame) and returns the payload
@@ -281,16 +218,15 @@ func decodeWindow(chunks [][]byte) ([]byte, error) {
 	defer r.Close()
 
 	br := newByteReader(r)
-	max := maxDecodedPayloadBytes()
 	var last []byte
 	for i := 0; i < len(chunks); i++ {
 		plen, err := binary.ReadUvarint(br)
 		if err != nil {
 			return nil, fmt.Errorf("blockdb codec: read uvarint #%d: %w", i, err)
 		}
-		if plen > uint64(max) {
+		if plen > maxDecodedPayloadBytes {
 			return nil, fmt.Errorf("blockdb codec: payload #%d length %d exceeds maxDecodedPayloadBytes=%d (corrupt row?)",
-				i, plen, max)
+				i, plen, maxDecodedPayloadBytes)
 		}
 		buf := make([]byte, plen)
 		if _, err := io.ReadFull(r, buf); err != nil {

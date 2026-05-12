@@ -176,13 +176,16 @@ func TestBlockQueueSyncerDeletion(t *testing.T) {
 
 			// add 15k blocks
 			const maxBlocks = maxDeletionBatchSize + maxDeletionBatchSize/2 // 15_000
-			writer := blockdb.NewBlockWriter(0)
-			defer writer.Close()
 			err = blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				store, serr := blockdb.NewStore(tx, 0)
+				if serr != nil {
+					return serr
+				}
+				defer store.Close()
 				for i := 0; i < maxBlocks; i++ {
 					blk := bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(i)}}
 					cert := agreement.Certificate{}
-					err0 := blockdb.BlockPut(tx, &blk, &cert, writer)
+					err0 := store.BlockPut(tx, &blk, &cert)
 					if err0 != nil {
 						return err0
 					}
