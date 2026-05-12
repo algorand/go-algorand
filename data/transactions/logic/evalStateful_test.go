@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -3334,6 +3334,8 @@ func TestReturnTypes(t *testing.T) {
 
 		// mimc requires an input size multiple of 32 bytes.
 		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254Mp110",
+		// poseidon2 requires an input size multiple of 32 bytes.
+		"poseidon2": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; poseidon2 BN254t2",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */
@@ -4036,9 +4038,11 @@ itxn_submit
 			ApprovalProgram:   testProg(t, source, v).Program,
 			ClearStateProgram: testProg(t, "int 1", v).Program,
 		})
+
 		// We're testing if this can recur forever. It's hard to fund all these
-		// apps, but we can put a huge credit in the ep.
-		*ep.FeeCredit = 1_000_000_000
+		// apps, but the top-level transaction can pay a huge fee, so it ends up
+		// as FeeCredit.
+		ep.TxnGroup[0].Txn.Fee = basics.MicroAlgos{Raw: 1_000 * 1e6}
 
 		testApp(t, source, ep, "appl depth (8) exceeded")
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,15 +24,16 @@ import (
 	"time"
 
 	"github.com/DataDog/zstd"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -79,7 +80,7 @@ func TestZstdDecompress(t *testing.T) {
 	compressed, err = zstd.Compress(nil, msg)
 	require.NoError(t, err)
 	decompressed, err = d.convert(compressed)
-	require.Error(t, err)
+	require.ErrorContains(t, err, `proposal data is too large: 20971530`)
 	require.Nil(t, decompressed)
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ import (
 
 	"github.com/algorand/avm-abi/abi"
 	"github.com/algorand/avm-abi/apps"
+
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	apiclient "github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -511,7 +512,8 @@ var createAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -591,7 +593,8 @@ var updateAppCmd = &cobra.Command{
 		}
 		tx.ExtraProgramPages = extraPages
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -661,7 +664,8 @@ var optInAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -731,7 +735,8 @@ var closeOutAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -801,7 +806,8 @@ var clearAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -870,7 +876,8 @@ var callAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -940,7 +947,8 @@ var deleteAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		tx.RekeyTo = parseRekey(rekeyToAddress)
 		tx.Note = parseNoteField(cmd)
 		tx.Lease = parseLease(cmd)
 
@@ -1444,7 +1452,8 @@ var methodAppCmd = &cobra.Command{
 			reportErrorf("Cannot create application txn: %v", err)
 		}
 
-		// Fill in note and lease
+		// Fill in rekey, note and lease
+		appCallTxn.RekeyTo = parseRekey(rekeyToAddress)
 		appCallTxn.Note = parseNoteField(cmd)
 		appCallTxn.Lease = parseLease(cmd)
 

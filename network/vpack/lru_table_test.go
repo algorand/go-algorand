@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,9 +22,10 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestLRUTableSizeValidation(t *testing.T) {
@@ -32,13 +33,11 @@ func TestLRUTableSizeValidation(t *testing.T) {
 
 	// Test invalid size (not power of 2)
 	_, err := NewStatefulEncoder(100)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "must be a power of 2")
+	require.ErrorContains(t, err, "must be a power of 2")
 
 	// Test invalid size (too small)
 	_, err = NewStatefulEncoder(8)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "at least 16")
+	require.ErrorContains(t, err, "at least 16")
 
 	// Test valid sizes
 	for _, size := range []uint{16, 32, 64, 128, 256, 512, 1024, 2048} {

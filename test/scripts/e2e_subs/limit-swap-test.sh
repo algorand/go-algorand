@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+limit-swap-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -141,4 +143,4 @@ ${gcmd} account balance -a $ACCOUNT; ${gcmd} account balance -a $ACCOUNT_ALGO_TR
 ${gcmd} clerk dryrun -t ${TEMPDIR}/group.stx
 ${gcmd} clerk rawsend -f ${TEMPDIR}/group.stx
 
-date '+limit-swap-test OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

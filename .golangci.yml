@@ -159,6 +159,8 @@ linters:
         text: '^superfluous-else: if block ends with .* so drop this else and outdent its block'
       - linters: forbidigo
         path-except: ^crypto/
+      - linters: forbidigo
+        path-except: ^network/
 
 issues:
   # Work our way back over time to be clean against all these
@@ -176,7 +178,15 @@ severity:
 
 formatters:
   enable:
+    - gci
     - gofmt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/algorand)
+        - prefix(github.com/algorand/go-algorand)
   exclusions:
     generated: lax
     paths:

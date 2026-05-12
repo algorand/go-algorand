@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+e2e_subs/keyreg.sh start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"

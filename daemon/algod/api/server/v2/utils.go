@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,8 +27,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
+
+	"github.com/algorand/go-codec/codec"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"

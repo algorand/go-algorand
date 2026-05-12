@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -38,9 +41,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func uint64ToBytes(num uint64) []byte {
@@ -285,7 +285,7 @@ func TestPayTxn(t *testing.T) {
 		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 			sender := env.Accounts[0]
 			receiver := env.Accounts[1]
-			amount := sender.AcctData.MicroAlgos.Raw + 100
+			amount := basics.MicroAlgos{Raw: sender.AcctData.MicroAlgos.Raw + 100}
 
 			txn := env.TxnInfo.NewTxn(txntest.Txn{
 				Type:     protocol.PaymentTx,
@@ -298,7 +298,7 @@ func TestPayTxn(t *testing.T) {
 				input: simulation.Request{
 					TxnGroups: [][]transactions.SignedTxn{{txn}},
 				},
-				expectedError: fmt.Sprintf("tried to spend {%d}", amount),
+				expectedError: fmt.Sprintf("tried to spend %s", amount),
 				expected: simulation.Result{
 					Version:   simulation.ResultLatestVersion,
 					LastRound: env.TxnInfo.LatestRound(),
@@ -8502,10 +8502,11 @@ func (resources unnamedResourceArguments) addToTxn(txn *txntest.Txn) {
 		}
 	}
 	txn.ApplicationArgs = encodedArgs
-	txn.Note = make([]byte, 32*len(crossProductAccountsOrder))
+	note := make([]byte, 32*len(crossProductAccountsOrder))
 	for i, account := range crossProductAccountsOrder {
-		copy(txn.Note[32*i:], account[:])
+		copy(note[32*i:], account[:])
 	}
+	txn.Note = note
 }
 
 func mapWithKeys[K comparable, V any](keys []K, defaultValue V) map[K]V {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,20 +24,19 @@ import (
 	"path/filepath"
 	"time"
 
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	modelV2 "github.com/algorand/go-algorand/daemon/algod/api/spec/v2"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
@@ -666,10 +665,19 @@ func (c *Client) AccountInformation(account string, includeCreatables bool) (res
 }
 
 // AccountAssetsInformation returns the assets held by an account, including asset params for non-deleted assets.
-func (c *Client) AccountAssetsInformation(account string, next *string, limit *uint64) (resp model.AccountAssetsInformationResponse, err error) {
+func (c *Client) AccountAssetsInformation(account string, next string, limit uint64) (resp model.AccountAssetsInformationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountAssetsInformation(account, next, limit)
+	}
+	return
+}
+
+// AccountApplicationsInformation returns the apps opted-into by an account, potentially including app params for non-deleted apps.
+func (c *Client) AccountApplicationsInformation(account string, next string, limit uint64, includeParams bool) (resp model.AccountApplicationsInformationResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountApplicationsInformation(account, next, limit, includeParams)
 	}
 	return
 }
@@ -766,6 +774,15 @@ func (c *Client) ApplicationBoxes(appID basics.AppIndex, maxBoxNum uint64) (resp
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationBoxes(appID, maxBoxNum)
+	}
+	return
+}
+
+// ApplicationBoxesPage takes an app's index and returns a page of box names with optional values.
+func (c *Client) ApplicationBoxesPage(appID basics.AppIndex, limit uint64, next string, prefix string, values bool, round basics.Round) (resp model.BoxesResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.ApplicationBoxesPage(appID, limit, next, prefix, values, round)
 	}
 	return
 }
@@ -1196,20 +1213,22 @@ func MakeDryrunStateGenerated(client Client, txnOrStxnOrSlice interface{}, other
 			apps := []basics.AppIndex{tx.ApplicationID}
 			apps = append(apps, tx.ForeignApps...)
 			for _, appIdx := range apps {
-				var appParams model.ApplicationParams
+				var appParams *model.ApplicationParams
 				if appIdx == 0 {
 					// if it is an app create txn then use params from the txn
-					appParams.ApprovalProgram = tx.ApprovalProgram
-					appParams.ClearStateProgram = tx.ClearStateProgram
-					appParams.GlobalStateSchema = &model.ApplicationStateSchema{
-						NumUint:      tx.GlobalStateSchema.NumUint,
-						NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+					appParams = &model.ApplicationParams{
+						ApprovalProgram:   tx.ApprovalProgram,
+						ClearStateProgram: tx.ClearStateProgram,
+						GlobalStateSchema: &model.ApplicationStateSchema{
+							NumUint:      tx.GlobalStateSchema.NumUint,
+							NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+						},
+						LocalStateSchema: &model.ApplicationStateSchema{
+							NumUint:      tx.LocalStateSchema.NumUint,
+							NumByteSlice: tx.LocalStateSchema.NumByteSlice,
+						},
+						Creator: tx.Sender.String(),
 					}
-					appParams.LocalStateSchema = &model.ApplicationStateSchema{
-						NumUint:      tx.LocalStateSchema.NumUint,
-						NumByteSlice: tx.LocalStateSchema.NumByteSlice,
-					}
-					appParams.Creator = tx.Sender.String()
 					// zero is not acceptable by ledger in dryrun/debugger
 					appIdx = defaultAppIdx
 				} else {
@@ -1335,4 +1354,12 @@ func (c *Client) BlockLogs(round basics.Round) (resp model.BlockLogsResponse, er
 		return algod.BlockLogs(round)
 	}
 	return
+}
+
+func nilToZero[T any](valPtr *T) T {
+	if valPtr == nil {
+		var defaultV T
+		return defaultV
+	}
+	return *valPtr
 }

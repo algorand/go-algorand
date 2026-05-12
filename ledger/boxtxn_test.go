@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2026 Algorand, Inc.
+// Copyright (C) 2019-2026 Algorand Foundation Ltd.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -33,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
 )
 
 var boxAppSource = main(`
@@ -565,18 +566,19 @@ func TestBoxIOBudgets(t *testing.T) {
 
 		// Create 4,096 byte box
 		proto := config.Consensus[cv]
+		amount := proto.MinBalance + boxFee(proto, 4096+1) // remember key len!
 		fundApp := txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: appID.Address(),
-			Amount:   proto.MinBalance + boxFee(proto, 4096+1), // remember key len!
+			Amount:   amount,
 		}
 		create := call.Args("create", "x", "\x10\x00")
 
 		// Slight detour - Prove insufficient funding fails creation.
-		fundApp.Amount--
+		fundApp.Amount = amount - 1
 		dl.txgroup("below min", &fundApp, create)
-		fundApp.Amount++
+		fundApp.Amount = amount
 
 		// Confirm desired creation happens.
 		dl.txgroup("", &fundApp, create)
