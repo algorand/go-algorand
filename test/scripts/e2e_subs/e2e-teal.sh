@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+e2e_teal start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -200,4 +202,4 @@ ${gcmd} clerk send --amount 10 --from-program-bytes ${TEMPDIR}/true2.lsig --to $
 set -o pipefail
 
 
-date '+e2e_teal OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"

@@ -109,6 +109,7 @@ modernize:
 
 lint:
 	$(GOLINTCOMMAND) run
+	shellcheck -e SC2034,SC2046,SC2053,SC2207,SC2145 -S warning test/scripts/e2e_subs/*.sh
 
 warninglint: custom-golangci-lint
 	./custom-golangci-lint run -c .golangci-warnings.yml

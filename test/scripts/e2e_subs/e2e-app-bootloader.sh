@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+app-bootloader-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -39,7 +41,7 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${TEMPDIR}/bootl
 EXPERROR='rejected by ApprovalProgram'
 RES=$(${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-bootloader-test FAIL call with no progs should fail %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL call with no progs should fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -47,7 +49,7 @@ fi
 EXPERROR='rejected by ApprovalProgram'
 RES=$(${gcmd} app update --app-id $APPID --from $ACCOUNT --approval-prog-raw ${TEMPDIR}/wrongupgrade.tealc --clear-prog-raw ${TEMPDIR}/wrongupgrade.tealc 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-bootloader-test FAIL update call with wrong progs should fail %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL update call with wrong progs should fail %Y%m%d_%H%M%S"
     false
 fi
 
@@ -57,7 +59,7 @@ ${gcmd} app update --app-id $APPID --from $ACCOUNT --approval-prog-raw ${TEMPDIR
 # Global state should be empty
 RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.tb)
 if [[ "$RES" != "null" ]]; then
-    date '+app-bootloader-test FAIL unexpected global state after update %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL unexpected global state after update %Y%m%d_%H%M%S"
     false
 fi
 
@@ -67,6 +69,6 @@ ${gcmd} app call --app-id $APPID --from $ACCOUNT
 # Global state should now have 'foo': 'foo' key
 RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.tb)
 if [[ "$RES" != "foo" ]]; then
-    date '+app-bootloader-test FAIL unexpected global state after update and call %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL unexpected global state after update and call %Y%m%d_%H%M%S"
     false
 fi

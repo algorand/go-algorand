@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+e2e_teal_multisig_future start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 set -e
 set -x
@@ -84,4 +86,4 @@ if ! grep -q '"lmsig"' ${TEMPDIR}/auto2.json; then
 fi
 echo "Auto-detection used new mode (LMsig field present)"
 
-date '+e2e_teal_multisig_future done %Y%m%d_%H%M%S'
+date "+${scriptname} done %Y%m%d_%H%M%S"
