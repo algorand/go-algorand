@@ -158,9 +158,7 @@ linters:
       - linters: revive
         text: '^superfluous-else: if block ends with .* so drop this else and outdent its block'
       - linters: forbidigo
-        path-except: ^crypto/
-      - linters: forbidigo
-        path-except: ^network/
+        path-except: ^(crypto|network)/
 
 issues:
   # Work our way back over time to be clean against all these
