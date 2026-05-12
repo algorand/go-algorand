@@ -44,8 +44,14 @@ func openBenchReader(b *testing.B) (tx *sql.Tx, reader *Reader, minR, maxR basic
 	}
 	b.Cleanup(func() { _ = db.Close() })
 
+	// SQLite's MIN/MAX-via-index shortcut only fires when a single aggregate
+	// appears alone in the SELECT; combining MIN and MAX in one statement
+	// forces a full table scan on the blocks table. Issue them separately.
 	var lo, hi int64
-	if err := db.QueryRow("SELECT MIN(rnd), MAX(rnd) FROM blocks").Scan(&lo, &hi); err != nil {
+	if err := db.QueryRow("SELECT MIN(rnd) FROM blocks").Scan(&lo); err != nil {
+		b.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&hi); err != nil {
 		b.Fatal(err)
 	}
 
@@ -97,7 +103,7 @@ func BenchmarkReader_BlockGetSequential(b *testing.B) {
 	}
 
 	rng := rand.New(rand.NewPCG(1, 2))
-	start := minR + basics.Round(rng.Uint64N(span-uint64(b.N)))
+	start := minR + basics.Round(rng.Uint64N(span-uint64(b.N)+1))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
