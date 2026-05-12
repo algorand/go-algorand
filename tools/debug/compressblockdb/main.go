@@ -242,13 +242,21 @@ func sqliteOnDiskSize(path string) (int64, error) {
 	return total, nil
 }
 
+// sourceRange returns (min, max) of the rnd column. The two aggregates are
+// queried separately on purpose: SQLite's min/max-via-index optimization
+// only applies when MIN or MAX appears alone in the SELECT list. Combining
+// them ("SELECT MIN(rnd), MAX(rnd) FROM blocks") forces a full table scan,
+// which is fine on a small DB but catastrophic on multi-TB archival nodes.
 func sourceRange(db *sql.DB) (basics.Round, basics.Round, error) {
 	var minNull, maxNull sql.NullInt64
-	if err := db.QueryRow("SELECT MIN(rnd), MAX(rnd) FROM blocks").Scan(&minNull, &maxNull); err != nil {
-		return 0, 0, fmt.Errorf("query source range: %w", err)
+	if err := db.QueryRow("SELECT MIN(rnd) FROM blocks").Scan(&minNull); err != nil {
+		return 0, 0, fmt.Errorf("query source min: %w", err)
 	}
 	if !minNull.Valid {
 		return 0, 0, fmt.Errorf("source has no rows")
+	}
+	if err := db.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&maxNull); err != nil {
+		return 0, 0, fmt.Errorf("query source max: %w", err)
 	}
 	return basics.Round(minNull.Int64), basics.Round(maxNull.Int64), nil
 }
