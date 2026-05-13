@@ -44,6 +44,7 @@ def main():
     ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
     ap.add_argument('-t', '--tags', action='append', default=[], help='tag/label pairs in a=b format to aggregate by, may be repeated. Empty means aggregation by metric name')
     ap.add_argument('--verbose', default=False, action='store_true')
+    ap.add_argument('-p', '--port', type=int, default=False, help='port to run the Dash app on')
 
     args = ap.parse_args()
     if args.verbose:
@@ -65,14 +66,6 @@ def main():
         print('Available nodes:', ', '.join(sorted(filesByNick.keys())))
         return 0
 
-    app = dash.Dash(__name__)
-    app.layout = html.Div(
-        html.Div([
-            html.H4('Algod Metrics'),
-            html.Div(id='text'),
-            dcc.Graph(id='graph'),
-        ])
-    )
     metrics_names = set(args.metrics_names)
     nrows = 1 if args.diff and len(args.metrics_names) == 2 else len(metrics_names)
 
@@ -152,10 +145,18 @@ def main():
             target_path = os.path.join(args.dir, default_img_filename)
             fig.write_image(target_path)
         print(f'Saved plot to {target_path}')
+    elif args.port:
+        app = dash.Dash(__name__)
+        app.layout = html.Div(
+            html.Div([
+                html.H4('Algod Metrics'),
+                dcc.Graph(id='graph', figure=fig),
+            ])
+        )
+        app.run_server(debug=args.verbose, host='0.0.0.0', port=args.port)
     else:
         fig.show()
 
-    # app.run_server(debug=True)
     return 0
 
 if __name__ == '__main__':
