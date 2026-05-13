@@ -42,6 +42,8 @@ def main():
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
     ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
+    ap.add_argument('--raw', action='append', default=[], help='metric name to plot as raw value (skip rate calculation). Useful for counters that should be shown as totals. May be repeated')
+    ap.add_argument('--all-raw', action='store_true', default=False, help='plot all metrics as raw values (skip rate calculation for every counter)')
     ap.add_argument('-t', '--tags', action='append', default=[], help='tag/label pairs in a=b format to aggregate by, may be repeated. Empty means aggregation by metric name')
     ap.add_argument('--verbose', default=False, action='store_true')
     ap.add_argument('-p', '--port', type=int, default=False, help='port to run the Dash app on')
@@ -67,6 +69,8 @@ def main():
         return 0
 
     metrics_names = set(args.metrics_names)
+    # Metrics the user wants plotted raw regardless of their `# TYPE` declaration.
+    raw_metrics = set(args.raw)
     nrows = 1 if args.diff and len(args.metrics_names) == 2 else len(metrics_names)
 
     fig = make_subplots(
@@ -86,6 +90,13 @@ def main():
         data = {'time': []}
         raw_series = {}
         raw_times = {}
+        # raw_indices[full_name][j] is the file-index (column in data[full_name]) at which
+        # raw_series[full_name][j] was recorded. Needed to rewrite earlier samples in place
+        # when a metric is discovered to be non-monotonic mid-stream.
+        raw_indices = {}
+        # Metrics exported as `# TYPE ... counter` but observed to decrease at least once.
+        # Treated as gauges from the moment the decrease is seen.
+        non_monotonic = set()
         idx = 0
         for dt, metrics_file in files_by_date.items():
             data['time'].append(dt)
@@ -107,17 +118,37 @@ def main():
                             data[full_name] = [0] * len(files_by_date)
                             raw_series[full_name] = []
                             raw_times[full_name] = []
+                            raw_indices[full_name] = []
+
+                        # If a "counter" metric decreases, it isn't actually monotonic —
+                        # algod exports some gauge-like values (queue sizes, pool counts) as
+                        # `# TYPE ... counter`. Rate-of-change for those is meaningless and
+                        # plots near zero. On first decrease, flip the metric to gauge mode
+                        # and rewrite previously-stored rate samples back to raw values so
+                        # the whole series is consistent.
+                        if (metric.type == MetricType.COUNTER
+                                and full_name not in non_monotonic
+                                and raw_series[full_name]
+                                and raw_value < raw_series[full_name][-1]):
+                            non_monotonic.add(full_name)
+                            for j, prev_idx in enumerate(raw_indices[full_name]):
+                                data[full_name][prev_idx] = raw_series[full_name][j]
 
                         metric_value = metric.value
-                        if metric.type == MetricType.COUNTER:
+                        if (metric.type == MetricType.COUNTER
+                                and not args.all_raw
+                                and full_name not in non_monotonic
+                                and metric.name not in raw_metrics):
                             if len(raw_series[full_name]) > 0 and len(raw_times[full_name]) > 0:
                                 metric_value = (metric_value - raw_series[full_name][-1]) / (dt - raw_times[full_name][-1]).total_seconds()
                             else:
                                 metric_value = 0
+                        # else: gauge, or counter that turned out to be non-monotonic — plot raw.
 
                         data[full_name][idx] = metric_value
                         raw_series[full_name].append(raw_value)
                         raw_times[full_name].append(dt)
+                        raw_indices[full_name].append(idx)
 
                         active_metric_names.append(full_name)
 
