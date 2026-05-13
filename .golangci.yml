@@ -103,8 +103,12 @@ linters:
         - error-is-as
       disable-all: true
     forbidigo:
+      analyze_types: true
       forbid:
         - p: ^(require|assert)\.Error$
+          pkg: ^github\.com/stretchr/testify/(require|assert)$
+          msg: use ErrorContains, ErrorIs, or ErrorAs instead
+        - p: ^(require|assert)\.Assertions\.Error$
           pkg: ^github\.com/stretchr/testify/(require|assert)$
           msg: use ErrorContains, ErrorIs, or ErrorAs instead
 
@@ -154,7 +158,7 @@ linters:
       - linters: revive
         text: '^superfluous-else: if block ends with .* so drop this else and outdent its block'
       - linters: forbidigo
-        path-except: ^network/
+        path-except: ^(crypto|network)/
 
 issues:
   # Work our way back over time to be clean against all these
