@@ -1273,7 +1273,6 @@ func (fs blockFieldSpec) Note() string {
 }
 
 func (fs blockFieldSpec) Modes() RunMode {
-	// FIXME: Is this ok?
 	return modeAny
 }
 
