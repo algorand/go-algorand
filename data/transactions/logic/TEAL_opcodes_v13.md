@@ -1,5 +1,5 @@
 
-# Version 11 Opcodes
+# Version 13 Opcodes
 
 Opcodes have a cost of 1 unless otherwise specified.
 
@@ -430,6 +430,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 63 | StateProofPK | [64]byte | v6  | State proof public key |
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
+| 68 | RejectVersion | uint64 | v12  | Application version for which the txn must reject |
 
 ## global
 
@@ -1033,17 +1034,19 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 
 ### app_params Fields
 
-| INDEX | NAME | TYPE | NOTES |
-| :-: | :------ |:--:| :--------- |
-| 0 | AppApprovalProgram | []byte | Bytecode of Approval Program |
-| 1 | AppClearStateProgram | []byte | Bytecode of Clear State Program |
-| 2 | AppGlobalNumUint | uint64 | Number of uint64 values allowed in Global State |
-| 3 | AppGlobalNumByteSlice | uint64 | Number of byte array values allowed in Global State |
-| 4 | AppLocalNumUint | uint64 | Number of uint64 values allowed in Local State |
-| 5 | AppLocalNumByteSlice | uint64 | Number of byte array values allowed in Local State |
-| 6 | AppExtraProgramPages | uint64 | Number of Extra Program Pages of code space |
-| 7 | AppCreator | address | Creator address |
-| 8 | AppAddress | address | Address for which this application has authority |
+| INDEX | NAME | TYPE | IN | NOTES |
+| :-: | :------ |:--:|:-:| :--------- |
+| 0 | AppApprovalProgram | []byte |      | Bytecode of Approval Program |
+| 1 | AppClearStateProgram | []byte |      | Bytecode of Clear State Program |
+| 2 | AppGlobalNumUint | uint64 |      | Number of uint64 values allowed in Global State |
+| 3 | AppGlobalNumByteSlice | uint64 |      | Number of byte array values allowed in Global State |
+| 4 | AppLocalNumUint | uint64 |      | Number of uint64 values allowed in Local State |
+| 5 | AppLocalNumByteSlice | uint64 |      | Number of byte array values allowed in Local State |
+| 6 | AppExtraProgramPages | uint64 |      | Number of Extra Program Pages of code space |
+| 7 | AppCreator | address |      | Creator address |
+| 8 | AppAddress | address |      | Address for which this application has authority |
+| 9 | AppVersion | uint64 | v12  | Version of the app, incremented each time the approval or clear program changes |
+| 10 | AppSizeSponsor | address | v13  | If non-zero, this account is responsible for the app's extra pages and global state balance requirement |
 
 params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.
 
@@ -1157,6 +1160,32 @@ pushints args are not added to the intcblock during assembly processes
 - for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: 1900
 - Availability: v7
+
+## falcon_verify
+
+- Bytecode: 0x85
+- Stack: ..., A: []byte, B: []byte, C: [1793]byte &rarr; ..., bool
+- for (data A, deterministic FALCON-1024 compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}
+- **Cost**: 1700
+- Availability: v12
+
+Signature B is variable-length, with maximum size 1423 bytes.
+
+## sumhash512
+
+- Bytecode: 0x86
+- Stack: ..., A: []byte &rarr; ..., [64]byte
+- sumhash512 of value A, yields [64]byte
+- **Cost**: 150 + 7 per 4 bytes of A
+- Availability: v13
+
+## sha512
+
+- Bytecode: 0x87
+- Stack: ..., A: []byte &rarr; ..., [64]byte
+- SHA512 of value A, yields [64]byte
+- **Cost**: 15 + 32 per 2 bytes of A
+- Availability: v13
 
 ## callsub
 
@@ -1659,6 +1688,10 @@ For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `bo
 | 7 | BlkProtocol | []byte | v11  |  |
 | 8 | BlkTxnCounter | uint64 | v11  |  |
 | 9 | BlkProposerPayout | uint64 | v11  |  |
+| 10 | BlkBranch512 | [64]byte | v13  |  |
+| 11 | BlkSha512_256TxnCommitment | [32]byte | v13  |  |
+| 12 | BlkSha256TxnCommitment | [32]byte | v13  |  |
+| 13 | BlkSha512TxnCommitment | [64]byte | v13  |  |
 
 ## box_splice
 
@@ -1781,3 +1814,23 @@ G1 element inputs are base field elements and G2 element inputs are quadratic fi
 A is a list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.
 
 MiMC hashes field elements, not arbitrary byte strings; reducing external inputs modulo the curve modulus makes congruent inputs hash identically. MiMC is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.
+
+## poseidon2
+
+- Syntax: `poseidon2 C` where C: [Poseidon2 Configurations Parameters](#poseidon2-configurations-parameters)
+- Bytecode: 0xe7 {uint8}
+- Stack: ..., A: []byte &rarr; ..., [32]byte
+- Poseidon2 hash of scalars A, using curve and parameters specified by configuration C
+- **Cost**: BN254t2=7 + 350 per 32 bytes of A; BLS12_381t2=7 + 350 per 32 bytes of A
+- Availability: v13
+
+### Poseidon2 Configurations Parameters
+
+| INDEX | NAME | NOTES |
+| :-: | :------ | :--------- |
+| 0 | BN254t2 | Poseidon2 Merkle-Damgard configuration for BN254 with width = 2, full rounds = 6, partial rounds = 50 |
+| 1 | BLS12_381t2 | Poseidon2 Merkle-Damgard configuration for BLS12-381 with width = 2, full rounds = 6, partial rounds = 50 |
+
+A is a list of concatenated 32 byte big-endian unsigned integer scalars. Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.
+
+Poseidon2 hashes field elements, not arbitrary byte strings; reducing external inputs modulo the curve modulus makes congruent inputs hash identically. Poseidon2 is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.

@@ -1,5 +1,5 @@
 {
-  "Version": 12,
+  "Version": 13,
   "LogicSigVersion": 12,
   "NamedTypes": [
     {
@@ -3109,7 +3109,7 @@
       "Args": [
         "uint64"
       ],
-      "Size": 3,
+      "Size": 0,
       "DocCost": "1",
       "Doc": "branch to TARGET if value A is not zero",
       "DocExtra": "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
@@ -3133,7 +3133,7 @@
       "Args": [
         "uint64"
       ],
-      "Size": 3,
+      "Size": 0,
       "DocCost": "1",
       "Doc": "branch to TARGET if value A is zero",
       "DocExtra": "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
@@ -3154,7 +3154,7 @@
       "Opcode": 66,
       "Name": "b",
       "Cost": "1",
-      "Size": 3,
+      "Size": 0,
       "DocCost": "1",
       "Doc": "branch unconditionally to TARGET",
       "DocExtra": "See `bnz` for details on how branches work. `b` always jumps to the offset.",
@@ -4264,7 +4264,8 @@
         "AppExtraProgramPages",
         "AppCreator",
         "AppAddress",
-        "AppVersion"
+        "AppVersion",
+        "AppSizeSponsor"
       ],
       "ArgEnumDoc": [
         "Bytecode of Approval Program",
@@ -4276,7 +4277,8 @@
         "Number of Extra Program Pages of code space",
         "Creator address",
         "Address for which this application has authority",
-        "Version of the app, incremented each time the approval or clear program changes"
+        "Version of the app, incremented each time the approval or clear program changes",
+        "If non-zero, this account is responsible for the app's extra pages and global state balance requirement"
       ],
       "ArgEnumTypes": [
         "[]byte",
@@ -4288,7 +4290,8 @@
         "uint64",
         "address",
         "address",
-        "uint64"
+        "uint64",
+        "address"
       ],
       "ArgEnumBytes": [
         0,
@@ -4300,9 +4303,11 @@
         6,
         7,
         8,
-        9
+        9,
+        10
       ],
       "ArgModes": [
+        0,
         0,
         0,
         0,
@@ -4324,7 +4329,8 @@
         5,
         5,
         5,
-        12
+        12,
+        13
       ],
       "DocCost": "1",
       "Doc": "X is field F from app A. Y is 1 if A exists, else 0",
@@ -4695,10 +4701,48 @@
       "Modes": 3
     },
     {
+      "Opcode": 134,
+      "Name": "sumhash512",
+      "Cost": "150 + 7 per 4 bytes of A",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[64]byte"
+      ],
+      "Size": 1,
+      "DocCost": "150 + 7 per 4 bytes of A",
+      "Doc": "sumhash512 of value A, yields [64]byte",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Cryptography"
+      ],
+      "Modes": 3
+    },
+    {
+      "Opcode": 135,
+      "Name": "sha512",
+      "Cost": "15 + 32 per 2 bytes of A",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[64]byte"
+      ],
+      "Size": 1,
+      "DocCost": "15 + 32 per 2 bytes of A",
+      "Doc": "SHA512 of value A, yields [64]byte",
+      "IntroducedVersion": 13,
+      "Groups": [
+        "Cryptography"
+      ],
+      "Modes": 3
+    },
+    {
       "Opcode": 136,
       "Name": "callsub",
       "Cost": "1",
-      "Size": 3,
+      "Size": 0,
       "DocCost": "1",
       "Doc": "branch unconditionally to TARGET, saving the next instruction on the call stack",
       "DocExtra": "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.",
@@ -7382,9 +7426,17 @@
         "BlkFeeSink",
         "BlkProtocol",
         "BlkTxnCounter",
-        "BlkProposerPayout"
+        "BlkProposerPayout",
+        "BlkBranch512",
+        "BlkSha512_256TxnCommitment",
+        "BlkSha256TxnCommitment",
+        "BlkSha512TxnCommitment"
       ],
       "ArgEnumDoc": [
+        "",
+        "",
+        "",
+        "",
         "",
         "",
         "",
@@ -7406,7 +7458,11 @@
         "address",
         "[]byte",
         "uint64",
-        "uint64"
+        "uint64",
+        "[64]byte",
+        "[32]byte",
+        "[32]byte",
+        "[64]byte"
       ],
       "ArgEnumBytes": [
         0,
@@ -7418,9 +7474,17 @@
         6,
         7,
         8,
-        9
+        9,
+        10,
+        11,
+        12,
+        13
       ],
       "ArgModes": [
+        0,
+        0,
+        0,
+        0,
         0,
         0,
         0,
@@ -7442,7 +7506,11 @@
         11,
         11,
         11,
-        11
+        11,
+        13,
+        13,
+        13,
+        13
       ],
       "DocCost": "1",
       "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",
@@ -7891,6 +7959,34 @@
         }
       ],
       "IntroducedVersion": 11,
+      "Groups": [
+        "Cryptography"
+      ],
+      "Modes": 3
+    },
+    {
+      "Opcode": 231,
+      "Name": "poseidon2",
+      "Cost": "BN254t2=7 + 350 per 32 bytes of A; BLS12_381t2=7 + 350 per 32 bytes of A",
+      "Args": [
+        "[]byte"
+      ],
+      "Returns": [
+        "[32]byte"
+      ],
+      "Size": 2,
+      "DocCost": "BN254t2=7 + 350 per 32 bytes of A; BLS12_381t2=7 + 350 per 32 bytes of A",
+      "Doc": "Poseidon2 hash of scalars A, using curve and parameters specified by configuration C",
+      "DocExtra": "A is a list of concatenated 32 byte big-endian unsigned integer scalars. Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.\n\nPoseidon2 hashes field elements, not arbitrary byte strings; reducing external inputs modulo the curve modulus makes congruent inputs hash identically. Poseidon2 is thus not a general purpose hash function, but meant to be used in zero knowledge applications to match a zk-circuit implementation.",
+      "ImmediateNote": [
+        {
+          "Comment": "configuration index",
+          "Encoding": "uint8",
+          "Name": "C",
+          "Reference": "Poseidon2 Configurations Parameters"
+        }
+      ],
+      "IntroducedVersion": 13,
       "Groups": [
         "Cryptography"
       ],

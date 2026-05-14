@@ -1,6 +1,8 @@
 #!/bin/bash
 
-date '+htlc-teal-test start %Y%m%d_%H%M%S'
+filename=$(basename "$0")
+scriptname="${filename%.*}"
+date "+${scriptname} start %Y%m%d_%H%M%S"
 
 my_dir="$(dirname "$0")"
 source "$my_dir/rest.sh" "$@"
@@ -36,7 +38,7 @@ ${gcmd} clerk send -a 10000000 -f ${ACCOUNT} -t ${CONTRACT}
 RES=$(${gcmd} clerk send --from-program ${TEMPDIR}/atomic.teal -a=0 -t=${ZERO_ADDRESS} --close-to=${ACCOUNTB} --argb64=YXNkZg== 2>&1 || true)
 EXPERROR='rejected by logic'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+htlc-teal-test FAIL txn with wrong preimage should be rejected %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL txn with wrong preimage should be rejected %Y%m%d_%H%M%S"
     false
 fi
 
@@ -44,7 +46,7 @@ fi
 RES=$(${gcmd} clerk send --from-program ${TEMPDIR}/atomic.teal -a=10 -t=${ZERO_ADDRESS} --close-to=${ACCOUNTB} --argb64=aHVudGVyMg== 2>&1 || true)
 EXPERROR='rejected by logic'
 if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+htlc-teal-test FAIL txn with nonzero amount should be rejected %Y%m%d_%H%M%S'
+    date "+${scriptname} FAIL txn with nonzero amount should be rejected %Y%m%d_%H%M%S"
     false
 fi
 
@@ -56,8 +58,8 @@ BALANCEB=$(${gcmd} account balance -a ${ACCOUNTB} | awk '{ print $1 }')
 # Expected balance is 10000000 - MIN_FEE (account for rewards which may have accumulated)
 EXPECTED_MIN=$((10000000 - MIN_FEE))
 if [ $BALANCEB -lt $EXPECTED_MIN ]; then
-    date "+htlc-teal-test FAIL wanted balance>=$EXPECTED_MIN but got ${BALANCEB} %Y%m%d_%H%M%S"
+    date "+${scriptname} FAIL wanted balance>=$EXPECTED_MIN but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
-date '+htlc-teal-test OK %Y%m%d_%H%M%S'
+date "+${scriptname} OK %Y%m%d_%H%M%S"
