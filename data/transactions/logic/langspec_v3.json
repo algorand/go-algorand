@@ -97,7 +97,6 @@
     {
       "Opcode": 0,
       "Name": "err",
-      "Cost": "1",
       "Size": 1,
       "DocCost": "1",
       "Doc": "Fail immediately.",
@@ -110,7 +109,6 @@
     {
       "Opcode": 1,
       "Name": "sha256",
-      "Cost": "35",
       "Args": [
         "[]byte"
       ],
@@ -129,7 +127,6 @@
     {
       "Opcode": 2,
       "Name": "keccak256",
-      "Cost": "130",
       "Args": [
         "[]byte"
       ],
@@ -148,7 +145,6 @@
     {
       "Opcode": 3,
       "Name": "sha512_256",
-      "Cost": "45",
       "Args": [
         "[]byte"
       ],
@@ -167,7 +163,6 @@
     {
       "Opcode": 4,
       "Name": "ed25519verify",
-      "Cost": "1900",
       "Args": [
         "[]byte",
         "[64]byte",
@@ -189,7 +184,6 @@
     {
       "Opcode": 8,
       "Name": "+",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -210,7 +204,6 @@
     {
       "Opcode": 9,
       "Name": "-",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -230,7 +223,6 @@
     {
       "Opcode": 10,
       "Name": "/",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -251,7 +243,6 @@
     {
       "Opcode": 11,
       "Name": "*",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -272,7 +263,6 @@
     {
       "Opcode": 12,
       "Name": "\u003c",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -292,7 +282,6 @@
     {
       "Opcode": 13,
       "Name": "\u003e",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -312,7 +301,6 @@
     {
       "Opcode": 14,
       "Name": "\u003c=",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -332,7 +320,6 @@
     {
       "Opcode": 15,
       "Name": "\u003e=",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -352,7 +339,6 @@
     {
       "Opcode": 16,
       "Name": "\u0026\u0026",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -372,7 +358,6 @@
     {
       "Opcode": 17,
       "Name": "||",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -392,7 +377,6 @@
     {
       "Opcode": 18,
       "Name": "==",
-      "Cost": "1",
       "Args": [
         "any",
         "any"
@@ -412,7 +396,6 @@
     {
       "Opcode": 19,
       "Name": "!=",
-      "Cost": "1",
       "Args": [
         "any",
         "any"
@@ -432,7 +415,6 @@
     {
       "Opcode": 20,
       "Name": "!",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -451,7 +433,6 @@
     {
       "Opcode": 21,
       "Name": "len",
-      "Cost": "1",
       "Args": [
         "[]byte"
       ],
@@ -470,7 +451,6 @@
     {
       "Opcode": 22,
       "Name": "itob",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -489,7 +469,6 @@
     {
       "Opcode": 23,
       "Name": "btoi",
-      "Cost": "1",
       "Args": [
         "[]byte"
       ],
@@ -509,7 +488,6 @@
     {
       "Opcode": 24,
       "Name": "%",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -529,7 +507,6 @@
     {
       "Opcode": 25,
       "Name": "|",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -549,7 +526,6 @@
     {
       "Opcode": 26,
       "Name": "\u0026",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -569,7 +545,6 @@
     {
       "Opcode": 27,
       "Name": "^",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -589,7 +564,6 @@
     {
       "Opcode": 28,
       "Name": "~",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -608,7 +582,6 @@
     {
       "Opcode": 29,
       "Name": "mulw",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -629,7 +602,6 @@
     {
       "Opcode": 30,
       "Name": "addw",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -650,7 +622,6 @@
     {
       "Opcode": 32,
       "Name": "intcblock",
-      "Cost": "1",
       "Size": 0,
       "DocCost": "1",
       "Doc": "prepare block of uint64 constants for use by intc",
@@ -671,7 +642,6 @@
     {
       "Opcode": 33,
       "Name": "intc",
-      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -694,7 +664,6 @@
     {
       "Opcode": 34,
       "Name": "intc_0",
-      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -710,7 +679,6 @@
     {
       "Opcode": 35,
       "Name": "intc_1",
-      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -726,7 +694,6 @@
     {
       "Opcode": 36,
       "Name": "intc_2",
-      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -742,7 +709,6 @@
     {
       "Opcode": 37,
       "Name": "intc_3",
-      "Cost": "1",
       "Returns": [
         "uint64"
       ],
@@ -758,7 +724,6 @@
     {
       "Opcode": 38,
       "Name": "bytecblock",
-      "Cost": "1",
       "Size": 0,
       "DocCost": "1",
       "Doc": "prepare block of byte-array constants for use by bytec",
@@ -779,7 +744,6 @@
     {
       "Opcode": 39,
       "Name": "bytec",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -802,7 +766,6 @@
     {
       "Opcode": 40,
       "Name": "bytec_0",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -818,7 +781,6 @@
     {
       "Opcode": 41,
       "Name": "bytec_1",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -834,7 +796,6 @@
     {
       "Opcode": 42,
       "Name": "bytec_2",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -850,7 +811,6 @@
     {
       "Opcode": 43,
       "Name": "bytec_3",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -866,7 +826,6 @@
     {
       "Opcode": 44,
       "Name": "arg",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -889,7 +848,6 @@
     {
       "Opcode": 45,
       "Name": "arg_0",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -905,7 +863,6 @@
     {
       "Opcode": 46,
       "Name": "arg_1",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -921,7 +878,6 @@
     {
       "Opcode": 47,
       "Name": "arg_2",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -937,7 +893,6 @@
     {
       "Opcode": 48,
       "Name": "arg_3",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -953,7 +908,6 @@
     {
       "Opcode": 49,
       "Name": "txn",
-      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1533,7 +1487,6 @@
     {
       "Opcode": 50,
       "Name": "global",
-      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -1663,7 +1616,6 @@
     {
       "Opcode": 51,
       "Name": "gtxn",
-      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -2249,7 +2201,6 @@
     {
       "Opcode": 52,
       "Name": "load",
-      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -2272,7 +2223,6 @@
     {
       "Opcode": 53,
       "Name": "store",
-      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -2295,7 +2245,6 @@
     {
       "Opcode": 54,
       "Name": "txna",
-      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -2370,7 +2319,6 @@
     {
       "Opcode": 55,
       "Name": "gtxna",
-      "Cost": "1",
       "Returns": [
         "any"
       ],
@@ -2450,7 +2398,6 @@
     {
       "Opcode": 56,
       "Name": "gtxns",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3034,7 +2981,6 @@
     {
       "Opcode": 57,
       "Name": "gtxnsa",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3112,7 +3058,6 @@
     {
       "Opcode": 64,
       "Name": "bnz",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3136,7 +3081,6 @@
     {
       "Opcode": 65,
       "Name": "bz",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3160,7 +3104,6 @@
     {
       "Opcode": 66,
       "Name": "b",
-      "Cost": "1",
       "Size": 3,
       "DocCost": "1",
       "Doc": "branch unconditionally to TARGET",
@@ -3181,7 +3124,6 @@
     {
       "Opcode": 67,
       "Name": "return",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3197,7 +3139,6 @@
     {
       "Opcode": 68,
       "Name": "assert",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3213,7 +3154,6 @@
     {
       "Opcode": 72,
       "Name": "pop",
-      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -3229,7 +3169,6 @@
     {
       "Opcode": 73,
       "Name": "dup",
-      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -3249,7 +3188,6 @@
     {
       "Opcode": 74,
       "Name": "dup2",
-      "Cost": "1",
       "Args": [
         "any",
         "any"
@@ -3272,7 +3210,6 @@
     {
       "Opcode": 75,
       "Name": "dig",
-      "Cost": "1",
       "Args": [
         "any"
       ],
@@ -3299,7 +3236,6 @@
     {
       "Opcode": 76,
       "Name": "swap",
-      "Cost": "1",
       "Args": [
         "any",
         "any"
@@ -3320,7 +3256,6 @@
     {
       "Opcode": 77,
       "Name": "select",
-      "Cost": "1",
       "Args": [
         "any",
         "any",
@@ -3341,7 +3276,6 @@
     {
       "Opcode": 80,
       "Name": "concat",
-      "Cost": "1",
       "Args": [
         "[]byte",
         "[]byte"
@@ -3362,7 +3296,6 @@
     {
       "Opcode": 81,
       "Name": "substring",
-      "Cost": "1",
       "Args": [
         "[]byte"
       ],
@@ -3393,7 +3326,6 @@
     {
       "Opcode": 82,
       "Name": "substring3",
-      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64",
@@ -3414,7 +3346,6 @@
     {
       "Opcode": 83,
       "Name": "getbit",
-      "Cost": "1",
       "Args": [
         "any",
         "uint64"
@@ -3435,7 +3366,6 @@
     {
       "Opcode": 84,
       "Name": "setbit",
-      "Cost": "1",
       "Args": [
         "any",
         "uint64",
@@ -3457,7 +3387,6 @@
     {
       "Opcode": 85,
       "Name": "getbyte",
-      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64"
@@ -3477,7 +3406,6 @@
     {
       "Opcode": 86,
       "Name": "setbyte",
-      "Cost": "1",
       "Args": [
         "[]byte",
         "uint64",
@@ -3498,7 +3426,6 @@
     {
       "Opcode": 96,
       "Name": "balance",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3518,7 +3445,6 @@
     {
       "Opcode": 97,
       "Name": "app_opted_in",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -3539,7 +3465,6 @@
     {
       "Opcode": 98,
       "Name": "app_local_get",
-      "Cost": "1",
       "Args": [
         "uint64",
         "stateKey"
@@ -3560,7 +3485,6 @@
     {
       "Opcode": 99,
       "Name": "app_local_get_ex",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64",
@@ -3583,7 +3507,6 @@
     {
       "Opcode": 100,
       "Name": "app_global_get",
-      "Cost": "1",
       "Args": [
         "stateKey"
       ],
@@ -3603,7 +3526,6 @@
     {
       "Opcode": 101,
       "Name": "app_global_get_ex",
-      "Cost": "1",
       "Args": [
         "uint64",
         "stateKey"
@@ -3625,7 +3547,6 @@
     {
       "Opcode": 102,
       "Name": "app_local_put",
-      "Cost": "1",
       "Args": [
         "uint64",
         "stateKey",
@@ -3644,7 +3565,6 @@
     {
       "Opcode": 103,
       "Name": "app_global_put",
-      "Cost": "1",
       "Args": [
         "stateKey",
         "any"
@@ -3661,7 +3581,6 @@
     {
       "Opcode": 104,
       "Name": "app_local_del",
-      "Cost": "1",
       "Args": [
         "uint64",
         "stateKey"
@@ -3679,7 +3598,6 @@
     {
       "Opcode": 105,
       "Name": "app_global_del",
-      "Cost": "1",
       "Args": [
         "stateKey"
       ],
@@ -3696,7 +3614,6 @@
     {
       "Opcode": 112,
       "Name": "asset_holding_get",
-      "Cost": "1",
       "Args": [
         "uint64",
         "uint64"
@@ -3752,7 +3669,6 @@
     {
       "Opcode": 113,
       "Name": "asset_params_get",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3897,7 +3813,6 @@
     {
       "Opcode": 120,
       "Name": "min_balance",
-      "Cost": "1",
       "Args": [
         "uint64"
       ],
@@ -3917,7 +3832,6 @@
     {
       "Opcode": 128,
       "Name": "pushbytes",
-      "Cost": "1",
       "Returns": [
         "[]byte"
       ],
@@ -3941,7 +3855,6 @@
     {
       "Opcode": 129,
       "Name": "pushint",
-      "Cost": "1",
       "Returns": [
         "uint64"
       ],
