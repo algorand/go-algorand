@@ -962,31 +962,6 @@
         "GroupIndex",
         "TxID"
       ],
-      "ArgEnumDoc": [
-        "32 byte address",
-        "microalgos",
-        "round number",
-        "round number",
-        "Any data up to 1024 bytes",
-        "32 byte lease value",
-        "32 byte address",
-        "microalgos",
-        "32 byte address",
-        "32 byte address",
-        "32 byte address",
-        "The first round that the participation key is valid.",
-        "The last round that the participation key is valid.",
-        "Dilution for the 2-level participation key",
-        "Transaction type as bytes",
-        "Transaction type as integer",
-        "Asset ID",
-        "value in Asset's units",
-        "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
-        "32 byte address",
-        "32 byte address",
-        "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
-        "The computed ID for this transaction. 32 bytes."
-      ],
       "ArgEnumTypes": [
         "address",
         "uint64",
@@ -1012,80 +987,191 @@
         "uint64",
         "[32]byte"
       ],
-      "ArgEnumBytes": [
-        0,
-        1,
-        2,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19,
-        20,
-        21,
-        22,
-        23
-      ],
-      "ArgModes": [
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3
-      ],
-      "ArgEnumVersion": [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 0,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 1,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "Bytes": 2,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "Bytes": 4,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "Bytes": 5,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "Bytes": 6,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 7,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 8,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 9,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "Bytes": 10,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "Bytes": 11,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "Bytes": 12,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "Bytes": 13,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "Bytes": 14,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "Bytes": 15,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "Bytes": 16,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "Bytes": 17,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "Bytes": 18,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "Bytes": 19,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 20,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 21,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "Bytes": 22,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "Bytes": 23,
+          "Modes": 3,
+          "Version": 0
+        }
       ],
       "DocCost": "1",
       "Doc": "field F of current transaction",
@@ -1118,13 +1204,6 @@
         "ZeroAddress",
         "GroupSize"
       ],
-      "ArgEnumDoc": [
-        "microalgos",
-        "microalgos",
-        "rounds",
-        "32 byte address of all zero bytes",
-        "Number of transactions in this atomic transaction group. At least 1"
-      ],
       "ArgEnumTypes": [
         "uint64",
         "uint64",
@@ -1132,26 +1211,47 @@
         "address",
         "uint64"
       ],
-      "ArgEnumBytes": [
-        0,
-        1,
-        2,
-        3,
-        4
-      ],
-      "ArgModes": [
-        3,
-        3,
-        3,
-        3,
-        3
-      ],
-      "ArgEnumVersion": [
-        0,
-        0,
-        0,
-        0,
-        0
+      "ArgDetails": [
+        {
+          "Name": "MinTxnFee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 0,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "MinBalance",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 1,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "MaxTxnLife",
+          "Type": "uint64",
+          "Doc": "rounds",
+          "Bytes": 2,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "ZeroAddress",
+          "Type": "address",
+          "Doc": "32 byte address of all zero bytes",
+          "Bytes": 3,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "GroupSize",
+          "Type": "uint64",
+          "Doc": "Number of transactions in this atomic transaction group. At least 1",
+          "Bytes": 4,
+          "Modes": 3,
+          "Version": 0
+        }
       ],
       "DocCost": "1",
       "Doc": "global field F",
@@ -1202,31 +1302,6 @@
         "GroupIndex",
         "TxID"
       ],
-      "ArgEnumDoc": [
-        "32 byte address",
-        "microalgos",
-        "round number",
-        "round number",
-        "Any data up to 1024 bytes",
-        "32 byte lease value",
-        "32 byte address",
-        "microalgos",
-        "32 byte address",
-        "32 byte address",
-        "32 byte address",
-        "The first round that the participation key is valid.",
-        "The last round that the participation key is valid.",
-        "Dilution for the 2-level participation key",
-        "Transaction type as bytes",
-        "Transaction type as integer",
-        "Asset ID",
-        "value in Asset's units",
-        "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
-        "32 byte address",
-        "32 byte address",
-        "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
-        "The computed ID for this transaction. 32 bytes."
-      ],
       "ArgEnumTypes": [
         "address",
         "uint64",
@@ -1252,80 +1327,191 @@
         "uint64",
         "[32]byte"
       ],
-      "ArgEnumBytes": [
-        0,
-        1,
-        2,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19,
-        20,
-        21,
-        22,
-        23
-      ],
-      "ArgModes": [
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3,
-        3
-      ],
-      "ArgEnumVersion": [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+      "ArgDetails": [
+        {
+          "Name": "Sender",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 0,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Fee",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 1,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "FirstValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "Bytes": 2,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "LastValid",
+          "Type": "uint64",
+          "Doc": "round number",
+          "Bytes": 4,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Note",
+          "Type": "[]byte",
+          "Doc": "Any data up to 1024 bytes",
+          "Bytes": 5,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Lease",
+          "Type": "[32]byte",
+          "Doc": "32 byte lease value",
+          "Bytes": 6,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Receiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 7,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Amount",
+          "Type": "uint64",
+          "Doc": "microalgos",
+          "Bytes": 8,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "CloseRemainderTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 9,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "VotePK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "Bytes": 10,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "SelectionPK",
+          "Type": "[32]byte",
+          "Doc": "32 byte address",
+          "Bytes": 11,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "VoteFirst",
+          "Type": "uint64",
+          "Doc": "The first round that the participation key is valid.",
+          "Bytes": 12,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "VoteLast",
+          "Type": "uint64",
+          "Doc": "The last round that the participation key is valid.",
+          "Bytes": 13,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "VoteKeyDilution",
+          "Type": "uint64",
+          "Doc": "Dilution for the 2-level participation key",
+          "Bytes": 14,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "Type",
+          "Type": "[]byte",
+          "Doc": "Transaction type as bytes",
+          "Bytes": 15,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "TypeEnum",
+          "Type": "uint64",
+          "Doc": "Transaction type as integer",
+          "Bytes": 16,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "XferAsset",
+          "Type": "uint64",
+          "Doc": "Asset ID",
+          "Bytes": 17,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "AssetAmount",
+          "Type": "uint64",
+          "Doc": "value in Asset's units",
+          "Bytes": 18,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "AssetSender",
+          "Type": "address",
+          "Doc": "32 byte address. Source of assets if Sender is the Asset's Clawback address.",
+          "Bytes": 19,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "AssetReceiver",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 20,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "AssetCloseTo",
+          "Type": "address",
+          "Doc": "32 byte address",
+          "Bytes": 21,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "GroupIndex",
+          "Type": "uint64",
+          "Doc": "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1",
+          "Bytes": 22,
+          "Modes": 3,
+          "Version": 0
+        },
+        {
+          "Name": "TxID",
+          "Type": "[32]byte",
+          "Doc": "The computed ID for this transaction. 32 bytes.",
+          "Bytes": 23,
+          "Modes": 3,
+          "Version": 0
+        }
       ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the current group",
