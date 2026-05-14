@@ -448,6 +448,8 @@ func argEnums(name string, version uint64) ([]string, []string, []argDetail) {
 		return fieldsAndTypes(logic.VoterParamsFields, version)
 	case "mimc":
 		return fieldsAndTypes(logic.MimcConfigs, version)
+	case "poseidon2":
+		return fieldsAndTypes(logic.Poseidon2Configs, version)
 	default:
 		return nil, nil, nil
 	}
