@@ -3637,7 +3637,7 @@
           "Type": "uint64",
           "Doc": "Amount of the asset unit held by this account",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3645,7 +3645,7 @@
           "Type": "bool",
           "Doc": "Is the asset frozen or not",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         }
       ],
@@ -3709,7 +3709,7 @@
           "Type": "uint64",
           "Doc": "Total number of units of this asset",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3717,7 +3717,7 @@
           "Type": "uint64",
           "Doc": "See AssetParams.Decimals",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3725,7 +3725,7 @@
           "Type": "bool",
           "Doc": "Frozen by default or not",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3733,7 +3733,7 @@
           "Type": "[]byte",
           "Doc": "Asset unit name",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3741,7 +3741,7 @@
           "Type": "[]byte",
           "Doc": "Asset name",
           "Bytes": 4,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3749,7 +3749,7 @@
           "Type": "[]byte",
           "Doc": "URL with additional info about the asset",
           "Bytes": 5,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3757,7 +3757,7 @@
           "Type": "[32]byte",
           "Doc": "Arbitrary commitment",
           "Bytes": 6,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3765,7 +3765,7 @@
           "Type": "address",
           "Doc": "Manager address",
           "Bytes": 7,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3773,7 +3773,7 @@
           "Type": "address",
           "Doc": "Reserve address",
           "Bytes": 8,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3781,7 +3781,7 @@
           "Type": "address",
           "Doc": "Freeze address",
           "Bytes": 9,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -3789,7 +3789,7 @@
           "Type": "address",
           "Doc": "Clawback address",
           "Bytes": 10,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         }
       ],

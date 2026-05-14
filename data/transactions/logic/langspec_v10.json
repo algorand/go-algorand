@@ -205,7 +205,7 @@
           "Type": "none",
           "Doc": "secp256k1 curve, used in Bitcoin",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 5
         },
         {
@@ -213,7 +213,7 @@
           "Type": "none",
           "Doc": "secp256r1 curve, NIST standard",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         }
       ],
@@ -255,7 +255,7 @@
           "Type": "none",
           "Doc": "secp256k1 curve, used in Bitcoin",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 5
         },
         {
@@ -263,7 +263,7 @@
           "Type": "none",
           "Doc": "secp256r1 curve, NIST standard",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         }
       ],
@@ -308,7 +308,7 @@
           "Type": "none",
           "Doc": "secp256k1 curve, used in Bitcoin",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 5
         },
         {
@@ -316,7 +316,7 @@
           "Type": "none",
           "Doc": "secp256r1 curve, NIST standard",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         }
       ],
@@ -4584,7 +4584,7 @@
           "Type": "any",
           "Doc": "",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 6
         },
         {
@@ -4592,7 +4592,7 @@
           "Type": "any",
           "Doc": "",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 6
         }
       ],
@@ -4640,7 +4640,7 @@
           "Type": "[]byte",
           "Doc": "",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         },
         {
@@ -4648,7 +4648,7 @@
           "Type": "uint64",
           "Doc": "",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         },
         {
@@ -4656,7 +4656,7 @@
           "Type": "[]byte",
           "Doc": "",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         }
       ],
@@ -4891,7 +4891,7 @@
           "Type": "uint64",
           "Doc": "Amount of the asset unit held by this account",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -4899,7 +4899,7 @@
           "Type": "bool",
           "Doc": "Is the asset frozen or not",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         }
       ],
@@ -4965,7 +4965,7 @@
           "Type": "uint64",
           "Doc": "Total number of units of this asset",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -4973,7 +4973,7 @@
           "Type": "uint64",
           "Doc": "See AssetParams.Decimals",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -4981,7 +4981,7 @@
           "Type": "bool",
           "Doc": "Frozen by default or not",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -4989,7 +4989,7 @@
           "Type": "[]byte",
           "Doc": "Asset unit name",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -4997,7 +4997,7 @@
           "Type": "[]byte",
           "Doc": "Asset name",
           "Bytes": 4,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -5005,7 +5005,7 @@
           "Type": "[]byte",
           "Doc": "URL with additional info about the asset",
           "Bytes": 5,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -5013,7 +5013,7 @@
           "Type": "[32]byte",
           "Doc": "Arbitrary commitment",
           "Bytes": 6,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -5021,7 +5021,7 @@
           "Type": "address",
           "Doc": "Manager address",
           "Bytes": 7,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -5029,7 +5029,7 @@
           "Type": "address",
           "Doc": "Reserve address",
           "Bytes": 8,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -5037,7 +5037,7 @@
           "Type": "address",
           "Doc": "Freeze address",
           "Bytes": 9,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -5045,7 +5045,7 @@
           "Type": "address",
           "Doc": "Clawback address",
           "Bytes": 10,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 2
         },
         {
@@ -5053,7 +5053,7 @@
           "Type": "address",
           "Doc": "Creator address",
           "Bytes": 11,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         }
       ],
@@ -5113,7 +5113,7 @@
           "Type": "[]byte",
           "Doc": "Bytecode of Approval Program",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -5121,7 +5121,7 @@
           "Type": "[]byte",
           "Doc": "Bytecode of Clear State Program",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -5129,7 +5129,7 @@
           "Type": "uint64",
           "Doc": "Number of uint64 values allowed in Global State",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -5137,7 +5137,7 @@
           "Type": "uint64",
           "Doc": "Number of byte array values allowed in Global State",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -5145,7 +5145,7 @@
           "Type": "uint64",
           "Doc": "Number of uint64 values allowed in Local State",
           "Bytes": 4,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -5153,7 +5153,7 @@
           "Type": "uint64",
           "Doc": "Number of byte array values allowed in Local State",
           "Bytes": 5,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -5161,7 +5161,7 @@
           "Type": "uint64",
           "Doc": "Number of Extra Program Pages of code space",
           "Bytes": 6,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -5169,7 +5169,7 @@
           "Type": "address",
           "Doc": "Creator address",
           "Bytes": 7,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         },
         {
@@ -5177,7 +5177,7 @@
           "Type": "address",
           "Doc": "Address for which this application has authority",
           "Bytes": 8,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 5
         }
       ],
@@ -5243,7 +5243,7 @@
           "Type": "uint64",
           "Doc": "Account balance in microalgos",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 6
         },
         {
@@ -5251,7 +5251,7 @@
           "Type": "uint64",
           "Doc": "Minimum required balance for account, in microalgos",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 6
         },
         {
@@ -5259,7 +5259,7 @@
           "Type": "address",
           "Doc": "Address the account is rekeyed to.",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 6
         },
         {
@@ -5267,7 +5267,7 @@
           "Type": "uint64",
           "Doc": "The total number of uint64 values allocated by this account in Global and Local States.",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         },
         {
@@ -5275,7 +5275,7 @@
           "Type": "uint64",
           "Doc": "The total number of byte array values allocated by this account in Global and Local States.",
           "Bytes": 4,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         },
         {
@@ -5283,7 +5283,7 @@
           "Type": "uint64",
           "Doc": "The number of extra app code pages used by this account.",
           "Bytes": 5,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         },
         {
@@ -5291,7 +5291,7 @@
           "Type": "uint64",
           "Doc": "The number of existing apps created by this account.",
           "Bytes": 6,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         },
         {
@@ -5299,7 +5299,7 @@
           "Type": "uint64",
           "Doc": "The number of apps this account is opted into.",
           "Bytes": 7,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         },
         {
@@ -5307,7 +5307,7 @@
           "Type": "uint64",
           "Doc": "The number of existing ASAs created by this account.",
           "Bytes": 8,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         },
         {
@@ -5315,7 +5315,7 @@
           "Type": "uint64",
           "Doc": "The numbers of ASAs held by this account (including ASAs this account created).",
           "Bytes": 9,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         },
         {
@@ -5323,7 +5323,7 @@
           "Type": "uint64",
           "Doc": "The number of existing boxes created by this account's app.",
           "Bytes": 10,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         },
         {
@@ -5331,7 +5331,7 @@
           "Type": "uint64",
           "Doc": "The total number of bytes used by this account's app's box keys and values.",
           "Bytes": 11,
-          "Modes": 0,
+          "Modes": 2,
           "Version": 8
         }
       ],
@@ -8886,7 +8886,7 @@
           "Type": "none",
           "Doc": "",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         }
       ],
@@ -8931,7 +8931,7 @@
           "Type": "[32]byte",
           "Doc": "",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         },
         {
@@ -8939,7 +8939,7 @@
           "Type": "uint64",
           "Doc": "",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 7
         }
       ],
@@ -9017,7 +9017,7 @@
           "Type": "none",
           "Doc": "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9025,7 +9025,7 @@
           "Type": "none",
           "Doc": "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9033,7 +9033,7 @@
           "Type": "none",
           "Doc": "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9041,7 +9041,7 @@
           "Type": "none",
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         }
       ],
@@ -9085,7 +9085,7 @@
           "Type": "none",
           "Doc": "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9093,7 +9093,7 @@
           "Type": "none",
           "Doc": "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9101,7 +9101,7 @@
           "Type": "none",
           "Doc": "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9109,7 +9109,7 @@
           "Type": "none",
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         }
       ],
@@ -9153,7 +9153,7 @@
           "Type": "none",
           "Doc": "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9161,7 +9161,7 @@
           "Type": "none",
           "Doc": "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9169,7 +9169,7 @@
           "Type": "none",
           "Doc": "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9177,7 +9177,7 @@
           "Type": "none",
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         }
       ],
@@ -9221,7 +9221,7 @@
           "Type": "none",
           "Doc": "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9229,7 +9229,7 @@
           "Type": "none",
           "Doc": "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9237,7 +9237,7 @@
           "Type": "none",
           "Doc": "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9245,7 +9245,7 @@
           "Type": "none",
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         }
       ],
@@ -9288,7 +9288,7 @@
           "Type": "none",
           "Doc": "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9296,7 +9296,7 @@
           "Type": "none",
           "Doc": "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9304,7 +9304,7 @@
           "Type": "none",
           "Doc": "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9312,7 +9312,7 @@
           "Type": "none",
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         }
       ],
@@ -9354,7 +9354,7 @@
           "Type": "none",
           "Doc": "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y",
           "Bytes": 0,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9362,7 +9362,7 @@
           "Type": "none",
           "Doc": "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y",
           "Bytes": 1,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9370,7 +9370,7 @@
           "Type": "none",
           "Doc": "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y",
           "Bytes": 2,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         },
         {
@@ -9378,7 +9378,7 @@
           "Type": "none",
           "Doc": "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y",
           "Bytes": 3,
-          "Modes": 0,
+          "Modes": 3,
           "Version": 10
         }
       ],
