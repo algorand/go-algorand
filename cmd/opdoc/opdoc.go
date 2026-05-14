@@ -317,7 +317,6 @@ func (o opcodeBytes) MarshalJSON() ([]byte, error) {
 type OpRecord struct {
 	Opcode  opcodeBytes
 	Name    string
-	Cost    string
 	Args    []string `json:",omitempty"`
 	Returns []string `json:",omitempty"`
 	Size    int
@@ -492,8 +491,6 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 			records[i].Opcode = opcodeBytes{spec.Opcode}
 		}
 		records[i].Name = spec.Name
-		argLen := len(spec.Arg.Types)
-		records[i].Cost = spec.OpDetails.DocCost(argLen, version)
 		records[i].Args = typeStrings(spec.Arg.Types)
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
