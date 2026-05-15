@@ -1163,10 +1163,12 @@ pushints args are not added to the intcblock during assembly processes
 ## falcon_verify
 
 - Bytecode: 0x85
-- Stack: ..., A: []byte, B: [1232]byte, C: [1793]byte &rarr; ..., bool
-- for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}
+- Stack: ..., A: []byte, B: []byte, C: [1793]byte &rarr; ..., bool
+- for (data A, deterministic FALCON-1024 compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}
 - **Cost**: 1700
 - Availability: v12
+
+Signature B is variable-length, with maximum size 1423 bytes.
 
 ## callsub
 

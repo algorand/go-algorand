@@ -40,8 +40,13 @@ var opDescByName = map[string]OpDesc{
 	"sha3_256":   {"SHA3_256 hash of value A, yields [32]byte", "", nil, ""},
 	"sha512":     {"SHA512 of value A, yields [64]byte", "", nil, ""},
 
-	"sumhash512":    {"sumhash512 of value A, yields [64]byte", "", nil, ""},
-	"falcon_verify": {"for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}", "", nil, ""},
+	"sumhash512": {"sumhash512 of value A, yields [64]byte", "", nil, ""},
+	"falcon_verify": {
+		"for (data A, deterministic FALCON-1024 compressed-format signature B, pubkey C) verify the signature of data against the pubkey => {0 or 1}",
+		"Signature B is variable-length, with maximum size 1423 bytes.",
+		nil,
+		"",
+	},
 
 	"mimc": {"MiMC hash of scalars A, using curve and parameters specified by configuration C", "" +
 		"A is a list of concatenated 32 byte big-endian unsigned integer scalars.  Fail if A's length is not a multiple of 32 or any element exceeds the curve modulus.\n\n" +
