@@ -92,7 +92,7 @@ const incomingThreads = 20
 
 // PubsubValidateQueueSize is the size of pubsub's per-subscription validate queue.
 // Exposed so it can be reported as a metric for saturation analysis.
-const PubsubValidateQueueSize = 256
+const PubsubValidateQueueSize = 1024
 
 // deriveAlgorandGossipSubParams derives the gossip sub parameters from the cfg.GossipFanout value
 // by using the same proportions as pubsub defaults - see GossipSubD, GossipSubDlo, etc.
@@ -247,7 +247,7 @@ func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) 
 
 // Subscribe returns a subscription to the given topic
 func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error) {
-	if err := s.pubsub.RegisterTopicValidator(topic, val); err != nil {
+	if err := s.pubsub.RegisterTopicValidator(topic, val, pubsub.WithValidatorConcurrency(4096), pubsub.WithValidatorTimeout(5*time.Second)); err != nil {
 		return nil, err
 	}
 	t, err := s.getOrCreateTopic(topic)
