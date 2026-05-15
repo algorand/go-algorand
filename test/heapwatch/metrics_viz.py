@@ -186,6 +186,8 @@ def main():
     ap.add_argument('-t', '--tags', action='append', default=[], help='tag/label pairs in a=b format to aggregate by, may be repeated. Empty means aggregation by metric name')
     ap.add_argument('--verbose', default=False, action='store_true')
     ap.add_argument('-p', '--port', type=int, default=False, help='port to run the Dash app on')
+    ap.add_argument('--auth-user', type=str, default='admin', help='HTTP Basic Auth username (default: admin). Only meaningful with --port and when a password is set')
+    ap.add_argument('--auth-password', type=str, default=None, help='HTTP Basic Auth password. If unset, the METRICS_VIZ_PASSWORD env var is used. If neither is set, no auth is required. NOTE: Basic Auth is plaintext over HTTP — use TLS or an SSH tunnel for untrusted networks')
 
     args = ap.parse_args()
     if args.verbose:
@@ -255,6 +257,25 @@ def main():
         print(f'Saved plot to {target_path}')
     elif args.port:
         app = Dash(__name__)
+
+        # Optional HTTP Basic Auth. CLI flag takes precedence over env var. Prefer the env
+        # var so the password doesn't leak through `ps` / shell history.
+        auth_password = args.auth_password or os.environ.get('METRICS_VIZ_PASSWORD')
+        if auth_password:
+            from flask import request, Response
+
+            @app.server.before_request
+            def _require_basic_auth():
+                auth = request.authorization
+                if auth and auth.username == args.auth_user and auth.password == auth_password:
+                    return None
+                return Response(
+                    'Authentication required.', 401,
+                    {'WWW-Authenticate': 'Basic realm="metrics_viz"'},
+                )
+
+            logging.info('HTTP Basic Auth enabled for user %r', args.auth_user)
+
         app.layout = html.Div([
             html.H4('Algod Metrics'),
             # Multi-select: subplot rows for unchecked metrics are removed entirely
