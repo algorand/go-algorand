@@ -34,10 +34,9 @@ import (
 	"strings"
 	"unicode"
 
-	"filippo.io/edwards25519"
-
 	"github.com/algorand/avm-abi/abi"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -2230,8 +2229,7 @@ const assemblerSaltSearchLimit = 128
 
 func programHashIsEdwardsPoint(program []byte) bool {
 	hash := HashProgram(program)
-	_, err := new(edwards25519.Point).SetBytes(hash[:])
-	return err == nil
+	return crypto.IsEdwards25519Point(hash[:])
 }
 
 // finalizeProgram constructs final program bytes. For v13+ stateless programs
